@@ -37,6 +37,14 @@ vercel -Q C:\Users\tribo\.vercel-one env ls
 ```
 
 O `.vercel/project.json` da raiz (ignorado pelo git) aponta para `one-platform`.
+
+**O autor de cada commit é o dono da conta Vercel**: `onedeveloperapp
+<onedeveloper.app@gmail.com>`, na configuração do git do próprio repositório
+(`git config --local`), como no MedChina (`flayeelab`). No plano Hobby a Vercel
+só compila um commit cujo autor é o dono do time; com outro autor o deploy fica
+`BLOCKED` (`TEAM_ACCESS_REQUIRED`) e o job do GitHub espera até o limite de 60
+minutos. Foi o que aconteceu em 2026-10-21 com commits feitos com o e-mail
+global da máquina.
 O plano Hobby é para uso pessoal e não comercial nos termos da Vercel: antes de
 o ONE atender um escritório, o time passa para o Pro.
 
