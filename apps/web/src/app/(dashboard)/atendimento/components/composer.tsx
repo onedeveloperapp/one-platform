@@ -243,10 +243,11 @@ export default function Composer({
         ) : (
           <>
             <FormControl fullWidth className="outlined" variant="standard">
-              <FormLabel component="label" htmlFor="inbox-template">
+              <FormLabel component="label" htmlFor="inbox-template" id="inbox-template-label">
                 {t("inbox-template-select")}
               </FormLabel>
               <Select
+                labelId="inbox-template-label"
                 inputProps={{ id: "inbox-template" }}
                 value={template?.id ?? ""}
                 onChange={(event) => {

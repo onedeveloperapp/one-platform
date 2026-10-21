@@ -11,6 +11,7 @@ import { useState } from "react";
 import { Alert, AlertTitle, Box, Breadcrumbs, Button, Drawer, Grid, Tooltip, Typography } from "@mui/material";
 
 import NiListCircle from "@/icons/nexture/ni-list-circle";
+import { enterAfterSessionChange } from "@/lib/safe-next";
 import { isSupabaseConfigured } from "@flyee/auth";
 
 /**
@@ -88,7 +89,7 @@ export default function SecuritySettings() {
               severity="success"
               className="neutral bg-background-paper/60!"
               action={
-                <Button color="inherit" size="small" component={Link} href="/inicio">
+                <Button color="inherit" size="small" onClick={() => void enterAfterSessionChange("/inicio")}>
                   {t("security-required-continue")}
                 </Button>
               }

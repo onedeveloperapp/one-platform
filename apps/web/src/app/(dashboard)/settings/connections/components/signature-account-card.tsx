@@ -135,6 +135,7 @@ export default function SignatureAccountCard({
               />
               <RadioGroup
                 row
+                className="gap-x-6"
                 aria-label={t("connections-signature-environment")}
                 value={environment}
                 onChange={(event) => setEnvironment(event.target.value === "sandbox" ? "sandbox" : "production")}

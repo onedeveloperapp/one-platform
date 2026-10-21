@@ -12,7 +12,7 @@ import Logo from "@/components/logo/logo";
 import { DEFAULTS } from "@/config";
 import { useHydrated } from "@/hooks/use-hydrated";
 import { resolvePostAuthDestination } from "@/lib/onboarding";
-import { sanitizeInternalNext } from "@/lib/safe-next";
+import { enterAfterSessionChange, sanitizeInternalNext } from "@/lib/safe-next";
 import { isSupabaseConfigured } from "@flyee/auth";
 import { createClient } from "@flyee/auth/client";
 import { BRAND } from "@flyee/content";
@@ -38,7 +38,7 @@ export default function TwoFactor() {
       const totp = data?.totp?.find((factor) => factor.status === "verified");
       if (!totp) {
         // No verified factor — nothing to challenge.
-        router.replace(DEFAULTS.appRoot);
+        void enterAfterSessionChange(DEFAULTS.appRoot);
         return;
       }
       setFactorId(totp.id);
@@ -72,8 +72,7 @@ export default function TwoFactor() {
         data: { user },
       } = await supabase.auth.getUser();
       const destination = user ? await resolvePostAuthDestination() : DEFAULTS.appRoot;
-      router.push(next ?? destination);
-      router.refresh();
+      await enterAfterSessionChange(next ?? destination);
     } finally {
       setBusy(false);
     }
@@ -81,9 +80,9 @@ export default function TwoFactor() {
 
   const signOut = async () => {
     const supabase = createClient();
-    await supabase.auth.signOut();
-    router.push("/auth/sign-in");
-    router.refresh();
+    // This browser's session only: the person's other devices stay signed in.
+    await supabase.auth.signOut({ scope: "local" });
+    await enterAfterSessionChange("/auth/sign-in");
   };
 
   return (

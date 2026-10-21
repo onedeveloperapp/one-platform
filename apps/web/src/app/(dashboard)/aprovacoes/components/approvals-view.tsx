@@ -6,7 +6,7 @@ import DraftApprovalCard from "./draft-approval-card";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { Alert, Box, Button, Card, CardContent, Typography } from "@mui/material";
 
@@ -47,12 +47,24 @@ export default function ApprovalsView({ state }: { state: ApprovalsState }) {
   const t = useTranslations("product");
   const router = useRouter();
   const [done, setDone] = useState<DecisionKind | null>(null);
+  // What this person decided here, out of the list at once: the list the server reads again comes a moment
+  // later, and a card still showing "Aprovar" after "Sugestão aprovada" invites a second click.
+  const [decidedHere, setDecidedHere] = useState<string[]>([]);
+  // The card a decision was made on leaves the screen: the focus goes to what says how it went.
+  const doneRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (done) doneRef.current?.focus();
+  }, [done, decidedHere]);
 
   const ready = state.kind === "ready" ? state : null;
   const refresh = () => router.refresh();
+  const pending = ready ? ready.pending.filter((approval) => !decidedHere.includes(approval.id)) : [];
+  const pendingTotal = ready
+    ? Math.max(0, ready.pendingTotal - ready.pending.filter((approval) => decidedHere.includes(approval.id)).length)
+    : 0;
 
   const decidesSomething = ready
-    ? ready.pending.some((approval) => mayDecide(ready.me.firmFunction, approval.approverFunctions))
+    ? pending.some((approval) => mayDecide(ready.me.firmFunction, approval.approverFunctions))
     : false;
   const blocked = ready ? ready.supportVisit || ready.secondFactor !== "ok" : false;
 
@@ -127,6 +139,8 @@ export default function ApprovalsView({ state }: { state: ApprovalsState }) {
 
           {done ? (
             <Alert
+              ref={doneRef}
+              tabIndex={-1}
               severity="success"
               role="status"
               className="neutral bg-background-paper/60!"
@@ -136,7 +150,7 @@ export default function ApprovalsView({ state }: { state: ApprovalsState }) {
             </Alert>
           ) : null}
 
-          {ready.pending.length === 0 ? (
+          {pendingTotal === 0 ? (
             <EmptyState
               icon={<NiListCheck size="large" />}
               title={t("approvals-empty-title")}
@@ -147,17 +161,18 @@ export default function ApprovalsView({ state }: { state: ApprovalsState }) {
             <Box component="section" aria-labelledby="approvals-waiting" className="flex flex-col gap-4">
               <Box className="flex flex-col gap-1">
                 <Typography id="approvals-waiting" variant="h5" component="h2" className="mb-0">
-                  {t("approvals-waiting", { count: ready.pendingTotal })}
+                  {t("approvals-waiting", { count: pendingTotal })}
                 </Typography>
-                {ready.pendingTotal > ready.pending.length ? (
+                {pending.length > 0 && pendingTotal > pending.length ? (
                   <Typography variant="body2" className="text-text-secondary">
-                    {t("approvals-more", { shown: ready.pending.length, total: ready.pendingTotal })}
+                    {t("approvals-more", { shown: pending.length, total: pendingTotal })}
                   </Typography>
                 ) : null}
               </Box>
-              {ready.pending.map((approval) => {
+              {pending.map((approval) => {
                 const decided = (kind: DecisionKind) => {
                   setDone(kind);
+                  setDecidedHere((ids) => [...ids, approval.id]);
                   refresh();
                 };
                 const canDecide = mayDecide(ready.me.firmFunction, approval.approverFunctions);

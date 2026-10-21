@@ -159,11 +159,12 @@ export default function OabCard({
               <Grid container spacing={3}>
                 <Grid size={{ xs: 12, sm: 4 }}>
                   <FormControl fullWidth className="outlined" variant="standard" error={touched && !uf}>
-                    <FormLabel component="label" htmlFor="team-oab-uf">
+                    <FormLabel component="label" htmlFor="team-oab-uf" id="team-oab-uf-label">
                       {t("team-oab-uf")}
                     </FormLabel>
                     <Select
                       id="team-oab-uf-select"
+                      labelId="team-oab-uf-label"
                       inputProps={{ id: "team-oab-uf" }}
                       value={uf}
                       displayEmpty
@@ -217,6 +218,7 @@ export default function OabCard({
                 </FormLabel>
                 <RadioGroup
                   row
+                  className="gap-x-6"
                   aria-labelledby="team-oab-kind"
                   value={kind}
                   onChange={(event) => setKind(event.target.value === "principal" ? "principal" : "suplementar")}

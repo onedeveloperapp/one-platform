@@ -1,7 +1,7 @@
 "use client";
 import { useFormik } from "formik";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import React, { useState } from "react";
 import * as yup from "yup";
@@ -30,7 +30,7 @@ import NiCrossSquare from "@/icons/nexture/ni-cross-square";
 import NiEyeClose from "@/icons/nexture/ni-eye-close";
 import NiEyeOpen from "@/icons/nexture/ni-eye-open";
 import { resolvePostAuthDestination } from "@/lib/onboarding";
-import { sanitizeInternalNext } from "@/lib/safe-next";
+import { enterAfterSessionChange, sanitizeInternalNext } from "@/lib/safe-next";
 import { useThemeContext } from "@/theme/theme-provider";
 import { isSupabaseConfigured } from "@flyee/auth";
 import { createClient } from "@flyee/auth/client";
@@ -56,7 +56,6 @@ const InputErrorTooltip = ({ title }: InputErrorProps) => {
 };
 
 export default function Page() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const t = useTranslations("auth");
   const hydrated = useHydrated();
@@ -103,14 +102,12 @@ export default function Page() {
       // Accounts with a verified TOTP factor must step up to AAL2 first.
       const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
       if (aal?.currentLevel === "aal1" && aal?.nextLevel === "aal2") {
-        router.push(`/auth/two-factor${next ? `?next=${encodeURIComponent(next)}` : ""}`);
-        router.refresh();
+        await enterAfterSessionChange(`/auth/two-factor${next ? `?next=${encodeURIComponent(next)}` : ""}`);
         return;
       }
       // A returning user with pending onboarding still needs the path to value.
       const destination = data.user ? await resolvePostAuthDestination() : DEFAULTS.appRoot;
-      router.push(next ?? destination);
-      router.refresh();
+      await enterAfterSessionChange(next ?? destination);
     },
     validateOnBlur: false,
     validateOnMount: false,

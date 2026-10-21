@@ -14,6 +14,7 @@ const viewer = (changes: Partial<MenuViewer> = {}): MenuViewer => ({
   role: "member",
   firmFunction: "atendimento",
   isSuperadmin: false,
+  owesSecondFactor: false,
   ...changes,
 });
 

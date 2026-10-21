@@ -483,7 +483,9 @@ export default function DataTable<R extends GridValidRowModel>({
           const propsCasted = props as SelectProps;
           return (
             <FormControl size="small" variant="outlined">
-              <InputLabel>{propsCasted.label}</InputLabel>
+              <InputLabel id={propsCasted.labelId} htmlFor={propsCasted.id}>
+                {propsCasted.label}
+              </InputLabel>
               <Select {...propsCasted} IconComponent={NiChevronDownSmall} MenuProps={{ className: "outlined" }} />
             </FormControl>
           );

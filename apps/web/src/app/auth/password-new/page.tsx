@@ -1,7 +1,7 @@
 "use client";
 import { useFormik } from "formik";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import React, { useState } from "react";
 import * as yup from "yup";
@@ -26,7 +26,7 @@ import { useHydrated } from "@/hooks/use-hydrated";
 import NiCheck from "@/icons/nexture/ni-check";
 import NiCross from "@/icons/nexture/ni-cross";
 import NiCrossSquare from "@/icons/nexture/ni-cross-square";
-import { sanitizeInternalNext } from "@/lib/safe-next";
+import { enterAfterSessionChange, sanitizeInternalNext } from "@/lib/safe-next";
 import { cn } from "@/lib/utils";
 import { isSupabaseConfigured } from "@flyee/auth";
 import { createClient } from "@flyee/auth/client";
@@ -45,7 +45,6 @@ const InputErrorTooltip = ({ title }: { title: string }) => (
 );
 
 export default function Page() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const t = useTranslations("auth");
   const hydrated = useHydrated();
@@ -79,8 +78,7 @@ export default function Page() {
         setServerError(t("request-failed"));
         return;
       }
-      router.push(next);
-      router.refresh();
+      await enterAfterSessionChange(next);
     },
     validateOnBlur: false,
     validateOnMount: false,

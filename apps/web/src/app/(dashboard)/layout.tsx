@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 
 import DashboardShell from "@/components/layout/dashboard-shell";
 import { resolveGate } from "@/lib/firm/gate";
+import { FIRM_SETUP_PATH } from "@/lib/firm/gate-rules";
 import type { MenuViewer } from "@/lib/firm/menu";
 import { getMemberContext } from "@/lib/member/context";
 
@@ -20,9 +21,14 @@ export default async function DashboardLayout({
   children: React.ReactNode;
 }>) {
   const context = await getMemberContext();
+  let owesSecondFactor = false;
   if (context) {
-    const decision = await resolveGate(context);
-    if (decision) redirect(decision.redirectTo);
+    const gate = await resolveGate(context);
+    // A send to another page of the logged area is the shell's on a request of the client router, where a
+    // redirect from here would loop (lib/firm/gate.ts); a page the browser loads is redirected.
+    const heldByShell = gate.clientRouter && gate.decision?.redirectTo !== FIRM_SETUP_PATH;
+    if (gate.decision && !heldByShell) redirect(gate.decision.redirectTo);
+    owesSecondFactor = gate.owesSecondFactor;
   }
   // Who is looking, for the menus: read here once, so no item appears and then leaves.
   const viewer: MenuViewer | null = context
@@ -31,6 +37,7 @@ export default async function DashboardLayout({
         role: context.firm?.role ?? null,
         firmFunction: context.firm?.firmFunction ?? null,
         isSuperadmin: context.isSuperadmin,
+        owesSecondFactor,
       }
     : null;
   return <DashboardShell viewer={viewer}>{children}</DashboardShell>;

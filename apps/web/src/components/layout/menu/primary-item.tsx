@@ -32,27 +32,17 @@ export const PrimaryItem = memo(function PrimaryItem({ item, onSelect, isActive,
   const [tooltipOpen, setTooltipOpen] = useState(false);
 
   if (menuType !== MenuType.Minimal) {
-    return (
-      <Box
-        className={cn(
-          "hover:bg-grey-25 flex h-[5.5rem] w-24 cursor-pointer flex-col items-center justify-center gap-1.5 rounded-2xl no-underline",
-          selected && "bg-grey-25",
-          className,
-        )}
-        component={item.isExternalLink ? NextLink : "div"}
-        href={item.isExternalLink ? item.href : undefined}
-        target={item.isExternalLink ? "_blank" : undefined}
-        rel={item.isExternalLink ? "noreferrer" : undefined}
-        onClick={
-          !item.isExternalLink
-            ? () => {
-                onSelect(item);
-                setTooltipOpen(false);
-              }
-            : undefined
-        }
-        aria-current={selected ? "page" : undefined}
-      >
+    const select = () => {
+      onSelect(item);
+      setTooltipOpen(false);
+    };
+    const boxClass = cn(
+      "text-text-primary hover:bg-grey-25 flex h-[5.5rem] w-24 cursor-pointer flex-col items-center justify-center gap-1.5 rounded-2xl border-0 bg-transparent p-0 no-underline",
+      selected && "bg-grey-25",
+      className,
+    );
+    const content = (
+      <>
         {item.icon && (
           <NextureIcons
             variant={selected ? "contained" : "outlined"}
@@ -77,6 +67,48 @@ export const PrimaryItem = memo(function PrimaryItem({ item, onSelect, isActive,
         >
           {t(item.label)}
         </Typography>
+      </>
+    );
+
+    // Each item is a real link, or a button for one that opens the second panel: the keyboard reaches it, a
+    // screen reader says what it is, and a link opens in a new tab. It was a plain div, out of reach of all three.
+    if (item.isExternalLink) {
+      return (
+        <Box
+          className={boxClass}
+          component={NextLink}
+          href={item.href ?? ""}
+          target="_blank"
+          rel="noreferrer"
+          aria-current={selected ? "page" : undefined}
+        >
+          {content}
+        </Box>
+      );
+    }
+    if (!item.href || (item.children && item.children.length > 0)) {
+      return (
+        <Box className={boxClass} component="button" type="button" onClick={select} aria-expanded={isActive}>
+          {content}
+        </Box>
+      );
+    }
+    return (
+      <Box
+        className={boxClass}
+        component={NextLink}
+        href={item.href}
+        // The menu navigates by itself (onSelect): a prefetch of every item would only cost a read of the session each.
+        prefetch={false}
+        onClick={(event: React.MouseEvent<HTMLAnchorElement>) => {
+          // A click that asks for a new tab or window is the browser's to follow; the menu keeps its own state.
+          if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
+          event.preventDefault();
+          select();
+        }}
+        aria-current={selected ? "page" : undefined}
+      >
+        {content}
       </Box>
     );
   }

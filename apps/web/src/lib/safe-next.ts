@@ -34,3 +34,24 @@ function sanitizeCandidate(value: string | null | undefined): string | null {
 export function sanitizeInternalNext(value: string | null | undefined, fallback = SAFE_DEFAULT_NEXT): string {
   return sanitizeCandidate(value) ?? sanitizeCandidate(fallback) ?? SAFE_DEFAULT_NEXT;
 }
+
+/**
+ * Goes to `path` after a screen changed the session (signed in, passed the
+ * second factor, founded or joined a firm, set a new password, signed out), or
+ * from the auth screens into the logged area: a document load, never the
+ * client router. The router keeps what it drew under the old session (its
+ * cache, and the layouts it does not draw again), and the gate's redirect in
+ * the middle of a client navigation, with the refresh such a screen then asked
+ * for, kept the router fetching the page the gate sent to without ever drawing
+ * it (2026-10-21: a founder with no second factor yet was left on a blank
+ * screen). A document load runs the middleware and the gate again under the
+ * new cookies. It replaces the page in the history, so going back never lands
+ * on a screen that sends the person forward again. Browser only.
+ *
+ * The promise never settles: the page is leaving, and a form that awaits it
+ * stays busy until it is gone, so a second click does not do it again.
+ */
+export function enterAfterSessionChange(path: string): Promise<never> {
+  window.location.replace(sanitizeInternalNext(path));
+  return new Promise<never>(() => {});
+}

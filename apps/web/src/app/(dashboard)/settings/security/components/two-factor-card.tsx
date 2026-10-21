@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useState } from "react";
 
@@ -28,6 +29,7 @@ const qrSrc = (qr: string) => (qr.startsWith("data:") ? qr : `data:image/svg+xml
 
 export default function TwoFactorCard({ onVerified }: { onVerified?: () => void } = {}) {
   const t = useTranslations("product");
+  const router = useRouter();
   const [factors, setFactors] = useState<Factor[]>([]);
   const [enrollment, setEnrollment] = useState<Enrollment | null>(null);
   const [code, setCode] = useState("");
@@ -84,6 +86,8 @@ export default function TwoFactorCard({ onVerified }: { onVerified?: () => void 
       setEnrollment(null);
       setCode("");
       refresh();
+      // The session changed: the layout reads again whether the person still owes a factor.
+      router.refresh();
       onVerified?.();
     } finally {
       setBusy(false);
@@ -96,6 +100,12 @@ export default function TwoFactorCard({ onVerified }: { onVerified?: () => void 
     const { error: unenrollError } = await supabase.auth.mfa.unenroll({ factorId });
     if (unenrollError) setError(t("security-action-error"));
     refresh();
+    if (!unenrollError) {
+      // The session's token still says a factor was verified until it is refreshed, and the layout reads the
+      // token: refreshed first, the layout sees the factor gone.
+      await supabase.auth.refreshSession();
+      router.refresh();
+    }
   };
 
   const verifiedFactors = factors.filter((factor) => factor.status === "verified");
@@ -140,8 +150,11 @@ export default function TwoFactorCard({ onVerified }: { onVerified?: () => void 
               </Typography>
               <Box className="flex flex-row items-end gap-2">
                 <FormControl className="outlined mb-0" variant="standard" size="small">
-                  <FormLabel component="label">{t("security-code")}</FormLabel>
+                  <FormLabel component="label" htmlFor="two-factor-enroll-code">
+                    {t("security-code")}
+                  </FormLabel>
                   <Input
+                    id="two-factor-enroll-code"
                     value={code}
                     autoComplete="one-time-code"
                     inputProps={{ inputMode: "numeric", maxLength: 6 }}

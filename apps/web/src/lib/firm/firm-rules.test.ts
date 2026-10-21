@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { decideGate, FIRM_SETUP_PATH, SECOND_FACTOR_REQUIRED_URL } from "@/lib/firm/gate-rules";
+import {
+  decideGate,
+  FIRM_SETUP_PATH,
+  isSecondFactorSetupPath,
+  owesSecondFactor,
+  SECOND_FACTOR_REQUIRED_URL,
+  shellHold,
+} from "@/lib/firm/gate-rules";
 import {
   FIRM_FUNCTIONS,
   formatOab,
@@ -64,6 +71,63 @@ describe("the gate of the logged area", () => {
     expect(decideGate({ ...inFirm, impersonating: true, secondFactorRequired: true })).toBeNull();
     // A visit still cannot enter the app of an account that has no firm.
     expect(decideGate({ ...inFirm, impersonating: true, hasFirm: false })).toEqual({ redirectTo: FIRM_SETUP_PATH });
+  });
+
+  it("says who owes a second factor, for the shell to keep them on the security screen on every later page", () => {
+    expect(owesSecondFactor({ ...inFirm, secondFactorRequired: true })).toBe(true);
+    // The security screen itself lets them through, and still they owe it.
+    expect(decideGate({ ...inFirm, path: "/settings/security", secondFactorRequired: true })).toBeNull();
+    expect(owesSecondFactor({ ...inFirm, secondFactorRequired: true, hasSecondFactor: true })).toBe(false);
+    expect(owesSecondFactor(inFirm)).toBe(false);
+    expect(owesSecondFactor({ ...inFirm, impersonating: true, secondFactorRequired: true })).toBe(false);
+  });
+
+  it("keeps a person where the gate would send them, on the pages opened after the first one", () => {
+    const owes = { hasFirm: true, isSuperadmin: false, owesSecondFactor: true };
+    for (const path of ["/inicio", "/casos", "/casos/abc", "/settings", "/settings/team", "/admin"]) {
+      expect(shellHold(owes, path)).toBe(SECOND_FACTOR_REQUIRED_URL);
+    }
+    expect(shellHold(owes, "/settings/security")).toBeNull();
+    // Nobody who owes nothing is held.
+    expect(shellHold({ ...owes, owesSecondFactor: false }, "/casos")).toBeNull();
+    // The platform operator, who works in no firm, is kept on the consoles and the own settings.
+    const operator = { hasFirm: false, isSuperadmin: true, owesSecondFactor: false };
+    expect(shellHold(operator, "/inicio")).toBe("/admin");
+    expect(shellHold(operator, "/admin/escritorios")).toBeNull();
+    expect(shellHold(operator, "/settings/security")).toBeNull();
+    expect(shellHold({ ...operator, owesSecondFactor: true }, "/admin")).toBe(SECOND_FACTOR_REQUIRED_URL);
+    // An account with no firm is sent out of the logged area by the layout, never held by the shell.
+    expect(shellHold({ hasFirm: false, isSuperadmin: false, owesSecondFactor: false }, "/inicio")).toBeNull();
+  });
+
+  it("holds exactly where the gate redirects, inside the logged area", () => {
+    const paths = ["/inicio", "/casos", "/settings", "/settings/security", "/admin", "/admin/ai", "/agenda"];
+    for (const hasFirm of [true, false]) {
+      for (const isSuperadmin of [true, false]) {
+        for (const owes of [true, false]) {
+          for (const path of paths) {
+            const gate = decideGate({
+              path,
+              hasFirm,
+              isSuperadmin,
+              impersonating: false,
+              secondFactorRequired: owes,
+              hasSecondFactor: !owes,
+            });
+            const inside = gate && gate.redirectTo !== FIRM_SETUP_PATH ? gate.redirectTo : null;
+            expect(shellHold({ hasFirm, isSuperadmin, owesSecondFactor: owes }, path)).toBe(inside);
+          }
+        }
+      }
+    }
+  });
+
+  it("opens to who owes a second factor the security screen alone", () => {
+    expect(isSecondFactorSetupPath("/settings/security")).toBe(true);
+    expect(isSecondFactorSetupPath("/settings/security/")).toBe(true);
+    expect(isSecondFactorSetupPath("/settings/securityx")).toBe(false);
+    expect(isSecondFactorSetupPath("/settings")).toBe(false);
+    expect(isSecondFactorSetupPath("/inicio")).toBe(false);
   });
 });
 

@@ -29,7 +29,7 @@ import NiCheck from "@/icons/nexture/ni-check";
 import NiCross from "@/icons/nexture/ni-cross";
 import NiCrossSquare from "@/icons/nexture/ni-cross-square";
 import { resolvePostAuthDestination } from "@/lib/onboarding";
-import { sanitizeInternalNext } from "@/lib/safe-next";
+import { enterAfterSessionChange, sanitizeInternalNext } from "@/lib/safe-next";
 import { cn } from "@/lib/utils";
 import { welcomeNewMember } from "@/lib/welcome-actions";
 import { useThemeContext } from "@/theme/theme-provider";
@@ -121,8 +121,7 @@ export default function Page() {
         // welcome is asked for here (once per account, sent after the answer).
         await welcomeNewMember();
         const destination = data.user ? await resolvePostAuthDestination() : DEFAULTS.appRoot;
-        router.push(next ?? destination);
-        router.refresh();
+        await enterAfterSessionChange(next ?? destination);
       } else {
         // Email confirmation is enabled on the Supabase project. Carry the
         // address so the next screen can resend the link — without it, an

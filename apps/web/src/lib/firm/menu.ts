@@ -20,6 +20,11 @@ export type MenuViewer = {
   /** What the person does in the firm. Null with no firm. */
   firmFunction: FirmFunction | null;
   isSuperadmin: boolean;
+  /**
+   * The person owes the second factor the rule asks of them (lib/firm/gate-rules.ts):
+   * the shell keeps them on the security screen until it is set up.
+   */
+  owesSecondFactor: boolean;
 };
 
 /** Who an item is for. An item that says nothing is for anybody of a firm. */

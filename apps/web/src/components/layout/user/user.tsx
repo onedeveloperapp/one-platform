@@ -15,9 +15,10 @@ import Popper from "@mui/material/Popper";
 import { useProfile } from "@/hooks/use-profile";
 import NiQuestionHexagon from "@/icons/nexture/ni-question-hexagon";
 import NiSettings from "@/icons/nexture/ni-settings";
+import { enterAfterSessionChange } from "@/lib/safe-next";
 import { cn } from "@/lib/utils";
 import { isSupabaseConfigured } from "@flyee/auth";
-import { createClient } from "@flyee/auth/client";
+import { createClient, isImpersonating } from "@flyee/auth/client";
 
 /**
  * Header user menu backed by the real session: the signed-in user's name,
@@ -47,11 +48,19 @@ export default function User() {
   const router = useRouter();
 
   const handleSignOut = async () => {
+    // A support visit ends by its own way out, which records it and gives the operator their own session back:
+    // signing out here would end the visited person's session instead.
+    if (isSupabaseConfigured && isImpersonating()) {
+      window.location.replace("/api/impersonation/exit");
+      return;
+    }
     if (isSupabaseConfigured) {
       const supabase = createClient();
-      await supabase.auth.signOut();
+      // This browser's session only: the person's other devices stay signed in.
+      await supabase.auth.signOut({ scope: "local" });
     }
-    router.push("/auth/sign-in");
+    // A document load: nothing the router drew under the session stays in its cache.
+    await enterAfterSessionChange("/auth/sign-in");
   };
 
   return (

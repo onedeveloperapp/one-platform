@@ -1,6 +1,5 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 
@@ -8,6 +7,7 @@ import { Alert, Box, Button } from "@mui/material";
 
 import { DEFAULTS } from "@/config";
 import { acceptInvitation } from "@/lib/firm/actions";
+import { enterAfterSessionChange } from "@/lib/safe-next";
 import { createClient } from "@flyee/auth/client";
 
 /** The errors the invitation page has words for; anything else reads as "try again". */
@@ -24,7 +24,6 @@ const ERROR_KEYS: Record<string, string> = {
 /** Accepts the invitation for the signed-in account, then opens the app. */
 export function AcceptInvitationButton({ invitationId }: { invitationId: string }) {
   const t = useTranslations("auth");
-  const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [errorCode, setErrorCode] = useState<string | null>(null);
 
@@ -38,8 +37,7 @@ export function AcceptInvitationButton({ invitationId }: { invitationId: string 
       setBusy(false);
       return;
     }
-    router.push(DEFAULTS.appRoot);
-    router.refresh();
+    await enterAfterSessionChange(DEFAULTS.appRoot);
   };
 
   return (
@@ -59,15 +57,14 @@ export function AcceptInvitationButton({ invitationId }: { invitationId: string 
 /** Signs the current account out and comes back to this invitation, to enter with the invited address. */
 export function SwitchAccountButton({ next }: { next: string }) {
   const t = useTranslations("auth");
-  const router = useRouter();
   const [busy, setBusy] = useState(false);
 
   const switchAccount = async () => {
     if (busy) return;
     setBusy(true);
-    await createClient().auth.signOut();
-    router.replace(`/auth/sign-in?next=${encodeURIComponent(next)}`);
-    router.refresh();
+    // This browser's session only: the person's other devices stay signed in.
+    await createClient().auth.signOut({ scope: "local" });
+    await enterAfterSessionChange(`/auth/sign-in?next=${encodeURIComponent(next)}`);
   };
 
   return (

@@ -1,7 +1,8 @@
 "use client";
 
+import { usePathname, useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Suspense } from "react";
+import { Suspense, useEffect } from "react";
 
 import AnnouncementBanner from "@/components/layout/announcements/announcement-banner";
 import ContentWrapper from "@/components/layout/containers/content-wrapper";
@@ -13,12 +14,14 @@ import LeftMenu from "@/components/layout/menu/left-menu";
 import MenuBackdrop from "@/components/layout/menu/menu-backdrop";
 import { ViewerProvider } from "@/components/layout/viewer-context";
 import SupportWidget from "@/components/support/support-widget";
+import { shellHold } from "@/lib/firm/gate-rules";
 import type { MenuViewer } from "@/lib/firm/menu";
 
 /**
  * The frame of the logged area: header, menu, the page and what floats over
  * it. The server layout above it decides WHO may see a page (a firm, a second
- * factor); this only draws.
+ * factor) on the first page somebody opens; on the pages they open after it,
+ * this keeps who owes a second factor on the screen that sets it up.
  */
 export default function DashboardShell({
   viewer,
@@ -29,6 +32,18 @@ export default function DashboardShell({
   children: React.ReactNode;
 }>) {
   const t = useTranslations("product");
+  const pathname = usePathname();
+  const router = useRouter();
+  // The gate on the pages a person opens after the first one: the layout above is not drawn again while
+  // somebody moves between its pages, and on those requests it leaves its sends to this (lib/firm/gate.ts).
+  // Who must be somewhere else is sent there before the page they asked for is drawn, and what the layout read
+  // of them is read again: a factor set up a moment ago lets them go.
+  const holdAt = viewer ? shellHold(viewer, pathname) : null;
+  useEffect(() => {
+    if (!holdAt) return;
+    router.replace(holdAt);
+    router.refresh();
+  }, [holdAt, pathname, router]);
   return (
     <ViewerProvider viewer={viewer}>
       <a
@@ -42,7 +57,7 @@ export default function DashboardShell({
       <Main>
         <ContentWrapper>
           <AnnouncementBanner />
-          <Suspense fallback={<Loading />}>{children}</Suspense>
+          <Suspense fallback={<Loading />}>{holdAt ? <Loading /> : children}</Suspense>
         </ContentWrapper>
       </Main>
       <MenuBackdrop />

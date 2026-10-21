@@ -10,6 +10,7 @@ import {
   AlertTitle,
   Box,
   Button,
+  CircularProgress,
   Divider,
   FormControl,
   FormControlLabel,
@@ -34,7 +35,7 @@ import {
   FUNCTION_LABEL_KEY,
   isFirmFunction,
 } from "@/lib/firm/roles";
-import { sanitizeInternalNext } from "@/lib/safe-next";
+import { enterAfterSessionChange, sanitizeInternalNext } from "@/lib/safe-next";
 import { isSupabaseConfigured } from "@flyee/auth";
 import { createClient } from "@flyee/auth/client";
 
@@ -84,10 +85,7 @@ export default function Page() {
     return requestedNext ? sanitizeInternalNext(requestedNext, DEFAULTS.appRoot) : DEFAULTS.appRoot;
   };
 
-  const enter = () => {
-    router.push(destination());
-    router.refresh();
-  };
+  const enter = () => enterAfterSessionChange(destination());
 
   const validationSchema = yup.object({
     name: yup
@@ -131,7 +129,7 @@ export default function Page() {
         setErrorCode(result.code);
         return;
       }
-      enter();
+      await enter();
     },
   });
 
@@ -159,7 +157,9 @@ export default function Page() {
         .maybeSingle();
       if (membership) {
         const requestedNext = searchParams.get("next");
-        router.replace(requestedNext ? sanitizeInternalNext(requestedNext, DEFAULTS.appRoot) : DEFAULTS.appRoot);
+        void enterAfterSessionChange(
+          requestedNext ? sanitizeInternalNext(requestedNext, DEFAULTS.appRoot) : DEFAULTS.appRoot,
+        );
         return;
       }
 
@@ -201,16 +201,24 @@ export default function Page() {
       setAccepting(null);
       return;
     }
-    enter();
+    await enter();
   };
 
   const signOut = async () => {
-    await createClient().auth.signOut();
-    router.replace("/auth/sign-in");
-    router.refresh();
+    // This browser's session only: the person's other devices stay signed in.
+    await createClient().auth.signOut({ scope: "local" });
+    await enterAfterSessionChange("/auth/sign-in");
   };
 
-  if (!ready) return null;
+  if (!ready) {
+    // The ground of the card, with the wait said: the first reads go to the database, and a blank screen
+    // while they come back reads as broken.
+    return (
+      <Box className="bg-waves flex min-h-screen w-full items-center justify-center bg-cover bg-center p-4">
+        <CircularProgress aria-label={tp("loading")} />
+      </Box>
+    );
+  }
 
   const dateFormat = new Intl.DateTimeFormat("pt-BR", { day: "numeric", month: "long" });
   const hasInvitations = invitations.length > 0;

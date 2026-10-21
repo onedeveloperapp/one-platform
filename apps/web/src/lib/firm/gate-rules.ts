@@ -46,13 +46,58 @@ export function decideGate(input: {
     }
   }
 
-  // A support visit is the operator's session standing in for the person: the
-  // operator cannot set up somebody else's factor, and already passed their own.
-  if (input.impersonating) return null;
-
-  if (input.secondFactorRequired && !input.hasSecondFactor) {
-    if (!input.path || input.path.startsWith(SECOND_FACTOR_SETUP_PATH)) return null;
+  if (owesSecondFactor(input)) {
+    if (!input.path || isSecondFactorSetupPath(input.path)) return null;
     return { redirectTo: SECOND_FACTOR_REQUIRED_URL };
   }
   return null;
+}
+
+/**
+ * Pure: the person owes the second factor the rule asks of them, and has none.
+ * A support visit owes nothing: it is the operator's session standing in for
+ * the person, and the operator cannot set up somebody else's factor and
+ * already passed their own.
+ *
+ * Such a person is kept on the security screen: on the first page they open
+ * by the layout's redirect, and on every page they open after it by the shell
+ * (components/layout/dashboard-shell.tsx), since a layout is not drawn again
+ * while somebody moves between its pages.
+ */
+export function owesSecondFactor(input: {
+  impersonating: boolean;
+  secondFactorRequired: boolean;
+  hasSecondFactor: boolean;
+}): boolean {
+  return !input.impersonating && input.secondFactorRequired && !input.hasSecondFactor;
+}
+
+/** Pure: the page where a second factor is set up, the one page open to who owes it. */
+export function isSecondFactorSetupPath(path: string): boolean {
+  return path === SECOND_FACTOR_SETUP_PATH || path.startsWith(`${SECOND_FACTOR_SETUP_PATH}/`);
+}
+
+/**
+ * Pure: where the shell of the logged area keeps a person instead of the page at `path`, or null. It is the
+ * gate's own answer for the sends that stay inside the logged area: the platform operator outside the
+ * consoles, and who owes a second factor outside the security screen. An account with no firm is sent out of
+ * the logged area by the layout itself, so the shell never holds it.
+ *
+ * The shell asks it of every page somebody opens, since the layout above is drawn once; and the layout leaves
+ * these sends to the shell on a request of the client router, where a redirect of its own would loop
+ * (lib/firm/gate.ts).
+ */
+export function shellHold(
+  viewer: { hasFirm: boolean; isSuperadmin: boolean; owesSecondFactor: boolean },
+  path: string,
+): string | null {
+  const decision = decideGate({
+    path,
+    hasFirm: viewer.hasFirm,
+    isSuperadmin: viewer.isSuperadmin,
+    impersonating: false,
+    secondFactorRequired: viewer.owesSecondFactor,
+    hasSecondFactor: !viewer.owesSecondFactor,
+  });
+  return decision && decision.redirectTo !== FIRM_SETUP_PATH ? decision.redirectTo : null;
 }
