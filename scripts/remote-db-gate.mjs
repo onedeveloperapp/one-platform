@@ -141,6 +141,22 @@ async function migrate(databaseUrl) {
     }
 
     const applied = await readAppliedMigrations(sql);
+    if (shouldApply) {
+      // Supabase grants every new table of public to anon and authenticated by default: the history is the owner's
+      // and the service role's alone, so a session may neither read nor write it (RLS on and no policy, and no grant).
+      await sql.unsafe(`
+        do $$
+        declare r text;
+        begin
+          revoke all on table public.schema_migrations from public;
+          foreach r in array array['anon', 'authenticated'] loop
+            if exists (select 1 from pg_roles where rolname = r) then
+              execute format('revoke all on table public.schema_migrations from %I', r);
+            end if;
+          end loop;
+        end $$;
+      `);
+    }
     const unknownApplied = [...applied].filter((version) => !files.includes(version));
     if (unknownApplied.length > 0) {
       throw new Error(`Remote migration history contains unknown files: ${unknownApplied.join(", ")}`);

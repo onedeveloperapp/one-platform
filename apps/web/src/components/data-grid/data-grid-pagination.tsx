@@ -1,7 +1,7 @@
 import { TablePaginationProps } from "@mui/material";
 import { TablePagination } from "@mui/material";
 import MuiPagination from "@mui/material/Pagination";
-import { gridPageCountSelector, useGridApiContext, useGridSelector } from "@mui/x-data-grid-pro";
+import { gridPageCountSelector, useGridApiContext, useGridSelector } from "@mui/x-data-grid";
 
 import NiChevronDownSmall from "@/icons/nexture/ni-chevron-down-small";
 

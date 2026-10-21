@@ -3,8 +3,6 @@
 import { useTranslations } from "next-intl";
 import { Suspense } from "react";
 
-import { LicenseInfo } from "@mui/x-license";
-
 import AnnouncementBanner from "@/components/layout/announcements/announcement-banner";
 import ContentWrapper from "@/components/layout/containers/content-wrapper";
 import Header from "@/components/layout/containers/header";
@@ -16,8 +14,6 @@ import MenuBackdrop from "@/components/layout/menu/menu-backdrop";
 import { ViewerProvider } from "@/components/layout/viewer-context";
 import SupportWidget from "@/components/support/support-widget";
 import type { MenuViewer } from "@/lib/firm/menu";
-
-LicenseInfo.setLicenseKey(process.env.NEXT_PUBLIC_MUI_X_LICENSE_KEY || "");
 
 /**
  * The frame of the logged area: header, menu, the page and what floats over

@@ -66,6 +66,9 @@ select is(
     where n.nspname = 'public'
       and has_function_privilege('anon', p.oid, 'EXECUTE')
       and not exists (select 1 from pg_depend d where d.objid = p.oid and d.deptype = 'e')
+      -- A function of an event trigger is called by no role (Supabase's own `rls_auto_enable`, which turns RLS on
+      -- in every new table of public, is one): it is no way in.
+      and p.prorettype <> 'event_trigger'::regtype
   ),
   -- The client_link_* functions are a client's way in, by the token of their link (0022, 0023, 0025, 0026, 0038).
   array[
@@ -111,6 +114,8 @@ select is(
     where n.nspname = 'public' and c.relkind = 'r'
       and not has_table_privilege('authenticated', c.oid, 'SELECT')
       and not has_any_column_privilege('authenticated', c.oid, 'SELECT')
+      -- The history of the migrations is the runner's (`scripts/remote-db-gate.mjs` on a hosted project), not the product's.
+      and c.relname <> 'schema_migrations'
   ),
   array[
     'billing_webhook_events',
@@ -199,6 +204,7 @@ select is(
     where n.nspname = 'public'
       and has_function_privilege('public', p.oid, 'EXECUTE')
       and not exists (select 1 from pg_depend d where d.objid = p.oid and d.deptype = 'e')
+      and p.prorettype <> 'event_trigger'::regtype
   ),
   '{}'::text[],
   'no function is left executable by PUBLIC'

@@ -103,6 +103,23 @@ export default [
       ],
       "prettier/prettier": "warn",
       "@next/next/google-font-display": "error",
+      // No component that needs a paid licence: MUI X's community packages (MIT) only. What only a paid tier
+      // gives is built in the project's own code (the owner's decision of 2026-10-21).
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              regex: "^@mui/x-[a-z-]+-(pro|premium)(/.*)?$",
+              message: "Pacote pago do MUI X: use o pacote comunitário (MIT) ou um componente próprio do projeto.",
+            },
+            {
+              regex: "^@mui/x-license(/.*)?$",
+              message: "O ONE não registra licença do MUI X: nenhum componente pago é usado.",
+            },
+          ],
+        },
+      ],
     },
   },
 ];
