@@ -17,6 +17,29 @@ Root Directory (`apps/web`) e quebra os symlinks de workspace para
 da nuvem resolve os pacotes `@flyee/*` nativamente. Continua tudo por token, sem
 a integração Git da Vercel.
 
+## O ONE hoje (feito em 2026-10-21)
+
+| O quê | Valor |
+| --- | --- |
+| Repositório | `github.com/onedeveloperapp/one-platform` (privado; esta máquina faz push por SSH pela conta BrunoSantanaDeveloper, colaboradora do repositório) |
+| Conta e time da Vercel | `onedeveloperapp`, time **ONE** (`team_K9MuFpOssa8qLl0aqB92grxu`), plano Hobby |
+| Projeto da Vercel | `one-platform` (`prj_aUngzQES91eCBPmPkG7wBtQRmCFz`): Root Directory `apps/web`, arquivos fora dele incluídos, Next.js, Node 22.x, funções em São Paulo (`gru1`), sem conexão Git |
+| Endereço de produção | `https://one-platform-two.vercel.app` (o `one-platform.vercel.app` já tinha dono) |
+| Secrets do repositório | `VERCEL_TOKEN` (criado no painel da Vercel, escopo ONE), `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID` |
+| Variáveis na Vercel | `NEXT_PUBLIC_SITE_URL` (Production) e `NEXT_PUBLIC_STORAGE_PREFIX=one` (Production e Preview); em Production também as do Supabase, `VAULT_KEYS` e `ANTHROPIC_API_KEY`. `WHATSAPP_SIMULATOR`, `CALENDAR_FAKE` e `PSC_FAKE` estão em Production, onde nunca valem: só agem num preview |
+
+A CLI da Vercel desta máquina continua logada em outra conta. A do ONE fica numa
+pasta de configuração própria e é usada assim, da raiz do repositório:
+
+```bash
+vercel -Q C:\Users\tribo\.vercel-one whoami
+vercel -Q C:\Users\tribo\.vercel-one env ls
+```
+
+O `.vercel/project.json` da raiz (ignorado pelo git) aponta para `one-platform`.
+O plano Hobby é para uso pessoal e não comercial nos termos da Vercel: antes de
+o ONE atender um escritório, o time passa para o Pro.
+
 ## Setup único
 
 ### 1. Criar/vincular o projeto na Vercel (local, uma vez)
@@ -29,8 +52,8 @@ npx vercel login
 npx vercel link
 ```
 
-No `link`, escolha o escopo (team/conta) e crie o projeto novo (ex.:
-`flyee-club`). Isso gera `.vercel/project.json` (gitignored) com o `orgId` e o
+No `link`, escolha o escopo (team/conta) e crie o projeto novo (o do ONE é
+`one-platform`, ver acima). Isso gera `.vercel/project.json` (gitignored) com o `orgId` e o
 `projectId` — são os valores dos secrets do passo 4. O `.vercel/` herdado da
 cópia do MedChina foi apagado em 2026-09-30: ele apontava para o projeto do
 MedChina, e um `vercel deploy` daqui publicaria o flyee.club lá.
