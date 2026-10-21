@@ -1,0 +1,156 @@
+{
+  "_readme": "Machine-readable catalog of the PRODUCT component library (mirror of components/marketing/catalog.json for the authenticated app). The PreToolUse product-screen-guard injects a digest of this file into every write/edit under app/(dashboard)/** or components/product/**, so the full expressive range is in context on every generation, not just the primitives the model happens to remember. Two kinds of entry: `components` are shared components that already exist in this repo (import them), and `template` are shapes described here but NOT packaged yet (build them to the description instead of inventing a new shape). Keep entries in sync when props change; guard lines render as `Name(props) — use`.",
+  "contract": [
+    "NEVER invent a component. The catalog below is the first stop for any container, tile, card, badge, meter or chart, and it is checked BEFORE markup is written, not after. If nothing here fits, build the new component in the existing visual language (tokens, radii, TILE_TONE tints, band height, type scale) and add it to this file in the same commit. Improvising a `<Box>` with a border and a radius is a defect even when it looks acceptable: it type-checks, it passes review, and it quietly grows a second design language. `product-lint` blocks the interactive form of this.",
+    "Before rendering a value, ask which catalog entry is the right shape for it. A counter set, a ratio, a share and a series each have a component — a run-on sentence of numbers is a defect, not a style.",
+    "Never invent a chart to fill space. A visual earns its place only when it answers a question the user actually asks, and only on data the payload already carries. Vanity metrics and decorative charts are forbidden (.claude/rules/app-ux.md).",
+    "Never hand-roll a shape that exists here. If the nearest entry does not fit, extend it (a prop, a mode) or build the `template` shape it describes, rather than writing a one-off.",
+    "Red is reserved for risk and failure. Commercial ceilings, queues and declines use `attention` (accent-3) — see usage-meter for the precedent.",
+    "Type scale: body1 14px, body2 12px, subtitle2 14px semibold, h5 18px, h4 20px. `caption` is below 12px — never for informative text."
+  ],
+  "tones": {
+    "rule": "Icon containers use TILE_TONE (bg-{tone}-light/10 + text-{tone}), tones primary | secondary | accent-1..4. Bars and meters use the UsageMeter vocabulary: primary | secondary | attention | empty. Status labels use the pastel badge, never colour alone."
+  },
+  "components": [
+    {
+      "name": "EmptyState",
+      "from": "@/components/product/empty-state",
+      "props": "icon, title, description?, action?, secondaryAction?, className?, titleAs?",
+      "use": "Every zero-data view: icon + why it is empty + the ONE next action. Never a bare 'no data'. Inside a card whose title is the h2, pass titleAs=\"h3\"."
+    },
+    {
+      "name": "PageHeader",
+      "from": "@/components/product/page-header",
+      "props": "title, crumbs[{label,href?}], description?, action?",
+      "use": "The title block of every member screen: the page's ONE <h1>, breadcrumbs back to the home, one sentence on what the screen is for, at most one action. Never hand-write an h1 + Breadcrumbs pair again."
+    },
+    {
+      "name": "UsageMeter",
+      "from": "@/components/product/usage-meter",
+      "props": "headline, caption?, segments[{key,label,value,display,tone}], ariaLabel",
+      "use": "A consumption readout — used vs remaining, with each pool NAMED. Use for any x-of-y allowance (minutes, quota). Beats a plain progress bar when the pools differ in nature (cycle vs purchased)."
+    },
+    {
+      "name": "MetricBars",
+      "from": "@/components/product/metric-bars",
+      "props": "items[{key,label,value,tone?,hint?,action?}], total?, spacing?, whole?",
+      "use": "Two to six counters that describe one population (a status funnel, accepted/edited/rejected, failures by stage). Replaces a sentence of counts. Port of the template's Application Status. `whole={false}` is for counters that share no whole (what a dossier holds): the same rows with no bar and no share."
+    },
+    {
+      "name": "TrendSparkline",
+      "from": "@/components/product/trend-sparkline",
+      "props": "label, data[], plotType?, formatValue?, caption?, tone?",
+      "use": "A SERIES the payload already carries: value + change against the previous point + the curve. Never synthesize a series to decorate. Port of the template's stat-with-sparkline. The text is the accessible reading (the change is spelled out for screen readers) and the drawing is hidden from assistive technology; only the triangle carries the hue, because accent tones fail contrast as small text."
+    },
+    {
+      "name": "StatTile",
+      "from": "@/components/product/home-tiles",
+      "props": "href | onClick+pressed | neither (plain readout), icon, tone, label, value, hint?",
+      "use": "A counter as a tile: tinted icon band (h-[4.5rem]) + label + value in h5, four across. `href` makes it a link; `onClick`+`pressed` make it a real filter button with aria-pressed. Port of dashboard-analytics-stats. A filter row is THIS, never a hand-written Box."
+    },
+    {
+      "name": "QuickActionTile",
+      "from": "@/components/product/home-tiles",
+      "props": "href, icon, tone, title, description",
+      "use": "A shortcut: full-height tinted icon column (w-16) + title + one-line description. Four across, never two columns."
+    },
+    {
+      "name": "TILE_TONE",
+      "from": "@/components/product/tile-tone",
+      "props": "TILE_TONE[tone] -> { bg, text }",
+      "use": "The only source of icon-container tinting. Never hand-write bg-primary/10 — the template tint is bg-{tone}-light/10."
+    },
+    {
+      "name": "ConfirmActionDialog",
+      "from": "@/components/product/confirm-action-dialog",
+      "props": "title, intro?, consequences[], stays?, staysTitle?, reasonLabel?, reasonPlaceholder?, reasonHelp?, reasonMinLength?, confirmLabel, tone?, onConfirm(reason)->Promise<string|null>, onClose",
+      "use": "Any operator action that changes someone else's account. It forces the three things a confirmation owes the reader: what the action DOES (`consequences`), what it deliberately does NOT do (`stays` — half the risk is assuming it reaches further), and a stated reason for the audit trail. Mount it conditionally with a `key` so it never changes identity on the way out. Never ship a destructive action on a bare click."
+    },
+    {
+      "name": "InfoHint",
+      "from": "@/components/product/info-hint",
+      "props": "label/title",
+      "use": "A definition attached to a number. A bare Tooltip on a non-focusable Box disappears on touch and for keyboards — use this instead."
+    },
+    {
+      "name": "StatusChip",
+      "from": "@/components/product/status-chip",
+      "props": "label, tone? (neutral | primary | positive | attention | info | danger), className?",
+      "use": "A lifecycle state as a NAMED badge: a module version (rascunho, publicada, retirada), a meeting, a roadmap item, a subscription, a lead. The template's tiny pastel button rendered as a span (no focus, reads as text). The tone tints the badge and the word is always text-primary, because the pastel label in the tone itself fails contrast on this palette. Never colour alone, never an outlined Chip for a state."
+    },
+    {
+      "name": "MessageBubble",
+      "from": "@/components/product/message-bubble",
+      "props": "side ('in' | 'out'), sideLabel, children, meta?, note?, className?",
+      "use": "One message of a conversation, on the side of who said it: the person's on the left over the neutral surface, the firm's on the right over the primary tile tint. Render them as the `li` children of a `ul`. `sideLabel` says the side to a screen reader (alignment and tint are never the only carrier), `meta` is the line under the text (when, by whom, what became of it, as a StatusChip) and `note` the line above it for a message that is not an ordinary one (sent from the phone, from before the connection, a template). Never a Card per message, and never a table of messages."
+    },
+    {
+      "name": "ComparisonTable",
+      "from": "@/components/product/comparison-table",
+      "props": "caption, rowHeader, columns[{key,label,note?,highlight?}], rows[{key,label,note?,muted?,cells[{primary,secondary?,mark?}]}], footer?, legend?, className?",
+      "use": "A few rows compared across a few columns where every cell is a figure (a metric per segment and week, the leader of each metric per week, results per segment). A real <table> with a sticky first column and a keyboard-reachable horizontal scroll. A `muted` row is set in the secondary text colour, never faded with opacity. Not for managing many rows: that is DataTable."
+    },
+    {
+      "name": "DataTable",
+      "from": "@/components/data-grid/data-table",
+      "props": "rows, columns, loading, header?, actions?, filters?, noRowsOverlay, noResultsOverlay, onQuickFilterChange?, initialColumnVisibility?, enableExport?, server?{total,page,pageSize,onPageChange,onSearchChange}",
+      "use": "The app's ONE table, and only when the job really is scan/compare/manage many rows. Put the page title in `header` and the primary action in `actions` — those slots render empty otherwise. Imports the community DataGrid: pinnedColumns needs the wrapper switched to @mui/x-data-grid-premium (installed and licensed). A list that outgrows what a browser should carry (the firm's cases) passes `server`: `rows` is then one page, paging and the search are asked of the caller, the grid sorts and filters nothing by itself, and `enableExport` stays off."
+    },
+    {
+      "name": "OnboardingChecklist / ActivationProgress / SetupWizard",
+      "from": "@/components/product/*",
+      "props": "see each file",
+      "use": "Steps to first value, completion drive, and progressive disclosure for long setups. Never points, badges, leaderboards or streaks."
+    },
+    {
+      "name": "StepCelebrationDialog",
+      "from": "@/components/product/step-celebration-dialog",
+      "props": "open, title, accomplished, nextTitle, nextHint?, ctaLabel, onNext, onClose",
+      "use": "The beat BETWEEN two steps of a guided flow: names what now exists in her records and loads the next step. Competence feedback, never a token — it awards, counts and ranks nothing, so it stays on the right side of the no-points/badges/leaderboards/streaks rule. Its primary action is what advances the wizard (drive SetupWizard in controlled mode)."
+    },
+    {
+      "name": "CheckSuggestion",
+      "from": "@/components/product/check-suggestion",
+      "props": "answer (CheckAnswer from lib/cases/document-check), className?",
+      "use": "What the AI read in a document of a case and suggests (accept or refuse, the reason the client would read, what the file is, the name on it, the legs of a ticket), shown where a person decides it: the case and the approval queue. It decides nothing; the card around it offers the decision. TILE_TONE icon box + StatusChip, the dedicated view of one task's answer that AnswerFields allows."
+    }
+  ],
+  "template": [
+    {
+      "name": "Medidor circular (gauge)",
+      "props": "CircularProgress variant=\"determinate\" + centred label + outline-grey-100 track ring",
+      "use": "One ratio that must read at a glance next to its x/y. No chart library. Not packaged yet — port it when a screen needs a single prominent ratio."
+    },
+    {
+      "name": "Tile horizontal com variação",
+      "props": "Card flex-row p-1 + Box h-24 w-16 rounded-2xl bg-{tone}-light/10 + label body1 + value h5 + NiTriangleUp/Down change",
+      "use": "A counter that has a previous period to compare against. Requires real prior-period data — otherwise use StatTile."
+    },
+    {
+      "name": "Rosca / radar",
+      "props": "PieChart / RadarChart from @mui/x-charts",
+      "use": "Only above ~6 categories, or to compare two comparable series. Below that, MetricBars reads better — prefer it."
+    },
+    {
+      "name": "Card ilustrado",
+      "props": "h4 card-title + body1 + Illustration* h-64 max-w-xs + contained/outlined actions",
+      "use": "The zero-data state of a whole screen, when the path to value deserves more than an EmptyState. Recover the shape with `git show ab2e84d:apps/web/src/components/product/home-empty-banner.tsx`."
+    },
+    {
+      "name": "Timeline de atividade",
+      "props": "@mui/lab Timeline + TimelineDot variant=outlined + subtitle2/body2 + relative time",
+      "use": "'What happened recently' when the order IS the meaning. Recover the shape from the recent-records card in `git show \"ab2e84d:apps/web/src/app/(dashboard)/inicio/page.tsx\"`."
+    }
+  ],
+  "traps": [
+    "MUI 9 builds a component class list as `Mui{Comp}-{variant}` + `Mui{Comp}-color{Color}`; the composed `Mui{Comp}-{variant}{Color}` of MUI 5 is gone. Both known instances are fixed: style/inputs/button.css now targets `.MuiButton-pastel.MuiButton-color{Color}`, and style/data-display/chip.css now targets `.MuiChip-outlined.MuiChip-color{Color}`. An outlined Chip therefore paints BOTH its text (from MUI emotion, matched on props) and its 1px ring (from the template, matched on classes). Before writing a selector against a composed class, check useUtilityClasses in the installed component source — TypeScript will not catch it, because a ChipClasses/ButtonClasses augmentation can declare a class the DOM never receives.",
+    "useHighlightedSparkline derives its y-axis from the data: an empty array yields -Infinity. Guard the series before rendering.",
+    "The template's `caption` variant is below 12px. Consequence text ('this is recorded with your name') belongs in body2.",
+    "An outlined Chip ring inherits the raw colour token, so it is only as legible as that token: on the light theme, error/primary/accent-* clear the 3:1 floor for a graphical object, while info (2.12:1), success (2.13:1), warning (2.51:1) and secondary (2.77:1) do not. Use colour on a Chip as reinforcement of a word that is already in the label, never as the sole carrier of the state.",
+    "A colour prop that is CONSTANT down a whole column carries no information and costs contrast: it reads as an affordance (primary) or dilutes the one signal that matters (error). Colour a Chip only where the colour VARIES with the row.",
+    "Feedback severity tokens (`--{sev}-light` / `--{sev}-dark`) hold the SAME value in the light and the dark block of design-tokens/css/common.css. A rule written as `text-{sev}-dark` for the light theme is therefore automatically wrong in the dark one, and no `dark:` variant exists to save it. Measured on the Alert: the template pairing of `bg-{sev}-light/10` + `text-{sev}-dark` reads 2.51:1 (info), 2.56:1 (success), 2.95:1 (warning) on light and 2.15:1 for error on dark, against ~9.2:1 for the inherited text. Severity belongs in the BACKGROUND and the ICON; the words keep inheriting text-primary.",
+    "The palette is written as `hsl(var(--token))` with cssVariables on. decomposeColor cannot read that and returns NaN WITHOUT throwing, so MUI never reaches its own fallback: every DERIVED colour (theme.alpha, palette.Alert.{sev}StandardBg, getContrastText) resolves to a value the browser discards. Direct references such as palette[sev].main survive — which is why an Alert icon is coloured today while its background is not. Consequence: when a template selector dies there is no native styling underneath it, and any new component that leans on a computed MUI colour is born broken and silent.",
+    "Run `npm run check:mui-classes` after touching anything under apps/web/src/style/**. It matches every `.Mui{Comp}-{slot}` against that component's own class manifest in node_modules, the only source of truth: a ChipClasses/ButtonClasses type augmentation can declare a class the DOM never emits, and that is exactly how three stylesheets accumulated dead rules nobody could see.",
+    "COLOUR ON A LABEL, MEASURED. This theme's palette is too light on six of its ten colours to carry text, and neither MUI nor the template compensates. Light theme, against the 4.5:1 floor: a FILLED surface (contained Button, filled Chip, Fab, selected ToggleButton) paints the label with `contrastText` = white, which clears only primary 4.89, accent-2 4.51, accent-4 5.22 and error 5.31 — it fails secondary 2.77, accent-1 3.77, accent-3 3.55, info 2.12, warning 2.51, success 2.13. An OUTLINED Chip does NOT rescue it: MUI paints that label `palette[color].main`, the same tone, so outlined warning is also 2.51. The pastel badge is no better (warning 2.95). Only three ways out, in order of preference: fill with one of the four colours that pass; or keep the tone in the RING and give the label `text-text-primary!` (9.79:1), which is what the alert chips of the inherited clinical-context-bar.tsx did (git show ab2e84d:apps/web/src/components/product/clinical-context-bar.tsx); or state the severity in the word and drop the colour. Never assume a variant change fixes contrast — measure it."
+  ]
+}

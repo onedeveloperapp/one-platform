@@ -1,0 +1,91 @@
+"use client";
+
+import { LaunchAdmin, LegalEntityAdmin } from "./components/site-admin";
+import SupportAdmin from "./components/support-admin";
+import Link from "next/link";
+import { useEffect, useState } from "react";
+
+import { Alert, Breadcrumbs, Card, CardContent, Grid, Typography } from "@mui/material";
+
+import { isSupabaseConfigured } from "@flyee/auth";
+import { createClient } from "@flyee/auth/client";
+
+/**
+ * Superadmin console for the public settings of the site (platform_settings):
+ * the launch stage, the operating company in the footer and the quick-support
+ * channels. RLS is the real gate; the client-side check only improves UX.
+ */
+export default function AdminSupport() {
+  const [allowed, setAllowed] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    const check = async () => {
+      if (!isSupabaseConfigured) {
+        setAllowed(false);
+        return;
+      }
+      const supabase = createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) {
+        setAllowed(false);
+        return;
+      }
+      const { data } = await supabase.from("profiles").select("is_superadmin").eq("id", user.id).maybeSingle();
+      setAllowed(Boolean(data?.is_superadmin));
+    };
+    check();
+  }, []);
+
+  return (
+    <Grid container spacing={5}>
+      <Grid size={12}>
+        <Typography variant="h1" component="h1" className="mb-0">
+          Site e suporte
+        </Typography>
+        <Breadcrumbs>
+          <Link color="inherit" href="/inicio">
+            Início
+          </Link>
+          <Typography variant="body2">Admin</Typography>
+          <Typography variant="body2">Site e suporte</Typography>
+        </Breadcrumbs>
+      </Grid>
+
+      {allowed === false && (
+        <Grid size={12}>
+          <Alert severity="error" className="neutral bg-background-paper/60!">
+            Esta área é restrita aos superadmins da plataforma.
+          </Alert>
+        </Grid>
+      )}
+
+      {allowed && (
+        <>
+          <Grid size={{ xs: 12, lg: 6 }}>
+            <Card component="section" className="h-full">
+              <CardContent>
+                <LaunchAdmin />
+              </CardContent>
+            </Card>
+          </Grid>
+          <Grid size={{ xs: 12, lg: 6 }}>
+            <Card component="section" className="h-full">
+              <CardContent>
+                <LegalEntityAdmin />
+              </CardContent>
+            </Card>
+          </Grid>
+          <Grid size={12}>
+            <Card component="section">
+              <CardContent>
+                <SupportAdmin />
+              </CardContent>
+            </Card>
+          </Grid>
+        </>
+      )}
+    </Grid>
+  );
+}

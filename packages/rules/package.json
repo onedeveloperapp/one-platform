@@ -1,0 +1,23 @@
+{
+  "name": "@flyee/rules",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "The pure rules of ONE's domain: no I/O, no clock of its own, no framework. The validators of M2 (the unique case number of the CNJ, flight numbers and airport codes, registrations at the bar, a person's age on a date), and since S6 the forum, the kind of proceeding, the reading of a METAR, the Tema 1.417 triage and the count of causes per state, and since S9 the deadline of a procedural act over the court's calendar; prescription joins in M4.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./cnj": "./src/cnj.ts",
+    "./deadlines": "./src/deadlines.ts",
+    "./flight": "./src/flight.ts",
+    "./forum": "./src/forum.ts",
+    "./oab": "./src/oab.ts",
+    "./person": "./src/person.ts",
+    "./proceedings": "./src/proceedings.ts",
+    "./state-count": "./src/state-count.ts",
+    "./suspension": "./src/suspension.ts",
+    "./weather": "./src/weather.ts"
+  },
+  "scripts": {
+    "test": "node --experimental-strip-types --test src/rules.test.ts src/domain.test.ts src/deadlines.test.ts"
+  }
+}

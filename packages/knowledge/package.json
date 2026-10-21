@@ -1,0 +1,15 @@
+{
+  "name": "@flyee/knowledge",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "The pure rules of the firm's verified library: reading what a piece cites (norms, súmulas, themes, decisions) into the key each has in the library, and measuring how alike two pieces are. No I/O, no clock, no framework. The search over the library's texts (the hybrid retrieval of the mold in commit ab2e84d, which needs pgvector) joins in a later milestone.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./citations": "./src/citations.ts",
+    "./similarity": "./src/similarity.ts"
+  },
+  "scripts": {
+    "test": "node --experimental-strip-types --test src/citations.test.ts src/similarity.test.ts"
+  }
+}

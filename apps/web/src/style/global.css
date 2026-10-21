@@ -1,0 +1,211 @@
+/* --------------------------- */
+/* Global */
+/* --------------------------- */
+
+/* 
+  Define the CSS layer order. 
+  Note: MUI overrides this when loaded with enableCssLayer: true.
+  We use MuiLayerOverride component in ThemeProvider to enforce this order.
+*/
+@layer theme, base, mui, components, utilities;
+
+@import "tailwindcss";
+@config "../../tailwind.config.ts";
+
+/*
+  Dark mode is CLASS-driven in this app (ThemeProvider toggles `.dark` on
+  <html>), not media-query-driven. Without this, Tailwind's `dark:` variant
+  follows prefers-color-scheme and silently disagrees with the app theme —
+  the light/dark <ProductShot> swap depends on it.
+*/
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* --------- Theme (design tokens: source of truth in packages/design-tokens) --------- */
+@import "@flyee/design-tokens/css/common.css";
+/* One locked palette, provisional for ONE (2026-10-08): blue.css. The other theme files stay in the package but are not loaded. */
+@import "@flyee/design-tokens/css/blue.css";
+@import "@flyee/design-tokens/css/marketing.css";
+
+/* --------- Surfaces --------- */
+@import "./surfaces/accordion.css";
+@import "./surfaces/card.css";
+@import "./surfaces/paper.css";
+
+/* --------- Data Display --------- */
+@import "./data-display/avatar.css";
+@import "./data-display/badge.css";
+@import "./data-display/chip.css";
+@import "./data-display/divider.css";
+@import "./data-display/list.css";
+@import "./data-display/table.css";
+@import "./data-display/tooltip.css";
+@import "./data-display/typography.css";
+
+/* --------- Navigation --------- */
+@import "./navigation/breadcrumb.css";
+@import "./navigation/menu.css";
+@import "./navigation/bottom-navigation.css";
+@import "./navigation/drawer.css";
+@import "./navigation/link.css";
+@import "./navigation/pagination.css";
+@import "./navigation/stepper.css";
+@import "./navigation/tabs.css";
+
+/* --------- Inputs --------- */
+@import "./inputs/autocomplete.css";
+@import "./inputs/button.css";
+@import "./inputs/button-group.css";
+@import "./inputs/checkbox.css";
+@import "./inputs/fab.css";
+@import "./inputs/input.css";
+@import "./inputs/radiobutton.css";
+@import "./inputs/rating.css";
+@import "./inputs/select.css";
+@import "./inputs/slider.css";
+@import "./inputs/switch.css";
+@import "./inputs/tooglebutton.css";
+
+/* --------- Layout --------- */
+@import "./layout/scrollbar.css";
+@import "./layout/image-list.css";
+@import "./layout/backgrounds.css";
+@import "./layout/marketing-motion.css";
+
+/* --------- Feedback --------- */
+@import "./feedback/alert.css";
+@import "./feedback/dialog.css";
+@import "./feedback/progress.css";
+@import "./feedback/skeleton.css";
+@import "./feedback/snackbar.css";
+
+/* --------- Lab --------- */
+@import "./lab/timeline.css";
+
+/* --------- Mui X --------- */
+@import "./mui-x/chart.css";
+@import "./mui-x/data-grid.css";
+@import "./mui-x/date-time-picker.css";
+@import "./mui-x/tree-view.css";
+
+/* --------- Plugins --------- */
+@import "./plugins/video-player-vidstack.css";
+@import "./plugins/file-upload-react-dropzone.css";
+
+/*
+  The default border color has changed to `currentColor` in Tailwind CSS v4,
+  so we've added these compatibility styles to make sure everything still
+  looks the same as it did with Tailwind CSS v3.
+
+  If we ever want to remove these styles, we need to add an explicit border
+  color utility to any element that depends on these defaults.
+*/
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-gray-200, currentColor);
+  }
+}
+
+@utility text-balance {
+  text-wrap: balance;
+}
+
+@layer utilities {
+  body {
+    @apply bg-background text-text-primary m-0 p-0 font-sans text-base;
+  }
+}
+
+* {
+  @apply box-border;
+}
+
+.bg-foreground,
+.shadow-inside {
+  transition: background-color 0.2s ease-in-out;
+}
+
+.shadow-inside {
+  transition: box-shadow 0.2s ease-in-out;
+}
+
+@theme {
+  --shadow-inside: var(--shadow-inside);
+
+  --shadow-line-left: var(--shadow-line-left);
+  --shadow-line-right: var(--shadow-line-right);
+
+  --shadow-2xs: var(--shadow-2xs);
+  --shadow-xs: var(--shadow-xs);
+  --shadow-sm: var(--shadow-sm);
+  --shadow-md: var(--shadow-md);
+  --shadow-lg: var(--shadow-lg);
+  --shadow-xl: var(--shadow-xl);
+  --shadow-2xl: var(--shadow-2xl);
+
+  --shadow-darker-2xs: var(--shadow-darker-2xs);
+  --shadow-darker-xs: var(--shadow-darker-xs);
+  --shadow-darker-sm: var(--shadow-darker-sm);
+  --shadow-darker-md: var(--shadow-darker-md);
+  --shadow-darker-lg: var(--shadow-darker-lg);
+  --shadow-darker-xl: var(--shadow-darker-xl);
+  --shadow-darker-2xl: var(--shadow-darker-2xl);
+
+  --animate-float: float 2s ease-in-out infinite;
+
+  @keyframes float {
+    0% {
+      transform: translateY(0);
+    }
+
+    50% {
+      transform: translateY(-10px);
+    }
+
+    100% {
+      transform: translateY(0);
+    }
+  }
+
+  /*
+    The ambient drift of the marketing satellites (components/marketing/float.tsx):
+    half a cycle up, half a cycle back, on a sine ease. The element sets
+    --float-travel, --float-cycle, --float-delay and --float-rotate when it
+    departs from the motion tokens. Transform only, so the compositor runs it.
+
+    Ten half cycles (thirty seconds with the token), not forever. The browser
+    produces a main-thread frame for every tick of a running animation while
+    any IntersectionObserver is watching something, and one always is (link
+    prefetching, the scroll reveals): an endless drift kept a phone working on
+    an idle page. An even count ends where it started, at rest.
+  */
+  --animate-mkt-float: mkt-float calc(var(--float-cycle, var(--motion-float-duration, 6s)) / 2)
+    cubic-bezier(0.37, 0, 0.63, 1) var(--float-delay, 0s) 10 alternate;
+
+  @keyframes mkt-float {
+    from {
+      transform: translateY(0) rotate(0deg);
+    }
+
+    to {
+      transform: translateY(calc(var(--float-travel, var(--motion-float-distance, 0.4rem)) * -1))
+        rotate(var(--float-rotate, 0deg));
+    }
+  }
+
+  --animate-wiggle: wiggle 1s ease-in-out infinite;
+
+  @keyframes wiggle {
+    0%,
+    100% {
+      transform: rotate(-3deg);
+    }
+
+    50% {
+      transform: rotate(3deg);
+    }
+  }
+}

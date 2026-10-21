@@ -1,0 +1,38 @@
+{
+  // Type check of the adapter packages on their own (`npm run typecheck:adapters`).
+  // The web app's tsc only reaches a package through an import, and an adapter
+  // exists before its first consumer does. `erasableSyntaxOnly` keeps the
+  // sources runnable by `node --experimental-strip-types`, which is how the
+  // contract tests run.
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2023"],
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true,
+    "erasableSyntaxOnly": true,
+    "allowImportingTsExtensions": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "types": ["node"]
+  },
+  "include": [
+    "calendar/src",
+    "psc/src",
+    "courts/src",
+    "flights/src",
+    "identity/src",
+    "signatures/src",
+    "whatsapp/src",
+    "connectors/src",
+    "documents/src",
+    "rules/src",
+    "knowledge/src",
+    "backup/src/tables.ts",
+    "backup/src/tables.test.ts"
+  ]
+}

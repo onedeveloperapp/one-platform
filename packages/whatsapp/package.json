@@ -1,0 +1,18 @@
+{
+  "name": "@flyee/whatsapp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "WhatsApp behind a provider interface, one instance per number of a firm: the official Cloud API, the reading of its webhooks (messages, statuses, coexistence, account events) with the signature check, and a simulator that stands where the vendor stands.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./types": "./src/types.ts",
+    "./rules": "./src/rules.ts",
+    "./webhook": "./src/webhook.ts",
+    "./providers/meta": "./src/providers/meta.ts",
+    "./simulator": "./src/simulator.ts"
+  },
+  "scripts": {
+    "test": "node --experimental-strip-types --test src/contract.test.ts src/webhook.test.ts src/rules.test.ts"
+  }
+}

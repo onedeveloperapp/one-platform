@@ -1,0 +1,64 @@
+/* --------------------------- */
+/* Theme Green — the palette inherited with the base project. Not loaded: */
+/* the site uses orange.css provisionally (apps/web/src/style/global.css). */
+/* Primary: Teal #177c81 · Secondary: Camel #c09362 */
+/* Accents derived outside the main brand colors, for highlights/charts:  */
+/* jade, slate blue, terracotta, plum. Red stays reserved for risk/error. */
+/* --------------------------- */
+
+@layer base {
+  .theme-green {
+    --primary: 183 70% 30%;
+    --primary-light: 183 70% 40%;
+    --primary-dark: 183 70% 20%;
+
+    --secondary: 31 43% 57%;
+    --secondary-light: 31 43% 67%;
+    --secondary-dark: 31 43% 47%;
+
+    --accent-1: 158 35% 42%;
+    --accent-1-light: 158 35% 52%;
+    --accent-1-dark: 158 35% 32%;
+
+    --accent-2: 210 40% 48%;
+    --accent-2-light: 210 40% 58%;
+    --accent-2-dark: 210 40% 38%;
+
+    --accent-3: 16 55% 55%;
+    --accent-3-light: 16 55% 65%;
+    --accent-3-dark: 16 55% 45%;
+
+    --accent-4: 327 28% 47%;
+    --accent-4-light: 327 28% 57%;
+    --accent-4-dark: 327 28% 37%;
+
+    color-scheme: light;
+  }
+  .theme-green.dark {
+    --primary: 183 55% 40%;
+    --primary-light: 183 55% 50%;
+    --primary-dark: 183 55% 30%;
+
+    --secondary: 31 45% 62%;
+    --secondary-light: 31 45% 72%;
+    --secondary-dark: 31 45% 38%;
+
+    --accent-1: 158 30% 50%;
+    --accent-1-light: 158 30% 60%;
+    --accent-1-dark: 158 30% 32%;
+
+    --accent-2: 210 42% 58%;
+    --accent-2-light: 210 42% 68%;
+    --accent-2-dark: 210 42% 40%;
+
+    --accent-3: 16 55% 60%;
+    --accent-3-light: 16 55% 70%;
+    --accent-3-dark: 16 55% 42%;
+
+    --accent-4: 327 30% 56%;
+    --accent-4-light: 327 30% 66%;
+    --accent-4-dark: 327 30% 42%;
+
+    color-scheme: dark;
+  }
+}

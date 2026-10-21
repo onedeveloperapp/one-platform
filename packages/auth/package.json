@@ -1,0 +1,21 @@
+{
+  "name": "@flyee/auth",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Supabase auth clients and helpers: browser client, server client (cookies), middleware session refresh and the service-role client.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./client": "./src/client.ts",
+    "./server": "./src/server.ts",
+    "./middleware": "./src/middleware.ts",
+    "./service": "./src/service.ts"
+  },
+  "dependencies": {
+    "@supabase/ssr": "^0.7.0",
+    "@supabase/supabase-js": "^2.50.0"
+  },
+  "peerDependencies": {
+    "next": ">=15"
+  }
+}

@@ -1,0 +1,72 @@
+# IDE specific
+# WebStorm
+.idea/
+# VSCode
+.vscode/
+
+# System files
+.DS_Store
+Thumbs.db
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Dependency directories
+node_modules/
+
+# Next.js build output
+.next/
+out/
+
+# Production files
+build/
+
+# Test and local tool output
+test-results/
+playwright-report/
+coverage/
+.expo/
+
+# TypeScript
+*.tsbuildinfo
+
+# Miscellaneous
+*.pem
+
+# Ignore EditorConfig
+.editorconfig
+
+# vercel
+.vercel
+
+# Supabase local runtime and generated migration mirror. Canonical migrations
+# stay in packages/db/migrations.
+supabase/.temp/
+supabase/migrations/*.sql
+
+# typescript
+next-env.d.ts
+
+# local configuration — real keys live here, never in git (.env.example is the tracked reference)
+.env
+.env.local
+.claude/settings.local.json
+
+.vercel
+
+
+# Inherited MedChina media (deleted in phase 1 of docs/PLANO-IMPLEMENTACAO.md);
+# kept out of git history on purpose.
+/apps/web/public/videos/
+
+# Local tool caches (embedded Postgres for npm run test:db:embedded)
+.cache/
+
+# ONE source material (the deck, the flow maps, the meeting transcript): it stays on the
+# machine and out of the repository, by the owner's decision (2026-10-09).
+/attachments/*
+!/attachments/README.md

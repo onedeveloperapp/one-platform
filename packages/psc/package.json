@@ -1,0 +1,22 @@
+{
+  "name": "@flyee/psc",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "A lawyer's ICP-Brasil cloud certificate behind an interface: the holder authorizes ONE at their certificate provider (a PSC) and ONE asks it to sign, never holding the key. One client for every PSC, as the ITI's DOC-ICP-17.01 specifies it (authorize with PKCE, token, certificate discovery, signature over a hash), and a fake that signs with an invented certificate, under one contract.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./types": "./src/types.ts",
+    "./pkce": "./src/pkce.ts",
+    "./fake": "./src/fake.ts",
+    "./providers/iti": "./src/providers/iti.ts",
+    "./certificate": "./src/certificate.ts"
+  },
+  "scripts": {
+    "test": "node --experimental-strip-types --test src/contract.test.ts"
+  },
+  "dependencies": {
+    "asn1js": "^3.0.10",
+    "pkijs": "^3.4.1"
+  }
+}

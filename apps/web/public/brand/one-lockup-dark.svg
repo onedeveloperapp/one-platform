@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="180" height="64" viewBox="0 0 180 64" role="img" aria-label="ONE">
+  <!-- Provisional ONE lockup, for dark surfaces (2026-10-08): the mark and the "ONE" lettermark drawn as shapes, so no font is needed. -->
+  <rect width="64" height="64" rx="14" fill="#00BFEB"/>
+  <circle cx="32" cy="32" r="15" fill="none" stroke="#0A2540" stroke-width="7"/>
+  <circle cx="45.5" cy="18.5" r="6.5" fill="#FFFFFF" stroke="#00BFEB" stroke-width="3"/>
+  <g fill="#FFFFFF">
+    <path d="M96 16a16 16 0 1 1 0 32a16 16 0 1 1 0-32zm0 6.5a9.5 9.5 0 1 0 0 19a9.5 9.5 0 1 0 0-19z" fill-rule="evenodd"/>
+    <rect x="120" y="16" width="6.5" height="32"/>
+    <rect x="139.5" y="16" width="6.5" height="32"/>
+    <polygon points="120,16 126.5,16 146,48 139.5,48"/>
+    <rect x="154" y="16" width="6.5" height="32"/>
+    <rect x="154" y="16" width="20" height="6.5"/>
+    <rect x="154" y="28.75" width="17" height="6.5"/>
+    <rect x="154" y="41.5" width="20" height="6.5"/>
+  </g>
+</svg>

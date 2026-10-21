@@ -1,0 +1,237 @@
+import type { FirmFunction, OrgRole } from "@/lib/firm/roles";
+
+/**
+ * The firm's conversations as the screens read them (migration 0019): types
+ * and the pure rules of the screen. The reads are in the page, under the
+ * person's own session; every write is a function of the database, reached
+ * through `lib/whatsapp/actions.ts`.
+ */
+
+export type WhatsAppState = "active" | "disconnected" | "none";
+
+export type ConversationSummary = {
+  id: string;
+  numberId: string;
+  /** The person's number, digits only. */
+  contact: string;
+  /** The name the firm's phone has for the person, else the one WhatsApp shows, else the number. */
+  name: string;
+  phoneLabel: string;
+  preview: string | null;
+  lastDirection: "in" | "out" | null;
+  /**
+   * The person wrote last, through the platform, and nobody of the firm answered. A last word that
+   * came with the history of the number, from before it was connected, waits for nobody.
+   */
+  waiting: boolean;
+  /** When the last message was, already written on the reader's clock. */
+  lastLabel: string | null;
+  unread: number;
+  /** Free text may be sent: the person wrote within the service window. */
+  windowOpen: boolean;
+  /** When the window closes, written on the reader's clock. Null when it is closed. */
+  windowClosesLabel: string | null;
+  optedOut: boolean;
+  /** The number this conversation is on is connected. */
+  numberActive: boolean;
+  /** The number is a simulated one: the screen offers to play the person's side. */
+  simulated: boolean;
+};
+
+export type MessageStatus = "received" | "queued" | "sending" | "sent" | "delivered" | "read" | "failed";
+
+export type ThreadMessage = {
+  id: string;
+  direction: "in" | "out";
+  /** `cloud`: through the platform. `app`: typed on the firm's phone. `history`: from before the number was connected. */
+  origin: "cloud" | "app" | "history";
+  kind: string;
+  body: string | null;
+  status: MessageStatus;
+  errorCode: string | null;
+  momentLabel: string;
+  /** Who of the firm wrote it here. Null for what came in, for the phone and for somebody who left. */
+  authorName: string | null;
+  templateName: string | null;
+  media: { state: "none" | "pending" | "stored" | "failed"; fileId: string | null; filename: string | null };
+};
+
+export type TemplateOption = {
+  id: string;
+  name: string;
+  body: string;
+  headerText: string | null;
+  footerText: string | null;
+  paramCount: number;
+};
+
+export type InboxData = {
+  firm: { id: string; name: string };
+  me: { role: OrgRole; firmFunction: FirmFunction };
+  whatsapp: WhatsAppState;
+  conversations: ConversationSummary[];
+  selected: {
+    conversation: ConversationSummary;
+    messages: ThreadMessage[];
+    olderHidden: boolean;
+    /** The cases of the person with this number, the latest first. */
+    cases: { id: string; seq: number }[];
+  } | null;
+  /** The approved templates of the selected conversation's account. */
+  templates: TemplateOption[];
+  /** A support visit reads the conversations and writes nothing. */
+  supportVisit: boolean;
+  /** The simulated number of the firm, when the simulator is on: the screen can start a conversation on it. */
+  simulatorNumberId: string | null;
+};
+
+/**
+ * What the screen renders from. `no-firm` is the platform operator, who works
+ * in no firm; `unavailable` is a clone without Supabase; `error` is a read
+ * that failed. None of them is ever shown as an empty list.
+ */
+export type InboxState =
+  | ({ kind: "ready" } & InboxData)
+  | { kind: "no-firm" }
+  | { kind: "unavailable" }
+  | { kind: "error" };
+
+/** How many conversations the list loads, most recent first. */
+export const CONVERSATIONS_SHOWN = 60;
+
+/** How many messages of a conversation the thread loads, the most recent ones. */
+export const MESSAGES_SHOWN = 80;
+
+/** A number as people write it: `+55 (62) 99999-0001` for a Brazilian one, `+<digits>` for any other. */
+export function phoneLabel(digits: string): string {
+  const clean = digits.replace(/\D/g, "");
+  const brazil = /^55(\d{2})(\d{4,5})(\d{4})$/.exec(clean);
+  if (brazil) return `+55 (${brazil[1]}) ${brazil[2]}-${brazil[3]}`;
+  return clean ? `+${clean}` : "";
+}
+
+/** The name a conversation shows under: the firm's own name for the person first. */
+export const contactName = (input: { savedName: string | null; contactName: string | null; contact: string }): string =>
+  input.savedName?.trim() || input.contactName?.trim() || phoneLabel(input.contact);
+
+/**
+ * True when a conversation waits for the firm: its last message is the person's and it is the one
+ * that arrived through the platform (the same rule `firm_today` counts by, migration 0020).
+ */
+export function isWaiting(input: {
+  lastDirection: string | null;
+  lastInboundAt: string | null;
+  lastMessageAt: string | null;
+}): boolean {
+  if (input.lastDirection !== "in" || !input.lastInboundAt || !input.lastMessageAt) return false;
+  return Date.parse(input.lastInboundAt) >= Date.parse(input.lastMessageAt);
+}
+
+/** Who may record that a person agreed to be written to again: who manages the firm or works its cases. */
+export const mayRemoveOptOut = (role: OrgRole, firmFunction: FirmFunction): boolean =>
+  role === "owner" || role === "admin" || firmFunction === "socio" || firmFunction === "advogado";
+
+/**
+ * What the composer offers in a conversation, decided from its state in the
+ * same order the database decides (`reserve_wa_send`), so the screen never
+ * offers what would be refused:
+ *
+ *   read_only     a support visit;
+ *   disconnected  the number is no longer connected;
+ *   text          the window is open: free text;
+ *   opted_out     the window is closed and the person asked to stop;
+ *   template      the window is closed: only an approved template.
+ */
+export type ComposerMode = "read_only" | "disconnected" | "text" | "opted_out" | "template";
+
+export function composerMode(input: {
+  supportVisit: boolean;
+  numberActive: boolean;
+  windowOpen: boolean;
+  optedOut: boolean;
+}): ComposerMode {
+  if (input.supportVisit) return "read_only";
+  if (!input.numberActive) return "disconnected";
+  if (input.windowOpen) return "text";
+  return input.optedOut ? "opted_out" : "template";
+}
+
+/** The words of each kind of message that has no text of its own (`product` namespace). */
+const KIND_KEYS: Record<string, string> = {
+  image: "inbox-kind-image",
+  document: "inbox-kind-document",
+  audio: "inbox-kind-audio",
+  video: "inbox-kind-video",
+  sticker: "inbox-kind-sticker",
+  location: "inbox-kind-location",
+  contacts: "inbox-kind-contacts",
+  reaction: "inbox-kind-reaction",
+  interactive: "inbox-kind-interactive",
+  button: "inbox-kind-interactive",
+  template: "inbox-kind-template",
+  system: "inbox-kind-system",
+};
+
+export const kindKey = (kind: string): string => KIND_KEYS[kind] ?? "inbox-kind-unsupported";
+
+/** What became of a message the firm sent, as a word (`product` namespace). */
+const STATUS_KEYS: Record<MessageStatus, string> = {
+  received: "inbox-status-received",
+  queued: "inbox-status-queued",
+  sending: "inbox-status-sending",
+  sent: "inbox-status-sent",
+  delivered: "inbox-status-delivered",
+  read: "inbox-status-read",
+  failed: "inbox-status-failed",
+};
+
+export const statusKey = (status: MessageStatus): string => STATUS_KEYS[status];
+
+/**
+ * Why a message did not go out, in words (`product` namespace). The codes are
+ * the ones recorded on the message: a name when the reason has one, the
+ * vendor's own code otherwise, which the screen shows as it is for whoever
+ * supports the firm.
+ */
+const FAILURE_KEYS: Record<string, string> = {
+  window_closed: "inbox-failure-window-closed",
+  invalid_recipient: "inbox-failure-invalid-recipient",
+  token_invalid: "inbox-failure-token-invalid",
+  vault_not_configured: "inbox-failure-token-invalid",
+  rate_limited: "inbox-failure-rate-limited",
+  unavailable: "inbox-failure-unavailable",
+  unconfirmed: "inbox-failure-unconfirmed",
+  not_attempted: "inbox-failure-not-attempted",
+  number_disconnected: "inbox-failure-number-disconnected",
+  simulator_off: "inbox-failure-simulator-off",
+  file_unavailable: "inbox-failure-file",
+  file_not_found: "inbox-failure-file",
+};
+
+export const failureKey = (code: string | null): string => FAILURE_KEYS[code ?? ""] ?? "inbox-failure-other";
+
+/** True when the failure has no words of its own, so the code is shown beside the generic sentence. */
+export const failureHasNoWords = (code: string | null): boolean => !(code && code in FAILURE_KEYS);
+
+/** The message key of each answer the sending functions give (`product` namespace). */
+const SEND_ERROR_KEYS: Record<string, string> = {
+  not_allowed_in_support_session: "inbox-error-support-session",
+  not_found: "inbox-error-not-found",
+  number_disconnected: "inbox-error-number-disconnected",
+  empty: "inbox-error-empty",
+  too_long: "inbox-error-too-long",
+  window_closed: "inbox-error-window-closed",
+  template_not_found: "inbox-error-template",
+  template_not_approved: "inbox-error-template",
+  template_params_mismatch: "inbox-error-template-values",
+  opted_out: "inbox-error-opted-out",
+  note_required: "inbox-error-note-required",
+  not_authorized: "inbox-error-not-authorized",
+  backend_not_configured: "inbox-error-backend",
+  file_not_found: "inbox-error-file",
+  type_not_allowed: "inbox-error-file-type",
+  too_large: "inbox-error-file-size",
+  not_uploaded: "inbox-error-file-upload",
+};
+
+export const sendErrorKey = (code: string): string => SEND_ERROR_KEYS[code] ?? "inbox-error-failed";

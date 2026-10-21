@@ -1,0 +1,11 @@
+{
+  "name": "@flyee/content",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Site identity (BRAND) and the pt-BR/en i18n message catalogs of the flyee.club platform.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./messages/*": "./messages/*"
+  }
+}

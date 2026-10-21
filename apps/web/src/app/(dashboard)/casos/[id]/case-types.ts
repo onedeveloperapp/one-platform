@@ -1,0 +1,276 @@
+import type { AirlineOption } from "../cases-types";
+
+import type { CaseStatus, Cause, Incident, Origin, PersonData, RequiredDocument } from "@/lib/cases/cases";
+import type { CheckAnswer } from "@/lib/cases/document-check";
+import type { DocumentQuality } from "@/lib/cases/document-quality";
+import type { CaseDossier, CaseDraft, CasePieces } from "@/lib/cases/draft-facts";
+import type { CivilCourtNeed, CourtNote, FamilyState } from "@/lib/cases/family";
+import type { CaseFiling } from "@/lib/cases/filing-facts";
+import type { Ceiling, LawyerCauses, WeatherAssessment } from "@/lib/cases/rules";
+import type { CaseAudio, CaseComplaint, CaseStatement } from "@/lib/cases/statement-facts";
+import type { ComplaintChannel } from "@/lib/cases/statements";
+import type { CourseFacts } from "@/lib/courts/course-facts";
+import type { CaseDeadlines, DeadlineAct } from "@/lib/deadlines/facts";
+import type { FirmFunction } from "@/lib/firm/roles";
+import type { FlightChecks } from "@/lib/flights/facts";
+import type { CaseHearings, Colleague } from "@/lib/hearings/facts";
+import type { CourtZones } from "@/lib/hearings/hearings";
+import type { CaseNotices } from "@/lib/notices/facts";
+
+export type CasePerson = PersonData & {
+  /** What the federal registry said of the CPF, when somebody asked. */
+  registry: {
+    /** What the registry answered for the CPF with this birth date. */
+    result: "found" | "not_found" | "birth_date_mismatch" | "minor";
+    checkedAt: string;
+    name: string | null;
+    situation: string | null;
+    regular: boolean | null;
+    nameMatches: boolean | null;
+  } | null;
+  updatedVia: "firm" | "client";
+};
+
+/** One person in the case: a claimant (an adult, or a minor with who answers for them) or a guardian. */
+export type CaseParty = {
+  partyId: string;
+  role: "claimant" | "guardian";
+  /** For a minor claimant: the guardian party who answers for them. */
+  guardianPartyId: string | null;
+  person: CasePerson;
+};
+
+export type CaseSegment = {
+  id: string;
+  position: number;
+  flight_number: string | null;
+  origin_iata: string | null;
+  destination_iata: string | null;
+  scheduled_departure_local: string | null;
+  scheduled_arrival_local: string | null;
+  actual_departure_local: string | null;
+  actual_arrival_local: string | null;
+  booking_reference: string | null;
+  affected: boolean;
+  source: "firm" | "client";
+};
+
+export type CaseDocument = {
+  id: string;
+  kind: string;
+  partyId: string | null;
+  status: "received" | "accepted" | "rejected";
+  rejectedReason: string | null;
+  source: "client" | "firm" | "whatsapp" | "signature";
+  fileId: string;
+  name: string;
+  createdAt: string;
+  /** The envelope a file the client sent back belongs to (gov.br). */
+  envelopeId: string | null;
+  /** Its bytes are a PDF (what a signature and a court system take). */
+  pdf: boolean;
+  /** What the backend did with it (migration 0024): normalized, checked, or why it could not. */
+  processing: "pending" | "working" | "done" | "skipped" | "failed";
+  processingError: string | null;
+  /** The PDF the backend made of a photo: what goes to a court system. */
+  normalizedFileId: string | null;
+  /** What the rule measured of its photo where it arrived: what keeps it from being read, when something does. */
+  quality: DocumentQuality | null;
+  /** The AI's check: what it suggested, and whether the suggestion still waits for a person. */
+  check: { answer: CheckAnswer; waiting: boolean } | null;
+};
+
+export type CaseProceeding = {
+  id: string;
+  kind: "juizado" | "comum";
+  court: string | null;
+  comarca: string | null;
+  unit: string | null;
+  system: string | null;
+  cnj: string | null;
+  forumBasis: string | null;
+  forumReason: string | null;
+  /** The city the forum is in, when it is not the domicile's. */
+  forumCity: string | null;
+  status: "planned" | "filed" | "closed";
+  filedAt: string | null;
+  parties: string[];
+  lawyers: string[];
+};
+
+export type CaseLink = {
+  id: string;
+  personId: string;
+  createdAt: string;
+  expiresAt: string;
+  revokedAt: string | null;
+  visits: number;
+  lastOpenedAt: string | null;
+  uploads: number;
+  finishedAt: string | null;
+};
+
+export type CaseEvent = {
+  id: string;
+  at: string;
+  kind: string;
+  actorType: string;
+  actorName: string | null;
+  data: Record<string, unknown>;
+};
+
+/** A document sent to be signed (migration 0023). */
+export type CaseEnvelope = {
+  id: string;
+  documentId: string;
+  method: "zapsign" | "govbr" | "enotariado";
+  status: string;
+  signers: { position: number; personId: string; name: string; signUrl: string | null; signedAt: string | null }[];
+  enotariadoUrl: string | null;
+  signedDocumentId: string | null;
+  lastError: string | null;
+  endedReason: string | null;
+  createdAt: string;
+};
+
+/** What a client accepted on their link: the text's title and version, and when. */
+export type CaseConsent = { personId: string; title: string; version: number; acceptedAt: string };
+
+export type TeamMember = { userId: string; name: string; firmFunction: FirmFunction };
+
+export type CourtOption = { acronym: string; name: string; uf: string };
+
+/** The filing system a court uses for each kind of proceeding, as the platform knows it (migration 0021). */
+export type CourtSystem = {
+  court: string;
+  kind: "juizado" | "comum";
+  system: string;
+  confirmed: boolean;
+  notes: string | null;
+  /** The type the lawyer picks in the system for each kind of file, where it is known (0036). */
+  fileTypes: Record<string, string>;
+};
+
+export type CaseDetail = {
+  id: string;
+  seq: number;
+  incident: Incident;
+  airlineIata: string | null;
+  flightDate: string | null;
+  cause: Cause;
+  status: CaseStatus;
+  origin: Origin | null;
+  summary: string | null;
+  responsibleId: string | null;
+  closeReason: string | null;
+  createdAt: string;
+};
+
+/** What the rules of the domain decide on, and what they answered (migration 0025, `@flyee/rules`). */
+export type CaseRules = {
+  /** The small-claims court's ceiling today; null when no minimum wage is on record. */
+  ceiling: Ceiling | null;
+  /** What is asked for each claimant, by party, in centavos. */
+  claims: Record<string, number | null>;
+  /** Where the lawsuits are filed by default. */
+  domicile: { city: string; uf: string } | null;
+  /** The cities of the airports of the trip: where another forum may be. */
+  tripPlaces: { city: string; uf: string }[];
+  /** What the airline told the passenger was the cause. */
+  statedCause: string | null;
+  decision: "pending" | "file" | "hold";
+  /** The decision was ONE's, from the triage, where the firm lets it. */
+  decisionAuto: boolean;
+  /** The triage kept the last time somebody saved it. */
+  savedTriage: { risk: string; grounds: string[]; rule: string; at: string | null } | null;
+  /** The weather read for the affected legs: per airport, and what the triage may conclude from it. */
+  weather: WeatherAssessment;
+  /** This environment has the key to read the reports. */
+  weatherConfigured: boolean;
+  /** The firm's lawyers' causes per state this year, and their registrations at the bar. */
+  causes: LawyerCauses[];
+  registrations: { userId: string; uf: string }[];
+  year: number;
+  /** How the family goes to court: together (the default) or split by a lawyer's choice, with the reason. */
+  family: FamilyState;
+  /** What the platform read of each court on a family split. */
+  courtNotes: CourtNote[];
+};
+
+export type { CaseAudio, CaseComplaint, CaseDossier, CaseDraft, CaseFiling, CasePieces, CaseStatement };
+
+export type CaseState =
+  | {
+      kind: "ready";
+      case: CaseDetail;
+      parties: CaseParty[];
+      segments: CaseSegment[];
+      documents: CaseDocument[];
+      proceedings: CaseProceeding[];
+      links: CaseLink[];
+      envelopes: CaseEnvelope[];
+      consents: CaseConsent[];
+      /** The firm has its ZapSign account connected. */
+      zapsign: boolean;
+      events: CaseEvent[];
+      team: TeamMember[];
+      airlines: AirlineOption[];
+      courts: CourtOption[];
+      courtSystems: CourtSystem[];
+      required: RequiredDocument[];
+      rules: CaseRules;
+      /** Each claimant of a lawsuit planned in the civil court, and their word on it (0025). */
+      civilCourt: CivilCourtNeed[];
+      /** What the clients told about the trip, each with where its chronology stands. */
+      statements: CaseStatement[];
+      /** The audios the case's people sent over WhatsApp that are not an account yet. */
+      audios: CaseAudio[];
+      /** The complaints made before suing, with their protocol and what came of each. */
+      complaints: CaseComplaint[];
+      /** How many days each channel gives for an answer, as the platform's setting says. */
+      complaintAnswerDays: Partial<Record<ComplaintChannel, number>>;
+      /** The filing package of each lawsuit (the one in course, or the one filed), with its files and receipt. */
+      filings: CaseFiling[];
+      /** The draft of each lawsuit's piece, the models it may be asked from, and the dossiers issued. */
+      pieces: CasePieces;
+      /** What ANAC's official record and FlightAware said of each leg, beside the case's own times. */
+      flights: FlightChecks;
+      /** The course of each lawsuit as the court shows it: its reading, what waits in it and its latest movements. */
+      course: CourseFacts;
+      /** The case's deadlines: every open one and the latest closed. */
+      deadlines: CaseDeadlines;
+      /** The acts a term is usually set for, for the form of a new deadline. */
+      deadlineActs: DeadlineAct[];
+      /** The case's hearings: the ones to come and the ones with no word on them, and the latest held or cancelled. */
+      hearings: CaseHearings;
+      /** The firm's people, for who attends a hearing. */
+      colleagues: Colleague[];
+      /** The zones of each court, for the zone a new hearing is said in. */
+      courtZones: Record<string, CourtZones>;
+      /** What ONE waits for to carry the case on by itself (0039), and when it last looked; null with no record. */
+      advance: { waiting: string | null; checkedLabel: string | null } | null;
+      /** A partner of the firm: who names who signs what ONE prepares. */
+      partner: boolean;
+      /** What the case's clients are told on WhatsApp by themselves: who may be, what went and what is due. */
+      notices: CaseNotices;
+      /** The person manages the firm: the notices are switched on in its settings. */
+      managesFirm: boolean;
+      /** The person proposes, completes and corrects deadlines: who signs, or runs them. */
+      worksDeadlines: boolean;
+      /** The person confirms deadlines: a partner or the controladoria. */
+      confirmsDeadlines: boolean;
+      /** The person reading is a partner or a lawyer of the firm: who decides to file or to hold. */
+      lawyer: boolean;
+      /** The day in Brazil's official time: who is a minor is decided by it. */
+      today: string;
+      /** The CPF registry is configured in this environment. */
+      cpfLookup: boolean;
+      supportVisit: boolean;
+    }
+  | { kind: "not-found" }
+  | { kind: "no-firm" }
+  | { kind: "unavailable" }
+  | { kind: "error" };
+
+/** How many events of the timeline the screen reads. */
+export const EVENTS_SHOWN = 80;

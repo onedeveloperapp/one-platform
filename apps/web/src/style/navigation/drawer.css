@@ -1,0 +1,21 @@
+@layer utilities {
+  .MuiDrawer-paper {
+    @apply bg-background-paper;
+  }
+
+  .MuiDrawer-anchorLeft .MuiDrawer-paper {
+    @apply rounded-r-2xl;
+  }
+
+  .MuiDrawer-anchorRight .MuiDrawer-paper {
+    @apply rounded-l-2xl;
+  }
+
+  .MuiDrawer-anchorBottom .MuiDrawer-paper {
+    @apply rounded-t-2xl;
+  }
+
+  .MuiDrawer-anchorTop .MuiDrawer-paper {
+    @apply rounded-b-2xl;
+  }
+}

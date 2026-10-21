@@ -1,0 +1,49 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run lint:*)",
+      "Bash(npm run prettier:*)",
+      "Bash(npm run tokens:generate:*)",
+      "Bash(npx tsc:*)",
+      "PowerShell(npm run lint:*)",
+      "PowerShell(npm run prettier:*)",
+      "PowerShell(npm run tokens:generate:*)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .claude/hooks/marketing-guard.mjs"
+          },
+          {
+            "type": "command",
+            "command": "node .claude/hooks/product-screen-guard.mjs"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .claude/hooks/marketing-lint.mjs"
+          },
+          {
+            "type": "command",
+            "command": "node .claude/hooks/product-lint.mjs"
+          },
+          {
+            "type": "command",
+            "command": "node .claude/hooks/harness-sync.mjs"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "name": "@flyee/ai",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "The AI layer: a ChatProvider interface with Anthropic, Gemini, OpenAI and OpenRouter implementations and a fake, and the executor that runs a task of the platform and records it (the run, the answer, the cost, the approval queue).",
+  "exports": {
+    ".": "./src/index.ts",
+    "./errors": "./src/errors.ts",
+    "./types": "./src/types.ts",
+    "./strict-schema": "./src/strict-schema.ts",
+    "./runs": "./src/runs.ts",
+    "./fake": "./src/fake.ts"
+  },
+  "scripts": {
+    "test": "node --experimental-strip-types --test src/providers/openai.test.ts src/providers/anthropic.test.ts src/errors.test.ts src/strict-schema.test.ts src/runs.test.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.132.1",
+    "@google/genai": "^1.9.0"
+  }
+}

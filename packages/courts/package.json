@@ -1,0 +1,24 @@
+{
+  "name": "@flyee/courts",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Court integrations behind interfaces, each with a real implementation, a fake and a contract test. The DJEN communications client, the rule of a filing package, and the sources of the course of a lawsuit (TJGO's Projudi webservice, the Escavador and Judit aggregators) with their comparative test.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./types": "./src/types.ts",
+    "./fake": "./src/fake.ts",
+    "./filing": "./src/filing.ts",
+    "./oab": "./src/oab.ts",
+    "./providers/djen": "./src/providers/djen.ts",
+    "./providers/projudi": "./src/providers/projudi.ts",
+    "./providers/aggregator-http": "./src/providers/aggregator-http.ts",
+    "./providers/escavador": "./src/providers/escavador.ts",
+    "./providers/judit": "./src/providers/judit.ts",
+    "./xml": "./src/xml.ts",
+    "./compare": "./src/compare.ts"
+  },
+  "scripts": {
+    "test": "node --experimental-strip-types --test src/contract.test.ts src/filing.test.ts src/proceedings.test.ts"
+  }
+}

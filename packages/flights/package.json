@@ -1,0 +1,20 @@
+{
+  "name": "@flyee/flights",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Flight facts behind interfaces: what happened to a flight (FlightAware, a fake), the weather observed at an airport (REDEMET), ANAC's official monthly record of the flights operated in Brazil (VRA), and how a leg of a case is checked against them.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./types": "./src/types.ts",
+    "./fake": "./src/fake.ts",
+    "./vra": "./src/vra.ts",
+    "./check": "./src/check.ts",
+    "./providers/redemet": "./src/providers/redemet.ts",
+    "./providers/flightaware": "./src/providers/flightaware.ts",
+    "./providers/anac-vra": "./src/providers/anac-vra.ts"
+  },
+  "scripts": {
+    "test": "node --experimental-strip-types --test src/contract.test.ts src/check.test.ts"
+  }
+}

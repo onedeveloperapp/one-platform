@@ -1,0 +1,65 @@
+name: CI
+
+# The checks every pull request must pass, with no secrets and no deploy.
+# Deploying stays in deploy.yml, on manual dispatch.
+#
+# Two jobs, side by side:
+#   verify    the app: harness, lint, types, unit tests, message catalog, the
+#             check that every table, column and function the code names exists
+#             in the migrations, and the production build;
+#   database  the migrations applied to an embedded PostgreSQL 17 and the pgTAP
+#             suite over them (two firms that never see each other). It needs no
+#             Docker and no Supabase project.
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run harness:check
+      - run: npm run harness:test
+      - run: npm run check:mui-classes
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run test
+      - run: npm run check:messages
+      - run: npm run check:db-refs
+      - run: npm run build
+
+  database:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      # The PostgreSQL build and pgTAP are fetched on the first run of the
+      # script; the cache keeps the next runs from fetching them again.
+      - uses: actions/cache@v4
+        with:
+          path: .cache/db-embedded
+          key: db-embedded-${{ runner.os }}-${{ hashFiles('scripts/db-embedded/run.mjs') }}
+      - run: npm ci
+      - run: npm run test:db:embedded
+      # The app's own code against the migrated database: a conversation in and out through the simulator.
+      - run: npm run test:db:roundtrip

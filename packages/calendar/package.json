@@ -1,0 +1,17 @@
+{
+  "name": "@flyee/calendar",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "A firm's calendar of hearings behind an interface: a secondary calendar ONE creates in the firm's Google account (scope calendar.app.created, nothing else of the account), and each hearing written into it as an event by its own id, so writing it again replaces it. The Google provider and a fake, under one contract.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./types": "./src/types.ts",
+    "./fake": "./src/fake.ts",
+    "./event-id": "./src/event-id.ts",
+    "./providers/google": "./src/providers/google.ts"
+  },
+  "scripts": {
+    "test": "node --experimental-strip-types --test src/contract.test.ts src/event-id.test.ts"
+  }
+}

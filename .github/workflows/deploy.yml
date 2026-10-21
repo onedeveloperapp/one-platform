@@ -1,0 +1,121 @@
+name: Deploy
+
+# Deploys apps/web to Vercel through the Vercel CLI (token-based), never the
+# Vercel Git integration — the project stays disconnected from GitHub on the
+# Vercel side (multiple GitHub accounts on the owner's machine conflict with it).
+#
+# The compile runs on Vercel's cloud build (not `--prebuilt` on the runner):
+# Vercel's build environment natively resolves the npm-workspace packages
+# (@flyee/*), which the runner-side `vercel build --prebuilt` flow breaks by
+# isolating the build to the Root Directory (apps/web) and severing the
+# ../../packages/* symlinks. Env vars come from the Vercel project settings.
+# Setup and secrets: docs/DEPLOY.md.
+#
+# push to main                 → production deploy
+# pull_request                 → preview deploy (URL in the run summary)
+# manual dispatch              → production by default, preview when chosen
+#
+# The same flow as MedChina's (decided by the owner on 2026-10-21, when the
+# ONE repository onedeveloperapp/one-platform and its Vercel project were made).
+
+# Deploys only what ships to Vercel (apps/web + the packages it imports).
+# Pushes/PRs that touch ONLY the paths below skip the deploy — GitHub runs the
+# job only when at least one changed file is NOT in paths-ignore. Workflow edits
+# (.github/**) still trigger, so a pipeline change is always exercised.
+#
+# A preview address is served by Vercel with `noindex` and can sit behind its
+# deployment protection. Production is a public, indexable address.
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+      - ".claude/**"
+      - ".agents/**"
+      - ".codex/**"
+      - "attachments/**"
+  pull_request:
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+      - ".claude/**"
+      - ".agents/**"
+      - ".codex/**"
+      - "attachments/**"
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Onde publicar: production ou preview (teste, fora dos buscadores)"
+        type: choice
+        options:
+          - production
+          - preview
+        default: production
+
+env:
+  VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+  VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+jobs:
+  preview:
+    name: Preview deploy
+    if: github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.target != 'production')
+    runs-on: ubuntu-latest
+    # `vercel deploy` BLOCKS until the cloud build finishes, so this ceiling is
+    # really "how long may a Vercel build take". At 30m the runner killed the
+    # job while the build was still running on Vercel — the deployment itself
+    # was never cancelled, only our wait for it, which reported a false failure.
+    timeout-minutes: 60
+    concurrency:
+      group: vercel-preview-${{ github.head_ref || github.ref_name }}
+      cancel-in-progress: true
+    steps:
+      - name: Check deploy secrets
+        run: |
+          if [ -z "${{ secrets.VERCEL_TOKEN }}" ] || [ -z "$VERCEL_ORG_ID" ] || [ -z "$VERCEL_PROJECT_ID" ]; then
+            echo "::error::Missing VERCEL_TOKEN / VERCEL_ORG_ID / VERCEL_PROJECT_ID secrets — see docs/DEPLOY.md"
+            exit 1
+          fi
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --global vercel@latest
+      - name: Deploy preview (Vercel cloud build)
+        run: |
+          url=$(vercel deploy --token=${{ secrets.VERCEL_TOKEN }} --yes)
+          echo "Preview: $url"
+          echo "### Vercel preview" >> "$GITHUB_STEP_SUMMARY"
+          echo "$url" >> "$GITHUB_STEP_SUMMARY"
+
+  production:
+    name: Production deploy
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.target == 'production')
+    runs-on: ubuntu-latest
+    # `vercel deploy` BLOCKS until the cloud build finishes, so this ceiling is
+    # really "how long may a Vercel build take". At 30m the runner killed the
+    # job while the build was still running on Vercel — the deployment itself
+    # was never cancelled, only our wait for it, which reported a false failure.
+    timeout-minutes: 60
+    concurrency:
+      group: vercel-production
+      cancel-in-progress: false
+    steps:
+      - name: Check deploy secrets
+        run: |
+          if [ -z "${{ secrets.VERCEL_TOKEN }}" ] || [ -z "$VERCEL_ORG_ID" ] || [ -z "$VERCEL_PROJECT_ID" ]; then
+            echo "::error::Missing VERCEL_TOKEN / VERCEL_ORG_ID / VERCEL_PROJECT_ID secrets — see docs/DEPLOY.md"
+            exit 1
+          fi
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --global vercel@latest
+      - name: Deploy to production (Vercel cloud build)
+        run: |
+          url=$(vercel deploy --prod --token=${{ secrets.VERCEL_TOKEN }} --yes)
+          echo "Production: $url"
+          echo "### Vercel production" >> "$GITHUB_STEP_SUMMARY"
+          echo "$url" >> "$GITHUB_STEP_SUMMARY"

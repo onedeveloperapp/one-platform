@@ -1,0 +1,19 @@
+{
+  "name": "@flyee/identity",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Lookup of a person's CPF in the federal registry behind an interface: the name, the birth date and whether the registration is regular. The Serpro provider (version 3 of its API, which answers for a CPF and its birth date, never for a minor) and a fake, under one contract.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./types": "./src/types.ts",
+    "./fake": "./src/fake.ts",
+    "./providers/serpro": "./src/providers/serpro.ts"
+  },
+  "scripts": {
+    "test": "node --experimental-strip-types --test src/contract.test.ts"
+  },
+  "dependencies": {
+    "@flyee/fields": "*"
+  }
+}

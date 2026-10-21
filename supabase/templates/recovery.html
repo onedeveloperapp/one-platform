@@ -1,0 +1,66 @@
+{{- /*
+  Reset password: the link that lets the owner of the address set a new password.
+  Sent by Supabase Auth (GoTrue), not by the app: the app's own e-mails are the
+  React Email templates of packages/email. Both languages live in this file and
+  the account's metadata picks one (the locale written at sign-up); an account
+  without it reads Portuguese. Colours are the light tokens copied by hand, as
+  in packages/email/src/templates/shell.tsx.
+  Wired in supabase/config.toml for local development; in the hosted project it
+  is pasted in Authentication, Email Templates (docs/DEPLOY.md).
+  This note is a template comment: it is not part of the message that is sent.
+*/ -}}
+<!doctype html>
+<html lang="{{ if eq (printf "%v" .Data.locale) "en" }}en{{ else }}pt-BR{{ end }}">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>FlyeeClub</title>
+  </head>
+  <body style="margin:0;padding:0;background-color:#f9f8f6;font-family:Arial,Helvetica,sans-serif;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f9f8f6;">
+      <tr>
+        <td align="center" style="padding:40px 16px;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;background-color:#ffffff;border-radius:16px;">
+            <tr>
+              <td style="padding:32px;text-align:left;">
+{{ if eq (printf "%v" .Data.locale) "en" }}
+            <h1 style="margin:0 0 16px;color:#48433d;font-size:20px;line-height:26px;">Reset your password</h1>
+            <p style="margin:0 0 16px;color:#48433d;font-size:14px;line-height:22px;">We received a request to change the password of your FlyeeClub account.</p>
+            <table role="presentation" cellpadding="0" cellspacing="0" style="margin:24px auto;">
+              <tr>
+                <td style="border-radius:12px;background-color:#f8a32a;">
+                  <a href="{{ .ConfirmationURL }}" style="display:inline-block;padding:12px 24px;color:#303030;font-size:14px;font-weight:700;text-decoration:none;">Create a new password</a>
+                </td>
+              </tr>
+            </table>
+            <hr style="margin:24px 0 16px;border:none;border-top:1px solid #e8e6e3;" />
+            <p style="margin:0 0 8px;color:#716c65;font-size:12px;line-height:18px;">If the link has expired, ask for a new one under Forgot my password.</p>
+            <p style="margin:0 0 8px;color:#716c65;font-size:12px;line-height:18px;">Did not ask for this? Ignore this message: your password stays the same.</p>
+            <p style="margin:0 0 8px;color:#716c65;font-size:12px;line-height:18px;">If the button does not open, copy this address and paste it in the browser:</p>
+            <p style="margin:0 0 8px;color:#716c65;font-size:12px;line-height:18px;word-break:break-all;">{{ .ConfirmationURL }}</p>
+            <p style="margin:0 0 8px;color:#716c65;font-size:12px;line-height:18px;">FlyeeClub · apps that run in the AI you already use</p>
+{{ else }}
+            <h1 style="margin:0 0 16px;color:#48433d;font-size:20px;line-height:26px;">Redefina sua senha</h1>
+            <p style="margin:0 0 16px;color:#48433d;font-size:14px;line-height:22px;">Recebemos um pedido para trocar a senha da sua conta no FlyeeClub.</p>
+            <table role="presentation" cellpadding="0" cellspacing="0" style="margin:24px auto;">
+              <tr>
+                <td style="border-radius:12px;background-color:#f8a32a;">
+                  <a href="{{ .ConfirmationURL }}" style="display:inline-block;padding:12px 24px;color:#303030;font-size:14px;font-weight:700;text-decoration:none;">Criar uma senha nova</a>
+                </td>
+              </tr>
+            </table>
+            <hr style="margin:24px 0 16px;border:none;border-top:1px solid #e8e6e3;" />
+            <p style="margin:0 0 8px;color:#716c65;font-size:12px;line-height:18px;">Se o link tiver expirado, peça outro em Esqueci minha senha.</p>
+            <p style="margin:0 0 8px;color:#716c65;font-size:12px;line-height:18px;">Não pediu a troca? Ignore esta mensagem: a sua senha continua a mesma.</p>
+            <p style="margin:0 0 8px;color:#716c65;font-size:12px;line-height:18px;">Se o botão não abrir, copie este endereço e cole no navegador:</p>
+            <p style="margin:0 0 8px;color:#716c65;font-size:12px;line-height:18px;word-break:break-all;">{{ .ConfirmationURL }}</p>
+            <p style="margin:0 0 8px;color:#716c65;font-size:12px;line-height:18px;">FlyeeClub · apps que rodam na IA que você já usa</p>
+{{ end }}
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>

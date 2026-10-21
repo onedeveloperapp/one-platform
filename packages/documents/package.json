@@ -1,0 +1,40 @@
+{
+  "name": "@flyee/documents",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "The firm's files and the documents ONE issues: what a file is by its bytes, its measure (hash, size, pages), issuing a version with a public verification code, and the normalization of PDFs and images for the court systems.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./types": "./src/types.ts",
+    "./detect": "./src/detect.ts",
+    "./codes": "./src/codes.ts",
+    "./code-generator": "./src/code-generator.ts",
+    "./measure": "./src/measure.ts",
+    "./issue": "./src/issue.ts",
+    "./files": "./src/files.ts",
+    "./stamp": "./src/stamp.ts",
+    "./normalize": "./src/normalize.ts",
+    "./text-pdf": "./src/text-pdf.ts",
+    "./quality": "./src/quality.ts",
+    "./quality-fixtures": "./src/quality.fixtures.ts",
+    "./fake": "./src/fake.ts",
+    "./cms": "./src/cms.ts"
+  },
+  "scripts": {
+    "test": "node --experimental-strip-types --test src/documents.test.ts src/normalize.test.ts src/text-pdf.test.ts src/quality.test.ts src/cms.test.ts",
+    "bench": "node --expose-gc --experimental-strip-types scripts/normalization-bench.ts",
+    "quality": "node --experimental-strip-types scripts/quality-table.ts"
+  },
+  "devDependencies": {
+    "@types/qrcode": "^1.5.5",
+    "@flyee/psc": "*"
+  },
+  "dependencies": {
+    "asn1js": "^3.0.10",
+    "pdf-lib": "^1.17.1",
+    "pkijs": "^3.4.1",
+    "qrcode": "^1.5.4",
+    "sharp": "^0.34.5"
+  }
+}

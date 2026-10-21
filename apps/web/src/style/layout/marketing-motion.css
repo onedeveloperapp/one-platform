@@ -1,0 +1,78 @@
+/* --------------------------- */
+/* Marketing Motion */
+/* --------------------------- */
+
+/*
+  The hero entrance of the public site: the page's one orchestrated moment
+  (docs/DESIGN.md). The copy rises in line by line, then the media, then the
+  satellites of a composition pop in.
+
+  It is CSS on purpose. A scripted timeline can only start after the page has
+  hydrated, so it first hid a headline the visitor was already reading and
+  then faded it back in, seconds late on a phone. These keyframes start with
+  the first paint, run on the compositor and need no script at all.
+
+  Timing mirrors the old timeline: 0.12s between copy lines; the media starts
+  0.55s before the last line ends (--hero-media-delay, set by <Hero> from the
+  number of lines); satellites follow 0.45s later, 0.08s apart.
+
+  The first keyframe is 0.01, not 0: an element painted at opacity 0 is not
+  counted as painted, and the headline is the largest element of the page.
+*/
+@keyframes mkt-rise {
+  from {
+    opacity: 0.01;
+    transform: translateY(var(--rise-distance, var(--motion-reveal-distance, 2.5rem))) scale(var(--rise-scale, 1));
+  }
+}
+
+@layer components {
+  @media (prefers-reduced-motion: no-preference) {
+    [data-hero-copy] > *,
+    [data-hero] [data-composition-frame],
+    [data-hero] [data-hero-media]:not(:has([data-composition-frame])),
+    [data-hero] [data-composition-satellite] {
+      /* backwards: hidden while it waits its turn, then nothing lingers once it has arrived. */
+      animation: mkt-rise var(--motion-duration-3, 800ms) var(--motion-ease, ease-out) backwards;
+    }
+
+    [data-hero-copy] > :nth-child(2) {
+      animation-delay: 0.12s;
+    }
+    [data-hero-copy] > :nth-child(3) {
+      animation-delay: 0.24s;
+    }
+    [data-hero-copy] > :nth-child(4) {
+      animation-delay: 0.36s;
+    }
+    [data-hero-copy] > :nth-child(5) {
+      animation-delay: 0.48s;
+    }
+    [data-hero-copy] > :nth-child(6) {
+      animation-delay: 0.6s;
+    }
+    [data-hero-copy] > :nth-child(n + 7) {
+      animation-delay: 0.72s;
+    }
+
+    [data-hero] [data-composition-frame],
+    [data-hero] [data-hero-media]:not(:has([data-composition-frame])) {
+      animation-delay: var(--hero-media-delay, 0.6s);
+    }
+
+    [data-hero] [data-composition-satellite] {
+      --rise-distance: calc(var(--motion-reveal-distance, 2.5rem) / 2);
+      --rise-scale: 0.96;
+      animation-delay: calc(var(--hero-media-delay, 0.6s) + 0.45s);
+    }
+    [data-hero] [data-composition-satellite]:nth-child(2) {
+      animation-delay: calc(var(--hero-media-delay, 0.6s) + 0.53s);
+    }
+    [data-hero] [data-composition-satellite]:nth-child(3) {
+      animation-delay: calc(var(--hero-media-delay, 0.6s) + 0.61s);
+    }
+    [data-hero] [data-composition-satellite]:nth-child(4) {
+      animation-delay: calc(var(--hero-media-delay, 0.6s) + 0.69s);
+    }
+  }
+}
