@@ -4,9 +4,11 @@ import { revalidatePath } from "next/cache";
 import { randomBytes, randomUUID } from "node:crypto";
 
 import { firstNameOf } from "@/lib/cases/cases";
+import { FIRM_FILES_BUCKET } from "@/lib/files/bucket";
 import { isManager } from "@/lib/firm/roles";
 import { evaluateTrip, tellFlightAlerts } from "@/lib/flight-alerts/work";
 import { getMemberContext } from "@/lib/member/context";
+import { stagedPath } from "@/lib/test-chat/staging";
 import {
   isQuickReply,
   type TestChatCard,
@@ -20,6 +22,7 @@ import {
 import { connectTestChatNumber } from "@/lib/whatsapp/connect";
 import { applyEvents } from "@/lib/whatsapp/events";
 import { supabaseInbox } from "@/lib/whatsapp/inbox";
+import { queueMediaFetch } from "@/lib/whatsapp/media";
 import { isSupportVisit } from "@/lib/whatsapp/session";
 import { createServiceClient } from "@flyee/auth/service";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -218,6 +221,91 @@ export async function sendTestMessage(
     },
   ]);
   return report.applied > 0 ? { ok: true, code: "delivered" } : { ok: false, code: "not_delivered" };
+}
+
+/** The files the test chat sends as the passenger, as a WhatsApp message carries them (0050). */
+const TEST_MEDIA: Record<string, "image" | "document" | "audio"> = {
+  "image/jpeg": "image",
+  "image/png": "image",
+  "image/webp": "image",
+  "application/pdf": "document",
+  "audio/ogg": "audio",
+  "audio/mpeg": "audio",
+  "audio/mp4": "audio",
+  "audio/aac": "audio",
+  "audio/amr": "audio",
+};
+
+/** The largest file the test chat sends: what WhatsApp carries of an audio. */
+const TEST_MEDIA_MAX_BYTES = 16 * 1024 * 1024;
+
+/**
+ * The first half of a file the passenger sends: a place for it where the
+ * vendor would keep it, and the signed address the page sends the bytes to.
+ */
+export async function startTestMedia(
+  token: string,
+  tripId: string,
+  input: { mime: string; bytes: number },
+): Promise<{ ok: true; mediaId: string; storagePath: string; uploadToken: string } | { ok: false; code: string }> {
+  const service = backendOrNull();
+  if (!service) return { ok: false, code: "unavailable" };
+  const opened = await openedTrip(service, token, tripId);
+  if (!opened) return { ok: false, code: "missing" };
+  const mime = String(input?.mime ?? "").toLowerCase();
+  if (!TEST_MEDIA[mime]) return { ok: false, code: "type_not_allowed" };
+  const bytes = Number(input?.bytes);
+  if (!Number.isFinite(bytes) || bytes <= 0 || bytes > TEST_MEDIA_MAX_BYTES) return { ok: false, code: "too_large" };
+  if (!(await hasRoom(service, token))) return { ok: false, code: "too_many" };
+  const mediaId = randomUUID();
+  const storagePath = stagedPath(opened.orgId, mediaId);
+  if (!storagePath) return { ok: false, code: "failed" };
+  const { data, error } = await service.storage.from(FIRM_FILES_BUCKET).createSignedUploadUrl(storagePath);
+  if (error || !data) return { ok: false, code: "unavailable" };
+  return { ok: true, mediaId, storagePath, uploadToken: data.token };
+}
+
+/**
+ * The second half: the file the page sent goes in as the passenger's
+ * message, through the same door a real one enters by, and the backend
+ * brings it into the firm's files at once.
+ */
+export async function sendTestMedia(
+  token: string,
+  tripId: string,
+  input: { mediaId: string; mime: string; name: string },
+): Promise<TestChatResult> {
+  const service = backendOrNull();
+  if (!service) return { ok: false, code: "unavailable" };
+  const opened = await openedTrip(service, token, tripId);
+  if (!opened) return { ok: false, code: "missing" };
+  const mime = String(input?.mime ?? "").toLowerCase();
+  const kind = TEST_MEDIA[mime];
+  if (!kind || !UUID.test(String(input?.mediaId ?? ""))) return { ok: false, code: "invalid_message" };
+  // The name a PDF shows with, as a phone sends it; a photo and an audio go with none, as WhatsApp sends them.
+  const name = [...String(input?.name ?? "")]
+    .filter((char) => char.charCodeAt(0) > 31)
+    .join("")
+    .trim()
+    .slice(0, 200);
+
+  const report = await applyEvents(supabaseInbox(service), "test", [
+    {
+      type: "message",
+      phoneNumberId: opened.phoneNumberId,
+      from: opened.trip.phone,
+      contactName: firstNameOf(opened.trip.name) || opened.trip.name,
+      providerMessageId: `test.in.${randomUUID()}`,
+      kind,
+      body: null,
+      media: { id: input.mediaId, mimeType: mime, filename: kind === "document" ? name || "arquivo.pdf" : null },
+      replyTo: null,
+      timestamp: new Date(),
+    },
+  ]);
+  if (report.applied === 0) return { ok: false, code: "not_delivered" };
+  await queueMediaFetch();
+  return { ok: true, code: "delivered" };
 }
 
 /**

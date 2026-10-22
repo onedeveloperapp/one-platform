@@ -1,9 +1,14 @@
 import "server-only";
 
+import { after } from "next/server";
+
 import { supabaseFileStore } from "@/lib/files/store";
+import { forgetStaged, readStaged } from "@/lib/test-chat/staging";
 import { readWhatsAppSettings } from "@/lib/whatsapp/config";
 import { providerFor } from "@/lib/whatsapp/provider";
+import { createServiceClient } from "@flyee/auth/service";
 import { measureFile } from "@flyee/documents/measure";
+import { sendEvent } from "@flyee/jobs";
 import type { WhatsAppProvider } from "@flyee/whatsapp/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -21,6 +26,10 @@ import type { SupabaseClient } from "@supabase/supabase-js";
  * fetched NOW (the vendor did not answer, asked to slow down, the token could
  * not be opened) is not recorded as anything: the message stays claimed and
  * is taken again, until the vendor's seven days end.
+ *
+ * A test chat's file (0050) is read where its page left it, and forgotten
+ * there once kept. Each pass says which conversations got a file kept, so
+ * ONE takes its turn there with the file in hand.
  */
 
 /** The purpose of `platform_settings.files` that lists what WhatsApp media is kept. */
@@ -40,7 +49,14 @@ type Claimed = {
 };
 
 /** `waiting`: left for another pass, because what stopped it may pass. */
-export type MediaReport = { claimed: number; stored: number; failed: number; waiting: number };
+export type MediaReport = {
+  claimed: number;
+  stored: number;
+  failed: number;
+  waiting: number;
+  /** The conversations a file of this pass was settled in (kept or not): ONE's turn there may now go on. */
+  conversations: string[];
+};
 
 const EXTENSION: Record<string, string> = {
   "application/pdf": "pdf",
@@ -80,8 +96,9 @@ export async function fetchPendingMedia(service: SupabaseClient, limit = 10): Pr
   const { data, error } = await service.rpc("claim_wa_media", { target_limit: limit });
   if (error) throw new Error(`claim_wa_media failed: ${error.message}`);
   const rows = Array.isArray(data) ? (data as Claimed[]) : [];
-  const report: MediaReport = { claimed: rows.length, stored: 0, failed: 0, waiting: 0 };
+  const report: MediaReport = { claimed: rows.length, stored: 0, failed: 0, waiting: 0, conversations: [] };
   if (rows.length === 0) return report;
+  const settled: string[] = [];
 
   const settings = await readWhatsAppSettings(service);
   const store = supabaseFileStore(service);
@@ -98,6 +115,7 @@ export async function fetchPendingMedia(service: SupabaseClient, limit = 10): Pr
       });
       // Not recorded: the message stays `fetching` and is claimed again in ten minutes.
       if (setError) console.error("whatsapp_set_media_failed", { state: setError.code ?? null });
+      else settled.push(row.message_id);
       if (fileId) report.stored += 1;
       else report.failed += 1;
     };
@@ -123,6 +141,8 @@ export async function fetchPendingMedia(service: SupabaseClient, limit = 10): Pr
           },
           settings,
           "whatsapp.media",
+          // A test chat's file waits where its page left it, under the firm.
+          { fetchStaged: (mediaId) => readStaged(service, row.org_id, mediaId) },
         );
         providers.set(row.number_id, access.ok ? access.provider : { problem: access.code });
       }
@@ -167,11 +187,50 @@ export async function fetchPendingMedia(service: SupabaseClient, limit = 10): Pr
         continue;
       }
       await settle(reserved.fileId, null);
+      if (row.provider === "test") await forgetStaged(service, row.org_id, row.media_wa_id);
     } catch {
       // The database or the storage did not answer: nothing is decided about this file, and one
       // message that could not be handled never stops the others of the pass.
       wait();
     }
   }
+
+  if (settled.length > 0) {
+    // Which conversations the files settled now were sent in: ONE's turn there waited for them.
+    const { data: messages } = await service.from("wa_messages").select("conversation_id").in("id", settled);
+    report.conversations = [
+      ...new Set(((messages ?? []) as { conversation_id: string | null }[]).flatMap((m) => m.conversation_id ?? [])),
+    ];
+  }
   return report;
+}
+
+/**
+ * A delivery brought a file: the jobs fetch it at once, and ONE's turn
+ * follows. Without them (a machine with no Inngest), the file is fetched
+ * after the response, and ONE's turn taken there once the passenger stopped
+ * writing. Never waited for: the sweeps take both anyway.
+ */
+export async function queueMediaFetch(): Promise<void> {
+  const sent = await sendEvent("one/whatsapp.media.pending", {});
+  if (sent.sent) return;
+  try {
+    after(async () => {
+      try {
+        const service = createServiceClient();
+        const report = await fetchPendingMedia(service, 10);
+        if (report.conversations.length === 0) return;
+        // Loaded when needed: the turn answers through this outbox's sender.
+        const { GATHER_MS, takeConversationTurns } = await import("@/lib/conversations/agent-work");
+        await new Promise((resolve) => setTimeout(resolve, GATHER_MS));
+        for (const conversationId of report.conversations) {
+          await takeConversationTurns(service, { conversationId }).catch(() => undefined);
+        }
+      } catch {
+        // Still pending: the sweep takes it.
+      }
+    });
+  } catch {
+    // Outside a request: the sweep takes it.
+  }
 }

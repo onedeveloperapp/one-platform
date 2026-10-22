@@ -9,8 +9,8 @@ import {
   RefusedEvent,
   type WhatsAppInbox,
 } from "@/lib/whatsapp/events";
+import { queueMediaFetch } from "@/lib/whatsapp/media";
 import { createServiceClient } from "@flyee/auth/service";
-import { sendEvent } from "@flyee/jobs";
 import { vendorFailureCode } from "@flyee/whatsapp/providers/meta";
 import type { WhatsAppProviderName } from "@flyee/whatsapp/types";
 import { parseWebhook, verifySignature } from "@flyee/whatsapp/webhook";
@@ -292,7 +292,7 @@ export async function handleDelivery(rawBody: string, signature: string | null):
   }
 
   const report = await applyEvents(supabaseInbox(service), provider, parseWebhook(payload));
-  // The sweep fetches a pending media anyway; the event only makes it sooner.
-  if (report.mediaPending) await sendEvent("one/whatsapp.media.pending", {});
+  // The sweep fetches a pending media anyway; this only makes it sooner (and ONE's turn after it).
+  if (report.mediaPending) await queueMediaFetch();
   return { ok: true, provider, report };
 }

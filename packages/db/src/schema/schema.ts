@@ -1728,6 +1728,8 @@ export const waMessages = pgTable("wa_messages", {
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 	aiRunId: uuid("ai_run_id"),
 	byOne: boolean("by_one").default(false).notNull(),
+	caseJoin: text("case_join"),
+	caseJoinAt: timestamp("case_join_at", { withTimezone: true, mode: 'string' }),
 }, (table) => [
 	index("wa_messages_conversation_idx").using("btree", table.conversationId.asc().nullsLast().op("timestamptz_ops"), table.createdAt.asc().nullsLast().op("uuid_ops")),
 	index("wa_messages_media_idx").using("btree", table.createdAt.asc().nullsLast().op("timestamptz_ops")).where(sql`(media_status = ANY (ARRAY['pending'::text, 'fetching'::text]))`),
@@ -1779,6 +1781,7 @@ export const waMessages = pgTable("wa_messages", {
 	check("wa_messages_media_check", sql`media_status = ANY (ARRAY['none'::text, 'pending'::text, 'fetching'::text, 'stored'::text, 'failed'::text])`),
 	check("wa_messages_body_check", sql`(body IS NULL) OR (char_length(body) <= 4096)`),
 	check("wa_messages_error_check", sql`(error_code IS NULL) OR (error_code ~ '^[a-z0-9_]{1,63}$'::text)`),
+	check("wa_messages_case_join_check", sql`((case_join IS NULL) = (case_join_at IS NULL)) AND ((case_join IS NULL) OR (case_join = ANY (ARRAY['document'::text, 'statement'::text, 'no_case'::text, 'left'::text])))`),
 ]);
 
 export const airlines = pgTable("airlines", {
@@ -4279,38 +4282,6 @@ export const trackedLegs = pgTable("tracked_legs", {
 	check("tracked_legs_estimate_check", sql`(status <> 'delayed'::text) OR (estimated_arrival_local IS NOT NULL)`),
 ]);
 
-export const waConversationEvents = pgTable("wa_conversation_events", {
-	id: uuid().defaultRandom().primaryKey().notNull(),
-	orgId: uuid("org_id").notNull(),
-	conversationId: uuid("conversation_id").notNull(),
-	kind: text().notNull(),
-	data: jsonb().default({}).notNull(),
-	actorType: text("actor_type").notNull(),
-	actorId: uuid("actor_id"),
-	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
-}, (table) => [
-	index("wa_conversation_events_conversation_idx").using("btree", table.conversationId.asc().nullsLast().op("timestamptz_ops"), table.createdAt.asc().nullsLast().op("uuid_ops")),
-	foreignKey({
-			columns: [table.orgId],
-			foreignColumns: [organizations.id],
-			name: "wa_conversation_events_org_id_fkey"
-		}).onDelete("cascade"),
-	foreignKey({
-			columns: [table.actorId],
-			foreignColumns: [profiles.id],
-			name: "wa_conversation_events_actor_id_fkey"
-		}).onDelete("set null"),
-	foreignKey({
-			columns: [table.orgId, table.conversationId],
-			foreignColumns: [waConversations.id, waConversations.orgId],
-			name: "wa_conversation_events_conversation_id_org_id_fkey"
-		}).onDelete("cascade"),
-	unique("wa_conversation_events_id_org_id_key").on(table.id, table.orgId),
-	pgPolicy("wa_conversation_events_select_member", { as: "permissive", for: "select", to: ["authenticated"], using: sql`is_org_member(org_id)` }),
-	check("wa_conversation_events_kind_check", sql`kind = ANY (ARRAY['case_opened'::text, 'link_sent'::text, 'person_called'::text, 'taken_over'::text, 'returned_to_one'::text, 'declined'::text, 'stopped'::text])`),
-	check("wa_conversation_events_actor_check", sql`actor_type = ANY (ARRAY['system'::text, 'person'::text])`),
-]);
-
 export const flightAlerts = pgTable("flight_alerts", {
 	id: uuid().defaultRandom().primaryKey().notNull(),
 	orgId: uuid("org_id").notNull(),
@@ -4356,6 +4327,38 @@ export const flightAlerts = pgTable("flight_alerts", {
 	check("flight_alerts_delay_check", sql`(delay_minutes IS NULL) OR ((delay_minutes >= 0) AND (delay_minutes <= 20160))`),
 	check("flight_alerts_answer_check", sql`(answer IS NULL) OR (answer = ANY (ARRAY['yes'::text, 'no'::text, 'stop'::text]))`),
 	check("flight_alerts_rule_check", sql`rule_version ~ '^[a-z][a-z0-9-]{2,40}$'::text`),
+]);
+
+export const waConversationEvents = pgTable("wa_conversation_events", {
+	id: uuid().defaultRandom().primaryKey().notNull(),
+	orgId: uuid("org_id").notNull(),
+	conversationId: uuid("conversation_id").notNull(),
+	kind: text().notNull(),
+	data: jsonb().default({}).notNull(),
+	actorType: text("actor_type").notNull(),
+	actorId: uuid("actor_id"),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+	index("wa_conversation_events_conversation_idx").using("btree", table.conversationId.asc().nullsLast().op("timestamptz_ops"), table.createdAt.asc().nullsLast().op("uuid_ops")),
+	foreignKey({
+			columns: [table.orgId],
+			foreignColumns: [organizations.id],
+			name: "wa_conversation_events_org_id_fkey"
+		}).onDelete("cascade"),
+	foreignKey({
+			columns: [table.actorId],
+			foreignColumns: [profiles.id],
+			name: "wa_conversation_events_actor_id_fkey"
+		}).onDelete("set null"),
+	foreignKey({
+			columns: [table.orgId, table.conversationId],
+			foreignColumns: [waConversations.id, waConversations.orgId],
+			name: "wa_conversation_events_conversation_id_org_id_fkey"
+		}).onDelete("cascade"),
+	unique("wa_conversation_events_id_org_id_key").on(table.id, table.orgId),
+	pgPolicy("wa_conversation_events_select_member", { as: "permissive", for: "select", to: ["authenticated"], using: sql`is_org_member(org_id)` }),
+	check("wa_conversation_events_actor_check", sql`actor_type = ANY (ARRAY['system'::text, 'person'::text])`),
+	check("wa_conversation_events_kind_check", sql`kind = ANY (ARRAY['case_opened'::text, 'link_sent'::text, 'person_called'::text, 'taken_over'::text, 'returned_to_one'::text, 'declined'::text, 'stopped'::text, 'document_joined'::text, 'statement_joined'::text])`),
 ]);
 
 export const announcementDismissals = pgTable("announcement_dismissals", {

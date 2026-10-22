@@ -318,6 +318,7 @@ async function loadInbox(selectedId: string | null): Promise<InboxState> {
         reason: typeof row.data?.reason === "string" ? row.data.reason : null,
         actorName: (row.actor_id && names.get(row.actor_id)) || null,
         fromPhone: row.data?.from_phone === true,
+        paper: typeof row.data?.kind === "string" ? row.data.kind : null,
       }));
     const waiting = waitingOf.get(chosen.id);
     if (waiting) {

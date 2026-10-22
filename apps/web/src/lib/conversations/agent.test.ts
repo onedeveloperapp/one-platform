@@ -4,13 +4,18 @@ import {
   caseStepsMessage,
   cleanReply,
   declinedMessage,
+  fileLine,
+  fileRole,
+  filesMessage,
   lastClientWords,
   minorsOf,
   modelAnswerOf,
   modelInput,
+  paperOf,
   quickAnswer,
   type TurnContext,
   turnContextOf,
+  turnFilesOf,
 } from "@/lib/conversations/agent";
 
 // Every person, firm and number here is invented.
@@ -118,5 +123,54 @@ describe("ONE in a conversation", () => {
     expect(input.aviso.viaja_com).toEqual(["Laura", "Bruna"]);
     expect(input.mensagens[1].texto).toBe("Meu CPF é [CPF]");
     expect(input.mensagens[2].texto).toBe("e o meu e-mail é [e-mail]");
+  });
+  it("reads what paper a file is, and a file the backend could not bring is one it says it did not receive", () => {
+    expect(paperOf({ tipo: "boarding_pass", nome: "  RAFAEL   TESTE " })).toEqual({
+      kind: "boarding_pass",
+      name: "RAFAEL TESTE",
+    });
+    expect(paperOf({ tipo: "passaporte" })).toEqual({ kind: "other", name: "" });
+    expect(paperOf(null)).toEqual({ kind: "other", name: "" });
+    const files = turnFilesOf([
+      { message_id: "m1", kind: "image", state: "stored", file_id: "f1", storage_path: "org/x/f1", mime: "image/jpeg" },
+      { message_id: "m2", kind: "audio", state: "stored", file_id: "f2", storage_path: "org/x/f2", mime: "audio/ogg" },
+      { message_id: "m3", kind: "video", state: "stored", file_id: "f3", storage_path: "org/x/f3", mime: "video/mp4" },
+      { message_id: "m4", kind: "image", state: "stored", file_id: null },
+      { kind: "image" },
+    ]);
+    expect(files.map(fileRole)).toEqual(["paper", "statement", "not_taken", "failed"]);
+  });
+
+  it("says what became of each file, in the firm's rules of copy", () => {
+    const message = filesMessage([
+      { kind: "paper", paper: "identity", status: "accepted", reason: null },
+      {
+        kind: "paper",
+        paper: "address_proof",
+        status: "rejected",
+        reason: "A foto ficou cortada! Envie a conta inteira.",
+      },
+      { kind: "paper", paper: "boarding_pass", status: "waiting", reason: null },
+      { kind: "failed" },
+    ]);
+    expect(message?.split("\n")).toEqual([
+      "Recebi o documento de identidade e já juntei ao seu caso. Está tudo certo.",
+      "Não deu para aceitar o comprovante de endereço. A foto ficou cortada. Envie a conta inteira.",
+      "Recebi o cartão de embarque e juntei ao seu caso. O escritório confere e avisa se precisar de outro.",
+      "Não consegui receber um arquivo. Envie de novo, por aqui ou pelo link do seu caso.",
+    ]);
+    expect(message).not.toMatch(/[–—!]/);
+    expect(fileLine({ kind: "no_case" })).toBe("Recebi o arquivo. Ele fica aqui na conversa para o escritório ver.");
+    expect(filesMessage([])).toBeNull();
+  });
+
+  it("answers no caption of a file as a question", () => {
+    expect(
+      lastClientWords([
+        { author: "one", kind: "text", text: "Pronto.", at: "1" },
+        { author: "cliente", kind: "image", text: "Segue o RG", at: "2" },
+        { author: "cliente", kind: "text", text: "Está certo?", at: "3" },
+      ]),
+    ).toEqual(["Está certo?"]);
   });
 });

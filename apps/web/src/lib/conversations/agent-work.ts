@@ -4,6 +4,8 @@ import { after } from "next/server";
 import { createHash, randomBytes } from "node:crypto";
 
 import { runFirmTask } from "@/lib/ai/executor";
+import { base64, MODEL_IMAGE, processCaseDocuments } from "@/lib/cases/documents-work";
+import { processCaseStatements } from "@/lib/cases/statements-work";
 import {
   byPersonMessage,
   calledMessage,
@@ -12,17 +14,28 @@ import {
   cleanReply,
   CONVERSATION_TASK,
   declinedMessage,
+  FILE_KIND_TASK,
+  type FileOutcome,
+  fileRole,
+  filesMessage,
   lastClientWords,
   minorsOf,
   modelAnswerOf,
   modelInput,
+  type PaperKind,
+  paperOf,
   quickAnswer,
   type TurnContext,
   turnContextOf,
+  type TurnFile,
+  turnFilesOf,
 } from "@/lib/conversations/agent";
+import { supabaseFileStore } from "@/lib/files/store";
 import { deliverOutbox } from "@/lib/whatsapp/send";
 import { createServiceClient } from "@flyee/auth/service";
 import { BRAND } from "@flyee/content";
+import { normalizeImage } from "@flyee/documents/normalize";
+import type { FileStore } from "@flyee/documents/types";
 import { sendEvent } from "@flyee/jobs";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -35,8 +48,12 @@ import type { SupabaseClient } from "@supabase/supabase-js";
  * `atendimento.conversa`, whose answer goes as ONE's when the firm lets it,
  * or waits in the queue for a person's "Enviar". When ONE cannot go on, it
  * calls a person. Every message goes through the outbox of 0019, once.
- * Nothing of a passenger is kept in a job's state: the steps carry ids and
- * counts.
+ * A file the passenger sent (0050) joins their case first: a photo or a PDF
+ * is read by the task `atendimento.arquivo.tipo` (what paper it is, the name
+ * on it), joins as that paper and is checked at once as a paper sent through
+ * the link is; an audio joins as their account of what happened; and ONE
+ * says what became of each. Nothing of a passenger is kept in a job's state:
+ * the steps carry ids and counts.
  */
 
 export type TurnReport = { claimed: number; answered: number; opened: number; called: number; failed: number };
@@ -84,6 +101,130 @@ async function callPerson(service: SupabaseClient, held: Held, reason: string): 
     target_claim: held.claim,
     target_reason: reason,
   });
+}
+
+/** The largest PDF the task that says what paper a file is reads; a larger one joins as a paper of no kind. */
+const PAPER_MAX_BYTES = 20 * 1024 * 1024;
+
+/** What paper a file is, as the task reads it; a paper of no kind when it cannot say (or waits for a person). */
+async function paperOfFile(
+  store: FileStore,
+  context: TurnContext,
+  file: TurnFile,
+): Promise<{ kind: PaperKind; name: string }> {
+  const unknown = { kind: "other" as const, name: "" };
+  if (!file.storagePath || !file.mime) return unknown;
+  const bytes = await store.get(file.storagePath);
+  if (!bytes) return unknown;
+  let attachment: { kind: "image" | "document"; mime: string; dataBase64: string };
+  if (file.mime === "application/pdf") {
+    if (bytes.byteLength > PAPER_MAX_BYTES) return unknown;
+    attachment = { kind: "document", mime: "application/pdf", dataBase64: base64(bytes) };
+  } else {
+    try {
+      attachment = {
+        kind: "image",
+        mime: "image/jpeg",
+        dataBase64: base64((await normalizeImage(bytes, MODEL_IMAGE)).jpeg),
+      };
+    } catch {
+      // An image the backend cannot read (a HEIC its build of sharp has no decoder for): a person sees it.
+      return unknown;
+    }
+  }
+  const run = await runFirmTask({
+    orgId: context.orgId,
+    task: FILE_KIND_TASK,
+    // What is hashed for the record: the file's own hash, never its bytes.
+    input: { sha256: file.sha256 ?? file.fileId },
+    messages: [{ role: "user", content: "Que papel é este arquivo?", attachments: [attachment] }],
+    subject: { type: "wa_message", id: file.messageId },
+    idempotencyKey: `file-kind:${file.messageId}`,
+  });
+  return run.kind === "finished" && !run.approvalId ? paperOf(run.output) : unknown;
+}
+
+/**
+ * The files the passenger sent since ONE last answered: each joins their
+ * case being gathered (or is set aside for a person), a paper is checked at
+ * once, and ONE says what became of each in one message. The statements
+ * joined are worked on once that message went. Answers whether there was any.
+ */
+async function joinFiles(service: SupabaseClient, held: Held, context: TurnContext): Promise<boolean> {
+  const listed = await rpc(service, "conversation_media_to_join", {
+    target_conversation: held.conversationId,
+    target_claim: held.claim,
+  });
+  const files = turnFilesOf(listed.items);
+  if (files.length === 0) return false;
+  const store = supabaseFileStore(service);
+  const join = (file: TurnFile, kind: string, name: string | null = null) =>
+    rpc(service, "one_join_conversation_media", {
+      target_conversation: held.conversationId,
+      target_claim: held.claim,
+      target_message: file.messageId,
+      target_kind: kind,
+      target_name: name,
+    });
+
+  const outcomes: FileOutcome[] = [];
+  const statements: string[] = [];
+  for (const file of files) {
+    const role = fileRole(file);
+    if (role === "failed" || role === "not_taken") {
+      await join(file, "left");
+      outcomes.push({ kind: role });
+      continue;
+    }
+    if (role === "statement") {
+      const joined = await join(file, "statement");
+      if (joined.code === "statement" && typeof joined.statement_id === "string") {
+        statements.push(joined.statement_id);
+        outcomes.push({ kind: "statement" });
+      } else if (joined.code === "no_case") outcomes.push({ kind: "no_case" });
+      continue;
+    }
+    const paper = await paperOfFile(store, context, file);
+    const joined = await join(file, paper.kind, paper.name || null);
+    if (joined.code === "no_case") {
+      outcomes.push({ kind: "no_case" });
+      continue;
+    }
+    if (joined.code !== "document" || typeof joined.document_id !== "string") continue;
+    // The same check as a paper sent through the link, now: the passenger hears what came of it here.
+    await processCaseDocuments(service, 1, joined.document_id).catch(() => undefined);
+    const { data: decided } = await service
+      .from("case_documents")
+      .select("status, rejected_reason")
+      .eq("id", joined.document_id)
+      .maybeSingle();
+    const status =
+      decided?.status === "accepted" ? "accepted" : decided?.status === "rejected" ? "rejected" : "waiting";
+    outcomes.push({
+      kind: "paper",
+      paper: paper.kind,
+      status,
+      reason: typeof decided?.rejected_reason === "string" ? decided.rejected_reason : null,
+    });
+  }
+
+  const message = filesMessage(outcomes);
+  if (message) await say(service, held, message);
+  for (const statementId of statements) await workStatement(statementId);
+  return true;
+}
+
+/** A statement joined from the conversation is transcribed and put in order: by the jobs, or here when there are none. */
+async function workStatement(statementId: string): Promise<void> {
+  const sent = await sendEvent("one/case.statement.received", { statementId });
+  if (sent.sent) return;
+  try {
+    const service = createServiceClient();
+    const first = await processCaseStatements(service, 1, statementId);
+    if (first.transcribed) await processCaseStatements(service, 1, statementId);
+  } catch {
+    // Still owed: the sweep takes it.
+  }
 }
 
 /** A yes: the case opened with the trip, and the link with the next steps; or the yes kept for a person. */
@@ -155,6 +296,9 @@ async function takeTurn(service: SupabaseClient, held: Held, report: TurnReport)
     }),
   );
   if (!context) return;
+
+  // What the passenger sent as files joins the case before anything is answered.
+  await joinFiles(service, held, context);
 
   if (context.answersLastHour >= ANSWERS_PER_HOUR) {
     await callPerson(service, held, "Muitas mensagens em pouco tempo: uma pessoa do escritório continua a conversa.");
@@ -262,7 +406,7 @@ export async function takeConversationTurns(
 }
 
 /** How long a passenger's messages one after the other are gathered before ONE answers. */
-const GATHER_MS = 5_500;
+export const GATHER_MS = 5_500;
 
 /**
  * A passenger just wrote: the jobs answer once they stop writing (the event

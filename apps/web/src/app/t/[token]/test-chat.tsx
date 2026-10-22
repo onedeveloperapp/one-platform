@@ -7,11 +7,20 @@ import { Alert, Box, Button, Card, CardContent, Collapse, Tab, Tabs, TextField, 
 
 import MessageBubble from "@/components/product/message-bubble";
 import StatusChip, { type StatusTone } from "@/components/product/status-chip";
+import NiPaperclip from "@/icons/nexture/ni-paperclip";
 import NiPlane from "@/icons/nexture/ni-plane";
 import NiRefresh from "@/icons/nexture/ni-refresh";
 import NiSendRight from "@/icons/nexture/ni-send-right";
+import { mimeOf, uploadToSignedUrl } from "@/lib/files/browser-upload";
 import { flightLabel } from "@/lib/flight-alerts/words";
-import { readTestChat, readTestThread, runTestTool, sendTestMessage } from "@/lib/test-chat/actions";
+import {
+  readTestChat,
+  readTestThread,
+  runTestTool,
+  sendTestMedia,
+  sendTestMessage,
+  startTestMedia,
+} from "@/lib/test-chat/actions";
 import {
   QUICK_REPLIES,
   TEST_TOOLS,
@@ -43,6 +52,24 @@ const LEG_KEY: Record<string, string> = {
   landed: "test-chat-leg-landed",
 };
 
+/** What the page says of a file the passenger sent, in place of its text. */
+const FILE_KEY: Record<string, string> = {
+  image: "test-chat-photo",
+  document: "test-chat-pdf",
+  audio: "test-chat-audio",
+  video: "test-chat-video",
+};
+
+/** The words of a file that did not go. */
+const fileErrorKey = (code: string): string =>
+  code === "type_not_allowed"
+    ? "test-chat-attach-type"
+    : code === "too_large"
+      ? "test-chat-attach-large"
+      : code === "too_many"
+        ? "test-chat-too-many"
+        : "test-chat-attach-error";
+
 const LEG_TONE: Record<string, StatusTone> = {
   scheduled: "positive",
   delayed: "attention",
@@ -55,8 +82,9 @@ const LEG_TONE: Record<string, StatusTone> = {
  * The test chat, where a passenger's phone stands: the four ready passengers,
  * each with their trip and the tools that make its problem happen, and the
  * conversation each has with the firm, read again every two seconds. What
- * the tester writes goes to the firm as the passenger's message, through the
- * same path a real one takes; nothing leaves ONE.
+ * the tester writes, or a photo, a PDF or an audio they send, goes to the firm
+ * as the passenger's message, through the same path a real one takes; nothing
+ * leaves ONE.
  */
 export default function TestChat({ token, initial }: { token: string; initial: TestChatView }) {
   const t = useTranslations("product");
@@ -68,6 +96,8 @@ export default function TestChat({ token, initial }: { token: string; initial: T
   const [notice, setNotice] = useState<{ tone: "success" | "info" | "warning" | "error"; text: string } | null>(null);
   const [toolsOpen, setToolsOpen] = useState(true);
   const listRef = useRef<HTMLUListElement | null>(null);
+  const picker = useRef<HTMLInputElement | null>(null);
+  const [sendingFile, setSendingFile] = useState(false);
 
   const trip = view.trips.find((item) => item.id === tripId) ?? view.trips[0] ?? null;
   const messages = (trip && threads[trip.id]) ?? [];
@@ -144,6 +174,35 @@ export default function TestChat({ token, initial }: { token: string; initial: T
     const text = draft.trim();
     if (!text || busy) return;
     if (await send({ text })) setDraft("");
+  };
+
+  // A file goes as WhatsApp sends one: to where the vendor would keep it, then as the passenger's message.
+  const attach = async (file: File) => {
+    setSendingFile(true);
+    setNotice(null);
+    try {
+      const mime = mimeOf(file);
+      const started = await startTestMedia(token, trip.id, { mime, bytes: file.size });
+      if (!started.ok) {
+        setNotice({ tone: "error", text: t(fileErrorKey(started.code)) });
+        return;
+      }
+      const uploaded = await uploadToSignedUrl({
+        storagePath: started.storagePath,
+        uploadToken: started.uploadToken,
+        file,
+        contentType: mime,
+      });
+      const sent = uploaded
+        ? await sendTestMedia(token, trip.id, { mediaId: started.mediaId, mime, name: file.name })
+        : { ok: false, code: "not_uploaded" };
+      if (!sent.ok) setNotice({ tone: "error", text: t(fileErrorKey(sent.code)) });
+      else void refreshView();
+    } catch {
+      setNotice({ tone: "error", text: t("test-chat-attach-error") });
+    } finally {
+      setSendingFile(false);
+    }
   };
 
   const runTool = async (key: string) => {
@@ -255,7 +314,14 @@ export default function TestChat({ token, initial }: { token: string; initial: T
                     }
                     meta={<span>{timeOf(message.at)}</span>}
                   >
-                    {message.body ?? (message.mediaFilename ? message.mediaFilename : t("test-chat-no-text"))}
+                    {FILE_KEY[message.kind] ? (
+                      <>
+                        <em>{t(FILE_KEY[message.kind], { name: message.mediaFilename ?? "" })}</em>
+                        {message.body ? <span className="block">{message.body}</span> : null}
+                      </>
+                    ) : (
+                      (message.body ?? (message.mediaFilename ? message.mediaFilename : t("test-chat-no-text")))
+                    )}
                   </MessageBubble>
                 ))
               )}
@@ -297,6 +363,28 @@ export default function TestChat({ token, initial }: { token: string; initial: T
                 size="small"
                 disabled={busy}
               />
+              <input
+                ref={picker}
+                type="file"
+                hidden
+                accept="image/jpeg,image/png,image/webp,application/pdf,audio/*"
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  event.target.value = "";
+                  if (file) void attach(file);
+                }}
+              />
+              <Button
+                variant="outlined"
+                color="grey"
+                disabled={busy || sendingFile}
+                onClick={() => picker.current?.click()}
+                aria-label={sendingFile ? t("test-chat-attach-sending") : t("test-chat-attach")}
+                title={t("test-chat-attach")}
+                className="icon-only"
+              >
+                <NiPaperclip size="medium" />
+              </Button>
               <Button
                 variant="contained"
                 disabled={busy || draft.trim() === ""}

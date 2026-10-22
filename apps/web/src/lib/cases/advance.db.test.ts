@@ -42,27 +42,10 @@ vi.mock("@flyee/ai/fake", async (original) => {
 let sql: Sql;
 let clientAs: ReturnType<typeof standIn>;
 
-/** The bucket, in memory: what the worker writes through the storage API. */
+/** The bucket, in memory: what the worker writes through the storage API (the stand-in carries it). */
 const bucket = new Map<string, Uint8Array>();
-const storage = {
-  from: () => ({
-    async upload(storagePath: string, bytes: Uint8Array) {
-      bucket.set(storagePath, new Uint8Array(bytes));
-      return { data: { path: storagePath }, error: null };
-    },
-    async download(storagePath: string) {
-      const bytes = bucket.get(storagePath);
-      if (!bytes) return { data: null, error: { message: "not found" } };
-      return { data: { arrayBuffer: async () => bytes.slice().buffer }, error: null };
-    },
-    async remove(storagePaths: string[]) {
-      for (const storagePath of storagePaths) bucket.delete(storagePath);
-      return { data: [], error: null };
-    },
-  }),
-};
 
-const backend = () => ({ ...clientAs("service_role", { role: "service_role" }), storage });
+const backend = () => clientAs("service_role", { role: "service_role" });
 vi.mock("@flyee/auth/service", () => ({ createServiceClient: () => backend() }));
 
 const ANA = "ae900000-0000-4000-8000-000000000001";
@@ -221,7 +204,7 @@ describe.skipIf(!DB_URL)("ONE carrying a case on, from its lawsuits to its filin
 
   beforeAll(async () => {
     sql = connect();
-    clientAs = standIn(sql);
+    clientAs = standIn(sql, { bucket });
     process.env.AI_FAKE_PROVIDER = "1";
     await sql.unsafe(`
       delete from public.organizations where id in ('${FIRM}', '${OTHER_FIRM}');

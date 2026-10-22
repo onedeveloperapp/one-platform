@@ -3,7 +3,7 @@ import "server-only";
 import { fetchPendingMedia } from "@/lib/whatsapp/media";
 import { deliverOutbox } from "@/lib/whatsapp/send";
 import { createServiceClient } from "@flyee/auth/service";
-import { inngest } from "@flyee/jobs";
+import { inngest, sendEvent } from "@flyee/jobs";
 
 /**
  * The scheduled work of WhatsApp, recomputed from the data on every pass
@@ -14,7 +14,9 @@ import { inngest } from "@flyee/jobs";
  *   was claimed long ago and never answered;
  * - the media sweep brings into the firm's files what people sent, and tries
  *   again what a pass left half-way. A delivery that brings a media also asks
- *   for a pass at once, so the file is there when somebody opens the thread.
+ *   for a pass at once, so the file is there when somebody opens the thread,
+ *   and each conversation a file was settled in asks for ONE's turn (0050),
+ *   which waited for the file. The steps carry counts only.
  */
 
 export const whatsappOutboxFunction = inngest.createFunction(
@@ -28,7 +30,13 @@ export const whatsappOutboxFunction = inngest.createFunction(
     }),
 );
 
-const mediaPass = () => fetchPendingMedia(createServiceClient(), 10);
+const mediaPass = async () => {
+  const report = await fetchPendingMedia(createServiceClient(), 10);
+  for (const conversationId of report.conversations) {
+    await sendEvent("one/conversation.turn", { conversationId }).catch(() => undefined);
+  }
+  return { claimed: report.claimed, stored: report.stored, failed: report.failed, waiting: report.waiting };
+};
 
 export const whatsappMediaSweepFunction = inngest.createFunction(
   { id: "one-whatsapp-media-sweep", retries: 0, concurrency: { limit: 1 } },

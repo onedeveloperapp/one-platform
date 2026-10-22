@@ -262,8 +262,9 @@ export default function Thread({
                     className="flex flex-col items-center gap-0.5 px-4 text-center"
                   >
                     <Typography variant="body2" className="text-text-secondary">
-                      {t(words.key, words.values)}
-                      {item.event.kind === "case_opened" && item.event.caseId ? (
+                      {t(words.key, words.paperKey ? { ...words.values, paper: t(words.paperKey) } : words.values)}
+                      {item.event.caseId &&
+                      ["case_opened", "document_joined", "statement_joined"].includes(item.event.kind) ? (
                         <>
                           {" · "}
                           <Link href={`/casos/${item.event.caseId}`} className="text-primary">

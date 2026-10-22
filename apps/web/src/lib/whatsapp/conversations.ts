@@ -1,3 +1,4 @@
+import { DOCUMENT_KIND_KEY, type DocumentKind } from "@/lib/cases/cases";
 import type { WaitingReply } from "@/lib/conversations/reply";
 import type { FirmFunction, OrgRole } from "@/lib/firm/roles";
 
@@ -82,13 +83,30 @@ export type ThreadEvent = {
   reason: string | null;
   actorName: string | null;
   fromPhone: boolean;
+  /** The kind of paper ONE joined to the case, for `document_joined`. */
+  paper: string | null;
 };
 
-/** The words of each event of a conversation, with what they name. */
-export function eventWords(event: ThreadEvent): { key: string; values: Record<string, string | number> } {
+/**
+ * The words of each event of a conversation, with what they name; `paperKey` is the name of a paper ONE
+ * joined to the case, said as `paper`.
+ */
+export function eventWords(event: ThreadEvent): {
+  key: string;
+  values: Record<string, string | number>;
+  paperKey?: string;
+} {
   switch (event.kind) {
     case "case_opened":
       return { key: "inbox-event-case-opened", values: { seq: event.seq ?? 0 } };
+    case "document_joined":
+      return {
+        key: "inbox-event-document-joined",
+        values: { seq: event.seq ?? 0 },
+        paperKey: DOCUMENT_KIND_KEY[(event.paper ?? "other") as DocumentKind] ?? DOCUMENT_KIND_KEY.other,
+      };
+    case "statement_joined":
+      return { key: "inbox-event-statement-joined", values: { seq: event.seq ?? 0 } };
     case "link_sent":
       return { key: "inbox-event-link-sent", values: {} };
     case "person_called":

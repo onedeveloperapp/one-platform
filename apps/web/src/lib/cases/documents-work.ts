@@ -66,9 +66,9 @@ export async function claimCaseDocuments(
 }
 
 /** The reduced photo the model reads: enough to read a document, far fewer tokens than a phone photo. */
-const MODEL_IMAGE = { maxPixels: 1568, quality: 80 };
+export const MODEL_IMAGE = { maxPixels: 1568, quality: 80 };
 
-const base64 = (bytes: Uint8Array): string => Buffer.from(bytes).toString("base64");
+export const base64 = (bytes: Uint8Array): string => Buffer.from(bytes).toString("base64");
 
 const pdfName = (documentId: string) => `documento-${documentId.slice(0, 8)}.pdf`;
 

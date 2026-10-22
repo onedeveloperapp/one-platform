@@ -30,8 +30,38 @@ export function connect(): Sql {
 
 type Failure = { code?: string; message: string };
 
-/** The stand-in clients of one connection: `clientAs(role, claims)`. */
-export function standIn(sql: Sql) {
+/**
+ * The stand-in clients of one connection: `clientAs(role, claims)`. Given a
+ * bucket, they carry the storage API too, as far as the app uses it, with
+ * the bucket kept in that map.
+ */
+export function standIn(sql: Sql, options: { bucket?: Map<string, Uint8Array> } = {}) {
+  const bucket = options.bucket;
+  const storage = bucket
+    ? {
+        from: () => ({
+          async upload(storagePath: string, bytes: Uint8Array) {
+            bucket.set(storagePath, new Uint8Array(bytes));
+            return { data: { path: storagePath }, error: null };
+          },
+          async download(storagePath: string) {
+            const bytes = bucket.get(storagePath);
+            if (!bytes) return { data: null, error: { message: "not found" } };
+            return { data: { arrayBuffer: async () => bytes.slice().buffer }, error: null };
+          },
+          async remove(storagePaths: string[]) {
+            for (const storagePath of storagePaths) bucket.delete(storagePath);
+            return { data: [], error: null };
+          },
+          async createSignedUploadUrl(storagePath: string) {
+            return {
+              data: { path: storagePath, token: `memory:${storagePath}`, signedUrl: `memory://${storagePath}` },
+              error: null,
+            };
+          },
+        }),
+      }
+    : undefined;
   const signatures = new Map<string, { types: Map<string, string>; rows: boolean }>();
   async function signatureOf(name: string) {
     const known = signatures.get(name);
@@ -72,6 +102,7 @@ export function standIn(sql: Sql) {
         return work(transaction);
       });
     return {
+      storage,
       async rpc(name: string, args: Row = {}): Promise<{ data: unknown; error: Failure | null }> {
         try {
           const signature = await signatureOf(name);

@@ -9,10 +9,15 @@ import { maskIdentifiers } from "@/lib/cases/drafts";
  * ONE writes by itself (the next steps after a yes, the end of a no) are
  * these words, never a model's; a model's answer is cleaned to the firm's
  * rules of copy before it goes. What the model reads of the conversation has
- * every identifier taken out.
+ * every identifier taken out. A file the passenger sends (0050) joins their
+ * case: what paper it is, read by a task that decides nothing, and ONE's words
+ * of what became of it, are here too.
  */
 
 export const CONVERSATION_TASK = "atendimento.conversa";
+
+/** The task that says what paper a file of the conversation is (0050). It decides nothing: the check does. */
+export const FILE_KIND_TASK = "atendimento.arquivo.tipo";
 
 export type QuickAnswer = "yes" | "no" | "stop";
 
@@ -187,15 +192,132 @@ export function turnContextOf(raw: unknown): TurnContext | null {
   };
 }
 
-/** The passenger's messages since ONE's last word: what the turn answers. */
+/** The kinds of message that carry a file: they join the case, and their caption is no question to answer. */
+const FILE_MESSAGES = new Set(["image", "document", "audio", "video", "sticker"]);
+
+/** The passenger's messages since ONE's last word: what the turn answers. A file is taken apart, as a file. */
 export function lastClientWords(messages: readonly TurnMessage[]): string[] {
   const words: string[] = [];
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const message = messages[index];
     if (message.author !== "cliente") break;
+    if (FILE_MESSAGES.has(message.kind)) continue;
     if (message.text.trim()) words.unshift(message.text.trim());
   }
   return words;
+}
+
+/** The kinds of paper a file of the conversation joins a case as (the kinds of `case_documents`). */
+export const PAPER_KINDS = [
+  "identity",
+  "address_proof",
+  "ticket",
+  "boarding_pass",
+  "receipt",
+  "evidence",
+  "other",
+] as const;
+export type PaperKind = (typeof PAPER_KINDS)[number];
+
+const isPaperKind = (value: unknown): value is PaperKind => (PAPER_KINDS as readonly unknown[]).includes(value);
+
+/** What the task said of a file: its kind (`other` for anything it did not say clearly) and the name written on it. */
+export function paperOf(output: unknown): { kind: PaperKind; name: string } {
+  const answer = (typeof output === "object" && output !== null ? output : {}) as Record<string, unknown>;
+  const name = typeof answer.nome === "string" ? answer.nome.replace(/\s+/g, " ").trim().slice(0, 200) : "";
+  return { kind: isPaperKind(answer.tipo) ? answer.tipo : "other", name };
+}
+
+/** A file of the turn, as the database hands it (`conversation_media_to_join`). */
+export type TurnFile = {
+  messageId: string;
+  /** The kind of message it came in: `image`, `document`, `audio`, `video`. */
+  kind: string;
+  /** `stored`: in the firm's files, to be read. `failed`: the backend could not bring it. */
+  state: "stored" | "failed";
+  fileId: string | null;
+  storagePath: string | null;
+  /** What its bytes say it is. */
+  mime: string | null;
+  bytes: number | null;
+  sha256: string | null;
+};
+
+export function turnFilesOf(raw: unknown): TurnFile[] {
+  return (Array.isArray(raw) ? raw : []).flatMap((item): TurnFile[] => {
+    const row = (item ?? {}) as Record<string, unknown>;
+    if (!text(row.message_id)) return [];
+    const stored = row.state === "stored" && text(row.file_id) && text(row.storage_path) && text(row.mime);
+    return [
+      {
+        messageId: String(row.message_id),
+        kind: text(row.kind) ?? "",
+        state: stored ? "stored" : "failed",
+        fileId: stored ? String(row.file_id) : null,
+        storagePath: stored ? String(row.storage_path) : null,
+        mime: stored ? String(row.mime) : null,
+        bytes: typeof row.bytes === "number" ? row.bytes : null,
+        sha256: text(row.sha256),
+      },
+    ];
+  });
+}
+
+/** What a file is to ONE: a paper it reads, the passenger's account (an audio), or one it does not take. */
+export function fileRole(file: TurnFile): "paper" | "statement" | "not_taken" | "failed" {
+  if (file.state !== "stored" || !file.mime) return "failed";
+  if (file.mime.startsWith("audio/")) return "statement";
+  if (file.mime.startsWith("image/") || file.mime === "application/pdf") return "paper";
+  return "not_taken";
+}
+
+/** What became of a file of the turn, for ONE's words of it. */
+export type FileOutcome =
+  | { kind: "paper"; paper: PaperKind; status: "accepted" | "rejected" | "waiting"; reason: string | null }
+  | { kind: "statement" }
+  | { kind: "no_case" }
+  | { kind: "failed" }
+  | { kind: "not_taken" };
+
+/** Each kind of paper as ONE names it in a sentence. */
+const PAPER_WORDS: Record<PaperKind, string> = {
+  identity: "o documento de identidade",
+  address_proof: "o comprovante de endereço",
+  ticket: "o bilhete",
+  boarding_pass: "o cartão de embarque",
+  receipt: "o recibo",
+  evidence: "a foto",
+  other: "o arquivo",
+};
+
+/** ONE's words of one file, as the firm's rules of copy want them. */
+export function fileLine(outcome: FileOutcome): string {
+  switch (outcome.kind) {
+    case "paper": {
+      const paper = PAPER_WORDS[outcome.paper];
+      if (outcome.status === "accepted") return `Recebi ${paper} e já juntei ao seu caso. Está tudo certo.`;
+      if (outcome.status === "rejected") {
+        const reason = cleanReply(outcome.reason, 400);
+        return reason
+          ? `Não deu para aceitar ${paper}. ${reason}`
+          : `Não deu para aceitar ${paper}. Envie de novo, por favor.`;
+      }
+      return `Recebi ${paper} e juntei ao seu caso. O escritório confere e avisa se precisar de outro.`;
+    }
+    case "statement":
+      return "Recebi o seu áudio e juntei ao seu caso como o relato do que aconteceu. Depois você vai ver os fatos em ordem no seu link, para confirmar.";
+    case "no_case":
+      return "Recebi o arquivo. Ele fica aqui na conversa para o escritório ver.";
+    case "not_taken":
+      return "Recebi o arquivo, mas ao caso eu junto só fotos, PDFs e áudios. O escritório vai ver o que você mandou.";
+    case "failed":
+      return "Não consegui receber um arquivo. Envie de novo, por aqui ou pelo link do seu caso.";
+  }
+}
+
+/** ONE's message of the files of a turn: a line each, in the order they came; null for none. */
+export function filesMessage(outcomes: readonly FileOutcome[]): string | null {
+  return outcomes.length > 0 ? outcomes.map(fileLine).join("\n") : null;
 }
 
 /** Whether a person of the date is a minor on a day (both `YYYY-MM-DD`). */

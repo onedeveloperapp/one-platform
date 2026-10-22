@@ -12,7 +12,10 @@ import type { AiProviderName } from "@flyee/ai/types";
  * the next steps, a question answered as ONE's with nothing of the passenger
  * handed to the model, a passenger who asks for a lawyer told that a person
  * continues and listed for the firm, a firm that keeps ONE's answers to a
- * person sending one once it is approved, and a "NÃO" ended kindly.
+ * person sending one once it is approved, and a "NÃO" ended kindly. A photo
+ * of an identity and an audio the passenger sends join the case (0050): the
+ * photo read for what paper it is, checked as one sent through the link and
+ * told in the conversation, the audio as the passenger's account.
  *
  * It runs only when a migrated database is at hand
  * (`npm run test:db:roundtrip`); otherwise it is skipped. What stands in is
@@ -48,6 +51,8 @@ vi.mock("@flyee/ai/fake", async (original) => {
 
 let sql: Sql;
 let clientAs: ReturnType<typeof standIn>;
+/** The bucket, in memory: where the test chat's page leaves a file, and the firm's files. */
+const bucket = new Map<string, Uint8Array>();
 const backend = () => clientAs("service_role", { role: "service_role" });
 vi.mock("@flyee/auth/service", () => ({ createServiceClient: () => backend() }));
 
@@ -94,7 +99,7 @@ describe.skipIf(!DB_URL)("ONE in the conversation, from the first word on a flig
 
   beforeAll(async () => {
     sql = connect();
-    clientAs = standIn(sql);
+    clientAs = standIn(sql, { bucket });
     process.env.AI_FAKE_PROVIDER = "1";
     await sql.unsafe(`
       delete from public.organizations where id = '${FIRM}';
@@ -200,6 +205,102 @@ describe.skipIf(!DB_URL)("ONE in the conversation, from the first word on a flig
     expect(events.map((event) => event.kind)).toEqual(["case_opened", "link_sent"]);
     // Done: the same yes is never taken twice.
     expect(await takeConversationTurns(backend() as never)).toMatchObject({ claimed: 0 });
+  });
+
+  it("joins a photo of the identity and an audio to the case, checks the photo and tells the passenger", async () => {
+    const { sendTestMedia, startTestMedia } = await import("@/lib/test-chat/actions");
+    const { fetchPendingMedia } = await import("@/lib/whatsapp/media");
+    const { takeConversationTurns } = await import("@/lib/conversations/agent-work");
+    const sharp = (await import("sharp")).default;
+    const trip = await tripOf("cancelamento");
+    model.answer = (briefing) =>
+      briefing.includes("Que papel é este arquivo?")
+        ? { tipo: "identity", nome: "MARIANA TESTE" }
+        : briefing.includes("Documento dito:")
+          ? {
+              decisao: "aceitar",
+              motivo: "",
+              tipo_identificado: "RG",
+              legivel: true,
+              nome_no_documento: "MARIANA TESTE",
+              confere_com_a_pessoa: "sim",
+              observacoes: "",
+              trechos: [],
+            }
+          : {};
+
+    // The page sends each file where the vendor would keep it, then as the passenger's message.
+    const send = async (bytes: Uint8Array, mime: string, name: string) => {
+      const started = await startTestMedia(TOKEN, trip, { mime, bytes: bytes.byteLength });
+      expect(started.ok).toBe(true);
+      if (!started.ok) return "";
+      bucket.set(started.storagePath, bytes);
+      expect(await sendTestMedia(TOKEN, trip, { mediaId: started.mediaId, mime, name })).toEqual({
+        ok: true,
+        code: "delivered",
+      });
+      return started.storagePath;
+    };
+    const photo = new Uint8Array(
+      await sharp({ create: { width: 900, height: 600, channels: 3, background: "#f4f1ea" } })
+        .composite([
+          {
+            input: Buffer.from(
+              '<svg width="900" height="600"><rect x="60" y="60" width="780" height="480" fill="none" stroke="#123" stroke-width="6"/><text x="120" y="300" font-size="56" fill="#123">REGISTRO GERAL</text></svg>',
+            ),
+          },
+        ])
+        .png()
+        .toBuffer(),
+    );
+    const staged = await send(photo, "image/png", "rg.png");
+    await send(new Uint8Array([...Buffer.from("OggS"), 0, 2, ...new Array(60).fill(0)]), "audio/ogg", "relato.ogg");
+    expect(await startTestMedia(TOKEN, trip, { mime: "video/mp4", bytes: 1000 })).toEqual({
+      ok: false,
+      code: "type_not_allowed",
+    });
+
+    // The turn waits for the files on their way; the backend brings them into the firm's files.
+    expect(await takeConversationTurns(backend() as never)).toMatchObject({ claimed: 0 });
+    expect(await fetchPendingMedia(backend() as never)).toMatchObject({ stored: 2, failed: 0 });
+    expect(bucket.has(staged)).toBe(false);
+
+    const asked = model.briefings.length;
+    expect(await takeConversationTurns(backend() as never)).toMatchObject({ claimed: 1, failed: 0 });
+    // The paper was read and then checked; the audio waits for its transcription.
+    expect(model.briefings.slice(asked).some((briefing) => briefing.includes("Que papel é este arquivo?"))).toBe(true);
+    expect(
+      model.briefings.slice(asked).some((briefing) => briefing.includes("Documento dito: documento de identidade")),
+    ).toBe(true);
+
+    const [paper] = await sql.unsafe(
+      `select d.kind, d.source, d.status, p.full_name from public.case_documents d
+       join public.case_parties cp on cp.id = d.party_id join public.people p on p.id = cp.person_id
+       join public.tracked_trips t on t.case_id = d.case_id where t.id = $1`,
+      [trip],
+    );
+    expect(paper).toEqual({ kind: "identity", source: "whatsapp", status: "accepted", full_name: "Mariana Teste" });
+    const [account] = await sql.unsafe(
+      `select s.source from public.case_statements s join public.tracked_trips t on t.case_id = s.case_id where t.id = $1`,
+      [trip],
+    );
+    expect(account).toEqual({ source: "whatsapp" });
+
+    const told = (await sentTo(MARIANA)).at(-1);
+    expect(told).toMatchObject({ by_one: true, model: false });
+    expect(String(told?.body)).toBe(
+      [
+        "Recebi o documento de identidade e já juntei ao seu caso. Está tudo certo.",
+        "Recebi o seu áudio e juntei ao seu caso como o relato do que aconteceu. Depois você vai ver os fatos em ordem no seu link, para confirmar.",
+      ].join("\n"),
+    );
+    const events = await sql.unsafe(
+      `select e.kind from public.wa_conversation_events e
+       join public.wa_conversations c on c.id = e.conversation_id
+       where c.org_id = $1 and c.contact_wa_id = $2 and e.kind in ('document_joined', 'statement_joined') order by e.kind`,
+      [FIRM, MARIANA],
+    );
+    expect(events.map((event) => event.kind)).toEqual(["document_joined", "statement_joined"]);
   });
 
   it("answers a question with the model's words, as ONE's, and hands the model no identifier", async () => {
