@@ -15,6 +15,7 @@ export const NOTICE_KINDS = [
   "payment_alert",
   "lawsuit_update",
   "document_refused",
+  "flight_problem",
 ] as const;
 export type NoticeKind = (typeof NOTICE_KINDS)[number];
 export const isNoticeKind = (value: unknown): value is NoticeKind =>
@@ -27,6 +28,7 @@ export const KIND_KEY: Record<NoticeKind, { label: string; when: string }> = {
   payment_alert: { label: "notice-kind-payment-alert", when: "notice-kind-payment-alert-when" },
   lawsuit_update: { label: "notice-kind-lawsuit-update", when: "notice-kind-lawsuit-update-when" },
   document_refused: { label: "notice-kind-document-refused", when: "notice-kind-document-refused-when" },
+  flight_problem: { label: "notice-kind-flight-problem", when: "notice-kind-flight-problem-when" },
 };
 
 /** What each value of a kind's text is, as the firm's form names it beside its number. */
@@ -41,6 +43,9 @@ const PARAM_KEY: Record<string, string> = {
   status: "notice-param-status",
   document: "notice-param-document",
   reason: "notice-param-reason",
+  flight: "notice-param-flight",
+  what: "notice-param-what",
+  assistance: "notice-param-assistance",
 };
 export const paramKey = (param: string): string => PARAM_KEY[param] ?? "notice-param-other";
 

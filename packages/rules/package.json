@@ -9,6 +9,7 @@
     "./cnj": "./src/cnj.ts",
     "./deadlines": "./src/deadlines.ts",
     "./flight": "./src/flight.ts",
+    "./flight-problem": "./src/flight-problem.ts",
     "./forum": "./src/forum.ts",
     "./oab": "./src/oab.ts",
     "./person": "./src/person.ts",
@@ -18,6 +19,6 @@
     "./weather": "./src/weather.ts"
   },
   "scripts": {
-    "test": "node --experimental-strip-types --test src/rules.test.ts src/domain.test.ts src/deadlines.test.ts"
+    "test": "node --experimental-strip-types --test src/rules.test.ts src/domain.test.ts src/deadlines.test.ts src/flight-problem.test.ts"
   }
 }

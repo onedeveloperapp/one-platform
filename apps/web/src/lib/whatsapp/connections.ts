@@ -1,6 +1,7 @@
 import type { StatusTone } from "@/components/product/status-chip";
 import type { SecondFactorState } from "@/lib/ai/approvals";
 import type { FirmNotices } from "@/lib/notices/facts";
+import type { TestChatCard } from "@/lib/test-chat/test-chat";
 
 /**
  * The firm's WhatsApp connection as its screen reads it (migrations 0017 and
@@ -12,7 +13,8 @@ import type { FirmNotices } from "@/lib/notices/facts";
 export type ConnectedNumber = {
   id: string;
   connectionId: string;
-  provider: "meta" | "simulator";
+  /** `test`: the number of the firm's test chat (0047), which its own card shows. */
+  provider: "meta" | "simulator" | "test";
   phoneLabel: string;
   verifiedName: string | null;
   /** `coexistence`: the number also lives on the firm's phone. `cloud`: only on the platform. */
@@ -73,6 +75,8 @@ export type ConnectionsData = {
   };
   /** The notices the firm's clients get on WhatsApp by themselves (migration 0038). */
   notices: FirmNotices;
+  /** The firm's test chat (migration 0047): whether it is on, and its page's address for who may hand it out. */
+  testChat: { state: TestChatCard; url: string | null; sinceLabel: string | null } | null;
 };
 
 /**
@@ -95,6 +99,8 @@ const CONNECT_ERROR_KEYS: Record<string, string> = {
   number_in_use: "connections-error-number-in-use",
   simulator_off: "connections-error-simulator-off",
   simulator_not_allowed: "connections-error-simulator-not-allowed",
+  test_chat_not_allowed: "connections-error-test-chat-not-allowed",
+  not_on: "connections-error-test-chat-off",
   not_recorded: "connections-error-not-recorded",
   vault_not_configured: "connections-error-vault",
   backend_not_configured: "connections-error-backend",

@@ -138,6 +138,8 @@ export default function InboxView({ state }: { state: InboxState }) {
                     messages={selected.messages}
                     olderHidden={selected.olderHidden}
                     cases={selected.cases}
+                    events={selected.events}
+                    waitingReply={selected.waitingReply}
                     templates={ready.templates}
                     me={ready.me}
                     firmName={ready.firm.name}

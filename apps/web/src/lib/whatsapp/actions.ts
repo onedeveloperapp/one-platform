@@ -221,6 +221,33 @@ export async function markConversationRead(conversationId: string): Promise<Acti
   return { ok: true, code: "read" };
 }
 
+/**
+ * Who answers a conversation (migration 0048): a person takes it over from
+ * ONE, or gives it back. Giving it back clears a call of ONE's, and what the
+ * passenger wrote last and nobody answered is then ONE's to answer.
+ */
+export async function setConversationAgent(conversationId: string, agent: "one" | "person"): Promise<ActionResult> {
+  const context = await getMemberContext();
+  if (!context?.firm || !UUID.test(conversationId) || (agent !== "one" && agent !== "person")) {
+    return { ok: false, code: "not_found" };
+  }
+  if (await isSupportVisit()) return { ok: false, code: "not_allowed_in_support_session" };
+  const { data, error } = await context.supabase.rpc("set_conversation_agent", {
+    target_conversation: conversationId,
+    target_agent: agent,
+  });
+  if (error) return { ok: false, code: codeOf(error.message) };
+  const answer = (data ?? {}) as { ok?: boolean; code?: string };
+  if (!answer.ok) return { ok: false, code: codeOf(answer.code) };
+  refresh();
+  if (agent === "one") {
+    // Given back with something the passenger wrote and nobody answered: ONE takes its turn now.
+    const { queueConversationTurn } = await import("@/lib/conversations/agent-work");
+    await queueConversationTurn(conversationId).catch(() => undefined);
+  }
+  return { ok: true, code: answer.code ?? "changed" };
+}
+
 /** Records that a person asked the firm to stop writing, or that they agreed to be written to again. */
 export async function setOptOut(input: {
   conversationId: string;

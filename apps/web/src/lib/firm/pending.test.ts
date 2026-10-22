@@ -56,6 +56,8 @@ const QUIET: FirmPending = {
   oneWaitsStale: 0,
   linksOwed: [],
   linksOwedTotal: 0,
+  conversationsCalled: [],
+  conversationsCalledTotal: 0,
   deadlinesOverdue: [],
   deadlinesToday: 0,
   hearingsToday: 0,
@@ -82,6 +84,8 @@ const CASE_A = "d5100000-0000-4000-8000-00000000000a";
 const CASE_B = "d5100000-0000-4000-8000-00000000000b";
 const PERSON_A = "d5100000-0000-4000-8000-0000000000a1";
 const PERSON_B = "d5100000-0000-4000-8000-0000000000b1";
+const CONVERSATION_A = "d5100000-0000-4000-8000-000000000201";
+const CONVERSATION_B = "d5100000-0000-4000-8000-000000000202";
 
 const group = (groups: PendingGroup[], key: PendingGroup["key"]) => groups.find((entry) => entry.key === key);
 const ids = (groups: PendingGroup[], key: PendingGroup["key"]) =>
@@ -120,6 +124,9 @@ describe("what waits for somebody, as the database says it", () => {
     // A database before the links (0046) owes no link to anybody.
     expect(read?.linksOwed).toEqual([]);
     expect(read?.linksOwedTotal).toBe(0);
+    // And one before ONE in the conversations (0048) has no conversation waiting for a person.
+    expect(read?.conversationsCalled).toEqual([]);
+    expect(read?.conversationsCalledTotal).toBe(0);
     expect(readFirmPending({ one_waits: [] })).toBeNull();
     expect(readFirmPending(null)).toBeNull();
     expect(readFirmPending([])).toBeNull();
@@ -147,6 +154,42 @@ describe("what waits for somebody, as the database says it", () => {
       { caseId: CASE_A, seq: 3, personId: PERSON_A, client: "Mariana Duarte", reason: "window_closed" },
     ]);
     expect(read?.linksOwedTotal).toBe(3);
+  });
+
+  it("reads the conversations where ONE called a person, and leaves out one it cannot read", () => {
+    const read = readFirmPending({
+      one_waits: [],
+      one_waits_total: 0,
+      one_waits_stale: 0,
+      conversations_called: [
+        {
+          conversation_id: CONVERSATION_A,
+          contact: "Mariana",
+          reason: "Quer falar com um advogado.",
+          since: null,
+          late: true,
+        },
+        { conversation_id: CONVERSATION_B, contact: "Rui", reason: "", late: false },
+        { conversation_id: "not-a-conversation", contact: "Rui", reason: "Reclamou do escritório." },
+      ],
+      conversations_called_total: 4,
+      deadlines_overdue: [],
+      deadlines_today: 0,
+      hearings_today: 0,
+      documents_stale: 0,
+      documents_stale_hours: 24,
+      one_waits_stale_days: 2,
+    });
+    expect(read?.conversationsCalled).toEqual([
+      {
+        conversationId: CONVERSATION_A,
+        contact: "Mariana",
+        reason: "Quer falar com um advogado.",
+        since: null,
+        late: true,
+      },
+    ]);
+    expect(read?.conversationsCalledTotal).toBe(4);
   });
 
   it("counts whole days since a wait started", () => {
@@ -257,6 +300,41 @@ describe("the center of what waits for somebody", () => {
     // Every link counts, the ones not listed too.
     expect(pendingBadge(groups)).toBe(5);
     expect(urgentIds(groups)).toContain(`link:${CASE_A}:${PERSON_A}`);
+  });
+
+  it("asks a person to answer each passenger ONE said a person would, late once they waited too long", () => {
+    const pending: FirmPending = {
+      ...QUIET,
+      conversationsCalled: [
+        {
+          conversationId: CONVERSATION_A,
+          contact: "Mariana",
+          reason: "Quer falar com um advogado.",
+          since: null,
+          late: true,
+        },
+        {
+          conversationId: CONVERSATION_B,
+          contact: "",
+          reason: "O ONE não conseguiu responder agora.",
+          since: null,
+          late: false,
+        },
+      ],
+      conversationsCalledTotal: 3,
+    };
+    const groups = pendingGroups(NOTHING, pending, ATTENDANCE, NOW);
+    expect(ids(groups, "late")).toEqual([`conversation:${CONVERSATION_A}`]);
+    expect(ids(groups, "one")).toEqual([`conversation:${CONVERSATION_B}`, "conversations:more"]);
+    expect(group(groups, "late")!.items[0]).toMatchObject({
+      // The conversation itself, where the person answers.
+      href: `/atendimento?c=${CONVERSATION_A}`,
+      label: { key: "pending-conversation", values: { contact: "Mariana" } },
+      detail: { key: "pending-conversation-detail", values: { reason: "Quer falar com um advogado." } },
+    });
+    expect(group(groups, "one")!.items[0]).toMatchObject({ label: { key: "pending-conversation-unnamed" } });
+    expect(pendingBadge(groups)).toBe(3);
+    expect(pendingLate(groups)).toBe(true);
   });
 
   it("splits what falls today from what falls in the next days", () => {
@@ -390,6 +468,17 @@ describe("the center of what waits for somebody", () => {
         reason,
       })),
       linksOwedTotal: LINK_REASONS.length + 1,
+      conversationsCalled: [
+        {
+          conversationId: CONVERSATION_A,
+          contact: "Mariana",
+          reason: "Quer falar com um advogado.",
+          since: null,
+          late: true,
+        },
+        { conversationId: CONVERSATION_B, contact: "", reason: "Reclamou do escritório.", since: null, late: false },
+      ],
+      conversationsCalledTotal: 3,
     };
     const groups = pendingGroups(today, pending, PARTNER, NOW);
     const keys = new Set<string>();

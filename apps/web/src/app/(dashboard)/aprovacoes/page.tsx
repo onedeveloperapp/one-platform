@@ -2,6 +2,7 @@ import ApprovalsView from "./components/approvals-view";
 import { cookies } from "next/headers";
 
 import {
+  type ApprovalConversation,
   type ApprovalDocument,
   type ApprovalDraft,
   type ApprovalsState,
@@ -17,9 +18,11 @@ import { DOCUMENT_CHECK_TASK } from "@/lib/cases/document-check";
 import { readQuality } from "@/lib/cases/document-quality";
 import { DRAFT_TASK } from "@/lib/cases/drafts";
 import { CHRONOLOGY_TASK, TRANSCRIPTION_TASK } from "@/lib/cases/statements";
+import { CONVERSATION_TASK } from "@/lib/conversations/agent";
 import { type FirmFunction, isFirmFunction } from "@/lib/firm/roles";
 import { getMemberContext } from "@/lib/member/context";
 import { IMPERSONATION_MARKER_COOKIE } from "@flyee/auth";
+import { isWindowOpen } from "@flyee/whatsapp/rules";
 
 type Embedded<T> = T | T[] | null;
 
@@ -78,6 +81,27 @@ type AnswerVersionRow = {
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 /** How many times the proposals of one statement are sent back, when the setting does not say. */
 const MAX_RETURNS = 5;
+
+type ConversationRow = {
+  id: string;
+  number_id: string;
+  contact_wa_id: string;
+  contact_name: string | null;
+  saved_name: string | null;
+  last_inbound_at: string | null;
+};
+
+type ConversationMessageRow = {
+  id: string;
+  conversation_id: string;
+  direction: string;
+  body: string | null;
+  by_one: boolean;
+  created_at: string;
+};
+
+/** How many of a conversation's last messages an answer of ONE is read beside. */
+const CONVERSATION_MESSAGES = 6;
 
 type DecidedRow = {
   id: string;
@@ -284,12 +308,72 @@ async function loadApprovals(): Promise<ApprovalsState> {
     }
   }
 
+  // The conversations the answers of ONE to a passenger are of: the last words each answer answers, and whether
+  // it can still go (0048).
+  const conversationOf = (row: PendingRow): string | null => {
+    const run = one(row.ai_runs);
+    return row.task === CONVERSATION_TASK && run?.subject_type === "wa_conversation" && UUID.test(run.subject_id ?? "")
+      ? (run.subject_id as string)
+      : null;
+  };
+  const conversationIds = [...new Set(pendingRows.map(conversationOf).filter((id): id is string => id !== null))];
+  const talks = new Map<string, ApprovalConversation>();
+  if (conversationIds.length > 0) {
+    const reference = new Date();
+    const [rows, said, numbers, stops, windowEnd] = await Promise.all([
+      supabase
+        .from("wa_conversations")
+        .select("id, number_id, contact_wa_id, contact_name, saved_name, last_inbound_at")
+        .eq("org_id", firm.id)
+        .in("id", conversationIds),
+      supabase
+        .from("wa_messages")
+        .select("id, conversation_id, direction, body, by_one, created_at")
+        .eq("org_id", firm.id)
+        .in("conversation_id", conversationIds)
+        .order("created_at", { ascending: false })
+        .limit(CONVERSATION_MESSAGES * conversationIds.length * 4),
+      supabase.from("wa_numbers").select("id, status").eq("org_id", firm.id),
+      supabase.from("wa_optouts").select("contact_wa_id").eq("org_id", firm.id),
+      supabase.rpc("wa_window_closes_at", { last_inbound: reference.toISOString() }),
+    ]);
+    if (rows.error || said.error || numbers.error || stops.error || windowEnd.error) return { kind: "error" };
+    const windowMs = Date.parse(String(windowEnd.data)) - reference.getTime();
+    const active = new Set(
+      ((numbers.data ?? []) as { id: string; status: string }[]).filter((n) => n.status === "active").map((n) => n.id),
+    );
+    const stopped = new Set(((stops.data ?? []) as { contact_wa_id: string }[]).map((row) => row.contact_wa_id));
+    const byConversation = new Map<string, ConversationMessageRow[]>();
+    for (const message of (said.data ?? []) as ConversationMessageRow[]) {
+      const list = byConversation.get(message.conversation_id) ?? [];
+      if (list.length < CONVERSATION_MESSAGES) list.push(message);
+      byConversation.set(message.conversation_id, list);
+    }
+    for (const row of (rows.data ?? []) as ConversationRow[]) {
+      talks.set(row.id, {
+        id: row.id,
+        contact: row.saved_name?.trim() || row.contact_name?.trim() || "",
+        windowOpen:
+          Number.isFinite(windowMs) && windowMs > 0 && isWindowOpen(row.last_inbound_at, reference.getTime(), windowMs),
+        optedOut: stopped.has(row.contact_wa_id),
+        numberActive: active.has(row.number_id),
+        messages: (byConversation.get(row.id) ?? []).reverse().map((message) => ({
+          id: message.id,
+          author: message.direction === "in" ? "cliente" : message.by_one ? "one" : "escritorio",
+          text: message.body ?? "",
+          momentLabel: momentLabel(message.created_at, timeZone),
+        })),
+      });
+    }
+  }
+
   const waiting: PendingApproval[] = pendingRows.map((row) => {
     const task = one(row.ai_tasks);
     const answered = one(row.ai_runs)?.output;
     const documentId = documentOf(row);
     const statementId = statementOf(row);
     const draftId = draftOf(row);
+    const conversationId = conversationOf(row);
     const piece = draftId ? (pieces.get(draftId) ?? null) : null;
     const answer = answers.get(row.run_id) ?? null;
     // A text of the AI is read whole on its case: the queue shows how the AI's own answer starts and what the
@@ -319,6 +403,7 @@ async function loadApprovals(): Promise<ApprovalsState> {
             notes: (answer?.notes ?? []).filter((item): item is string => typeof item === "string"),
           }
         : null,
+      conversation: conversationId ? (talks.get(conversationId) ?? null) : null,
     };
   });
 

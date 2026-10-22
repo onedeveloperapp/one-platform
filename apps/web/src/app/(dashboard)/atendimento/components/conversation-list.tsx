@@ -58,8 +58,18 @@ export default function ConversationList({
                       {preview}
                     </Typography>
                   ) : null}
-                  {conversation.unread > 0 || conversation.waiting || conversation.optedOut ? (
+                  {conversation.unread > 0 ||
+                  conversation.waiting ||
+                  conversation.optedOut ||
+                  conversation.test ||
+                  conversation.calledReason ||
+                  conversation.replyWaiting ? (
                     <Box className="flex flex-row flex-wrap gap-1.5">
+                      {conversation.calledReason ? (
+                        <StatusChip label={t("inbox-called-chip")} tone="attention" />
+                      ) : null}
+                      {conversation.replyWaiting ? <StatusChip label={t("inbox-reply-chip")} tone="attention" /> : null}
+                      {conversation.test ? <StatusChip label={t("inbox-test-chip")} tone="info" /> : null}
                       {conversation.unread > 0 ? (
                         <StatusChip label={t("inbox-unread", { count: conversation.unread })} tone="attention" />
                       ) : conversation.waiting ? (

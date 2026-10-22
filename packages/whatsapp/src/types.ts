@@ -11,7 +11,11 @@
  * that was already reserved, and says what the vendor answered.
  */
 
-export type WhatsAppProviderName = "meta" | "simulator";
+/**
+ * Who stands where the vendor stands for a number: the vendor itself, the simulator of a development
+ * machine, or the test chat of a firm (its page by a link, honoured in production, reaching nobody).
+ */
+export type WhatsAppProviderName = "meta" | "simulator" | "test";
 
 /** How long a person's message keeps free text open. The database's setting is the one that decides. */
 export const SERVICE_WINDOW_MS = 24 * 60 * 60 * 1000;

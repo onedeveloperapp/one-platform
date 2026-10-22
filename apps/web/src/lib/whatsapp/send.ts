@@ -172,6 +172,23 @@ async function deliverOne(service: SupabaseClient, row: Claimed, pass: Pass): Pr
 
   await mark(service, row, true, result.providerMessageId, null);
 
+  if (row.provider === "test") {
+    // A test chat's page is the phone: what is kept there was delivered (the page says it read it, 0047).
+    try {
+      await service.rpc("wa_apply_status", {
+        target_org: row.org_id,
+        target_number: row.number_id,
+        target_wa_message_id: result.providerMessageId,
+        target_status: "delivered",
+        target_error_code: null,
+        target_pricing_category: null,
+        target_pricing_type: null,
+      });
+    } catch {
+      // The message was sent and recorded; only its receipt is missing.
+    }
+  }
+
   if (row.provider === "simulator") {
     // The vendor would say next that the message reached the person's phone:
     // the simulator says it through the same door a real status comes in by.

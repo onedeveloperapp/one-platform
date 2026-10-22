@@ -1,6 +1,7 @@
 "use client";
 
 import ApprovalCard, { type DecisionKind } from "./approval-card";
+import ConversationReplyCard from "./conversation-reply-card";
 import DocumentCheckCard from "./document-check-card";
 import DraftApprovalCard from "./draft-approval-card";
 import Link from "next/link";
@@ -23,6 +24,7 @@ const DONE_KEY: Record<DecisionKind, string> = {
   "approved-edited": "approvals-done-approved-edited",
   rejected: "approvals-done-rejected",
   returned: "approvals-done-returned",
+  "approved-not-sent": "approvals-done-approved-not-sent",
 };
 
 const decidedChip = (decision: DecidedApproval): { key: string; tone: StatusTone } =>
@@ -182,6 +184,16 @@ export default function ApprovalsView({ state }: { state: ApprovalsState }) {
                     key={approval.id}
                     approval={approval}
                     document={approval.document}
+                    canDecide={canDecide}
+                    blocked={blocked}
+                    onDecided={decided}
+                  />
+                ) : approval.conversation ? (
+                  // An answer of ONE to a passenger is read beside the conversation it answers, and sent from here.
+                  <ConversationReplyCard
+                    key={approval.id}
+                    approval={approval}
+                    conversation={approval.conversation}
                     canDecide={canDecide}
                     blocked={blocked}
                     onDecided={decided}

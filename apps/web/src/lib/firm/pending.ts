@@ -15,8 +15,10 @@ import { formatCnj } from "@flyee/rules/cnj";
  *           stopped;
  *   today   what falls today, and in the next days;
  *   one     what keeps ONE from carrying on: each case it waits on, with what
- *           it waits for, each client's link it could not send, with why, and
- *           every decision only a person takes;
+ *           it waits for, each client's link it could not send, with why, each
+ *           conversation where ONE called a person (late once the passenger
+ *           waited the setting's minutes), and every decision only a person
+ *           takes;
  *   review  what is good to look at and holds nothing up.
  *
  * The first three are the badge: nothing pending or late goes unseen. The
@@ -44,6 +46,15 @@ export const isLinkReason = (value: unknown): value is LinkReason =>
 /** Somebody of a case being gathered who never had a link, and why ONE has not sent it. */
 export type LinkOwed = { caseId: string; seq: number; personId: string; client: string; reason: LinkReason };
 
+/** A conversation where ONE called a person (migration 0048), with why. */
+export type ConversationCalled = {
+  conversationId: string;
+  contact: string;
+  reason: string;
+  since: string | null;
+  late: boolean;
+};
+
 export type OverdueDeadline = {
   deadlineId: string;
   caseId: string | null;
@@ -59,6 +70,8 @@ export type FirmPending = {
   oneWaitsStale: number;
   linksOwed: LinkOwed[];
   linksOwedTotal: number;
+  conversationsCalled: ConversationCalled[];
+  conversationsCalledTotal: number;
   deadlinesOverdue: OverdueDeadline[];
   deadlinesToday: number;
   hearingsToday: number;
@@ -94,6 +107,15 @@ function linkOwedOf(raw: unknown): LinkOwed | null {
   if (!caseId || !UUID.test(caseId) || !personId || !UUID.test(personId) || !seq || !isLinkReason(row.reason))
     return null;
   return { caseId, seq, personId, client: text(row.client) ?? "", reason: row.reason };
+}
+
+function conversationCalledOf(raw: unknown): ConversationCalled | null {
+  if (typeof raw !== "object" || raw === null) return null;
+  const row = raw as Record<string, unknown>;
+  const conversationId = text(row.conversation_id);
+  const reason = text(row.reason);
+  if (!conversationId || !UUID.test(conversationId) || !reason) return null;
+  return { conversationId, contact: text(row.contact) ?? "", reason, since: text(row.since), late: row.late === true };
 }
 
 function overdueOf(raw: unknown): OverdueDeadline | null {
@@ -147,6 +169,11 @@ export function readFirmPending(raw: unknown): FirmPending | null {
       ? answer.links_owed.map(linkOwedOf).filter((row): row is LinkOwed => row !== null)
       : [],
     linksOwedTotal: count(answer.links_owed_total) ?? 0,
+    // Read where the database says them (0048); a database without them has no conversation waiting.
+    conversationsCalled: Array.isArray(answer.conversations_called)
+      ? answer.conversations_called.map(conversationCalledOf).filter((row): row is ConversationCalled => row !== null)
+      : [],
+    conversationsCalledTotal: count(answer.conversations_called_total) ?? 0,
     deadlinesOverdue: answer.deadlines_overdue.map(overdueOf).filter((row): row is OverdueDeadline => row !== null),
     deadlinesToday,
     hearingsToday,
@@ -318,6 +345,27 @@ export function pendingGroups(
         values: { seq: link.seq, reason: { message: LINK_REASON_KEY[link.reason] } },
       },
       count: 1,
+    });
+  }
+  // Each passenger ONE told a person answers: one who waited the setting's minutes is late.
+  for (const called of pending.conversationsCalled) {
+    groups[called.late ? "late" : "one"].push({
+      id: `conversation:${called.conversationId}`,
+      href: `/atendimento?c=${called.conversationId}`,
+      label: called.contact
+        ? { key: "pending-conversation", values: { contact: called.contact } }
+        : { key: "pending-conversation-unnamed" },
+      detail: { key: "pending-conversation-detail", values: { reason: called.reason } },
+      count: 1,
+    });
+  }
+  const unlistedConversations = pending.conversationsCalledTotal - pending.conversationsCalled.length;
+  if (unlistedConversations > 0) {
+    groups.one.push({
+      id: "conversations:more",
+      href: "/atendimento",
+      label: { key: "pending-conversations-more", values: { count: unlistedConversations } },
+      count: unlistedConversations,
     });
   }
   const unlistedLinks = pending.linksOwedTotal - pending.linksOwed.length;

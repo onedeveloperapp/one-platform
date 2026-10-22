@@ -116,6 +116,9 @@ insert into public.wa_conversations (id, org_id, number_id, contact_wa_id) value
 insert into public.wa_messages (org_id, conversation_id, number_id, direction, kind, body, status) values
   ('b1000000-0000-4000-8000-00000000000a', 'f2000000-0000-4000-8000-00000000000a', 'f1000000-0000-4000-8000-00000000000a', 'in', 'text', 'teste', 'received'),
   ('b1000000-0000-4000-8000-00000000000b', 'f2000000-0000-4000-8000-00000000000b', 'f1000000-0000-4000-8000-00000000000b', 'in', 'text', 'teste', 'received');
+insert into public.wa_conversation_events (org_id, conversation_id, kind, actor_type) values
+  ('b1000000-0000-4000-8000-00000000000a', 'f2000000-0000-4000-8000-00000000000a', 'link_sent', 'system'),
+  ('b1000000-0000-4000-8000-00000000000b', 'f2000000-0000-4000-8000-00000000000b', 'link_sent', 'system');
 insert into public.wa_templates (org_id, waba_id, name, category, status, body) values
   ('b1000000-0000-4000-8000-00000000000a', 'waba-a', 'modelo_teste', 'utility', 'approved', 'Texto do modelo.'),
   ('b1000000-0000-4000-8000-00000000000b', 'waba-b', 'modelo_teste', 'utility', 'approved', 'Texto do modelo.');
@@ -259,6 +262,21 @@ insert into public.firm_signers (org_id, user_id) values
 insert into public.lawyer_signature_uses (org_id, person_id, psc, purpose, document_hashes, seal_id) values
   ('b1000000-0000-4000-8000-00000000000a', 'a1000000-0000-4000-8000-000000000002', 'serproid', 'authorization.check', array[repeat('a', 64)], gen_random_uuid()),
   ('b1000000-0000-4000-8000-00000000000b', 'a1000000-0000-4000-8000-000000000004', 'serproid', 'authorization.check', array[repeat('b', 64)], gen_random_uuid());
+-- The test chat of each firm and a trip it follows, with its leg and an alert (0047).
+insert into public.test_chats (org_id, number_id, token) values
+  ('b1000000-0000-4000-8000-00000000000a', 'f1000000-0000-4000-8000-00000000000a', repeat('a', 43)),
+  ('b1000000-0000-4000-8000-00000000000b', 'f1000000-0000-4000-8000-00000000000b', repeat('b', 43));
+insert into public.tracked_trips (id, org_id, passenger_name, phone, airline_iata, is_test, label, consent_wording, consent_at, consent_channel) values
+  ('ae900000-0000-4000-8000-00000000000a', 'b1000000-0000-4000-8000-00000000000a', 'Passageira Teste A', '5500988880001', 'LA', true,
+   'cancelamento', 'Concordo em receber avisos sobre a viagem que cadastrei.', now(), 'test'),
+  ('ae900000-0000-4000-8000-00000000000b', 'b1000000-0000-4000-8000-00000000000b', 'Passageiro Teste B', '5500988880002', 'G3', true,
+   'cancelamento', 'Concordo em receber avisos sobre a viagem que cadastrei.', now(), 'test');
+insert into public.tracked_legs (org_id, trip_id, position, flight_number, origin_iata, destination_iata, scheduled_departure_local, scheduled_arrival_local) values
+  ('b1000000-0000-4000-8000-00000000000a', 'ae900000-0000-4000-8000-00000000000a', 1, 'LA3456', 'GRU', 'REC', '2099-01-10 08:10', '2099-01-10 11:25'),
+  ('b1000000-0000-4000-8000-00000000000b', 'ae900000-0000-4000-8000-00000000000b', 1, 'G31450', 'BSB', 'GIG', '2099-01-10 14:00', '2099-01-10 15:45');
+insert into public.flight_alerts (org_id, trip_id, kind, rule_version) values
+  ('b1000000-0000-4000-8000-00000000000a', 'ae900000-0000-4000-8000-00000000000a', 'cancelled', 'flight-problem-v1'),
+  ('b1000000-0000-4000-8000-00000000000b', 'ae900000-0000-4000-8000-00000000000b', 'cancelled', 'flight-problem-v1');
 -- record_versions: written by the versioning triggers of the inserts above.
 
 -- Tables keyed by the person.
@@ -399,15 +417,15 @@ select is(
     'consent_acceptances',
     'deadlines', 'djen_captures', 'dossiers', 'draft_templates', 'entitlement_grants', 'files', 'filing_package_items', 'filing_packages',
     'filing_receipts', 'firm_autonomy', 'firm_calendars',
-    'firm_invitations', 'firm_notice_kinds', 'firm_signers', 'flight_checks', 'flight_segments', 'hearings', 'import_batches', 'import_rows', 'invoices',
+    'firm_invitations', 'firm_notice_kinds', 'firm_signers', 'flight_alerts', 'flight_checks', 'flight_segments', 'hearings', 'import_batches', 'import_rows', 'invoices',
     'issued_documents', 'lawyer_signature_uses', 'legal_sources', 'memberships',
     'movements', 'notice_optins', 'onboarding_state',
     'people',
     'proceeding_lawyers', 'proceeding_parties', 'proceeding_tracking', 'proceedings', 'publication_readings', 'publications', 'record_versions',
     'signature_envelopes',
-    'subscriptions',
+    'subscriptions', 'test_chats', 'tracked_legs', 'tracked_trips',
     'wa_contacts',
-    'wa_conversations', 'wa_messages', 'wa_numbers', 'wa_optouts', 'wa_templates'
+    'wa_conversation_events', 'wa_conversations', 'wa_messages', 'wa_numbers', 'wa_optouts', 'wa_templates'
   ],
   'and of their own firm exactly what an owner should'
 );
@@ -575,13 +593,13 @@ select is(
     'client_links', 'client_notices',
     'consent_acceptances', 'deadlines', 'djen_captures', 'dossiers', 'draft_templates', 'entitlement_grants', 'files',
     'filing_package_items', 'filing_packages',
-    'filing_receipts', 'firm_autonomy', 'firm_calendars', 'firm_notice_kinds', 'firm_signers', 'flight_checks', 'flight_segments', 'hearings', 'import_batches',
+    'filing_receipts', 'firm_autonomy', 'firm_calendars', 'firm_notice_kinds', 'firm_signers', 'flight_alerts', 'flight_checks', 'flight_segments', 'hearings', 'import_batches',
     'import_rows', 'invoices', 'issued_documents', 'lawyer_signature_uses', 'legal_sources',
     'memberships', 'movements', 'notice_optins', 'people', 'proceeding_lawyers', 'proceeding_parties', 'proceeding_tracking', 'proceedings',
     'publication_readings', 'publications',
     'signature_envelopes',
-    'subscriptions',
-    'wa_contacts', 'wa_conversations', 'wa_messages', 'wa_numbers', 'wa_optouts', 'wa_templates'
+    'subscriptions', 'test_chats', 'tracked_legs', 'tracked_trips',
+    'wa_contacts', 'wa_conversation_events', 'wa_conversations', 'wa_messages', 'wa_numbers', 'wa_optouts', 'wa_templates'
   ],
   'and of their own firm less than the owner: no audit trail, no history, no invitations, no checkout, no vendor accounts'
 );
@@ -618,15 +636,15 @@ select is(
     'consent_acceptances',
     'deadlines', 'djen_captures', 'dossiers', 'draft_templates', 'entitlement_grants', 'files', 'filing_package_items', 'filing_packages',
     'filing_receipts', 'firm_autonomy', 'firm_calendars',
-    'firm_invitations', 'firm_notice_kinds', 'firm_signers', 'flight_checks', 'flight_segments', 'hearings', 'import_batches', 'import_rows', 'invoices',
+    'firm_invitations', 'firm_notice_kinds', 'firm_signers', 'flight_alerts', 'flight_checks', 'flight_segments', 'hearings', 'import_batches', 'import_rows', 'invoices',
     'issued_documents', 'lawyer_signature_uses', 'legal_sources', 'memberships',
     'movements', 'notice_optins', 'onboarding_state',
     'people',
     'proceeding_lawyers', 'proceeding_parties', 'proceeding_tracking', 'proceedings', 'publication_readings', 'publications', 'record_versions',
     'signature_envelopes',
-    'subscriptions',
+    'subscriptions', 'test_chats', 'tracked_legs', 'tracked_trips',
     'wa_contacts',
-    'wa_conversations', 'wa_messages', 'wa_numbers', 'wa_optouts', 'wa_templates'
+    'wa_conversation_events', 'wa_conversations', 'wa_messages', 'wa_numbers', 'wa_optouts', 'wa_templates'
   ],
   'and of their own firm the same an owner of firm A reads of theirs'
 );

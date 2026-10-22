@@ -21,15 +21,21 @@ import messages from "@flyee/content/messages/pt-BR.json";
 import { renderTemplate } from "@flyee/whatsapp/rules";
 
 const ROOT = path.resolve(__dirname, "../../../../..");
-const MIGRATION = fs.readFileSync(path.join(ROOT, "packages/db/migrations/0038_client_notices.sql"), "utf8");
+// The kinds were made in 0038 and one more joined in 0047 (ONE's first word when a flight has a problem).
+const MIGRATION = ["0038_client_notices.sql", "0047_test_chat.sql"]
+  .map((file) => fs.readFileSync(path.join(ROOT, "packages/db/migrations", file), "utf8"))
+  .join("\n");
 const product = messages.product as Record<string, string>;
 
 /** The kinds the migration seeds, each with its text, footer, values and examples. */
 function seeded(): { kind: string; body: string; footer: string; params: string[]; examples: string[] }[] {
-  const start = MIGRATION.indexOf("insert into public.notice_kinds");
-  const block = MIGRATION.slice(start, MIGRATION.indexOf("on conflict (kind) do nothing", start));
+  const blocks: string[] = [];
+  for (let start = MIGRATION.indexOf("insert into public.notice_kinds"); start >= 0; ) {
+    blocks.push(MIGRATION.slice(start, MIGRATION.indexOf("on conflict (kind) do nothing", start)));
+    start = MIGRATION.indexOf("insert into public.notice_kinds", start + 1);
+  }
   // Each row starts on its own line: ('kind', position, 'base', 'text', 'footer', array[...], array[...]).
-  const rows = block.split(/\n {2}\(/).slice(1);
+  const rows = blocks.flatMap((block) => block.split(/\n {2}\(/).slice(1));
   return rows.map((row) => {
     const strings = [...row.matchAll(/'((?:[^']|'')*)'/g)].map((match) => match[1].replaceAll("''", "'"));
     const arrays = [...row.matchAll(/array\[([\s\S]*?)\]/g)].map((match) =>
@@ -41,7 +47,9 @@ function seeded(): { kind: string; body: string; footer: string; params: string[
 
 describe("what the code says matches what the database keeps", () => {
   it("lists the kinds as the table allows them, and the migration seeds each one", () => {
-    const check = /constraint notice_kinds_kind_check check \(kind in \(([^)]+)\)\)/.exec(MIGRATION)?.[1] ?? "";
+    // The latest definition of the check is the one in force.
+    const check =
+      [...MIGRATION.matchAll(/constraint notice_kinds_kind_check check \(kind in \(([^)]+)\)\)/g)].pop()?.[1] ?? "";
     const allowed = [...check.matchAll(/'([a-z_]+)'/g)].map((match) => match[1]);
     expect([...NOTICE_KINDS].sort()).toEqual(allowed.sort());
     expect(

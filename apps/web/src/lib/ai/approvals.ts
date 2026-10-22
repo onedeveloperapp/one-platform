@@ -30,6 +30,20 @@ export type PendingApproval = {
   statement: ApprovalStatement | null;
   /** The draft of a piece the answer is the first text of (migration 0029). */
   draft: ApprovalDraft | null;
+  /** The conversation an answer of ONE to a passenger is of (migration 0048). */
+  conversation: ApprovalConversation | null;
+};
+
+/** The conversation an answer of ONE answers: its last words, and whether the answer can still go. */
+export type ApprovalConversation = {
+  id: string;
+  /** The name the firm has for the passenger, else the one WhatsApp shows; empty when neither. */
+  contact: string;
+  windowOpen: boolean;
+  optedOut: boolean;
+  numberActive: boolean;
+  /** The last messages, oldest first. */
+  messages: { id: string; author: "cliente" | "one" | "escritorio"; text: string; momentLabel: string }[];
 };
 
 /** The draft a text of the AI is of: the case and the lawsuit it is written for, and the model it came from. */

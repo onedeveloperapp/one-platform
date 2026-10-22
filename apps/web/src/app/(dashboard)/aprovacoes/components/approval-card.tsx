@@ -32,7 +32,7 @@ import { caseLabel } from "@/lib/cases/cases";
 import { CHRONOLOGY_TASK } from "@/lib/cases/statements";
 import { FUNCTION_LABEL_KEY } from "@/lib/firm/roles";
 
-export type DecisionKind = "approved" | "approved-edited" | "rejected" | "returned";
+export type DecisionKind = "approved" | "approved-edited" | "rejected" | "returned" | "approved-not-sent";
 
 /** The fewest characters that say what to change. */
 const REQUEST_MIN = 10;

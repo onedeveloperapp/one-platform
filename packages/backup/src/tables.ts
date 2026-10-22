@@ -12,8 +12,11 @@
  *   but a copy of them in a bucket is one more place they live, and a
  *   restore never needs them: a firm reconnects its account, a lawyer
  *   authorizes again, and the token is sealed anew.
+ * - `test_chats`: the firms' test chats (0047), whose rows hold the secret of
+ *   the link that opens each one. A restore never needs them: a firm turns
+ *   its test chat on again, under a new link.
  */
-export const NEVER_BACKED_UP: readonly string[] = ["backup_runs", "connection_secrets"];
+export const NEVER_BACKED_UP: readonly string[] = ["backup_runs", "connection_secrets", "test_chats"];
 
 /** The tables to copy, from every table of the schema, in a stable order. */
 export function tablesToBackUp(all: readonly string[]): string[] {

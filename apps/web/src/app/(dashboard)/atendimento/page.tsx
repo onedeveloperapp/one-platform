@@ -1,8 +1,11 @@
 import InboxView from "./components/inbox-view";
 import { cookies } from "next/headers";
 
-import { momentLabel } from "@/lib/ai/approvals";
+import { mayDecide, momentLabel } from "@/lib/ai/approvals";
 import { phonesOfWaId } from "@/lib/cases/cases";
+import { CONVERSATION_TASK } from "@/lib/conversations/agent";
+import { type WaitingReply, waitingReplyOf } from "@/lib/conversations/reply";
+import { isFirmFunction } from "@/lib/firm/roles";
 import { getMemberContext } from "@/lib/member/context";
 import { isSimulatorOn } from "@/lib/whatsapp/config";
 import {
@@ -15,6 +18,7 @@ import {
   type MessageStatus,
   phoneLabel,
   type TemplateOption,
+  type ThreadEvent,
   type ThreadMessage,
 } from "@/lib/whatsapp/conversations";
 import { IMPERSONATION_MARKER_COOKIE } from "@flyee/auth";
@@ -33,6 +37,8 @@ type ConversationRow = {
   last_message_preview: string | null;
   last_message_direction: string | null;
   unread_count: number;
+  agent: string;
+  called_reason: string | null;
 };
 
 type MessageRow = {
@@ -48,8 +54,18 @@ type MessageRow = {
   media_file_id: string | null;
   media_filename: string | null;
   sent_by: string | null;
+  ai_run_id: string | null;
+  by_one: boolean;
   created_at: string;
   wa_timestamp: string | null;
+};
+
+type EventRow = {
+  id: string;
+  kind: string;
+  data: Record<string, unknown> | null;
+  actor_id: string | null;
+  created_at: string;
 };
 
 type TemplateRow = {
@@ -63,8 +79,21 @@ type TemplateRow = {
 
 type TeamRow = { user_id: string; display_name: string | null; email: string | null };
 
+/** An answer of ONE that waits for a person (0048), with the conversation it is of. */
+type WaitingRow = {
+  id: string;
+  approver_functions: string[] | null;
+  created_at: string;
+  ai_runs:
+    | { output: unknown; subject_type: string | null; subject_id: string | null }
+    | { output: unknown; subject_type: string | null; subject_id: string | null }[]
+    | null;
+};
+
+/** How many answers of ONE that wait the inbox reads to mark its conversations: one waits per conversation. */
+const WAITING_READ = 100;
 const CONVERSATION_COLUMNS =
-  "id, number_id, contact_wa_id, contact_name, saved_name, last_inbound_at, last_message_at, last_message_preview, last_message_direction, unread_count";
+  "id, number_id, contact_wa_id, contact_name, saved_name, last_inbound_at, last_message_at, last_message_preview, last_message_direction, unread_count, agent, called_reason";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -88,7 +117,7 @@ async function loadInbox(selectedId: string | null): Promise<InboxState> {
   const timeZone = context.profile.timezone;
   const reference = new Date();
 
-  const [numbers, conversations, optouts, windowEnd, cookieStore] = await Promise.all([
+  const [numbers, conversations, optouts, windowEnd, waitingAnswers, cookieStore] = await Promise.all([
     supabase.from("wa_numbers").select("id, provider, status, waba_id").eq("org_id", firm.id),
     supabase
       .from("wa_conversations")
@@ -100,9 +129,26 @@ async function loadInbox(selectedId: string | null): Promise<InboxState> {
     // How long the window is belongs to the database's settings, which a
     // person does not read: asking when a window opened now would close gives its length.
     supabase.rpc("wa_window_closes_at", { last_inbound: reference.toISOString() }),
+    // The answers of ONE that wait for a person's "Enviar" (0048): one per conversation at most.
+    supabase
+      .from("approvals")
+      .select("id, approver_functions, created_at, ai_runs(output, subject_type, subject_id)")
+      .eq("org_id", firm.id)
+      .eq("status", "pending")
+      .eq("task", CONVERSATION_TASK)
+      .order("created_at", { ascending: false })
+      .limit(WAITING_READ),
     cookies(),
   ]);
-  if (numbers.error || conversations.error || optouts.error || windowEnd.error) return { kind: "error" };
+  if (numbers.error || conversations.error || optouts.error || windowEnd.error || waitingAnswers.error)
+    return { kind: "error" };
+
+  const waitingOf = new Map<string, WaitingRow>();
+  for (const row of (waitingAnswers.data ?? []) as WaitingRow[]) {
+    const run = Array.isArray(row.ai_runs) ? (row.ai_runs[0] ?? null) : row.ai_runs;
+    if (run?.subject_type === "wa_conversation" && run.subject_id && !waitingOf.has(run.subject_id))
+      waitingOf.set(run.subject_id, row);
+  }
 
   const windowMs = Date.parse(String(windowEnd.data)) - reference.getTime();
   if (!Number.isFinite(windowMs) || windowMs <= 0) return { kind: "error" };
@@ -138,6 +184,10 @@ async function loadInbox(selectedId: string | null): Promise<InboxState> {
       optedOut: stopped.has(row.contact_wa_id),
       numberActive: number?.status === "active",
       simulated: number?.provider === "simulator",
+      test: number?.provider === "test",
+      agent: row.agent === "person" ? "person" : "one",
+      calledReason: row.called_reason,
+      replyWaiting: waitingOf.has(row.id),
     };
   };
 
@@ -148,6 +198,8 @@ async function loadInbox(selectedId: string | null): Promise<InboxState> {
   let olderHidden = false;
   let templates: TemplateOption[] = [];
   let personCases: { id: string; seq: number }[] = [];
+  let events: ThreadEvent[] = [];
+  let waitingReply: { reply: WaitingReply; mayDecide: boolean } | null = null;
 
   if (selectedId && UUID.test(selectedId)) {
     chosen = list.find((conversation) => conversation.id === selectedId) ?? null;
@@ -166,11 +218,11 @@ async function loadInbox(selectedId: string | null): Promise<InboxState> {
 
   if (chosen) {
     const account = numberOf.get(chosen.numberId)?.waba_id ?? "";
-    const [thread, approved, team, people] = await Promise.all([
+    const [thread, approved, team, people, happened] = await Promise.all([
       supabase
         .from("wa_messages")
         .select(
-          "id, direction, origin, kind, body, status, error_code, template_name, media_status, media_file_id, media_filename, sent_by, created_at, wa_timestamp",
+          "id, direction, origin, kind, body, status, error_code, template_name, media_status, media_file_id, media_filename, sent_by, ai_run_id, by_one, created_at, wa_timestamp",
         )
         .eq("conversation_id", chosen.id)
         .eq("org_id", firm.id)
@@ -190,8 +242,16 @@ async function loadInbox(selectedId: string | null): Promise<InboxState> {
         .select("id, case_parties(cases(id, seq, updated_at))")
         .eq("org_id", firm.id)
         .in("phone", phonesOfWaId(chosen.contact)),
+      // What ONE did here and who took it over (0048).
+      supabase
+        .from("wa_conversation_events")
+        .select("id, kind, data, actor_id, created_at")
+        .eq("conversation_id", chosen.id)
+        .eq("org_id", firm.id)
+        .order("created_at", { ascending: false })
+        .limit(MESSAGES_SHOWN),
     ]);
-    if (thread.error || approved.error || team.error || people.error) return { kind: "error" };
+    if (thread.error || approved.error || team.error || people.error || happened.error) return { kind: "error" };
 
     type CaseRef = { id: string; seq: number; updated_at: string };
     const found = new Map<string, CaseRef>();
@@ -226,6 +286,9 @@ async function loadInbox(selectedId: string | null): Promise<InboxState> {
         errorCode: row.error_code,
         momentLabel: momentLabel(row.wa_timestamp ?? row.created_at, timeZone),
         authorName: (row.sent_by && names.get(row.sent_by)) || null,
+        at: row.created_at,
+        byOne: row.by_one === true,
+        aiRun: Boolean(row.ai_run_id),
         templateName: row.template_name,
         media: {
           state:
@@ -240,6 +303,30 @@ async function loadInbox(selectedId: string | null): Promise<InboxState> {
           filename: row.media_filename,
         },
       }));
+    const firstMessage = messages[0]?.at ?? null;
+    events = ((happened.data ?? []) as EventRow[])
+      // Only what happened while the messages shown were written: nothing older than the first of them.
+      .filter((row) => !olderHidden || !firstMessage || row.created_at >= firstMessage)
+      .reverse()
+      .map((row) => ({
+        id: row.id,
+        kind: row.kind,
+        at: row.created_at,
+        momentLabel: momentLabel(row.created_at, timeZone),
+        caseId: typeof row.data?.case_id === "string" ? row.data.case_id : null,
+        seq: typeof row.data?.seq === "number" ? row.data.seq : null,
+        reason: typeof row.data?.reason === "string" ? row.data.reason : null,
+        actorName: (row.actor_id && names.get(row.actor_id)) || null,
+        fromPhone: row.data?.from_phone === true,
+      }));
+    const waiting = waitingOf.get(chosen.id);
+    if (waiting) {
+      const run = Array.isArray(waiting.ai_runs) ? (waiting.ai_runs[0] ?? null) : waiting.ai_runs;
+      waitingReply = {
+        reply: waitingReplyOf(waiting.id, run?.output, momentLabel(waiting.created_at, timeZone)),
+        mayDecide: mayDecide(firm.firmFunction, (waiting.approver_functions ?? []).filter(isFirmFunction)),
+      };
+    }
     templates = ((approved.data ?? []) as TemplateRow[]).map((row) => ({
       id: row.id,
       name: row.name,
@@ -259,7 +346,7 @@ async function loadInbox(selectedId: string | null): Promise<InboxState> {
     me: { role: firm.role, firmFunction: firm.firmFunction },
     whatsapp: active.length > 0 ? "active" : numberRows.length > 0 ? "disconnected" : "none",
     conversations: list,
-    selected: chosen ? { conversation: chosen, messages, olderHidden, cases: personCases } : null,
+    selected: chosen ? { conversation: chosen, messages, olderHidden, cases: personCases, events, waitingReply } : null,
     templates,
     supportVisit: cookieStore.has(IMPERSONATION_MARKER_COOKIE),
     simulatorNumberId: simulatorOn ? (active.find((row) => row.provider === "simulator")?.id ?? null) : null,

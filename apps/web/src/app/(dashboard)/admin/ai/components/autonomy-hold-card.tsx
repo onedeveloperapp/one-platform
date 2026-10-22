@@ -22,6 +22,8 @@ import type { AutonomyCatalogEntry } from "@/lib/admin/ai";
 
 /** What each decision is, for the operator. */
 const DECISION_LABEL: Record<string, string> = {
+  reply_client: "Responder o cliente na conversa",
+  open_case_from_chat: "Abrir o caso pela conversa",
   send_client_link: "Enviar o link ao cliente",
   document_check: "Aceitar ou recusar documentos",
   chronology: "Mandar a cronologia ao cliente",

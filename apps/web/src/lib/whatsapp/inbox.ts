@@ -72,6 +72,22 @@ async function askForLinks(service: SupabaseClient, orgId: string, contact: stri
   }
 }
 
+/**
+ * A passenger wrote in a conversation: ONE takes its turn there once they
+ * stop writing (migration 0048), where ONE answers it; the database decides
+ * whether it does. Never fails the message: the sweep takes the turn anyway.
+ */
+async function askForTurn(conversationId: unknown): Promise<void> {
+  if (typeof conversationId !== "string") return;
+  try {
+    // Loaded when needed: the turn sends its answer through this inbox's outbox.
+    const { queueConversationTurn } = await import("@/lib/conversations/agent-work");
+    await queueConversationTurn(conversationId);
+  } catch {
+    // The sweep takes the turn.
+  }
+}
+
 export function supabaseInbox(service: SupabaseClient): WhatsAppInbox {
   return {
     async route(provider, phoneNumberId): Promise<NumberRoute | null> {
@@ -121,7 +137,10 @@ export function supabaseInbox(service: SupabaseClient): WhatsAppInbox {
           target_wa_timestamp: iso(event.timestamp),
         }),
       );
-      if (answer.code === "received") await askForLinks(service, route.orgId, event.from);
+      if (answer.code === "received") {
+        await askForLinks(service, route.orgId, event.from);
+        await askForTurn(answer.conversation_id);
+      }
       return { mediaPending: answer.code === "received" && answer.media_pending === true };
     },
 

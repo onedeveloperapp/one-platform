@@ -39,6 +39,10 @@ export type JobEvents = {
   "one/hearings.changed": { data: { hearingId: string | null } };
   /** A firm switched a kind of notice on, or somebody agreed to be told: reserve and send what is due now. */
   "one/notices.sweep": { data: Record<string, never> };
+  /** A flight ONE follows has a problem (its alert), or the sweep is asked: tell what is due now. */
+  "one/flight.alerts": { data: { alertId: string | null } };
+  /** A passenger wrote in a conversation ONE answers: its turn, once they stop writing. */
+  "one/conversation.turn": { data: { conversationId: string } };
 };
 
 export const isInngestConfigured = Boolean(process.env.INNGEST_EVENT_KEY && process.env.INNGEST_SIGNING_KEY);

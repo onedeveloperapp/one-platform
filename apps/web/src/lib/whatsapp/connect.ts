@@ -62,6 +62,7 @@ const KNOWN_CODES = [
   "connection_not_connected",
   "number_in_use",
   "simulator_not_allowed",
+  "test_chat_not_allowed",
   "not_found",
 ] as const;
 
@@ -166,7 +167,9 @@ export async function syncAccountTemplates(
   // A simulated account lists back what ONE submitted to it, as the platform keeps it; not read, nothing is synced,
   // since a list without them would take them away.
   const kept =
-    number.provider === "simulator" ? await simulatedTemplates(service, number.orgId, number.wabaId) : undefined;
+    number.provider === "simulator" || number.provider === "test"
+      ? await simulatedTemplates(service, number.orgId, number.wabaId)
+      : undefined;
   if (kept === null) return { ok: false, code: "templates_unreadable" };
   const access = await providerFor(number, settings, "whatsapp.templates", { simulatedTemplates: kept });
   if (!access.ok) return { ok: false, code: access.code };
@@ -229,7 +232,9 @@ async function undo(context: MemberContext, connectionId: string, leave?: () => 
 
 /** What the screen is told when a number could not be recorded: the reason when it is the firm's to act on. */
 const notRecorded = (code: string): string =>
-  code === "number_in_use" || code === "simulator_not_allowed" ? code : "not_recorded";
+  code === "number_in_use" || code === "simulator_not_allowed" || code === "test_chat_not_allowed"
+    ? code
+    : "not_recorded";
 
 // ---------- The simulator ----------
 
@@ -289,6 +294,61 @@ export async function connectSimulatedNumber(context: MemberContext): Promise<Co
     phoneNumberId,
     wabaId,
   });
+  return { ok: true, code: "connected", numberId: recorded.numberId, syncRequested: false };
+}
+
+// ---------- The test chat (0047) ----------
+
+/** A number of the test chat: an area code no carrier has, so it is nobody's. */
+const testChatPhone = () => `55008${String(randomInt(0, 100_000_000)).padStart(8, "0")}`;
+
+/**
+ * Connects the number of a firm's test chat, as a real one is connected (a
+ * connection under the person's own session, a sealed token behind it, the
+ * number recorded by the backend), with no vendor behind it: honoured in
+ * production, since it reaches nobody. A firm that had one connects the
+ * same again, and its conversations come back with it. The database refuses
+ * it beside a real number. Who manages the firm.
+ */
+export async function connectTestChatNumber(context: MemberContext): Promise<ConnectResult> {
+  if (!context.firm || !isManager(context.firm.role)) return { ok: false, code: "not_authorized" };
+  const env = await backend();
+  if ("problem" in env) return { ok: false, code: env.problem };
+  const orgId = context.firm.id;
+
+  const { data: previous } = await context.supabase
+    .from("wa_numbers")
+    .select("phone_number_id, waba_id, display_phone_number")
+    .eq("org_id", orgId)
+    .eq("provider", "test")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const wabaId = (previous?.waba_id as string | undefined) ?? `test-waba-${randomBytes(8).toString("hex")}`;
+  const phoneNumberId = (previous?.phone_number_id as string | undefined) ?? `test-${randomBytes(8).toString("hex")}`;
+  const displayPhoneNumber = (previous?.display_phone_number as string | undefined) ?? testChatPhone();
+
+  const started = await begin(context, orgId, wabaId, "Chat de teste");
+  if (!started.ok) return started;
+  const place = { orgId, connectionId: started.connectionId };
+
+  const sealed = await env.vault.seal(place, { access_token: "test-chat" }, { metadata: { test_chat: true } });
+  if (sealed.kind !== "sealed") return { ok: false, code: `vault_${sealed.code}`, connectionId: started.connectionId };
+
+  const recorded = await recordNumber(env, {
+    orgId,
+    connectionId: started.connectionId,
+    provider: "test",
+    phoneNumberId,
+    wabaId,
+    displayPhoneNumber,
+    verifiedName: context.firm.name,
+    mode: "cloud",
+  });
+  if (!recorded.ok) {
+    await undo(context, started.connectionId);
+    return { ok: false, code: notRecorded(recorded.code) };
+  }
   return { ok: true, code: "connected", numberId: recorded.numberId, syncRequested: false };
 }
 

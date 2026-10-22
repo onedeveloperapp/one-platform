@@ -2,6 +2,7 @@ import "server-only";
 
 import { getVault } from "@/lib/connections/vault";
 import { isSimulatorOn, type WhatsAppSettings } from "@/lib/whatsapp/config";
+import { TestChatProvider } from "@/lib/whatsapp/test-provider";
 import { MetaProvider } from "@flyee/whatsapp/providers/meta";
 import { SimulatorProvider } from "@flyee/whatsapp/simulator";
 import type { AccountTemplate, WhatsAppProvider } from "@flyee/whatsapp/types";
@@ -12,7 +13,8 @@ import type { AccountTemplate, WhatsAppProvider } from "@flyee/whatsapp/types";
  * A number of the vendor needs the firm's token: it is opened from the vault,
  * once per piece of work, with the firm, the connection and a purpose that is
  * recorded with the read. A simulated number has no vendor behind it and
- * opens nothing.
+ * opens nothing, and neither has a test chat's (0047), which production
+ * honours: it reaches nobody.
  */
 export type NumberTarget = {
   provider: string;
@@ -29,8 +31,17 @@ export async function providerFor(
   settings: WhatsAppSettings,
   purpose: string,
   /** For a simulated account: the templates ONE submitted to it, which the simulator lists back (it keeps no memory). */
-  options: { simulatedTemplates?: AccountTemplate[] } = {},
+  options: {
+    simulatedTemplates?: AccountTemplate[];
+    fetchStaged?: NonNullable<ConstructorParameters<typeof TestChatProvider>[0]>["fetchStaged"];
+  } = {},
 ): Promise<ProviderAccess> {
+  if (target.provider === "test") {
+    return {
+      ok: true,
+      provider: new TestChatProvider({ templates: options.simulatedTemplates, fetchStaged: options.fetchStaged }),
+    };
+  }
   if (target.provider === "simulator") {
     // A simulated number left in a database that reached production sends nothing.
     return isSimulatorOn()

@@ -43,6 +43,9 @@ const PUBLIC_PREFIXES = [
   // A client's link: a passenger has no account, the token in the path is
   // their way in (lib/cases/client-link.ts).
   "/c/",
+  // A firm's test chat: whoever tests has no account, the token in the path is
+  // the way in (lib/test-chat/actions.ts).
+  "/t/",
   // Endpoints a person reaches from an e-mail, with no account or signed out:
   // each carries its own token (the unsubscribe link, lib/unsubscribe.ts). The
   // trailing slash is part of the rule: `/api/publicity` is not this folder.
@@ -149,7 +152,7 @@ export async function middleware(request: NextRequest) {
 
   // A page whose path carries a token keeps no visit cookie: a campaign
   // parameter on it would store the path, token included, as the landing page.
-  const tokenInPath = pathname.startsWith("/c/") || pathname.startsWith("/convite/");
+  const tokenInPath = pathname.startsWith("/c/") || pathname.startsWith("/t/") || pathname.startsWith("/convite/");
 
   const withVisitCookies = <T extends NextResponse>(res: T): T => {
     if (tokenInPath) return res;

@@ -54,7 +54,13 @@ export function standIn(sql: Sql) {
 
   const asText = (value: unknown, type: string): string | null => {
     if (value === null || value === undefined) return null;
-    if (type.endsWith("[]") && Array.isArray(value)) return `{${value.join(",")}}`;
+    // An array as Postgres reads one: each element quoted, so a text with a comma or a space stays one element.
+    if (type.endsWith("[]") && Array.isArray(value)) {
+      const quoted = value.map((item) =>
+        item === null || item === undefined ? "NULL" : `"${String(item).replace(/[\\"]/g, (mark) => "\\" + mark)}"`,
+      );
+      return `{${quoted.join(",")}}`;
+    }
     return typeof value === "object" ? JSON.stringify(value) : String(value);
   };
 

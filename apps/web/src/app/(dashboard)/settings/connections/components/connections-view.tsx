@@ -7,6 +7,7 @@ import NoticesCard from "./notices-card";
 import NumberCard from "./number-card";
 import SignatureAccountCard from "./signature-account-card";
 import TemplatesCard from "./templates-card";
+import TestChatCard from "./test-chat-card";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -35,6 +36,10 @@ export default function ConnectionsView({ state }: { state: ConnectionsState }) 
   const ready = state.kind === "ready" ? state : null;
   const refresh = () => router.refresh();
   const active = ready ? ready.numbers.filter((number) => number.status === "active") : [];
+  // The test chat's number is shown by its own card; a real number is what the firm connects here.
+  const realActive = active.filter((number) => number.provider !== "test");
+  // Only a number at the vendor ends the test chat: the simulator of a development machine stands beside it.
+  const vendorActive = active.some((number) => number.provider === "meta");
   // Nobody connects from a session without the second factor, or from a support visit: the screen says why, once.
   const blocked = ready ? ready.supportVisit || ready.secondFactor !== "ok" : false;
 
@@ -168,17 +173,29 @@ export default function ConnectionsView({ state }: { state: ConnectionsState }) 
               </Grid>
             ) : null}
 
-            {ready.numbers.map((number) => (
-              <NumberCard
-                key={number.id}
-                number={number}
+            {ready.numbers
+              .filter((number) => number.provider !== "test")
+              .map((number) => (
+                <NumberCard
+                  key={number.id}
+                  number={number}
+                  blocked={blocked}
+                  simulator={ready.environment.simulator}
+                  onChanged={refresh}
+                />
+              ))}
+
+            {ready.testChat && (!vendorActive || ready.testChat.state.on) ? (
+              <TestChatCard
+                state={ready.testChat.state}
+                url={ready.testChat.url}
+                sinceLabel={ready.testChat.sinceLabel}
                 blocked={blocked}
-                simulator={ready.environment.simulator}
                 onChanged={refresh}
               />
-            ))}
+            ) : null}
 
-            {active.length === 0 || ready.pending.length > 0 ? (
+            {realActive.length === 0 || ready.pending.length > 0 ? (
               <ConnectCard
                 firmName={ready.firm.name}
                 again={ready.numbers.length > 0}

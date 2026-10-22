@@ -7,6 +7,7 @@ import { getVault } from "@/lib/connections/vault";
 import { isManager } from "@/lib/firm/roles";
 import { getMemberContext } from "@/lib/member/context";
 import { firmNotices } from "@/lib/notices/facts";
+import { testChatCardOf } from "@/lib/test-chat/test-chat";
 import { isSimulatorOn, signupWindowConfig } from "@/lib/whatsapp/config";
 import type {
   AccountTemplateRow,
@@ -16,6 +17,7 @@ import type {
 } from "@/lib/whatsapp/connections";
 import { phoneLabel } from "@/lib/whatsapp/conversations";
 import { IMPERSONATION_MARKER_COOKIE } from "@flyee/auth";
+import { BRAND } from "@flyee/content";
 
 type ConnectionRow = {
   id: string;
@@ -78,6 +80,7 @@ async function loadConnections(agenda: string | null): Promise<ConnectionsState>
     calendarConnection,
     firmCalendar,
     notices,
+    testChat,
   ] = await Promise.all([
     supabase
       .from("connections")
@@ -120,6 +123,11 @@ async function loadConnections(agenda: string | null): Promise<ConnectionsState>
       .maybeSingle(),
     supabase.from("firm_calendars").select("name, status, problem").eq("org_id", firm.id).maybeSingle(),
     firmNotices(supabase, firm.id).catch(() => null),
+    // The test chat (0047): a read that failed hides its card, and the rest of the screen stands.
+    supabase.rpc("test_chat_link", { target_org: firm.id }).then(
+      ({ data, error }) => (error ? null : testChatCardOf(data)),
+      () => null,
+    ),
   ]);
   if (
     connections.error ||
@@ -140,7 +148,7 @@ async function loadConnections(agenda: string | null): Promise<ConnectionsState>
   const list: ConnectedNumber[] = numberRows.map((row) => ({
     id: row.id,
     connectionId: row.connection_id,
-    provider: row.provider === "simulator" ? "simulator" : "meta",
+    provider: row.provider === "simulator" ? "simulator" : row.provider === "test" ? "test" : "meta",
     phoneLabel: phoneLabel(row.display_phone_number),
     verifiedName: row.verified_name,
     mode: row.mode === "coexistence" ? "coexistence" : "cloud",
@@ -221,6 +229,13 @@ async function loadConnections(agenda: string | null): Promise<ConnectionsState>
       outcome: agenda,
     },
     notices,
+    testChat: testChat
+      ? {
+          state: testChat,
+          url: testChat.token ? `${BRAND.siteUrl}/t/${testChat.token}` : null,
+          sinceLabel: testChat.startedAt ? momentLabel(testChat.startedAt, timeZone) : null,
+        }
+      : null,
   };
 }
 

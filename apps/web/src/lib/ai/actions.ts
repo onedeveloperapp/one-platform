@@ -6,6 +6,8 @@ import { DRAFT_TASK } from "@/lib/cases/drafts";
 import { settleDraftReading } from "@/lib/cases/drafts-work";
 import { CHRONOLOGY_TASK, TRANSCRIPTION_TASK } from "@/lib/cases/statements";
 import { queueStatementWork } from "@/lib/cases/statements-work";
+import { CONVERSATION_TASK } from "@/lib/conversations/agent";
+import { sendApprovedReply } from "@/lib/conversations/agent-work";
 import { getMemberContext } from "@/lib/member/context";
 
 /**
@@ -20,7 +22,15 @@ import { getMemberContext } from "@/lib/member/context";
 
 export type Decision = "approved" | "rejected" | "returned";
 
-export type DecisionResult = { ok: true; code: Decision; edited: boolean } | { ok: false; code: string };
+export type DecisionResult =
+  | {
+      ok: true;
+      code: Decision;
+      edited: boolean;
+      /** An answer of ONE to a passenger, approved and not sent: why, as the database says it. */
+      notSent?: string;
+    }
+  | { ok: false; code: string };
 
 const KNOWN_CODES = [
   "second_factor_required",
@@ -94,8 +104,17 @@ export async function decideApproval(input: {
   if (subject && run?.subject_type === "case_draft" && decided?.task === DRAFT_TASK && input.decision === "rejected") {
     await settleDraftReading(subject);
   }
+  // An answer of ONE to a passenger, approved: it goes now, as ONE's answer this person approved (0048).
+  let notSent: string | null = null;
+  if (run?.subject_type === "wa_conversation" && decided?.task === CONVERSATION_TASK) {
+    if (input.decision === "approved") {
+      const sent = await sendApprovedReply(input.approvalId);
+      if (sent !== "queued" && sent !== "already_sent") notSent = sent;
+    }
+    revalidatePath("/atendimento");
+  }
 
   revalidatePath("/aprovacoes");
   revalidatePath("/inicio");
-  return { ok: true, code: input.decision, edited: Boolean(answer.edited) };
+  return { ok: true, code: input.decision, edited: Boolean(answer.edited), ...(notSent ? { notSent } : {}) };
 }

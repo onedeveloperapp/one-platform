@@ -8,28 +8,35 @@ import { useEffect, useRef, useState } from "react";
 
 import { Alert, Box, Button, Card, CardContent, Typography } from "@mui/material";
 
+import WaitingReplyForm, { type ReplyOutcome } from "@/components/conversations/waiting-reply";
 import MessageBubble from "@/components/product/message-bubble";
 import StatusChip from "@/components/product/status-chip";
 import NiArrowLeft from "@/icons/nexture/ni-arrow-left";
 import { caseLabel } from "@/lib/cases/cases";
+import { notSentKey, type ReplyBlock, replyBlock, type WaitingReply } from "@/lib/conversations/reply";
 import type { FirmFunction, OrgRole } from "@/lib/firm/roles";
-import { markConversationRead, openMedia } from "@/lib/whatsapp/actions";
+import { markConversationRead, openMedia, setConversationAgent } from "@/lib/whatsapp/actions";
 import {
   composerMode,
   type ConversationSummary,
+  eventWords,
   failureHasNoWords,
   failureKey,
   kindKey,
   mayRemoveOptOut,
   statusKey,
   type TemplateOption,
+  type ThreadEvent,
   type ThreadMessage,
 } from "@/lib/whatsapp/conversations";
 
 /**
  * One conversation: what was said, in order, and the answer being written.
  * The header says what decides the answer (whether the 24 hours are open,
- * whether the person asked to stop), and the composer offers only what the
+ * whether the person asked to stop) and who answers it: ONE, which a person
+ * takes over with a click (or by writing) and gives back, or a person, whom
+ * ONE may have called with why. Each message says who wrote it, and what ONE
+ * did is told between the messages. The composer offers only what the
  * database will accept.
  */
 export default function Thread({
@@ -37,6 +44,8 @@ export default function Thread({
   messages,
   olderHidden,
   cases,
+  events,
+  waitingReply,
   templates,
   me,
   firmName,
@@ -49,6 +58,10 @@ export default function Thread({
   olderHidden: boolean;
   /** The cases of the person with this number, the latest first. */
   cases: { id: string; seq: number }[];
+  /** What ONE did in the conversation and who took it over, in order. */
+  events: ThreadEvent[];
+  /** The answer of ONE that waits for a person's "Enviar" here, and whether this person decides it. */
+  waitingReply: { reply: WaitingReply; mayDecide: boolean } | null;
   templates: TemplateOption[];
   me: { role: OrgRole; firmFunction: FirmFunction };
   firmName: string;
@@ -61,6 +74,38 @@ export default function Thread({
   const [optOut, setOptOut] = useState<"record" | "remove" | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [mediaError, setMediaError] = useState(false);
+  const [agentBusy, setAgentBusy] = useState(false);
+  const [agentError, setAgentError] = useState(false);
+  const [replyNote, setReplyNote] = useState<{ severity: "success" | "warning"; text: string } | null>(null);
+
+  const replyDone = (outcome: ReplyOutcome) => {
+    setReplyNote(
+      outcome.kind === "sent"
+        ? { severity: "success", text: t("reply-sent") }
+        : outcome.kind === "discarded"
+          ? { severity: "success", text: t("reply-discarded") }
+          : { severity: "warning", text: t(notSentKey(outcome.code)) },
+    );
+    onChanged();
+  };
+  const block: ReplyBlock = replyBlock(conversation);
+
+  const changeAgent = async (agent: "one" | "person") => {
+    setAgentBusy(true);
+    setAgentError(false);
+    const result = await setConversationAgent(conversation.id, agent).catch(() => ({ ok: false }));
+    setAgentBusy(false);
+    if (!result.ok) setAgentError(true);
+    else onChanged();
+  };
+
+  // The messages and what happened between them, in the order they happened. What happened in the same moment as
+  // a message comes first: the case opened before the message that tells it, the conversation taken over before
+  // the words of who took it.
+  const timeline = [
+    ...messages.map((message) => ({ type: "message" as const, at: message.at, message })),
+    ...events.map((event) => ({ type: "event" as const, at: event.at, event })),
+  ].sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : a.type === b.type ? 0 : a.type === "event" ? -1 : 1));
 
   const lastId = messages.length > 0 ? messages[messages.length - 1].id : null;
 
@@ -131,8 +176,48 @@ export default function Thread({
                 <StatusChip label={t("inbox-window-closed")} tone="neutral" />
               )}
               {conversation.optedOut ? <StatusChip label={t("inbox-opted-out")} tone="attention" /> : null}
+              {conversation.test ? <StatusChip label={t("inbox-test-chip")} tone="info" /> : null}
             </Box>
           </Box>
+          <Box className="flex flex-row flex-wrap items-center gap-2">
+            <StatusChip
+              label={conversation.agent === "one" ? t("inbox-agent-one") : t("inbox-agent-person")}
+              tone={conversation.agent === "one" ? "primary" : "neutral"}
+            />
+            {!supportVisit ? (
+              conversation.agent === "one" ? (
+                <Button
+                  variant="outlined"
+                  color="grey"
+                  size="small"
+                  disabled={agentBusy}
+                  onClick={() => void changeAgent("person")}
+                >
+                  {t("inbox-agent-take")}
+                </Button>
+              ) : (
+                <Button
+                  variant="outlined"
+                  color="primary"
+                  size="small"
+                  disabled={agentBusy}
+                  onClick={() => void changeAgent("one")}
+                >
+                  {t("inbox-agent-give-back")}
+                </Button>
+              )
+            ) : null}
+          </Box>
+          {conversation.calledReason ? (
+            <Alert severity="warning" className="neutral bg-background-paper/60!">
+              {t("inbox-called", { reason: conversation.calledReason })}
+            </Alert>
+          ) : null}
+          {agentError ? (
+            <Alert severity="error" className="neutral bg-background-paper/60!" onClose={() => setAgentError(false)}>
+              {t("inbox-agent-error")}
+            </Alert>
+          ) : null}
           <Box className="flex flex-row flex-wrap gap-2">
             {cases.slice(0, 3).map((item) => (
               <Button
@@ -167,7 +252,33 @@ export default function Thread({
             </Typography>
           ) : null}
           <Box component="ul" className="m-0 flex list-none flex-col gap-3 p-0">
-            {messages.map((message) => {
+            {timeline.map((item) => {
+              if (item.type === "event") {
+                const words = eventWords(item.event);
+                return (
+                  <Box
+                    component="li"
+                    key={`event-${item.event.id}`}
+                    className="flex flex-col items-center gap-0.5 px-4 text-center"
+                  >
+                    <Typography variant="body2" className="text-text-secondary">
+                      {t(words.key, words.values)}
+                      {item.event.kind === "case_opened" && item.event.caseId ? (
+                        <>
+                          {" · "}
+                          <Link href={`/casos/${item.event.caseId}`} className="text-primary">
+                            {t("inbox-event-open-case")}
+                          </Link>
+                        </>
+                      ) : null}
+                    </Typography>
+                    <Typography variant="caption" className="text-text-secondary">
+                      {item.event.momentLabel}
+                    </Typography>
+                  </Box>
+                );
+              }
+              const message = item.message;
               const fromFirm = message.direction === "out";
               const failed = message.status === "failed";
               // Not sent, or nobody can tell: the two are never shown under the same word.
@@ -189,7 +300,16 @@ export default function Thread({
                   meta={
                     <>
                       <span>{message.momentLabel}</span>
-                      {fromFirm && message.authorName ? (
+                      {!fromFirm ? <span>{t("inbox-by-client")}</span> : null}
+                      {fromFirm && message.aiRun ? (
+                        <span>
+                          {message.authorName
+                            ? t("inbox-by-one-approved", { name: message.authorName })
+                            : t("inbox-by-one-ai")}
+                        </span>
+                      ) : fromFirm && message.byOne ? (
+                        <span>{t("inbox-by-one")}</span>
+                      ) : fromFirm && message.authorName ? (
                         <span>{t("inbox-by", { name: message.authorName })}</span>
                       ) : null}
                       {fromFirm ? (
@@ -254,6 +374,34 @@ export default function Thread({
           >
             {notice}
           </Alert>
+        ) : null}
+
+        {replyNote ? (
+          <Alert
+            severity={replyNote.severity}
+            role="status"
+            className="neutral bg-background-paper/60!"
+            onClose={() => setReplyNote(null)}
+          >
+            {replyNote.text}
+          </Alert>
+        ) : null}
+
+        {waitingReply ? (
+          <WaitingReplyForm
+            key={waitingReply.reply.approvalId}
+            waiting={waitingReply.reply}
+            idPrefix={`thread-${conversation.id}`}
+            block={block}
+            decides={supportVisit ? t("reply-support") : waitingReply.mayDecide ? null : t("reply-not-yours")}
+            onDone={replyDone}
+          />
+        ) : null}
+
+        {conversation.agent === "one" && (mode === "text" || mode === "template") ? (
+          <Typography variant="body2" className="text-text-secondary">
+            {t("inbox-one-answers-hint")}
+          </Typography>
         ) : null}
 
         <Composer

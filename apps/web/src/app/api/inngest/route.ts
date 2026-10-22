@@ -10,9 +10,11 @@ import { aiFunctions } from "@/lib/ai/jobs";
 import { billingFunctions } from "@/lib/billing-jobs";
 import { caseFunctions } from "@/lib/cases/jobs";
 import { connectionFunctions } from "@/lib/connections/jobs";
+import { conversationFunctions } from "@/lib/conversations/jobs";
 import { courtFunctions } from "@/lib/courts/jobs";
 import { deadlineFunctions } from "@/lib/deadlines/jobs";
 import { fileFunctions } from "@/lib/files/jobs";
+import { flightAlertFunctions } from "@/lib/flight-alerts/jobs";
 import { flightFunctions } from "@/lib/flights/jobs";
 import { hearingFunctions } from "@/lib/hearings/jobs";
 import { importFunctions } from "@/lib/import/jobs";
@@ -47,6 +49,8 @@ export const { GET, POST, PUT } = serve({
     ...deadlineFunctions,
     ...hearingFunctions,
     ...noticeFunctions,
+    ...flightAlertFunctions,
+    ...conversationFunctions,
     ...publicationFunctions,
     ...whatsappFunctions,
     ...backupFunctions,

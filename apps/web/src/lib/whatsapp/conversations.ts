@@ -1,3 +1,4 @@
+import type { WaitingReply } from "@/lib/conversations/reply";
 import type { FirmFunction, OrgRole } from "@/lib/firm/roles";
 
 /**
@@ -36,6 +37,14 @@ export type ConversationSummary = {
   numberActive: boolean;
   /** The number is a simulated one: the screen offers to play the person's side. */
   simulated: boolean;
+  /** The number is the firm's test chat (0047): the person's side is played on its page. */
+  test: boolean;
+  /** Who answers it (0048): ONE, or a person of the firm who took it over or whom ONE called. */
+  agent: "one" | "person";
+  /** Why ONE called a person, while the conversation waits for one. */
+  calledReason: string | null;
+  /** An answer of ONE waits for a person's "Enviar" in it. */
+  replyWaiting: boolean;
 };
 
 export type MessageStatus = "received" | "queued" | "sending" | "sent" | "delivered" | "read" | "failed";
@@ -50,11 +59,58 @@ export type ThreadMessage = {
   status: MessageStatus;
   errorCode: string | null;
   momentLabel: string;
-  /** Who of the firm wrote it here. Null for what came in, for the phone and for somebody who left. */
+  /** Who of the firm wrote it here, or approved ONE's answer. Null for what came in, for the phone and for somebody who left. */
   authorName: string | null;
+  /** When it was, for the order of the conversation. */
+  at: string;
+  /** ONE wrote it: its own words (a link, a notice, the first word on a flight) or a model's answer. */
+  byOne: boolean;
+  /** A model's answer: a run of the task that answers the passenger. */
+  aiRun: boolean;
   templateName: string | null;
   media: { state: "none" | "pending" | "stored" | "failed"; fileId: string | null; filename: string | null };
 };
+
+/** What ONE did in a conversation, or who took it over, as the thread tells it (`wa_conversation_events`). */
+export type ThreadEvent = {
+  id: string;
+  kind: string;
+  at: string;
+  momentLabel: string;
+  caseId: string | null;
+  seq: number | null;
+  reason: string | null;
+  actorName: string | null;
+  fromPhone: boolean;
+};
+
+/** The words of each event of a conversation, with what they name. */
+export function eventWords(event: ThreadEvent): { key: string; values: Record<string, string | number> } {
+  switch (event.kind) {
+    case "case_opened":
+      return { key: "inbox-event-case-opened", values: { seq: event.seq ?? 0 } };
+    case "link_sent":
+      return { key: "inbox-event-link-sent", values: {} };
+    case "person_called":
+      return { key: "inbox-event-person-called", values: { reason: event.reason ?? "" } };
+    case "taken_over":
+      return event.fromPhone
+        ? { key: "inbox-event-taken-over-phone", values: {} }
+        : event.actorName
+          ? { key: "inbox-event-taken-over", values: { name: event.actorName } }
+          : { key: "inbox-event-taken-over-unnamed", values: {} };
+    case "returned_to_one":
+      return event.actorName
+        ? { key: "inbox-event-returned", values: { name: event.actorName } }
+        : { key: "inbox-event-returned-unnamed", values: {} };
+    case "declined":
+      return { key: "inbox-event-declined", values: {} };
+    case "stopped":
+      return { key: "inbox-event-stopped", values: {} };
+    default:
+      return { key: "inbox-event-other", values: {} };
+  }
+}
 
 export type TemplateOption = {
   id: string;
@@ -76,6 +132,10 @@ export type InboxData = {
     olderHidden: boolean;
     /** The cases of the person with this number, the latest first. */
     cases: { id: string; seq: number }[];
+    /** What ONE did and what changed hands, told between the messages (0048). */
+    events: ThreadEvent[];
+    /** The answer of ONE that waits for a person's "Enviar" here, and whether this person's function decides it. */
+    waitingReply: { reply: WaitingReply; mayDecide: boolean } | null;
   } | null;
   /** The approved templates of the selected conversation's account. */
   templates: TemplateOption[];
