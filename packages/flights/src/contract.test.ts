@@ -47,6 +47,14 @@ const FLIGHTS: FakeFlight[] = [
     actualDeparture: null,
     actualArrival: null,
   },
+  // Left late and is now expected five hours late.
+  {
+    ...SCHEDULE,
+    flight: "G31500",
+    actualDeparture: "2026-10-05T16:40:00Z",
+    actualArrival: null,
+    estimatedArrival: "2026-10-05T17:40:00Z",
+  },
   // Landed somewhere else.
   {
     ...SCHEDULE,
@@ -95,6 +103,17 @@ function flightStatusContract(name: string, make: (flights: FakeFlight[]) => Fli
       const diverted = await make(FLIGHTS).getFlightStatus({ flight: "LA3420", date: "2026-10-05" });
       assert.equal(diverted?.state, "diverted");
       assert.equal(diverted?.arrivalDelayMinutes, null);
+    });
+
+    it("says when a flight that has not landed is now expected, and a landed one when it arrived", async () => {
+      const flying = await make(FLIGHTS).getFlightStatus({ flight: "G31500", date: "2026-10-05" });
+      assert.equal(flying?.state, "departed");
+      assert.equal(flying?.estimatedArrival, "2026-10-05T17:40:00Z");
+      assert.equal(flying?.arrivalDelayMinutes, null);
+      const landed = await make(FLIGHTS).getFlightStatus({ flight: "LA3418", date: "2026-10-05" });
+      assert.equal(landed?.estimatedArrival, "2026-10-05T17:05:00Z");
+      const cancelled = await make(FLIGHTS).getFlightStatus({ flight: "G31234", date: "2026-10-05" });
+      assert.equal(cancelled?.estimatedArrival, null);
     });
 
     it("does not know a flight on another day, or a flight that does not exist", async () => {
@@ -183,11 +202,16 @@ function aeroStandIn(flights: FakeFlight[], answer?: (url: URL) => Response | nu
         blocked: false,
         position_only: false,
         origin: { code: `SB${flight.origin.slice(0, 2)}`, code_iata: flight.origin, timezone: "America/Sao_Paulo" },
-        destination: { code: `SB${flight.destination.slice(0, 2)}`, code_iata: flight.destination, timezone: "America/Sao_Paulo" },
+        destination: {
+          code: `SB${flight.destination.slice(0, 2)}`,
+          code_iata: flight.destination,
+          timezone: "America/Sao_Paulo",
+        },
         scheduled_out: flight.scheduledDeparture,
         actual_out: flight.state === "cancelled" ? null : flight.actualDeparture,
         scheduled_in: flight.scheduledArrival,
         actual_in: flight.state === "cancelled" ? null : flight.actualArrival,
+        estimated_in: flight.state === "cancelled" ? null : (flight.actualArrival ?? flight.estimatedArrival ?? null),
         departure_delay: null,
         arrival_delay: null,
         status: "Scheduled",
@@ -198,15 +222,20 @@ function aeroStandIn(flights: FakeFlight[], answer?: (url: URL) => Response | nu
     const next = new URL(url);
     next.searchParams.set("cursor", String(page + 1));
     return new Response(
-      JSON.stringify({ links: more ? { next: `${next.pathname.replace("/aeroapi", "")}${next.search}` } : null, num_pages: 1, flights: slice }),
+      JSON.stringify({
+        links: more ? { next: `${next.pathname.replace("/aeroapi", "")}${next.search}` } : null,
+        num_pages: 1,
+        flights: slice,
+      }),
       { status: 200, headers: { "content-type": "application/json; charset=UTF-8" } },
     );
   }) as typeof fetch;
   return { run, calls };
 }
 
-flightStatusContract("flightaware", (flights) =>
-  new FlightAwareProvider({ apiKey: "chave-de-teste", fetch: aeroStandIn(flights).run, now: () => AFTER }),
+flightStatusContract(
+  "flightaware",
+  (flights) => new FlightAwareProvider({ apiKey: "chave-de-teste", fetch: aeroStandIn(flights).run, now: () => AFTER }),
 );
 
 describe("FlightAware, beyond the contract", () => {
@@ -242,8 +271,26 @@ describe("FlightAware, beyond the contract", () => {
 
   it("tells apart the legs one number flies on a day by their origin, and follows the pages", async () => {
     const legs: FakeFlight[] = [
-      { ...SCHEDULE, flight: "G31000", origin: "GRU", destination: "BSB", scheduledDeparture: "2026-10-05T09:00:00Z", scheduledArrival: "2026-10-05T10:40:00Z", actualDeparture: "2026-10-05T09:05:00Z", actualArrival: "2026-10-05T10:41:00Z" },
-      { ...SCHEDULE, flight: "G31000", origin: "BSB", destination: "MAO", scheduledDeparture: "2026-10-05T11:30:00Z", scheduledArrival: "2026-10-05T14:10:00Z", actualDeparture: "2026-10-05T13:30:00Z", actualArrival: "2026-10-05T16:20:00Z" },
+      {
+        ...SCHEDULE,
+        flight: "G31000",
+        origin: "GRU",
+        destination: "BSB",
+        scheduledDeparture: "2026-10-05T09:00:00Z",
+        scheduledArrival: "2026-10-05T10:40:00Z",
+        actualDeparture: "2026-10-05T09:05:00Z",
+        actualArrival: "2026-10-05T10:41:00Z",
+      },
+      {
+        ...SCHEDULE,
+        flight: "G31000",
+        origin: "BSB",
+        destination: "MAO",
+        scheduledDeparture: "2026-10-05T11:30:00Z",
+        scheduledArrival: "2026-10-05T14:10:00Z",
+        actualDeparture: "2026-10-05T13:30:00Z",
+        actualArrival: "2026-10-05T16:20:00Z",
+      },
     ];
     const standIn = aeroStandIn(legs, undefined, 1);
     const provider = new FlightAwareProvider({ apiKey: "k", fetch: standIn.run, now: () => AFTER });
@@ -292,9 +339,19 @@ describe("FlightAware, beyond the contract", () => {
     assert.equal(runway?.destinationTimeZone, "America/Recife");
 
     const cancelledStandIn = aeroStandIn([
-      { ...SCHEDULE, flight: "G31234", actualDeparture: "2026-10-05T11:00:00Z", actualArrival: null, state: "cancelled" },
+      {
+        ...SCHEDULE,
+        flight: "G31234",
+        actualDeparture: "2026-10-05T11:00:00Z",
+        actualArrival: null,
+        state: "cancelled",
+      },
     ]);
-    const cancelled = await new FlightAwareProvider({ apiKey: "k", fetch: cancelledStandIn.run, now: () => AFTER }).getFlightStatus({
+    const cancelled = await new FlightAwareProvider({
+      apiKey: "k",
+      fetch: cancelledStandIn.run,
+      now: () => AFTER,
+    }).getFlightStatus({
       flight: "G31234",
       date: "2026-10-05",
     });
@@ -306,9 +363,17 @@ describe("FlightAware, beyond the contract", () => {
     const query = { flight: "LA3418", date: "2026-10-05" };
     const withAnswer = (response: () => Response) =>
       new FlightAwareProvider({ apiKey: "k", fetch: aeroStandIn([], () => response()).run, now: () => AFTER });
-    await assert.rejects(withAnswer(() => new Response("{}", { status: 401 })).getFlightStatus(query), FlightAwareAuthError);
     await assert.rejects(
-      withAnswer(() => new Response(JSON.stringify({ title: "Bad", reason: "x", detail: "span too long", status: 400 }), { status: 400 })).getFlightStatus(query),
+      withAnswer(() => new Response("{}", { status: 401 })).getFlightStatus(query),
+      FlightAwareAuthError,
+    );
+    await assert.rejects(
+      withAnswer(
+        () =>
+          new Response(JSON.stringify({ title: "Bad", reason: "x", detail: "span too long", status: 400 }), {
+            status: 400,
+          }),
+      ).getFlightStatus(query),
       FlightAwareQueryError,
     );
     await assert.rejects(
@@ -327,13 +392,20 @@ describe("FlightAware, beyond the contract", () => {
       }) as typeof fetch,
       now: () => AFTER,
     });
-    await assert.rejects(silent.getFlightStatus(query), (error: unknown) => error instanceof FlightAwareUnavailableError && error.status === null);
+    await assert.rejects(
+      silent.getFlightStatus(query),
+      (error: unknown) => error instanceof FlightAwareUnavailableError && error.status === null,
+    );
   });
 
   it("asks the history for a flight of nine to eleven days ago, whose whole day the flights no longer cover", async () => {
     const standIn = aeroStandIn(FLIGHTS);
     const tenDaysLater = Date.parse("2026-10-15T15:00:00Z");
-    const status = await new FlightAwareProvider({ apiKey: "k", fetch: standIn.run, now: () => tenDaysLater }).getFlightStatus({
+    const status = await new FlightAwareProvider({
+      apiKey: "k",
+      fetch: standIn.run,
+      now: () => tenDaysLater,
+    }).getFlightStatus({
       flight: "LA3418",
       date: "2026-10-05",
     });
@@ -344,19 +416,49 @@ describe("FlightAware, beyond the contract", () => {
 
   it("follows a number through its stop to where the passenger got off", async () => {
     const legs: FakeFlight[] = [
-      { ...SCHEDULE, flight: "G32601", origin: "GIG", destination: "BEL", scheduledDeparture: "2026-10-05T11:30:00Z", scheduledArrival: "2026-10-05T15:00:00Z", actualDeparture: "2026-10-05T11:31:00Z", actualArrival: "2026-10-05T14:51:00Z" },
-      { ...SCHEDULE, flight: "G32601", origin: "BEL", destination: "MCP", scheduledDeparture: "2026-10-05T15:45:00Z", scheduledArrival: "2026-10-05T16:40:00Z", actualDeparture: "2026-10-05T16:30:00Z", actualArrival: "2026-10-05T17:25:00Z" },
+      {
+        ...SCHEDULE,
+        flight: "G32601",
+        origin: "GIG",
+        destination: "BEL",
+        scheduledDeparture: "2026-10-05T11:30:00Z",
+        scheduledArrival: "2026-10-05T15:00:00Z",
+        actualDeparture: "2026-10-05T11:31:00Z",
+        actualArrival: "2026-10-05T14:51:00Z",
+      },
+      {
+        ...SCHEDULE,
+        flight: "G32601",
+        origin: "BEL",
+        destination: "MCP",
+        scheduledDeparture: "2026-10-05T15:45:00Z",
+        scheduledArrival: "2026-10-05T16:40:00Z",
+        actualDeparture: "2026-10-05T16:30:00Z",
+        actualArrival: "2026-10-05T17:25:00Z",
+      },
     ];
     const provider = new FlightAwareProvider({ apiKey: "k", fetch: aeroStandIn(legs).run, now: () => AFTER });
-    const through = await provider.getFlightStatus({ flight: "G32601", date: "2026-10-05", origin: "GIG", destination: "MCP" });
+    const through = await provider.getFlightStatus({
+      flight: "G32601",
+      date: "2026-10-05",
+      origin: "GIG",
+      destination: "MCP",
+    });
     assert.equal(through?.origin, "GIG");
     assert.equal(through?.destination, "MCP");
     assert.deepEqual(through?.stops, ["BEL"]);
     assert.equal(through?.actualDeparture, "2026-10-05T11:31:00Z");
     assert.equal(through?.arrivalDelayMinutes, 45);
     // A first leg that landed late is still the one the onward leg waited for.
-    const late = [{ ...legs[0], actualArrival: "2026-10-05T17:00:00Z" }, { ...legs[1], actualDeparture: "2026-10-05T17:40:00Z", actualArrival: "2026-10-05T18:35:00Z" }];
-    const delayed = await new FlightAwareProvider({ apiKey: "k", fetch: aeroStandIn(late).run, now: () => AFTER }).getFlightStatus({
+    const late = [
+      { ...legs[0], actualArrival: "2026-10-05T17:00:00Z" },
+      { ...legs[1], actualDeparture: "2026-10-05T17:40:00Z", actualArrival: "2026-10-05T18:35:00Z" },
+    ];
+    const delayed = await new FlightAwareProvider({
+      apiKey: "k",
+      fetch: aeroStandIn(late).run,
+      now: () => AFTER,
+    }).getFlightStatus({
       flight: "G32601",
       date: "2026-10-05",
       origin: "GIG",
@@ -366,7 +468,11 @@ describe("FlightAware, beyond the contract", () => {
     assert.equal(delayed?.arrivalDelayMinutes, 115);
     // An onward leg cancelled: the flight never arrived, whatever the first leg did.
     const stranded = [legs[0], { ...legs[1], actualDeparture: null, actualArrival: null, state: "cancelled" as const }];
-    const cut = await new FlightAwareProvider({ apiKey: "k", fetch: aeroStandIn(stranded).run, now: () => AFTER }).getFlightStatus({
+    const cut = await new FlightAwareProvider({
+      apiKey: "k",
+      fetch: aeroStandIn(stranded).run,
+      now: () => AFTER,
+    }).getFlightStatus({
       flight: "G32601",
       date: "2026-10-05",
       origin: "GIG",
@@ -376,7 +482,12 @@ describe("FlightAware, beyond the contract", () => {
     assert.equal(cut?.actualDeparture, "2026-10-05T11:31:00Z");
     assert.equal(cut?.actualArrival, null);
     // A destination no leg reaches: the leg from the origin, which says where it landed.
-    const elsewhere = await provider.getFlightStatus({ flight: "G32601", date: "2026-10-05", origin: "GIG", destination: "SSA" });
+    const elsewhere = await provider.getFlightStatus({
+      flight: "G32601",
+      date: "2026-10-05",
+      origin: "GIG",
+      destination: "SSA",
+    });
     assert.equal(elsewhere?.destination, "BEL");
     assert.equal(elsewhere?.stops, undefined);
   });
@@ -385,7 +496,10 @@ describe("FlightAware, beyond the contract", () => {
     const one = (flight: Record<string, unknown>) =>
       new FlightAwareProvider({
         apiKey: "k",
-        fetch: aeroStandIn([], () => new Response(JSON.stringify({ links: null, num_pages: 1, flights: [flight] }), { status: 200 })).run,
+        fetch: aeroStandIn(
+          [],
+          () => new Response(JSON.stringify({ links: null, num_pages: 1, flights: [flight] }), { status: 200 }),
+        ).run,
         now: () => AFTER,
       }).getFlightStatus({ flight: "AD4000", date: "2026-10-05" });
     const base = {
@@ -450,8 +564,14 @@ function recordContract(name: string, make: (months: Record<string, string>) => 
       const month = await make({ "2026-08": RECORD_MONTH }).readMonth("2026-08", WANTED);
       assert.equal(month.kind, "read");
       if (month.kind !== "read") return;
-      assert.deepEqual(month.records.map((record) => `${record.airline}${record.number}`), ["TAM3418", "GLO1000"]);
-      assert.deepEqual(month.unscheduled.map((leg) => `${leg.origin}-${leg.destination} ${leg.kind}`), ["SBSV-SBRF included"]);
+      assert.deepEqual(
+        month.records.map((record) => `${record.airline}${record.number}`),
+        ["TAM3418", "GLO1000"],
+      );
+      assert.deepEqual(
+        month.unscheduled.map((leg) => `${leg.origin}-${leg.destination} ${leg.kind}`),
+        ["SBSV-SBRF included"],
+      );
     });
 
     it("says a month that is not out, and a file of another shape, apart from a month with no such flight", async () => {
@@ -471,7 +591,11 @@ recordContract("fake", (months) => {
 });
 
 /** ANAC's server: each month's file sent in pieces of a few bytes, as a large file arrives. */
-function anacStandIn(months: Record<string, Uint8Array | string>, answer?: (url: string) => Response | null, piece = 7) {
+function anacStandIn(
+  months: Record<string, Uint8Array | string>,
+  answer?: (url: string) => Response | null,
+  piece = 7,
+) {
   const asked: string[] = [];
   const run = (async (input: string | URL) => {
     const url = String(input);
@@ -508,7 +632,9 @@ describe("ANAC's record, beyond the contract", () => {
     assert.equal(month.records.length, 2);
     assert.equal(month.records[0].justification, "ATRASOS NÃO ESPECÍFICOS");
     // The same file in UTF-8, cut between the two bytes of a letter, reads the same.
-    const utf8 = await new AnacVraSource({ fetch: anacStandIn({ "2026-08": RECORD_MONTH }, undefined, 3).run }).readMonth("2026-08", WANTED);
+    const utf8 = await new AnacVraSource({
+      fetch: anacStandIn({ "2026-08": RECORD_MONTH }, undefined, 3).run,
+    }).readMonth("2026-08", WANTED);
     assert.equal(utf8.kind === "read" && utf8.records.length, 2);
   });
 
@@ -549,7 +675,12 @@ describe("ANAC's record, beyond the contract", () => {
 function redemetStandIn(observations: Metar[], answer?: (url: URL) => Response | null) {
   const calls: URL[] = [];
   const hourOf = (stamp: string) =>
-    Date.UTC(Number(stamp.slice(0, 4)), Number(stamp.slice(4, 6)) - 1, Number(stamp.slice(6, 8)), Number(stamp.slice(8, 10)));
+    Date.UTC(
+      Number(stamp.slice(0, 4)),
+      Number(stamp.slice(4, 6)) - 1,
+      Number(stamp.slice(6, 8)),
+      Number(stamp.slice(8, 10)),
+    );
   const run = (async (input: string | URL) => {
     const url = new URL(String(input));
     calls.push(url);
@@ -561,7 +692,9 @@ function redemetStandIn(observations: Metar[], answer?: (url: URL) => Response |
     const size = Number(url.searchParams.get("page_tam") ?? 150);
     const page = Number(url.searchParams.get("page") ?? 1);
     const all = observations
-      .filter((metar) => metar.icao === icao && Date.parse(metar.observedAt) >= start && Date.parse(metar.observedAt) <= end)
+      .filter(
+        (metar) => metar.icao === icao && Date.parse(metar.observedAt) >= start && Date.parse(metar.observedAt) <= end,
+      )
       .sort((a, b) => Date.parse(b.observedAt) - Date.parse(a.observedAt))
       .map((metar) => ({
         id_localidade: icao,
@@ -574,7 +707,13 @@ function redemetStandIn(observations: Metar[], answer?: (url: URL) => Response |
       JSON.stringify({
         status: true,
         message: 200,
-        data: { current_page: page, last_page: lastPage, per_page: size, total: all.length, data: all.slice((page - 1) * size, page * size) },
+        data: {
+          current_page: page,
+          last_page: lastPage,
+          per_page: size,
+          total: all.length,
+          data: all.slice((page - 1) * size, page * size),
+        },
       }),
       { status: 200, headers: { "content-type": "application/json" } },
     );
@@ -582,8 +721,10 @@ function redemetStandIn(observations: Metar[], answer?: (url: URL) => Response |
   return { run, calls };
 }
 
-weatherContract("redemet", (observations) =>
-  new RedemetProvider({ apiKey: "chave-de-teste", fetch: redemetStandIn(observations).run, pageSize: 1 }),
+weatherContract(
+  "redemet",
+  (observations) =>
+    new RedemetProvider({ apiKey: "chave-de-teste", fetch: redemetStandIn(observations).run, pageSize: 1 }),
 );
 
 describe("REDEMET, beyond the contract", () => {
@@ -609,8 +750,14 @@ describe("REDEMET, beyond the contract", () => {
       apiKey: "errada",
       fetch: redemetStandIn([], () => new Response("{}", { status: 403 })).run,
     });
-    await assert.rejects(refused.getMetar({ icao: "SBGO", from: "2026-10-05T10:00:00Z", to: "2026-10-05T11:00:00Z" }), RedemetAuthError);
-    const down = new RedemetProvider({ apiKey: "k", fetch: redemetStandIn([], () => new Response("", { status: 503 })).run });
+    await assert.rejects(
+      refused.getMetar({ icao: "SBGO", from: "2026-10-05T10:00:00Z", to: "2026-10-05T11:00:00Z" }),
+      RedemetAuthError,
+    );
+    const down = new RedemetProvider({
+      apiKey: "k",
+      fetch: redemetStandIn([], () => new Response("", { status: 503 })).run,
+    });
     await assert.rejects(
       down.getMetar({ icao: "SBGO", from: "2026-10-05T10:00:00Z", to: "2026-10-05T11:00:00Z" }),
       (error: unknown) => error instanceof RedemetUnavailableError && error.status === 503,
@@ -630,8 +777,14 @@ describe("REDEMET, beyond the contract", () => {
   it("asks nothing for a window that is not one", async () => {
     const standIn = redemetStandIn(OBSERVATIONS);
     const provider = new RedemetProvider({ apiKey: "k", fetch: standIn.run });
-    assert.deepEqual(await provider.getMetar({ icao: "SBGO", from: "2026-10-05T12:00:00Z", to: "2026-10-05T10:00:00Z" }), []);
-    assert.deepEqual(await provider.getMetar({ icao: "GYN", from: "2026-10-05T10:00:00Z", to: "2026-10-05T12:00:00Z" }), []);
+    assert.deepEqual(
+      await provider.getMetar({ icao: "SBGO", from: "2026-10-05T12:00:00Z", to: "2026-10-05T10:00:00Z" }),
+      [],
+    );
+    assert.deepEqual(
+      await provider.getMetar({ icao: "GYN", from: "2026-10-05T10:00:00Z", to: "2026-10-05T12:00:00Z" }),
+      [],
+    );
     assert.equal(standIn.calls.length, 0);
   });
 });

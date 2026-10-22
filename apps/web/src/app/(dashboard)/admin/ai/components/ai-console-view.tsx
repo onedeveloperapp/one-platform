@@ -4,6 +4,7 @@ import AiPricesAdmin from "./ai-prices-admin";
 import AutonomyHoldCard from "./autonomy-hold-card";
 import DjenHealthCard from "./djen-health-card";
 import ExecutorCheckCard from "./executor-check-card";
+import FlightReleaseCard from "./flight-release-card";
 import ShadowTriageCard from "./shadow-triage-card";
 import TaskAutonomyDialog from "./task-autonomy-dialog";
 import TaskInstructionsDialog from "./task-instructions-dialog";
@@ -38,6 +39,7 @@ import {
   type DjenHealth,
   EXECUTOR_CHECK_TASK,
   type FirmChoice,
+  type FlightWatchStatus,
   formatBrlFromMicros,
   formatUsdMicros,
   type ProviderState,
@@ -61,6 +63,8 @@ export type AiConsoleState = ConsoleState<{
   djen: DjenHealth;
   /** What ONE decides alone in the firms, and what the operator holds for all of them. */
   autonomy: AutonomyCatalogEntry[];
+  flights: FlightWatchStatus;
+  flightSourceOn: boolean;
   djenCaptureOn: boolean;
   readiness: { fake: boolean; configured: Record<string, boolean> };
   /** False without SUPABASE_SERVICE_ROLE_KEY: no run can be started from here. */
@@ -144,7 +148,20 @@ export default function AiConsoleView({ state }: { state: AiConsoleState }) {
     );
   }
 
-  const { spend, accuracy, firms, prompts, triage, djen, autonomy, djenCaptureOn, readiness, serviceAvailable } = state;
+  const {
+    spend,
+    accuracy,
+    firms,
+    prompts,
+    triage,
+    djen,
+    autonomy,
+    flights,
+    flightSourceOn,
+    djenCaptureOn,
+    readiness,
+    serviceAvailable,
+  } = state;
   const { totals, usdToBrl } = spend;
   const totalBrl = formatBrlFromMicros(totals.costUsdMicros, usdToBrl);
   const checkTask = accuracy.tasks.find((task) => task.task === EXECUTOR_CHECK_TASK) ?? null;
@@ -373,6 +390,9 @@ export default function AiConsoleView({ state }: { state: AiConsoleState }) {
       </Grid>
       <Grid size={12}>
         <AutonomyHoldCard catalog={autonomy} onChanged={refresh} />
+      </Grid>
+      <Grid size={12}>
+        <FlightReleaseCard status={flights} sourceOn={flightSourceOn} onChanged={refresh} />
       </Grid>
       <Grid size={12}>
         <TriagePolicyCard measure={triage} onChanged={refresh} />

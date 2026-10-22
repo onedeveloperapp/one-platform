@@ -46,6 +46,11 @@ export type FlightStatus = {
   /** Null while it has not happened, and for a cancelled flight. */
   actualDeparture: string | null;
   actualArrival: string | null;
+  /**
+   * When the flight is now expected at its destination (an ISO instant): its arrival once it landed there,
+   * before that the source's estimate. Null for a cancelled flight; absent when a source does not say.
+   */
+  estimatedArrival?: string | null;
   state: FlightState;
   /**
    * Minutes between the scheduled and the actual arrival at the destination:

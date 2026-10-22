@@ -557,3 +557,39 @@ export async function loadAutonomyCatalog(supabase: SupabaseClient): Promise<Aut
     taskHeld: row.task_held === true,
   }));
 }
+
+/**
+ * How the flights ONE follows stand (migration 0051): whether its first word to real passengers is released, when,
+ * by whom and on what note, the reads at FlightAware today against the ceiling, and how many trips it follows.
+ */
+export type FlightWatchStatus = {
+  released: boolean;
+  releasedAt: string | null;
+  releasedBy: string | null;
+  releasedNote: string | null;
+  readsToday: number;
+  dailyReads: number;
+  followingReal: number;
+  followingTest: number;
+  heldAlerts: number;
+};
+
+/** `admin_flight_watch_status`, read. Throws when it could not be read. */
+export async function loadFlightWatch(supabase: SupabaseClient): Promise<FlightWatchStatus> {
+  const { data, error } = await supabase.rpc("admin_flight_watch_status");
+  if (error || !data || typeof data !== "object") throw new Error("the flight watch could not be read");
+  const row = data as Record<string, unknown>;
+  const count = (value: unknown) => (typeof value === "number" && Number.isFinite(value) ? value : 0);
+  const text = (value: unknown) => (typeof value === "string" && value.trim() ? value : null);
+  return {
+    released: row.released === true,
+    releasedAt: text(row.released_at),
+    releasedBy: text(row.released_by),
+    releasedNote: text(row.released_note),
+    readsToday: count(row.reads_today),
+    dailyReads: count(row.daily_reads),
+    followingReal: count(row.following_real),
+    followingTest: count(row.following_test),
+    heldAlerts: count(row.held_alerts),
+  };
+}

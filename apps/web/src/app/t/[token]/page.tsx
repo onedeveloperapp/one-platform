@@ -4,6 +4,7 @@ import { getTranslations } from "next-intl/server";
 
 import { Box, Paper, Typography } from "@mui/material";
 
+import { flightStatusProvider } from "@/lib/flights/status";
 import { readTestChat } from "@/lib/test-chat/actions";
 
 /**
@@ -52,5 +53,6 @@ export default async function TestChatPage({ params }: { params: Promise<{ token
       <Notice title={t("test-chat-missing-title")} body={t("test-chat-missing-body")} />
     );
   }
-  return <TestChat token={token} initial={read.view} />;
+  // A real flight is followed only where FlightAware's key is (0051): the page says so where it is not.
+  return <TestChat token={token} initial={read.view} realFlights={flightStatusProvider() !== null} />;
 }

@@ -6,10 +6,15 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { firstNameOf } from "@/lib/cases/cases";
 import { FIRM_FILES_BUCKET } from "@/lib/files/bucket";
 import { isManager } from "@/lib/firm/roles";
+import { localOf } from "@/lib/flight-alerts/source";
+import { watchTrips } from "@/lib/flight-alerts/watch";
 import { evaluateTrip, tellFlightAlerts } from "@/lib/flight-alerts/work";
+import { flightStatusProvider } from "@/lib/flights/status";
 import { getMemberContext } from "@/lib/member/context";
 import { stagedPath } from "@/lib/test-chat/staging";
 import {
+  flightNumberOf,
+  followableDay,
   isQuickReply,
   type TestChatCard,
   testChatCardOf,
@@ -221,6 +226,62 @@ export async function sendTestMessage(
     },
   ]);
   return report.applied > 0 ? { ok: true, code: "delivered" } : { ok: false, code: "not_delivered" };
+}
+
+/**
+ * The test chat follows a real flight (0051): the flight and day the tester
+ * names, read at FlightAware with the platform's key, become the test chat's
+ * fifth trip, read again there as a real passenger's would be, ONE writing
+ * in the test chat when the rule finds a problem. Answers `following`, or
+ * why not: `no_source` (no key in this environment), `invalid_flight`,
+ * `flight_not_found`, `source_unavailable`.
+ */
+export async function followRealFlight(
+  token: string,
+  input: { flight: string; date: string },
+): Promise<TestChatResult & { tripId?: string }> {
+  const service = backendOrNull();
+  if (!service) return { ok: false, code: "unavailable" };
+  if (!TOKEN.test(String(token ?? ""))) return { ok: false, code: "missing" };
+  const { data: chat, error } = await service.rpc("test_chat_by_token", { target_token: token });
+  if (error || !(chat as { found?: boolean } | null)?.found) return { ok: false, code: "missing" };
+  const flight = flightNumberOf(input?.flight ?? "");
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date());
+  const day = String(input?.date ?? "");
+  if (!flight || !followableDay(day, today)) return { ok: false, code: "invalid_flight" };
+  const provider = flightStatusProvider();
+  if (!provider) return { ok: false, code: "no_source" };
+  if (!(await hasRoom(service, token))) return { ok: false, code: "too_many" };
+
+  let status;
+  try {
+    status = await provider.getFlightStatus({ flight, date: day });
+  } catch {
+    return { ok: false, code: "source_unavailable" };
+  }
+  const departure = localOf(status?.scheduledDeparture, status?.originTimeZone);
+  const arrival = localOf(status?.scheduledArrival, status?.destinationTimeZone);
+  if (!status || !departure || !arrival || !status.origin || !status.destination) {
+    return { ok: false, code: "flight_not_found" };
+  }
+  const { data: followed, error: followError } = await service.rpc("test_chat_follow_flight", {
+    target_token: token,
+    target_legs: [
+      {
+        position: 1,
+        flight_number: flight,
+        origin: status.origin,
+        destination: status.destination,
+        departure,
+        arrival,
+      },
+    ],
+  });
+  const answer = (followed ?? {}) as { ok?: boolean; code?: string; trip_id?: string };
+  if (followError || !answer.ok || !answer.trip_id) return { ok: false, code: answer.code ?? "failed" };
+  // Read at once, as the watch would: what FlightAware says now is on the trip before the tester looks.
+  await watchTrips(service, provider, { tripId: answer.trip_id }).catch(() => undefined);
+  return { ok: true, code: "following", tripId: answer.trip_id };
 }
 
 /** The files the test chat sends as the passenger, as a WhatsApp message carries them (0050). */

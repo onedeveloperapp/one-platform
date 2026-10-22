@@ -1,12 +1,16 @@
 /**
  * The firm's test chat (migration 0047), as its page and the connections
  * screen read it: the four ready trips and the tools that make each one's
- * problem happen, and the readers of what the database answers. Pure: the
- * reads and writes are `lib/test-chat/actions.ts`.
+ * problem happen, the real flight a tester names to be followed at
+ * FlightAware (0051), and the readers of what the database answers. Pure:
+ * the reads and writes are `lib/test-chat/actions.ts`.
  */
 
-/** The ready trips, by the name of their scenario (`tracked_trips.label`). */
-export const TEST_TRIPS = ["cancelamento", "familia", "conexao", "internacional"] as const;
+/** The trips, by the name of their scenario (`tracked_trips.label`): the four ready ones, and a real flight. */
+export const TEST_TRIPS = ["cancelamento", "familia", "conexao", "internacional", "voo_real"] as const;
+
+/** The trip of a real flight, followed at FlightAware: no tool makes it happen. */
+export const REAL_FLIGHT = "voo_real";
 export type TestTrip = (typeof TEST_TRIPS)[number];
 export const isTestTrip = (value: unknown): value is TestTrip => (TEST_TRIPS as readonly unknown[]).includes(value);
 
@@ -56,7 +60,23 @@ export const TEST_TOOLS: Record<TestTrip, TestTool[]> = {
     { key: "late_9h", label: "test-chat-tool-late-9", legs: [{ position: 1, status: "delayed", late_minutes: 540 }] },
     { key: "cancel", label: "test-chat-tool-cancel", legs: [{ position: 1, status: "cancelled" }] },
   ],
+  voo_real: [],
 };
+
+/** A flight as a tester types it ("la 3300"), as the platform writes it ("LA3300"); null for one that is not. */
+export function flightNumberOf(input: string): string | null {
+  const code = String(input ?? "")
+    .replace(/\s+/g, "")
+    .toUpperCase();
+  return /^[A-Z0-9]{2}\d{1,4}[A-Z]?$/.test(code) ? code : null;
+}
+
+/** Whether a day may be followed: from yesterday to the day after tomorrow, what FlightAware keeps in sight. */
+export function followableDay(day: string, today: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || !/^\d{4}-\d{2}-\d{2}$/.test(today)) return false;
+  const days = Math.round((Date.parse(`${day}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86_400_000);
+  return days >= -1 && days <= 2;
+}
 
 /** The tool of a trip by its key; null for one it does not have. */
 export function toolOf(trip: string, key: string): TestTool | null {
@@ -70,6 +90,7 @@ export const TRIP_KEY: Record<TestTrip, string> = {
   familia: "test-chat-trip-familia",
   conexao: "test-chat-trip-conexao",
   internacional: "test-chat-trip-internacional",
+  voo_real: "test-chat-trip-voo-real",
 };
 
 /** The quick replies of ONE's first word, as a person taps them. */

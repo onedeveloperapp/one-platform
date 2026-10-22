@@ -1,7 +1,7 @@
 // GENERATED from packages/db/migrations by `npm run db:schema:pull`.
 // Regenerate after every migration instead of editing by hand.
 import { relations } from "drizzle-orm/relations";
-import { profiles, organizations, usersInAuth, memberships, auditEvents, consentTerms, consentAcceptances, accessEvents, platformSettings, notifications, announcements, onboardingState, oabRegistrations, firmInvitations, subscriptions, plans, coupons, billingOperations, subscriptionModules, modules, invoices, entitlementGrants, signupAttribution, metaAttribution, purchaseAttributions, productEvents, helpCategories, helpArticles, leads, blogPosts, blogComments, impersonationSessions, newsletterSends, aiSpend, aiTasks, promptVersions, autonomyDecisions, aiRuns, approvals, connections, connectionSecrets, files, waNumbers, issuedDocuments, waTemplates, waConversations, waMessages, people, caseParties, cases, airports, flightSegments, proceedings, courts, clientLinks, caseEvents, signatureEnvelopes, caseDocuments, clientConsents, caseWeather, airlines, civilCourtAnswers, caseStatements, adminComplaints, certificateInventory, filingReceipts, filingPackages, djenCaptures, legalSources, publications, draftTemplates, caseDrafts, caseDraftVersions, dossiers, flightChecks, proceedingTracking, movements, importBatches, importRows, courtCalendarDays, deadlineActs, deadlines, publicationTriagePolicies, firmCalendars, hearingEventRemovals, noticeOptins, caseAdvances, clientNotices, noticeKinds, hearings, proceedingSignersSeen, pscProviders, lawyerSignatureUses, lawyerCpfs, filingPackageItems, testChats, trackedTrips, trackedLegs, flightAlerts, waConversationEvents, announcementDismissals, newsletterDeliveries, proceedingParties, proceedingLawyers, firmSigners, waContacts, firmAutonomy, waOptouts, courtNotes, caseDraftCitations, courtCalendarYears, firmNoticeKinds, publicationReadings, courtSystems } from "./schema";
+import { profiles, organizations, usersInAuth, memberships, auditEvents, consentTerms, consentAcceptances, accessEvents, platformSettings, notifications, announcements, onboardingState, oabRegistrations, firmInvitations, subscriptions, plans, coupons, billingOperations, subscriptionModules, modules, invoices, entitlementGrants, signupAttribution, metaAttribution, purchaseAttributions, productEvents, helpCategories, helpArticles, leads, blogPosts, blogComments, impersonationSessions, newsletterSends, aiSpend, aiTasks, promptVersions, autonomyDecisions, aiRuns, approvals, connections, connectionSecrets, files, waNumbers, issuedDocuments, waTemplates, waConversations, waMessages, people, caseParties, cases, airports, flightSegments, proceedings, courts, clientLinks, caseEvents, signatureEnvelopes, caseDocuments, clientConsents, caseWeather, airlines, civilCourtAnswers, caseStatements, adminComplaints, certificateInventory, filingReceipts, filingPackages, djenCaptures, legalSources, publications, draftTemplates, caseDrafts, caseDraftVersions, dossiers, flightChecks, proceedingTracking, movements, importBatches, importRows, courtCalendarDays, deadlineActs, deadlines, publicationTriagePolicies, firmCalendars, hearingEventRemovals, noticeOptins, caseAdvances, clientNotices, noticeKinds, hearings, proceedingSignersSeen, pscProviders, lawyerSignatureUses, lawyerCpfs, filingPackageItems, testChats, trackedLegs, trackedTrips, flightAlerts, waConversationEvents, announcementDismissals, newsletterDeliveries, proceedingParties, proceedingLawyers, firmSigners, waContacts, firmAutonomy, waOptouts, courtNotes, caseDraftCitations, courtCalendarYears, firmNoticeKinds, publicationReadings, courtSystems } from "./schema";
 
 export const organizationsRelations = relations(organizations, ({one, many}) => ({
 	profile: one(profiles, {
@@ -73,10 +73,10 @@ export const organizationsRelations = relations(organizations, ({one, many}) => 
 	filingPackageItems: many(filingPackageItems),
 	lawyerSignatureUses: many(lawyerSignatureUses),
 	testChats: many(testChats),
-	trackedTrips: many(trackedTrips),
 	trackedLegs: many(trackedLegs),
 	flightAlerts: many(flightAlerts),
 	waConversationEvents: many(waConversationEvents),
+	trackedTrips: many(trackedTrips),
 	proceedingParties: many(proceedingParties),
 	proceedingLawyers: many(proceedingLawyers),
 	firmSigners: many(firmSigners),
@@ -1957,19 +1957,6 @@ export const testChatsRelations = relations(testChats, ({one}) => ({
 	}),
 }));
 
-export const trackedTripsRelations = relations(trackedTrips, ({one, many}) => ({
-	organization: one(organizations, {
-		fields: [trackedTrips.orgId],
-		references: [organizations.id]
-	}),
-	case: one(cases, {
-		fields: [trackedTrips.orgId],
-		references: [cases.id]
-	}),
-	trackedLegs: many(trackedLegs),
-	flightAlerts: many(flightAlerts),
-}));
-
 export const trackedLegsRelations = relations(trackedLegs, ({one}) => ({
 	organization: one(organizations, {
 		fields: [trackedLegs.orgId],
@@ -1978,6 +1965,19 @@ export const trackedLegsRelations = relations(trackedLegs, ({one}) => ({
 	trackedTrip: one(trackedTrips, {
 		fields: [trackedLegs.orgId],
 		references: [trackedTrips.id]
+	}),
+}));
+
+export const trackedTripsRelations = relations(trackedTrips, ({one, many}) => ({
+	trackedLegs: many(trackedLegs),
+	flightAlerts: many(flightAlerts),
+	organization: one(organizations, {
+		fields: [trackedTrips.orgId],
+		references: [organizations.id]
+	}),
+	case: one(cases, {
+		fields: [trackedTrips.orgId],
+		references: [cases.id]
 	}),
 }));
 

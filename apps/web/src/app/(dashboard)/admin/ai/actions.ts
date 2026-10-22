@@ -219,3 +219,28 @@ export async function setAutonomyHold(input: {
   revalidatePath("/admin/ai");
   return { ok: true };
 }
+
+/**
+ * Releases ONE's first word to real passengers with the note of the legal opinion, or takes it back with why
+ * (migration 0051, `admin_set_flight_alerts_release`). The database checks the operator, the second factor and the
+ * note, and records it.
+ */
+export async function setFlightAlertsRelease(input: {
+  released: boolean;
+  note: string;
+}): Promise<{ ok: true } | { ok: false; code: string }> {
+  const session = await requireSuperadmin();
+  if (!session) return { ok: false, code: "forbidden" };
+  const note = String(input?.note ?? "").trim();
+  if (note.length < 10) return { ok: false, code: "note_required" };
+  const { data, error } = await session.supabase.rpc("admin_set_flight_alerts_release", {
+    target_released: input?.released === true,
+    target_note: note,
+  });
+  if (error)
+    return { ok: false, code: error.message.includes("second_factor_required") ? "second_factor_required" : "failed" };
+  const answer = (data ?? {}) as { ok?: boolean; code?: string };
+  if (!answer.ok) return { ok: false, code: String(answer.code ?? "failed") };
+  revalidatePath("/admin/ai");
+  return { ok: true };
+}

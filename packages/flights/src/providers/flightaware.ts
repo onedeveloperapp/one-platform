@@ -1,4 +1,9 @@
-import { arrivalDelayMinutes, type FlightQuery, type FlightStatus, type FlightStatusProvider } from "@flyee/flights/types";
+import {
+  arrivalDelayMinutes,
+  type FlightQuery,
+  type FlightStatus,
+  type FlightStatusProvider,
+} from "@flyee/flights/types";
 
 /**
  * What happened to a flight, from FlightAware's AeroAPI. Written from its
@@ -13,7 +18,8 @@ import { arrivalDelayMinutes, type FlightQuery, type FlightStatus, type FlightSt
  * both with the key in the header `x-apikey`, answering
  * `{ flights: [...], links: { next } | null, num_pages }`. A flight carries
  * the times at the gate (`scheduled_out`, `actual_out`, `scheduled_in`,
- * `actual_in`) and on the runway (`*_off`, `*_on`), its airports with their
+ * `actual_in`, and the estimates `estimated_out`, `estimated_in`) and on the
+ * runway (`*_off`, `*_on`), its airports with their
  * IATA codes and time zones, and two flags: `diverted`, and `cancelled`,
  * which the reference says means the flight is no longer tracked, "a number
  * of reasons" of which an airline's cancellation is one: a flight with a
@@ -87,12 +93,15 @@ type AeroFlight = {
   actual_on?: string | null;
   scheduled_in?: string | null;
   actual_in?: string | null;
+  estimated_on?: string | null;
+  estimated_in?: string | null;
 };
 type AeroPage = { flights?: AeroFlight[]; links?: { next?: string } | null };
 
 const DAY = 24 * 60 * 60 * 1000;
 const codeOf = (flight: string) => flight.replace(/\s+/g, "").toUpperCase();
-const dateAt = (day: string, plus: number) => new Date(Date.parse(`${day}T00:00:00Z`) + plus * DAY).toISOString().slice(0, 10);
+const dateAt = (day: string, plus: number) =>
+  new Date(Date.parse(`${day}T00:00:00Z`) + plus * DAY).toISOString().slice(0, 10);
 
 const iataOf = (airport: AirportRef | undefined): string => (airport?.code_iata ?? airport?.code ?? "").toUpperCase();
 const departureOf = (flight: AeroFlight) => flight.scheduled_out ?? flight.scheduled_off ?? null;
@@ -104,9 +113,12 @@ const legCancelled = (flight: AeroFlight) => flight.cancelled === true && !(flig
 function localDate(instant: string | null | undefined, timeZone: string | null | undefined): string | null {
   if (!instant || Number.isNaN(Date.parse(instant))) return null;
   try {
-    return new Intl.DateTimeFormat("en-CA", { timeZone: timeZone || "UTC", year: "numeric", month: "2-digit", day: "2-digit" }).format(
-      new Date(instant),
-    );
+    return new Intl.DateTimeFormat("en-CA", {
+      timeZone: timeZone || "UTC",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date(instant));
   } catch {
     return null;
   }
@@ -175,7 +187,8 @@ export class FlightAwareProvider implements FlightStatusProvider {
   /** A flight from its leg's departure to its (same or onward) leg's arrival, each pair of times of one kind. */
   private statusOf(first: AeroFlight, last: AeroFlight, flight: string, date: string): FlightStatus {
     // The gate's times when the arrival has them (or nothing happened yet), else the runway's.
-    const gate = Boolean(last.scheduled_in && (last.actual_in || !last.actual_on)) || !(last.scheduled_on || last.actual_on);
+    const gate =
+      Boolean(last.scheduled_in && (last.actual_in || !last.actual_on)) || !(last.scheduled_on || last.actual_on);
     const left = (leg: AeroFlight) => (gate ? (leg.actual_out ?? null) : (leg.actual_off ?? null));
     // Cancelled when either leg was, each by itself: a first leg flown and an onward leg cancelled never arrived.
     const cancelled = legCancelled(first) || (last !== first && legCancelled(last));
@@ -184,6 +197,10 @@ export class FlightAwareProvider implements FlightStatusProvider {
     const scheduledArrival = (gate ? last.scheduled_in : last.scheduled_on) ?? "";
     const actualDeparture = legCancelled(first) ? null : left(first);
     const actualArrival = cancelled ? null : gate ? (last.actual_in ?? null) : (last.actual_on ?? null);
+    // When it is now expected: its arrival once it landed, else AeroAPI's estimate of the same kind.
+    const estimatedArrival = cancelled
+      ? null
+      : (actualArrival ?? (gate ? (last.estimated_in ?? null) : (last.estimated_on ?? null)));
     const diverted = first.diverted === true || last.diverted === true;
     const state: FlightStatus["state"] = cancelled
       ? "cancelled"
@@ -203,8 +220,12 @@ export class FlightAwareProvider implements FlightStatusProvider {
       scheduledArrival,
       actualDeparture,
       actualArrival,
+      estimatedArrival,
       state,
-      arrivalDelayMinutes: state === "landed" && scheduledArrival && actualArrival ? arrivalDelayMinutes(scheduledArrival, actualArrival) : null,
+      arrivalDelayMinutes:
+        state === "landed" && scheduledArrival && actualArrival
+          ? arrivalDelayMinutes(scheduledArrival, actualArrival)
+          : null,
       basis: gate ? "gate" : "runway",
       originTimeZone: first.origin?.timezone ?? null,
       destinationTimeZone: last.destination?.timezone ?? null,

@@ -4204,47 +4204,6 @@ export const testChats = pgTable("test_chats", {
 	check("test_chats_reason_check", sql`(ended_reason IS NULL) OR (ended_reason = ANY (ARRAY['turned_off'::text, 'replaced_by_real_number'::text]))`),
 ]);
 
-export const trackedTrips = pgTable("tracked_trips", {
-	id: uuid().defaultRandom().primaryKey().notNull(),
-	orgId: uuid("org_id").notNull(),
-	passengerName: text("passenger_name").notNull(),
-	phone: text().notNull(),
-	companions: jsonb().default([]).notNull(),
-	airlineIata: text("airline_iata").notNull(),
-	isTest: boolean("is_test").default(false).notNull(),
-	label: text(),
-	consentWording: text("consent_wording").notNull(),
-	consentAt: timestamp("consent_at", { withTimezone: true, mode: 'string' }).notNull(),
-	consentChannel: text("consent_channel").notNull(),
-	status: text().default('watching').notNull(),
-	caseId: uuid("case_id"),
-	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
-	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
-}, (table) => [
-	index("tracked_trips_phone_idx").using("btree", table.orgId.asc().nullsLast().op("text_ops"), table.phone.asc().nullsLast().op("uuid_ops")),
-	uniqueIndex("tracked_trips_test_label_idx").using("btree", table.orgId.asc().nullsLast().op("uuid_ops"), table.label.asc().nullsLast().op("uuid_ops")).where(sql`is_test`),
-	foreignKey({
-			columns: [table.orgId],
-			foreignColumns: [organizations.id],
-			name: "tracked_trips_org_id_fkey"
-		}).onDelete("cascade"),
-	foreignKey({
-			columns: [table.orgId, table.caseId],
-			foreignColumns: [cases.id, cases.orgId],
-			name: "tracked_trips_case_id_org_id_fkey"
-		}).onDelete("set null"),
-	unique("tracked_trips_id_org_id_key").on(table.id, table.orgId),
-	pgPolicy("tracked_trips_select_member", { as: "permissive", for: "select", to: ["authenticated"], using: sql`is_org_member(org_id)` }),
-	check("tracked_trips_test_check", sql`is_test = (label IS NOT NULL)`),
-	check("tracked_trips_name_check", sql`(char_length(btrim(passenger_name)) >= 2) AND (char_length(btrim(passenger_name)) <= 200)`),
-	check("tracked_trips_phone_check", sql`phone ~ '^[0-9]{12,15}$'::text`),
-	check("tracked_trips_airline_check", sql`airline_iata ~ '^[A-Z0-9]{2}$'::text`),
-	check("tracked_trips_companions_check", sql`(jsonb_typeof(companions) = 'array'::text) AND (jsonb_array_length(companions) <= 9)`),
-	check("tracked_trips_label_check", sql`(label IS NULL) OR (label ~ '^[a-z][a-z_]{2,40}$'::text)`),
-	check("tracked_trips_consent_check", sql`((char_length(consent_wording) >= 20) AND (char_length(consent_wording) <= 2000)) AND (consent_channel = ANY (ARRAY['test'::text, 'page'::text, 'whatsapp'::text, 'firm'::text]))`),
-	check("tracked_trips_status_check", sql`status = ANY (ARRAY['watching'::text, 'alerted'::text, 'case_opened'::text, 'declined'::text, 'stopped'::text])`),
-]);
-
 export const trackedLegs = pgTable("tracked_legs", {
 	id: uuid().defaultRandom().primaryKey().notNull(),
 	orgId: uuid("org_id").notNull(),
@@ -4359,6 +4318,59 @@ export const waConversationEvents = pgTable("wa_conversation_events", {
 	pgPolicy("wa_conversation_events_select_member", { as: "permissive", for: "select", to: ["authenticated"], using: sql`is_org_member(org_id)` }),
 	check("wa_conversation_events_actor_check", sql`actor_type = ANY (ARRAY['system'::text, 'person'::text])`),
 	check("wa_conversation_events_kind_check", sql`kind = ANY (ARRAY['case_opened'::text, 'link_sent'::text, 'person_called'::text, 'taken_over'::text, 'returned_to_one'::text, 'declined'::text, 'stopped'::text, 'document_joined'::text, 'statement_joined'::text])`),
+]);
+
+export const trackedTrips = pgTable("tracked_trips", {
+	id: uuid().defaultRandom().primaryKey().notNull(),
+	orgId: uuid("org_id").notNull(),
+	passengerName: text("passenger_name").notNull(),
+	phone: text().notNull(),
+	companions: jsonb().default([]).notNull(),
+	airlineIata: text("airline_iata").notNull(),
+	isTest: boolean("is_test").default(false).notNull(),
+	label: text(),
+	consentWording: text("consent_wording").notNull(),
+	consentAt: timestamp("consent_at", { withTimezone: true, mode: 'string' }).notNull(),
+	consentChannel: text("consent_channel").notNull(),
+	status: text().default('watching').notNull(),
+	caseId: uuid("case_id"),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	watch: text().default('flightaware').notNull(),
+	watchedAt: timestamp("watched_at", { withTimezone: true, mode: 'string' }),
+	watchClaims: integer("watch_claims").default(0).notNull(),
+	watchClaimedAt: timestamp("watch_claimed_at", { withTimezone: true, mode: 'string' }),
+	watchError: text("watch_error"),
+	watchDay: date("watch_day"),
+	watchReads: integer("watch_reads").default(0).notNull(),
+}, (table) => [
+	index("tracked_trips_phone_idx").using("btree", table.orgId.asc().nullsLast().op("text_ops"), table.phone.asc().nullsLast().op("text_ops")),
+	uniqueIndex("tracked_trips_test_label_idx").using("btree", table.orgId.asc().nullsLast().op("uuid_ops"), table.label.asc().nullsLast().op("uuid_ops")).where(sql`is_test`),
+	index("tracked_trips_watch_idx").using("btree", table.watchedAt.asc().nullsFirst().op("timestamptz_ops")).where(sql`((watch = 'flightaware'::text) AND (status = ANY (ARRAY['watching'::text, 'alerted'::text])))`),
+	foreignKey({
+			columns: [table.orgId],
+			foreignColumns: [organizations.id],
+			name: "tracked_trips_org_id_fkey"
+		}).onDelete("cascade"),
+	foreignKey({
+			columns: [table.orgId, table.caseId],
+			foreignColumns: [cases.id, cases.orgId],
+			name: "tracked_trips_case_id_org_id_fkey"
+		}).onDelete("set null"),
+	unique("tracked_trips_id_org_id_key").on(table.id, table.orgId),
+	pgPolicy("tracked_trips_select_member", { as: "permissive", for: "select", to: ["authenticated"], using: sql`is_org_member(org_id)` }),
+	check("tracked_trips_test_check", sql`is_test = (label IS NOT NULL)`),
+	check("tracked_trips_name_check", sql`(char_length(btrim(passenger_name)) >= 2) AND (char_length(btrim(passenger_name)) <= 200)`),
+	check("tracked_trips_phone_check", sql`phone ~ '^[0-9]{12,15}$'::text`),
+	check("tracked_trips_airline_check", sql`airline_iata ~ '^[A-Z0-9]{2}$'::text`),
+	check("tracked_trips_companions_check", sql`(jsonb_typeof(companions) = 'array'::text) AND (jsonb_array_length(companions) <= 9)`),
+	check("tracked_trips_label_check", sql`(label IS NULL) OR (label ~ '^[a-z][a-z_]{2,40}$'::text)`),
+	check("tracked_trips_consent_check", sql`((char_length(consent_wording) >= 20) AND (char_length(consent_wording) <= 2000)) AND (consent_channel = ANY (ARRAY['test'::text, 'page'::text, 'whatsapp'::text, 'firm'::text]))`),
+	check("tracked_trips_status_check", sql`status = ANY (ARRAY['watching'::text, 'alerted'::text, 'case_opened'::text, 'declined'::text, 'stopped'::text])`),
+	check("tracked_trips_watch_check", sql`watch = ANY (ARRAY['simulated'::text, 'flightaware'::text])`),
+	check("tracked_trips_watch_real_check", sql`is_test OR (watch = 'flightaware'::text)`),
+	check("tracked_trips_watch_error_check", sql`(watch_error IS NULL) OR (watch_error ~ '^[a-z][a-z0-9_]{1,59}$'::text)`),
+	check("tracked_trips_watch_reads_check", sql`watch_reads >= 0`),
 ]);
 
 export const announcementDismissals = pgTable("announcement_dismissals", {

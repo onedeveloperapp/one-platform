@@ -14,6 +14,7 @@ import NiSendRight from "@/icons/nexture/ni-send-right";
 import { mimeOf, uploadToSignedUrl } from "@/lib/files/browser-upload";
 import { flightLabel } from "@/lib/flight-alerts/words";
 import {
+  followRealFlight,
   readTestChat,
   readTestThread,
   runTestTool,
@@ -23,6 +24,7 @@ import {
 } from "@/lib/test-chat/actions";
 import {
   QUICK_REPLIES,
+  REAL_FLIGHT,
   TEST_TOOLS,
   type TestChatView,
   type TestMessage,
@@ -60,6 +62,23 @@ const FILE_KEY: Record<string, string> = {
   video: "test-chat-video",
 };
 
+/** The tab of a real flight before one is followed: a form, and no conversation yet. */
+const NEW_REAL = "voo_real:new";
+
+/** The words of a real flight that could not be followed. */
+const realFlightErrorKey = (code: string): string =>
+  code === "no_source"
+    ? "test-chat-real-no-source"
+    : code === "invalid_flight"
+      ? "test-chat-real-invalid"
+      : code === "flight_not_found"
+        ? "test-chat-real-not-found"
+        : code === "source_unavailable"
+          ? "test-chat-real-unavailable"
+          : code === "too_many"
+            ? "test-chat-too-many"
+            : "test-chat-real-error";
+
 /** The words of a file that did not go. */
 const fileErrorKey = (code: string): string =>
   code === "type_not_allowed"
@@ -84,9 +103,19 @@ const LEG_TONE: Record<string, StatusTone> = {
  * conversation each has with the firm, read again every two seconds. What
  * the tester writes, or a photo, a PDF or an audio they send, goes to the firm
  * as the passenger's message, through the same path a real one takes; nothing
- * leaves ONE.
+ * leaves ONE. A fifth tab follows a real flight the tester names (0051), read
+ * at FlightAware as a real passenger's would be.
  */
-export default function TestChat({ token, initial }: { token: string; initial: TestChatView }) {
+export default function TestChat({
+  token,
+  initial,
+  realFlights,
+}: {
+  token: string;
+  initial: TestChatView;
+  /** FlightAware's key is in this environment: a real flight can be followed. */
+  realFlights: boolean;
+}) {
   const t = useTranslations("product");
   const [view, setView] = useState(initial);
   const [tripId, setTripId] = useState(initial.trips[0]?.id ?? "");
@@ -99,8 +128,10 @@ export default function TestChat({ token, initial }: { token: string; initial: T
   const picker = useRef<HTMLInputElement | null>(null);
   const [sendingFile, setSendingFile] = useState(false);
 
-  const trip = view.trips.find((item) => item.id === tripId) ?? view.trips[0] ?? null;
+  const placeholder = tripId === NEW_REAL;
+  const trip = placeholder ? null : (view.trips.find((item) => item.id === tripId) ?? view.trips[0] ?? null);
   const messages = (trip && threads[trip.id]) ?? [];
+  const hasReal = view.trips.some((item) => item.label === REAL_FLIGHT);
   // What the page already has, read by the pull without starting it again at every message.
   const threadsRef = useRef(threads);
   threadsRef.current = threads;
@@ -146,7 +177,7 @@ export default function TestChat({ token, initial }: { token: string; initial: T
     if (list) list.scrollTop = list.scrollHeight;
   }, [messages.length, tripId]);
 
-  if (!trip) {
+  if (!trip && !placeholder) {
     return (
       <Box className="flex min-h-screen w-full justify-center px-4 py-8">
         <Typography variant="body1">{t("test-chat-no-trips")}</Typography>
@@ -154,7 +185,15 @@ export default function TestChat({ token, initial }: { token: string; initial: T
     );
   }
 
+  // A real flight followed now: its tab, read again at once.
+  const followed = async (followedId: string | null) => {
+    await refreshView();
+    if (followedId) setTripId(followedId);
+    setNotice({ tone: "success", text: t("test-chat-real-following-now") });
+  };
+
   const send = async (input: { text?: string; reply?: string }) => {
+    if (!trip) return false;
     setBusy(true);
     setNotice(null);
     const result = await sendTestMessage(token, trip.id, input).catch(() => ({ ok: false, code: "failed" }));
@@ -178,6 +217,7 @@ export default function TestChat({ token, initial }: { token: string; initial: T
 
   // A file goes as WhatsApp sends one: to where the vendor would keep it, then as the passenger's message.
   const attach = async (file: File) => {
+    if (!trip) return;
     setSendingFile(true);
     setNotice(null);
     try {
@@ -206,6 +246,7 @@ export default function TestChat({ token, initial }: { token: string; initial: T
   };
 
   const runTool = async (key: string) => {
+    if (!trip) return;
     setBusy(true);
     setNotice(null);
     const result = await runTestTool(token, trip.id, key).catch(() => ({ ok: false, code: "failed" }) as const);
@@ -249,7 +290,7 @@ export default function TestChat({ token, initial }: { token: string; initial: T
         {/* The tabs scroll inside their own width: the theme's tabs reach a little past it on a phone. */}
         <Box className="max-w-full min-w-0 overflow-hidden">
           <Tabs
-            value={trip.id}
+            value={placeholder || !trip ? NEW_REAL : trip.id}
             onChange={(_, value: string) => {
               setTripId(value);
               setNotice(null);
@@ -268,16 +309,29 @@ export default function TestChat({ token, initial }: { token: string; initial: T
                 className="normal-case"
               />
             ))}
+            {hasReal ? null : <Tab value={NEW_REAL} label={t("test-chat-real-tab")} className="normal-case" />}
           </Tabs>
         </Box>
 
-        <TripTools
-          trip={trip}
-          open={toolsOpen}
-          busy={busy}
-          onToggle={() => setToolsOpen((open) => !open)}
-          onTool={(key) => void runTool(key)}
-        />
+        {trip ? (
+          <TripTools
+            trip={trip}
+            open={toolsOpen}
+            busy={busy}
+            onToggle={() => setToolsOpen((open) => !open)}
+            onTool={(key) => void runTool(key)}
+          />
+        ) : null}
+
+        {placeholder || trip?.label === REAL_FLIGHT ? (
+          <RealFlightCard
+            token={token}
+            realFlights={realFlights}
+            delayHours={Math.round(view.delayMinutes / 60)}
+            another={!placeholder}
+            onFollowed={(id) => void followed(id)}
+          />
+        ) : null}
 
         {notice ? (
           <Alert severity={notice.tone} className="neutral bg-background-paper/60!" onClose={() => setNotice(null)}>
@@ -285,120 +339,218 @@ export default function TestChat({ token, initial }: { token: string; initial: T
           </Alert>
         ) : null}
 
-        <Card component="section" aria-labelledby="test-chat-thread">
-          <CardContent className="flex flex-col gap-3">
-            <Typography id="test-chat-thread" variant="h5" component="h2" className="mb-0">
-              {t("test-chat-thread-title", { firm: view.firm })}
-            </Typography>
-            <Box
-              component="ul"
-              ref={listRef}
-              className="m-0 flex max-h-[55vh] min-h-48 list-none flex-col gap-2 overflow-y-auto p-0"
-              aria-live="polite"
-            >
-              {messages.length === 0 ? (
-                <Box component="li">
-                  <Typography variant="body2" className="text-text-secondary">
-                    {t("test-chat-empty-thread")}
-                  </Typography>
-                </Box>
-              ) : (
-                messages.map((message) => (
-                  <MessageBubble
-                    key={message.id}
-                    side={message.direction === "in" ? "out" : "in"}
-                    sideLabel={
-                      message.direction === "in"
-                        ? t("test-chat-you-said")
-                        : t("test-chat-firm-said", { firm: view.firm })
-                    }
-                    meta={<span>{timeOf(message.at)}</span>}
-                  >
-                    {FILE_KEY[message.kind] ? (
-                      <>
-                        <em>{t(FILE_KEY[message.kind], { name: message.mediaFilename ?? "" })}</em>
-                        {message.body ? <span className="block">{message.body}</span> : null}
-                      </>
-                    ) : (
-                      (message.body ?? (message.mediaFilename ? message.mediaFilename : t("test-chat-no-text")))
-                    )}
-                  </MessageBubble>
-                ))
-              )}
-            </Box>
-
-            {choosing ? (
-              <Box className="flex flex-row flex-wrap gap-2" role="group" aria-label={t("test-chat-replies")}>
-                {QUICK_REPLIES.map((reply) => (
-                  <Button
-                    key={reply}
-                    variant="outlined"
-                    color="primary"
-                    disabled={busy}
-                    onClick={() => void send({ reply })}
-                    aria-label={t("test-chat-reply-label", { reply })}
-                  >
-                    {reply}
-                  </Button>
-                ))}
+        {trip ? (
+          <Card component="section" aria-labelledby="test-chat-thread">
+            <CardContent className="flex flex-col gap-3">
+              <Typography id="test-chat-thread" variant="h5" component="h2" className="mb-0">
+                {t("test-chat-thread-title", { firm: view.firm })}
+              </Typography>
+              <Box
+                component="ul"
+                ref={listRef}
+                className="m-0 flex max-h-[55vh] min-h-48 list-none flex-col gap-2 overflow-y-auto p-0"
+                aria-live="polite"
+              >
+                {messages.length === 0 ? (
+                  <Box component="li">
+                    <Typography variant="body2" className="text-text-secondary">
+                      {t("test-chat-empty-thread")}
+                    </Typography>
+                  </Box>
+                ) : (
+                  messages.map((message) => (
+                    <MessageBubble
+                      key={message.id}
+                      side={message.direction === "in" ? "out" : "in"}
+                      sideLabel={
+                        message.direction === "in"
+                          ? t("test-chat-you-said")
+                          : t("test-chat-firm-said", { firm: view.firm })
+                      }
+                      meta={<span>{timeOf(message.at)}</span>}
+                    >
+                      {FILE_KEY[message.kind] ? (
+                        <>
+                          <em>{t(FILE_KEY[message.kind], { name: message.mediaFilename ?? "" })}</em>
+                          {message.body ? <span className="block">{message.body}</span> : null}
+                        </>
+                      ) : (
+                        (message.body ?? (message.mediaFilename ? message.mediaFilename : t("test-chat-no-text")))
+                      )}
+                    </MessageBubble>
+                  ))
+                )}
               </Box>
-            ) : null}
 
-            <Box className="flex flex-row items-end gap-2">
-              <TextField
-                id="test-chat-draft"
-                label={t("test-chat-draft-label")}
-                placeholder={t("test-chat-placeholder")}
-                value={draft}
-                onChange={(event) => setDraft(event.target.value.slice(0, 4096))}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter" && !event.shiftKey) {
-                    event.preventDefault();
-                    void submit();
-                  }
-                }}
-                multiline
-                maxRows={4}
-                fullWidth
-                size="small"
-                disabled={busy}
-              />
-              <input
-                ref={picker}
-                type="file"
-                hidden
-                accept="image/jpeg,image/png,image/webp,application/pdf,audio/*"
-                onChange={(event) => {
-                  const file = event.target.files?.[0];
-                  event.target.value = "";
-                  if (file) void attach(file);
-                }}
-              />
-              <Button
-                variant="outlined"
-                color="grey"
-                disabled={busy || sendingFile}
-                onClick={() => picker.current?.click()}
-                aria-label={sendingFile ? t("test-chat-attach-sending") : t("test-chat-attach")}
-                title={t("test-chat-attach")}
-                className="icon-only"
-              >
-                <NiPaperclip size="medium" />
-              </Button>
-              <Button
-                variant="contained"
-                disabled={busy || draft.trim() === ""}
-                onClick={() => void submit()}
-                aria-label={t("test-chat-send")}
-                className="icon-only"
-              >
-                <NiSendRight size="medium" />
-              </Button>
-            </Box>
-          </CardContent>
-        </Card>
+              {choosing ? (
+                <Box className="flex flex-row flex-wrap gap-2" role="group" aria-label={t("test-chat-replies")}>
+                  {QUICK_REPLIES.map((reply) => (
+                    <Button
+                      key={reply}
+                      variant="outlined"
+                      color="primary"
+                      disabled={busy}
+                      onClick={() => void send({ reply })}
+                      aria-label={t("test-chat-reply-label", { reply })}
+                    >
+                      {reply}
+                    </Button>
+                  ))}
+                </Box>
+              ) : null}
+
+              <Box className="flex flex-row items-end gap-2">
+                <TextField
+                  id="test-chat-draft"
+                  label={t("test-chat-draft-label")}
+                  placeholder={t("test-chat-placeholder")}
+                  value={draft}
+                  onChange={(event) => setDraft(event.target.value.slice(0, 4096))}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" && !event.shiftKey) {
+                      event.preventDefault();
+                      void submit();
+                    }
+                  }}
+                  multiline
+                  maxRows={4}
+                  fullWidth
+                  size="small"
+                  disabled={busy}
+                />
+                <input
+                  ref={picker}
+                  type="file"
+                  hidden
+                  accept="image/jpeg,image/png,image/webp,application/pdf,audio/*"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    event.target.value = "";
+                    if (file) void attach(file);
+                  }}
+                />
+                <Button
+                  variant="outlined"
+                  color="grey"
+                  disabled={busy || sendingFile}
+                  onClick={() => picker.current?.click()}
+                  aria-label={sendingFile ? t("test-chat-attach-sending") : t("test-chat-attach")}
+                  title={t("test-chat-attach")}
+                  className="icon-only"
+                >
+                  <NiPaperclip size="medium" />
+                </Button>
+                <Button
+                  variant="contained"
+                  disabled={busy || draft.trim() === ""}
+                  onClick={() => void submit()}
+                  aria-label={t("test-chat-send")}
+                  className="icon-only"
+                >
+                  <NiSendRight size="medium" />
+                </Button>
+              </Box>
+            </CardContent>
+          </Card>
+        ) : null}
       </Box>
     </Box>
+  );
+}
+
+/** Today in Brasília, "YYYY-MM-DD": the day a flight is named from. */
+const todayHere = () => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date());
+
+/**
+ * The form of a real flight: its number and day, followed at FlightAware by
+ * ONE as a real passenger's would be. Where this environment has no key, it
+ * says so instead.
+ */
+function RealFlightCard({
+  token,
+  realFlights,
+  delayHours,
+  another,
+  onFollowed,
+}: {
+  token: string;
+  realFlights: boolean;
+  delayHours: number;
+  /** A flight is followed already: this one takes its place. */
+  another: boolean;
+  onFollowed: (tripId: string | null) => void;
+}) {
+  const t = useTranslations("product");
+  const [flight, setFlight] = useState("");
+  const [day, setDay] = useState(todayHere);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const follow = async () => {
+    setBusy(true);
+    setError(null);
+    const result = await followRealFlight(token, { flight, date: day }).catch(() => ({ ok: false, code: "failed" }));
+    setBusy(false);
+    if (!result.ok) {
+      setError(t(realFlightErrorKey(result.code)));
+      return;
+    }
+    setFlight("");
+    onFollowed("tripId" in result && typeof result.tripId === "string" ? result.tripId : null);
+  };
+
+  return (
+    <Card component="section" aria-labelledby="test-chat-real">
+      <CardContent className="flex flex-col gap-3">
+        <Typography id="test-chat-real" variant="h5" component="h2" className="mb-0">
+          {another ? t("test-chat-real-other") : t("test-chat-real-title")}
+        </Typography>
+        <Typography variant="body2" className="text-text-secondary">
+          {t("test-chat-real-body", { hours: delayHours })}
+        </Typography>
+        {realFlights ? (
+          <>
+            <Box className="flex flex-col gap-3 sm:flex-row sm:items-start">
+              <TextField
+                id="test-chat-real-flight"
+                label={t("test-chat-real-flight")}
+                helperText={t("test-chat-real-flight-help")}
+                value={flight}
+                onChange={(event) => setFlight(event.target.value.slice(0, 12))}
+                size="small"
+                className="sm:flex-1"
+                disabled={busy}
+              />
+              <TextField
+                id="test-chat-real-day"
+                label={t("test-chat-real-day")}
+                type="date"
+                value={day}
+                onChange={(event) => setDay(event.target.value)}
+                size="small"
+                className="sm:w-48"
+                disabled={busy}
+                slotProps={{ inputLabel: { shrink: true } }}
+              />
+            </Box>
+            <Box>
+              <Button variant="contained" disabled={busy || flight.trim() === ""} onClick={() => void follow()}>
+                {busy ? t("test-chat-real-reading") : t("test-chat-real-follow")}
+              </Button>
+            </Box>
+          </>
+        ) : (
+          <Alert severity="info" className="neutral bg-background-paper/60!">
+            {t("test-chat-real-no-source")}
+          </Alert>
+        )}
+        {error ? (
+          <Alert severity="error" className="neutral bg-background-paper/60!" onClose={() => setError(null)}>
+            {error}
+          </Alert>
+        ) : null}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -494,7 +646,7 @@ function TripTools({
         <Collapse in={open}>
           <Box className="border-grey-100 flex flex-col gap-3 border-t pt-3">
             <Typography variant="body2" className="text-text-secondary">
-              {t("test-chat-tools-body")}
+              {trip.label === REAL_FLIGHT ? t("test-chat-real-watching") : t("test-chat-tools-body")}
             </Typography>
             <Box className="flex flex-row flex-wrap gap-2">
               {TEST_TOOLS[trip.label].map((tool, index) => (

@@ -60,6 +60,8 @@ export class FakeFlightData implements FlightStatusProvider, WeatherProvider, Fl
     this.flights.set(keyOf(flight), {
       ...flight,
       flight: codeOf(flight.flight),
+      // As a source says it: the arrival once it landed, else the estimate declared; nothing for a cancellation.
+      estimatedArrival: state === "cancelled" ? null : (flight.actualArrival ?? flight.estimatedArrival ?? null),
       state,
       arrivalDelayMinutes: landedThere
         ? arrivalDelayMinutes(flight.scheduledArrival, flight.actualArrival as string)

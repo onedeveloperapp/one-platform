@@ -12,7 +12,7 @@ Flight facts of ONE behind interfaces (`docs/ONE-PLANO-DESENVOLVIMENTO.md`, sect
 | `src/check.ts` | How a leg of a case is checked (`conferencia-voo-v1`): which flight of the record is the leg's (`matchLeg`: the airline's own number, a codeshare, or the route for an airline the platform does not know; from the leg's origin, at the ticket's time), the legs of the same flight no schedule foresaw tied to it (`withUnscheduled`), and how what the case says stands against a source (`compareLeg`: agrees, differs, cancelled, diverted, nothing to compare), with the source's own delays and, for a cancelled flight whose aircraft went on by those legs, when it reached the destination |
 | `src/providers/redemet.ts` | `RedemetProvider`: the reports (METAR) of Brazilian airports from REDEMET (DECEA), with the platform's key. Its reference was read on 2026-10-09; it has not run against REDEMET yet |
 | `src/providers/anac-vra.ts` | `AnacVraSource` (`FlightRecordSource`): a month of ANAC's record from the public file, read as it arrives and never held whole; its encoding told by its first line (UTF-8 from 2021, Latin-1 before); a month read whole, missing (404) or unavailable with why, never a month of no flights when it was not read. Its first lines of June 2021, December 2018 and March 2016 were read on 2026-10-10 |
-| `src/providers/flightaware.ts` | `FlightAwareProvider`: what happened to a flight anywhere, from FlightAware's AeroAPI, with the platform's key: the recent and scheduled flights, and the history from 2011. Written from its OpenAPI reference (4.17.1, read on 2026-10-10); it has not run against AeroAPI yet |
+| `src/providers/flightaware.ts` | `FlightAwareProvider`: what happened to a flight anywhere, from FlightAware's AeroAPI, with the platform's key: the recent and scheduled flights, and the history from 2011. Written from its OpenAPI reference (4.17.1, read on 2026-10-10); it has not run against AeroAPI yet. A status says when the flight is now expected at its destination (`estimatedArrival`: the arrival once it landed, before that AeroAPI's `estimated_in` or `estimated_on`, of the same kind as the other times), which is how ONE sees a delay coming before the flight lands |
 | `src/contract.test.ts` | What any provider must do. Runs against the fake, against REDEMET and against AeroAPI with stand-ins in the shapes of their references |
 | `src/check.test.ts` | The record read from lines in the form of a real file, the matching and the comparison, as tables |
 
@@ -44,7 +44,7 @@ What ONE uses:
 |---|---|---|
 | REDEMET, the weather observations of Brazilian airports | `WeatherProvider` | built in M2 (S6) |
 | ANAC's VRA, the official record of the flights operated in Brazil, a month at a time | `vra.ts` and `check.ts`, read by the case's flight check | built in M3 |
-| FlightAware, what happened to a flight anywhere | `FlightStatusProvider` | built in M3 (a check asked by a person); a flight followed while it happens joins in M4 (Direito do Passageiro) |
+| FlightAware, what happened to a flight anywhere | `FlightStatusProvider` | built in M3 (a check asked by a person); a flight followed while it happens built in the adjustments before the tests, phase 4 (migration 0051: the trips ONE follows read in their window, within the platform's daily reads, `apps/web/src/lib/flight-alerts/watch.ts`) |
 
 ## Rules
 
