@@ -143,12 +143,22 @@ export class FakeRunStore implements RunStore {
     const task = this.tasks.get(input.task);
     if (!task) return { kind: "refused", code: "unknown_task" };
     if (input.idempotencyKey) {
-      const existing = this.runs.find((run) => run.orgId === input.orgId && run.idempotencyKey === input.idempotencyKey);
+      const existing = this.runs.find(
+        (run) => run.orgId === input.orgId && run.idempotencyKey === input.idempotencyKey,
+      );
       if (existing) return { kind: "existing", runId: existing.runId, status: existing.status };
     }
     this.sequence += 1;
     const runId = `run-${this.sequence}`;
-    this.runs.push({ ...input, runId, status: "running", output: null, usage: null, errorCode: null, approvalId: null });
+    this.runs.push({
+      ...input,
+      runId,
+      status: "running",
+      output: null,
+      usage: null,
+      errorCode: null,
+      approvalId: null,
+    });
     return { kind: "started", runId, prompt: task.prompt };
   }
 
@@ -165,7 +175,11 @@ export class FakeRunStore implements RunStore {
     if (!run) throw new Error("run_not_found");
     const usage = input.usage ?? null;
     const price = usage ? this.prices.get(usage.model ?? "") : undefined;
-    const cost = usage && price ? Math.round(usage.tokensIn * price[0] + usage.tokensOut * price[1]) : 0;
+    // The audio a model heard is an input like the others where the book gives it no rate of its own (0043).
+    const cost =
+      usage && price
+        ? Math.round((usage.tokensIn + (usage.audioTokensIn ?? 0)) * price[0] + usage.tokensOut * price[1])
+        : 0;
     // A run already closed keeps its status and its answer: only what the late
     // call consumed is still recorded.
     if (run.status !== "running") {

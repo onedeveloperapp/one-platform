@@ -44,6 +44,8 @@ export const organizations = pgTable("organizations", {
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 	publicationAiTriage: boolean("publication_ai_triage").default(false).notNull(),
+	worksAlone: boolean("works_alone"),
+	setupAnsweredAt: timestamp("setup_answered_at", { withTimezone: true, mode: 'string' }),
 }, (table) => [
 	foreignKey({
 			columns: [table.createdBy],
@@ -1102,6 +1104,8 @@ export const aiSpend = pgTable("ai_spend", {
 	refId: uuid("ref_id"),
 	createdBy: uuid("created_by"),
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	// You can use { mode: "bigint" } if numbers are exceeding js number limitations
+	audioTokensIn: bigint("audio_tokens_in", { mode: "number" }).default(0).notNull(),
 }, (table) => [
 	index("ai_spend_at_idx").using("btree", table.occurredAt.desc().nullsFirst().op("timestamptz_ops")),
 	index("ai_spend_feature_idx").using("btree", table.feature.asc().nullsLast().op("text_ops"), table.occurredAt.desc().nullsFirst().op("text_ops")),
@@ -1120,6 +1124,7 @@ export const aiSpend = pgTable("ai_spend", {
 	check("ai_spend_tokens_in_check", sql`tokens_in >= 0`),
 	check("ai_spend_tokens_out_check", sql`tokens_out >= 0`),
 	check("ai_spend_cost_usd_micros_check", sql`cost_usd_micros >= 0`),
+	check("ai_spend_audio_tokens_check", sql`audio_tokens_in >= 0`),
 ]);
 
 export const aiTasks = pgTable("ai_tasks", {
@@ -1208,6 +1213,73 @@ export const autonomyDecisions = pgTable("autonomy_decisions", {
 	check("autonomy_decisions_held_check", sql`(held = (held_note IS NOT NULL)) AND ((held_note IS NULL) OR ((char_length(held_note) >= 8) AND (char_length(held_note) <= 500)))`),
 ]);
 
+export const aiRuns = pgTable("ai_runs", {
+	id: uuid().defaultRandom().primaryKey().notNull(),
+	orgId: uuid("org_id").notNull(),
+	task: text().notNull(),
+	promptVersionId: uuid("prompt_version_id").notNull(),
+	provider: text().notNull(),
+	model: text().notNull(),
+	effort: text(),
+	inputHash: text("input_hash").notNull(),
+	subjectType: text("subject_type"),
+	subjectId: text("subject_id"),
+	idempotencyKey: text("idempotency_key"),
+	requestedBy: uuid("requested_by"),
+	status: text().default('running').notNull(),
+	output: jsonb(),
+	errorCode: text("error_code"),
+	// You can use { mode: "bigint" } if numbers are exceeding js number limitations
+	tokensIn: bigint("tokens_in", { mode: "number" }).default(0).notNull(),
+	// You can use { mode: "bigint" } if numbers are exceeding js number limitations
+	tokensOut: bigint("tokens_out", { mode: "number" }).default(0).notNull(),
+	// You can use { mode: "bigint" } if numbers are exceeding js number limitations
+	costUsdMicros: bigint("cost_usd_micros", { mode: "number" }).default(0).notNull(),
+	priced: boolean().default(false).notNull(),
+	spendId: uuid("spend_id"),
+	startedAt: timestamp("started_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	finishedAt: timestamp("finished_at", { withTimezone: true, mode: 'string' }),
+	// You can use { mode: "bigint" } if numbers are exceeding js number limitations
+	audioTokensIn: bigint("audio_tokens_in", { mode: "number" }).default(0).notNull(),
+}, (table) => [
+	uniqueIndex("ai_runs_idempotency_idx").using("btree", table.orgId.asc().nullsLast().op("text_ops"), table.idempotencyKey.asc().nullsLast().op("uuid_ops")).where(sql`(idempotency_key IS NOT NULL)`),
+	index("ai_runs_org_idx").using("btree", table.orgId.asc().nullsLast().op("timestamptz_ops"), table.startedAt.desc().nullsFirst().op("timestamptz_ops")),
+	index("ai_runs_running_idx").using("btree", table.startedAt.asc().nullsLast().op("timestamptz_ops")).where(sql`(status = 'running'::text)`),
+	index("ai_runs_subject_idx").using("btree", table.orgId.asc().nullsLast().op("uuid_ops"), table.subjectType.asc().nullsLast().op("uuid_ops"), table.subjectId.asc().nullsLast().op("uuid_ops")).where(sql`(subject_type IS NOT NULL)`),
+	foreignKey({
+			columns: [table.orgId],
+			foreignColumns: [organizations.id],
+			name: "ai_runs_org_id_fkey"
+		}).onDelete("cascade"),
+	foreignKey({
+			columns: [table.task],
+			foreignColumns: [aiTasks.slug],
+			name: "ai_runs_task_fkey"
+		}).onDelete("restrict"),
+	foreignKey({
+			columns: [table.promptVersionId],
+			foreignColumns: [promptVersions.id],
+			name: "ai_runs_prompt_version_id_fkey"
+		}).onDelete("restrict"),
+	foreignKey({
+			columns: [table.requestedBy],
+			foreignColumns: [profiles.id],
+			name: "ai_runs_requested_by_fkey"
+		}).onDelete("set null"),
+	foreignKey({
+			columns: [table.spendId],
+			foreignColumns: [aiSpend.id],
+			name: "ai_runs_spend_id_fkey"
+		}).onDelete("set null"),
+	pgPolicy("ai_runs_select_member", { as: "permissive", for: "select", to: ["authenticated"], using: sql`(is_org_member(org_id) AND (NOT ai_task_is_shadow(task)))` }),
+	check("ai_runs_status_check", sql`status = ANY (ARRAY['running'::text, 'succeeded'::text, 'failed'::text, 'blocked'::text])`),
+	check("ai_runs_input_hash_check", sql`input_hash ~ '^[0-9a-f]{64}$'::text`),
+	check("ai_runs_subject_check", sql`((subject_type IS NULL) AND (subject_id IS NULL)) OR ((subject_type ~ '^[a-z][a-z0-9_]{1,39}$'::text) AND ((char_length(subject_id) >= 1) AND (char_length(subject_id) <= 80)))`),
+	check("ai_runs_idempotency_check", sql`(idempotency_key IS NULL) OR ((char_length(idempotency_key) >= 8) AND (char_length(idempotency_key) <= 120))`),
+	check("ai_runs_finished_check", sql`(status = 'running'::text) = (finished_at IS NULL)`),
+	check("ai_runs_audio_tokens_check", sql`audio_tokens_in >= 0`),
+]);
+
 export const approvals = pgTable("approvals", {
 	id: uuid().defaultRandom().primaryKey().notNull(),
 	orgId: uuid("org_id").notNull(),
@@ -1251,70 +1323,6 @@ export const approvals = pgTable("approvals", {
 	check("approvals_output_check", sql`(status = 'approved'::text) = (final_output IS NOT NULL)`),
 	check("approvals_note_check", sql`(decision_note IS NULL) OR (char_length(decision_note) <= 2000)`),
 	check("approvals_status_check", sql`status = ANY (ARRAY['pending'::text, 'approved'::text, 'rejected'::text, 'returned'::text, 'withdrawn'::text])`),
-]);
-
-export const aiRuns = pgTable("ai_runs", {
-	id: uuid().defaultRandom().primaryKey().notNull(),
-	orgId: uuid("org_id").notNull(),
-	task: text().notNull(),
-	promptVersionId: uuid("prompt_version_id").notNull(),
-	provider: text().notNull(),
-	model: text().notNull(),
-	effort: text(),
-	inputHash: text("input_hash").notNull(),
-	subjectType: text("subject_type"),
-	subjectId: text("subject_id"),
-	idempotencyKey: text("idempotency_key"),
-	requestedBy: uuid("requested_by"),
-	status: text().default('running').notNull(),
-	output: jsonb(),
-	errorCode: text("error_code"),
-	// You can use { mode: "bigint" } if numbers are exceeding js number limitations
-	tokensIn: bigint("tokens_in", { mode: "number" }).default(0).notNull(),
-	// You can use { mode: "bigint" } if numbers are exceeding js number limitations
-	tokensOut: bigint("tokens_out", { mode: "number" }).default(0).notNull(),
-	// You can use { mode: "bigint" } if numbers are exceeding js number limitations
-	costUsdMicros: bigint("cost_usd_micros", { mode: "number" }).default(0).notNull(),
-	priced: boolean().default(false).notNull(),
-	spendId: uuid("spend_id"),
-	startedAt: timestamp("started_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
-	finishedAt: timestamp("finished_at", { withTimezone: true, mode: 'string' }),
-}, (table) => [
-	uniqueIndex("ai_runs_idempotency_idx").using("btree", table.orgId.asc().nullsLast().op("text_ops"), table.idempotencyKey.asc().nullsLast().op("uuid_ops")).where(sql`(idempotency_key IS NOT NULL)`),
-	index("ai_runs_org_idx").using("btree", table.orgId.asc().nullsLast().op("timestamptz_ops"), table.startedAt.desc().nullsFirst().op("timestamptz_ops")),
-	index("ai_runs_running_idx").using("btree", table.startedAt.asc().nullsLast().op("timestamptz_ops")).where(sql`(status = 'running'::text)`),
-	index("ai_runs_subject_idx").using("btree", table.orgId.asc().nullsLast().op("uuid_ops"), table.subjectType.asc().nullsLast().op("uuid_ops"), table.subjectId.asc().nullsLast().op("uuid_ops")).where(sql`(subject_type IS NOT NULL)`),
-	foreignKey({
-			columns: [table.orgId],
-			foreignColumns: [organizations.id],
-			name: "ai_runs_org_id_fkey"
-		}).onDelete("cascade"),
-	foreignKey({
-			columns: [table.task],
-			foreignColumns: [aiTasks.slug],
-			name: "ai_runs_task_fkey"
-		}).onDelete("restrict"),
-	foreignKey({
-			columns: [table.promptVersionId],
-			foreignColumns: [promptVersions.id],
-			name: "ai_runs_prompt_version_id_fkey"
-		}).onDelete("restrict"),
-	foreignKey({
-			columns: [table.requestedBy],
-			foreignColumns: [profiles.id],
-			name: "ai_runs_requested_by_fkey"
-		}).onDelete("set null"),
-	foreignKey({
-			columns: [table.spendId],
-			foreignColumns: [aiSpend.id],
-			name: "ai_runs_spend_id_fkey"
-		}).onDelete("set null"),
-	pgPolicy("ai_runs_select_member", { as: "permissive", for: "select", to: ["authenticated"], using: sql`(is_org_member(org_id) AND (NOT ai_task_is_shadow(task)))` }),
-	check("ai_runs_status_check", sql`status = ANY (ARRAY['running'::text, 'succeeded'::text, 'failed'::text, 'blocked'::text])`),
-	check("ai_runs_input_hash_check", sql`input_hash ~ '^[0-9a-f]{64}$'::text`),
-	check("ai_runs_subject_check", sql`((subject_type IS NULL) AND (subject_id IS NULL)) OR ((subject_type ~ '^[a-z][a-z0-9_]{1,39}$'::text) AND ((char_length(subject_id) >= 1) AND (char_length(subject_id) <= 80)))`),
-	check("ai_runs_idempotency_check", sql`(idempotency_key IS NULL) OR ((char_length(idempotency_key) >= 8) AND (char_length(idempotency_key) <= 120))`),
-	check("ai_runs_finished_check", sql`(status = 'running'::text) = (finished_at IS NULL)`),
 ]);
 
 export const connections = pgTable("connections", {
@@ -3666,6 +3674,37 @@ export const noticeOptins = pgTable("notice_optins", {
 	check("notice_optins_wording_check", sql`(char_length(wording) >= 20) AND (char_length(wording) <= 1000)`),
 ]);
 
+export const caseAdvances = pgTable("case_advances", {
+	caseId: uuid("case_id").primaryKey().notNull(),
+	orgId: uuid("org_id").notNull(),
+	after: timestamp({ withTimezone: true, mode: 'string' }),
+	claimedAt: timestamp("claimed_at", { withTimezone: true, mode: 'string' }),
+	claims: integer().default(0).notNull(),
+	attempts: integer().default(0).notNull(),
+	waiting: text(),
+	checkedAt: timestamp("checked_at", { withTimezone: true, mode: 'string' }),
+	wokenAt: timestamp("woken_at", { withTimezone: true, mode: 'string' }),
+	lawsuitsAt: timestamp("lawsuits_at", { withTimezone: true, mode: 'string' }),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	waitingSince: timestamp("waiting_since", { withTimezone: true, mode: 'string' }),
+}, (table) => [
+	index("case_advances_due_idx").using("btree", sql`COALESCE(after, created_at)`, sql`case_id`),
+	index("case_advances_waiting_idx").using("btree", table.orgId.asc().nullsLast().op("text_ops"), table.waiting.asc().nullsLast().op("text_ops")).where(sql`(waiting IS NOT NULL)`),
+	foreignKey({
+			columns: [table.orgId],
+			foreignColumns: [organizations.id],
+			name: "case_advances_org_id_fkey"
+		}).onDelete("cascade"),
+	foreignKey({
+			columns: [table.caseId, table.orgId],
+			foreignColumns: [cases.id, cases.orgId],
+			name: "case_advances_case_id_org_id_fkey"
+		}).onDelete("cascade"),
+	pgPolicy("case_advances_select_member", { as: "permissive", for: "select", to: ["authenticated"], using: sql`is_org_member(org_id)` }),
+	check("case_advances_waiting_check", sql`(waiting IS NULL) OR (waiting ~ '^[a-z][a-z_]{2,40}$'::text)`),
+	check("case_advances_attempts_check", sql`attempts >= 0`),
+]);
+
 export const clientNotices = pgTable("client_notices", {
 	id: uuid().defaultRandom().primaryKey().notNull(),
 	orgId: uuid("org_id").notNull(),
@@ -3835,36 +3874,6 @@ export const hearings = pgTable("hearings", {
 	check("hearings_outcome_check", sql`((outcome IS NULL) OR ((status = 'held'::text) AND (outcome = ANY (ARRAY['acordo'::text, 'sem_acordo'::text, 'outro'::text])))) AND ((status <> 'cancelled'::text) OR ((char_length(COALESCE(outcome_note, ''::text)) >= 8) AND (char_length(COALESCE(outcome_note, ''::text)) <= 1000))) AND (COALESCE(char_length(outcome_note), 0) <= 1000)`),
 	check("hearings_revision_check", sql`(revision >= 1) AND ((synced_revision IS NULL) OR ((synced_revision >= 1) AND (synced_revision <= revision)))`),
 	check("hearings_sync_error_check", sql`(sync_error IS NULL) OR (sync_error ~ '^[a-z][a-z0-9_]{1,59}$'::text)`),
-]);
-
-export const caseAdvances = pgTable("case_advances", {
-	caseId: uuid("case_id").primaryKey().notNull(),
-	orgId: uuid("org_id").notNull(),
-	after: timestamp({ withTimezone: true, mode: 'string' }),
-	claimedAt: timestamp("claimed_at", { withTimezone: true, mode: 'string' }),
-	claims: integer().default(0).notNull(),
-	attempts: integer().default(0).notNull(),
-	waiting: text(),
-	checkedAt: timestamp("checked_at", { withTimezone: true, mode: 'string' }),
-	wokenAt: timestamp("woken_at", { withTimezone: true, mode: 'string' }),
-	lawsuitsAt: timestamp("lawsuits_at", { withTimezone: true, mode: 'string' }),
-	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
-}, (table) => [
-	index("case_advances_due_idx").using("btree", sql`COALESCE(after, created_at)`, sql`case_id`),
-	index("case_advances_waiting_idx").using("btree", table.orgId.asc().nullsLast().op("text_ops"), table.waiting.asc().nullsLast().op("text_ops")).where(sql`(waiting IS NOT NULL)`),
-	foreignKey({
-			columns: [table.orgId],
-			foreignColumns: [organizations.id],
-			name: "case_advances_org_id_fkey"
-		}).onDelete("cascade"),
-	foreignKey({
-			columns: [table.caseId, table.orgId],
-			foreignColumns: [cases.id, cases.orgId],
-			name: "case_advances_case_id_org_id_fkey"
-		}).onDelete("cascade"),
-	pgPolicy("case_advances_select_member", { as: "permissive", for: "select", to: ["authenticated"], using: sql`is_org_member(org_id)` }),
-	check("case_advances_waiting_check", sql`(waiting IS NULL) OR (waiting ~ '^[a-z][a-z_]{2,40}$'::text)`),
-	check("case_advances_attempts_check", sql`attempts >= 0`),
 ]);
 
 export const proceedingSignersSeen = pgTable("proceeding_signers_seen", {

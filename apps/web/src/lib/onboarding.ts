@@ -5,7 +5,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 /**
  * The firm's setup checklist. A step is done when the thing exists in the
  * database, never because somebody clicked it: the facts come from
- * `firm_setup_facts` (migration 0020), computed on every read, so the
+ * `firm_setup_facts` (migrations 0020 and 0044), computed on every read, so the
  * checklist is right even when the work happened somewhere else (a colleague
  * registered at the bar, the number was connected from another session).
  *
@@ -13,9 +13,11 @@ import type { SupabaseClient } from "@supabase/supabase-js";
  * What each person keeps for themselves is only whether they dismissed the
  * card (`onboarding_state`, one row per person and firm).
  *
- * The steps of M1 are what M1 built. The signature provider and the document
- * templates enter with the screens that connect them (M2); a step is never
- * declared before its screen exists.
+ * The list holds only what keeps ONE from working for the firm: a lawyer at
+ * the bar chosen to sign what ONE prepares, the team where there is one, a way
+ * to the clients and the first case. The CNPJ is asked when the firm subscribes,
+ * and a firm that said it works alone has no team to invite (0044). The first
+ * questions themselves are asked once, on their own screen (`/configurar`).
  */
 export const ONBOARDING_FLOW = "firm-setup";
 
@@ -27,14 +29,15 @@ export type ActivationFacts = Record<string, boolean>;
 
 /**
  * The steps in order. Titles are `product` message keys, `fact` names the
- * fact of `firm_setup_facts` that closes the step, and `href` is where the
- * person does it.
+ * fact of `firm_setup_facts` that closes the step, `href` is where the
+ * person does it, and `hiddenWhen` names a fact that takes the step out of
+ * the list (a firm that works alone has no team to invite).
  */
-const STEP_DEFINITIONS: (Omit<OnboardingStep, "done"> & { fact: string })[] = [
-  { key: "firm-document", title: "setup-step-firm-document", href: "/settings/billing", fact: "firm_document" },
-  { key: "oab", title: "setup-step-oab", href: "/settings/team", fact: "oab" },
-  { key: "team", title: "setup-step-team", href: "/settings/team", fact: "team" },
-  { key: "whatsapp", title: "setup-step-whatsapp", href: "/settings/connections", fact: "whatsapp" },
+const STEP_DEFINITIONS: (Omit<OnboardingStep, "done"> & { fact: string; hiddenWhen?: string })[] = [
+  { key: "oab", title: "setup-step-oab", href: "/configurar", fact: "oab_signer" },
+  { key: "team", title: "setup-step-team", href: "/settings/team", fact: "team", hiddenWhen: "works_alone" },
+  { key: "channel", title: "setup-step-channel", href: "/settings/connections", fact: "channel" },
+  { key: "first-case", title: "setup-step-first-case", href: "/casos", fact: "first_case" },
 ];
 
 /**
@@ -50,14 +53,29 @@ export async function getActivationFacts(supabase: SupabaseClient, orgId: string
   );
 }
 
-/** Every declared step is done. */
+/** Every step of the firm's list is done. */
 export function isActivated(facts: ActivationFacts): boolean {
   return buildOnboardingSteps(facts).every((step) => step.done);
 }
 
-/** The steps the checklist renders, each done or not by its fact. */
+/** The first questions of the setup were answered or set aside (0044). */
+export function isSetupAnswered(facts: ActivationFacts): boolean {
+  return facts.setup_answered === true;
+}
+
+/**
+ * The steps the checklist renders, each done or not by its fact. With no
+ * facts (the shape only), every step is listed.
+ */
 export function buildOnboardingSteps(facts?: ActivationFacts): OnboardingStep[] {
-  return STEP_DEFINITIONS.map(({ fact, ...step }) => ({ ...step, done: facts ? facts[fact] === true : undefined }));
+  return STEP_DEFINITIONS.filter((step) => !(facts && step.hiddenWhen && facts[step.hiddenWhen] === true)).map(
+    (step) => ({
+      key: step.key,
+      title: step.title,
+      href: step.href,
+      done: facts ? facts[step.fact] === true : undefined,
+    }),
+  );
 }
 
 /** Step definitions without live state, used where only the shape matters. */

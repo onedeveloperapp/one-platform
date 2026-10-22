@@ -1,7 +1,7 @@
 // GENERATED from packages/db/migrations by `npm run db:schema:pull`.
 // Regenerate after every migration instead of editing by hand.
 import { relations } from "drizzle-orm/relations";
-import { profiles, organizations, usersInAuth, memberships, auditEvents, consentTerms, consentAcceptances, accessEvents, platformSettings, notifications, announcements, onboardingState, oabRegistrations, firmInvitations, subscriptions, plans, coupons, billingOperations, subscriptionModules, modules, invoices, entitlementGrants, signupAttribution, metaAttribution, purchaseAttributions, productEvents, helpCategories, helpArticles, leads, blogPosts, blogComments, impersonationSessions, newsletterSends, aiSpend, aiTasks, promptVersions, autonomyDecisions, approvals, aiRuns, connections, connectionSecrets, files, waNumbers, issuedDocuments, waConversations, waTemplates, waMessages, people, caseParties, cases, airports, flightSegments, proceedings, courts, clientLinks, caseEvents, signatureEnvelopes, caseDocuments, clientConsents, caseWeather, airlines, civilCourtAnswers, caseStatements, adminComplaints, certificateInventory, filingReceipts, filingPackages, djenCaptures, draftTemplates, legalSources, publications, caseDrafts, caseDraftVersions, dossiers, flightChecks, proceedingTracking, movements, importBatches, importRows, courtCalendarDays, deadlineActs, deadlines, publicationTriagePolicies, firmCalendars, hearingEventRemovals, noticeOptins, clientNotices, noticeKinds, hearings, caseAdvances, proceedingSignersSeen, pscProviders, lawyerSignatureUses, lawyerCpfs, filingPackageItems, announcementDismissals, newsletterDeliveries, proceedingParties, proceedingLawyers, firmSigners, waContacts, firmAutonomy, waOptouts, courtNotes, caseDraftCitations, courtCalendarYears, firmNoticeKinds, publicationReadings, courtSystems } from "./schema";
+import { profiles, organizations, usersInAuth, memberships, auditEvents, consentTerms, consentAcceptances, accessEvents, platformSettings, notifications, announcements, onboardingState, oabRegistrations, firmInvitations, subscriptions, plans, coupons, billingOperations, subscriptionModules, modules, invoices, entitlementGrants, signupAttribution, metaAttribution, purchaseAttributions, productEvents, helpCategories, helpArticles, leads, blogPosts, blogComments, impersonationSessions, newsletterSends, aiSpend, aiTasks, promptVersions, autonomyDecisions, aiRuns, approvals, connections, connectionSecrets, files, waNumbers, issuedDocuments, waConversations, waTemplates, waMessages, people, caseParties, cases, airports, flightSegments, proceedings, courts, clientLinks, caseEvents, signatureEnvelopes, caseDocuments, clientConsents, caseWeather, airlines, civilCourtAnswers, caseStatements, adminComplaints, certificateInventory, filingReceipts, filingPackages, djenCaptures, draftTemplates, legalSources, publications, caseDrafts, caseDraftVersions, dossiers, flightChecks, proceedingTracking, movements, importBatches, importRows, courtCalendarDays, deadlineActs, deadlines, publicationTriagePolicies, firmCalendars, hearingEventRemovals, noticeOptins, caseAdvances, clientNotices, noticeKinds, hearings, proceedingSignersSeen, pscProviders, lawyerSignatureUses, lawyerCpfs, filingPackageItems, announcementDismissals, newsletterDeliveries, proceedingParties, proceedingLawyers, firmSigners, waContacts, firmAutonomy, waOptouts, courtNotes, caseDraftCitations, courtCalendarYears, firmNoticeKinds, publicationReadings, courtSystems } from "./schema";
 
 export const organizationsRelations = relations(organizations, ({one, many}) => ({
 	profile: one(profiles, {
@@ -23,8 +23,8 @@ export const organizationsRelations = relations(organizations, ({one, many}) => 
 	productEvents: many(productEvents),
 	impersonationSessions: many(impersonationSessions),
 	aiSpends: many(aiSpend),
-	approvals: many(approvals),
 	aiRuns: many(aiRuns),
+	approvals: many(approvals),
 	connections: many(connections),
 	connectionSecrets: many(connectionSecrets),
 	files: many(files),
@@ -65,9 +65,9 @@ export const organizationsRelations = relations(organizations, ({one, many}) => 
 	firmCalendars: many(firmCalendars),
 	hearingEventRemovals: many(hearingEventRemovals),
 	noticeOptins: many(noticeOptins),
+	caseAdvances: many(caseAdvances),
 	clientNotices: many(clientNotices),
 	hearings: many(hearings),
-	caseAdvances: many(caseAdvances),
 	proceedingSignersSeens: many(proceedingSignersSeen),
 	filingPackages: many(filingPackages),
 	filingPackageItems: many(filingPackageItems),
@@ -122,8 +122,8 @@ export const profilesRelations = relations(profiles, ({one, many}) => ({
 	newsletterSends: many(newsletterSends),
 	promptVersions: many(promptVersions),
 	autonomyDecisions: many(autonomyDecisions),
-	approvals: many(approvals),
 	aiRuns: many(aiRuns),
+	approvals: many(approvals),
 	connections_connectedBy: many(connections, {
 		relationName: "connections_connectedBy_profiles_id"
 	}),
@@ -625,8 +625,8 @@ export const promptVersionsRelations = relations(promptVersions, ({one, many}) =
 export const aiTasksRelations = relations(aiTasks, ({many}) => ({
 	promptVersions: many(promptVersions),
 	autonomyDecisions: many(autonomyDecisions),
-	approvals: many(approvals),
 	aiRuns: many(aiRuns),
+	approvals: many(approvals),
 }));
 
 export const autonomyDecisionsRelations = relations(autonomyDecisions, ({one, many}) => ({
@@ -641,27 +641,7 @@ export const autonomyDecisionsRelations = relations(autonomyDecisions, ({one, ma
 	firmAutonomies: many(firmAutonomy),
 }));
 
-export const approvalsRelations = relations(approvals, ({one}) => ({
-	organization: one(organizations, {
-		fields: [approvals.orgId],
-		references: [organizations.id]
-	}),
-	aiRun: one(aiRuns, {
-		fields: [approvals.runId],
-		references: [aiRuns.id]
-	}),
-	aiTask: one(aiTasks, {
-		fields: [approvals.task],
-		references: [aiTasks.slug]
-	}),
-	profile: one(profiles, {
-		fields: [approvals.decidedBy],
-		references: [profiles.id]
-	}),
-}));
-
 export const aiRunsRelations = relations(aiRuns, ({one, many}) => ({
-	approvals: many(approvals),
 	organization: one(organizations, {
 		fields: [aiRuns.orgId],
 		references: [organizations.id]
@@ -682,6 +662,7 @@ export const aiRunsRelations = relations(aiRuns, ({one, many}) => ({
 		fields: [aiRuns.spendId],
 		references: [aiSpend.id]
 	}),
+	approvals: many(approvals),
 	caseDocuments: many(caseDocuments),
 	caseStatements_transcriptRunId: many(caseStatements, {
 		relationName: "caseStatements_transcriptRunId_aiRuns_id"
@@ -696,6 +677,25 @@ export const aiRunsRelations = relations(aiRuns, ({one, many}) => ({
 	caseDrafts: many(caseDrafts),
 	caseDraftVersions: many(caseDraftVersions),
 	publicationReadings: many(publicationReadings),
+}));
+
+export const approvalsRelations = relations(approvals, ({one}) => ({
+	organization: one(organizations, {
+		fields: [approvals.orgId],
+		references: [organizations.id]
+	}),
+	aiRun: one(aiRuns, {
+		fields: [approvals.runId],
+		references: [aiRuns.id]
+	}),
+	aiTask: one(aiTasks, {
+		fields: [approvals.task],
+		references: [aiTasks.slug]
+	}),
+	profile: one(profiles, {
+		fields: [approvals.decidedBy],
+		references: [profiles.id]
+	}),
 }));
 
 export const connectionsRelations = relations(connections, ({one, many}) => ({
@@ -959,9 +959,9 @@ export const casesRelations = relations(cases, ({one, many}) => ({
 	movements: many(movements),
 	importRows: many(importRows),
 	deadlines: many(deadlines),
+	caseAdvances: many(caseAdvances),
 	clientNotices: many(clientNotices),
 	hearings: many(hearings),
-	caseAdvances: many(caseAdvances),
 	filingPackages: many(filingPackages),
 	lawyerSignatureUses: many(lawyerSignatureUses),
 }));
@@ -1754,6 +1754,17 @@ export const noticeOptinsRelations = relations(noticeOptins, ({one}) => ({
 	}),
 }));
 
+export const caseAdvancesRelations = relations(caseAdvances, ({one}) => ({
+	organization: one(organizations, {
+		fields: [caseAdvances.orgId],
+		references: [organizations.id]
+	}),
+	case: one(cases, {
+		fields: [caseAdvances.caseId],
+		references: [cases.id]
+	}),
+}));
+
 export const clientNoticesRelations = relations(clientNotices, ({one}) => ({
 	organization: one(organizations, {
 		fields: [clientNotices.orgId],
@@ -1832,17 +1843,6 @@ export const hearingsRelations = relations(hearings, ({one, many}) => ({
 		references: [publications.id]
 	}),
 	publicationReadings: many(publicationReadings),
-}));
-
-export const caseAdvancesRelations = relations(caseAdvances, ({one}) => ({
-	organization: one(organizations, {
-		fields: [caseAdvances.orgId],
-		references: [organizations.id]
-	}),
-	case: one(cases, {
-		fields: [caseAdvances.caseId],
-		references: [cases.id]
-	}),
 }));
 
 export const proceedingSignersSeenRelations = relations(proceedingSignersSeen, ({one}) => ({

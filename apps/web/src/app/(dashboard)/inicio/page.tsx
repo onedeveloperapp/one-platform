@@ -1,9 +1,11 @@
+import { loadSetupState } from "../configurar/setup-state";
+import SetupView, { type SetupState } from "../configurar/setup-view";
 import HomeView, { type HomeState } from "./home-view";
 
 import { isManager } from "@/lib/firm/roles";
-import { readFirmToday } from "@/lib/firm/today";
+import { readFirmToday, todayViewerOf } from "@/lib/firm/today";
 import { getMemberContext } from "@/lib/member/context";
-import { getActivationFacts, onboardingFlowKey } from "@/lib/onboarding";
+import { getActivationFacts, isSetupAnswered, onboardingFlowKey } from "@/lib/onboarding";
 import { getOnboardingState } from "@flyee/onboarding";
 
 /**
@@ -14,14 +16,22 @@ import { getOnboardingState } from "@flyee/onboarding";
  * out. Who manages a firm that is still being set up also sees what is
  * missing, from facts (`firm_setup_facts`). Deadlines, hearings and cases
  * join the same answer as their milestones arrive.
+ *
+ * Who manages a firm whose first questions were never answered is asked them
+ * here, before the home (the screen of `/configurar`, migration 0044):
+ * answered or set aside once, they are never asked again. They are shown in
+ * place, never by a redirect: a page of the logged area streams inside the
+ * shell, so a redirect would be the client router's, a path that broke the
+ * screen in the production build.
  */
-async function loadHome(): Promise<HomeState> {
+async function loadHome(): Promise<HomeState | { kind: "setup"; setup: SetupState }> {
   const context = await getMemberContext();
   if (!context) return { kind: "unavailable" };
   if (!context.firm) return { kind: "no-firm" };
 
   const firm = context.firm;
   const manager = isManager(firm.role);
+  const viewer = todayViewerOf(firm);
   const flowKey = onboardingFlowKey(context.userId, firm.id);
 
   const [today, facts, checklist] = await Promise.all([
@@ -30,6 +40,7 @@ async function loadHome(): Promise<HomeState> {
     manager ? getActivationFacts(context.supabase, firm.id) : Promise.resolve(null),
     manager ? getOnboardingState(context.supabase, flowKey) : Promise.resolve(null),
   ]);
+  if (facts && !isSetupAnswered(facts)) return { kind: "setup", setup: await loadSetupState(context) };
   const read = today.error ? null : readFirmToday(today.data);
   if (!read) return { kind: "error" };
 
@@ -39,16 +50,15 @@ async function loadHome(): Promise<HomeState> {
     firm: { name: firm.name },
     manager,
     today: read,
-    triagesPublications:
-      firm.firmFunction === "socio" || firm.firmFunction === "advogado" || firm.firmFunction === "controladoria",
-    worksDeadlines:
-      firm.firmFunction === "socio" || firm.firmFunction === "advogado" || firm.firmFunction === "controladoria",
-    confirmsDeadlines: firm.firmFunction === "socio" || firm.firmFunction === "controladoria",
+    triagesPublications: viewer.triagesPublications,
+    worksDeadlines: viewer.worksDeadlines,
+    confirmsDeadlines: viewer.confirmsDeadlines,
     // Facts that could not be read show no checklist, never one that calls a finished step missing.
     setup: facts && checklist ? { flowKey, state: checklist, facts } : null,
   };
 }
 
 export default async function HomePage() {
-  return <HomeView state={await loadHome()} />;
+  const home = await loadHome();
+  return home.kind === "setup" ? <SetupView state={home.setup} /> : <HomeView state={home} />;
 }

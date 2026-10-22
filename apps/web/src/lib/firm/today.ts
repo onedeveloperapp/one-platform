@@ -267,6 +267,22 @@ export type TodayViewer = {
   managesFirm: boolean;
 };
 
+/**
+ * Who is looking, from their place in the firm: who signs (sócio, advocacia) and who runs the deadlines
+ * (controladoria) work on the courts' publications and deadlines; a partner or the controladoria confirms a
+ * deadline; who manages the firm account fixes its connections.
+ */
+export function todayViewerOf(firm: { role: string | null; firmFunction: string | null }): TodayViewer {
+  const fn = firm.firmFunction;
+  const signsOrRuns = fn === "socio" || fn === "advogado" || fn === "controladoria";
+  return {
+    triagesPublications: signsOrRuns,
+    worksDeadlines: signsOrRuns,
+    confirmsDeadlines: fn === "socio" || fn === "controladoria",
+    managesFirm: firm.role === "owner" || firm.role === "admin",
+  };
+}
+
 const EVERYTHING: TodayViewer = {
   triagesPublications: true,
   worksDeadlines: true,

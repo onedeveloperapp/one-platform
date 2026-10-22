@@ -117,6 +117,30 @@ export async function foundFirm(input: {
   return { ok: true, code: "created", orgId: data };
 }
 
+/**
+ * The first questions of a firm's setup (migration 0044): whether it works
+ * alone, which takes the team out of its list, and that they were answered,
+ * so the screen that asks them stops asking. Who manages the firm, never in a
+ * support visit; the database keeps each answer on the record.
+ */
+export async function answerFirmSetup(input: {
+  worksAlone?: boolean | null;
+  finished?: boolean;
+}): Promise<FirmActionResult> {
+  const context = await getMemberContext();
+  if (!context?.firm) return { ok: false, code: "not_authorized" };
+  const { data, error } = await context.supabase.rpc("answer_firm_setup", {
+    target_org: context.firm.id,
+    target_works_alone: typeof input.worksAlone === "boolean" ? input.worksAlone : null,
+    target_finished: input.finished === true,
+  });
+  const result = fold(data, error);
+  if (!result.ok) return result;
+  revalidatePath("/inicio");
+  revalidatePath("/configurar");
+  return { ok: true, code: result.code };
+}
+
 /** Accepts an invitation addressed to the caller's own confirmed e-mail. */
 export async function acceptInvitation(invitationId: string): Promise<FirmActionResult> {
   const context = await getMemberContext();

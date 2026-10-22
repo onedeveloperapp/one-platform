@@ -70,7 +70,7 @@ $$;
 
 select is(
   pg_temp.facts('aa000000-0000-4000-8000-000000000001', 'ba000000-0000-4000-8000-00000000000a'),
-  '{"firm_document": false, "oab": false, "team": false, "whatsapp": false}'::jsonb,
+  '{"firm_document": false, "oab": false, "signer": false, "oab_signer": false, "team": false, "works_alone": false, "whatsapp": false, "channel": false, "first_case": false, "setup_answered": false}'::jsonb,
   'a firm that was just founded has nothing in place'
 );
 
@@ -117,12 +117,12 @@ insert into public.wa_numbers (id, org_id, connection_id, provider, phone_number
 
 select is(
   pg_temp.facts('aa000000-0000-4000-8000-000000000001', 'ba000000-0000-4000-8000-00000000000a'),
-  '{"firm_document": true, "oab": true, "team": true, "whatsapp": true}'::jsonb,
+  '{"firm_document": true, "oab": true, "signer": false, "oab_signer": false, "team": true, "works_alone": false, "whatsapp": true, "channel": true, "first_case": false, "setup_answered": false}'::jsonb,
   'with a connected number the firm has everything in place'
 );
 select is(
   pg_temp.facts('aa000000-0000-4000-8000-000000000004', 'ba000000-0000-4000-8000-00000000000b'),
-  '{"firm_document": false, "oab": false, "team": false, "whatsapp": false}'::jsonb,
+  '{"firm_document": false, "oab": false, "signer": false, "oab_signer": false, "team": false, "works_alone": false, "whatsapp": false, "channel": false, "first_case": false, "setup_answered": false}'::jsonb,
   'and nothing of it shows in the other firm''s answer'
 );
 

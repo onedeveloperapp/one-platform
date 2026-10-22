@@ -94,6 +94,8 @@ export function supabaseRunStore(service: SupabaseClient): RunStore {
         target_tokens_out: input.usage?.tokensOut ?? 0,
         target_model: input.usage?.model ?? null,
         target_error_code: input.errorCode ?? null,
+        // What a model heard is reported apart and priced at its own rate (0043).
+        target_audio_tokens_in: input.usage?.audioTokensIn ?? 0,
       });
       // A run that could not be closed stays `running` until the sweep gives it
       // up (expire_stale_ai_runs): the caller must know it did not land.

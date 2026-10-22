@@ -1,5 +1,6 @@
 "use client";
 import Notifications from "../notifications/notifications";
+import PendingCenter from "../pending/pending-center";
 import User from "../user/user";
 import Link from "next/link";
 import * as React from "react";
@@ -9,6 +10,7 @@ import { useTranslations } from "use-intl";
 import { Box, Button } from "@mui/material";
 
 import { useLayoutContext } from "@/components/layout/layout-context";
+import { useViewer } from "@/components/layout/viewer-context";
 import Logo from "@/components/logo/logo";
 import NiMenuSplit from "@/icons/nexture/ni-menu-split";
 import { cn } from "@/lib/utils";
@@ -16,6 +18,9 @@ import { cn } from "@/lib/utils";
 export default function Header() {
   const t = useTranslations("dashboard");
   const { showLeftInMobile, showLeftMobileButton, leftMenuWidth, leftShowBackdrop } = useLayoutContext();
+  const viewer = useViewer();
+  // What waits for somebody is the firm's; who is held on the security screen sees it once they pass.
+  const showPending = Boolean(viewer?.hasFirm) && !viewer?.owesSecondFactor;
 
   const [mounted, setMounted] = useState(false);
 
@@ -84,6 +89,7 @@ export default function Header() {
 
         {/* Right buttons */}
         <Box className="ml-auto flex flex-row sm:gap-1">
+          {showPending ? <PendingCenter /> : null}
           <Notifications />
         </Box>
 
