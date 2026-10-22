@@ -146,7 +146,10 @@ export async function removeDraftTemplate(templateId: string): Promise<LibraryRe
   return result;
 }
 
-/** The text of a model, read when a person opens it: a list never reads every text whole. */
+/**
+ * The text of a model, read when a person opens it: a list never reads every text whole. A model of the
+ * platform (0045) is read too, to be copied into one of the firm's.
+ */
 export async function readDraftTemplate(
   templateId: string,
 ): Promise<{ ok: true; body: string; isDefault: boolean } | { ok: false; code: string }> {
@@ -156,7 +159,7 @@ export async function readDraftTemplate(
     .from("draft_templates")
     .select("id, body, is_default")
     .eq("id", templateId)
-    .eq("org_id", context.firm.id)
+    .or(`org_id.eq.${context.firm.id},org_id.is.null`)
     .maybeSingle();
   if (error) return { ok: false, code: "failed" };
   if (!data) return { ok: false, code: "not_found" };

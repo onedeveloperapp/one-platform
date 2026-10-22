@@ -1,7 +1,7 @@
 // GENERATED from packages/db/migrations by `npm run db:schema:pull`.
 // Regenerate after every migration instead of editing by hand.
 import { relations } from "drizzle-orm/relations";
-import { profiles, organizations, usersInAuth, memberships, auditEvents, consentTerms, consentAcceptances, accessEvents, platformSettings, notifications, announcements, onboardingState, oabRegistrations, firmInvitations, subscriptions, plans, coupons, billingOperations, subscriptionModules, modules, invoices, entitlementGrants, signupAttribution, metaAttribution, purchaseAttributions, productEvents, helpCategories, helpArticles, leads, blogPosts, blogComments, impersonationSessions, newsletterSends, aiSpend, aiTasks, promptVersions, autonomyDecisions, aiRuns, approvals, connections, connectionSecrets, files, waNumbers, issuedDocuments, waConversations, waTemplates, waMessages, people, caseParties, cases, airports, flightSegments, proceedings, courts, clientLinks, caseEvents, signatureEnvelopes, caseDocuments, clientConsents, caseWeather, airlines, civilCourtAnswers, caseStatements, adminComplaints, certificateInventory, filingReceipts, filingPackages, djenCaptures, draftTemplates, legalSources, publications, caseDrafts, caseDraftVersions, dossiers, flightChecks, proceedingTracking, movements, importBatches, importRows, courtCalendarDays, deadlineActs, deadlines, publicationTriagePolicies, firmCalendars, hearingEventRemovals, noticeOptins, caseAdvances, clientNotices, noticeKinds, hearings, proceedingSignersSeen, pscProviders, lawyerSignatureUses, lawyerCpfs, filingPackageItems, announcementDismissals, newsletterDeliveries, proceedingParties, proceedingLawyers, firmSigners, waContacts, firmAutonomy, waOptouts, courtNotes, caseDraftCitations, courtCalendarYears, firmNoticeKinds, publicationReadings, courtSystems } from "./schema";
+import { profiles, organizations, usersInAuth, memberships, auditEvents, consentTerms, consentAcceptances, accessEvents, platformSettings, notifications, announcements, onboardingState, oabRegistrations, firmInvitations, subscriptions, plans, coupons, billingOperations, subscriptionModules, modules, invoices, entitlementGrants, signupAttribution, metaAttribution, purchaseAttributions, productEvents, helpCategories, helpArticles, leads, blogPosts, blogComments, impersonationSessions, newsletterSends, aiSpend, aiTasks, promptVersions, autonomyDecisions, aiRuns, approvals, connections, connectionSecrets, files, waNumbers, issuedDocuments, waConversations, waTemplates, waMessages, people, caseParties, cases, airports, flightSegments, proceedings, courts, clientLinks, caseEvents, signatureEnvelopes, caseDocuments, clientConsents, caseWeather, airlines, civilCourtAnswers, caseStatements, adminComplaints, certificateInventory, filingReceipts, filingPackages, djenCaptures, legalSources, publications, draftTemplates, caseDrafts, caseDraftVersions, dossiers, flightChecks, proceedingTracking, movements, importBatches, importRows, courtCalendarDays, deadlineActs, deadlines, publicationTriagePolicies, firmCalendars, hearingEventRemovals, noticeOptins, caseAdvances, clientNotices, noticeKinds, hearings, proceedingSignersSeen, pscProviders, lawyerSignatureUses, lawyerCpfs, filingPackageItems, announcementDismissals, newsletterDeliveries, proceedingParties, proceedingLawyers, firmSigners, waContacts, firmAutonomy, waOptouts, courtNotes, caseDraftCitations, courtCalendarYears, firmNoticeKinds, publicationReadings, courtSystems } from "./schema";
 
 export const organizationsRelations = relations(organizations, ({one, many}) => ({
 	profile: one(profiles, {
@@ -50,9 +50,9 @@ export const organizationsRelations = relations(organizations, ({one, many}) => 
 	certificateInventories: many(certificateInventory),
 	filingReceipts: many(filingReceipts),
 	djenCaptures: many(djenCaptures),
-	draftTemplates: many(draftTemplates),
 	legalSources: many(legalSources),
 	publications: many(publications),
+	draftTemplates: many(draftTemplates),
 	caseDrafts: many(caseDrafts),
 	caseDraftVersions: many(caseDraftVersions),
 	dossiers: many(dossiers),
@@ -176,12 +176,6 @@ export const profilesRelations = relations(profiles, ({one, many}) => ({
 	certificateInventories: many(certificateInventory),
 	filingReceipts: many(filingReceipts),
 	djenCaptures: many(djenCaptures),
-	draftTemplates_createdBy: many(draftTemplates, {
-		relationName: "draftTemplates_createdBy_profiles_id"
-	}),
-	draftTemplates_updatedBy: many(draftTemplates, {
-		relationName: "draftTemplates_updatedBy_profiles_id"
-	}),
 	legalSources_verifiedBy: many(legalSources, {
 		relationName: "legalSources_verifiedBy_profiles_id"
 	}),
@@ -199,6 +193,12 @@ export const profilesRelations = relations(profiles, ({one, many}) => ({
 	}),
 	publications_hearingSettledBy: many(publications, {
 		relationName: "publications_hearingSettledBy_profiles_id"
+	}),
+	draftTemplates_createdBy: many(draftTemplates, {
+		relationName: "draftTemplates_createdBy_profiles_id"
+	}),
+	draftTemplates_updatedBy: many(draftTemplates, {
+		relationName: "draftTemplates_updatedBy_profiles_id"
 	}),
 	caseDrafts_revisionBy: many(caseDrafts, {
 		relationName: "caseDrafts_revisionBy_profiles_id"
@@ -1383,24 +1383,6 @@ export const djenCapturesRelations = relations(djenCaptures, ({one}) => ({
 	}),
 }));
 
-export const draftTemplatesRelations = relations(draftTemplates, ({one, many}) => ({
-	organization: one(organizations, {
-		fields: [draftTemplates.orgId],
-		references: [organizations.id]
-	}),
-	profile_createdBy: one(profiles, {
-		fields: [draftTemplates.createdBy],
-		references: [profiles.id],
-		relationName: "draftTemplates_createdBy_profiles_id"
-	}),
-	profile_updatedBy: one(profiles, {
-		fields: [draftTemplates.updatedBy],
-		references: [profiles.id],
-		relationName: "draftTemplates_updatedBy_profiles_id"
-	}),
-	caseDrafts: many(caseDrafts),
-}));
-
 export const legalSourcesRelations = relations(legalSources, ({one}) => ({
 	organization: one(organizations, {
 		fields: [legalSources.orgId],
@@ -1461,6 +1443,24 @@ export const publicationsRelations = relations(publications, ({one, many}) => ({
 	publicationReadings: many(publicationReadings),
 }));
 
+export const draftTemplatesRelations = relations(draftTemplates, ({one, many}) => ({
+	organization: one(organizations, {
+		fields: [draftTemplates.orgId],
+		references: [organizations.id]
+	}),
+	profile_createdBy: one(profiles, {
+		fields: [draftTemplates.createdBy],
+		references: [profiles.id],
+		relationName: "draftTemplates_createdBy_profiles_id"
+	}),
+	profile_updatedBy: one(profiles, {
+		fields: [draftTemplates.updatedBy],
+		references: [profiles.id],
+		relationName: "draftTemplates_updatedBy_profiles_id"
+	}),
+	caseDrafts: many(caseDrafts),
+}));
+
 export const caseDraftsRelations = relations(caseDrafts, ({one, many}) => ({
 	organization: one(organizations, {
 		fields: [caseDrafts.orgId],
@@ -1493,13 +1493,13 @@ export const caseDraftsRelations = relations(caseDrafts, ({one, many}) => ({
 		fields: [caseDrafts.orgId],
 		references: [proceedings.id]
 	}),
-	draftTemplate: one(draftTemplates, {
-		fields: [caseDrafts.orgId],
-		references: [draftTemplates.id]
-	}),
 	caseDocument: one(caseDocuments, {
 		fields: [caseDrafts.orgId],
 		references: [caseDocuments.id]
+	}),
+	draftTemplate: one(draftTemplates, {
+		fields: [caseDrafts.templateId],
+		references: [draftTemplates.id]
 	}),
 	caseDraftVersions: many(caseDraftVersions),
 	caseDraftCitations: many(caseDraftCitations),

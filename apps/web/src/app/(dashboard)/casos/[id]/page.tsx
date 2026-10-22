@@ -16,7 +16,7 @@ import { cookies } from "next/headers";
 
 import { momentLabel } from "@/lib/ai/approvals";
 import { caseAdvanceOf } from "@/lib/cases/advance";
-import { CAUSES, isCaseStatus, isIncident, ORIGINS, type RequiredDocument } from "@/lib/cases/cases";
+import { CAUSES, isCaseStatus, isIncident, linksOwedOf, ORIGINS, type RequiredDocument } from "@/lib/cases/cases";
 import { readCheckAnswer } from "@/lib/cases/document-check";
 import { readQuality } from "@/lib/cases/document-quality";
 import { loadCasePieces } from "@/lib/cases/draft-facts";
@@ -231,7 +231,7 @@ async function loadCase(id: string): Promise<CaseState> {
   const course = await loadCourseFacts(supabase, firm, id, context.profile.timezone).catch(() => undefined);
   if (!course) return { kind: "error" };
   // The case's deadlines, and the acts of the list for a new one. A read that failed is an error of the page too.
-  const [deadlines, acts, hearings, people, zones, notices, civilCourt, advanced] = await Promise.all([
+  const [deadlines, acts, hearings, people, zones, notices, civilCourt, advanced, linksOwed] = await Promise.all([
     caseDeadlines(supabase, firm, id, context.profile.timezone).catch(() => undefined),
     deadlineActs(supabase).catch(() => undefined),
     caseHearings(supabase, firm, id, context.profile.timezone).catch(() => undefined),
@@ -247,8 +247,12 @@ async function loadCase(id: string): Promise<CaseState> {
       .eq("org_id", firm)
       .maybeSingle()
       .then(({ data, error }) => (error ? undefined : { advance: caseAdvanceOf(data) })),
+    // Who of the case is owed a link and why ONE has not sent it (0046). A read that failed is an error of the page.
+    supabase
+      .rpc("case_links_owed", { target_case: id })
+      .then(({ data, error }) => (error ? undefined : (linksOwedOf(data) ?? undefined))),
   ]);
-  if (!deadlines || !acts || !hearings || !people || !zones || !notices || !civilCourt || !advanced) {
+  if (!deadlines || !acts || !hearings || !people || !zones || !notices || !civilCourt || !advanced || !linksOwed) {
     return { kind: "error" };
   }
 
@@ -407,6 +411,7 @@ async function loadCase(id: string): Promise<CaseState> {
       uploads: link.upload_count,
       finishedAt: link.finished_at,
     })),
+    linksOwed,
     events: (
       (events.data ?? []) as {
         id: string;

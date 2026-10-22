@@ -214,6 +214,8 @@ describe.skipIf(!DB_URL)("ONE carrying a case on, from its lawsuits to its filin
       package: async (packageId) => {
         packagesAsked.push(packageId);
       },
+      // No client here is owed a link ONE can send: the firms of this file have no WhatsApp connected.
+      message: async () => undefined,
     });
   }
 

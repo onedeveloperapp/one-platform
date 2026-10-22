@@ -94,7 +94,11 @@ export default function LibraryView({ state, citation }: { state: LibraryState; 
     citation && mayWrite ? { source: null, citation } : null,
   );
   const [retiring, setRetiring] = useState<LibrarySource | null>(null);
-  const [templateForm, setTemplateForm] = useState<{ template: LibraryTemplate | null } | null>(null);
+  const [templateForm, setTemplateForm] = useState<{
+    template: LibraryTemplate | null;
+    /** A model of the platform the firm starts its own from. */
+    copyOf?: LibraryTemplate;
+  } | null>(null);
   const [removing, setRemoving] = useState<LibraryTemplate | null>(null);
   const [search, setSearch] = useState("");
   const [shown, setShown] = useState(SOURCES_SHOWN);
@@ -107,7 +111,8 @@ export default function LibraryView({ state, citation }: { state: LibraryState; 
     : verified;
   const changed = () => router.refresh();
   const empty = data !== null && data.sources.length === 0 && data.templates.length === 0;
-  const full = data !== null && data.templates.length >= data.maxTemplates;
+  // What a firm may keep counts only its own models: the platform's are every firm's.
+  const full = data !== null && data.templates.filter((template) => !template.platform).length >= data.maxTemplates;
   const addSource = (typed: string) => setSourceForm({ source: null, citation: typed });
 
   return (
@@ -223,7 +228,7 @@ export default function LibraryView({ state, citation }: { state: LibraryState; 
                       key={source.key}
                       className="border-grey-100 flex flex-wrap items-center gap-3 border-b py-3 last:border-b-0"
                     >
-                      <Box className="flex min-w-0 flex-1 flex-col">
+                      <Box className="flex min-w-0 flex-1 basis-60 flex-col">
                         <Typography variant="body1" className="font-semibold break-words">
                           {source.label}
                         </Typography>
@@ -273,6 +278,9 @@ export default function LibraryView({ state, citation }: { state: LibraryState; 
                   </Button>
                 ) : null}
               </Box>
+              <Typography variant="body2" className="text-text-secondary">
+                {t("library-templates-one")}
+              </Typography>
               {mayWrite && full ? (
                 <Typography variant="body2" className="text-text-secondary">
                   {t("library-templates-full", { count: data.maxTemplates })}
@@ -298,7 +306,7 @@ export default function LibraryView({ state, citation }: { state: LibraryState; 
                       key={template.id}
                       className="border-grey-100 flex flex-wrap items-center gap-3 border-b py-3 last:border-b-0"
                     >
-                      <Box className="flex min-w-0 flex-1 flex-col">
+                      <Box className="flex min-w-0 flex-1 basis-60 flex-col">
                         <Typography variant="body1" className="font-semibold break-words">
                           {template.name}
                         </Typography>
@@ -314,7 +322,15 @@ export default function LibraryView({ state, citation }: { state: LibraryState; 
                           ].join(" · ")}
                         </Typography>
                       </Box>
-                      {template.isDefault ? (
+                      {template.platform ? (
+                        <StatusChip tone="neutral" label={t("library-template-platform-chip")} />
+                      ) : null}
+                      {template.provisional ? (
+                        <StatusChip tone="attention" label={t("library-template-provisional-chip")} />
+                      ) : null}
+                      {template.usedByOne ? (
+                        <StatusChip tone="info" label={t("library-template-used-chip")} />
+                      ) : template.isDefault && !template.platform ? (
                         <StatusChip tone="info" label={t("library-template-default-chip")} />
                       ) : null}
                       {template.missing > 0 ? (
@@ -325,7 +341,18 @@ export default function LibraryView({ state, citation }: { state: LibraryState; 
                       ) : template.cited > 0 ? (
                         <StatusChip tone="positive" label={t("library-template-covered")} />
                       ) : null}
-                      {mayWrite ? (
+                      {mayWrite && template.platform ? (
+                        <Button
+                          variant="text"
+                          color="grey"
+                          size="small"
+                          disabled={full}
+                          onClick={() => setTemplateForm({ template: null, copyOf: template })}
+                          aria-label={t("library-template-copy-label", { name: template.name })}
+                        >
+                          {t("library-template-copy")}
+                        </Button>
+                      ) : mayWrite ? (
                         <Box className="flex flex-wrap gap-1">
                           <Button
                             variant="text"
@@ -420,7 +447,7 @@ export default function LibraryView({ state, citation }: { state: LibraryState; 
                   <Box component="ul" className="m-0 flex list-none flex-col p-0">
                     {retired.map((source) => (
                       <Box component="li" key={source.id} className="flex flex-wrap items-center gap-3 py-2">
-                        <Box className="flex min-w-0 flex-1 flex-col">
+                        <Box className="flex min-w-0 flex-1 basis-60 flex-col">
                           <Typography variant="body1" className="break-words">
                             {source.citation}
                           </Typography>
@@ -475,9 +502,12 @@ export default function LibraryView({ state, citation }: { state: LibraryState; 
       {templateForm ? (
         <TemplateDialog
           template={templateForm.template}
+          copyOf={templateForm.copyOf ?? null}
           defaults={Object.fromEntries(
             (data?.templates ?? [])
-              .filter((template) => template.isDefault && template.id !== templateForm.template?.id)
+              .filter(
+                (template) => template.isDefault && !template.platform && template.id !== templateForm.template?.id,
+              )
               .map((template) => [template.proceedingKind ?? "any", template.name]),
           )}
           onClose={() => setTemplateForm(null)}
@@ -516,7 +546,7 @@ function SourceRow({
   const t = useTranslations("product");
   return (
     <Box component="li" className="border-grey-100 flex flex-wrap items-start gap-3 border-b py-3 last:border-b-0">
-      <Box className="flex min-w-0 flex-1 flex-col gap-0.5">
+      <Box className="flex min-w-0 flex-1 basis-60 flex-col gap-0.5">
         <Typography variant="body1" className="font-semibold break-words">
           {source.citation}
         </Typography>
@@ -530,9 +560,11 @@ function SourceRow({
         ) : null}
         <Typography variant="body2" className="text-text-secondary">
           {[
-            source.verifiedBy
-              ? t("library-source-verified", { name: source.verifiedBy, when: source.verifiedLabel })
-              : t("library-source-verified-at", { when: source.verifiedLabel }),
+            source.platform
+              ? t("library-source-verified-one", { when: source.verifiedLabel })
+              : source.verifiedBy
+                ? t("library-source-verified", { name: source.verifiedBy, when: source.verifiedLabel })
+                : t("library-source-verified-at", { when: source.verifiedLabel }),
             source.note,
           ]
             .filter(Boolean)
@@ -552,7 +584,7 @@ function SourceRow({
         >
           {t("library-source-open")}
         </Button>
-        {mayWrite ? (
+        {mayWrite && !source.platform ? (
           <>
             <Button
               variant="text"
@@ -642,7 +674,7 @@ function SourceDialog({ form, onClose, onSaved }: { form: SourceForm; onClose: (
         onClose={close}
         closeLabel={t("library-close")}
       />
-      <DialogContent className="flex flex-col gap-4">
+      <DialogContent className="flex flex-col gap-4 pt-2!">
         <TextField
           label={t("library-source-citation")}
           helperText={t(editing ? "library-source-citation-fixed" : "library-source-citation-help")}
@@ -832,6 +864,14 @@ function RemoveDialog({
   );
 }
 
+/** The name a copy of a model of the platform starts with: the firm's own, without the platform's mark. */
+function copyName(name: string): string {
+  return name
+    .replace(/\s*\(modelo do ONE\)\s*$/u, "")
+    .trim()
+    .slice(0, 120);
+}
+
 /** What saying a model is the default means, for the kind it is written for. */
 function defaultKey(kind: Kind): string {
   if (kind === null) return "library-template-default-any";
@@ -849,11 +889,14 @@ function defaultKey(kind: Kind): string {
  */
 function TemplateDialog({
   template,
+  copyOf,
   defaults,
   onClose,
   onSaved,
 }: {
   template: LibraryTemplate | null;
+  /** A model of the platform this new model starts from: its text, its kind and its name, the firm's from then on. */
+  copyOf: LibraryTemplate | null;
   /** The other models that are a default now, by the kind they are for ("any" for both). */
   defaults: Record<string, string>;
   onClose: () => void;
@@ -861,29 +904,35 @@ function TemplateDialog({
 }) {
   const t = useTranslations("product");
   const [pending, startTransition] = useTransition();
-  const [name, setName] = useState(template?.name ?? "");
-  const [kind, setKind] = useState<Kind>(template?.proceedingKind ?? null);
+  const [name, setName] = useState(template?.name ?? (copyOf ? copyName(copyOf.name) : ""));
+  const [kind, setKind] = useState<Kind>(template?.proceedingKind ?? copyOf?.proceedingKind ?? null);
   // Whether it is the default as it was read when the dialog opened, and as it is on screen.
   const [savedDefault, setSavedDefault] = useState(template?.isDefault ?? false);
   const [isDefault, setIsDefault] = useState(template?.isDefault ?? false);
   // The text as it was read, and the text on screen: what "changed" is measured against.
   const [saved, setSaved] = useState<string | null>(template ? null : "");
-  const [body, setBody] = useState<string | null>(template ? null : "");
+  const [body, setBody] = useState<string | null>(template || copyOf ? null : "");
   const [errorCode, setErrorCode] = useState<string | null>(null);
   const [leaving, setLeaving] = useState(false);
   const templateId = template?.id ?? null;
+  // What is read when the dialog opens: the model being edited, or the platform's one a copy starts from.
+  const readId = templateId ?? copyOf?.id ?? null;
+  const copying = templateId === null && copyOf !== null;
 
   useEffect(() => {
-    if (!templateId) return;
+    if (!readId) return;
     let open = true;
-    readDraftTemplate(templateId)
+    readDraftTemplate(readId)
       .then((read) => {
         if (!open) return;
         if (read.ok) {
-          setSaved(read.body);
           setBody(read.body);
-          setSavedDefault(read.isDefault);
-          setIsDefault(read.isDefault);
+          // A copy is a new model: nothing of it is saved yet.
+          if (!copying) {
+            setSaved(read.body);
+            setSavedDefault(read.isDefault);
+            setIsDefault(read.isDefault);
+          }
         } else setErrorCode(read.code);
       })
       .catch(() => {
@@ -892,7 +941,7 @@ function TemplateDialog({
     return () => {
       open = false;
     };
-  }, [templateId]);
+  }, [readId, copying]);
 
   const odd = unknownMarks(body ?? "");
   const complete = name.trim().length >= 2 && (body ?? "").trim().length >= 20;
@@ -938,11 +987,17 @@ function TemplateDialog({
     <Dialog open onClose={close} aria-labelledby="library-template-dialog" maxWidth="lg" fullWidth>
       <DialogHeader
         id="library-template-dialog"
-        title={t(template ? "library-template-dialog-edit" : "library-template-dialog-new")}
+        title={t(
+          template
+            ? "library-template-dialog-edit"
+            : copying
+              ? "library-template-dialog-copy"
+              : "library-template-dialog-new",
+        )}
         onClose={close}
         closeLabel={t("library-close")}
       />
-      <DialogContent className="flex flex-col gap-4">
+      <DialogContent className="flex flex-col gap-4 pt-2!">
         <Box className="flex flex-wrap gap-3">
           <TextField
             label={t("library-template-name")}

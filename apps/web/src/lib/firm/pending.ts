@@ -15,7 +15,8 @@ import { formatCnj } from "@flyee/rules/cnj";
  *           stopped;
  *   today   what falls today, and in the next days;
  *   one     what keeps ONE from carrying on: each case it waits on, with what
- *           it waits for, and every decision only a person takes;
+ *           it waits for, each client's link it could not send, with why, and
+ *           every decision only a person takes;
  *   review  what is good to look at and holds nothing up.
  *
  * The first three are the badge: nothing pending or late goes unseen. The
@@ -24,6 +25,24 @@ import { formatCnj } from "@flyee/rules/cnj";
  */
 
 export type OneWait = { caseId: string; seq: number; client: string; waiting: string; since: string | null };
+
+/** Why ONE did not send somebody their link (migration 0046, `client_link_reach`), or `late` once it should have. */
+export const LINK_REASONS = [
+  "by_person",
+  "no_phone",
+  "no_number",
+  "no_conversation",
+  "opted_out",
+  "window_closed",
+  "late",
+] as const;
+export type LinkReason = (typeof LINK_REASONS)[number];
+
+export const isLinkReason = (value: unknown): value is LinkReason =>
+  (LINK_REASONS as readonly unknown[]).includes(value);
+
+/** Somebody of a case being gathered who never had a link, and why ONE has not sent it. */
+export type LinkOwed = { caseId: string; seq: number; personId: string; client: string; reason: LinkReason };
 
 export type OverdueDeadline = {
   deadlineId: string;
@@ -38,6 +57,8 @@ export type FirmPending = {
   oneWaits: OneWait[];
   oneWaitsTotal: number;
   oneWaitsStale: number;
+  linksOwed: LinkOwed[];
+  linksOwedTotal: number;
   deadlinesOverdue: OverdueDeadline[];
   deadlinesToday: number;
   hearingsToday: number;
@@ -62,6 +83,17 @@ function oneWaitOf(raw: unknown): OneWait | null {
   const waiting = text(row.waiting);
   if (!caseId || !UUID.test(caseId) || !seq || !waiting) return null;
   return { caseId, seq, client: text(row.client) ?? "", waiting, since: text(row.since) };
+}
+
+function linkOwedOf(raw: unknown): LinkOwed | null {
+  if (typeof raw !== "object" || raw === null) return null;
+  const row = raw as Record<string, unknown>;
+  const caseId = text(row.case_id);
+  const personId = text(row.person_id);
+  const seq = count(row.seq);
+  if (!caseId || !UUID.test(caseId) || !personId || !UUID.test(personId) || !seq || !isLinkReason(row.reason))
+    return null;
+  return { caseId, seq, personId, client: text(row.client) ?? "", reason: row.reason };
 }
 
 function overdueOf(raw: unknown): OverdueDeadline | null {
@@ -110,6 +142,11 @@ export function readFirmPending(raw: unknown): FirmPending | null {
     oneWaits: answer.one_waits.map(oneWaitOf).filter((row): row is OneWait => row !== null),
     oneWaitsTotal,
     oneWaitsStale,
+    // Read where the database says them (0046); a database without them owes no link to anybody.
+    linksOwed: Array.isArray(answer.links_owed)
+      ? answer.links_owed.map(linkOwedOf).filter((row): row is LinkOwed => row !== null)
+      : [],
+    linksOwedTotal: count(answer.links_owed_total) ?? 0,
     deadlinesOverdue: answer.deadlines_overdue.map(overdueOf).filter((row): row is OverdueDeadline => row !== null),
     deadlinesToday,
     hearingsToday,
@@ -174,6 +211,17 @@ export function daysSince(since: string | null, now: Date): number {
   if (Number.isNaN(then)) return 0;
   return Math.max(0, Math.floor((now.getTime() - then) / 86_400_000));
 }
+
+/** The words of why a link did not go, and what to do. */
+export const LINK_REASON_KEY: Record<LinkReason, string> = {
+  by_person: "pending-link-by-person",
+  no_phone: "pending-link-no-phone",
+  no_number: "pending-link-no-number",
+  no_conversation: "pending-link-no-conversation",
+  opted_out: "pending-link-opted-out",
+  window_closed: "pending-link-window-closed",
+  late: "pending-link-late",
+};
 
 const needItem = (need: TodayNeed): PendingItem => ({
   id: `need:${need.key}`,
@@ -256,6 +304,29 @@ export function pendingGroups(
         : { key: "pending-case-unnamed", values: { seq: wait.seq } },
       detail: { key: "pending-case-waits", values: { days, reason: { message: waitingKey(wait.waiting) } } },
       count: 1,
+    });
+  }
+  // Each client ONE could not send the link to, with why: without it the client sends nothing. One ONE should
+  // have sent by now is late.
+  for (const link of pending.linksOwed) {
+    groups[link.reason === "late" ? "late" : "one"].push({
+      id: `link:${link.caseId}:${link.personId}`,
+      href: `/casos/${link.caseId}#case-link`,
+      label: link.client ? { key: "pending-link", values: { client: link.client } } : { key: "pending-link-unnamed" },
+      detail: {
+        key: "pending-link-detail",
+        values: { seq: link.seq, reason: { message: LINK_REASON_KEY[link.reason] } },
+      },
+      count: 1,
+    });
+  }
+  const unlistedLinks = pending.linksOwedTotal - pending.linksOwed.length;
+  if (unlistedLinks > 0) {
+    groups.one.push({
+      id: "links:more",
+      href: "/casos",
+      label: { key: "pending-links-more", values: { count: unlistedLinks } },
+      count: unlistedLinks,
     });
   }
   const unlistedCases = pending.oneWaitsTotal - pending.oneWaits.length;

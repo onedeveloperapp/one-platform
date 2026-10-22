@@ -15,6 +15,11 @@ select plan(67);
 -- Every person, firm, company, CPF, CNPJ and number here is invented.
 -- ============================================================
 
+-- This file is about a firm's own library and models: the platform's (0045), which answer for every firm, are
+-- taken out for its length (the transaction rolls back), and 0052 covers them.
+delete from public.legal_sources where org_id is null;
+delete from public.draft_templates where org_id is null;
+
 insert into auth.users (id, instance_id, aud, role, email, encrypted_password, email_confirmed_at, raw_app_meta_data, raw_user_meta_data, created_at, updated_at)
 values
   ('af100000-0000-4000-8000-000000000001', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',

@@ -22,6 +22,7 @@ import type { AutonomyCatalogEntry } from "@/lib/admin/ai";
 
 /** What each decision is, for the operator. */
 const DECISION_LABEL: Record<string, string> = {
+  send_client_link: "Enviar o link ao cliente",
   document_check: "Aceitar ou recusar documentos",
   chronology: "Mandar a cronologia ao cliente",
   piece_text: "Aprovar o primeiro texto da peça",
@@ -30,6 +31,7 @@ const DECISION_LABEL: Record<string, string> = {
   create_lawsuits: "Criar as ações do caso",
   start_piece: "Pedir a peça à IA",
   request_package: "Montar o pacote de protocolo",
+  sign_package: "Assinar os arquivos do protocolo",
   publication_deadline: "Propor o prazo de uma publicação",
   publication_hearing: "Registrar a audiência de uma publicação",
 };

@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   daysSince,
   type FirmPending,
+  LINK_REASONS,
   pendingBadge,
   type PendingGroup,
   pendingGroups,
@@ -53,6 +54,8 @@ const QUIET: FirmPending = {
   oneWaits: [],
   oneWaitsTotal: 0,
   oneWaitsStale: 0,
+  linksOwed: [],
+  linksOwedTotal: 0,
   deadlinesOverdue: [],
   deadlinesToday: 0,
   hearingsToday: 0,
@@ -77,6 +80,8 @@ const ATTENDANCE: TodayViewer = {
 const NOW = new Date("2026-10-22T15:00:00Z");
 const CASE_A = "d5100000-0000-4000-8000-00000000000a";
 const CASE_B = "d5100000-0000-4000-8000-00000000000b";
+const PERSON_A = "d5100000-0000-4000-8000-0000000000a1";
+const PERSON_B = "d5100000-0000-4000-8000-0000000000b1";
 
 const group = (groups: PendingGroup[], key: PendingGroup["key"]) => groups.find((entry) => entry.key === key);
 const ids = (groups: PendingGroup[], key: PendingGroup["key"]) =>
@@ -112,9 +117,36 @@ describe("what waits for somebody, as the database says it", () => {
       { caseId: CASE_A, seq: 1, client: "Mariana Duarte", waiting: "claims_missing", since: "2026-10-19T12:00:00Z" },
     ]);
     expect(read?.deadlinesOverdue.map((deadline) => deadline.deadlineId)).toEqual(["x1"]);
+    // A database before the links (0046) owes no link to anybody.
+    expect(read?.linksOwed).toEqual([]);
+    expect(read?.linksOwedTotal).toBe(0);
     expect(readFirmPending({ one_waits: [] })).toBeNull();
     expect(readFirmPending(null)).toBeNull();
     expect(readFirmPending([])).toBeNull();
+  });
+
+  it("reads the links ONE did not send, and leaves out one it cannot read", () => {
+    const read = readFirmPending({
+      one_waits: [],
+      one_waits_total: 0,
+      one_waits_stale: 0,
+      links_owed: [
+        { case_id: CASE_A, seq: 3, person_id: PERSON_A, client: "Mariana Duarte", reason: "window_closed" },
+        { case_id: CASE_B, seq: 4, person_id: PERSON_B, client: "Rui Lima", reason: "a reason nobody wrote" },
+        { case_id: "not-a-case", seq: 5, person_id: PERSON_B, reason: "no_phone" },
+      ],
+      links_owed_total: 3,
+      deadlines_overdue: [],
+      deadlines_today: 0,
+      hearings_today: 0,
+      documents_stale: 0,
+      documents_stale_hours: 24,
+      one_waits_stale_days: 2,
+    });
+    expect(read?.linksOwed).toEqual([
+      { caseId: CASE_A, seq: 3, personId: PERSON_A, client: "Mariana Duarte", reason: "window_closed" },
+    ]);
+    expect(read?.linksOwedTotal).toBe(3);
   });
 
   it("counts whole days since a wait started", () => {
@@ -201,6 +233,30 @@ describe("the center of what waits for somebody", () => {
     expect(group(groups, "review")!.items).toEqual([expect.objectContaining({ id: "need:documents", count: 3 })]);
     expect(pendingLate(groups)).toBe(true);
     expect(pendingBadge(groups)).toBe(2 + 1 + 2 + 1 + 1 + 1);
+  });
+
+  it("asks a person for each link ONE could not send, and says late the one it should have sent", () => {
+    const pending: FirmPending = {
+      ...QUIET,
+      linksOwed: [
+        { caseId: CASE_A, seq: 3, personId: PERSON_A, client: "Mariana Duarte", reason: "no_conversation" },
+        { caseId: CASE_B, seq: 4, personId: PERSON_B, client: "", reason: "late" },
+      ],
+      linksOwedTotal: 5,
+    };
+    const groups = pendingGroups(NOTHING, pending, ATTENDANCE, NOW);
+    expect(ids(groups, "late")).toEqual([`link:${CASE_B}:${PERSON_B}`]);
+    expect(ids(groups, "one")).toEqual([`link:${CASE_A}:${PERSON_A}`, "links:more"]);
+    expect(group(groups, "one")!.items[0]).toMatchObject({
+      // The case's card of the link, where the person copies it or sends it.
+      href: `/casos/${CASE_A}#case-link`,
+      label: { key: "pending-link", values: { client: "Mariana Duarte" } },
+      detail: { key: "pending-link-detail", values: { seq: 3, reason: { message: "pending-link-no-conversation" } } },
+    });
+    expect(group(groups, "late")!.items[0]).toMatchObject({ label: { key: "pending-link-unnamed" } });
+    // Every link counts, the ones not listed too.
+    expect(pendingBadge(groups)).toBe(5);
+    expect(urgentIds(groups)).toContain(`link:${CASE_A}:${PERSON_A}`);
   });
 
   it("splits what falls today from what falls in the next days", () => {
@@ -326,6 +382,14 @@ describe("the center of what waits for somebody", () => {
         { caseId: CASE_B, seq: 8, client: "", waiting: "draft_in_course", since: null },
       ],
       oneWaitsTotal: 5,
+      linksOwed: LINK_REASONS.map((reason, index) => ({
+        caseId: CASE_A,
+        seq: 7,
+        personId: `d5100000-0000-4000-8000-00000000010${index}`,
+        client: index === 0 ? "" : "Mariana Duarte",
+        reason,
+      })),
+      linksOwedTotal: LINK_REASONS.length + 1,
     };
     const groups = pendingGroups(today, pending, PARTNER, NOW);
     const keys = new Set<string>();

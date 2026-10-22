@@ -58,7 +58,7 @@ export function standIn(sql: Sql) {
     return typeof value === "object" ? JSON.stringify(value) : String(value);
   };
 
-  return function clientAs(role: "service_role" | "authenticated", claims: Row) {
+  return function clientAs(role: "service_role" | "authenticated" | "anon", claims: Row) {
     const as = async <T>(work: (transaction: Sql) => Promise<T>): Promise<T> =>
       sql.begin(async (transaction) => {
         await transaction.unsafe("select set_config('request.jwt.claims', $1, true)", [JSON.stringify(claims)]);

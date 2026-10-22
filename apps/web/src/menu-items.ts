@@ -135,6 +135,13 @@ export const leftMenuItems: MenuItem[] = [
         description: "menu-admin-calendar-description",
       },
       {
+        id: "admin-content",
+        icon: "NiBook",
+        label: "menu-admin-content",
+        href: "/admin/conteudo",
+        description: "menu-admin-content-description",
+      },
+      {
         id: "admin-audit",
         icon: "NiShieldCheck",
         label: "menu-admin-audit",

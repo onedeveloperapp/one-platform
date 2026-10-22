@@ -1,6 +1,6 @@
 import type { AirlineOption } from "../cases-types";
 
-import type { CaseStatus, Cause, Incident, Origin, PersonData, RequiredDocument } from "@/lib/cases/cases";
+import type { CaseStatus, Cause, Incident, LinkOwed, Origin, PersonData, RequiredDocument } from "@/lib/cases/cases";
 import type { CheckAnswer } from "@/lib/cases/document-check";
 import type { DocumentQuality } from "@/lib/cases/document-quality";
 import type { CaseDossier, CaseDraft, CasePieces } from "@/lib/cases/draft-facts";
@@ -208,6 +208,8 @@ export type CaseState =
       documents: CaseDocument[];
       proceedings: CaseProceeding[];
       links: CaseLink[];
+      /** Who of the case is owed a link and why ONE has not sent it (0046). */
+      linksOwed: LinkOwed[];
       envelopes: CaseEnvelope[];
       consents: CaseConsent[];
       /** The firm has its ZapSign account connected. */

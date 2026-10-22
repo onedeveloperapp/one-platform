@@ -7,6 +7,7 @@
  */
 
 export const AUTONOMY_DECISIONS = [
+  "send_client_link",
   "document_check",
   "chronology",
   "piece_text",
@@ -74,6 +75,7 @@ export function firmAutonomyOf(raw: unknown): FirmAutonomy[] | null {
 
 /** What each decision is, in the screen's words. */
 export const DECISION_KEY: Record<AutonomyDecision, { title: string; body: string }> = {
+  send_client_link: { title: "autonomy-send-client-link", body: "autonomy-send-client-link-body" },
   document_check: { title: "autonomy-document-check", body: "autonomy-document-check-body" },
   chronology: { title: "autonomy-chronology", body: "autonomy-chronology-body" },
   piece_text: { title: "autonomy-piece-text", body: "autonomy-piece-text-body" },

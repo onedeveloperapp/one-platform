@@ -4,12 +4,20 @@ import path from "node:path";
 import postgres from "postgres";
 
 const root = process.cwd();
-const args = new Set(process.argv.slice(2));
-const knownArgs = new Set(["--apply", "--test", "--test-only"]);
+// `--only=0052,0053` tests the files whose names start so; `--keep-going` tests every file and fails at the end.
+const only = process.argv
+  .slice(2)
+  .filter((arg) => arg.startsWith("--only="))
+  .flatMap((arg) => arg.slice("--only=".length).split(","))
+  .map((prefix) => prefix.trim())
+  .filter(Boolean);
+const args = new Set(process.argv.slice(2).filter((arg) => !arg.startsWith("--only=")));
+const knownArgs = new Set(["--apply", "--test", "--test-only", "--keep-going"]);
 
 for (const arg of args) {
   if (!knownArgs.has(arg)) throw new Error(`Unknown argument: ${arg}`);
 }
+const keepGoing = args.has("--keep-going");
 
 const shouldApply = args.has("--apply");
 const shouldTest = args.has("--test") || args.has("--test-only");
@@ -206,9 +214,12 @@ async function testDatabase(databaseUrl) {
   const files = entries
     .filter((entry) => entry.isFile() && entry.name.endsWith(".sql"))
     .map((entry) => entry.name)
+    .filter((name) => only.length === 0 || only.some((prefix) => name.startsWith(prefix)))
     .sort((left, right) => left.localeCompare(right));
+  if (files.length === 0) throw new Error("No test file matches --only");
 
   let total = 0;
+  const failed = [];
 
   try {
     await sql.unsafe("set statement_timeout = '120s'");
@@ -221,7 +232,10 @@ async function testDatabase(databaseUrl) {
         results = await sql.unsafe(source);
       } catch (error) {
         await sql.unsafe("rollback").catch(() => undefined);
-        throw new Error(`${file} failed: ${error.message}`, { cause: error });
+        if (!keepGoing) throw new Error(`${file} failed: ${error.message}`, { cause: error });
+        console.error(`${file} failed: ${error.message}`);
+        failed.push(file);
+        continue;
       }
 
       const rows = results.flatMap((result) => (Array.isArray(result) ? result : [result]));
@@ -238,9 +252,11 @@ async function testDatabase(databaseUrl) {
       const planned = Number(plan[1]);
       if (assertions.length !== planned || failures.length > 0) {
         for (const failure of failures) console.error(`  ${failure}`);
-        throw new Error(
-          `${file} emitted ${assertions.length}/${planned} assertions with ${failures.length} failure(s)`,
-        );
+        const message = `${file} emitted ${assertions.length}/${planned} assertions with ${failures.length} failure(s)`;
+        if (!keepGoing) throw new Error(message);
+        console.error(message);
+        failed.push(file);
+        continue;
       }
 
       total += assertions.length;
@@ -250,6 +266,9 @@ async function testDatabase(databaseUrl) {
     await sql.end({ timeout: 5 });
   }
 
+  if (failed.length > 0) {
+    throw new Error(`Remote pgTAP: ${total} assertions passed, ${failed.length} file(s) failing: ${failed.join(", ")}`);
+  }
   console.log(`Remote pgTAP: ${total} assertions passed.`);
 }
 

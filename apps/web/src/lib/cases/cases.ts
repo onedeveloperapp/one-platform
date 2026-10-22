@@ -284,6 +284,46 @@ export const isDocumentKind = (value: unknown): value is DocumentKind =>
 /** The stages a case still waits on the client in: their link takes what they send. */
 export const CLIENT_STAGES: readonly CaseStatus[] = ["intake", "documents", "signature"];
 
+/**
+ * Why somebody of a case being gathered still has no link (migration 0046,
+ * `case_links_owed`): ONE is sending it, should have by now, or cannot, and
+ * why. Each said on the case with what to do.
+ */
+export const LINK_OWED_REASONS = [
+  "sending",
+  "late",
+  "by_person",
+  "no_phone",
+  "no_number",
+  "no_conversation",
+  "opted_out",
+  "window_closed",
+] as const;
+export type LinkOwedReason = (typeof LINK_OWED_REASONS)[number];
+export type LinkOwed = { personId: string; reason: LinkOwedReason };
+
+export const LINK_OWED_KEY: Record<LinkOwedReason, string> = {
+  sending: "case-link-owed-sending",
+  late: "case-link-owed-late",
+  by_person: "case-link-owed-by-person",
+  no_phone: "case-link-owed-no-phone",
+  no_number: "case-link-owed-no-number",
+  no_conversation: "case-link-owed-no-conversation",
+  opted_out: "case-link-owed-opted-out",
+  window_closed: "case-link-owed-window-closed",
+};
+
+/** The database's answer, read; null when it is not one. A reason this code does not know is left out. */
+export function linksOwedOf(raw: unknown): LinkOwed[] | null {
+  if (!Array.isArray(raw)) return null;
+  return raw.flatMap((item): LinkOwed[] => {
+    const row = (item ?? {}) as { person_id?: unknown; reason?: unknown };
+    return typeof row.person_id === "string" && (LINK_OWED_REASONS as readonly unknown[]).includes(row.reason)
+      ? [{ personId: row.person_id, reason: row.reason as LinkOwedReason }]
+      : [];
+  });
+}
+
 /** The groups the list of cases filters by. */
 export const STATUS_GROUPS = {
   open: ["intake", "documents", "signature"],

@@ -182,7 +182,12 @@ export async function loadCasePieces(
       .eq("case_id", caseId)
       .order("requested_at", { ascending: false })
       .limit(40),
-    supabase.from("draft_templates").select("id, name, proceeding_kind").eq("org_id", firmId).order("name"),
+    // The firm's models and the platform's (0045): a piece may be asked from either.
+    supabase
+      .from("draft_templates")
+      .select("id, name, proceeding_kind")
+      .or(`org_id.eq.${firmId},org_id.is.null`)
+      .order("name"),
     supabase
       .from("dossiers")
       .select("id, status, summary, requested_at, issued_at, issued_documents(verify_code)")

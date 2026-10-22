@@ -43,8 +43,13 @@ select is(
   row('Carla Lima', 'https://example.invalid/c.png')::text,
   'an OAuth full name and picture are used'
 );
-select is((select count(*)::int from public.organizations), 0, 'sign-up founds no firm');
-select is((select count(*)::int from public.memberships), 0, 'and puts nobody in one');
+-- Counted of these sign-ups: a hosted database has firms of its own.
+select is((select count(*)::int from public.organizations
+           where created_by in ('a1000000-0000-4000-8000-000000000001', 'a1000000-0000-4000-8000-000000000002',
+                                'a1000000-0000-4000-8000-000000000003')), 0, 'sign-up founds no firm');
+select is((select count(*)::int from public.memberships
+           where user_id in ('a1000000-0000-4000-8000-000000000001', 'a1000000-0000-4000-8000-000000000002',
+                             'a1000000-0000-4000-8000-000000000003')), 0, 'and puts nobody in one');
 select throws_ok(
   $$update public.profiles set locale = 'en' where id = 'a1000000-0000-4000-8000-000000000001'$$,
   '23514', null,

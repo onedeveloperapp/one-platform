@@ -1,13 +1,17 @@
 import "server-only";
 
 import { after } from "next/server";
+import { createHash, randomBytes } from "node:crypto";
 
 import { lawsuitsWaiting } from "@/lib/cases/advance";
-import { caseMissing, type MissingParty, type PersonData, type RequiredDocument } from "@/lib/cases/cases";
+import { caseMissing, firstNameOf, type MissingParty, type PersonData, type RequiredDocument } from "@/lib/cases/cases";
 import { draftNext } from "@/lib/cases/drafts-work";
 import { buildFilingPackages } from "@/lib/cases/filing-work";
 import { lawsuitPlan, type MinimumWage, type RuleParty } from "@/lib/cases/rules";
+import { WHATSAPP_COPY } from "@/lib/messages/whatsapp-copy";
+import { deliverOutbox } from "@/lib/whatsapp/send";
 import { createServiceClient } from "@flyee/auth/service";
+import { BRAND } from "@flyee/content";
 import { sendEvent } from "@flyee/jobs";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -17,20 +21,30 @@ import type { SupabaseClient } from "@supabase/supabase-js";
  * functions, which make every check a person's request makes. Creating the
  * lawsuits needs the rules of the app (what the case lacks, the plan of the
  * lawsuits), so the case is read here with the same rules the case screen
- * shows; the piece and the package are the database's. What ONE then waits
- * for is recorded for the screen. Nothing of a client is kept in a job's
- * state: the steps carry case ids and outcomes only.
+ * shows; the piece and the package are the database's. Before them, ONE
+ * sends the client's link to who is owed one (0046): the token is minted
+ * here and only its SHA-256 goes to the database. What ONE then waits for is
+ * recorded for the screen. Nothing of a client is kept in a job's state: the
+ * steps carry case ids and outcomes only.
  */
 
-/** A case a worker holds, and whether creating its lawsuits or asking for a package is what to look at. */
-export type HeldAdvance = { caseId: string; claim: number; lawsuitsDue: boolean; packageDue: boolean };
+/** A case a worker holds, and whether sending a link, creating its lawsuits or asking for a package is what to look at. */
+export type HeldAdvance = {
+  caseId: string;
+  claim: number;
+  linkDue: boolean;
+  lawsuitsDue: boolean;
+  packageDue: boolean;
+};
 
 export type AdvanceOutcome = "created" | "acted" | "waiting" | "idle" | "lost" | "failed";
 
-/** What follows a piece or a package ONE asked for: the jobs, or the work itself where there are none. */
+/** What follows a piece, a package or a message ONE asked for: the jobs, or the work itself where there are none. */
 export type AdvanceFollow = {
   draft: (draftId: string) => Promise<void>;
   package: (packageId: string) => Promise<void>;
+  /** A message ONE wrote to the outbox (a client's link): sent at once, or by the outbox's sweep. */
+  message: (messageId: string) => Promise<void>;
 };
 
 /** Today on the platform's calendar (Brasília): the day a minor is a minor on and the minimum wage is read for. */
@@ -52,9 +66,12 @@ export async function claimCaseAdvances(
   const answer = (data ?? {}) as { claimed?: unknown; parked?: unknown };
   const claimed = Array.isArray(answer.claimed) ? answer.claimed : [];
   return {
-    held: (claimed as { case_id: string; claim: number; lawsuits_due: boolean; package_due: boolean }[]).map((row) => ({
+    held: (
+      claimed as { case_id: string; claim: number; link_due?: boolean; lawsuits_due: boolean; package_due: boolean }[]
+    ).map((row) => ({
       caseId: row.case_id,
       claim: Number(row.claim),
+      linkDue: row.link_due === true,
       lawsuitsDue: row.lawsuits_due === true,
       packageDue: row.package_due === true,
     })),
@@ -237,9 +254,58 @@ async function createLawsuits(
   return { waiting: String(answer.code ?? "failed"), created: false, lost: false };
 }
 
+/** The links ONE sent of a held case: the messages the outbox holds for them, and whether something went wrong. */
+type LinksSent = { lost: boolean; failed: boolean; messages: string[] };
+
+/**
+ * Sends each adult of a held case the link ONE can send them now (0046): the
+ * database names who, with the firm's name; a token is minted for each, and
+ * the database makes the link and writes its message (the same words a
+ * person's link goes with) under the case's own lock, checking again that
+ * the person is owed one and that their 24 hours are open. One the database
+ * no longer sends (a person made a link meanwhile, the 24 hours closed) is
+ * left as it says. Throws when the database could not be asked at all.
+ */
+async function sendClientLinks(service: SupabaseClient, held: HeldAdvance): Promise<LinksSent> {
+  const sent: LinksSent = { lost: false, failed: false, messages: [] };
+  const { data, error } = await service.rpc("advance_client_links", {
+    target_case: held.caseId,
+    target_claim: held.claim,
+  });
+  if (error) throw new Error("client links could not be read");
+  const answer = (data ?? {}) as { ok?: boolean; code?: string; firm?: unknown; people?: unknown };
+  if (!answer.ok) return { ...sent, lost: answer.code === "not_working" };
+  const firm = typeof answer.firm === "string" ? answer.firm : "";
+  const people = (Array.isArray(answer.people) ? answer.people : []) as { person_id?: unknown; full_name?: unknown }[];
+  for (const person of people) {
+    if (typeof person.person_id !== "string") continue;
+    const token = randomBytes(32).toString("base64url");
+    const { data: made, error: refused } = await service.rpc("advance_send_client_link", {
+      target_case: held.caseId,
+      target_claim: held.claim,
+      target_person: person.person_id,
+      target_token_hash: createHash("sha256").update(token, "utf8").digest("hex"),
+      target_body: WHATSAPP_COPY["pt-BR"].clientLink({
+        firstName: firstNameOf(typeof person.full_name === "string" ? person.full_name : null),
+        firm,
+        url: `${BRAND.siteUrl}/c/${token}`,
+      }),
+    });
+    if (refused) {
+      sent.failed = true;
+      continue;
+    }
+    const result = (made ?? {}) as { ok?: boolean; code?: string; message_id?: unknown };
+    if (result.ok && typeof result.message_id === "string") sent.messages.push(result.message_id);
+    else if (result.code === "not_working") return { ...sent, lost: true };
+  }
+  return sent;
+}
+
 /**
  * Does what is due for one claimed case and records what ONE waits for:
- * its lawsuits when they are what to look at, then the piece and the
+ * the client's link first (what the client sends is what the rest waits
+ * for), its lawsuits when they are what to look at, then the piece and the
  * package of each lawsuit. A failure of the moment is recorded as one (the
  * case is looked at again sooner, each time a little later), and what ONE
  * found it waits for before it is still said.
@@ -252,15 +318,34 @@ export async function advanceClaimedCase(
   let waiting: string | null = null;
   let created = false;
   let failed = false;
-  const asked: { drafts: string[]; packages: string[] } = { drafts: [], packages: [] };
+  const asked: { drafts: string[]; packages: string[]; messages: string[] } = {
+    drafts: [],
+    packages: [],
+    messages: [],
+  };
   try {
+    if (held.linkDue) {
+      const links = await sendClientLinks(service, held);
+      asked.messages = links.messages;
+      if (links.failed) failed = true;
+      if (links.lost) {
+        await deliverMessages(asked.messages, follow);
+        return "lost";
+      }
+    }
     const day = today();
     // The case is read when its lawsuits or a package are what to look at: both need what the screen says it lacks.
     const facts = held.lawsuitsDue || held.packageDue ? await loadLawsuitFacts(service, held.caseId) : null;
-    if ((held.lawsuitsDue || held.packageDue) && !facts) return "lost";
+    if ((held.lawsuitsDue || held.packageDue) && !facts) {
+      await deliverMessages(asked.messages, follow);
+      return "lost";
+    }
     if (held.lawsuitsDue && facts) {
       const lawsuits = await createLawsuits(service, held, facts, day);
-      if (lawsuits.lost) return "lost";
+      if (lawsuits.lost) {
+        await deliverMessages(asked.messages, follow);
+        return "lost";
+      }
       waiting = lawsuits.waiting;
       created = lawsuits.created;
     }
@@ -280,7 +365,10 @@ export async function advanceClaimedCase(
       waiting?: string | null;
       failed?: boolean;
     };
-    if (!steps.ok && steps.code === "not_working") return "lost";
+    if (!steps.ok && steps.code === "not_working") {
+      await deliverMessages(asked.messages, follow);
+      return "lost";
+    }
     asked.drafts = Array.isArray(steps.drafts) ? steps.drafts.filter((id): id is string => typeof id === "string") : [];
     asked.packages = Array.isArray(steps.packages)
       ? steps.packages.filter((id): id is string => typeof id === "string")
@@ -299,6 +387,7 @@ export async function advanceClaimedCase(
     target_failed: failed,
   });
   // What ONE asked for is the jobs' now (or, with none, done right here); each is also owed to their sweeps.
+  await deliverMessages(asked.messages, follow);
   for (const draftId of asked.drafts) {
     try {
       await follow.draft(draftId);
@@ -316,8 +405,24 @@ export async function advanceClaimedCase(
   if (created) return "created";
   // The claim stays held until it is stale when its record did not land: the case is looked at again then.
   if (failed || unrecorded) return "failed";
-  if (asked.drafts.length > 0 || asked.packages.length > 0) return "acted";
+  if (asked.drafts.length > 0 || asked.packages.length > 0 || asked.messages.length > 0) return "acted";
   return waiting ? "waiting" : "idle";
+}
+
+/** The messages ONE wrote, sent now; one that fails here is the outbox's sweep's. */
+async function deliverMessages(messages: string[], follow: AdvanceFollow): Promise<void> {
+  for (const messageId of messages) {
+    try {
+      await follow.message(messageId);
+    } catch {
+      // Owed: the outbox's sweep sends it.
+    }
+  }
+}
+
+/** A message ONE wrote, claimed and sent by the outbox (0019): once, whatever else claims it. */
+async function sendNow(messageId: string): Promise<void> {
+  await deliverOutbox(createServiceClient(), { messageId });
 }
 
 /** The jobs take what ONE asked for. */
@@ -328,6 +433,7 @@ export const followByJobs: AdvanceFollow = {
   package: async (packageId) => {
     await sendEvent("one/case.filing.requested", { packageId });
   },
+  message: sendNow,
 };
 
 /** With no jobs, what ONE asked for is worked on here: a first text and what follows it, a package built. */
@@ -342,6 +448,7 @@ const followHere: AdvanceFollow = {
   package: async (packageId) => {
     await buildFilingPackages(createServiceClient(), 1, packageId);
   },
+  message: sendNow,
 };
 
 /** One claim and the case it held: its outcome (none when nothing was due), and how many it set aside. */

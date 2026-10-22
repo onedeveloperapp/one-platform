@@ -23,7 +23,7 @@ import {
 
 import StatusChip from "@/components/product/status-chip";
 import { createClientLink, type LinkDelivery, revokeClientLink } from "@/lib/cases/actions";
-import { caseErrorKey, CLIENT_STAGES } from "@/lib/cases/cases";
+import { caseErrorKey, CLIENT_STAGES, LINK_OWED_KEY } from "@/lib/cases/cases";
 import { isMinorOn } from "@flyee/rules/person";
 
 type Ready = Extract<CaseState, { kind: "ready" }>;
@@ -51,7 +51,10 @@ const moment = (iso: string) =>
  * The client's way in: a link by token for one adult of the case, which ends
  * on its own after the configured days or when the firm ends it. The token
  * is shown once, when the link is made (the database keeps only its hash),
- * and can go straight into the WhatsApp conversation with the client.
+ * and can go straight into the WhatsApp conversation with the client. While
+ * the case is gathered, ONE sends it by itself to who wrote to the firm's
+ * WhatsApp (0046); the card says, for each adult with no link, whether ONE
+ * is sending it or why it cannot.
  */
 export default function ClientLinkCard({
   state,
@@ -172,6 +175,16 @@ export default function ClientLinkCard({
             )}
           </Box>
         ))}
+
+        {state.linksOwed.length > 0 && (
+          <Box className="flex flex-col gap-1">
+            {state.linksOwed.map((owed) => (
+              <Typography key={owed.personId} variant="body2" className="text-text-secondary">
+                {t(LINK_OWED_KEY[owed.reason], { name: nameOf(owed.personId) })}
+              </Typography>
+            ))}
+          </Box>
+        )}
 
         {state.consents.length > 0 && (
           <Box className="flex flex-col gap-1">

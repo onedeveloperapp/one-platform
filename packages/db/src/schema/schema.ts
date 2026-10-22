@@ -2694,45 +2694,9 @@ export const djenCaptures = pgTable("djen_captures", {
 	check("djen_captures_skipped_items_check", sql`(jsonb_typeof(skipped_items) = 'array'::text) AND (jsonb_typeof(round_skipped_items) = 'array'::text)`),
 ]);
 
-export const draftTemplates = pgTable("draft_templates", {
-	id: uuid().defaultRandom().primaryKey().notNull(),
-	orgId: uuid("org_id").notNull(),
-	name: text().notNull(),
-	proceedingKind: text("proceeding_kind"),
-	body: text().notNull(),
-	isDefault: boolean("is_default").default(false).notNull(),
-	createdBy: uuid("created_by"),
-	updatedBy: uuid("updated_by"),
-	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
-	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
-}, (table) => [
-	uniqueIndex("draft_templates_default_idx").using("btree", sql`org_id`, sql`COALESCE(proceeding_kind, ''::text)`).where(sql`is_default`),
-	uniqueIndex("draft_templates_name_idx").using("btree", sql`org_id`, sql`lower(btrim(name))`),
-	foreignKey({
-			columns: [table.orgId],
-			foreignColumns: [organizations.id],
-			name: "draft_templates_org_id_fkey"
-		}).onDelete("cascade"),
-	foreignKey({
-			columns: [table.createdBy],
-			foreignColumns: [profiles.id],
-			name: "draft_templates_created_by_fkey"
-		}).onDelete("set null"),
-	foreignKey({
-			columns: [table.updatedBy],
-			foreignColumns: [profiles.id],
-			name: "draft_templates_updated_by_fkey"
-		}).onDelete("set null"),
-	unique("draft_templates_id_org_id_key").on(table.id, table.orgId),
-	pgPolicy("draft_templates_select_member", { as: "permissive", for: "select", to: ["authenticated"], using: sql`is_org_member(org_id)` }),
-	check("draft_templates_name_check", sql`((char_length(btrim(name)) >= 2) AND (char_length(btrim(name)) <= 120)) AND (name !~ '[[:cntrl:]]'::text)`),
-	check("draft_templates_kind_check", sql`(proceeding_kind IS NULL) OR (proceeding_kind = ANY (ARRAY['juizado'::text, 'comum'::text]))`),
-	check("draft_templates_body_check", sql`(char_length(body) >= 20) AND (char_length(body) <= 200000)`),
-]);
-
 export const legalSources = pgTable("legal_sources", {
 	id: uuid().defaultRandom().primaryKey().notNull(),
-	orgId: uuid("org_id").notNull(),
+	orgId: uuid("org_id"),
 	kind: text().notNull(),
 	issuer: text().default('').notNull(),
 	number: text().notNull(),
@@ -2752,7 +2716,9 @@ export const legalSources = pgTable("legal_sources", {
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 }, (table) => [
-	index("legal_sources_norm_idx").using("btree", table.orgId.asc().nullsLast().op("uuid_ops"), table.kind.asc().nullsLast().op("text_ops"), table.issuer.asc().nullsLast().op("text_ops"), table.number.asc().nullsLast().op("uuid_ops")).where(sql`(status = 'verified'::text)`),
+	index("legal_sources_norm_idx").using("btree", table.orgId.asc().nullsLast().op("uuid_ops"), table.kind.asc().nullsLast().op("text_ops"), table.issuer.asc().nullsLast().op("text_ops"), table.number.asc().nullsLast().op("text_ops")).where(sql`(status = 'verified'::text)`),
+	uniqueIndex("legal_sources_platform_key_idx").using("btree", table.key.asc().nullsLast().op("text_ops")).where(sql`(org_id IS NULL)`),
+	index("legal_sources_platform_norm_idx").using("btree", table.kind.asc().nullsLast().op("text_ops"), table.issuer.asc().nullsLast().op("text_ops"), table.number.asc().nullsLast().op("text_ops")).where(sql`((org_id IS NULL) AND (status = 'verified'::text))`),
 	foreignKey({
 			columns: [table.orgId],
 			foreignColumns: [organizations.id],
@@ -2771,6 +2737,7 @@ export const legalSources = pgTable("legal_sources", {
 	unique("legal_sources_id_org_id_key").on(table.id, table.orgId),
 	unique("legal_sources_org_id_key_key").on(table.orgId, table.key),
 	pgPolicy("legal_sources_select_member", { as: "permissive", for: "select", to: ["authenticated"], using: sql`is_org_member(org_id)` }),
+	pgPolicy("legal_sources_select_platform", { as: "permissive", for: "select", to: ["authenticated"] }),
 	check("legal_sources_kind_check", sql`kind = ANY (ARRAY['lei'::text, 'lei_complementar'::text, 'constituicao'::text, 'decreto'::text, 'resolucao'::text, 'sumula'::text, 'sumula_vinculante'::text, 'tema'::text, 'precedente'::text, 'processo'::text, 'enunciado'::text, 'norma'::text])`),
 	check("legal_sources_number_check", sql`CHECK (legal_source_number_ok(kind, number`),
 	check("legal_sources_issued_by_check", sql`CHECK (legal_source_issuer_ok(kind, issuer, number`),
@@ -2903,6 +2870,47 @@ export const publications = pgTable("publications", {
 	check("publications_review_check", sql`((NOT review_due) OR (ai_applied AND (category IS NOT NULL))) AND ((reviewed_at IS NULL) OR (category IS NOT NULL))`),
 ]);
 
+export const draftTemplates = pgTable("draft_templates", {
+	id: uuid().defaultRandom().primaryKey().notNull(),
+	orgId: uuid("org_id"),
+	name: text().notNull(),
+	proceedingKind: text("proceeding_kind"),
+	body: text().notNull(),
+	isDefault: boolean("is_default").default(false).notNull(),
+	createdBy: uuid("created_by"),
+	updatedBy: uuid("updated_by"),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	provisional: boolean().default(false).notNull(),
+}, (table) => [
+	uniqueIndex("draft_templates_default_idx").using("btree", sql`org_id`, sql`COALESCE(proceeding_kind, ''::text)`).where(sql`is_default`),
+	uniqueIndex("draft_templates_name_idx").using("btree", sql`org_id`, sql`lower(btrim(name))`),
+	uniqueIndex("draft_templates_platform_default_idx").using("btree", sql`COALESCE(proceeding_kind, ''::text)`).where(sql`((org_id IS NULL) AND is_default)`),
+	uniqueIndex("draft_templates_platform_name_idx").using("btree", sql`lower(btrim(name))`).where(sql`(org_id IS NULL)`),
+	foreignKey({
+			columns: [table.orgId],
+			foreignColumns: [organizations.id],
+			name: "draft_templates_org_id_fkey"
+		}).onDelete("cascade"),
+	foreignKey({
+			columns: [table.createdBy],
+			foreignColumns: [profiles.id],
+			name: "draft_templates_created_by_fkey"
+		}).onDelete("set null"),
+	foreignKey({
+			columns: [table.updatedBy],
+			foreignColumns: [profiles.id],
+			name: "draft_templates_updated_by_fkey"
+		}).onDelete("set null"),
+	unique("draft_templates_id_org_id_key").on(table.id, table.orgId),
+	pgPolicy("draft_templates_select_member", { as: "permissive", for: "select", to: ["authenticated"], using: sql`is_org_member(org_id)` }),
+	pgPolicy("draft_templates_select_platform", { as: "permissive", for: "select", to: ["authenticated"] }),
+	check("draft_templates_name_check", sql`((char_length(btrim(name)) >= 2) AND (char_length(btrim(name)) <= 120)) AND (name !~ '[[:cntrl:]]'::text)`),
+	check("draft_templates_kind_check", sql`(proceeding_kind IS NULL) OR (proceeding_kind = ANY (ARRAY['juizado'::text, 'comum'::text]))`),
+	check("draft_templates_body_check", sql`(char_length(body) >= 20) AND (char_length(body) <= 200000)`),
+	check("draft_templates_provisional_check", sql`(NOT provisional) OR (org_id IS NULL)`),
+]);
+
 export const caseDrafts = pgTable("case_drafts", {
 	id: uuid().defaultRandom().primaryKey().notNull(),
 	orgId: uuid("org_id").notNull(),
@@ -2983,14 +2991,14 @@ export const caseDrafts = pgTable("case_drafts", {
 			name: "case_drafts_proceeding_id_org_id_fkey"
 		}).onDelete("cascade"),
 	foreignKey({
-			columns: [table.orgId, table.templateId],
-			foreignColumns: [draftTemplates.id, draftTemplates.orgId],
-			name: "case_drafts_template_id_org_id_fkey"
-		}).onDelete("set null"),
-	foreignKey({
 			columns: [table.orgId, table.documentId],
 			foreignColumns: [caseDocuments.id, caseDocuments.orgId],
 			name: "case_drafts_document_id_org_id_fkey"
+		}).onDelete("set null"),
+	foreignKey({
+			columns: [table.templateId],
+			foreignColumns: [draftTemplates.id],
+			name: "case_drafts_template_id_fkey"
 		}).onDelete("set null"),
 	unique("case_drafts_id_org_id_key").on(table.id, table.orgId),
 	pgPolicy("case_drafts_select_member", { as: "permissive", for: "select", to: ["authenticated"], using: sql`is_org_member(org_id)` }),

@@ -49,6 +49,29 @@ function unwrap(name: string, { data, error }: Rpc): Record<string, unknown> {
 
 const iso = (moment: Date | null): string | null => (moment ? moment.toISOString() : null);
 
+/**
+ * A client who just wrote may now be sent their link by ONE (migration 0046):
+ * the database already woke the cases that owe it, and naming them here has
+ * them looked at now instead of at the next sweep. Never fails the message:
+ * the sweep takes the cases anyway.
+ */
+async function askForLinks(service: SupabaseClient, orgId: string, contact: string): Promise<void> {
+  try {
+    const { data, error } = await service.rpc("wa_contact_link_cases", {
+      target_org: orgId,
+      target_contact: contact,
+    });
+    if (error || !Array.isArray(data) || data.length === 0) return;
+    // Loaded when needed: the worker that sends a link sends it through this inbox's outbox.
+    const { queueCaseAdvance } = await import("@/lib/cases/advance-work");
+    for (const caseId of data) {
+      if (typeof caseId === "string") await queueCaseAdvance(caseId);
+    }
+  } catch {
+    // The sweep looks at the cases anyway.
+  }
+}
+
 export function supabaseInbox(service: SupabaseClient): WhatsAppInbox {
   return {
     async route(provider, phoneNumberId): Promise<NumberRoute | null> {
@@ -98,6 +121,7 @@ export function supabaseInbox(service: SupabaseClient): WhatsAppInbox {
           target_wa_timestamp: iso(event.timestamp),
         }),
       );
+      if (answer.code === "received") await askForLinks(service, route.orgId, event.from);
       return { mediaPending: answer.code === "received" && answer.media_pending === true };
     },
 
