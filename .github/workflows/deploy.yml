@@ -119,3 +119,27 @@ jobs:
           echo "Production: $url"
           echo "### Vercel production" >> "$GITHUB_STEP_SUMMARY"
           echo "$url" >> "$GITHUB_STEP_SUMMARY"
+      # Inngest learns the app's functions only when the app is synced: a
+      # deploy that adds or changes a function and is not synced leaves it
+      # unregistered, and its events and crons run nothing (found on
+      # 2026-10-24, when ONE's turns in the test chat never ran). A PUT to the
+      # serve route is the dashboard's "Sync". It goes to the production
+      # address, which is public: a deployment's own address sits behind
+      # Vercel's login, which Inngest cannot pass. A sync that fails warns and
+      # leaves the deploy as it went.
+      - name: Sync the jobs with Inngest
+        env:
+          PRODUCTION_URL: ${{ vars.PRODUCTION_URL || 'https://one-platform-two.vercel.app' }}
+        run: |
+          for attempt in 1 2 3 4 5; do
+            code=$(curl -s -o sync.json -w '%{http_code}' -X PUT "$PRODUCTION_URL/api/inngest" --max-time 60 || echo 000)
+            if [ "$code" = "200" ]; then
+              echo "Inngest: $(cat sync.json)"
+              echo "Inngest sync: $(cat sync.json)" >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            echo "Inngest sync, attempt $attempt: HTTP $code $(cat sync.json 2>/dev/null)"
+            sleep 15
+          done
+          echo "::warning::Inngest was not synced: sync the app at $PRODUCTION_URL/api/inngest (docs/DEPLOY.md)"
+          echo "Inngest sync failed: see this step's log" >> "$GITHUB_STEP_SUMMARY"

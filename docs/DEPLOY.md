@@ -173,7 +173,13 @@ barra final).
 ## Pós-deploy (primeira vez)
 
 - **Inngest**: no dashboard do Inngest, sincronizar o app apontando para
-  `https://<domínio>/api/inngest` (depois de setar as duas chaves).
+  `https://<domínio>/api/inngest` (depois de setar as duas chaves). A partir
+  daí, cada deploy de produção sincroniza sozinho (o passo "Sync the jobs with
+  Inngest" do workflow faz `PUT` em `https://<domínio>/api/inngest`; o domínio
+  vem da variável `PRODUCTION_URL` do repositório, ou do endereço atual). Sem a
+  sincronização, uma função nova não fica registrada: os eventos chegam ao
+  Inngest e nada roda. Para sincronizar à mão:
+  `curl -X PUT https://<domínio>/api/inngest`.
 - **Webhooks de billing**: apontar Stripe para
   `https://<domínio>/api/webhooks/stripe` e Asaas para
   `https://<domínio>/api/webhooks/asaas`.
