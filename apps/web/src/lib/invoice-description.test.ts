@@ -10,8 +10,8 @@ import { INVOICE_DESCRIPTION_LIMIT, invoiceDescription } from "@flyee/billing/ty
  * characters (measured), so whatever is typed there must never reach the
  * provider longer than that, otherwise every checkout of that plan fails at
  * the last step. The name and the description are joined by a colon: the
- * copy rules (docs/PRODUCT.md, 2026-10-07) keep the dash out of every text a
- * customer reads, and the invoice is one.
+ * copy rules (CLAUDE.md, engineering rule 14) keep the dash out of every text
+ * a customer reads, and the invoice is one.
  */
 const PRO_ANUAL = {
   name: "Plano Escritório anual",

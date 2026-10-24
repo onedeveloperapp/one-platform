@@ -1,427 +1,226 @@
-# flyee.club — organização, diferenciais e próximos passos
+# ONE · Documento de produto
 
-Sep 30, 2026 · @Dev
+22 de outubro de 2026.
 
-> **Status:** PRD provisório, movido de `attachments/` em 2026-09-30. Este repositório é a **plataforma** do flyee.club. O **produto** (CLI `npx flyee`, core do harness e conteúdo dos módulos) é um projeto separado que consome a API e o manifesto definidos aqui. As decisões de 2026-09-30 valem sobre o texto original quando houver conflito, e as de 2026-10-06 valem sobre as de 2026-09-30. Plano de execução: [`docs/PLANO-IMPLEMENTACAO.md`](PLANO-IMPLEMENTACAO.md).
+> **Status.** Este é o documento de produto do ONE: o que ele é, para quem, as decisões do dono que o código assume, o que já existe e o que falta. Ele substitui o PRD do flyee.club que este arquivo tinha até hoje (lido com `git show f4e0c2a:docs/PRODUCT.md`). O andamento técnico, parte por parte, está no `CLAUDE.md` da raiz ("Where things stand"), que é mantido a cada entrega; o plano de engenharia aprovado é o [`docs/ONE-PLANO-DESENVOLVIMENTO.md`](ONE-PLANO-DESENVOLVIMENTO.md). Quando este documento e o `CLAUDE.md` divergirem sobre o estado do código, vale o `CLAUDE.md`, e este documento deve ser corrigido. Os outros arquivos de `docs/` ainda descrevem o flyee.club e são históricos (o `DEPLOY.md` tem no topo uma seção sobre o deploy do ONE).
 
-## A ideia organizada
+## 1. O que é o ONE
 
-O FlyeeClub é um clube com um acesso de pagamento único (o plano "FlyeeClub") e uma assinatura por cima (o "FlyeeClub Pro"): o integrante instala o seu harness na IA que já usa e recebe, continuamente, as ferramentas e as atualizações que mantêm tudo funcionando quando Claude, Codex ou as APIs mudam. A cada 30 dias sem atualizar, ele volta ao painel para revalidar o token, e é lá que vê o próximo degrau.
+O ONE é um software por assinatura para escritórios de advocacia de contencioso de massa no Brasil. Ele reúne num só lugar o que o escritório hoje espalha por várias ferramentas e planilhas: o atendimento pelo WhatsApp, a pasta do cliente, os documentos, a peça, o pacote de protocolo, as publicações, os prazos, as audiências e os avisos ao cliente. A apresentação comercial o chama de "Office as a Service".
 
-**Tese em uma frase (proposta):** a IA muda toda semana; o flyee.club é o clube que mantém suas ferramentas funcionando e melhorando, na IA que você já usa, em português e inglês.
+- **Frase do produto** (`BRAND` em `packages/content`): "O software do escritório de contencioso de massa."
+- **Quem compra:** o escritório. Vários escritórios usam o mesmo banco desde o primeiro dia, cada um isolado dos outros.
+- **Quem vende:** uma empresa de tecnologia, sem sócios advogados. O ONE é software para escritórios e nunca age como escritório.
+- **O primeiro módulo:** ações de passageiro aéreo contra companhias aéreas (atraso, cancelamento, overbooking, bagagem), de passageiros do Brasil inteiro, portanto em muitos tribunais e sistemas.
+- **O escritório piloto:** um escritório de contencioso de consumo em Goiânia (TJGO, Projudi). Hoje ele trabalha com o ChatGuru (WhatsApp), o Astrea (gestão de processos), a ZapSign (assinatura), a InfinitePay (links de pagamento) e o protocolo manual no PJe e no Projudi, e gasta com isso e com as horas da equipe cerca de R$ 2.000 por mês. É a referência de preço que o dono deu.
 
-**O que o integrante recebe**
+**O que o ONE não é**
 
-- **Harness flyee:** um `agent.md` que centraliza skills, workflows e rules e torna cada ferramenta agnóstica de IA (Claude Code, Codex, Gemini CLI, Cursor e o que vier).
-- **Catálogo inteiro, desde o kit:** frameworks, skills e workflows, cada um com página própria no painel. O kit de entrada não limita ferramentas nem atualização; limita acesso (1), aulas avançadas, voto no roadmap e encontros.
-- **Atualização como produto:** quando a IA muda, a ferramenta muda; a cópia de quem saiu envelhece. Atualizar exige um token válido, revalidado no painel a cada 30 dias sem uso.
-- **Aula de uso:** vídeo curto por ferramenta, em português e inglês desde o início; aulas avançadas só na assinatura. *Revisado em 2026-10-06: guia escrito no pacote de cada versão, com vídeo opcional dentro dele (ver "Guias").*
-- **Receitas:** fluxos que encadeiam ferramentas até um resultado.
-- **Novidades:** o que mudou nas IAs e o que isso muda nas ferramentas.
+- Não é escritório: não presta serviço jurídico, não promete resultado, valor de indenização nem tempo até a sentença.
+- Não movimenta dinheiro de processo: nada de honorários, repasse ao cliente, valor da causa ou link de pagamento. Os honorários são assunto de cada escritório, fora do ONE.
+- Não cobra o passageiro. A única cobrança é a assinatura do próprio ONE.
+- Não intermedeia causas: o passageiro chega ao escritório pelo canal do escritório, nunca pelo ONE.
 
-**O que ele não é:** curso com começo e fim, comunidade de networking, marketplace de terceiros, nem ferramenta que gasta crédito de IA do seu lado: o integrante usa o próprio plano ou API.
+## 2. Quem usa
 
-**Sua vantagem de origem:** cada ferramenta nasceu em produção (MedChina, radar de conteúdo, pipeline de vídeo, o próprio harness). É o que separa o clube de quem monta ferramenta para vender ferramenta.
-
-## Decisões tomadas 2026-09-30
-
-Registradas ao transformar a base copiada do MedChina na plataforma do flyee.club. O detalhe técnico de cada uma está em [`docs/PLANO-IMPLEMENTACAO.md`](PLANO-IMPLEMENTACAO.md).
-
-**Fronteira entre plataforma e produto**
-
-| Peça deste documento | Onde nasce | Observação |
+| Quem | Como entra | O que faz no ONE |
 | --- | --- | --- |
-| Painel flyee.club: login, pagamento em BRL e USD, vitrine, aulas, receitas, changelog, perfil, revalidação do token | Plataforma (este repositório) | Escopo atual |
-| Servidor de pacotes: valida token e plano, entrega a versão com checksum, registra instalação e uso | Plataforma (este repositório) | API `/api/cli/*`; contrato em `docs/CLI-CONTRACT.md`, escrito na fase 3 do plano |
-| Schema do manifesto `flyee.module.json` | Plataforma (este repositório) | Pacote `packages/catalog`, criado na fase 3; o produto o consome |
-| Métricas por segmento, lista de espera, newsletter, encontros, roadmap votado | Plataforma (este repositório) | Escopo atual |
-| Instalador `npx flyee`, core do harness, módulos e receitas como arquivos | Produto (projeto separado) | Fora deste repositório; consome a API e o manifesto |
-| Harness de desenvolvimento deste repositório (`.claude/`, hooks, skills) | Ferramenta interna da plataforma | Nunca distribuído; skills de terceiros ficam só aqui |
+| **Sociedade** (função `socio`) | Conta, com segundo fator | Responde pelo escritório e acompanha tudo. Muda o que o ONE decide sozinho, escolhe quem assina o que o ONE prepara, decide protocolar ou segurar, aprova peças. |
+| **Advocacia** (`advogado`) | Conta, com segundo fator | Atua nos casos e aprova o que vai ao tribunal: a peça, o pacote, a assinatura em nuvem dos arquivos, o recibo do protocolo. |
+| **Controladoria** (`controladoria`) | Conta | Cuida de publicações, prazos, audiências e protocolos. |
+| **Atendimento** (`atendimento`) | Conta | Fala com os clientes pelo WhatsApp e reúne os documentos. |
+| **Cliente** (o passageiro, e quem responde por um menor) | Sem conta: um link por token, mandado pelo escritório | Preenche os dados e os da família, a viagem, manda documentos e o relato, confirma a ordem dos fatos, aceita textos, assina, responde se aceita a vara cível, escolhe receber avisos e acompanha o processo. Vê só a marca do escritório. |
+| **Operador da plataforma** | Conta de superadmin | Consoles em `/admin`: escritórios, IA (versões de instruções, autonomia das tarefas, medidas), calendário forense, cobrança, auditoria, backups, suporte assistido, conteúdo do site. |
 
-**Decisões**
+Além da função, cada pessoa tem um papel na conta do escritório (titular, administração, equipe), que decide quem gerencia equipe, conexões e plano. Uma pessoa pertence a um escritório só. O segundo fator é pedido por papel e por cada ação que dá ou tira acesso.
 
-| Tema | Decisão |
+## 3. Decisões do dono que o código assume
+
+| Data | Decisão |
 | --- | --- |
-| Base | Este repositório não tem mais vínculo com o template flyee. O escopo npm `@flyee/*` continua, porque flyee é a marca. |
-| Banco | Projeto Supabase novo, com um conjunto enxuto de migrações escrito do zero só com o que é genérico. |
-| Pagamento | Asaas para BRL e Stripe para USD, escolhidos pela moeda de cada compra. |
-| Site público | Completo desde já, bilíngue e indexado: português em `/`, inglês em `/en`, com textos provisórios. |
-| Marca | Nome flyee.club. Logo oficial entregue em 2026-10-01 (`apps/web/public/brand/`). Tipografia definida na mesma data: Londrina Solid nos títulos, JetBrains Mono em comandos e Mulish no texto. Paleta ainda provisória: o tema laranja do template, até a paleta do flyee.club virar tokens. A TT Chocolates, licenciada para o MedChina, saiu. |
-| "1 acesso" | Limite de dispositivos por degrau: kit 1, assinatura 3, Pro 5. |
-| Canal de atualização | O mesmo para todos na v1. A separação entre estável e latest fica preparada para depois de medir a conversão kit → assinatura em 60 dias. |
-| Segmentos | Produto próprio, freelancer ou agência, profissional que usa IA todo dia, dev, e "outro" para quem não se encaixa. "Outro" não entra na regra de foco. *Revisado em 2026-10-06: os segmentos passaram a ser os perfis do site (negócio, agência, produto digital, dev e outro), migração `0028`.* |
-| Console de perguntas ao banco | `/admin/insights` continua, com uma chave de IA paga pelo operador. Não gasta crédito do integrante. |
-| Vídeos das aulas | YouTube não listado para todas as aulas, inclusive as avançadas. A plataforma só entrega o id do vídeo avançado a quem tem direito; um link repassado continua assistível, e esse risco está aceito. *Revisado em 2026-10-06: o guia passou a ser escrito, no pacote; o vídeo, quando há, é opcional e fica dentro do guia, com a mesma regra de acesso.* |
-| Nota fiscal | Emitida direto no Asaas. A plataforma não tem lógica fiscal. |
-| Encontros | Por link externo (Zoom, Meet ou transmissão). O painel guarda o link e conta o clique em "entrar" como presença. |
-| Endereços em inglês | Traduzidos já na v1: `/en/pricing`, `/en/how-it-works`, `/en/catalog` e assim por diante. |
-| Termos de uso, privacidade e cookies | Considerados revisados. Entram como versão 1 nos dois idiomas, sem marca de provisório. |
-
-**Premissas adotadas no plano (confirme ou corrija)**
-
-- ~~O kit concede acesso e atualização sem prazo.~~ Revisado em 2026-10-06 pelo brief da home: o kit vale por 1 ano a partir do pagamento, sem renovação automática, e é renovado comprando de novo (o novo prazo começa quando o atual termina); pode ser parcelado no cartão; todo plano pago pode ser usado em projetos de clientes; o reembolso continua pelo suporte. Quem assina sem ter comprado o kit e cancela perde a atualização; a tela de cancelamento oferece o kit para mantê-la.
-- O Pro é uma família de plano própria, não um complemento da assinatura.
-- Máquinas sem navegador entram pelo fluxo de código de dispositivo, com as mesmas regras de token: 30 dias sem update e revogação no cancelamento.
-- Eventos de uso ficam numa tabela do próprio Supabase e são lidos em `/admin/metricas`. PostHog não entra.
-- Uma conta corresponde a um integrante. Planos por assento ficam para o degrau 5.
-- Vendas em USD pela Stripe: se a nota de exportação for exigida, o operador a emite no Asaas; a plataforma não automatiza.
-- A assinatura anual em USD vale 10 vezes a mensal, como hipótese.
-- Só o site público usa endereços com idioma. O painel do integrante, o admin, o login e o checkout seguem o idioma do perfil, sem `/en`, porque não são indexados.
-
-**Ordem.** Este documento recomenda vender o kit antes de construir o painel. O plano respeita isso: a página de espera é o primeiro deploy e o checkout do kit vem antes do painel completo, então a pré-venda pode começar enquanto o resto da plataforma avança. Construir não é abrir: os planos de assinatura podem ficar ocultos e o card de upsell desligado até o portão destacado da fase 2 (ver "Etapas").
-
-## Decisões tomadas 2026-10-06
-
-Registradas no alinhamento do repositório do produto com a plataforma. O que cabe à plataforma está detalhado na fase 9 de [`docs/PLANO-IMPLEMENTACAO.md`](PLANO-IMPLEMENTACAO.md); o que cabe ao produto fica no repositório dele.
-
-**O nome e a escada (alinhamento com o brief da home, opção 1)**
-
-| Tema | Decisão |
-| --- | --- |
-| Nome | A plataforma se chama **FlyeeClub**. O domínio continua flyee.club e a CLI continua `npx flyee`. |
-| Dois planos | O acesso de pagamento único é o plano **"FlyeeClub"**, e é ele que todo CTA vende ("Assinar FlyeeClub agora"). A assinatura é o **"FlyeeClub Pro"**: guias avançados, receitas, encontros, voto, a camada "abrir o capô" (herdada do Pro) e 3 máquinas. O Pro de antes saiu da vitrine: linhas `pro-*` inativas, sem apagar (migração `0025`). |
-| Ofertas depois da compra | Quem tem o FlyeeClub recebe a oferta do FlyeeClub Pro no painel e na revalidação. O app sob medida, a mentoria remota e a consultoria completa não são planos: são contratados sob demanda, oferecidos no painel a quem já paga e pedidos pelo formulário de contato (`/contato?assunto=app`, `mentoria` ou `consultoria`). |
-| Medição da home | Opção 1 (2026-10-06): a postura da plataforma fica (`docs/TRACKING.md`): Pixel e GA4 com opt-out, `product_events` só para uso de integrante, visitas por porta no servidor. Os eventos da seção 8 do brief viram eventos custom do GA4 pelo `lib/site-events.ts` (declarados com `data-track` nos elementos e `track` nas seções), sem PostHog e sem tabela `events`. O `segment` é capturado por link (`?segment=`) ou clique e pré-preenche a lista de espera, o cadastro e o onboarding ; desde a migração `0028` os perfis do site e os segmentos são um vocabulário só (ver "Segmentos"). |
-| Preço e vagas | Opção 1 (2026-10-07): a regra 5 do brief (sem preço riscado, "de/por", contagem regressiva ou "vagas" na página) vira regra da plataforma inteira para o preço e fica restrita à página da oferta para as vagas. Nenhum card risca o preço de tabela, nem na home, nem em `/planos`, nem em `/fundadores`, nem no painel: com cupom, o card mostra só o preço cobrado e nomeia o cupom ("Com o cupom X"). O card de fundador mostra o preço de fundador sozinho, sem o preço anual riscado nem a porcentagem de economia; o preço normal está em `/planos`. O contador de vagas e a data limite, lidos do banco (`founders_offer()`), ficam só em `/fundadores`; `/planos` diz apenas que o preço de fundador está aberto e leva à oferta. O campo de âncora saiu do console da oferta. A mensagem do painel que confirma um cupom continua dizendo o desconto e por quantos ciclos ele vale, porque é termo do cupom e não comparação de preço. A economia do plano anual sobre o mensal continua no seletor de ciclo, calculada dos preços reais, porque compara dois ciclos à venda e não risca nenhum preço. O teste `apps/web/src/lib/honest-pricing.test.ts` segura a regra. |
-| Regras de texto | Opção 1 (2026-10-07, migração `0035`): as regras de texto do brief valem para todo texto que visitante e integrante leem, nos dois idiomas: site, painel, checkout, e-mails, sino, mensagens da CLI, a descrição da fatura do provedor e os textos legais em vigor. Nada de travessão (— ou –), ponto de exclamação ou emoji (© e → ficam, de propósito), nem das palavras proibidas: desbloqueie, potencialize, sem esforço, soluções inovadoras; unlock, elevate, empower, seamless, robust, supercharge, game-changing, "it's not just". Onde caberia um travessão vai dois-pontos, vírgula ou frase nova, e "·" separa itens. O console do operador fica fora. Três testes seguram a regra: `apps/web/src/lib/i18n/copy-rules.test.ts` (catálogos, copy da home, e-mails, sino, CLI e o resto do código que chega às pessoas), o pgTAP `0033_copy_rules` (o que as migrações semeiam, os textos legais em vigor entre eles) e o e2e, que lê o texto renderizado das páginas públicas e de entrada. Os termos de uso em inglês (versão 5) e o termo de conexão da CLI em inglês (versão 2) trocaram "unlocks" por um verbo comum; os textos em português não mudaram. O que o operador escreve no console (blog, ajuda, avisos, textos dos apps, descrição dos planos) segue a mesma regra, ainda sem checagem automática. |
-| Selos da loja | Opção 1 (2026-10-06, migração `0034`): os dois selos dos cards vêm dos dados. "Novo" aparece quando a primeira publicação do app tem até N dias (N em `platform_settings.catalog.new_badge_days`, 30 para começar, editável na aba Categorias da loja). "Usa sua conta X" usa os nomes das credenciais obrigatórias que o operador cadastra no app (`lib/catalog/store-badges.ts`). Os dois já aparecem nos cards da home e de `/catalogo`, e o banner de destaque os usa quando a home for refeita pelo brief. |
-| Próximos na loja | Opção 1 (2026-10-06, migração `0033`): o bloco do brief é alimentado pelo roadmap, com dois dados novos. O mês em que uma ideia foi a mais votada é registrado quando o operador a planeja pelo card do mais votado. A marca "contratado" é posta pelo operador numa ideia vinda de um pedido pago. Uma leitura pública (`roadmap_coming_next`) entrega só as ideias planejadas e em construção, e cada uma leva um selo, o mais específico que for verdade (`lib/roadmap-coming-next.ts`): "Em desenvolvimento, sai para todos" para as contratadas, "Mais votado de {mês}", "Em produção" e, para as planejadas sem outro selo, "Planejado", que o brief não tinha. O bloco some quando não há nenhuma ideia e entra quando a home for refeita pelo brief; a home atual não o tem. |
-| IAs prometidas | Opção 1 (2026-10-06): o site promete as quatro IAs de terminal (Claude Code, Codex, Gemini CLI e Cursor), com o plano ou a chave de API do integrante, e diz que a página de cada app mostra em quais ele foi testado (o `compatible_ais` do manifesto). O requisito do brief ("Um plano pago do Claude com Claude Code, ou do ChatGPT com Codex") passa a ter esse texto na home refeita, coerente com os quatro logos do hero. Os dois níveis "testado" e "compatível pelo padrão" continuam na fase 10. |
-| Botões | Opção 1 (2026-10-06): os botões de compra do acesso dizem "Assinar FlyeeClub agora" (hero, card do FlyeeClub, CTA final, rodapé), e o card do FlyeeClub Pro diz "Assinar FlyeeClub Pro". O botão do topo mantém o texto do brief, "Quero montar meu sistema", e não é compra: leva aos planos (na home, rola até a seção de preços). Antes da abertura da loja, todos dizem "Entrar na lista de espera" (`lib/launch.ts`, `primaryCtaFor` e `navCtaFor`). |
-| Para quem é | Opção 1 (2026-10-06, migração `0032`): o operador marca, em cada app, os perfis do site para os quais ele é um bom começo (negócio, agência, produto digital, dev; nunca "outro"), no console, como a categoria da loja e fora do manifesto. O bloco "Para quem é" da home do brief mostra até 3 apps publicados por perfil, na ordem do catálogo (`lib/catalog/starters.ts`); perfil sem app marcado fica sem chips. Os apps escritos à mão no brief (Copy LP, Radar e outros) não aparecem enquanto não forem publicados. O bloco entra quando a home for refeita pelo brief; a home atual não o tem. |
-| App contratado | Opção 2 (2026-10-06, migração `0031`): o app desenvolvido sob demanda entra na loja para todos os integrantes quando fica pronto, salvo acordo de exclusividade combinado por escrito no contato antes da contratação. O preço e o prazo da exclusividade ficam fora da plataforma. O aviso aparece onde a contratação começa (o card "App sob medida" do painel, o card do roadmap e a página de contato aberta para um app) e na cláusula da versão 4 dos termos de uso. O FAQ do brief ("Se outra pessoa pagar por um app, eu recebo também? Recebe.") passa a ser verdade, com essa ressalva. |
-| Equipes | Opção 1 (2026-10-06): o FlyeeClub Pro libera mais computadores para a mesma pessoa (o teto é `plans.limits.devices`, hoje 3), nunca mais pessoas. Os termos já proíbem compartilhar o acesso. Equipe é assunto do contato até existir um plano por pessoa (o degrau "Time", depois). O FAQ de `/planos` responde "Tenho uma equipe. Como faço?" assim. Na home refeita pelo brief, essa resposta substitui a do brief ("o completo libera mais acessos"), e a linha de acessos da tabela mostra "Até N computadores" lido do plano, no lugar de "Mais de um". |
-| Sem terminal | Opção 1 (2026-10-06): o FAQ "Funciona no app do Claude ou do ChatGPT, sem terminal?" continua respondendo "Ainda não", como a home já faz, e não o "Sim" do brief. Hoje a entrega é só pela CLI. A porta MCP da fase 10.5 não muda a resposta sozinha: ela lê catálogo, guias e conta, mas não executa apps. A resposta muda só quando um app rodar de fato sem terminal (por exemplo, skills enviadas para a conta). |
-| Guias | Opção 1 (2026-10-06, migração `0030`): o guia de cada app é escrito e viaja no pacote de cada versão (`guides/<pt-BR|en>/<usar|abrir-o-capo>.md`), então nunca descreve um app diferente do instalado. O painel mostra o guia da versão instalada e avisa quando sai uma mais nova. O vídeo, quando há, fica dentro do guia. "Guias avançados" é a profundidade "abrir o capô", no FlyeeClub Pro, e o vocabulário passou de "aula" para "guia". Ficou como convenção de caminho, e não como campo do manifesto, porque um campo novo exige `manifest_version` novo e a v2 já está reservada para `automation` e `requires`. |
-| Dúvidas no app | Fica para o fim (2026-10-06): o dono do produto quer um suporte com agente de IA integrado, que só faz sentido com a plataforma completa. Vira a fase 11 de `docs/PLANO-IMPLEMENTACAO.md`. Até lá, a home não promete perguntas na página do app. |
-| Categorias da loja | Opção 1 (2026-10-06, migração `0029`): duas camadas. As 7 etapas continuam sendo a taxonomia do catálogo (o manifesto declara a etapa; painel, roadmap, regra de uso amplo e API da CLI seguem nelas). A loja pública (home e `/catalogo`) filtra por categoria, os tipos de trabalho do brief: Vender, Divulgar, Vídeo, Pesquisa e Construir, dados editáveis no console e fora do manifesto (mudar a categoria não pede versão nova). App sem categoria aparece só em "Todos". Exemplo: o app de edição de vídeo fica na etapa Divulgar ("fazer o produto ser encontrado") e na categoria Vídeo. |
-| Segmentos | Opção 1 (2026-10-06, migração `0028`): os segmentos são os perfis do site, "Seu negócio", "Sua agência", "Seu produto digital" e "Seu trabalho de dev" (`negocio`, `agencia`, `produto`, `dev`), mais `outro`, que fica fora da regra de foco. "Profissional que usa IA" saiu: o site não o oferece. Onboarding, lista de espera, métricas, regra de foco e o resumo de segunda falam a mesma língua do site. |
-| App sob medida | Opção 1, o mínimo honesto (2026-10-06, migração `0026`): no FlyeeClub Pro, o integrante propõe o app no roadmap (`propose_roadmap_item`); a proposta fica em análise, visível só ao autor e ao operador, com teto de propostas em análise em `platform_settings.roadmap`; o console abre para votos ou recusa. O roadmap mostra o mais votado do mês (votos dados no mês entre as ideias abertas, `roadmap_month_leader`), que o operador planeja na virada do mês. Contratar direto é o formulário de contato, sem cotação na hora, pagamento ou acompanhamento no painel. A home diz só isso; o bloco "App sob medida" do brief perde a faixa de valor, o pagamento e o acompanhamento. |
-
-**O repositório do produto**
-
-| Tema | Decisão |
-| --- | --- |
-| Onde nasce | `C:\AppsProjects\flyee`, um monorepo privado separado deste: a CLI, o core do harness e os apps. Consome só `docs/CLI-CONTRACT.md` e o JSON Schema do manifesto publicado em `/api/cli/schema/module`; nunca importa código desta base. |
-| O que vai ao npm | Só a CLI, no pacote público `flyee`, que já pertence ao operador (hoje em 0.7.9, de um projeto anterior). A CLI nova sai como `1.0.0` nesse nome, e `platform_settings.cli.min_cli_version` sobe para `1.0.0` no dia da publicação. |
-| O que não vai ao npm | Os apps. Cada app é um ZIP com `flyee.module.json`, enviado ao servidor de pacotes da plataforma e entregue pelo token. A versão de cada app vive no manifesto e numa tag do git do produto; o `files` do manifesto é gerado pela ferramenta, nunca escrito à mão. |
-| Publicação de versões | Na v1 a CI do produto gera e valida os ZIPs e o operador os envia pelo console `/admin/catalogo`; publicar, marcar estável e retirar continuam ações do console. Um token de serviço para o `POST /api/admin/catalog/versions` fica como pedido do produto à plataforma, para a CI enviar os rascunhos sozinha. |
-| Arquivo de entrada do harness | `AGENTS.md` canônico, gerado pelo core em blocos marcados, com ponteiros de uma linha em `CLAUDE.md` (`@AGENTS.md`) e `GEMINI.md` (`@./AGENTS.md`); o Cursor lê o `AGENTS.md` da raiz. Skills de cada app em `.agents/skills/` (Codex, Gemini CLI e Cursor leem aí) com pontes em `.claude/skills/` para o Claude Code, sempre cópias, nunca symlinks. Uma cópia só dos arquivos do app, em `.flyee/modules/<slug>/`. |
-| `/flyee` dentro da IA | O core instala uma skill `flyee` que funciona como menu dentro do Claude Code, Codex, Gemini CLI e Cursor: apps instalados e disponíveis, atualizar, guia de cada app, novidades e abrir o painel local. Ela só roda a CLI com `--json`, nunca inventa estado. |
-| Painel local | `npx flyee ui`: um servidor em `127.0.0.1` que serve uma página estática com o estado do projeto (apps, versões, conexão, revalidação, credenciais externas, documentação e ofertas lidas da plataforma). Em avaliação de escopo; depende de a plataforma publicar `packages/design-tokens` como pacote npm público, para o painel usar o mesmo sistema de design sem levar código licenciado. |
-| Primeiro app | Um app de edição de vídeo, construído primeiro para uso do próprio operador e lançado com o vídeo que o apresenta. A lista de módulos iniciais da seção "Arquitetura da entrega" e a tabela "Catálogo por etapa" passam a ser referência histórica, não compromisso: os apps citados ali serão refeitos ou atualizados quando entrarem. |
-
-**O integrante não usa o terminal**
-
-- A IA do integrante roda todo comando do flyee. Ele só confirma na conversa o que a IA vai fazer, aprova o login no navegador e cola chaves de serviços externos numa página que abre no navegador dele.
-- Programas que os apps usam (ffmpeg, yt-dlp…) são instalados pela CLI, pelo gerenciador de pacotes do sistema, sem perguntas além da confirmação do app (`npx flyee need`; o `add` e o `update` instalam o que o app declara). O que só o integrante pode dar, como a senha de administrador no Linux, volta como um passo único.
-- Isso vale para os textos da plataforma também: a página "como funciona", o painel e os e-mails dizem o que pedir à IA, e o comando aparece só como referência, nunca como tarefa do integrante. `/instalar.md` (fase 10.3) é a porta de entrada que já segue essa regra.
-
-**O degrau grátis é uma versão, não uma cópia**
-
-| Tema | Decisão |
-| --- | --- |
-| Modelo | O direito passa a ser por versão, por canal. O plano gratuito fica no canal `free`: baixa e mantém só a versão de cada app marcada como grátis no console. Kit, assinatura e Pro continuam no canal `latest`. Um app inteiro grátis continua possível pela flag `is_free_sample` do módulo, mas é exceção. |
-| Qual versão é grátis | Marcação manual, por versão, no console; a primeira versão publicada de um app vem pré-marcada. Marcar outra move o degrau grátis; retirar a versão grátis exige marcar outra. A regra comercial nunca entra no manifesto. |
-| Congelamento | A versão grátis nunca recebe atualização porque não há versão nova no canal `free`, não porque a plataforma a bloqueie. A conta sem compra roda `npx flyee update`, renova o token e não recebe nada. É a tese "a cópia envelhece" aplicada ao degrau zero. |
-| A distância é visível | O catálogo passa a devolver também a versão mais nova de verdade (`newest`), e a conta sem compra vê, na CLI e no painel, quantas versões está atrás e o changelog do que não tem. Pedir uma versão fora do canal responde `denied_entitlement` com o link de upgrade e grava `update.denied_entitlement`. |
-| Lançamento de um app | No dia do vídeo, a 1.0 é a última. Nos apps principais, a 1.0 nasce deliberadamente reduzida e a 1.1 sai no mesmo dia com a fatia completa: a versão grátis vira uma tag antiga no git, nunca mantida em paralelo. Nos apps menores, a paridade inicial é aceita, porque a venda é a loja inteira e as atualizações. |
-| O que não existe | Teste grátis do acesso completo (`trial_days` fica em 0), cupom ou desconto por vídeo, e duas versões completas de um mesmo app. |
-
-**O plano gratuito nunca é oferecido**
-
-- Ninguém "assina grátis". A conta sem compra é consequência de um cadastro que veio do conteúdo (o link de um vídeo) ou da mensagem do instalador; ela nunca é vendida, anunciada ou listada: nenhum botão, coluna de preço, selo ou texto público oferece um plano gratuito ou uma "conta grátis". O plano `gratuito` continua com `is_public = false`.
-- O site público não anuncia versões grátis nem "amostra grátis". O que a conta sem compra pode instalar aparece dentro do painel, depois do cadastro, com o cadeado e a oferta do kit no resto.
-- Dentro do painel, o degrau sem compra é descrito pelo que é ("sem acesso ao catálogo", "versão de entrada"), nunca como um plano com nome comercial.
-
-**O funil de conteúdo**
-
-| Passo | Como funciona na plataforma |
-| --- | --- |
-| O vídeo entrega o método completo | Decisão de conteúdo: vídeo que para no problema é teaser. O que se vende é o app pronto, as atualizações e a loja. |
-| Um link por vídeo | `/catalogo/<slug>?origem=youtube&utm_campaign=<id do vídeo>`: a primeira visita grava a origem num cookie de 90 dias e o cadastro a copia para `signup_attribution`; `account.created` leva `origem`. É o que diz qual vídeo vende. |
-| A conta sem compra é o lead | Substitui a skill por e-mail: o cadastro já confirma o endereço e registra segmento, IA, idioma, máquina e instalação, que uma lista de e-mail não registra. A newsletter continua para quem não quer criar conta. |
-| `npx flyee add <app>` sem login | A CLI mostra "este app faz parte do acesso flyee.club" e o link da página pública do app, com `origem=cli`, vindo do servidor (a CLI nunca monta URL da plataforma). A origem possível aqui é `cli`; o vídeo só é identificado pelo link da descrição. |
-| Conta sem compra pedindo um app pago | O servidor já responde `denied_entitlement` com a mensagem no idioma e o link de upgrade, e grava `update.denied_entitlement`. |
-| A revalidação traz de volta | A conta sem compra tem o mesmo token de 30 dias; `/revalidar` mostra a oferta do kit. |
-| Arrependimento | Os 7 dias são obrigatórios pelo CDC e têm o mesmo efeito de um teste para quem quiser copiar; o risco está aceito pela tese da cópia que envelhece. |
-
-**Apps com pipeline e execução automática**
-
-| Tema | Decisão |
-| --- | --- |
-| Pipeline dentro do app | Um app de tipo `workflow` é uma pipeline empacotada: passos de script e passos de IA, arquivos de entrada e saída, estado por execução em `.flyee/runs/<app>/<id>/`. A mesma definição roda dentro da sessão da IA, que executa os passos de IA inline, e fora dela, pela CLI. O app continua sendo um app; personas e subagentes, quando existirem, são detalhe de implementação invisível para quem instala. |
-| Duas metades | A metade automática não tem ponto de aprovação; toda decisão fica para a metade sob demanda, que recebe o material pronto em arquivo. Exemplo: às 7h, buscar e pontuar notícias e escrever o material; depois, com o integrante presente, escolher a pauta e escrever o roteiro com aprovações. |
-| Disparo | Local, nunca pela plataforma: `flyee schedule <app>` registra a tarefa no Agendador do Windows, no `launchd` ou num timer do `systemd`; `flyee run <app>` executa; tarefa perdida roda na próxima oportunidade. Passos de IA sem supervisão usam a IA do integrante em modo não interativo, com as permissões do manifesto como lista de ferramentas liberadas. Sem processo residente e sem agendadores em nuvem de fornecedor. |
-| Custo e consentimento | A metade automática gasta a IA do integrante sem ele presente: é opcional, com horário confirmado na instalação, visível no painel e desligável. Todo app declara quais passos usam IA; onde não há raciocínio, o passo é script puro. |
-| Manifesto v2 | Campos novos, só quando o primeiro app automático ou com dependência chegar: `automation` (horário sugerido, uso de IA sem supervisão, o que lê e escreve), `requires` (dependência entre apps) e `example_prompt` ("peça assim"). Propriedade de evento `trigger` com `scheduled` ou `manual`. |
-
-**Compatibilidade, qualidade e distribuição** (aprendido do agency-agents e do goose-skills)
-
-| Tema | Decisão |
-| --- | --- |
-| Registro declarativo de ferramentas | O core tem uma tabela de ferramentas, não adaptadores escritos à mão: por ferramenta, como detectar, onde escrever, em que formato, em que escopo (projeto ou usuário) e a regra para arquivo alheio (nunca sobrescrever; anexar bloco gerenciado ou registrar que pulou). Adicionar uma ferramenta é uma linha de dados. |
-| Dois níveis de compatibilidade | "Testado": as IAs declaradas em `compatible_ais`; no lançamento, Claude Code, Codex, Gemini CLI e Cursor. "Compatível pelo padrão": toda ferramenta que o core detecta e atende por `AGENTS.md` e `.agents/skills`, instalada sem promessa e reportada como `other`; no lançamento, GitHub Copilot, OpenCode, Antigravity, Kimi Code, Windsurf e Aider. Promoção: 30 máquinas vivas numa ferramenta por 4 semanas seguidas a levam ao enum, à matriz de testes e à página de compatibilidade. |
-| Avaliação e canário | Todo app leva `tests/eval.json`: casos com prompt, fixtures, asserções e rubrica para um juiz. Roda antes de publicar uma versão e como canário: diário no Claude Code e no Codex, semanal no Gemini CLI e no Cursor, e a matriz inteira quando a versão de uma IA muda. De 3 a 5 casos por app, para caber no plano do operador. Toda falha de suporte vira um caso. |
-| Instalação por URL | `flyee.club/instalar.md`: a pessoa cola o endereço na IA, que explica o que vai fazer, pede confirmação, roda só `npx flyee@latest`, confere com `flyee doctor --json` e manda reiniciar a IA. É a resposta ao "nunca abri um terminal". |
-| Índice e importação | O repositório do produto gera um índice de apps a partir dos manifestos e READMEs. O primeiro app entra pelo console; a importação do índice pela plataforma, com o token de serviço, entra antes do segundo app. |
-| `/flyee` como roteador | Responde "o que você quer fazer?" com os apps certos, inclusive os com cadeado, gerado do catálogo. |
-| Metadados por ferramenta | O core gera, de uma fonte só, o `agents/openai.yaml` do Codex, as flags do Cursor e o `whenToUse` do Kimi. |
-| Regras de autoria | App com chave externa sempre tem um modo sem a chave que entrega algo. Todo app traz um prompt de exemplo. Descrições de skill têm teto de tamanho, porque entram no contexto de toda sessão; o `/flyee` liga e desliga apps por projeto. |
-| Perfil de instalação | `flyee.apps.json` exportável e aplicável com `npx flyee add --from`, para repetir a mesma instalação em projetos de cliente. |
-| Porta MCP | Entra no plano em duas partes. Um servidor MCP local dentro da CLI, com estado, catálogo, instalação, guia e telemetria como ferramentas, para qualquer IA com MCP. E um servidor MCP remoto na plataforma, só leitura, para quem usa só o app do Claude ou do ChatGPT: catálogo, guias, novidades e estado da conta, autenticado pelo servidor OAuth que já existe. |
-
-## Mercado: onde está o vão
-
-O concorrente mais próximo tem nome: o Ratos OS vende um `AGENTS.md` com pastas e skills para Claude Code, Codex e Hermes por R$ 97, com um ano de acesso e sem renovação automática. O vão que sobra é exatamente o seu modelo: ninguém vende a atualização contínua como produto, e ninguém entrega em mais de um idioma.
-
-| Oferta | Onde | Preço | O que entrega | Nível |
-| --- | --- | --- | --- | --- |
-| [Ratos OS](https://ratosdeia.com.br/claudeos/) (Ratos de IA / DobraLabs) | BR | R$ 97 único (de R$ 297), 1 ano de acesso | `AGENTS.md` + pastas (clientes, processos, finanças, marca), instalador guiado de 20 min, 33 aulas (8h56), skills de tráfego, conteúdo e propostas; Claude Code, Codex e Hermes | Quem já usa IA todo dia, sem programar |
-| [Comunidade Ratos de IA](https://ratosdeia.com.br/comunidade/) | BR | R$ 597 único (de R$ 697), 1 ano, sem renovação | 4 cursos (82 aulas), WhatsApp VIP, calls com o fundador, fórum curado por agente, skills exclusivas; 350+ membros ativos | Dono de negócio, gestor, marketing, operações |
-| [Ratos de IA, skills avulsas](https://ratosdeia.com.br/) | BR | R$ 57 cada | 24 skills prontas para Claude Code; newsletter semanal grátis como topo de funil | Idem |
-| [Maestros da IA](https://comunidade.maestrosdaia.com/) (Arthur Endo, Lyria Zoccal) | BR | R$ 97/mês | 147 aulas, 329 recursos (100 skills, 56 apps, 12 agentes), encontros semanais | Iniciante a empresário |
-| [Claude Economy](https://claude-economy.vercel.app/) (Marcelo Anders) | BR | R$ 297 único (próximo lote R$ 497) | 12 módulos, 30 skills, 3 agentes, atualização vitalícia, grupo de WhatsApp | Empreendedor e operador |
-| [Automators Club](https://automatorsclub.com.br/) (Matheus Fonseca) | BR | R$ 197 único | 14+ módulos, templates, calls semanais | Iniciante a intermediário |
-| [Claude Code Club](https://skoolmakers.com/communities/category/ia/) (Duncan Rogoff) | Skool | US$ 9/mês | Construir ferramentas com Claude Code sem saber programar; 7.275 membros | Iniciante |
-| [AI Business Hub](https://www.skool.com/ai-leaders-1796/about) (Suleiman Najim) | Skool | US$ 49/mês (US$ 99 após 600 membros) | Curso de Claude, MCPs, skills, templates; 604 membros | Iniciante a avançado |
-| [Early AI-dopters](https://skoolmakers.com/communities/category/ia/) (Mark Kashef) | Skool | US$ 77/mês | Generalista de IA com Claude Code; 1.386 membros | Intermediário |
-| [AI Automations by Jack](https://skoolmakers.com/communities/category/ia/) (Jack Roberts) | Skool | US$ 77/mês | 110+ blueprints; 3.302 membros | Intermediário |
-| [Chase AI+](https://skoolmakers.com/communities/category/ia/) (Chase Hannegan) | Skool | US$ 97/mês | Masterclass de Claude Code, 100+ templates de agentes; 1.365 membros | Agência |
-| [RoboNuggets](https://skoolmakers.com/communities/category/ia/) (Jay E) | Skool | US$ 97/mês | 70+ cursos de IA agêntica; 1.180 membros | Técnico |
-
-**O que a tabela mostra**
-
-- **Ratos OS é o seu espelho mais próximo:** mesmo objeto (um arquivo de agente + skills), mesmo público amplo, mesma exigência de que o usuário pague a própria IA. A diferença é o modelo: eles vendem acesso por um ano; você vende atualização contínua. Sua página precisa dizer isso em uma linha.
-- **O preço de referência caiu:** R$ 97 único na entrada e R$ 597/ano de comunidade no Brasil; US$ 49 a 97/mês fora. Uma assinatura mensal no Brasil precisa parecer barata ao lado de "R$ 97 por um ano".
-- **Todos vendem volume:** "329 recursos", "110+ blueprints", "24 skills". Volume vira commodity; ritmo de atualização não, porque exige alguém operando.
-- **Ninguém é multi-idioma:** os brasileiros vendem só em português; os do Skool, só em inglês. Um catálogo bilíngue desde o dia 1 abre os dois mercados com o mesmo trabalho de engenharia.
-
-**Sobre a validação:** ver concorrentes prova que existe mercado, não que ele compra de você. A validação que conta é pagamento, e ela está na fase 1 das etapas.
-
-## Melhorias na ideia
-
-Cinco ajustes transformam "painel com ícones de ferramentas" em algo difícil de copiar. O mais importante é o primeiro: entrar amplo com uma promessa única e deixar os dados de uso escolherem o foco.
-
-1. **Entrar amplo, focar por medição.** Público definido por nível é vago como promessa de venda, mas serve como porta de entrada. A página vende uma promessa única e abre 3 ou 4 portas por perfil (quem opera produto próprio, freelancer ou agência, profissional que usa Claude ou Codex todo dia, dev); o cadastro registra perfil, IA usada e idioma, e o uso por ferramenta decide o foco.
-   - Os dois níveis viram duas profundidades da mesma ferramenta: **usar** (sem código) e **abrir o capô** (adaptar, estender, integrar).
-2. **Organizar o catálogo pelas etapas que você já domina.** Os ícones ficam, um por módulo; as sete trilhas são o filtro: Planejar, Construir, Publicar, Divulgar, Vender, Escalar, Manter. O integrante entra pela etapa em que está travado.
-3. **A ferramenta vai até a IA, não o integrante até o painel.** O painel continua como vitrine e manual. O uso acontece dentro do Claude Code, Codex, Cursor ou Gemini CLI, pelo seu harness: um `npx flyee` instala o agent.md com skills, workflows e rules, e o mesmo comando atualiza (detalhe na seção de arquitetura).
-4. **Receitas acima de ferramentas.** Ferramenta solta vira commodity; o resultado encadeado não. Ex.: radar, pauta, roteiro e vídeo; ou briefing, página, anúncio e e-mail.
-5. **Aula curta, colada na ferramenta.** Um vídeo por ferramenta e por profundidade, no lugar de curso longo, gravado uma vez em português e traduzido no pipeline de vídeo que você já tem. Menos produção para você, menos tempo até o primeiro resultado para ele.
-
-**Catálogo por etapa do ciclo do produto.** O gráfico original não veio na exportação deste documento. A tabela abaixo foi reconstruída com os módulos citados em "Arquitetura da entrega". O saas-starter aparece entre os primeiros módulos, embora o parágrafo seguinte diga que as etapas de engenharia ainda estão vazias; confirme se ele já está empacotado.
-
-| Etapa | Módulos iniciais |
-| --- | --- |
-| Planejar | vazia |
-| Construir | saas-starter |
-| Publicar | vazia |
-| Divulgar | radar de conteúdo, pauta e roteiro, roteiro HeyGen, takes com mockups de telas, pesquisa de conteúdo automática, copy de redes |
-| Vender | copy de LP e sites |
-| Escalar | vazia |
-| Manter | vazia |
-
-As ferramentas empacotadas até aqui servem marketing e venda; as etapas de engenharia, que são o seu diferencial, ainda estão vazias no catálogo.
-
-*Nota de 2026-10-06: o primeiro app a entrar no catálogo será o de edição de vídeo, construído para uso do operador antes do vídeo de lançamento. Esta tabela é referência histórica (seção "Decisões tomadas 2026-10-06").*
-
-## O que você pode não estar considerando
-
-Suas decisões resolvem metade dos riscos da primeira versão (cópia, custo de IA, licença, nome). Sobram oito, e os dois primeiros são os que mais podem atrasar: como o npm vai controlar o acesso e como você vai medir o público para decidir o foco.
-
-| Ponto | Por que importa | Resposta proposta |
-| --- | --- | --- |
-| npm privado não é feito para consumidor | Pacote privado no npm exige [organização paga por usuário](https://docs.npmjs.com/upgrading-to-a-paid-organization-plan/) e conta npm de quem instala. Não serve para vender a centenas de integrantes. | Público no npm só o instalador (`npx flyee`); o conteúdo do plano vem do seu servidor com o token do integrante, versionado e revogável. Você mantém o controle de versões e não expõe o repositório. |
-| Medir o público exige instrumentação desde o dia 1 | "Deixar os dados decidirem" só funciona se houver dado. | Cadastro pede perfil, IA usada e idioma; cada ferramenta registra execução (sem conteúdo); o painel mostra compra, ativação e uso semanal por segmento. |
-| Suporte cresce com integrantes, não com ferramentas | Quebra frequente é o motivo da assinatura, mas também gera pergunta. Se cada quebra vira atendimento, a energia por entrega volta. | Aviso de versão dentro do harness ("sua versão 1.4, atual 1.6, o que mudou"); suporte só assíncrono e coletivo; FAQ gerada das perguntas. |
-| Quem não usa terminal | `npx` alcança quem roda Claude Code, Codex, Cursor ou Gemini CLI. Quem só usa o app do Claude ou do ChatGPT fica de fora; o Ratos OS tem o mesmo limite. | Aceitar o limite na v1 e medir a demanda; segunda porta depois: skills enviadas na conta do Claude e conector MCP para o app. |
-| Multi-idioma dobra o conteúdo, não o código | Ferramenta e harness são os mesmos; aula, página e changelog são dois. | Gravar em português e traduzir vídeo e texto no pipeline que você já tem; inglês só do que estiver estável. |
-| Segurança e confiança | O padrão de skills [não tem assinatura nem revisão obrigatória](https://anomity.ai/blog/agent-skills-open-standard-adoption-governance/), e já houve campanha de skills maliciosas. Um instalador que escreve no computador do integrante pede confiança. | Instalador com changelog, permissões declaradas e checksum; nada sai da máquina sem aviso. Vira diferencial. |
-| Gatilho contra cancelamento tem limite | Criar atrito para cancelar pode ser enquadrado como prática abusiva pelo CDC; mostrar a desvantagem de sair, não. | Gatilho honesto: contador de versões atrás, changelog do que ele perderia, preço de fundador que não volta, plano anual. Cancelar em um clique. |
-| Fiscal e jurídico | Cobrança recorrente em dois países, LGPD, termos de uso, nota fiscal. | Contador antes do primeiro pagamento; termos simples desde a pré-venda; plataforma de pagamento que cobre BRL e USD. |
-
-## Diferenciais
-
-Os diferenciais mais fortes já existem: o harness agnóstico e a atualização contínua. O que falta construir barato é a medição por segmento, que decide o foco; o que fica para depois é a porta para quem não usa terminal.
-
-1. **Nascido em produção.** Cada ferramenta mostra onde roda de verdade e o que já quebrou. Ninguém na amostra prova uso real.
-2. **Atualização como produto.** Ritmo curto, changelog visível, contador de versão dentro do harness; atualizar exige token revalidado a cada 30 dias, o que traz todo integrante de volta ao painel. O Ratos OS vende um ano de acesso e some; você vende presença contínua.
-3. **Catálogo pelo ciclo do produto.** Sete etapas, entrada pela dor do momento.
-4. **Revisado e seguro.** Versão, permissões declaradas, checksum, nada sai da máquina sem aviso.
-5. **Bilíngue desde o dia 1.** Mesmo catálogo em português e inglês; nenhum concorrente da amostra faz isso.
-6. **Harness agnóstico via npm.** Um `agent.md` que roda em Claude Code, Codex, Gemini CLI e Cursor; um comando instala e atualiza. Já está construído.
-7. **Receitas.** Fluxos completos até o resultado, não peças soltas.
-8. **Duas profundidades.** Usar sem código ou abrir o capô.
-9. **Painel de uso e perfil.** Mede quem compra e quem usa por segmento; decide o foco e o que parar de manter.
-10. **Roadmap votado.** Integrantes votam na próxima ferramenta.
-
-**Diferenciais por força e custo de construir.** O gráfico original não veio na exportação. A divisão abaixo foi reconstruída a partir do texto desta seção.
-
-| Quadrante | Diferenciais |
-| --- | --- |
-| Fazer já: custam pouco porque saem do que já existe | 1 nascido em produção, 2 atualização como produto, 3 catálogo pelo ciclo do produto, 5 bilíngue desde o dia 1, 6 harness agnóstico via npm, 9 painel de uso e perfil |
-| Depois | 4 revisado e seguro, 7 receitas, 8 duas profundidades, 10 roadmap votado |
-
-A plataforma dá suporte aos dez desde o início, e checksum e permissões declaradas (item 4) entram já na API de entrega. A divisão acima é de prioridade de produto.
-
-Comece pelo quadrante "Fazer já": seis diferenciais que custam pouco porque saem do que você já faz. O painel de uso é a aposta que decide o foco.
-
-## Arquitetura da entrega
-
-Um cadastro, um comando: o painel emite o token do integrante, `npx flyee` instala e atualiza o harness na máquina dele, e o harness carrega skills, workflows e rules em qualquer IA que leia um `agent.md`. Nada do seu lado gasta crédito de IA.
-
-- **Painel flyee.club (web).** Login, pagamento em BRL e USD, vitrine com os ícones, aulas, receitas, changelog e perfil do integrante (segmento, IA, idioma). Emite o token, revalida a cada 30 dias sem update e o revoga no cancelamento; a tela de revalidação mostra o próximo degrau.
-- **`npx flyee` (pacote público no npm).** Só o instalador é público: pede o token, baixa o pacote do plano do seu servidor, instala o harness e roda `npx flyee update` depois. O controle de versão fica com você, sem repositório exposto e sem exigir conta npm do integrante.
-- **Servidor de pacotes.** Um pacote versionado por plano e idioma, changelog por versão, checksum e registro de instalação e uso por ferramenta. Valida o token a cada `update`: passados 30 dias do último contato, responde "revalide no painel" com o link. As ferramentas já instaladas continuam funcionando; só a atualização espera, e o harness avisa a partir do dia 25.
-- **Harness flyee (`agent.md`).** O que você já construiu: um ponto de entrada que centraliza skills, workflows e rules e torna tudo agnóstico. É o que faz "qualquer IA" ser verdade sem um conector por IA.
-- **Skills soltas.** Arquivo `SKILL.md` avulso, sem harness e sem atualização. Camada de amostra grátis e porta de entrada. *Substituída em 2026-10-06 pela versão de entrada de cada app no canal `free` (seção "Decisões tomadas 2026-10-06"): a porta de entrada passa a ser a conta sem compra, instalando pela própria CLI, e nenhuma skill solta é distribuída.*
-
-**O limite a aceitar na v1:** `npx` alcança quem usa terminal (Claude Code, Codex, Gemini CLI, Cursor). Quem só usa o app do Claude ou do ChatGPT entra depois, por skills enviadas na conta ou por um conector MCP, quando a medição mostrar que vale.
-
-**Core e módulos:** o harness que existe hoje vira duas coisas. O *core* `flyee` é só o contrato: `agent.md` enxuto, rules, registro de módulos e os comandos `add` e `update`. Cada ferramenta é um *módulo* versionado no seu servidor, instalado sob demanda com `npx flyee add <módulo>`, e é o que aparece como ícone no painel. O starter kit de SaaS é o primeiro módulo da trilha Construir, não o core: quem só quer a ferramenta de vídeo não recebe um esqueleto de SaaS.
-
-| Pergunta | Resposta |
-| --- | --- |
-| Tudo no mesmo harness? | Não. Um `agent.md` que carrega tudo incha o contexto e degrada a IA; uma quebra no módulo de vídeo não pode exigir release do core; e a métrica por segmento precisa do módulo como unidade (quem instala e usa o quê). |
-| Complementos que o integrante adiciona? | Sim. Módulo = pasta com `flyee.module.json` (nome, versão, trilha, tipo, IAs compatíveis, credenciais externas exigidas como HeyGen ou Apify, permissões, aula por idioma, changelog) + skills, workflows e scripts. O core adiciona uma referência ao `agent.md`; nada é concatenado. |
-| Pacotes npm separados? | Não para o integrante: um único instalador público, e os módulos vêm do seu servidor pelo token, com o plano decidindo quais. Internamente, um monorepo com um pacote por módulo dá versionamento independente. |
-| E as receitas? | Um conjunto nomeado de módulos mais um workflow por cima: `npx flyee add receita:video-semanal` instala radar, pauta, roteiro HeyGen e takes de uma vez. |
-| E as trilhas? | Viram filtro e ordem do catálogo, não container. O painel volta a ser a vitrine de ícones que você imaginou: um ícone por módulo, filtrado por etapa. |
-
-Primeiros módulos, pelo que você já tem: saas-starter (Construir); radar de conteúdo, pauta e roteiro, roteiro HeyGen, takes com mockups de telas, pesquisa de conteúdo automática, copy de redes (Divulgar); copy de LP e sites (Vender).
-
-**Arquitetura da entrega.** O diagrama original não veio na exportação. Versão em texto, com a fronteira entre plataforma e produto:
-
-```text
-Painel flyee.club [plataforma]
-  emite o token, revalida após 30 dias sem update, revoga no cancelamento
-      │
-      ├─► npx flyee [produto] ──token──► servidor de pacotes [plataforma]
-      │                                  confere token, plano e versão;
-      │                                  devolve pacote, checksum e manifesto
-      ├─► skills soltas [amostra grátis, sem token e sem atualização]
-      └─► aulas, receitas e changelog [painel]
-
-Harness flyee na máquina do integrante [produto]
-  ──► Claude Code · Codex · Gemini CLI · Cursor (plano ou API do próprio integrante)
-```
-
-O token liga tudo: o painel emite, o instalador usa, o servidor confere. Trinta dias sem update, o token vence e o integrante volta ao painel para revalidar; cancelou, o update para e a versão envelhece.
-
-## Modelo de negócio
-
-A escada tem três degraus claros: um produto de entrada barato para medir quem compra, a assinatura como núcleo, e upsells para quem já usa. Os preços são hipóteses ancoradas no Ratos OS (R$ 97 único, 1 ano) e na comunidade Ratos (R$ 597/ano); como o clube não substitui sua renda no curto prazo, o objetivo dos primeiros seis meses é dado, não receita.
-
-| Degrau | O que é | Para quem | Preço de partida (hipótese) | O que prova |
-| --- | --- | --- | --- | --- |
-| 0 · Amostra | A versão de entrada de cada app, instalada pela CLI numa conta sem compra, + newsletter bilíngue; nunca oferecida, só alcançada pelo conteúdo (decisão de 2026-10-06) | Topo de funil | Sem preço | Interesse por segmento e idioma; qual vídeo traz cadastro e instalação |
-| 1 · FlyeeClub, o acesso (low-ticket) | Harness + catálogo inteiro com atualização contínua + aula de uso por ferramenta; 1 acesso; token revalidado no painel a cada 30 dias sem update | Quem quer testar | R$ 97 único / US$ 29 | Quem paga, por qual porta entra e quem volta para revalidar |
-| 2 · FlyeeClub Pro, a assinatura | FlyeeClub + guias avançados, receitas, encontros, voto no roadmap, a camada "abrir o capô" (herdada do Pro em 2026-10-06), acesso em mais de uma máquina | Quem usa toda semana e quer ir fundo | R$ 67/mês ou R$ 597/ano; US$ 19/mês; fundador com preço travado | Uso semanal por segmento, conversão kit → assinatura |
-| ~~3 · Pro~~ (fora da vitrine desde 2026-10-06: a camada "abrir o capô" passou ao FlyeeClub Pro e as linhas `pro-*` ficam inativas) | Assinatura + camada "abrir o capô" + mais máquinas (a licença comercial passou a valer em todo plano pago em 2026-10-06) | Freelancer e agência | R$ 197/mês / US$ 49 | Quanto do público é profissional de serviço |
-| 4 · Mentoria em grupo | Turma trimestral, ao vivo, sobre operar produto com IA | Assinantes engajados | R$ 997 a 1.997 por turma | Demanda por acesso a você |
-| 5 · Advisory e Time | Meio dia por semana ([plano de agosto](https://claude.ai/code/artifact/a704c98b-1442-45e3-9e3f-dd4ae0f5166c)) e plano por assento | Empresas | Preço público, sob consulta | Teto da escada |
-
-Os preços desta tabela são dados configuráveis, guardados em `plans` e editados em `/admin/billing`, nunca constantes no código. Os valores são hipóteses de partida.
-
-**Upsell é gatilho de uso, não de tempo:** a revalidação de 30 dias é o momento em que todo integrante, até o do kit, passa pelo painel; é ali que a oferta certa aparece. Desde 2026-10-06: quem tem o FlyeeClub recebe a oferta do FlyeeClub Pro (com a razão de uso quando houver, três ou mais trilhas em 30 dias), e todo integrante pagante vê a mentoria e a consultoria, sob demanda, levando ao contato; o advisory a quem pergunta sobre a própria operação.
-
-**Consequência do kit sem limite de ferramentas:** a camada mais forte (ferramenta + atualização) passa a ser vendida uma vez, por R$ 97. A assinatura precisa valer pela camada de profundidade (aulas avançadas, receitas, encontros, voto), que é a que consome sua energia. Duas formas de proteger: canal estável para o kit (atualização mensal) e canal latest para assinantes (semanal, com beta); ou aceitar e medir a conversão kit → assinatura em 60 dias antes de mexer.
-
-**Retenção honesta:** contador de versões atrás dentro do harness, changelog do que a versão dele já perdeu, preço de fundador que não volta e plano anual. Cancelamento em um clique; o gatilho é a perda visível, não o atrito.
-
-**Conta de referência:** 300 kits de entrada a R$ 97 são R$ 29.100 uma vez; 100 assinantes a R$ 67 são R$ 6.700/mês. Taxas e impostos saem daí.
-
-## Métricas e trackers
-
-O foco não tem data: ele é decidido quando os dados cumprirem uma regra combinada antes. Proposta de regra: um segmento lidera em compra do kit, ativação e uso semanal por 4 semanas seguidas, com pelo menos 30 pessoas em cada segmento comparado. Até lá, o catálogo continua amplo.
-
-**O que registrar (eventos, nunca o conteúdo do uso)**
-
-| Momento | Evento | Dimensões | Serve para |
+| 2026-10-08 | Vários escritórios desde o primeiro dia; o ONE é vendido a outros escritórios já no primeiro ano. |
+| 2026-10-08 | Só o módulo de passagens aéreas nesta fase. Salário-maternidade, plano de saúde e trabalhista ficam fora. Passageiros do Brasil inteiro. |
+| 2026-10-08 | O cliente do ONE paga assinatura e nada passa pelo ONE: sem taxas, sem valores de processo, sem pagamentos. |
+| 2026-10-08 | O ONE é uma empresa de tecnologia. O conteúdo jurídico padrão do módulo vem de um advogado contratado como curador; cada escritório revisa e responde pelo que usa. Todos os tipos de certificado digital (A1, A3 em token ou cartão, nuvem) precisam funcionar. |
+| 2026-10-08 | Plano de desenvolvimento em marcos M0 a M6 aprovado. Identidade provisória (paleta `theme-blue`, logos provisórios) até a arte oficial. |
+| 2026-10-09 | Uma pessoa não pertence a mais de um escritório. O material de origem (`attachments/`) não entra no repositório. |
+| 2026-10-13 | "Viagem Blindada" passa a se chamar **Direito do Passageiro**. |
+| 2026-10-14 | **Automação primeiro.** O ONE decide sozinho por padrão, inclusive nos atos do advogado (o texto da peça, protocolar ou segurar, os prazos), e cada escritório escolhe, decisão por decisão, que uma pessoa confira uma parte ou decida tudo. |
+| 2026-10-14 | Uma credencial do advogado é guardada quando uma automação do ONE precisar dela (o protocolo no sistema do tribunal), sob regras de custódia próprias. |
+| 2026-10-14 | Uma família com menor vai junta à vara cível, num processo só. Dividir (adultos no juizado, o menor na vara cível) é escolha registrada de um advogado. Cada autor de um processo na vara cível aceita, antes do protocolo, o que isso implica de custas. |
+| 2026-10-15 | Protocolo pelo ONE: primeiro o que não precisa de autorização de tribunal (a assinatura em nuvem do advogado, o arquivo assinado que o tribunal aceita, o cliente do MNI). Automação da tela de um tribunal só onde nenhuma regra escrita do tribunal ou do CNJ a proíbe; uma previsão de hostilidade não impede. Cada tribunal é conferido contra os próprios atos antes. |
+| 2026-10-21 | Nenhum componente que exija licença paga (só os pacotes MIT do MUI X). Repositório próprio (`onedeveloperapp/one-platform`), publicado pela Vercel via GitHub Actions. |
+
+**Regras de produto que valem em tudo**
+
+- Adultos vão ao juizado especial cível; um adulto acima do teto de 40 salários mínimos vai à vara cível sozinho. O foro padrão é o domicílio do passageiro; outro foro só numa cidade de aeroporto da viagem e com motivo registrado.
+- O WhatsApp é o oficial (Cloud API da Meta), com o número de cada escritório, em coexistência com o aplicativo do celular.
+- A marca do escritório em tudo o que o passageiro vê. Só português do Brasil.
+- Texto para pessoas (site, app, e-mails, WhatsApp): simples, sem travessão, sem ponto de exclamação, sem emoji. Testes seguram a regra.
+- Regras do domínio (foro, tipo de processo, prazo, Tema 1.417, contagem de causas por estado) são código puro, versionado e testado. A IA nunca decide uma regra.
+- Toda execução de IA fica registrada (tarefa, versão das instruções, modelo, entrada, saída, custo).
+- Nenhuma senha, semente de segundo fator ou arquivo de certificado de advogado é guardado. A única custódia construída é a da autorização de assinatura em nuvem (seção 6).
+
+## 4. A jornada de um caso
+
+O que existe hoje, na ordem em que o caso anda. "Construído" quer dizer código, banco e telas prontos e testados; a seção 8 diz o que já rodou contra o fornecedor real.
+
+| Etapa | O que o ONE faz | Onde | Estado |
 | --- | --- | --- | --- |
-| Cadastro | conta criada | segmento, IA usada, idioma, origem (UTM), degrau comprado | Quem entra e por onde |
-| Instalação | `npx flyee` rodou | versão, IA detectada, sistema | Ativação técnica |
-| Ativação | primeira ferramenta executada | ferramenta, trilha | Quem passa do install ao uso |
-| Uso | ferramenta executada | ferramenta, trilha, versão instalada | Uso semanal por segmento; o que ninguém usa |
-| Atualização | `update` rodou, ou falhou por token vencido | versão de → para | Ritmo de atualização; quem ficou para trás |
-| Revalidação | token revalidado no painel | dias desde o último update, oferta exibida, clique | Volta ao painel; eficácia da isca |
-| Aula | aula iniciada e concluída | ferramenta, idioma, nível | Onde a aula avançada tem demanda |
-| Upsell | oferta vista, clicada, comprada | degrau de origem → destino | Conversão kit → assinatura → Pro |
-| Saída | cancelamento e motivo | degrau, tempo de casa, uso nos 30 dias anteriores | O que precede o cancelamento |
+| Atendimento | Conversas do número do escritório; o que pode ser enviado é decidido pelo banco (texto livre só nas 24 horas depois da última mensagem da pessoa, modelo aprovado fora delas, nunca a quem pediu para sair); envio de arquivos do caso; abrir um caso a partir da conversa. | `/atendimento` | Construído. O atendente de IA, o CRM e os follow-ups são o M4. |
+| Pasta do cliente | Link do cliente por token: dados dele e dos filhos, viagem, documentos, relato, aceites. O escritório confere no Serpro o CPF de um adulto. A foto de um documento é medida na chegada (tamanho, nitidez, luz) e o cliente é avisado na hora se não dá para ler. | `/c/[token]`, `/casos/[id]` | Construído. |
+| Conferência dos documentos | A IA confere cada documento que sabe ler (identidade, comprovante de endereço, bilhete, cartão de embarque, recibo) e lê os trechos do voo de um bilhete. O ONE aceita ou recusa; um documento recusado é pedido de novo ao cliente pelo WhatsApp, com o motivo. | `/casos/[id]`, `/aprovacoes` | Construído. |
+| Assinatura do cliente | O PDF vai para assinatura pela ZapSign da conta do escritório, pelo gov.br ou pelo e-Notariado. O PDF assinado vira documento aceito do caso. | `/casos/[id]`, `/c/[token]` | Construído. |
+| Relato | O cliente manda áudio ou texto; a IA transcreve e propõe a ordem dos fatos; o cliente confirma ou diz o que está errado. | `/casos/[id]`, `/c/[token]` | Construído. |
+| O voo | Cada trecho é conferido no registro oficial da ANAC (VRA); a FlightAware responde, a pedido, o que o VRA ainda não tem. Os METAR da REDEMET guardados como prova. | `/casos/[id]` | Construído. |
+| Como o caso vai a juízo | As regras planejam as ações: foro, juizado ou vara cível, família com menor junta, teto por autor, o que cada autor pede, a triagem do Tema 1.417 (risco de a suspensão nacional alcançar o caso), o aviso de inscrição suplementar na OAB. | `/casos/[id]` | Construído. |
+| Reclamação administrativa | O escritório registra o canal (Anac Passageiro, consumidor.gov.br, Procon, a companhia), o protocolo e o prazo de resposta. O ONE não protocola nada lá. | `/casos/[id]` | Construído. |
+| A peça | A IA escreve o primeiro texto a partir do modelo do escritório, sem receber CPF, endereço ou telefone. Só é aprovado o texto cujas citações estão todas na biblioteca conferida do escritório e sem nada a completar; o advogado aprova na prévia o texto exato, ou devolve à IA com o que mudar. O PDF sai em nome do escritório. | `/casos/[id]`, `/biblioteca` | Construído (só a petição inicial). |
+| Dossiê | Documento do caso, com código público de verificação: quem é cada pessoa, o que fizeram no link, o que assinaram, o que contaram, o que foi tentado antes. | `/casos/[id]`, `/verificar/[code]` | Construído. |
+| Pacote de protocolo | Os arquivos na ordem, com nomes simples, divididos pelo limite do sistema (Projudi, eproc, PJe), com o passo a passo do sistema. No Projudi do TJGO, o ONE assina cada arquivo (`.p7s`) com a autorização em nuvem de um advogado da ação. O advogado protocola com o próprio login e anexa o recibo. | `/protocolo`, `/casos/[id]` | Construído. O protocolo pelo próprio ONE (MNI) é o próximo passo. |
+| Carteira existente | Importação da planilha do sistema anterior (Excel ou texto), lida no navegador, com conferência linha a linha antes de gravar, e desfeita se preciso. | `/casos/importar` | Construído. |
+| Andamento | O processo é lido no tribunal pelo número: Projudi do TJGO pelo webservice público; os outros tribunais por um agregador ainda a escolher. | `/casos/[id]` | Construído (TJGO); fora de Goiás espera o agregador. |
+| Publicações | O DJEN é lido por inscrição na OAB de cada advogado; uma pessoa tria (prazo, audiência, decisão, pagamento, ciência, outro); a IA tria em modo sombra e, nas categorias que bateram a meta, com amostra. | `/publicacoes` | Construído. |
+| Prazos | Contados pela regra sobre o calendário do tribunal (dias úteis, recesso, suspensões), confirmados por uma pessoa ou pelo ONE; o ONE lê o prazo de uma publicação triada como prazo. | `/prazos` | Construído. Só o calendário do TJGO de 2026 está registrado. |
+| Audiências | Registradas com fuso do tribunal, modalidade, local ou link e quem vai; escritas na agenda Google do escritório; o ONE lê a audiência de uma publicação triada como audiência. | `/agenda` | Construído. |
+| Avisos ao cliente | Pelo WhatsApp do escritório, só a quem aceitou: lembrete de audiência (um mês, uma semana, um dia, no dia), audiência que mudou, andamento a cada quinze dias, alerta contra o golpe do falso advogado no dia em que um pagamento é triado, documento recusado. No link, o cliente vê o processo e a próxima audiência. | `/settings/connections`, `/casos/[id]`, `/c/[token]` | Construído. |
+| O que precisa de alguém hoje | Contagens do dia: documentos a conferir, peças esperando advogado, pacotes prontos, publicações a triar, prazos vencendo, audiências sem aviso, leituras atrasadas. | `/inicio`, `/casos` | Construído. |
 
-**As cinco métricas que decidem o foco (uma linha por segmento, toda semana)**
+**O ONE leva o caso adiante sozinho.** Quando um caso tem o que as ações pedem, o ONE cria as ações, nomeia quem assina, pede a peça à IA, aprova o texto se ele passa pelo portão, pede o pacote e assina os arquivos, cada passo como o escritório deixou. Quando para, o caso diz o que ele espera e quem resolve. Nada que uma pessoa desfez é refeito.
 
-1. Compradores do kit e conversão da página, por porta de entrada.
-2. Ativação em 7 dias: instalou e executou ao menos uma ferramenta.
-3. Uso semanal: executou em 3 das últimas 4 semanas.
-4. Conversão kit → assinatura em 60 dias.
-5. Receita por integrante em 90 dias: kit + assinatura + upsell.
+**Cobertura do fluxo do escritório piloto.** Os mapas de fluxo do piloto (`attachments/fluxo_geral.md`, `fuxo_passageiros.md`, fora do repositório) comparados ao que existe:
 
-**Onde isso vive:** a v1 não precisa de painel interno. Uma tabela de eventos no seu banco (você já usa Supabase) ou um PostHog auto-hospedado, e uma consulta semanal por segmento numa planilha, bastam até a fase 2. O que não pode faltar é o evento registrado desde o primeiro integrante, com o segmento e o idioma gravados no cadastro.
+| Etapa do fluxo | No ONE |
+| --- | --- |
+| Lead e marketing (tráfego, conteúdo) | Fora do ONE. A origem do lead entra com o CRM do M4. |
+| Atendimento (script, follow-up, "não tem direito") | Conversas construídas; atendente de IA, CRM e follow-ups no M4. |
+| Contratação (procuração, contrato, dados, documentos, questionário, resumo dos fatos) | Construído. O pagamento por PIX ou link fica fora, por decisão. |
+| Reclamação administrativa | Registro construído. |
+| Petição inicial (fatos, direitos, pedidos, documentos na vertical, em PDF, no tamanho e na ordem) | Construído. |
+| Distribuição (PJe, eproc, e-SAJ, Projudi) | Pacote para Projudi, eproc e PJe; o advogado protocola. e-SAJ não tem pacote. |
+| Acolhimento (número do processo, audiência na agenda, lembretes, alerta de golpe) | Construído. |
+| Analisar publicações e prazos | Construído. |
+| Acompanhamento (andamento ao cliente) | A cada quinze dias (o fluxo pedia uma vez por mês). Pesquisa de satisfação e pedido de indicação não estão no plano. |
+| Audiência (resumo para o audiencista, valor para acordo) | Não construído. A faixa de acordo por companhia é do M5. |
+| Sentença e recursos (embargos, recurso inominado, contrarrazões, réplica) | Prazos e publicações sim; peças além da inicial não estão no plano atual. |
+| Balcão virtual | Não está no plano. |
+| Financeiro (receber, pagar cliente) | Fora do ONE, por decisão. |
+| Resumo semanal de cada etapa | O resumo semanal do sócio falta no M3. |
+| Direito do Passageiro (mensagens no dia do voo, verificação de atraso) | M4. |
 
-## Etapas
+## 5. O que o ONE decide sozinho
 
-Venda o kit de entrada antes de construir o painel e deixe o uso por segmento escolher o foco. Cada fase termina num portão; as metas são propostas para você ajustar.
+Cada decisão abaixo tem três modos, escolhidos por um sócio com o segundo fator em `/settings/autonomia`: **o ONE decide sozinho** (o padrão da plataforma), **o ONE decide e uma parte espera a conferência de uma pessoa**, ou **uma pessoa decide**. O operador pode segurar uma decisão em todos os escritórios quando a medida dela cai. Toda decisão do ONE fica na linha do tempo do caso e na auditoria como do ONE.
 
-**Roadmap em 5 fases e 4 portões.** O diagrama original não veio na exportação. A tabela foi reconstruída a partir do texto desta seção e precisa da sua confirmação.
+| Decisão (como a tela diz) | O que o ONE faz sozinho |
+| --- | --- |
+| Aceitar ou recusar os documentos do cliente | Aplica a conferência da IA. |
+| Mandar a ordem dos fatos ao cliente | Põe a cronologia proposta no link do cliente. |
+| Aprovar o primeiro texto da peça | Aprova o texto da IA quando todas as citações estão na biblioteca e nada ficou a completar, e gera o PDF. Um texto que um advogado tocou nunca é aprovado pelo ONE. |
+| Confirmar os prazos | Confirma no dia contado, sempre pelo dia mais cedo quando a contagem supôs algo. |
+| Decidir entre protocolar ou segurar (Tema 1.417) | Segura no risco alto, protocola no médio, baixo ou fora do tema; não decide quando a triagem não sabe. |
+| Criar as ações do caso | Cria as ações que as regras planejam quando o caso tem o que elas pedem. |
+| Pedir a peça à IA | Pede o primeiro texto do modelo padrão do escritório para aquele tipo de ação. |
+| Montar o pacote de protocolo | Pede o pacote quando a peça vira a petição e os documentos estão aceitos. |
+| Assinar os arquivos do protocolo | Assina com a autorização em nuvem de um advogado da ação, onde o sistema aceita arquivo assinado. |
+| Propor o prazo de uma publicação | Lê o prazo de uma publicação que uma pessoa triou como prazo e o propõe, só quando o texto não deixa dúvida. |
+| Registrar a audiência de uma publicação | Lê a audiência de uma publicação triada como audiência e a registra, só quando o texto não deixa dúvida. |
 
-| Fase | O que acontece | Portão para seguir |
+**O que continua sempre com uma pessoa:** triar uma publicação como prazo, audiência, decisão ou pagamento (a IA fica em modo sombra nessas categorias); devolver uma resposta da IA com o que mudar; protocolar no sistema do tribunal; escolher outro foro; dividir uma família.
+
+As tarefas de IA que existem: `caso.documento.conferencia`, `caso.relato.transcricao`, `caso.relato.cronologia`, `caso.peca.minuta`, `publicacao.triagem`, `publicacao.prazo`, `publicacao.audiencia` e `plataforma.verificacao` (a checagem do executor, sem dado de cliente). O modelo de cada uma é dado da versão publicada das instruções, trocado pelo operador em `/admin/ai`.
+
+## 6. Assinatura, certificados e protocolo
+
+- **Hoje o advogado protocola** no sistema do tribunal, com o próprio login. O ONE entrega o pacote pronto e guarda o recibo.
+- **Assinatura em nuvem.** O advogado autoriza o ONE no PSC do próprio certificado ICP-Brasil em nuvem (o provedor credenciado pelo ITI), por no máximo sete dias. O ONE guarda essa autorização selada, nunca o certificado nem os fatores que o desbloqueiam, e a usa só para o que foi declarado antes (os arquivos de um pacote de uma ação que o advogado assina). Os arquivos assinados só saem do ONE pelas mãos do advogado que assinou. O advogado, um sócio ou quem gerencia o escritório encerra a autorização a qualquer momento.
+- **Inventário de certificados.** Cada advogado declara o tipo de certificado com que assina em cada sistema, a validade e a última vez que conferiu que o computador assina lá. Nada do certificado em si.
+- **O que vem a seguir:** o cliente do MNI (`entregarManifestacaoProcessual`), para o ONE entregar a petição pelo canal do próprio tribunal, com um dublê onde o tribunal fica, e depois o protocolo pela tela do tribunal onde nenhuma regra escrita proíbe.
+- **Por que guardar o certificado não basta:** o PJe, a PDPJ e o eproc pedem segundo fator por aplicativo autenticador também a quem entra com certificado; o Projudi do TJGO manda um código por e-mail; a lei reserva a chave privada ao titular.
+
+## 7. Modelo de negócio
+
+- O ONE cobra só a própria assinatura, pelo Asaas, em reais. As faixas são dados (tabela `plans`), com limites como processos ativos, IA incluída e números de WhatsApp, e o monitor de voo do Direito do Passageiro como adicional.
+- **Ainda não construído.** A cobrança do ONE é do M3. O código de cobrança ainda é o herdado (acesso avulso mais assinatura, Stripe e dólar, degraus `kit`, `club` e `pro`), e o único plano semeado é "Sem assinatura". Nenhum preço foi decidido.
+- **Âncora de preço:** o piloto gasta cerca de R$ 2.000 por mês com o que o ONE substitui.
+- **Nunca:** pagamento atrelado ao resultado do processo, percentual de causa, cobrança do passageiro.
+
+## 8. Fornecedores e o que já rodou de verdade
+
+| Fornecedor | Para quê | Quem contrata | Estado |
+| --- | --- | --- | --- |
+| Meta (WhatsApp Cloud API) | O número de cada escritório | O app é da plataforma; o número é do escritório | Construído; roda no simulador. Falta o app do ONE na Meta (portfólio, Embedded Signup, revisão de Tech Provider). |
+| Anthropic | Conferência de documentos, cronologia, peça, triagem | Plataforma | Rodou na primeira caminhada (2026-10-21): Sonnet 5.5 nos documentos, Opus 5.5 na peça e na checagem do executor. A tabela de preços dos modelos está vazia, então nenhuma execução tem custo ainda. |
+| Google Gemini | Transcrição de áudio | Plataforma | Falta a chave. |
+| ZapSign | Assinatura do cliente | Escritório | Construído; testado só com dublê. |
+| Serpro (Consulta CPF) | Conferir o CPF de um adulto | Plataforma | Construído; falta o contrato. |
+| DJEN (CNJ) | Publicações | Público, sem chave | Conferido à mão desta máquina; nunca a partir do app publicado. |
+| Projudi do TJGO (webservice público) | Andamento em Goiás | Público, sem chave | Conferido à mão desta máquina. |
+| Escavador, Judit, Codilo | Andamento fora de Goiás | Plataforma | Esperando chaves de teste para o comparativo; nenhum rodou. |
+| ANAC (VRA) | Registro oficial dos voos | Público | Um mês lido desta máquina. |
+| FlightAware (AeroAPI) | Voo recente ou no exterior | Plataforma | Falta saber se o uso do ONE cabe no plano Standard ou exige o Premium. |
+| REDEMET | METAR dos aeroportos | Plataforma | Falta o cadastro da chave. |
+| Google Agenda | Agenda de audiências do escritório | Plataforma (projeto) e escritório (conta) | Construído; falta o projeto Google publicado. |
+| PSC (BirdID, SerproID e outros) | Assinatura em nuvem do advogado | Advogado (certificado), plataforma (cadastro como aplicação) | Construído; falta o cadastro do ONE em cada PSC e um certificado SSL ICP-Brasil do domínio. |
+| Asaas | Assinatura do ONE | Plataforma | Não construído. |
+| Supabase, Vercel, Inngest, Resend | Banco, hospedagem, jobs, e-mail | Plataforma | Projeto Supabase de desenvolvimento com a base (43 migrações, 1.397 asserções pgTAP passando); Vercel publicando em `one-platform-two.vercel.app` (plano Hobby); homologação e produção no Supabase em São Paulo, Inngest e domínio ainda por criar. |
+
+**A primeira caminhada pelo app** (2026-10-21, contra o banco de desenvolvimento): escritório fundado com segundo fator, cada tela do menu, um caso aberto e o link do cliente no celular, documentos conferidos pelo modelo real e aceitos pelo ONE, um trecho lido do cartão de embarque, conversa pelo simulador, convite aceito, e o ONE levando o caso até o primeiro texto da peça. Telas que ainda não foram percorridas com dados: publicações, prazos, audiências, pacote e assinatura, importação, dossiê.
+
+## 9. Onde está o desenvolvimento
+
+| Marco | O que entrega | Estado em 2026-10-22 |
 | --- | --- | --- |
-| 0 · Preparar (duas semanas) | segmentos e perguntas do cadastro, eventos, inventário, `npx flyee`, página de espera, primeiro conteúdo | página de espera no ar e eventos definidos |
-| 1 · Vender o kit | validação por pagamento | 50 compradores; abaixo disso, estender a fase 1 |
-| 2 · Medir | eventos registrados e lidos por segmento | **portão destacado**: com a leitura por segmento, abrir painel, assinatura e upsell |
-| 3 · Assinatura e upsell | assinatura, aulas avançadas, receitas, encontros, voto | regra de foco cumprida (seção de métricas) |
-| 4 · Foco | catálogo e conteúdo concentrados no segmento líder | — |
+| M0 · Base limpa e segura | Repositório do ONE, só pt-BR, sem nada de outro produto | Pronto (2026-10-08). |
+| M1 · Fundação para vários escritórios | Escritório e equipe, segundo fator, cofre, arquivos, camada de IA com fila de aprovação, WhatsApp, `/inicio` | Pronto. |
+| M2 · Do contrato assinado à petição inicial | Caso, link do cliente, assinatura, conferência de documentos, regras, relato, peça, biblioteca, dossiê, pacote, DJEN | Pronto, menos o teste do posto de protocolo no Projudi com um advogado do piloto. |
+| M3 · Carteira nacional viva e pronto para outros escritórios | Andamento, importação, prazos, triagem com amostra, pacotes eproc e PJe, audiências, avisos ao cliente, autonomia por escritório, o ONE levando o caso, assinatura em nuvem | Em andamento. Construído: S8, S9 e dez partes do S10. Falta: o cliente do MNI e o protocolo pelo ONE; o resumo semanal do sócio; a vigia do DJEN e da troca de sistema de um tribunal; a cobrança do ONE (Asaas, faixas, medição, painel de consumo); o suporte assistido e o console de escritórios refeitos; o backup adaptado. |
+| M4 · Atendimento com IA e Direito do Passageiro | Atendente de IA em modo sugestão, CRM com origem do lead, follow-ups; o passageiro se cadastra na página do escritório antes de voar e recebe mensagens informativas no dia do voo | Não começado. |
+| M5 · Números | Resultados, faixa de acordo por companhia, estimativa de tempo com margem de erro, painel de volume e semelhança | Não começado. |
+| M6 · Escala para novos escritórios | Módulo versionado como dado, instalação de um escritório em um dia, migração pela OAB, raio-x pela OAB | Não começado. |
 
-O portão destacado é o que libera a assinatura: sem eventos registrados e lidos por segmento, não abra painel nem upsell. O foco em si não tem data; ele dispara pela regra da seção de métricas. Abaixo de 50 compradores, estenda a fase 1; se nenhum segmento se destacar, reveja as portas de entrada, não o produto.
+## 10. O que depende do dono, fora do código
 
-**Próximas duas semanas (fase 0)**
+A lista completa, com o estado de cada item, é o documento "ONE · O que providenciar fora da plataforma" (https://claude.ai/code/artifact/2b7654a2-a43b-407e-b042-c27c43ea3664). Os que mais seguram o produto:
 
-- [ ] Definir os 3 ou 4 segmentos de entrada e as perguntas do cadastro (perfil, IA usada, idioma)
-- [ ] Definir os eventos da seção de métricas e onde ficam registrados
-- [ ] Inventariar as ferramentas por etapa e listar o que fica fora do kit (aulas avançadas, voto, encontros)
-- [ ] Empacotar o harness como `npx flyee`: instalador público + pacote no seu servidor com token de 30 dias
-- [ ] Subir página de espera bilíngue com lista de e-mail
-- [ ] Publicar o primeiro conteúdo (autópsia de produção) apontando para a lista
+- Projetos Supabase de homologação e produção em São Paulo; plano Pro na Vercel (o Hobby é só para uso pessoal); conta no Inngest; domínio do ONE com o Resend.
+- O app do ONE na Meta, sem o qual nenhum número real conecta.
+- A identidade oficial (logo, paleta, tipografia) e os textos legais (termos de uso, privacidade, cookies), que nenhuma migração semeia.
+- Contrato com o Serpro; resposta da FlightAware sobre o plano; cadastro na REDEMET; chaves de teste de Judit, Escavador e Codilo, e depois o contrato do agregador escolhido.
+- Projeto Google com a API de agenda, publicado fora do modo de teste.
+- Cadastro do ONE como aplicação nos PSC, com um certificado SSL ICP-Brasil do domínio, e um advogado do piloto com certificado em nuvem.
+- O acesso ao MNI do TJGO, pedido pelo piloto à engenharia de software do tribunal, com o ambiente de teste do Projudi.
+- O teste do posto de protocolo no Projudi, no eproc e no PJe com um advogado (login, assinador, limites reais de arquivo, tipos de cada arquivo).
+- O cabeçalho de uma exportação do Astrea feita pelo piloto (só os nomes das colunas), para a importação reconhecer as colunas sozinha.
+- A meta que uma categoria da triagem de IA precisa bater para sair do modo sombra (os números da configuração são uma proposta).
+- A conta do Asaas e as faixas e preços da assinatura.
+- O curador do conteúdo padrão do módulo e os textos que o cliente aceita no link.
 
-## Decisões em aberto
+## 11. Pontos em aberto e riscos de produto
 
-Das seis decisões originais, três foram tomadas em 2026-09-30 e estão marcadas. As levantadas no plano da plataforma foram quase todas decididas no mesmo dia.
+- **O site promete o contrário do padrão.** A descrição do ONE no site e nos metadados diz "com o advogado no controle de cada decisão", enquanto o padrão, desde 2026-10-14, é o ONE decidir sozinho, inclusive a peça e o prazo. O escritório pode mudar isso, mas o texto público precisa refletir a decisão. É do dono escolher a frase.
+- **Recomendação n. 001/2024 do Conselho Federal da OAB, item 3.1:** o julgamento profissional não é feito por IA generativa sem supervisão humana, e nenhuma atividade privativa da advocacia é delegada a ela. O padrão de o ONE aprovar sozinho o texto da peça fica em tensão com isso; a tela de autonomia cita o item ao lado das decisões do advogado, e o card do protocolo diz quando nenhum advogado leu a petição.
+- **A ação da OAB-SP contra a Enter** (2026-10-07, Justiça Federal de São Paulo) aponta quatro marcas que valem para qualquer fornecedor: pagamento atrelado ao resultado, estratégia sem decisão registrada de um advogado, peças "prontas para protocolar" validadas mais rápido do que se lê, e intermediação de causas. A Enter vende a defesa de massa às companhias que os escritórios do ONE processam, e os tribunais têm ferramentas próprias que procuram padrões (Berna no TJGO, Atalaia no CNJ, InfoVoo). A análise completa está em `reports/Análise da Enter para o ONE.md` (fora do repositório).
+- **Família dividida:** o TJMT e a 2ª Turma Cível do TJDFT rejeitaram a divisão adultos no juizado e menor na vara cível; a 7ª Turma Cível do TJDFT aceitou. Por isso a família vai junta por padrão; os julgados ficam no console do operador.
+- **Achados da primeira caminhada que esperam o operador:** o modelo aceitou documentos marcados "documento de teste, sem validade" (as instruções da tarefa não pedem que recuse; uma nova versão se publica em `/admin/ai`); a tabela de preços dos modelos está vazia; o trecho lido de um bilhete não é marcado como o trecho afetado, que as regras leem.
+- **Todo sistema de tribunal está "não confirmado"** na tabela até o operador conferir os atos do tribunal, então um pacote espera por isso ou por um advogado que nomeie o sistema na ação.
+- **Só o calendário de 2026 do TJGO está registrado.** Nos outros tribunais e anos, a contagem de prazo usa fins de semana, feriados nacionais e o recesso, e diz isso.
+- **Leitura por inscrição na OAB:** quando um advogado sai do escritório, as publicações dos processos dele deixam de ser lidas para esse escritório (o escritório é avisado).
+- **A biblioteca começa vazia.** Uma lista de fontes sugerida pela plataforma seria decisão do dono.
+- **Tribunais federais e do trabalho** não entram: a importação os recusa e não há calendário para eles.
+- **Faltam, pelo que a defesa ataca primeiro:** procuração com assinatura ICP-Brasil ou por escritura quando o juiz pedir (a Nota Técnica NEA 01/2026 do TJGO permite), conferência mais funda do comprovante de endereço, prova de embarque por pessoa, e uma medida de que o advogado leu (tempo entre a prévia e a aprovação).
 
-- [x] **Quais segmentos entram na medição.** Decidido: produto próprio, freelancer ou agência, profissional que usa IA todo dia, dev, e "outro" fora da regra de foco. *Revisado em 2026-10-06: negócio, agência, produto digital e dev, os perfis do site, e "outro" fora da regra de foco (migração `0028`).*
-- [ ] **A regra que dispara o foco.** Aceita a proposta (um segmento lidera em compra, ativação e uso semanal por 4 semanas, com 30 ou mais pessoas por segmento) ou prefere outra? O painel de métricas usa a proposta como indicador até você decidir.
-- [x] **O que "1 acesso" significa no kit.** Decidido: um dispositivo no kit, três na assinatura, cinco no Pro.
-- [x] **Canal de atualização do kit.** Decidido: o mesmo canal para todos na v1.
-- [x] **O que fica aberto.** Decidido em 2026-10-06: nenhuma skill solta; o degrau grátis é a versão de entrada de cada app, no canal `free`, instalada pela CLI numa conta sem compra. Do harness, só a CLI é pública (pacote `flyee` no npm); o core viaja dentro dela e os apps vêm do servidor de pacotes.
-- [x] **Ordem dos upsells.** Decidido em 2026-10-06, com os dois planos: quem tem o FlyeeClub recebe a oferta do FlyeeClub Pro; a mentoria remota e a consultoria completa são serviços sob demanda, oferecidos no painel a quem já paga e contratados pelo contato; o Pro de antes saiu da vitrine. Desde 2026-10-06 nenhum uso das ferramentas oferece o Pro por conta própria: projetos de cliente valem em todo plano pago.
-- [x] **Proteção contra cópia e revenda.** Decidido em 2026-10-06. O que a IA lê fica em texto na máquina do integrante, então nenhuma trava impede copiar arquivos. O conjunto do item 10.6 do plano combina valor fora do disco, licença assinada por app e máquina que prende o harness à conta, marcas rastreáveis, relatório de downloads anômalos, cláusula nos termos, registro da marca no INPI e conteúdo dinâmico servido pela plataforma.
+## 12. Fora do escopo agora
 
-**Levantadas no plano da plataforma**
-
-- [x] **Vídeo das aulas avançadas.** Decidido: YouTube não listado para todas as aulas.
-- [x] **Nota fiscal.** Decidido: emitida direto no Asaas.
-- [x] **Encontros.** Decidido: link externo.
-- [x] **Endereços em inglês.** Decidido: traduzidos já na v1.
-- [x] **Revisão jurídica.** Decidido: os termos são considerados revisados.
-- [ ] **Quem opera o flyee.club.** Razão social, CNPJ e cidade que os termos de uso e a política de privacidade identificam. Os textos legais herdados ainda identificam a empresa do MedChina; o seed dos termos (fase 2) precisa desse dado antes do primeiro deploy.
-- [ ] **Preço anual em USD.** Este documento só traz US$ 19 por mês. A hipótese do plano é 10 vezes a mensal.
-- [x] **Trial da assinatura.** Decidido em 2026-10-06: nenhum. `trial_days` fica em 0; a versão de entrada no canal `free` cumpre o papel de teste sem entregar a loja inteira.
-
-**Do lado do produto (fora deste repositório)**
-
-- [ ] **Licenças do saas-starter.** Um módulo derivado desta base não pode levar a chave do MUI X Premium, que é licenciado por desenvolvedor; cada integrante precisaria da própria licença. O código do template licenciado (a vitrine `/ui` e os ícones Nexture) e as fontes comerciais precisam de checagem de licença antes de qualquer redistribuição.
-- [x] **Arquivo de entrada do harness.** Decidido em 2026-10-06: `AGENTS.md` canônico com ponteiros `CLAUDE.md` e `GEMINI.md`, skills em `.agents/skills/` com pontes em `.claude/skills/`, geradas pelo core como este repositório já faz em `scripts/sync-agent-harness.mjs` (seção "Decisões tomadas 2026-10-06").
+- Outros módulos: salário-maternidade, plano de saúde, trabalhista.
+- Aplicativo móvel; outro idioma além do português.
+- Qualquer controle de valores de processo, repasse ao cliente ou nota fiscal do escritório.
+- Peças depois da inicial, pesquisa de satisfação, balcão virtual.
 
 ## Fontes
 
-- [Ratos OS](https://ratosdeia.com.br/claudeos/), [Comunidade Ratos de IA](https://ratosdeia.com.br/comunidade/) e [Ratos de IA](https://ratosdeia.com.br/)
-- [Skoolmakers: comunidades de IA no Skool](https://skoolmakers.com/communities/category/ia/)
-- [Comunidade Maestros da IA](https://comunidade.maestrosdaia.com/) e [Maestros da IA, implementação](https://implementacao.maestrosdaia.com/)
-- [Claude Economy](https://claude-economy.vercel.app/)
-- [Automators Club](https://automatorsclub.com.br/)
-- [AI Business Hub](https://www.skool.com/ai-leaders-1796/about)
-- [Agent Skills: padrão aberto, adoção e governança](https://anomity.ai/blog/agent-skills-open-standard-adoption-governance/)
-- [ChatGPT e MCP: planos e limites](https://coworker.ai/blog/chatgpt-mcp)
-- [npm: plano pago de organização](https://docs.npmjs.com/upgrading-to-a-paid-organization-plan/)
-- [Claude Code: hospedar e manter marketplace](https://code.claude.com/docs/en/plugins/host-marketplace)
+- `CLAUDE.md` da raiz ("Where things stand", "Product decisions the code assumes"): o estado do código, mantido a cada entrega.
+- [`docs/ONE-PLANO-DESENVOLVIMENTO.md`](ONE-PLANO-DESENVOLVIMENTO.md): o plano de engenharia aprovado em 2026-10-08. Algumas premissas dele mudaram depois (a autonomia, a custódia da assinatura em nuvem, a família com menor, AeroDataBox trocado por ANAC e FlightAware); vale o que este documento e o `CLAUDE.md` dizem.
+- `attachments/` (fora do repositório): a apresentação "ONE, Tudo em um só lugar", os mapas de fluxo geral e do passageiro e a transcrição da reunião com o advogado do piloto.
+- `reports/Análise da Enter para o ONE.md` e `research_notes/` (fora do repositório): a análise da Enter, os julgados sobre a família dividida, a nota técnica do TJGO e a pesquisa sobre protocolo automatizado.
+- "ONE · O que providenciar fora da plataforma" (https://claude.ai/code/artifact/2b7654a2-a43b-407e-b042-c27c43ea3664): o que o dono providencia.
