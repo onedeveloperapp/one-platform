@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useLocalStorage } from "react-use";
 
 import { useScreenEffect } from "@/hooks/use-screen";
 import { MenuDefaultWidth, MenuShowState, MenuType, MenuWidth, Screens } from "@/types";
@@ -7,20 +6,19 @@ import { MenuDefaultWidth, MenuShowState, MenuType, MenuWidth, Screens } from "@
 type Props = {
   primaryBreakpoint: keyof Screens;
   secondaryBreakpoint?: keyof Screens;
-  storageKey: string;
   defaultMenuType: MenuType;
   menuDefaultWidth: MenuDefaultWidth;
 };
 
 export function useMenu(config: Props) {
-  const { primaryBreakpoint, secondaryBreakpoint, storageKey, defaultMenuType, menuDefaultWidth } = config;
+  const { primaryBreakpoint, secondaryBreakpoint, defaultMenuType, menuDefaultWidth } = config;
 
   const [showBackdrop, setShowBackdrop] = useState(false);
 
   const [primaryDefault, setPrimaryDefault] = useState<boolean>(false);
   const [secondaryDefault, setSecondaryDefault] = useState<boolean>(false);
 
-  const [menuType, setMenuType] = useLocalStorage<MenuType>(storageKey, defaultMenuType);
+  const [menuType, setMenuType] = useState<MenuType>(defaultMenuType);
 
   const [primaryCurrent, setPrimaryCurrent] = useState(MenuShowState.Show);
   const [secondaryCurrent, setSecondaryCurrent] = useState(MenuShowState.Show);

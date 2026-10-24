@@ -267,7 +267,7 @@ export default function ThemeProvider({ children }: { children: ReactNode }) {
     if (storedTheme !== theme) setTheme(theme);
   }, [theme, mode, storedTheme, setTheme]);
 
-  const [content, setContent] = useLocalStorage<ContentType>(LS_KEYS.contentType, DEFAULTS.contentType);
+  const [content, setContent] = useState<ContentType>(DEFAULTS.contentType);
 
   return (
     <ThemeContext.Provider
@@ -276,7 +276,7 @@ export default function ThemeProvider({ children }: { children: ReactNode }) {
         setTheme,
         mode: mode ?? DEFAULTS.themeMode,
         setMode,
-        content: content ?? DEFAULTS.contentType,
+        content,
         setContent,
         isDarkMode,
       }}

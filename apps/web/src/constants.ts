@@ -68,8 +68,6 @@ export const SESSION_STORAGE_KEYS = {
 export const LOCAL_STORAGE_KEYS = {
   themeColor: `${storagePrefix}-theme-color`,
   themeMode: `${storagePrefix}-theme-mode`,
-  leftMenuType: `${storagePrefix}-left-menu-type`,
-  contentType: `${storagePrefix}-content-type`,
   cookieConsent: `${storagePrefix}-cookie-consent`,
 };
 
