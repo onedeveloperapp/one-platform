@@ -119,6 +119,12 @@
       "from": "@/components/product/check-suggestion",
       "props": "answer (CheckAnswer from lib/cases/document-check), className?",
       "use": "What the AI read in a document of a case and suggests (accept or refuse, the reason the client would read, what the file is, the name on it, the legs of a ticket), shown where a person decides it: the case and the approval queue. It decides nothing; the card around it offers the decision. TILE_TONE icon box + StatusChip, the dedicated view of one task's answer that AnswerFields allows."
+    },
+    {
+      "name": "SecondFactorPrompt",
+      "from": "@/components/product/second-factor-prompt",
+      "props": "id, state: missing | challenge, reason, onConfirmed",
+      "use": "The second factor where an action asks for it, on the same screen: what the action needs it for, then the setup of an authenticator (its QR on white, its key, a code back) for an account with none, or the code alone for a session that has not confirmed it; once confirmed the screen goes on at the second level. Never a link to the security page from a flow the person would not come back from (the firm's setup first). A neutral warning Alert with its actions under the words, so a phone never squeezes them."
     }
   ],
   "template": [

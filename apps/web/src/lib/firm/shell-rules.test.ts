@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { canAccess, type MenuViewer, visibleItems } from "@/lib/firm/menu";
+import { isSetupStep } from "@/lib/firm/setup-steps";
 import { type FirmToday, readFirmToday, somethingForMe, todayNeeds } from "@/lib/firm/today";
 import {
   buildOnboardingSteps,
@@ -519,27 +520,45 @@ describe("the firm's setup, from facts", () => {
   it("is the firm's, and lists only what keeps ONE from working for it", () => {
     expect(isOnboardingEnabled).toBe(true);
     expect(ONBOARDING_ORG_SCOPED).toBe(true);
+    // Each step of the setup leads back to its own step of /configurar, never to another screen.
     expect(buildOnboardingSteps().map((step) => [step.key, step.href])).toEqual([
-      ["oab", "/configurar"],
-      ["team", "/settings/team"],
-      ["channel", "/settings/connections"],
+      ["oab", "/configurar?passo=oab"],
+      ["claims", "/configurar?passo=valores"],
+      ["team", "/configurar?passo=equipe"],
+      ["channel", "/configurar?passo=canal"],
       ["first-case", "/casos"],
     ]);
     for (const step of buildOnboardingSteps()) expect(product[step.title], step.title).toBeTruthy();
   });
 
+  it("names steps of the setup the setup has", () => {
+    for (const step of buildOnboardingSteps()) {
+      const asked = new URL(step.href ?? "/", "https://one.invalid").searchParams.get("passo");
+      if (asked !== null) expect(isSetupStep(asked), step.key).toBe(true);
+    }
+  });
+
   it("marks a step done when the thing exists, and never by a click", () => {
-    const facts = { oab_signer: true, team: false, channel: true, first_case: false };
-    expect(buildOnboardingSteps(facts).map((step) => step.done)).toEqual([true, false, true, false]);
+    const facts = { oab_signer: true, claim_defaults: true, team: false, channel: true, first_case: false };
+    expect(buildOnboardingSteps(facts).map((step) => step.done)).toEqual([true, true, false, true, false]);
     expect(isActivated(facts)).toBe(false);
-    expect(isActivated({ oab_signer: true, team: true, channel: true, first_case: true })).toBe(true);
+    expect(isActivated({ oab_signer: true, claim_defaults: true, team: true, channel: true, first_case: true })).toBe(
+      true,
+    );
     // A fact the database did not answer is a step not done, never one assumed done.
-    expect(isActivated({ oab_signer: true, team: true, channel: true })).toBe(false);
+    expect(isActivated({ oab_signer: true, team: true, channel: true, first_case: true })).toBe(false);
   });
 
   it("asks no team of a firm that works alone", () => {
-    const alone = { oab_signer: true, team: false, works_alone: true, channel: true, first_case: true };
-    expect(buildOnboardingSteps(alone).map((step) => step.key)).toEqual(["oab", "channel", "first-case"]);
+    const alone = {
+      oab_signer: true,
+      claim_defaults: true,
+      team: false,
+      works_alone: true,
+      channel: true,
+      first_case: true,
+    };
+    expect(buildOnboardingSteps(alone).map((step) => step.key)).toEqual(["oab", "claims", "channel", "first-case"]);
     expect(isActivated(alone)).toBe(true);
   });
 

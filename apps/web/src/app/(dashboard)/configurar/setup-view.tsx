@@ -1,5 +1,10 @@
 "use client";
 
+import TemplateDialog from "../biblioteca/template-dialog";
+import ConnectCard from "../settings/connections/components/connect-card";
+import NoticesCard from "../settings/connections/components/notices-card";
+import SignatureAccountCard from "../settings/connections/components/signature-account-card";
+import TestChatCard from "../settings/connections/components/test-chat-card";
 import { teamErrorKey } from "../settings/team/team-types";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -23,18 +28,24 @@ import {
   Typography,
 } from "@mui/material";
 
+import { CurrencyField } from "@/components/product/fields";
 import PageHeader from "@/components/product/page-header";
+import SecondFactorPrompt from "@/components/product/second-factor-prompt";
 import SetupWizard, { type WizardStep } from "@/components/product/setup-wizard";
 import type { SecondFactorState } from "@/lib/ai/approvals";
+import { type Incident, INCIDENT_KEY, INCIDENTS } from "@/lib/cases/cases";
 import { addOabRegistration, answerFirmSetup, inviteToFirm } from "@/lib/firm/actions";
-import { autonomyErrorKey } from "@/lib/firm/autonomy";
-import { setFirmSigner } from "@/lib/firm/autonomy-actions";
+import { autonomyErrorKey, type ClaimDefault } from "@/lib/firm/autonomy";
+import { setFirmClaimDefault, setFirmSigner } from "@/lib/firm/autonomy-actions";
 import { FIRM_FUNCTIONS, type FirmFunction, formatOab, OAB_STATES, type OabRegistration } from "@/lib/firm/roles";
+import { SETUP_STEPS, type SetupStepKey } from "@/lib/firm/setup-steps";
+import type { LibraryTemplate, SetupPaper } from "@/lib/library/facts";
+import type { ConnectionsState } from "@/lib/whatsapp/connections";
 
 export type SetupState =
   | { kind: "unavailable" }
   | { kind: "error" }
-  /** The questions are who manages the firm's to answer. */
+  /** The setup is who manages the firm's to do. */
   | { kind: "not-manager" }
   | {
       kind: "ready";
@@ -52,6 +63,14 @@ export type SetupState =
       secondFactor: SecondFactorState;
       supportVisit: boolean;
       isOwner: boolean;
+      /** The claim the firm asks by default for each kind of problem; null when it could not be read. */
+      claimDefaults: ClaimDefault[] | null;
+      /** Which model ONE sends clients to sign of each paper; null when it could not be read. */
+      papers: { procuracao: SetupPaper; contrato: SetupPaper } | null;
+      /** The firm's connections as their own screen reads them: the signature account, the test chat, the number. */
+      connections: ConnectionsState;
+      /** The step the address asked for (`?passo=`): the list on the home leads to the one something is missing in. */
+      step: SetupStepKey | null;
     };
 
 /** Digits and, in the sections that use one, the letter at the end: what the bar writes. */
@@ -59,12 +78,44 @@ const NUMBER_PATTERN = /^[0-9]{1,7}[A-Za-z]?$/;
 const cleanNumber = (value: string) => value.replace(/[^0-9A-Za-z]/g, "");
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+type Paper = "procuracao" | "contrato";
+
+/** The words of each paper a client signs: its name, what ONE sends of it, and how a person writes the firm's. */
+const PAPER_WORDS: Record<Paper, { title: string; firm: string; one: string; make: string }> = {
+  procuracao: {
+    title: "setup-papers-procuracao",
+    firm: "setup-papers-procuracao-firm",
+    one: "setup-papers-procuracao-one",
+    make: "setup-papers-procuracao-make",
+  },
+  contrato: {
+    title: "setup-papers-contrato",
+    firm: "setup-papers-contrato-firm",
+    one: "setup-papers-contrato-none",
+    make: "setup-papers-contrato-make",
+  },
+};
+
+/** A claim as the field holds it (reais with their decimals): none when blank, `invalid` when it is no amount. */
+const centsOf = (raw: string | undefined): number | null | "invalid" => {
+  const text = (raw ?? "").trim();
+  if (text === "") return null;
+  const value = Number(text);
+  return Number.isFinite(value) && value > 0 ? Math.round(value * 100) : "invalid";
+};
+
 /**
- * The first questions of a firm, one per screen: who answers and whether they
- * sign what ONE prepares, whether the firm works alone, and the channel to the
- * clients. Each step saves what it asks before the next one opens, so leaving
- * half way keeps what was answered; "Fazer depois" sets the questions aside
- * for good, and the list on the home keeps what is still missing.
+ * What a firm sets up for ONE to work for it, one decision per screen: who
+ * answers and whether they sign what ONE prepares, the claim the firm asks by
+ * default for each kind of problem, whether it works alone, the papers its
+ * clients sign, and the channel to them. Each step does its own work where it
+ * is: the second factor a decision asks for is set up in the step, the
+ * models are written in a dialog over it, the signature account, the test
+ * chat and the number are connected in it, so nobody leaves the setup for a
+ * screen they would not come back from. Each step saves what it asks before
+ * the next one opens, so leaving half way keeps what was answered; "Fazer
+ * depois" sets the setup aside, and the list on the home leads back to the
+ * step something is still missing in.
  */
 export default function SetupView({ state }: { state: SetupState }) {
   const t = useTranslations("product");
@@ -108,13 +159,20 @@ export default function SetupView({ state }: { state: SetupState }) {
 function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> }) {
   const t = useTranslations("product");
   const router = useRouter();
+  const refresh = () => router.refresh();
 
   const lawyer = state.firmFunction === "socio" || state.firmFunction === "advogado";
   const partner = state.firmFunction === "socio";
   const registered = state.registrations.length > 0;
-  // Who signs is chosen with the second factor confirmed (set_firm_signer asks for it). Without it the step
-  // shows the choice as it stands and goes on: the choice waits for O que o ONE decide, never blocks the step.
-  const choosesSigner = partner && state.secondFactor === "ok";
+  const blocked = state.supportVisit;
+
+  // ---------- The second factor ----------
+  // Confirmed here, before the page reads the session again: every step goes on from the same moment.
+  const [confirmedHere, setConfirmedHere] = useState(false);
+  const factor: SecondFactorState = confirmedHere ? "ok" : state.secondFactor;
+  // What the database asks the factor for (who signs, the claims, an invitation, a connection) waits for it.
+  const locked = factor !== "ok";
+  const choosesSigner = partner && !locked;
 
   // ---------- Who answers, at the bar ----------
   const [uf, setUf] = useState("");
@@ -125,6 +183,27 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
   const numberOk = NUMBER_PATTERN.test(cleanNumber(number));
   const oabReady = !lawyer || registered || (Boolean(uf) && numberOk);
 
+  const onFactor = () => {
+    setConfirmedHere(true);
+    // Who signs is chosen with the factor: a partner who did not sign yet is offered it, as on a first visit.
+    if (partner && !state.signs) setSigns(true);
+  };
+
+  /** The step's way to the second factor, saying what it is for; nothing in a support visit or once confirmed. */
+  const factorPrompt = (id: string, reason: string) =>
+    !blocked && factor !== "ok" ? (
+      <SecondFactorPrompt id={id} state={factor} reason={reason} onConfirmed={onFactor} />
+    ) : null;
+
+  // ---------- The claim the firm asks ----------
+  const savedClaims = new Map((state.claimDefaults ?? []).map((row) => [row.incident, row.cents]));
+  // What was typed, as the field holds it, until the page reads it back.
+  const [claims, setClaims] = useState<Partial<Record<Incident, string>>>(() =>
+    Object.fromEntries((state.claimDefaults ?? []).map((row) => [row.incident, (row.cents / 100).toFixed(2)])),
+  );
+  const [claimsError, setClaimsError] = useState<string | null>(null);
+  const claimsEditable = partner && !locked && !blocked && state.claimDefaults !== null;
+
   // ---------- Alone or with a team ----------
   const [worksAlone, setWorksAlone] = useState<boolean | null>(state.worksAlone);
   const [teamError, setTeamError] = useState<string | null>(null);
@@ -134,15 +213,29 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
   const [invited, setInvited] = useState<{ email: string; link: string | null }[]>([]);
   const [inviteError, setInviteError] = useState<string | null>(null);
 
+  // ---------- The papers a client signs ----------
+  const [paperForm, setPaperForm] = useState<{
+    paper: Paper;
+    template: LibraryTemplate | null;
+    copyOf: LibraryTemplate | null;
+  } | null>(null);
+
   // ---------- The end ----------
   const [finishError, setFinishError] = useState<string | null>(null);
   const [leaving, setLeaving] = useState(false);
 
-  const blocked = state.supportVisit;
-
-  // A flow left half way opens where the person stopped; one answered before opens at its start.
-  const firstOpen = (lawyer && !registered) || (partner && !state.signs) ? 0 : state.worksAlone === null ? 1 : 2;
-  const [stepIndex, setStepIndex] = useState(state.answered ? 0 : firstOpen);
+  // A flow left half way opens where something is missing; one answered before opens at its start, and the list
+  // on the home opens the step it names.
+  const missing: [boolean, SetupStepKey][] = [
+    [(lawyer && !registered) || (partner && !state.signs), "oab"],
+    [partner && state.claimDefaults !== null && state.claimDefaults.length === 0, "valores"],
+    [state.worksAlone === null, "equipe"],
+    [!state.whatsapp, "canal"],
+  ];
+  const firstOpen = SETUP_STEPS.indexOf(missing.find(([open]) => open)?.[1] ?? "oab");
+  const [stepIndex, setStepIndex] = useState(
+    state.step ? SETUP_STEPS.indexOf(state.step) : state.answered ? 0 : firstOpen,
+  );
 
   const saveOab = async (): Promise<boolean> => {
     setOabError(null);
@@ -163,7 +256,28 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
         return false;
       }
     }
-    router.refresh();
+    refresh();
+    return true;
+  };
+
+  // Each kind whose field changed is said or taken back; one that is no amount keeps the step, saying which.
+  const saveClaims = async (): Promise<boolean> => {
+    setClaimsError(null);
+    if (!claimsEditable) return true;
+    for (const incident of INCIDENTS) {
+      const cents = centsOf(claims[incident]);
+      if (cents === "invalid") {
+        setClaimsError(t("setup-claims-invalid", { kind: t(INCIDENT_KEY[incident]) }));
+        return false;
+      }
+      if (cents === (savedClaims.get(incident) ?? null)) continue;
+      const result = await setFirmClaimDefault(incident, cents);
+      if (!result.ok) {
+        setClaimsError(t(autonomyErrorKey(result.code)));
+        return false;
+      }
+    }
+    refresh();
     return true;
   };
 
@@ -196,7 +310,7 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
     setEmail("");
   };
 
-  /** The questions are answered, or set aside: the firm goes on to its home, or to where the person chose. */
+  /** The setup is answered, or set aside: the firm goes on to its home. */
   const finish = async (destination: string): Promise<boolean> => {
     setFinishError(null);
     setLeaving(true);
@@ -210,6 +324,30 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
     router.refresh();
     return true;
   };
+
+  /** A paper's model opens over the step: the firm's own to change, else the platform's to start from, else new. */
+  const openPaper = (paper: Paper, choice: SetupPaper) => {
+    const own = choice.used && !choice.used.platform ? choice.used : null;
+    setPaperForm({ paper, template: own, copyOf: own ? null : choice.platform });
+  };
+
+  const papers = state.papers;
+  const signerPrompt = factorPrompt("setup-oab-factor", t("setup-oab-signs-factor"));
+  const connections = state.connections.kind === "ready" ? state.connections : null;
+  const realNumber = connections?.numbers.find((item) => item.status === "active" && item.provider !== "test") ?? null;
+  const connectionsError = (
+    <Alert
+      severity="error"
+      className="neutral bg-background-paper/60!"
+      action={
+        <Button color="inherit" size="small" onClick={refresh}>
+          {t("today-retry")}
+        </Button>
+      }
+    >
+      {t("connections-load-error")}
+    </Alert>
+  );
 
   const steps: WizardStep[] = [
     {
@@ -305,31 +443,7 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
               <Typography variant="body2" className="text-text-secondary">
                 {t("setup-oab-signs-help")}
               </Typography>
-              {state.secondFactor === "missing" ? (
-                <Alert
-                  severity="warning"
-                  className="neutral bg-background-paper/60! mt-2"
-                  action={
-                    <Button color="inherit" size="small" href="/settings/security">
-                      {t("setup-second-factor-missing-action")}
-                    </Button>
-                  }
-                >
-                  {t("setup-second-factor-missing")}
-                </Alert>
-              ) : state.secondFactor === "challenge" ? (
-                <Alert
-                  severity="warning"
-                  className="neutral bg-background-paper/60! mt-2"
-                  action={
-                    <Button color="inherit" size="small" href="/auth/two-factor?next=/configurar">
-                      {t("setup-second-factor-challenge-action")}
-                    </Button>
-                  }
-                >
-                  {t("setup-second-factor-challenge")}
-                </Alert>
-              ) : null}
+              {signerPrompt ? <Box className="mt-2">{signerPrompt}</Box> : null}
             </Box>
           ) : lawyer ? (
             <Typography variant="body2" className="text-text-secondary">
@@ -340,6 +454,59 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
           {oabError ? (
             <Alert severity="error" className="neutral bg-background-paper/60!" role="alert">
               {oabError}
+            </Alert>
+          ) : null}
+        </Box>
+      ),
+    },
+    {
+      title: t("setup-claims-title"),
+      hint: t("setup-claims-hint"),
+      canAdvance: !blocked,
+      onPrimary: saveClaims,
+      content: (
+        <Box className="flex flex-col gap-4">
+          {!partner ? (
+            <Alert severity="info" className="neutral bg-background-paper/60!">
+              {t("setup-claims-not-partner")}
+            </Alert>
+          ) : (
+            factorPrompt("setup-claims-factor", t("setup-claims-factor"))
+          )}
+          {state.claimDefaults === null ? (
+            <Alert
+              severity="error"
+              className="neutral bg-background-paper/60!"
+              action={
+                <Button color="inherit" size="small" onClick={refresh}>
+                  {t("today-retry")}
+                </Button>
+              }
+            >
+              {t("autonomy-claims-load-error")}
+            </Alert>
+          ) : (
+            <Grid container spacing={3}>
+              {INCIDENTS.map((incident) => (
+                <Grid key={incident} size={{ xs: 12, sm: 6 }}>
+                  <CurrencyField
+                    size="small"
+                    fullWidth
+                    id={`setup-claim-${incident}`}
+                    name={`setup-claim-${incident}`}
+                    label={t(INCIDENT_KEY[incident])}
+                    currencySymbol="R$"
+                    value={claims[incident] ?? ""}
+                    disabled={!claimsEditable}
+                    onChange={(event) => setClaims((before) => ({ ...before, [incident]: event.target.value }))}
+                  />
+                </Grid>
+              ))}
+            </Grid>
+          )}
+          {claimsError ? (
+            <Alert severity="error" className="neutral bg-background-paper/60!" role="alert">
+              {claimsError}
             </Alert>
           ) : null}
         </Box>
@@ -396,6 +563,7 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
               <Typography variant="subtitle2" component="h3">
                 {t("setup-team-invite-title")}
               </Typography>
+              {factorPrompt("setup-team-factor", t("setup-team-factor"))}
               <Grid container spacing={3}>
                 <Grid size={{ xs: 12, sm: 7 }}>
                   <FormControl fullWidth className="outlined" variant="standard" error={Boolean(inviteError)}>
@@ -408,7 +576,7 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
                       value={email}
                       autoComplete="off"
                       onChange={(event) => setEmail(event.target.value)}
-                      disabled={blocked || inviting}
+                      disabled={blocked || locked || inviting}
                       aria-describedby="setup-invite-email-help"
                     />
                     <FormHelperText id="setup-invite-email-help">
@@ -427,7 +595,7 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
                       inputProps={{ id: "setup-invite-function" }}
                       value={inviteFunction}
                       onChange={(event) => setInviteFunction(event.target.value as FirmFunction)}
-                      disabled={blocked || inviting}
+                      disabled={blocked || locked || inviting}
                     >
                       {FIRM_FUNCTIONS.map((role) => (
                         <MenuItem key={role} value={role}>
@@ -439,7 +607,12 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
                 </Grid>
               </Grid>
               <Box>
-                <Button variant="outlined" color="grey" onClick={() => void invite()} disabled={blocked || inviting}>
+                <Button
+                  variant="outlined"
+                  color="grey"
+                  onClick={() => void invite()}
+                  disabled={blocked || locked || inviting}
+                >
                   {inviting ? t("saving") : t("setup-team-invite-send")}
                 </Button>
               </Box>
@@ -462,6 +635,88 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
       ),
     },
     {
+      title: t("setup-papers-title"),
+      hint: t("setup-papers-hint"),
+      canAdvance: !blocked,
+      content: (
+        <Box className="flex flex-col gap-6">
+          {papers === null ? (
+            <Alert
+              severity="error"
+              className="neutral bg-background-paper/60!"
+              action={
+                <Button color="inherit" size="small" onClick={refresh}>
+                  {t("today-retry")}
+                </Button>
+              }
+            >
+              {t("setup-papers-load-error")}
+            </Alert>
+          ) : (
+            (["procuracao", "contrato"] as const).map((paper) => {
+              const choice = papers[paper];
+              const own = choice.used && !choice.used.platform ? choice.used : null;
+              const words = PAPER_WORDS[paper];
+              // A paper of the firm is changed; the platform's power of attorney is a start; a contract is new.
+              const can = lawyer && !blocked && (own !== null || choice.platform !== null || paper === "contrato");
+              return (
+                <Box
+                  key={paper}
+                  component="section"
+                  aria-labelledby={`setup-papers-${paper}`}
+                  className="flex flex-col gap-2"
+                >
+                  <Typography id={`setup-papers-${paper}`} variant="subtitle2" component="h3" className="mb-0">
+                    {t(words.title)}
+                  </Typography>
+                  <Typography variant="body2" className="text-text-secondary">
+                    {own ? t(words.firm, { name: own.name }) : t(words.one)}
+                  </Typography>
+                  {can ? (
+                    <Box>
+                      <Button variant="outlined" color="grey" size="small" onClick={() => openPaper(paper, choice)}>
+                        {own ? t("setup-papers-open") : t(words.make)}
+                      </Button>
+                    </Box>
+                  ) : null}
+                </Box>
+              );
+            })
+          )}
+          {!lawyer ? (
+            <Alert severity="info" className="neutral bg-background-paper/60!">
+              {t("setup-papers-not-lawyer")}
+            </Alert>
+          ) : null}
+
+          <Box component="section" aria-labelledby="setup-papers-sign" className="flex flex-col gap-2">
+            <Typography id="setup-papers-sign" variant="subtitle2" component="h3" className="mb-0">
+              {t("setup-papers-sign-title")}
+            </Typography>
+            <Typography variant="body2" className="text-text-secondary">
+              {t("setup-papers-sign-govbr")}
+            </Typography>
+          </Box>
+          {connections ? (
+            <>
+              {connections.signature?.status === "connected"
+                ? null
+                : factorPrompt("setup-papers-factor", t("setup-papers-factor"))}
+              <SignatureAccountCard
+                embedded
+                account={connections.signature}
+                blocked={blocked || locked}
+                vault={connections.environment.vault}
+                onChanged={refresh}
+              />
+            </>
+          ) : (
+            connectionsError
+          )}
+        </Box>
+      ),
+    },
+    {
       title: t("setup-channel-title"),
       hint: t("setup-channel-hint"),
       canAdvance: !blocked,
@@ -469,23 +724,43 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
       onPrimary: () => finish("/inicio"),
       busy: leaving,
       content: (
-        <Box className="flex flex-col gap-4">
-          {state.whatsapp ? (
-            <Alert severity="success" className="neutral bg-background-paper/60!">
-              {t("setup-channel-whatsapp-done")}
-            </Alert>
+        <Box className="flex flex-col gap-6">
+          {!connections ? (
+            connectionsError
           ) : (
-            <Box className="flex flex-col items-start gap-2">
-              <Typography variant="body1">{t("setup-channel-whatsapp-help")}</Typography>
-              <Button
-                variant="outlined"
-                color="grey"
-                disabled={blocked || leaving}
-                onClick={() => void finish("/settings/connections")}
-              >
-                {t("setup-channel-whatsapp")}
-              </Button>
-            </Box>
+            <>
+              {factorPrompt("setup-channel-factor", t("setup-channel-factor"))}
+              {realNumber ? (
+                <>
+                  <Alert severity="success" className="neutral bg-background-paper/60!">
+                    {t("setup-channel-whatsapp-done")}
+                  </Alert>
+                  <NoticesCard embedded notices={connections.notices} blocked={blocked || locked} onChanged={refresh} />
+                </>
+              ) : (
+                <>
+                  {connections.testChat ? (
+                    <TestChatCard
+                      embedded
+                      state={connections.testChat.state}
+                      url={connections.testChat.url}
+                      sinceLabel={connections.testChat.sinceLabel}
+                      blocked={blocked || locked}
+                      onChanged={refresh}
+                    />
+                  ) : null}
+                  <ConnectCard
+                    embedded
+                    firmName={connections.firm.name}
+                    again={connections.numbers.some((item) => item.provider !== "test")}
+                    pending={connections.pending}
+                    environment={connections.environment}
+                    blocked={blocked || locked}
+                    onConnected={refresh}
+                  />
+                </>
+              )}
+            </>
           )}
           {finishError ? (
             <Alert severity="error" className="neutral bg-background-paper/60!" role="alert">
@@ -521,6 +796,26 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
         onComplete={() => undefined}
         completeLabel={t("setup-finish")}
       />
+      {paperForm ? (
+        <TemplateDialog
+          template={paperForm.template}
+          copyOf={paperForm.copyOf}
+          // The firm's default of the paper, which the one saved here takes the place of.
+          defaults={Object.fromEntries(
+            (["procuracao", "contrato"] as const).flatMap((paper) => {
+              const name = papers?.[paper].firmDefault ?? null;
+              return name && name !== paperForm.template?.name ? [[paper, name]] : [];
+            }),
+          )}
+          initialDocument={paperForm.paper}
+          initialDefault
+          onClose={() => setPaperForm(null)}
+          onSaved={() => {
+            setPaperForm(null);
+            refresh();
+          }}
+        />
+      ) : null}
     </Box>
   );
 }

@@ -38,6 +38,7 @@ export default function TestChatCard({
   sinceLabel,
   blocked,
   onChanged,
+  embedded = false,
 }: {
   state: TestChatState;
   /** The page's address, written from the link's secret, for who may hand it out. */
@@ -45,6 +46,8 @@ export default function TestChatCard({
   sinceLabel: string | null;
   blocked: boolean;
   onChanged: () => void;
+  /** Inside another screen's flow (the firm's setup): the section without its card, its title a level down. */
+  embedded?: boolean;
 }) {
   const t = useTranslations("product");
   const [busy, setBusy] = useState(false);
@@ -76,107 +79,112 @@ export default function TestChatCard({
     }
   };
 
-  return (
-    <Grid size={12}>
-      <Card component="section" aria-labelledby="connections-test-chat">
-        <CardContent className="flex flex-col gap-4">
-          <Box className="flex flex-col gap-1">
-            <Box className="flex flex-row flex-wrap items-center gap-2">
-              <Typography id="connections-test-chat" variant="h5" component="h2" className="mb-0">
-                {t("connections-test-chat-title")}
-              </Typography>
-              <StatusChip
-                tone={state.on ? "positive" : "neutral"}
-                label={state.on ? t("connections-test-chat-on") : t("connections-test-chat-off")}
-              />
-            </Box>
-            <Typography variant="body2" className="text-text-secondary max-w-3xl">
-              {t("connections-test-chat-body")}
-            </Typography>
-          </Box>
+  const content = (
+    <>
+      <Box className="flex flex-col gap-1">
+        <Box className="flex flex-row flex-wrap items-center gap-2">
+          <Typography
+            id="connections-test-chat"
+            variant={embedded ? "subtitle2" : "h5"}
+            component={embedded ? "h3" : "h2"}
+            className="mb-0"
+          >
+            {t("connections-test-chat-title")}
+          </Typography>
+          <StatusChip
+            tone={state.on ? "positive" : "neutral"}
+            label={state.on ? t("connections-test-chat-on") : t("connections-test-chat-off")}
+          />
+        </Box>
+        <Typography variant="body2" className="text-text-secondary max-w-3xl">
+          {t("connections-test-chat-body")}
+        </Typography>
+      </Box>
 
-          {state.on ? (
-            <>
-              {sinceLabel ? (
-                <Typography variant="body2" className="text-text-secondary">
-                  {t("connections-test-chat-since", { when: sinceLabel })}
-                </Typography>
-              ) : null}
-              {url ? (
-                <Box className="flex flex-col gap-2">
-                  <FormControl className="outlined" variant="standard">
-                    <FormLabel htmlFor="connections-test-chat-url">{t("connections-test-chat-link")}</FormLabel>
-                    <Input
-                      id="connections-test-chat-url"
-                      value={url}
-                      readOnly
-                      aria-describedby="connections-test-chat-url-help"
-                    />
-                    <FormHelperText id="connections-test-chat-url-help">
-                      {copied ? t("connections-test-chat-copied") : t("connections-test-chat-link-help")}
-                    </FormHelperText>
-                  </FormControl>
-                  <Box className="flex flex-row flex-wrap gap-2">
-                    <Button variant="contained" onClick={() => void copy()}>
-                      {t("connections-test-chat-copy")}
-                    </Button>
-                    <Button variant="outlined" color="grey" href={url} target="_blank" rel="noopener noreferrer">
-                      {t("connections-test-chat-open")}
-                    </Button>
-                    {!blocked ? (
-                      <>
-                        <Button variant="text" color="grey" disabled={busy} onClick={() => setConfirming("renew")}>
-                          {t("connections-test-chat-renew")}
-                        </Button>
-                        <Button variant="text" color="grey" disabled={busy} onClick={() => setConfirming("end")}>
-                          {t("connections-test-chat-end")}
-                        </Button>
-                      </>
-                    ) : null}
-                  </Box>
-                </Box>
-              ) : (
-                <Typography variant="body2" className="text-text-secondary">
-                  {t("connections-test-chat-not-keeper")}
-                </Typography>
-              )}
-            </>
-          ) : state.realNumber ? (
+      {state.on ? (
+        <>
+          {sinceLabel ? (
             <Typography variant="body2" className="text-text-secondary">
-              {t("connections-test-chat-real-number")}
+              {t("connections-test-chat-since", { when: sinceLabel })}
             </Typography>
-          ) : (
-            <Box className="flex flex-col gap-2">
-              {state.endedReason === "replaced_by_real_number" ? (
-                <Typography variant="body2" className="text-text-secondary">
-                  {t("connections-test-chat-ended-real")}
-                </Typography>
-              ) : null}
-              <Box>
-                <Button
-                  variant="contained"
-                  disabled={busy || blocked || !state.keeper}
-                  onClick={() => void run(startTestChat)}
-                >
-                  {busy ? t("cases-working") : t("connections-test-chat-start")}
-                </Button>
-              </Box>
-              {blocked ? (
-                <Typography variant="body2" className="text-text-secondary">
-                  {t("connections-test-chat-blocked")}
-                </Typography>
-              ) : null}
-            </Box>
-          )}
-
-          {problem ? (
-            <Alert severity="error" className="neutral bg-background-paper/60!" onClose={() => setProblem(null)}>
-              {t(connectErrorKey(problem))}
-            </Alert>
           ) : null}
-        </CardContent>
-      </Card>
+          {url ? (
+            <Box className="flex flex-col gap-2">
+              <FormControl className="outlined" variant="standard">
+                <FormLabel htmlFor="connections-test-chat-url">{t("connections-test-chat-link")}</FormLabel>
+                <Input
+                  id="connections-test-chat-url"
+                  value={url}
+                  readOnly
+                  aria-describedby="connections-test-chat-url-help"
+                />
+                <FormHelperText id="connections-test-chat-url-help">
+                  {copied ? t("connections-test-chat-copied") : t("connections-test-chat-link-help")}
+                </FormHelperText>
+              </FormControl>
+              <Box className="flex flex-row flex-wrap gap-2">
+                <Button variant="contained" onClick={() => void copy()}>
+                  {t("connections-test-chat-copy")}
+                </Button>
+                <Button variant="outlined" color="grey" href={url} target="_blank" rel="noopener noreferrer">
+                  {t("connections-test-chat-open")}
+                </Button>
+                {!blocked ? (
+                  <>
+                    <Button variant="text" color="grey" disabled={busy} onClick={() => setConfirming("renew")}>
+                      {t("connections-test-chat-renew")}
+                    </Button>
+                    <Button variant="text" color="grey" disabled={busy} onClick={() => setConfirming("end")}>
+                      {t("connections-test-chat-end")}
+                    </Button>
+                  </>
+                ) : null}
+              </Box>
+            </Box>
+          ) : (
+            <Typography variant="body2" className="text-text-secondary">
+              {t("connections-test-chat-not-keeper")}
+            </Typography>
+          )}
+        </>
+      ) : state.realNumber ? (
+        <Typography variant="body2" className="text-text-secondary">
+          {t("connections-test-chat-real-number")}
+        </Typography>
+      ) : (
+        <Box className="flex flex-col gap-2">
+          {state.endedReason === "replaced_by_real_number" ? (
+            <Typography variant="body2" className="text-text-secondary">
+              {t("connections-test-chat-ended-real")}
+            </Typography>
+          ) : null}
+          <Box>
+            <Button
+              variant="contained"
+              disabled={busy || blocked || !state.keeper}
+              onClick={() => void run(startTestChat)}
+            >
+              {busy ? t("cases-working") : t("connections-test-chat-start")}
+            </Button>
+          </Box>
+          {blocked ? (
+            <Typography variant="body2" className="text-text-secondary">
+              {t("connections-test-chat-blocked")}
+            </Typography>
+          ) : null}
+        </Box>
+      )}
 
+      {problem ? (
+        <Alert severity="error" className="neutral bg-background-paper/60!" onClose={() => setProblem(null)}>
+          {t(connectErrorKey(problem))}
+        </Alert>
+      ) : null}
+    </>
+  );
+
+  const dialogs = (
+    <>
       {confirming === "renew" ? (
         <ConfirmActionDialog
           requireReason={false}
@@ -214,6 +222,23 @@ export default function TestChatCard({
           onClose={() => setConfirming(null)}
         />
       ) : null}
+    </>
+  );
+
+  if (embedded) {
+    return (
+      <Box component="section" aria-labelledby="connections-test-chat" className="flex flex-col gap-4">
+        {content}
+        {dialogs}
+      </Box>
+    );
+  }
+  return (
+    <Grid size={12}>
+      <Card component="section" aria-labelledby="connections-test-chat">
+        <CardContent className="flex flex-col gap-4">{content}</CardContent>
+      </Card>
+      {dialogs}
     </Grid>
   );
 }

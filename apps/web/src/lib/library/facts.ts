@@ -200,6 +200,68 @@ export function paperModelFor(
   return rows.find((t) => t.org_id === null && documentOf(t) === kind && t.is_default === true)?.id ?? null;
 }
 
+/** A paper a client signs, as the firm's setup offers it (0054). */
+export type SetupPaper = {
+  /** The model ONE sends now: the firm's own, or the platform's power of attorney; null when it sends none. */
+  used: LibraryTemplate | null;
+  /** The platform's model a firm's own starts from: the power of attorney; none of a contract. */
+  platform: LibraryTemplate | null;
+  /** The name of the firm's default of it, which a new default takes the place of. */
+  firmDefault: string | null;
+};
+
+type PaperRow = ModelRow & { provisional: boolean | null; name: string; updated_at: string };
+
+/**
+ * The papers a client signs as the firm's setup offers them: which model ONE
+ * sends of each (`paperModelFor`, as `paper_template_for` decides it), the
+ * platform's model a firm's own starts from, and the firm's default a new one
+ * takes the place of. Null when they could not be read: the step says so,
+ * never that nothing is sent.
+ */
+export async function loadSetupPapers(
+  supabase: SupabaseClient,
+  firmId: string,
+  timeZone: string | null | undefined,
+): Promise<{ procuracao: SetupPaper; contrato: SetupPaper } | null> {
+  const { data, error } = await supabase
+    .from("draft_templates")
+    .select("id, org_id, provisional, name, document_kind, proceeding_kind, is_default, updated_at")
+    .or(`org_id.eq.${firmId},org_id.is.null`)
+    .in("document_kind", ["procuracao", "contrato"])
+    .order("name");
+  if (error) return null;
+  const rows = (data ?? []) as PaperRow[];
+  const view = (row: PaperRow, used: boolean): LibraryTemplate => ({
+    id: row.id,
+    name: row.name,
+    documentKind: documentOf(row),
+    proceedingKind: null,
+    isDefault: row.is_default === true,
+    platform: row.org_id === null,
+    provisional: row.org_id === null && row.provisional === true,
+    usedByOne: used,
+    updatedLabel: momentLabel(row.updated_at, timeZone),
+    updatedBy: null,
+    cited: 0,
+    missing: 0,
+  });
+  const paper = (kind: "procuracao" | "contrato"): SetupPaper => {
+    const usedId = paperModelFor(rows, firmId, kind);
+    const used = rows.find((row) => row.id === usedId) ?? null;
+    const platform =
+      rows.find((row) => row.org_id === null && documentOf(row) === kind && row.is_default === true) ?? null;
+    const firmDefault =
+      rows.find((row) => row.org_id === firmId && documentOf(row) === kind && row.is_default === true) ?? null;
+    return {
+      used: used ? view(used, true) : null,
+      platform: platform ? view(platform, platform.id === usedId) : null,
+      firmDefault: firmDefault?.name ?? null,
+    };
+  };
+  return { procuracao: paper("procuracao"), contrato: paper("contrato") };
+}
+
 export async function loadLibrary(
   supabase: SupabaseClient,
   firmId: string,

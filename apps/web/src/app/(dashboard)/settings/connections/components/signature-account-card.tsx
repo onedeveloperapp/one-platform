@@ -32,12 +32,15 @@ export default function SignatureAccountCard({
   blocked,
   vault,
   onChanged,
+  embedded = false,
 }: {
   account: { connectionId: string; status: string; environment: string; lastError: string | null } | null;
   /** A support visit, or a session without the second factor: nothing is connected or cut. */
   blocked: boolean;
   vault: boolean;
   onChanged: () => void;
+  /** Inside another screen's flow (the firm's setup): the section without its card, its title a level down. */
+  embedded?: boolean;
 }) {
   const t = useTranslations("product");
   const [token, setToken] = useState("");
@@ -74,101 +77,117 @@ export default function SignatureAccountCard({
     }
   };
 
+  const content = (
+    <>
+      <Box className="flex flex-wrap items-start justify-between gap-2">
+        <Box className="flex flex-col gap-1">
+          <Typography
+            id="connections-signature"
+            variant={embedded ? "subtitle2" : "h5"}
+            component={embedded ? "h3" : "h2"}
+            className="mb-0"
+          >
+            {t("connections-signature-title")}
+          </Typography>
+          <Typography variant="body2" className="text-text-secondary">
+            {t("connections-signature-body")}
+          </Typography>
+        </Box>
+        {account && (
+          <StatusChip
+            tone={connected ? "positive" : "attention"}
+            label={
+              connected
+                ? account.environment === "sandbox"
+                  ? t("connections-signature-connected-sandbox")
+                  : t("connections-signature-connected")
+                : t("connections-signature-problem")
+            }
+          />
+        )}
+      </Box>
+
+      {!vault && (
+        <Alert severity="info" className="neutral bg-background-paper/60!">
+          {t("connections-error-vault")}
+        </Alert>
+      )}
+
+      {connected ? (
+        <Box>
+          <Button
+            variant="outlined"
+            color="grey"
+            size="small"
+            disabled={busy || blocked}
+            onClick={() => void disconnect()}
+          >
+            {busy ? t("cases-working") : t("connections-signature-disconnect")}
+          </Button>
+        </Box>
+      ) : (
+        <Box className="flex flex-col gap-3">
+          <TextField
+            fullWidth
+            size="small"
+            id="connections-signature-token"
+            label={t("connections-signature-token")}
+            helperText={t("connections-signature-token-help")}
+            value={token}
+            type="password"
+            autoComplete="off"
+            disabled={busy || blocked || !vault}
+            onChange={(event) => setToken(event.target.value)}
+          />
+          <RadioGroup
+            row
+            className="gap-x-6"
+            aria-label={t("connections-signature-environment")}
+            value={environment}
+            onChange={(event) => setEnvironment(event.target.value === "sandbox" ? "sandbox" : "production")}
+          >
+            <FormControlLabel
+              value="production"
+              control={<Radio size="small" />}
+              label={t("connections-signature-production")}
+            />
+            <FormControlLabel
+              value="sandbox"
+              control={<Radio size="small" />}
+              label={t("connections-signature-sandbox")}
+            />
+          </RadioGroup>
+          <Box>
+            <Button
+              variant="contained"
+              disabled={busy || blocked || !vault || token.trim().length < 16}
+              onClick={() => void connect()}
+            >
+              {busy ? t("cases-working") : t("connections-signature-connect")}
+            </Button>
+          </Box>
+        </Box>
+      )}
+
+      {problem && (
+        <Alert severity="error" className="neutral bg-background-paper/60!">
+          {t(connectErrorKey(problem))}
+        </Alert>
+      )}
+    </>
+  );
+
+  if (embedded) {
+    return (
+      <Box component="section" aria-labelledby="connections-signature" className="flex flex-col gap-4">
+        {content}
+      </Box>
+    );
+  }
   return (
     <Grid size={12}>
       <Card component="section" aria-labelledby="connections-signature">
-        <CardContent className="flex flex-col gap-4">
-          <Box className="flex flex-wrap items-start justify-between gap-2">
-            <Box className="flex flex-col gap-1">
-              <Typography id="connections-signature" variant="h5" component="h2" className="mb-0">
-                {t("connections-signature-title")}
-              </Typography>
-              <Typography variant="body2" className="text-text-secondary">
-                {t("connections-signature-body")}
-              </Typography>
-            </Box>
-            {account && (
-              <StatusChip
-                tone={connected ? "positive" : "attention"}
-                label={
-                  connected
-                    ? account.environment === "sandbox"
-                      ? t("connections-signature-connected-sandbox")
-                      : t("connections-signature-connected")
-                    : t("connections-signature-problem")
-                }
-              />
-            )}
-          </Box>
-
-          {!vault && (
-            <Alert severity="info" className="neutral bg-background-paper/60!">
-              {t("connections-error-vault")}
-            </Alert>
-          )}
-
-          {connected ? (
-            <Box>
-              <Button
-                variant="outlined"
-                color="grey"
-                size="small"
-                disabled={busy || blocked}
-                onClick={() => void disconnect()}
-              >
-                {busy ? t("cases-working") : t("connections-signature-disconnect")}
-              </Button>
-            </Box>
-          ) : (
-            <Box className="flex flex-col gap-3">
-              <TextField
-                fullWidth
-                size="small"
-                id="connections-signature-token"
-                label={t("connections-signature-token")}
-                helperText={t("connections-signature-token-help")}
-                value={token}
-                type="password"
-                autoComplete="off"
-                disabled={busy || blocked || !vault}
-                onChange={(event) => setToken(event.target.value)}
-              />
-              <RadioGroup
-                row
-                className="gap-x-6"
-                aria-label={t("connections-signature-environment")}
-                value={environment}
-                onChange={(event) => setEnvironment(event.target.value === "sandbox" ? "sandbox" : "production")}
-              >
-                <FormControlLabel
-                  value="production"
-                  control={<Radio size="small" />}
-                  label={t("connections-signature-production")}
-                />
-                <FormControlLabel
-                  value="sandbox"
-                  control={<Radio size="small" />}
-                  label={t("connections-signature-sandbox")}
-                />
-              </RadioGroup>
-              <Box>
-                <Button
-                  variant="contained"
-                  disabled={busy || blocked || !vault || token.trim().length < 16}
-                  onClick={() => void connect()}
-                >
-                  {busy ? t("cases-working") : t("connections-signature-connect")}
-                </Button>
-              </Box>
-            </Box>
-          )}
-
-          {problem && (
-            <Alert severity="error" className="neutral bg-background-paper/60!">
-              {t(connectErrorKey(problem))}
-            </Alert>
-          )}
-        </CardContent>
+        <CardContent className="flex flex-col gap-4">{content}</CardContent>
       </Card>
     </Grid>
   );

@@ -18,20 +18,16 @@ import {
   Typography,
 } from "@mui/material";
 
+import { confirmTotp, qrSrc, startTotpEnrollment, type TotpEnrollment } from "@/lib/security/second-factor";
 import { createClient } from "@flyee/auth/client";
 
 type Factor = { id: string; friendly_name?: string | null; status: string };
-
-type Enrollment = { factorId: string; qrCode: string; secret: string };
-
-/** Supabase returns the QR as an SVG string or a data URL depending on version. */
-const qrSrc = (qr: string) => (qr.startsWith("data:") ? qr : `data:image/svg+xml;utf8,${encodeURIComponent(qr)}`);
 
 export default function TwoFactorCard({ onVerified }: { onVerified?: () => void } = {}) {
   const t = useTranslations("product");
   const router = useRouter();
   const [factors, setFactors] = useState<Factor[]>([]);
-  const [enrollment, setEnrollment] = useState<Enrollment | null>(null);
+  const [enrollment, setEnrollment] = useState<TotpEnrollment | null>(null);
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -48,16 +44,12 @@ export default function TwoFactorCard({ onVerified }: { onVerified?: () => void 
 
   const startEnrollment = async () => {
     setError(null);
-    const supabase = createClient();
-    const { data, error: enrollError } = await supabase.auth.mfa.enroll({
-      factorType: "totp",
-      friendlyName: t("security-authenticator"),
-    });
-    if (enrollError || !data) {
+    const started = await startTotpEnrollment(t("security-authenticator"));
+    if (!started) {
       setError(t("security-action-error"));
       return;
     }
-    setEnrollment({ factorId: data.id, qrCode: data.totp.qr_code, secret: data.totp.secret });
+    setEnrollment(started);
     setCode("");
   };
 
@@ -66,21 +58,10 @@ export default function TwoFactorCard({ onVerified }: { onVerified?: () => void 
     setError(null);
     setBusy(true);
     try {
-      const supabase = createClient();
-      const { data: challenge, error: challengeError } = await supabase.auth.mfa.challenge({
-        factorId: enrollment.factorId,
-      });
-      if (challengeError || !challenge) {
-        setError(t("security-action-error"));
-        return;
-      }
-      const { error: verifyError } = await supabase.auth.mfa.verify({
-        factorId: enrollment.factorId,
-        challengeId: challenge.id,
-        code: code.trim(),
-      });
-      if (verifyError) {
-        setError(t("security-code-error"));
+      const confirmed = await confirmTotp(enrollment.factorId, code);
+      if (confirmed !== "ok") {
+        const refused = confirmed === "code" ? "security-code-error" : "security-action-error";
+        setError(t(refused));
         return;
       }
       setEnrollment(null);

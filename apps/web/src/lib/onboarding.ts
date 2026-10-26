@@ -1,4 +1,5 @@
 import { DEFAULTS } from "@/config";
+import { setupHref } from "@/lib/firm/setup-steps";
 import { type FlowKey, type OnboardingStep } from "@flyee/onboarding";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -14,10 +15,12 @@ import type { SupabaseClient } from "@supabase/supabase-js";
  * card (`onboarding_state`, one row per person and firm).
  *
  * The list holds only what keeps ONE from working for the firm: a lawyer at
- * the bar chosen to sign what ONE prepares, the team where there is one, a way
- * to the clients and the first case. The CNPJ is asked when the firm subscribes,
- * and a firm that said it works alone has no team to invite (0044). The first
- * questions themselves are asked once, on their own screen (`/configurar`).
+ * the bar chosen to sign what ONE prepares, the claim the firm asks by
+ * default (0056: without it every case waits for a person), the team where
+ * there is one, a way to the clients and the first case. The CNPJ is asked
+ * when the firm subscribes, and a firm that said it works alone has no team
+ * to invite (0044). Each step of the setup leads back to its own step of
+ * `/configurar`, where it is done without leaving for another screen.
  */
 export const ONBOARDING_FLOW = "firm-setup";
 
@@ -34,9 +37,10 @@ export type ActivationFacts = Record<string, boolean>;
  * the list (a firm that works alone has no team to invite).
  */
 const STEP_DEFINITIONS: (Omit<OnboardingStep, "done"> & { fact: string; hiddenWhen?: string })[] = [
-  { key: "oab", title: "setup-step-oab", href: "/configurar", fact: "oab_signer" },
-  { key: "team", title: "setup-step-team", href: "/settings/team", fact: "team", hiddenWhen: "works_alone" },
-  { key: "channel", title: "setup-step-channel", href: "/settings/connections", fact: "channel" },
+  { key: "oab", title: "setup-step-oab", href: setupHref("oab"), fact: "oab_signer" },
+  { key: "claims", title: "setup-step-claims", href: setupHref("valores"), fact: "claim_defaults" },
+  { key: "team", title: "setup-step-team", href: setupHref("equipe"), fact: "team", hiddenWhen: "works_alone" },
+  { key: "channel", title: "setup-step-channel", href: setupHref("canal"), fact: "channel" },
   { key: "first-case", title: "setup-step-first-case", href: "/casos", fact: "first_case" },
 ];
 
