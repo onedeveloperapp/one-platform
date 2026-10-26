@@ -26,7 +26,7 @@ export function KpiChip({
     <div className={CHIP_BASE}>
       <p className="text-text-secondary text-xs">{label}</p>
       <div className="flex items-baseline gap-2">
-        <span className="font-display text-text-primary text-2xl font-normal tabular-nums">{value}</span>
+        <span className="font-display text-text-primary text-2xl font-bold tabular-nums">{value}</span>
         {delta && (
           <span className={cn("rounded-full px-1.5 py-0.5 text-xs font-semibold", hue.softBg, hue.text)}>{delta}</span>
         )}

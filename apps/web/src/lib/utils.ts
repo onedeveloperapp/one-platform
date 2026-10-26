@@ -8,11 +8,15 @@ import { extendTailwindMerge } from "tailwind-merge";
  * conflict with a real color like `text-primary`, and silently DROPS the size —
  * so any token-sized heading built through cn() (StatBand numbers, tone-colored
  * headings) renders at base size. Keep this list in sync with the scale.
+ * The same goes for the eyebrow's weight and tracking: an unknown `font-*` is
+ * read as a font FAMILY, and `font-eyebrow` would drop `font-body` beside it.
  */
 const twMerge = extendTailwindMerge({
   extend: {
     classGroups: {
       "font-size": [{ text: ["display-2xl", "display-xl", "display-lg", "display-md"] }],
+      "font-weight": [{ font: ["eyebrow"] }],
+      tracking: [{ tracking: ["eyebrow"] }],
     },
   },
 });

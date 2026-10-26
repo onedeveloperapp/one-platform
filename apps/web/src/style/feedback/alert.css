@@ -52,8 +52,14 @@
     @apply bg-error-light/20;
   }
 
+  /* The action's label stays on one line: the message wraps around it. A
+     bold label (the buttons are bold) broke "Convidar pessoa" in two. */
   .MuiAlert-action {
     @apply items-center pt-0;
+
+    .MuiButton-root {
+      @apply whitespace-nowrap;
+    }
   }
 
   /* The template's `outlined` rules painted the message in the severity

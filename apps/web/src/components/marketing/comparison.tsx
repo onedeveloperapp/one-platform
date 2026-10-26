@@ -21,8 +21,8 @@ export default function Comparison({ before, after }: { before: ComparisonSide; 
   return (
     <Reveal className="grid grid-cols-1 items-stretch gap-0 md:grid-cols-[1fr_auto_1fr]">
       <article className="border-grey-100 bg-background-paper rounded-3xl border p-7 md:p-9">
-        <p className="text-text-secondary text-xs font-bold tracking-widest uppercase">{before.label}</p>
-        <h3 className="font-display text-display-md text-text-secondary mt-3 font-bold">{before.title}</h3>
+        <p className="text-text-secondary font-eyebrow tracking-eyebrow text-xs uppercase">{before.label}</p>
+        <h3 className="font-display text-display-md text-text-secondary mt-3 font-extrabold">{before.title}</h3>
         <ul className="mt-6 flex flex-col">
           {before.items.map((item) => (
             <li
@@ -46,8 +46,8 @@ export default function Comparison({ before, after }: { before: ComparisonSide; 
       </div>
 
       <article className="bg-background-deep text-text-contrast shadow-darker-lg rounded-3xl p-7 md:p-9">
-        <p className="text-text-contrast/60 text-xs font-bold tracking-widest uppercase">{after.label}</p>
-        <h3 className="font-display text-display-md mt-3 font-bold">{after.title}</h3>
+        <p className="text-text-contrast/60 font-eyebrow tracking-eyebrow text-xs uppercase">{after.label}</p>
+        <h3 className="font-display text-display-md mt-3 font-extrabold">{after.title}</h3>
         <ul className="mt-6 flex flex-col">
           {after.items.map((item) => (
             <li

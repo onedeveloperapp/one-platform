@@ -12,9 +12,9 @@ const config: Config = {
         sans: ["var(--font-body)", "ui-sans-serif"],
         heading: ["var(--font-heading)", "ui-sans-serif"],
         body: ["var(--font-body)", "ui-sans-serif"],
-        // Marketing display slot: the heading font (Londrina Solid, inherited
-        // with the base and provisional). A separate display font loaded in
-        // the root layout would set --font-display.
+        // Marketing display slot: the heading font (Urbanist, the type of
+        // MedChina's clinical-source home since 2026-10-26). A separate display
+        // font loaded in the root layout would set --font-display.
         display: ["var(--font-display, var(--font-heading))", "ui-sans-serif"],
         // Commands, versions, file names, mono eyebrows and readouts:
         // JetBrains Mono, set as --font-mono in the root layout. The system
@@ -38,6 +38,13 @@ const config: Config = {
         "2xl": "var(--border-radius-2xl)",
         "3xl": "var(--border-radius-3xl)",
         "4xl": "var(--border-radius-4xl)",
+      },
+      // The eyebrow of a marketing title (@flyee/design-tokens/css/marketing.css).
+      letterSpacing: {
+        eyebrow: "var(--eyebrow-tracking)",
+      },
+      fontWeight: {
+        eyebrow: "var(--eyebrow-weight)",
       },
       fontSize: {
         // Marketing display scale — fluid via clamp() in @flyee/design-tokens/css/marketing.css

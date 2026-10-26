@@ -80,7 +80,7 @@ export default function BlogComments({ postId }: { postId: string }) {
 
   return (
     <div className="mx-auto flex w-full max-w-prose flex-col gap-5">
-      <h2 className="font-display text-text-primary text-xl font-normal">{t("blog-comments-title")}</h2>
+      <h2 className="font-display text-text-primary text-xl font-bold">{t("blog-comments-title")}</h2>
 
       {comments.length === 0 && <p className="text-text-secondary text-base">{t("blog-comments-empty")}</p>}
 

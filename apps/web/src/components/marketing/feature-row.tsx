@@ -61,7 +61,7 @@ export default function FeatureRows({
                 {item.eyebrow && (
                   // The family hue on a bar, the words in a text colour: no palette
                   // hue reaches 4.5:1 as small text on a light ground.
-                  <p className="text-text-secondary mb-3 flex items-center gap-2.5 text-sm font-semibold tracking-wide uppercase">
+                  <p className="text-text-secondary font-eyebrow tracking-eyebrow mb-3 flex items-center gap-2.5 text-xs uppercase">
                     <span
                       aria-hidden
                       className="h-1 w-6 flex-none rounded-full"
@@ -70,7 +70,7 @@ export default function FeatureRows({
                     {item.eyebrow}
                   </p>
                 )}
-                <h3 className="font-display text-display-md text-text-primary font-bold">{item.title}</h3>
+                <h3 className="font-display text-display-md text-text-primary font-extrabold">{item.title}</h3>
                 <p className="text-text-secondary mt-3 leading-7">{item.body}</p>
                 {item.bullets && item.bullets.length > 0 && (
                   <ul className="mt-5 flex flex-col gap-2.5">

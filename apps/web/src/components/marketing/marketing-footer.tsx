@@ -62,7 +62,7 @@ export default function MarketingFooter({
           <div className="grid grid-cols-2 gap-8 sm:grid-cols-3">
             {COLUMNS.map((column) => (
               <div key={column.titleKey} className="flex flex-col gap-2">
-                <p className="text-text-contrast/80 text-sm font-semibold tracking-wide uppercase">
+                <p className="text-text-contrast/80 font-eyebrow tracking-eyebrow text-xs uppercase">
                   {t(column.titleKey)}
                 </p>
                 {column.titleKey === "footer-account" && (

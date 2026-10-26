@@ -32,8 +32,8 @@ export default function SectionHeader({
         className,
       )}
     >
-      {eyebrow && <p className="text-primary text-sm font-semibold tracking-wide uppercase">{eyebrow}</p>}
-      <Heading className="font-display text-display-lg text-text-primary font-bold">{title}</Heading>
+      {eyebrow && <p className="text-primary font-eyebrow tracking-eyebrow text-xs uppercase">{eyebrow}</p>}
+      <Heading className="font-display text-display-lg text-text-primary font-extrabold">{title}</Heading>
       {subtitle && <p className="text-text-secondary text-lg leading-6">{subtitle}</p>}
     </div>
   );

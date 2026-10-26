@@ -16,11 +16,11 @@ export default function NumberStrip({ items }: { items: { title: string; body: s
       >
         {items.map((item, index) => (
           <article key={item.title} className="flex gap-4 px-0 py-4 md:px-6 md:py-1 md:first:pl-0 md:last:pr-0">
-            <span aria-hidden className="font-display text-secondary flex-none text-lg leading-6 font-normal">
+            <span aria-hidden className="font-display text-secondary flex-none text-lg leading-6 font-bold">
               {String(index + 1).padStart(2, "0")}
             </span>
             <div>
-              <p className="font-display text-text-primary text-base leading-5 font-normal">{item.title}</p>
+              <p className="font-display text-text-primary text-base leading-5 font-bold">{item.title}</p>
               <p className="text-text-secondary mt-1.5 text-sm leading-5">{item.body}</p>
             </div>
           </article>

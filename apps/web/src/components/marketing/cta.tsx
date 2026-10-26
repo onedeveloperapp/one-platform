@@ -45,8 +45,8 @@ export default function Cta({
       <Section background="deep" decor={decor} track={track}>
         <Reveal>
           <div className="flex flex-col items-start gap-4 py-6 md:py-10">
-            {kicker && <p className="text-secondary-light font-mono text-xs tracking-widest uppercase">{kicker}</p>}
-            <h2 className="font-display text-display-lg max-w-3xl font-bold">{title}</h2>
+            {kicker && <p className="text-secondary-light font-eyebrow tracking-eyebrow text-xs uppercase">{kicker}</p>}
+            <h2 className="font-display text-display-lg max-w-3xl font-extrabold">{title}</h2>
             {subtitle && <p className="text-text-contrast/75 max-w-2xl text-lg leading-7">{subtitle}</p>}
             <div className="mt-2 flex flex-col items-start gap-4 sm:flex-row sm:items-center">
               {/* Light button on the deep band: token classes override the
@@ -101,8 +101,8 @@ export default function Cta({
             }}
           />
           <div className="relative flex flex-col items-center gap-4">
-            {kicker && <p className="text-primary font-mono text-xs tracking-widest uppercase">{kicker}</p>}
-            <h2 className="font-display text-display-lg text-text-primary max-w-2xl font-bold">{title}</h2>
+            {kicker && <p className="text-primary font-eyebrow tracking-eyebrow text-xs uppercase">{kicker}</p>}
+            <h2 className="font-display text-display-lg text-text-primary max-w-2xl font-extrabold">{title}</h2>
             {subtitle && <p className="text-text-secondary max-w-xl text-lg leading-6">{subtitle}</p>}
             <div className="mt-2 flex flex-col items-center gap-4 sm:flex-row">
               <Button

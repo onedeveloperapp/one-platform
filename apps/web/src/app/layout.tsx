@@ -1,7 +1,7 @@
 import "@/style/global.css";
 
 import { Metadata } from "next";
-import { JetBrains_Mono, Londrina_Solid, Mulish } from "next/font/google";
+import { JetBrains_Mono, Mulish, Urbanist } from "next/font/google";
 import Script from "next/script";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getMessages } from "next-intl/server";
@@ -40,14 +40,13 @@ const mulish = Mulish({
   preload: true,
 });
 
-// The heading face. Inherited with the base and provisional for ONE, like the
-// palette: the official identity decides the type. The family ships four
-// static weights only (100, 300, 400 and 900), so a heading class gets
-// the nearest real face, never a synthesised one: font-normal and font-medium
-// render Regular; font-semibold, font-bold and font-extrabold render Black.
-// Add "300" or "100" to the list when a design calls for a lighter display.
-const londrina = Londrina_Solid({
-  weight: ["400", "900"],
+// The heading face, with Mulish for the text: the type of MedChina's
+// clinical-source home, chosen for ONE on 2026-10-26. That page sets its
+// titles in TT Chocolates, a commercial face no licence of ONE's covers;
+// Urbanist (OFL) is the heading face of MedChina's own app, beside the same
+// Mulish. A variable font, so one file covers 100 to 900: the display scale
+// is ExtraBold and the smaller headings Bold.
+const urbanist = Urbanist({
   subsets: ["latin"],
   variable: "--font-heading",
   display: "swap",
@@ -69,8 +68,8 @@ const jetbrains = JetBrains_Mono({
 });
 
 // `font-display` has no face of its own: it falls back to --font-heading
-// (Londrina Solid) through tailwind.config.ts. A separate display face, if one
-// is ever chosen, is wired here as --font-display.
+// (Urbanist) through tailwind.config.ts. A separate display face, if one is
+// ever chosen, is wired here as --font-display.
 
 export const metadata: Metadata = {
   metadataBase: new URL(BRAND.siteUrl),
@@ -121,7 +120,7 @@ export default async function RootLayout({
       lang={locale}
       suppressHydrationWarning
       style={{ "--inner-shadow-opacity": "0.6", "--foreground-opacity": "0.6" } as React.CSSProperties}
-      className={`${mulish.variable} ${londrina.variable} ${jetbrains.variable} ${DEFAULTS.themeColor} ${
+      className={`${mulish.variable} ${urbanist.variable} ${jetbrains.variable} ${DEFAULTS.themeColor} ${
         DEFAULTS.themeMode === "dark" ? "dark" : "light"
       }`}
     >

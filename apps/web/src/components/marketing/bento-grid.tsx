@@ -54,7 +54,7 @@ export default function BentoGrid({
             >
               {item.visual && <div className={cn("min-h-24", tone.text)}>{item.visual}</div>}
               <div>
-                <h3 className="text-text-primary font-heading text-xl font-normal">{item.title}</h3>
+                <h3 className="text-text-primary font-heading text-xl font-bold">{item.title}</h3>
                 <p className="text-text-secondary mt-2 leading-6">{item.body}</p>
               </div>
               {/* Corner wash in the cell's own hue — quiet until touched. */}

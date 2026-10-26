@@ -44,7 +44,7 @@ export default function UnsubscribePanel({ kind }: { kind: "member" | "lead" | n
         <span className="bg-accent-2-light/10 text-accent-2 flex h-11 w-11 items-center justify-center rounded-xl">
           <NiCheckSquare size="medium" />
         </span>
-        <p className="font-display text-text-primary text-xl font-normal">
+        <p className="font-display text-text-primary text-xl font-bold">
           {t(member ? "unsubscribe-member-done-title" : "unsubscribe-lead-done-title")}
         </p>
         <p className="text-text-secondary text-base leading-6">

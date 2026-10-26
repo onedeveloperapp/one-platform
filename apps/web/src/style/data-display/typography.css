@@ -7,33 +7,34 @@
   }
 
   /*
-    The heading face (Londrina Solid) has two usable weights, Regular and
-    Black, and nothing between them: any class from font-semibold up renders
-    Black. Black carries a title from 24px up; below that its counters close,
-    so the smaller headings are set in Regular, which is already a heavy face.
+    The heading face is Urbanist, as on MedChina's clinical-source home: its
+    page titles ExtraBold and its card titles Bold, set a little tight. These
+    sizes are the app's, far below that page's display, so the tracking is
+    gentler than the -0.035em of the marketing scale, and a title that wraps
+    keeps some air between its lines.
   */
   .MuiTypography-h1 {
-    @apply font-heading text-5xl font-bold;
+    @apply font-heading text-5xl leading-[1.15] font-extrabold tracking-[-0.025em];
   }
 
   .MuiTypography-h2 {
-    @apply font-heading text-4xl font-bold;
+    @apply font-heading text-4xl leading-[1.15] font-extrabold tracking-[-0.025em];
   }
 
   .MuiTypography-h3 {
-    @apply font-heading text-3xl font-normal;
+    @apply font-heading text-3xl font-bold tracking-[-0.015em];
   }
 
   .MuiTypography-h4 {
-    @apply font-heading text-2xl font-normal;
+    @apply font-heading text-2xl font-bold tracking-[-0.015em];
   }
 
   .MuiTypography-h5 {
-    @apply font-heading text-xl font-normal;
+    @apply font-heading text-xl font-bold tracking-[-0.01em];
   }
 
   .MuiTypography-h6 {
-    @apply font-heading text-lg font-normal;
+    @apply font-heading text-lg font-bold tracking-[-0.01em];
   }
 
   .MuiTypography-subtitle1 {
@@ -54,7 +55,7 @@
   }
 
   .MuiTypography-button {
-    @apply font-body text-base font-medium normal-case;
+    @apply font-body text-base font-bold normal-case;
   }
 
   .MuiTypography-overline {

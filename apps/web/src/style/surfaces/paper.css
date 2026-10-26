@@ -41,6 +41,6 @@
   }
 
   .MuiPaper-outlined {
-    @apply border-grey-50 border border-solid;
+    @apply border-grey-100 border border-solid;
   }
 }

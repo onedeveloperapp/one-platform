@@ -7,7 +7,7 @@ Building blocks for every public page under `apps/web/src/app/[locale]/(marketin
 ## Contract
 
 - **Every block of content sits inside `<Section>`** (which renders `<Container>`); vertical rhythm, max width and horizontal padding come from the marketing tokens (`packages/design-tokens/css/marketing.css`) — never from per-page utility values.
-- **Headings use the fluid display scale**: `font-display text-display-{2xl,xl,lg,md}` (`clamp()`-based, no breakpoint font-size jumps). `--font-display` falls back to the heading font, Londrina Solid, which has two weights: the display scale is Black (`font-bold`), a heading under 24px is Regular (`font-normal`).
+- **Headings use the fluid display scale**: `font-display text-display-{2xl,xl,lg,md}` (`clamp()`-based, no breakpoint font-size jumps). `--font-display` falls back to the heading font, Urbanist: the display scale is ExtraBold (`font-extrabold`), a heading below it is Bold (`font-bold`). An eyebrow is `text-xs font-eyebrow tracking-eyebrow uppercase`.
 - **Motion only through `<Reveal>`** (GSAP + ScrollTrigger): transforms + `autoAlpha`, plays once, honors `prefers-reduced-motion`. Never animate width/height/top/left.
 - **Copy comes from the `marketing` i18n namespace** — no hardcoded strings; pages fetch translations and pass plain data into the sections.
 - **Tokens only** for colors/radii/shadows (`hsl(var(--token))` via Tailwind classes). All 4 color themes × light/dark must look right.

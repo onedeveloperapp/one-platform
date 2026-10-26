@@ -85,7 +85,7 @@ export default async function BlogPage() {
                     <h2
                       className={cn(
                         "font-display text-text-primary group-hover:text-primary transition-colors",
-                        featured ? "text-display-md font-bold" : "text-xl font-normal",
+                        featured ? "text-display-md font-extrabold" : "text-xl font-bold",
                       )}
                     >
                       {post.title}
@@ -113,7 +113,7 @@ export default async function BlogPage() {
         <Section>
           <Reveal>
             <div className="border-grey-100 mx-auto flex max-w-xl flex-col items-center gap-3 rounded-4xl border border-dashed px-6 py-14 text-center">
-              <h2 className="font-display text-text-primary text-xl font-normal">{t("blog-empty-title")}</h2>
+              <h2 className="font-display text-text-primary text-xl font-bold">{t("blog-empty-title")}</h2>
               <p className="text-text-secondary text-base leading-6">{t("blog-empty-hint")}</p>
             </div>
           </Reveal>

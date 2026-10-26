@@ -54,7 +54,7 @@ export default function FeatureGrid({
               >
                 {feature.icon}
               </span>
-              <h3 className="text-text-primary font-heading text-xl font-normal">{feature.title}</h3>
+              <h3 className="text-text-primary font-heading text-xl font-bold">{feature.title}</h3>
               <p className="text-text-secondary text-base leading-6">{feature.description}</p>
             </div>
           );

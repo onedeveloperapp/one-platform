@@ -46,7 +46,7 @@ export function RuledCard({ item }: { item: RuledGridItem }) {
           )}
         </div>
       )}
-      <h3 className="font-display text-text-primary text-xl leading-6 font-normal">{item.title}</h3>
+      <h3 className="font-display text-text-primary text-xl leading-6 font-bold">{item.title}</h3>
       <p className="text-text-secondary mt-2.5 text-base leading-6">{item.body}</p>
       {item.flags && item.flags.length > 0 && (
         <ul className="m-0 mt-3 flex list-none flex-row flex-wrap gap-2 p-0">
@@ -142,7 +142,7 @@ export default function RuledGrid({
             )}
             <h3
               className={cn(
-                "font-display text-lg leading-6 font-normal",
+                "font-display text-lg leading-6 font-bold",
                 deep ? "text-text-contrast" : "text-text-primary",
               )}
             >

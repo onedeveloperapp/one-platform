@@ -64,7 +64,7 @@ export default async function HelpPage() {
                     >
                       <NiBookmark size="medium" />
                     </span>
-                    <h2 className="font-display text-text-primary text-xl font-normal">{category.name}</h2>
+                    <h2 className="font-display text-text-primary text-xl font-bold">{category.name}</h2>
                   </div>
                   {category.description && (
                     <p className="text-text-secondary -mt-2 text-base leading-6">{category.description}</p>
@@ -96,7 +96,7 @@ export default async function HelpPage() {
         <Section>
           <Reveal>
             <div className="border-grey-100 mx-auto flex max-w-xl flex-col items-center gap-3 rounded-4xl border border-dashed px-6 py-14 text-center">
-              <h2 className="font-display text-text-primary text-xl font-normal">{t("help-empty-title")}</h2>
+              <h2 className="font-display text-text-primary text-xl font-bold">{t("help-empty-title")}</h2>
               <p className="text-text-secondary text-base leading-6">{t("help-empty-hint")}</p>
             </div>
           </Reveal>

@@ -69,7 +69,7 @@ export default function WaitlistForm() {
         <span className="bg-accent-2-light/10 text-accent-2 flex h-11 w-11 items-center justify-center rounded-xl">
           <NiCheckSquare size="medium" />
         </span>
-        <p className="font-display text-text-primary text-xl font-normal">{t("waitlist-sent-title")}</p>
+        <p className="font-display text-text-primary text-xl font-bold">{t("waitlist-sent-title")}</p>
         <p className="text-text-secondary text-base leading-6">{t("waitlist-sent-body", { email: sentTo })}</p>
         <div>
           <Button variant="text" color="primary" onClick={() => setSentTo(null)}>

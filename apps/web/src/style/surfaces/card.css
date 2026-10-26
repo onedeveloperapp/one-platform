@@ -3,8 +3,10 @@
 /* --------------------------- */
 
 @layer utilities {
+  /* A card has a hairline and a soft drop, as on MedChina's clinical-source
+     home: the line draws its edge where the shadow is faint. */
   .MuiCard-root {
-    @apply bg-background-paper rounded-3xl px-3 py-3 shadow-sm!;
+    @apply bg-background-paper border-grey-100 rounded-3xl border border-solid px-3 py-3 shadow-sm!;
   }
 
   .MuiCardContent-root {
@@ -32,7 +34,7 @@
   }
 
   .MuiPaper-outlined.MuiCard-root {
-    @apply border-grey-50 border border-solid shadow-none!;
+    @apply border-grey-100 border border-solid shadow-none!;
   }
 
   .MuiCardHeader-avatar {

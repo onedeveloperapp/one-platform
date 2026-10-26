@@ -35,13 +35,13 @@ const RAW_COLOR_FN = /\b(?:rgba?|oklch)\s*\(/;
 const RAW_HSL = /\bhsla?\(\s*(?!var\()/;
 const ICON_LIB_IMPORT = /from\s+["'](?:@phosphor-icons\/|lucide-react|react-icons|@tabler\/icons|@mui\/icons-material)/;
 /**
- * The heading face (Londrina Solid) ships Regular and Black and nothing in
- * between: every class from font-semibold up renders Black, whose counters
- * close under 24px. Below the display scale a heading is set in font-normal.
+ * The heading face (Urbanist, as on MedChina's clinical-source home since
+ * 2026-10-26) is set heavy: ExtraBold on the display scale, Bold below it. In
+ * a light weight a small heading reads as body text beside the Mulish.
  */
 const HEADING_FACE = /\bfont-(?:heading|display)\b/;
 const SMALL_TEXT_SIZE = /(?:^|[\s"'`:])text-(?:xs|sm|base|lg|xl|2xl|3xl)\b/;
-const HEAVY_WEIGHT = /\bfont-(?:semibold|bold|extrabold|black)\b/;
+const LIGHT_WEIGHT = /\bfont-(?:thin|extralight|light|normal|medium)\b/;
 /** JSX text node with 3+ words and no expression — likely copy that belongs in i18n. */
 const JSX_TEXT = />\s*([A-Za-zÀ-ÿ][^<>{}]*?\s+\S+\s+\S+[^<>{}]*?)\s*</;
 const ATTR_TEXT = /\b(?:alt|aria-label|placeholder)=["'][A-Za-zÀ-ÿ][^"']+["']/;
@@ -93,8 +93,7 @@ function lint(filePath, content) {
         violations.push(
           `[raw-color] ${at}: hex literal — colors come from tokens (hsl(var(--token)) / token Tailwind classes).`,
         );
-      if (RAW_COLOR_FN.test(line))
-        violations.push(`[raw-color] ${at}: rgb()/oklch() literal — use hsl(var(--token)).`);
+      if (RAW_COLOR_FN.test(line)) violations.push(`[raw-color] ${at}: rgb()/oklch() literal — use hsl(var(--token)).`);
       if (RAW_HSL.test(line))
         violations.push(`[raw-color] ${at}: hsl() with raw values — only hsl(var(--token) / alpha) is allowed.`);
       if (TW_DEFAULT_PALETTE.test(line))
@@ -112,9 +111,9 @@ function lint(filePath, content) {
         violations.push(
           `[icon-import] ${at}: direct icon-library import — marketing imports icons only via @/icons/nexture/ni-* (see .claude/rules/icons.md).`,
         );
-      if (HEADING_FACE.test(line) && SMALL_TEXT_SIZE.test(line) && HEAVY_WEIGHT.test(line))
+      if (HEADING_FACE.test(line) && SMALL_TEXT_SIZE.test(line) && LIGHT_WEIGHT.test(line))
         advisories.push(
-          `[heading-weight] ${at}: a heading below the display scale in a heavy weight — the heading face has Regular and Black only, and Black closes up under 24px. Use font-normal here; font-bold belongs to text-display-* (docs/DESIGN.md, "Display type").`,
+          `[heading-weight] ${at}: a heading below the display scale in a light weight — the heading face is set Bold below the display scale and ExtraBold on text-display-*. Use font-bold here (docs/DESIGN.md, "Display type").`,
         );
     }
     if (isPage && !isExempt) {

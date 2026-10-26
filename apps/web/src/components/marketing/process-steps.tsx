@@ -106,14 +106,14 @@ export default function ProcessSteps({
               )}
 
               <div className="flex flex-col gap-2">
-                <h3 className="text-text-primary font-heading text-xl font-normal">{step.title}</h3>
+                <h3 className="text-text-primary font-heading text-xl font-bold">{step.title}</h3>
                 <p className="text-text-secondary leading-6">{step.body}</p>
               </div>
 
               {step.deliverableValue && (
                 <div className="border-grey-100 mt-auto border-t pt-4">
                   {step.deliverableLabel && (
-                    <p className="text-text-secondary mb-1 text-xs font-semibold tracking-wide uppercase">
+                    <p className="text-text-secondary font-eyebrow tracking-eyebrow mb-1 text-xs uppercase">
                       {step.deliverableLabel}
                     </p>
                   )}

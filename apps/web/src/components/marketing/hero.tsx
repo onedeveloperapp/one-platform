@@ -116,7 +116,7 @@ export default function Hero({
           className="grid grid-cols-1 items-center gap-10 md:grid-cols-[0.84fr_1.16fr] md:gap-10"
         >
           <div data-hero-copy className="flex flex-col items-start gap-6 text-left">
-            {eyebrow && <p className="text-primary text-sm font-semibold tracking-wide uppercase">{eyebrow}</p>}
+            {eyebrow && <p className="text-primary font-eyebrow tracking-eyebrow text-xs uppercase">{eyebrow}</p>}
             <h1 className="font-display text-display-xl text-text-primary [&_em]:text-primary font-extrabold [&_em]:not-italic">
               {title}
             </h1>
@@ -148,7 +148,7 @@ export default function Hero({
     <Section spacing="default" decor={decor} className="overflow-hidden" track={track}>
       <div data-hero style={entrance} className="flex flex-col items-center">
         <div data-hero-copy className="flex flex-col items-center gap-6 text-center">
-          {eyebrow && <p className="text-primary text-sm font-semibold tracking-wide uppercase">{eyebrow}</p>}
+          {eyebrow && <p className="text-primary font-eyebrow tracking-eyebrow text-xs uppercase">{eyebrow}</p>}
 
           {/* display-xl over a wider measure: the title takes two lines and the
               product below it starts above the fold (docs/HOME-COPY.md). */}
@@ -165,7 +165,7 @@ export default function Hero({
               <p className="text-text-secondary text-sm">{strip.label}</p>
               <ul className="flex flex-row flex-wrap items-center justify-center gap-x-8 gap-y-2">
                 {strip.items.map((item) => (
-                  <li key={item} className="text-text-secondary font-heading text-xl font-normal tracking-tight">
+                  <li key={item} className="text-text-secondary font-heading text-xl font-bold tracking-tight">
                     {item}
                   </li>
                 ))}

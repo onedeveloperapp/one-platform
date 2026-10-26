@@ -18,7 +18,7 @@ export default function LogoCloud({
         <p className="text-text-secondary text-sm">{label}</p>
         <ul className="flex flex-row flex-wrap items-center justify-center gap-x-10 gap-y-4">
           {items.map((item) => (
-            <li key={item.name} className="text-text-muted font-heading text-xl font-normal tracking-tight">
+            <li key={item.name} className="text-text-muted font-heading text-xl font-bold tracking-tight">
               {item.logo ?? item.name}
             </li>
           ))}

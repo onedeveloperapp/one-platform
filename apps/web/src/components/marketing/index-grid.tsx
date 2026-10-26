@@ -30,7 +30,7 @@ export default function IndexGrid({
           >
             <span
               aria-hidden
-              className={cn("font-display text-sm font-normal", accent ? "text-secondary-light" : "text-secondary")}
+              className={cn("font-display text-sm font-bold", accent ? "text-secondary-light" : "text-secondary")}
             >
               {String(index + 1).padStart(2, "0")}
             </span>

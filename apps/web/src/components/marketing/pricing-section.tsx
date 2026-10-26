@@ -145,7 +145,7 @@ export default function PricingSection({
         </p>
       )}
       {tiers && tiers.length > 0 && (
-        <p className="text-text-secondary -mt-4 mb-10 flex flex-wrap items-center justify-center gap-3 text-xs font-bold tracking-widest uppercase">
+        <p className="text-text-secondary font-eyebrow tracking-eyebrow -mt-4 mb-10 flex flex-wrap items-center justify-center gap-3 text-xs uppercase">
           {tiers.map((tier, index) => (
             <span key={tier} className="flex items-center gap-3">
               {index > 0 && <span aria-hidden className="bg-grey-100 h-px w-8" />}
@@ -221,7 +221,7 @@ export default function PricingSection({
                       style={{ backgroundColor: "currentcolor" }}
                     />
                   </span>
-                  <PlanHeading className="text-text-primary font-heading text-xl font-normal">{plan.name}</PlanHeading>
+                  <PlanHeading className="text-text-primary font-heading text-xl font-bold">{plan.name}</PlanHeading>
                 </div>
                 {plan.description && <p className="text-text-secondary text-sm leading-5">{plan.description}</p>}
               </div>
@@ -234,7 +234,7 @@ export default function PricingSection({
                   </p>
                 )}
                 <p className="flex flex-row items-baseline gap-1">
-                  <span className="font-display text-display-md text-text-primary font-bold">{plan.price}</span>
+                  <span className="font-display text-display-md text-text-primary font-extrabold">{plan.price}</span>
                   {plan.period && <span className="text-text-secondary text-sm">{plan.period}</span>}
                 </p>
                 {plan.installmentsLabel && <p className="text-text-secondary text-sm">{plan.installmentsLabel}</p>}
