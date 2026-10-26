@@ -1,3 +1,5 @@
+import { type Incident, INCIDENTS } from "@/lib/cases/cases";
+
 /**
  * What each firm lets ONE decide alone (migration 0016, `autonomy_decisions`
  * and `firm_autonomy`): by default ONE decides and records each decision
@@ -10,6 +12,7 @@ export const AUTONOMY_DECISIONS = [
   "reply_client",
   "open_case_from_chat",
   "send_client_link",
+  "send_signature_papers",
   "document_check",
   "chronology",
   "piece_text",
@@ -80,6 +83,7 @@ export const DECISION_KEY: Record<AutonomyDecision, { title: string; body: strin
   reply_client: { title: "autonomy-reply-client", body: "autonomy-reply-client-body" },
   open_case_from_chat: { title: "autonomy-open-case-from-chat", body: "autonomy-open-case-from-chat-body" },
   send_client_link: { title: "autonomy-send-client-link", body: "autonomy-send-client-link-body" },
+  send_signature_papers: { title: "autonomy-send-signature-papers", body: "autonomy-send-signature-papers-body" },
   document_check: { title: "autonomy-document-check", body: "autonomy-document-check-body" },
   chronology: { title: "autonomy-chronology", body: "autonomy-chronology-body" },
   piece_text: { title: "autonomy-piece-text", body: "autonomy-piece-text-body" },
@@ -111,5 +115,21 @@ export function autonomyErrorKey(code: string): string {
   if (code === "invalid_mode" || code === "invalid_sample" || code === "decision_not_found") {
     return "autonomy-error-invalid";
   }
+  if (code === "invalid_amount" || code === "invalid_incident") return "autonomy-claim-error-amount";
   return "autonomy-error-failed";
+}
+
+/** The claim a firm asks by default for a kind of problem (migration 0052), in cents. */
+export type ClaimDefault = { incident: Incident; cents: number };
+
+/** The firm's default claims as the database answered them; a row that is not one is left out. */
+export function claimDefaultsOf(raw: unknown): ClaimDefault[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.flatMap((item): ClaimDefault[] => {
+    const row = (item ?? {}) as { incident?: unknown; cents?: unknown };
+    const cents = typeof row.cents === "number" ? row.cents : typeof row.cents === "string" ? Number(row.cents) : NaN;
+    return (INCIDENTS as readonly unknown[]).includes(row.incident) && Number.isInteger(cents) && cents > 0
+      ? [{ incident: row.incident as Incident, cents }]
+      : [];
+  });
 }

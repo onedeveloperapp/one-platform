@@ -97,7 +97,7 @@ reset role;
 
 select ok(
   (select array_agg(kind order by position) = array['hearing_change', 'hearing_reminder', 'payment_alert', 'lawsuit_update',
-                                                    'document_refused', 'flight_problem']
+                                                    'document_refused', 'flight_problem', 'case_received', 'lawsuit_filed']
    from public.notice_kinds)
   and (select bool_and(cardinality(params) = cardinality(examples)
                        and (select count(*) from regexp_matches(body, '\{\{([0-9])\}\}', 'g')) = cardinality(params))
@@ -534,7 +534,7 @@ select ok(
           and not (payload -> 'due' @> '[{"blocker": "kind_off"}]'::jsonb)
    from res where name = 'case_view')
   and (select (payload ->> 'last_day')::integer >= 1 and payload ->> 'daily_max' = '250' and payload ->> 'accounts' = '1'
-              and jsonb_array_length(payload -> 'kinds') = 6 from res where name = 'firm_view')
+              and jsonb_array_length(payload -> 'kinds') = 8 from res where name = 'firm_view')
   and (select payload = '[]'::jsonb from res where name = 'unwarned_ok'),
   'anybody of the firm reads the case''s people, what went and what is due, and the firm''s kinds'
 );
@@ -714,8 +714,9 @@ reset role;
 update public.connections set status = 'error', last_error = 'token_invalid' where id = 'dd100000-0000-4000-8000-00000000000b';
 select pg_temp.as_backend();
 set local role service_role;
+-- Of the kinds that are on (the lawsuit filed three days ago is due its word too, and that kind is off).
 insert into res select 'failing', jsonb_build_object('n', count(*), 'all', bool_and(c.blocker = 'number_failing'))
-  from public.notice_candidates('bd100000-0000-4000-8000-00000000000b', null) c;
+  from public.notice_candidates('bd100000-0000-4000-8000-00000000000b', null) c where c.blocker is distinct from 'kind_off';
 select pg_temp.reserve_in('failing_run', 'bd100000-0000-4000-8000-00000000000b');
 reset role;
 update public.connections set status = 'connected', last_error = null where id = 'dd100000-0000-4000-8000-00000000000b';

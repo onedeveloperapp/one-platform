@@ -117,6 +117,24 @@ export default function ClientFolder({
     return () => window.clearInterval(timer);
   }, [lastWaiting, router]);
 
+  // ONE prepares what the client signs right after they say they finished (the power of attorney, the contract):
+  // for a few minutes the folder is read again, so the papers show while the client is still here.
+  const finishedAt = Date.parse(view.link.finished_at ?? "") || 0;
+  const awaitingPapers = finishedAt > 0 && tasks.signatures.length === 0;
+  useEffect(() => {
+    if (!awaitingPapers) return;
+    const started = Date.now();
+    const timer = window.setInterval(() => {
+      const now = Date.now();
+      if (now - finishedAt > CHECK_WATCH_MS || now - started > CHECK_WATCH_MS) {
+        window.clearInterval(timer);
+        return;
+      }
+      if (window.document.visibilityState === "visible") router.refresh();
+    }, CHECK_POLL_MS);
+    return () => window.clearInterval(timer);
+  }, [awaitingPapers, finishedAt, router]);
+
   const holder = view.people.find((person) => person.is_holder) ?? view.people[0];
   const claimants = view.people.filter((person) => person.roles.includes("claimant"));
   const missing = holder

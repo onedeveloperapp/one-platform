@@ -51,6 +51,19 @@ const KIND_LABEL: Record<string, string> = {
   any: "Os dois tipos",
 };
 
+/** What a model of the platform writes (0054): a piece, or the power of attorney ONE sends clients to sign. */
+const DOCUMENT_LABEL: Record<PlatformTemplate["documentKind"], string> = {
+  piece: "Peça de uma ação",
+  procuracao: "Procuração",
+};
+
+const MARKS_HELP: Record<PlatformTemplate["documentKind"], string> = {
+  piece:
+    "Cite só fontes conferidas pelo ONE, como a biblioteca as escreve. As marcas [[PARTES]], [[RE]], [[JUIZO]], [[VALOR_DA_CAUSA]], [[PEDIDO_POR_PARTE]] e [[ADVOGADOS]] são preenchidas com os dados do caso.",
+  procuracao:
+    "As marcas [[OUTORGANTE]], [[OUTORGADOS]], [[ESCRITORIO]], [[RE]], [[OBJETO]], [[LOCAL_DATA]] e [[NOME]] são preenchidas com os dados de cada cliente quando o ONE envia a procuração para ele assinar.",
+};
+
 const ERROR_TEXT: Record<string, string> = {
   forbidden: "Esta sessão não pode mudar o conteúdo da plataforma.",
   not_found: "Não foi encontrado: a lista mudou. Recarregue a página.",
@@ -98,14 +111,14 @@ export default function ContentConsoleView({ state }: { state: ConsoleState<{ co
       <PageHeader
         title="Conteúdo padrão"
         crumbs={[{ label: "Admin", href: "/admin" }, { label: "Conteúdo padrão" }]}
-        description="Os modelos de peça e as fontes que o ONE dá a todos os escritórios. Um escritório sem modelo de um tipo de ação escreve a partir do modelo padrão do ONE desse tipo."
+        description="Os modelos e as fontes que o ONE dá a todos os escritórios. Um escritório sem modelo de um tipo de ação escreve a partir do modelo padrão do ONE desse tipo, e um escritório sem procuração própria envia aos clientes a procuração padrão do ONE."
       />
 
       <Card component="section" aria-labelledby="content-templates">
         <CardContent className="flex flex-col gap-3">
           <Box className="flex flex-wrap items-center gap-3">
             <Typography id="content-templates" variant="h5" component="h2" className="mb-0 min-w-0 flex-1">
-              Modelos de peça do ONE
+              Modelos do ONE
             </Typography>
             <Button variant="outlined" color="grey" onClick={() => setTemplateForm({ template: null })}>
               Novo modelo
@@ -133,11 +146,18 @@ export default function ContentConsoleView({ state }: { state: ConsoleState<{ co
                       {template.name}
                     </Typography>
                     <Typography variant="body2" className="text-text-secondary">
-                      {KIND_LABEL[template.proceedingKind ?? "any"]} · {template.body.length.toLocaleString("pt-BR")}{" "}
-                      caracteres
+                      {template.documentKind === "procuracao"
+                        ? DOCUMENT_LABEL.procuracao
+                        : KIND_LABEL[template.proceedingKind ?? "any"]}{" "}
+                      · {template.body.length.toLocaleString("pt-BR")} caracteres
                     </Typography>
                   </Box>
-                  {template.isDefault ? <StatusChip tone="info" label="Padrão do tipo" /> : null}
+                  {template.isDefault ? (
+                    <StatusChip
+                      tone="info"
+                      label={template.documentKind === "procuracao" ? "Padrão" : "Padrão do tipo"}
+                    />
+                  ) : null}
                   {template.provisional ? <StatusChip tone="attention" label="Provisório" /> : null}
                   <Box className="flex flex-wrap gap-1">
                     <Button
@@ -345,6 +365,7 @@ function TemplateDialog({
 }) {
   const [pending, startTransition] = useTransition();
   const [name, setName] = useState(template?.name ?? "");
+  const [writes, setWrites] = useState<PlatformTemplate["documentKind"]>(template?.documentKind ?? "piece");
   const [kind, setKind] = useState<"juizado" | "comum" | "any">(template?.proceedingKind ?? "any");
   const [body, setBody] = useState(template?.body ?? "");
   const [isDefault, setIsDefault] = useState(template?.isDefault ?? false);
@@ -356,7 +377,8 @@ function TemplateDialog({
       const answer = await savePlatformTemplate({
         templateId: template?.id ?? null,
         name,
-        proceedingKind: kind === "any" ? null : kind,
+        documentKind: writes,
+        proceedingKind: writes === "piece" && kind !== "any" ? kind : null,
         body,
         isDefault,
         provisional,
@@ -390,21 +412,38 @@ function TemplateDialog({
           />
           <TextField
             select
-            label="Tipo de ação"
-            value={kind}
-            onChange={(event) => setKind(event.target.value as "juizado" | "comum" | "any")}
+            label="O que o modelo escreve"
+            value={writes}
+            onChange={(event) => setWrites(event.target.value === "procuracao" ? "procuracao" : "piece")}
             disabled={pending}
             className="min-w-56"
           >
-            <MenuItem value="any">{KIND_LABEL.any}</MenuItem>
-            <MenuItem value="juizado">{KIND_LABEL.juizado}</MenuItem>
-            <MenuItem value="comum">{KIND_LABEL.comum}</MenuItem>
+            <MenuItem value="piece">{DOCUMENT_LABEL.piece}</MenuItem>
+            <MenuItem value="procuracao">{DOCUMENT_LABEL.procuracao}</MenuItem>
           </TextField>
+          {writes === "piece" ? (
+            <TextField
+              select
+              label="Tipo de ação"
+              value={kind}
+              onChange={(event) => setKind(event.target.value as "juizado" | "comum" | "any")}
+              disabled={pending}
+              className="min-w-56"
+            >
+              <MenuItem value="any">{KIND_LABEL.any}</MenuItem>
+              <MenuItem value="juizado">{KIND_LABEL.juizado}</MenuItem>
+              <MenuItem value="comum">{KIND_LABEL.comum}</MenuItem>
+            </TextField>
+          ) : null}
         </Box>
         <Box className="flex flex-wrap gap-x-6">
           <FormControlLabel
             control={<Checkbox checked={isDefault} onChange={(event) => setIsDefault(event.target.checked)} />}
-            label="Modelo padrão deste tipo para os escritórios sem modelo próprio"
+            label={
+              writes === "procuracao"
+                ? "Procuração padrão para os escritórios sem procuração própria"
+                : "Modelo padrão deste tipo para os escritórios sem modelo próprio"
+            }
             disabled={pending}
           />
           <FormControlLabel
@@ -415,7 +454,7 @@ function TemplateDialog({
         </Box>
         <TextField
           label="Texto"
-          helperText="Cite só fontes conferidas pelo ONE, como a biblioteca as escreve. As marcas [[PARTES]], [[RE]], [[JUIZO]], [[VALOR_DA_CAUSA]], [[PEDIDO_POR_PARTE]] e [[ADVOGADOS]] são preenchidas com os dados do caso."
+          helperText={MARKS_HELP[writes]}
           value={body}
           onChange={(event) => setBody(event.target.value)}
           disabled={pending}

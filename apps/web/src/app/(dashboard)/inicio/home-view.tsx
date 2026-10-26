@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl";
 
 import { Alert, Box, Button, Grid, Typography } from "@mui/material";
 
+import AttentionList, { type AttentionGroup } from "@/components/product/attention-list";
 import EmptyState from "@/components/product/empty-state";
 import { StatTile } from "@/components/product/home-tiles";
 import OnboardingChecklistCard from "@/components/product/onboarding-checklist-card";
@@ -30,6 +31,7 @@ import NiScale from "@/icons/nexture/ni-scale";
 import NiShieldCheck from "@/icons/nexture/ni-shield-check";
 import NiTimeline from "@/icons/nexture/ni-timeline";
 import NiUsers from "@/icons/nexture/ni-users";
+import { type PendingGroup, sayPending } from "@/lib/firm/pending";
 import { type FirmToday, somethingForMe, type TodayNeed, todayNeeds } from "@/lib/firm/today";
 import type { ActivationFacts } from "@/lib/onboarding";
 import type { FlowKey, OnboardingStateRow } from "@flyee/onboarding";
@@ -47,6 +49,8 @@ export type HomeState =
       firm: { name: string };
       manager: boolean;
       today: FirmToday;
+      /** What holds a case until somebody of the firm acts (late, then waiting on the firm); null when unread. */
+      attention: PendingGroup[] | null;
       /** The person says what a publication is: what the courts published is theirs to work on. */
       triagesPublications: boolean;
       /** The person works on deadlines: who signs, or runs them. */
@@ -239,6 +243,23 @@ export default function HomeView({ state }: { state: HomeState }) {
   const router = useRouter();
 
   const ready = state.kind === "ready" ? state : null;
+  const attention: AttentionGroup[] = (ready?.attention ?? []).map((group) => {
+    const late = group.key === "late";
+    return {
+      key: group.key,
+      title: t(late ? "today-attention-late" : "today-attention-waits"),
+      tone: late ? "danger" : "attention",
+      items: group.items.map((item) => ({
+        id: item.id,
+        href: item.href,
+        tag: sayPending(t, item.tag),
+        title: sayPending(t, item.label),
+        detail: item.detail ? sayPending(t, item.detail) : undefined,
+        count: item.count,
+      })),
+    };
+  });
+  const attentionTotal = (ready?.attention ?? []).reduce((sum, group) => sum + group.total, 0);
   const needs = ready
     ? todayNeeds(ready.today, {
         triagesPublications: ready.triagesPublications,
@@ -301,6 +322,28 @@ export default function HomeView({ state }: { state: HomeState }) {
             >
               {ready.manager ? t("today-whatsapp-disconnected-manager") : t("today-whatsapp-disconnected-member")}
             </Alert>
+          ) : null}
+
+          {ready.attention === null ? (
+            <Alert
+              severity="error"
+              className="neutral bg-background-paper/60!"
+              action={
+                <Button color="inherit" size="small" onClick={() => router.refresh()}>
+                  {t("today-retry")}
+                </Button>
+              }
+            >
+              {t("today-attention-error")}
+            </Alert>
+          ) : attentionTotal > 0 ? (
+            <AttentionList
+              id="today-attention"
+              title={t("today-attention-title")}
+              description={t("today-attention-body")}
+              total={t("today-attention-count", { count: attentionTotal })}
+              groups={attention}
+            />
           ) : null}
 
           {ready.setup ? (

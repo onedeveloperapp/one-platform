@@ -21,8 +21,9 @@ import messages from "@flyee/content/messages/pt-BR.json";
 import { renderTemplate } from "@flyee/whatsapp/rules";
 
 const ROOT = path.resolve(__dirname, "../../../../..");
-// The kinds were made in 0038 and one more joined in 0047 (ONE's first word when a flight has a problem).
-const MIGRATION = ["0038_client_notices.sql", "0047_test_chat.sql"]
+// The kinds were made in 0038, one more joined in 0047 (ONE's first word when a flight has a problem) and two in
+// 0055 (what the client sent arrived, and the lawsuit was filed).
+const MIGRATION = ["0038_client_notices.sql", "0047_test_chat.sql", "0055_client_progress.sql"]
   .map((file) => fs.readFileSync(path.join(ROOT, "packages/db/migrations", file), "utf8"))
   .join("\n");
 const product = messages.product as Record<string, string>;

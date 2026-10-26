@@ -1,4 +1,4 @@
-import { waitingFix, waitingKey } from "@/lib/cases/advance";
+import { isClientWait, waitingHref, waitingKey, waitingTagKey } from "@/lib/cases/advance";
 import { type FirmToday, type TodayNeed, todayNeeds, type TodayViewer } from "@/lib/firm/today";
 import { formatCnj } from "@flyee/rules/cnj";
 
@@ -55,6 +55,16 @@ export type ConversationCalled = {
   late: boolean;
 };
 
+/** A signature that waits for somebody of the firm (migration 0053): a signed file a client sent back, or an outcome nobody can tell. */
+export type SignatureToConfirm = {
+  envelopeId: string;
+  caseId: string;
+  seq: number;
+  client: string;
+  status: "received" | "uncertain";
+  since: string | null;
+};
+
 export type OverdueDeadline = {
   deadlineId: string;
   caseId: string | null;
@@ -78,6 +88,9 @@ export type FirmPending = {
   documentsStale: number;
   documentsStaleHours: number;
   oneWaitsStaleDays: number;
+  signaturesToConfirm: SignatureToConfirm[];
+  signaturesToConfirmTotal: number;
+  packageSignaturesFailed: number;
 };
 
 const count = (value: unknown): number | null =>
@@ -116,6 +129,17 @@ function conversationCalledOf(raw: unknown): ConversationCalled | null {
   const reason = text(row.reason);
   if (!conversationId || !UUID.test(conversationId) || !reason) return null;
   return { conversationId, contact: text(row.contact) ?? "", reason, since: text(row.since), late: row.late === true };
+}
+
+function signatureOf(raw: unknown): SignatureToConfirm | null {
+  if (typeof raw !== "object" || raw === null) return null;
+  const row = raw as Record<string, unknown>;
+  const envelopeId = text(row.envelope_id);
+  const caseId = text(row.case_id);
+  const seq = count(row.seq);
+  if (!envelopeId || !UUID.test(envelopeId) || !caseId || !UUID.test(caseId) || !seq) return null;
+  if (row.status !== "received" && row.status !== "uncertain") return null;
+  return { envelopeId, caseId, seq, client: text(row.client) ?? "", status: row.status, since: text(row.since) };
 }
 
 function overdueOf(raw: unknown): OverdueDeadline | null {
@@ -180,6 +204,12 @@ export function readFirmPending(raw: unknown): FirmPending | null {
     documentsStale,
     documentsStaleHours,
     oneWaitsStaleDays,
+    // Read where the database says them (0053); a database without them has no signature waiting for a person.
+    signaturesToConfirm: Array.isArray(answer.signatures_to_confirm)
+      ? answer.signatures_to_confirm.map(signatureOf).filter((row): row is SignatureToConfirm => row !== null)
+      : [],
+    signaturesToConfirmTotal: count(answer.signatures_to_confirm_total) ?? 0,
+    packageSignaturesFailed: count(answer.package_signatures_failed) ?? 0,
   };
 }
 
@@ -188,11 +218,27 @@ export type PendingGroupKey = "late" | "today" | "one" | "review";
 /** Words of the `product` namespace, with their values; a value that is itself words is said first (`message`). */
 export type PendingText = { key: string; values?: Record<string, string | number | { message: string }> };
 
+/** The words of a `PendingText`, with whatever translates the `product` namespace. */
+export function sayPending(
+  t: (key: string, values?: Record<string, string | number>) => string,
+  text: PendingText,
+): string {
+  const values = Object.fromEntries(
+    Object.entries(text.values ?? {}).map(([name, value]) => [
+      name,
+      typeof value === "object" ? t(value.message) : value,
+    ]),
+  );
+  return t(text.key, values);
+}
+
 /** One line of the center: what, of which case and why, and where it is done. */
 export type PendingItem = {
   /** Stable while the thing waits: what the center compares to say something new arrived. */
   id: string;
   href: string;
+  /** What kind of thing it is, in a word or two (a deadline, the claim, a signature): how a person tells it at a glance. */
+  tag: PendingText;
   label: PendingText;
   detail?: PendingText;
   /** How many things the line stands for; one when it is one thing of one case. */
@@ -228,6 +274,37 @@ const NEED_GROUP: Partial<Record<TodayNeed["key"], PendingGroupKey>> = {
   queue: "review",
 };
 
+/** What kind of thing each need of the home is, in a word or two. */
+const NEED_TAG: Record<TodayNeed["key"], string> = {
+  overdue: "pending-tag-deadline",
+  due: "pending-tag-deadline",
+  confirm: "pending-tag-deadline",
+  recheck: "pending-tag-deadline",
+  untimed: "pending-tag-deadline",
+  hearings: "pending-tag-hearing",
+  unresolved: "pending-tag-hearing",
+  unwritten: "pending-tag-hearing",
+  unwarned: "pending-tag-hearing",
+  calendar: "pending-tag-calendar",
+  closing: "pending-tag-conversation",
+  waiting: "pending-tag-conversation",
+  failed: "pending-tag-message",
+  approvals: "pending-tag-approval",
+  queue: "pending-tag-approval",
+  checks: "pending-tag-publication",
+  cancelled: "pending-tag-publication",
+  publications: "pending-tag-publication",
+  reading: "pending-tag-publication",
+  clients: "pending-tag-client",
+  civil: "pending-tag-civil",
+  documents: "pending-tag-documents",
+  moved: "pending-tag-movement",
+  drafts: "pending-tag-piece",
+  filings: "pending-tag-filing",
+  contested: "pending-tag-account",
+  complaints: "pending-tag-complaint",
+};
+
 /** A day of the calendar as people read it: 12/10/2026. */
 const dayLabel = (day: string): string => day.split("-").reverse().join("/");
 
@@ -253,6 +330,7 @@ export const LINK_REASON_KEY: Record<LinkReason, string> = {
 const needItem = (need: TodayNeed): PendingItem => ({
   id: `need:${need.key}`,
   href: need.href,
+  tag: { key: NEED_TAG[need.key] },
   label: { key: `today-need-${need.key}` },
   detail: { key: `today-need-${need.key}-hint` },
   count: need.count,
@@ -274,6 +352,7 @@ export function pendingGroups(
       groups.late.push({
         id: `deadline:${deadline.deadlineId}`,
         href: deadline.caseId ? `/casos/${deadline.caseId}` : "/prazos?ver=vencidos",
+        tag: { key: "pending-tag-deadline" },
         label: { key: "pending-deadline", values: { title: deadline.title } },
         detail:
           deadline.seq !== null
@@ -290,6 +369,7 @@ export function pendingGroups(
       groups.late.push({
         id: "need:overdue",
         href: "/prazos?ver=vencidos",
+        tag: { key: "pending-tag-deadline" },
         label: { key: "pending-deadlines-more", values: { count: unlisted } },
         count: unlisted,
       });
@@ -301,6 +381,7 @@ export function pendingGroups(
     groups.late.push({
       id: "documents:stale",
       href: "/casos?ver=documentos",
+      tag: { key: "pending-tag-documents" },
       label: {
         key: "pending-documents-stale",
         values: { count: pending.documentsStale, hours: pending.documentsStaleHours },
@@ -313,6 +394,7 @@ export function pendingGroups(
     groups.review.push({
       id: "need:documents",
       href: "/casos?ver=documentos",
+      tag: { key: "pending-tag-documents" },
       label: { key: "today-need-documents" },
       detail: { key: "today-need-documents-hint" },
       count: freshDocuments,
@@ -323,9 +405,12 @@ export function pendingGroups(
   for (const wait of pending.oneWaits) {
     const days = daysSince(wait.since, now);
     const stale = days >= pending.oneWaitsStaleDays;
-    groups[stale ? "late" : "one"].push({
+    // What waits on the client (their signature) is the firm's to follow up only once it waited too long; until
+    // then it is only to look at.
+    groups[stale ? "late" : isClientWait(wait.waiting) ? "review" : "one"].push({
       id: `case:${wait.caseId}:${wait.waiting}`,
-      href: waitingFix(wait.waiting)?.href ?? `/casos/${wait.caseId}`,
+      href: waitingHref(wait.waiting, wait.caseId),
+      tag: { key: waitingTagKey(wait.waiting) },
       label: wait.client
         ? { key: "pending-case", values: { seq: wait.seq, client: wait.client } }
         : { key: "pending-case-unnamed", values: { seq: wait.seq } },
@@ -339,6 +424,7 @@ export function pendingGroups(
     groups[link.reason === "late" ? "late" : "one"].push({
       id: `link:${link.caseId}:${link.personId}`,
       href: `/casos/${link.caseId}#case-link`,
+      tag: { key: "pending-tag-link" },
       label: link.client ? { key: "pending-link", values: { client: link.client } } : { key: "pending-link-unnamed" },
       detail: {
         key: "pending-link-detail",
@@ -352,6 +438,7 @@ export function pendingGroups(
     groups[called.late ? "late" : "one"].push({
       id: `conversation:${called.conversationId}`,
       href: `/atendimento?c=${called.conversationId}`,
+      tag: { key: "pending-tag-conversation" },
       label: called.contact
         ? { key: "pending-conversation", values: { contact: called.contact } }
         : { key: "pending-conversation-unnamed" },
@@ -359,11 +446,50 @@ export function pendingGroups(
       count: 1,
     });
   }
+  // Each signature a person of the firm confirms or looks at: a file a client sent back waiting longer than the
+  // papers may is late.
+  for (const signature of pending.signaturesToConfirm) {
+    const stale =
+      signature.since !== null && now.getTime() - Date.parse(signature.since) > pending.documentsStaleHours * 3_600_000;
+    groups[stale ? "late" : "one"].push({
+      id: `signature:${signature.envelopeId}`,
+      href: `/casos/${signature.caseId}#case-signatures`,
+      tag: { key: "pending-tag-signature" },
+      label: signature.client
+        ? { key: "pending-signature", values: { client: signature.client } }
+        : { key: "pending-signature-unnamed" },
+      detail: {
+        key: signature.status === "received" ? "pending-signature-received" : "pending-signature-uncertain",
+        values: { seq: signature.seq },
+      },
+      count: 1,
+    });
+  }
+  const unlistedSignatures = pending.signaturesToConfirmTotal - pending.signaturesToConfirm.length;
+  if (unlistedSignatures > 0) {
+    groups.one.push({
+      id: "signatures:more",
+      href: "/casos",
+      tag: { key: "pending-tag-signature" },
+      label: { key: "pending-signatures-more", values: { count: unlistedSignatures } },
+      count: unlistedSignatures,
+    });
+  }
+  if (pending.packageSignaturesFailed > 0) {
+    groups.one.push({
+      id: "packages:signature-failed",
+      href: "/protocolo",
+      tag: { key: "pending-tag-filing" },
+      label: { key: "pending-package-signatures-failed", values: { count: pending.packageSignaturesFailed } },
+      count: pending.packageSignaturesFailed,
+    });
+  }
   const unlistedConversations = pending.conversationsCalledTotal - pending.conversationsCalled.length;
   if (unlistedConversations > 0) {
     groups.one.push({
       id: "conversations:more",
       href: "/atendimento",
+      tag: { key: "pending-tag-conversation" },
       label: { key: "pending-conversations-more", values: { count: unlistedConversations } },
       count: unlistedConversations,
     });
@@ -373,6 +499,7 @@ export function pendingGroups(
     groups.one.push({
       id: "links:more",
       href: "/casos",
+      tag: { key: "pending-tag-link" },
       label: { key: "pending-links-more", values: { count: unlistedLinks } },
       count: unlistedLinks,
     });
@@ -382,6 +509,7 @@ export function pendingGroups(
     groups.one.push({
       id: "cases:more",
       href: "/casos",
+      tag: { key: "pending-tag-case" },
       label: { key: "pending-cases-more", values: { count: unlistedCases } },
       count: unlistedCases,
     });
@@ -393,6 +521,7 @@ export function pendingGroups(
       groups.today.push({
         id: "deadlines:today",
         href: "/prazos?ver=proximos",
+        tag: { key: "pending-tag-deadline" },
         label: { key: "pending-deadlines-today", values: { count: pending.deadlinesToday } },
         count: pending.deadlinesToday,
       });
@@ -402,6 +531,7 @@ export function pendingGroups(
       groups.today.push({
         id: "deadlines:soon",
         href: "/prazos?ver=proximos",
+        tag: { key: "pending-tag-deadline" },
         label: { key: "pending-deadlines-later", values: { count: laterDeadlines } },
         count: laterDeadlines,
       });
@@ -410,6 +540,7 @@ export function pendingGroups(
       groups.today.push({
         id: "hearings:today",
         href: "/agenda",
+        tag: { key: "pending-tag-hearing" },
         label: { key: "pending-hearings-today", values: { count: pending.hearingsToday } },
         count: pending.hearingsToday,
       });
@@ -419,6 +550,7 @@ export function pendingGroups(
       groups.today.push({
         id: "hearings:soon",
         href: "/agenda",
+        tag: { key: "pending-tag-hearing" },
         label: { key: "pending-hearings-later", values: { count: laterHearings } },
         count: laterHearings,
       });
@@ -449,6 +581,14 @@ export function pendingBadge(groups: readonly PendingGroup[]): number {
 /** Something passed its time. */
 export const pendingLate = (groups: readonly PendingGroup[]): boolean =>
   groups.some((group) => group.key === "late" && group.total > 0);
+
+/** A case waits for the firm to act (ONE can only go on once somebody does). */
+export const pendingWaitsOnFirm = (groups: readonly PendingGroup[]): boolean =>
+  groups.some((group) => group.key === "one" && group.total > 0);
+
+/** What holds a case until somebody of the firm acts, for the home: what passed its time, then what waits on the firm. */
+export const attentionGroups = (groups: readonly PendingGroup[]): PendingGroup[] =>
+  groups.filter((group) => group.key === "late" || group.key === "one");
 
 /** The ids that would make somebody stop: a new one of these is told at once, wherever the person is. */
 export const urgentIds = (groups: readonly PendingGroup[]): string[] =>

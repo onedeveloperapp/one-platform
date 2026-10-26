@@ -11,11 +11,15 @@ import { connect, DB_URL, type Row, type Sql, standIn } from "@/lib/testing/embe
  * waits, saying why; the client writes to the firm's WhatsApp, which wakes
  * the case, and ONE makes the link and sends it in that conversation, once.
  * The link the message carries is the one the database keeps (its token's
- * SHA-256), and it opens the client's page.
+ * SHA-256), and it opens the client's page. Once the client says on it that
+ * they finished, ONE sends them the power of attorney to sign (0054) and
+ * tells them in the conversation that what they sent arrived and what comes
+ * next (0055), once.
  *
  * It runs only when a migrated database is at hand
  * (`npm run test:db:roundtrip`); otherwise it is skipped. What stands in is
- * the transport, as the same database roles with the same claims.
+ * the transport, as the same database roles with the same claims, and the
+ * bucket (in memory).
  *
  * Every person, firm and number here is invented: the phones are of an area
  * code no carrier has.
@@ -26,6 +30,8 @@ vi.mock("@flyee/jobs", () => ({ sendEvent: async () => ({ sent: false, hint: "no
 
 let sql: Sql;
 let clientAs: ReturnType<typeof standIn>;
+/** The bucket, in memory: where the worker keeps the papers it issues. */
+const bucket = new Map<string, Uint8Array>();
 const backend = () => clientAs("service_role", { role: "service_role" });
 vi.mock("@flyee/auth/service", () => ({ createServiceClient: () => backend() }));
 
@@ -63,12 +69,14 @@ async function sentToMaria(): Promise<Row[]> {
 
 describe.skipIf(!DB_URL)("the client's link, sent by ONE", () => {
   let caseId = "";
+  /** The token of the link ONE sent, as its message carries it. */
+  let token = "";
 
   beforeAll(async () => {
     // Set on the process itself: a stubbed variable is taken back before each test.
     process.env.WHATSAPP_SIMULATOR = "1";
     sql = connect();
-    clientAs = standIn(sql);
+    clientAs = standIn(sql, { bucket });
     await sql.unsafe(`
       delete from public.organizations where id = '${FIRM}';
       delete from auth.users where id = '${ANA}';
@@ -150,7 +158,7 @@ describe.skipIf(!DB_URL)("the client's link, sent by ONE", () => {
     expect(body).toContain("Souza Advogados");
 
     // The token the message carries is the link the database keeps, and it opens the client's page.
-    const token = /\/c\/([A-Za-z0-9_-]{32,128})/.exec(body)?.[1] ?? "";
+    token = /\/c\/([A-Za-z0-9_-]{32,128})/.exec(body)?.[1] ?? "";
     expect(token).not.toBe("");
     const [link] = await sql.unsafe(
       `select token_hash, created_by, revoked_at from public.client_links where case_id = $1`,
@@ -186,5 +194,61 @@ describe.skipIf(!DB_URL)("the client's link, sent by ONE", () => {
     expect(await sentToMaria()).toHaveLength(1);
     const [count] = await sql.unsafe(`select count(*)::int as n from public.client_links where case_id = $1`, [caseId]);
     expect(count.n).toBe(1);
+  });
+
+  it("once the client finished, sends the power of attorney to sign and says what comes next, once", async () => {
+    // What a power of attorney writes of who grants it and who receives it: Maria's facts, Ana signing for the firm.
+    await sql.unsafe(
+      `update public.people set cpf = '12345678909', nationality = 'brasileira', marital_status = 'solteiro',
+         profession = 'Professora', street = 'Rua das Flores', address_number = '10', district = 'Centro',
+         city = 'Goiânia', uf = 'GO', postal_code = '74000000'
+       where org_id = $1 and phone = $2`,
+      [FIRM, MARIA.phone],
+    );
+    await sql.unsafe(
+      `insert into public.oab_registrations (user_id, uf, number, kind) values ($1, 'GO', '92001', 'principal')`,
+      [ANA],
+    );
+    await sql.unsafe(`insert into public.firm_signers (org_id, user_id, added_by) values ($1, $2, $2)`, [FIRM, ANA]);
+
+    const finished = await clientAs("anon", { role: "anon" }).rpc("client_link_finish", { target_token: token });
+    expect(finished.error).toBeNull();
+    expect(finished.data).toMatchObject({ ok: true, code: "finished" });
+    await carry(caseId);
+
+    // The power of attorney of the platform, issued as a PDF of the case and sent by gov.br on the link.
+    const [paper] = await sql.unsafe(
+      `select p.kind, e.method, e.status, f.purpose, f.storage_path from public.case_papers p
+       join public.signature_envelopes e on e.id = p.envelope_id
+       join public.case_documents d on d.id = p.document_id
+       join public.files f on f.id = d.file_id
+       where p.case_id = $1`,
+      [caseId],
+    );
+    expect(paper).toMatchObject({ kind: "procuracao", method: "govbr", status: "pending", purpose: "paper" });
+    const pdf = bucket.get(String(paper.storage_path));
+    expect(pdf && new TextDecoder().decode(pdf.subarray(0, 5))).toBe("%PDF-");
+
+    // ONE's word in the conversation, after the link: what arrived, and the power of attorney first.
+    const sent = await sentToMaria();
+    expect(sent).toHaveLength(2);
+    expect(sent[1]).toMatchObject({ kind: "text", sent_by: null });
+    expect(["sent", "delivered", "read"]).toContain(sent[1].status);
+    expect(String(sent[1].body)).toContain("Recebi o seu aviso de que terminou, Maria.");
+    expect(String(sent[1].body)).toContain("1. Assine a procuração que está no seu link.");
+    const [notice] = await sql.unsafe(
+      `select n.kind, n.occurrence from public.client_notices n
+       join public.wa_messages m on m.id = n.message_id
+       where n.case_id = $1 and m.body = $2`,
+      [caseId, sent[1].body],
+    );
+    expect(notice).toEqual({ kind: "case_received", occurrence: `r:${caseId}` });
+
+    // Never twice: the paper, nor the word.
+    await carry(caseId);
+    await carry(caseId);
+    expect(await sentToMaria()).toHaveLength(2);
+    const [papers] = await sql.unsafe(`select count(*)::int as n from public.case_papers where case_id = $1`, [caseId]);
+    expect(papers.n).toBe(1);
   });
 });

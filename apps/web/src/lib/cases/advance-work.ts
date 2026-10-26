@@ -5,13 +5,18 @@ import { createHash, randomBytes } from "node:crypto";
 
 import { lawsuitsWaiting } from "@/lib/cases/advance";
 import { caseMissing, firstNameOf, type MissingParty, type PersonData, type RequiredDocument } from "@/lib/cases/cases";
+import { draftBlocks } from "@/lib/cases/drafts";
 import { draftNext } from "@/lib/cases/drafts-work";
 import { buildFilingPackages } from "@/lib/cases/filing-work";
 import { lawsuitPlan, type MinimumWage, type RuleParty } from "@/lib/cases/rules";
+import { supabaseFileStore } from "@/lib/files/store";
 import { WHATSAPP_COPY } from "@/lib/messages/whatsapp-copy";
 import { deliverOutbox } from "@/lib/whatsapp/send";
 import { createServiceClient } from "@flyee/auth/service";
 import { BRAND } from "@flyee/content";
+import { takeBackFile } from "@flyee/documents/files";
+import { measureFile } from "@flyee/documents/measure";
+import { renderTextPdf } from "@flyee/documents/text-pdf";
 import { sendEvent } from "@flyee/jobs";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -23,7 +28,9 @@ import type { SupabaseClient } from "@supabase/supabase-js";
  * lawsuits), so the case is read here with the same rules the case screen
  * shows; the piece and the package are the database's. Before them, ONE
  * sends the client's link to who is owed one (0046): the token is minted
- * here and only its SHA-256 goes to the database. What ONE then waits for is
+ * here and only its SHA-256 goes to the database; once the client finished,
+ * the papers they sign (0054) and its word that what they sent arrived and
+ * what comes next (0055). What ONE then waits for is
  * recorded for the screen. Nothing of a client is kept in a job's state: the
  * steps carry case ids and outcomes only.
  */
@@ -35,6 +42,10 @@ export type HeldAdvance = {
   linkDue: boolean;
   lawsuitsDue: boolean;
   packageDue: boolean;
+  /** A paper the client signs is owed (0054): the power of attorney, the contract. */
+  papersDue: boolean;
+  /** A client who finished on their link is owed ONE's word that it arrived and what comes next (0055). */
+  receivedDue: boolean;
 };
 
 export type AdvanceOutcome = "created" | "acted" | "waiting" | "idle" | "lost" | "failed";
@@ -67,13 +78,23 @@ export async function claimCaseAdvances(
   const claimed = Array.isArray(answer.claimed) ? answer.claimed : [];
   return {
     held: (
-      claimed as { case_id: string; claim: number; link_due?: boolean; lawsuits_due: boolean; package_due: boolean }[]
+      claimed as {
+        case_id: string;
+        claim: number;
+        link_due?: boolean;
+        lawsuits_due: boolean;
+        package_due: boolean;
+        papers_due?: boolean;
+        received_due?: boolean;
+      }[]
     ).map((row) => ({
       caseId: row.case_id,
       claim: Number(row.claim),
       linkDue: row.link_due === true,
       lawsuitsDue: row.lawsuits_due === true,
       packageDue: row.package_due === true,
+      papersDue: row.papers_due === true,
+      receivedDue: row.received_due === true,
     })),
     parked: Number(answer.parked ?? 0) || 0,
   };
@@ -212,6 +233,23 @@ async function createLawsuits(
   facts: LawsuitFacts,
   day: string,
 ): Promise<{ waiting: string | null; created: boolean; lost: boolean }> {
+  // A claimant nobody set a claim for takes the firm's default for the case's kind of problem, written by the
+  // database as ONE (0052); with none, the case waits for the claim.
+  const unclaimed = facts.parties.filter(
+    (party) => party.role === "claimant" && !(typeof party.claimCents === "number" && party.claimCents > 0),
+  );
+  if (unclaimed.length > 0) {
+    const { data, error } = await service.rpc("advance_claim_defaults", {
+      target_case: held.caseId,
+      target_claim: held.claim,
+    });
+    if (error) throw new Error("claim defaults failed");
+    const answer = (data ?? {}) as { ok?: boolean; code?: string; applied?: unknown; cents?: unknown };
+    if (!answer.ok && answer.code === "not_working") return { waiting: null, created: false, lost: true };
+    if (answer.ok && typeof answer.cents === "number" && typeof answer.applied === "number" && answer.applied > 0) {
+      for (const party of unclaimed) party.claimCents = answer.cents;
+    }
+  }
   const waiting = lawsuitsWaiting({
     missing: missingOf(facts, day),
     claims: facts.parties.filter((party) => party.role === "claimant").map((party) => party.claimCents),
@@ -252,6 +290,115 @@ async function createLawsuits(
     return { waiting: null, created: false, lost: false };
   }
   return { waiting: String(answer.code ?? "failed"), created: false, lost: false };
+}
+
+/** What issuing a held case's papers came to: what it waits for, an envelope the backend opens, whether it was lost. */
+type PapersSent = { lost: boolean; failed: boolean; waiting: string | null; envelopes: number; zapsign: boolean };
+
+/** How many papers one look issues at most: each a PDF and an envelope. */
+const PAPERS_PER_LOOK = 6;
+
+/** The name of a paper's file, plain: no accent, no space. */
+function paperFileName(kind: string, person: string): string {
+  const plain = `${kind === "procuracao" ? "procuracao" : "contrato"}-${person}`
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80);
+  return `${plain || "documento"}.pdf`;
+}
+
+/**
+ * Issues the papers a held case owes (0054): for each, the database writes the
+ * text with the person's facts (`advance_paper_to_issue`), the worker makes it
+ * a PDF of the firm's own (nothing of the platform printed on it) and keeps
+ * it under the purpose `paper`, and the database makes it a document of the
+ * case and sends it to the person to sign, in one step (`advance_record_paper`).
+ * A paper whose facts are not all on record is not issued: the case waits for
+ * them (`paper_incomplete`). Throws when the database could not be asked.
+ */
+async function sendPapers(service: SupabaseClient, held: HeldAdvance): Promise<PapersSent> {
+  const sent: PapersSent = { lost: false, failed: false, waiting: null, envelopes: 0, zapsign: false };
+  const store = supabaseFileStore(service);
+  for (let turn = 0; turn < PAPERS_PER_LOOK; turn += 1) {
+    const { data, error } = await service.rpc("advance_paper_to_issue", {
+      target_case: held.caseId,
+      target_claim: held.claim,
+    });
+    if (error) throw new Error("papers could not be read");
+    const paper = (data ?? {}) as {
+      ok?: boolean;
+      code?: string;
+      org_id?: string;
+      person_id?: string;
+      kind?: string;
+      template_id?: string;
+      title?: string;
+      person?: string;
+      firm?: string;
+      body?: string;
+    };
+    if (!paper.ok) return { ...sent, lost: paper.code === "not_working" };
+    if (paper.code === "none") return sent;
+    if (paper.code === "incomplete" || paper.code === "unwritable") {
+      return { ...sent, waiting: paper.code === "incomplete" ? "paper_incomplete" : "paper_unwritable" };
+    }
+    if (paper.code !== "due" || !paper.org_id || !paper.person_id || !paper.kind || !paper.template_id || !paper.body) {
+      return { ...sent, failed: true };
+    }
+    let pdf: Uint8Array;
+    try {
+      pdf = await renderTextPdf({
+        blocks: draftBlocks(paper.body),
+        title: paper.title ?? undefined,
+        author: paper.firm ?? undefined,
+        producer: paper.firm ?? undefined,
+        pageNumbers: true,
+      });
+    } catch {
+      return { ...sent, failed: true };
+    }
+    const reserved = await store.reserve({
+      orgId: paper.org_id,
+      purpose: "paper",
+      name: paperFileName(paper.kind, paper.person ?? ""),
+      mime: "application/pdf",
+      bytes: pdf.byteLength,
+    });
+    if (!reserved.ok) return { ...sent, failed: true };
+    let measure: Awaited<ReturnType<typeof measureFile>>;
+    try {
+      await store.put(reserved.storagePath, pdf, "application/pdf");
+      measure = await measureFile(pdf);
+    } catch {
+      // Nothing names the file yet: it is taken back, and the paper tried again at the next look.
+      await takeBackFile(store, reserved.fileId, reserved.storagePath);
+      return { ...sent, failed: true };
+    }
+    const { data: recorded, error: refused } = await service.rpc("advance_record_paper", {
+      target_case: held.caseId,
+      target_claim: held.claim,
+      target_person: paper.person_id,
+      target_kind: paper.kind,
+      target_template: paper.template_id,
+      payload: { file_id: reserved.fileId, sha256: measure.sha256, bytes: measure.bytes, pages: measure.pages ?? 1 },
+    });
+    // An answer lost on the way may have kept the file as the paper: it is taken back only when the database said
+    // it was not, record first, and the database refuses to forget a file a document names.
+    if (refused) throw new Error("paper could not be recorded");
+    const result = (recorded ?? {}) as { ok?: boolean; code?: string; method?: string };
+    if (!result.ok) {
+      await takeBackFile(store, reserved.fileId, reserved.storagePath);
+      if (result.code === "not_working") return { ...sent, lost: true };
+      if (result.code === "not_due") continue;
+      return { ...sent, failed: true };
+    }
+    sent.envelopes += 1;
+    if (result.method === "zapsign") sent.zapsign = true;
+  }
+  return sent;
 }
 
 /** The links ONE sent of a held case: the messages the outbox holds for them, and whether something went wrong. */
@@ -303,6 +450,53 @@ async function sendClientLinks(service: SupabaseClient, held: HeldAdvance): Prom
 }
 
 /**
+ * Tells each client of a held case who finished on their link, in the
+ * conversation ONE holds with them, that what they sent arrived and what
+ * comes next (0055): the database names who, with the firm's name and
+ * whether a power of attorney waits for their signature, and writes each
+ * message as ONE's, recorded as the notice the firm's template would have
+ * been, checking again under the lock the notices take turns under. One the
+ * database no longer says (the 24 hours closed, a person took the
+ * conversation, it was told already) is left as it says. Throws when the
+ * database could not be asked at all.
+ */
+async function sayReceived(service: SupabaseClient, held: HeldAdvance): Promise<LinksSent> {
+  const said: LinksSent = { lost: false, failed: false, messages: [] };
+  const { data, error } = await service.rpc("advance_received_people", {
+    target_case: held.caseId,
+    target_claim: held.claim,
+  });
+  if (error) throw new Error("received words could not be read");
+  const answer = (data ?? {}) as { ok?: boolean; code?: string; people?: unknown };
+  if (!answer.ok) return { ...said, lost: answer.code === "not_working" };
+  const people = (Array.isArray(answer.people) ? answer.people : []) as {
+    person_id?: unknown;
+    full_name?: unknown;
+    paper_waiting?: unknown;
+  }[];
+  for (const person of people) {
+    if (typeof person.person_id !== "string") continue;
+    const { data: told, error: refused } = await service.rpc("advance_say_received", {
+      target_case: held.caseId,
+      target_claim: held.claim,
+      target_person: person.person_id,
+      target_body: WHATSAPP_COPY["pt-BR"].caseReceived({
+        firstName: firstNameOf(typeof person.full_name === "string" ? person.full_name : null),
+        paperWaiting: person.paper_waiting === true,
+      }),
+    });
+    if (refused) {
+      said.failed = true;
+      continue;
+    }
+    const result = (told ?? {}) as { ok?: boolean; code?: string; message_id?: unknown };
+    if (result.ok && typeof result.message_id === "string") said.messages.push(result.message_id);
+    else if (result.code === "not_working") return { ...said, lost: true };
+  }
+  return said;
+}
+
+/**
  * Does what is due for one claimed case and records what ONE waits for:
  * the client's link first (what the client sends is what the rest waits
  * for), its lawsuits when they are what to look at, then the piece and the
@@ -318,10 +512,11 @@ export async function advanceClaimedCase(
   let waiting: string | null = null;
   let created = false;
   let failed = false;
-  const asked: { drafts: string[]; packages: string[]; messages: string[] } = {
+  const asked: { drafts: string[]; packages: string[]; messages: string[]; papers: number } = {
     drafts: [],
     packages: [],
     messages: [],
+    papers: 0,
   };
   try {
     if (held.linkDue) {
@@ -329,6 +524,31 @@ export async function advanceClaimedCase(
       asked.messages = links.messages;
       if (links.failed) failed = true;
       if (links.lost) {
+        await deliverMessages(asked.messages, follow);
+        return "lost";
+      }
+    }
+    // The papers the client signs once they finished: issued and sent before the lawsuits, which do not wait for
+    // them (only the filing does, 0054).
+    let papersWaiting: string | null = null;
+    if (held.papersDue) {
+      const papers = await sendPapers(service, held);
+      if (papers.lost) {
+        await deliverMessages(asked.messages, follow);
+        return "lost";
+      }
+      if (papers.failed) failed = true;
+      papersWaiting = papers.waiting;
+      if (papers.envelopes > 0) asked.papers = papers.envelopes;
+      // An envelope of the firm's ZapSign account is opened by the backend (0023).
+      if (papers.zapsign) await sendEvent("one/signature.requested", {}).catch(() => undefined);
+    }
+    // Once the papers went, the client hears that what they sent arrived and what comes next (0055).
+    if (held.receivedDue) {
+      const told = await sayReceived(service, held);
+      asked.messages.push(...told.messages);
+      if (told.failed) failed = true;
+      if (told.lost) {
         await deliverMessages(asked.messages, follow);
         return "lost";
       }
@@ -373,7 +593,7 @@ export async function advanceClaimedCase(
     asked.packages = Array.isArray(steps.packages)
       ? steps.packages.filter((id): id is string => typeof id === "string")
       : [];
-    waiting = waiting ?? (typeof steps.waiting === "string" ? steps.waiting : null);
+    waiting = waiting ?? (typeof steps.waiting === "string" ? steps.waiting : null) ?? papersWaiting;
     // A step that failed (whatever ONE says first) is a failure of the look: tried again later each time, then
     // said to need a person.
     if (steps.failed === true) failed = true;
@@ -405,7 +625,9 @@ export async function advanceClaimedCase(
   if (created) return "created";
   // The claim stays held until it is stale when its record did not land: the case is looked at again then.
   if (failed || unrecorded) return "failed";
-  if (asked.drafts.length > 0 || asked.packages.length > 0 || asked.messages.length > 0) return "acted";
+  if (asked.drafts.length > 0 || asked.packages.length > 0 || asked.messages.length > 0 || asked.papers > 0) {
+    return "acted";
+  }
   return waiting ? "waiting" : "idle";
 }
 

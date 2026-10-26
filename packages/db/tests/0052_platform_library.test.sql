@@ -68,8 +68,11 @@ select ok(
 );
 select ok(
   (select count(*) = 2 and bool_and(is_default and provisional) and count(distinct proceeding_kind) = 2
-   from public.draft_templates where org_id is null),
-  'and one provisional default model for each kind of lawsuit'
+   from public.draft_templates where org_id is null and document_kind = 'piece')
+    -- And the power of attorney ONE sends a client to sign (0054), provisional too.
+    and (select count(*) = 1 and bool_and(is_default and provisional)
+         from public.draft_templates where org_id is null and document_kind = 'procuracao'),
+  'and one provisional default model for each kind of lawsuit, and one of a power of attorney'
 );
 
 -- ---------- Every firm reads them, none writes them ----------
@@ -109,8 +112,8 @@ select throws_ok(
 reset role;
 
 select ok(
-  (select (payload ->> 'sources')::int = 22 and (payload ->> 'models')::int = 2 from res where name = 'a_reads')
-    and (select (payload ->> 'sources')::int = 22 and (payload ->> 'models')::int = 2 from res where name = 'b_reads'),
+  (select (payload ->> 'sources')::int = 22 and (payload ->> 'models')::int = 3 from res where name = 'a_reads')
+    and (select (payload ->> 'sources')::int = 22 and (payload ->> 'models')::int = 3 from res where name = 'b_reads'),
   'both firms read the sources and the models of the platform'
 );
 select ok(

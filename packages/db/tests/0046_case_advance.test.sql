@@ -257,12 +257,15 @@ select ok(
   'ONE asks the AI for the first text of the piece from the firm''s default model, as ONE'
 );
 
--- A lawsuit a person created with nobody signing it, in São Paulo: ONE names the signer at the bar there.
+-- A lawsuit a person created with nobody signing it, in São Paulo, while the firm has nobody to sign what ONE
+-- prepares (Ana stopped; a signer of another state would be named within their causes there, 0052): ONE waits,
+-- and names the signer at the bar there once the firm sets one.
 select pg_temp.sign_in('a4600000-0000-4000-8000-000000000001');
 set local role authenticated;
 insert into res values ('lawsuit_2', public.save_proceeding(pg_temp.got('case_2', 'case_id')::uuid, null,
   '{"kind": "juizado", "court": "TJSP", "comarca": "São Paulo", "forum_basis": "event_place", "forum_reason": "O voo chegou a São Paulo.", "forum_city": "São Paulo", "system": "eproc"}'::jsonb,
   array[pg_temp.got('case_2', 'party_id')::uuid]));
+select public.set_firm_signer('b4600000-0000-4000-8000-00000000000a', 'a4600000-0000-4000-8000-000000000001', false);
 reset role;
 select pg_temp.as_backend();
 set local role service_role;
@@ -638,7 +641,8 @@ reset role;
 select pg_temp.sign_in('a4600000-0000-4000-8000-000000000003');
 set local role authenticated;
 select ok(
-  (select count(*) = 2 from public.firm_signers where org_id = 'b4600000-0000-4000-8000-00000000000a')
+  -- Bia: Ana stopped signing what ONE prepares, above.
+  (select count(*) = 1 from public.firm_signers where org_id = 'b4600000-0000-4000-8000-00000000000a')
   and (select waiting is null from public.case_advances where case_id = pg_temp.got('case_1', 'case_id')::uuid),
   'anybody of the firm reads who signs what ONE prepares, and what ONE waits for in a case'
 );

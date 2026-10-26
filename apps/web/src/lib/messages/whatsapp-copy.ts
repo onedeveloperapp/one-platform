@@ -18,6 +18,28 @@ const ptBR = {
       `Este é o link para enviar ao ${input.firm} os seus dados, os do seu voo e os seus documentos: ${input.url}`,
       "O link é só seu. Se tiver qualquer dúvida, responda esta mensagem.",
     ].join("\n\n"),
+  /**
+   * ONE's word once the client said, on their link, that they sent everything (0055): it arrived, and what comes
+   * next, the power of attorney first when one ONE sent waits for their signature.
+   */
+  caseReceived: (input: { firstName: string; paperWaiting: boolean }): string =>
+    [
+      input.firstName
+        ? `Recebi o seu aviso de que terminou, ${input.firstName}. Obrigado.`
+        : "Recebi o seu aviso de que terminou. Obrigado.",
+      "Os próximos passos:",
+      ...(input.paperWaiting
+        ? [
+            "1. Assine a procuração que está no seu link. Ela autoriza o escritório a entrar com a ação em seu nome.",
+            "2. O escritório confere os documentos e prepara a ação.",
+            "3. Quando a ação for protocolada, o escritório avisa você por aqui.",
+          ]
+        : [
+            "1. O escritório confere os documentos e prepara a ação.",
+            "2. Quando a ação for protocolada, o escritório avisa você por aqui.",
+          ]),
+      "Se lembrar de mais alguma coisa, ainda pode enviar pelo mesmo link.",
+    ].join("\n"),
 };
 
 export type WhatsAppCopy = typeof ptBR;

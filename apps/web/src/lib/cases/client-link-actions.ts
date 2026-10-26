@@ -186,7 +186,18 @@ export async function finishClientLink(token: string): Promise<ClientResult> {
   if (closed) return closed;
   const supabase = createAnonClient();
   if (!supabase) return unavailable;
-  return fold(await supabase.rpc("client_link_finish", { target_token: token }), nothing);
+  const result = fold(await supabase.rpc("client_link_finish", { target_token: token }), nothing);
+  // The case the client finished woke in the database (0054): ONE looks at it now, sends the papers they sign and
+  // tells them what comes next (0055). Named, so that with no jobs it is looked at right after the response.
+  if (result.ok) {
+    const hash = createHash("sha256").update(token, "utf8").digest("hex");
+    const backend = service();
+    const link = backend
+      ? (await backend.from("client_links").select("case_id").eq("token_hash", hash).maybeSingle()).data
+      : null;
+    await queueCaseAdvance(typeof link?.case_id === "string" ? link.case_id : null);
+  }
+  return result;
 }
 
 function service() {

@@ -159,7 +159,7 @@ export default function RulesCard({
       : signs.map((sign) => (sign in SIGN_KEY ? t(SIGN_KEY[sign as WeatherSign]) : sign)).join(", ");
 
   return (
-    <Card component="section" aria-labelledby="case-rules">
+    <Card component="section" aria-labelledby="case-rules" id="como-vai-a-juizo">
       <CardContent className="flex flex-col gap-5">
         <Box className="flex flex-col gap-1">
           <Typography id="case-rules" variant="h5" component="h2" className="mb-0">

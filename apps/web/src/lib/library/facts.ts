@@ -1,7 +1,7 @@
 import "server-only";
 
 import { momentLabel } from "@/lib/ai/approvals";
-import { sourceLabel } from "@/lib/cases/drafts";
+import { isModelDocument, type ModelDocument, sourceLabel } from "@/lib/cases/drafts";
 import {
   citationGap,
   distinctCitations,
@@ -16,7 +16,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
  * What the screen of the library reads (migrations 0029 and 0045), under the
  * person's own session: the sources a lawyer of the firm checked and the ones
  * the platform checked, the firm's models of pieces and the platform's, which
- * model ONE writes each kind of piece from, and what each model cites that
+ * model ONE writes each kind of piece from and which paper it sends clients
+ * to sign (0054: a power of attorney, a fee contract), and what each model of a piece cites that
  * neither library answers for yet (read from the model's text by the same
  * reader that reads a draft). A read that fails throws: a screen shows an
  * error, never an empty library.
@@ -58,6 +59,9 @@ export type MissingSource = {
 export type LibraryTemplate = {
   id: string;
   name: string;
+  /** What it writes (0054): the piece of a lawsuit, a power of attorney or a fee contract. */
+  documentKind: ModelDocument;
+  /** The kind of lawsuit a piece is written for; a paper serves every lawsuit. */
   proceedingKind: "juizado" | "comum" | null;
   /** The default of its kind: the firm's, or the platform's (0039, 0045). */
   isDefault: boolean;
@@ -65,11 +69,11 @@ export type LibraryTemplate = {
   platform: boolean;
   /** A model of the platform the curator has not reviewed yet. */
   provisional: boolean;
-  /** ONE writes the pieces of some kind from it now (`draft_template_for`). */
+  /** ONE writes the pieces of some kind from it now (`draft_template_for`), or sends it to clients to sign (`paper_template_for`). */
   usedByOne: boolean;
   updatedLabel: string;
   updatedBy: string | null;
-  /** How many distinct sources its text cites, and how many of them the library does not answer for. */
+  /** How many distinct sources its text cites, and how many of them the library does not answer for: a paper's none, since no gate reads it. */
   cited: number;
   missing: number;
 };
@@ -104,12 +108,25 @@ type TemplateRow = {
   org_id: string | null;
   provisional: boolean | null;
   name: string;
+  document_kind: string | null;
   proceeding_kind: string | null;
   is_default: boolean | null;
   body: string;
   updated_by: string | null;
   updated_at: string;
 };
+
+type ModelRow = {
+  id: string;
+  org_id: string | null;
+  document_kind?: string | null;
+  proceeding_kind: string | null;
+  is_default: boolean | null;
+};
+
+/** What a row writes: a row read before 0054 said nothing of it, and wrote a piece. */
+const documentOf = (row: { document_kind?: string | null }): ModelDocument =>
+  isModelDocument(row.document_kind) ? row.document_kind : "piece";
 
 type TeamRow = { user_id: string; display_name: string | null; email: string | null };
 
@@ -145,16 +162,13 @@ async function readSources(supabase: SupabaseClient, firmId: string): Promise<So
 }
 
 /**
- * The model ONE writes a kind of piece from, as `draft_template_for` (0045) decides it: a firm with models of
- * the kind keeps its rule (its default of the kind, else of both kinds, else its only model of the kind, else
- * none), and a firm with none writes from the platform's default.
+ * The model ONE writes a kind of piece from, as `draft_template_for` (0045, 0054) decides it, among the models
+ * that write a piece: a firm with models of the kind keeps its rule (its default of the kind, else of both kinds,
+ * else its only model of the kind, else none), and a firm with none writes from the platform's default.
  */
-export function modelForKind(
-  rows: readonly { id: string; org_id: string | null; proceeding_kind: string | null; is_default: boolean | null }[],
-  firmId: string,
-  kind: "juizado" | "comum",
-): string | null {
-  const firm = rows.filter((t) => t.org_id === firmId && (t.proceeding_kind === kind || t.proceeding_kind === null));
+export function modelForKind(rows: readonly ModelRow[], firmId: string, kind: "juizado" | "comum"): string | null {
+  const pieces = rows.filter((t) => documentOf(t) === "piece");
+  const firm = pieces.filter((t) => t.org_id === firmId && (t.proceeding_kind === kind || t.proceeding_kind === null));
   if (firm.length > 0) {
     return (
       firm.find((t) => t.is_default === true && t.proceeding_kind === kind)?.id ??
@@ -162,10 +176,28 @@ export function modelForKind(
       (firm.length === 1 ? firm[0].id : null)
     );
   }
-  const platform = rows.filter((t) => t.org_id === null && t.is_default === true);
+  const platform = pieces.filter((t) => t.org_id === null && t.is_default === true);
   return (
     platform.find((t) => t.proceeding_kind === kind)?.id ?? platform.find((t) => t.proceeding_kind === null)?.id ?? null
   );
+}
+
+/**
+ * The model ONE sends clients a paper of from, as `paper_template_for` (0054) decides it: a firm with models of
+ * the paper keeps its rule (its default, else its only one, else none); a firm with none sends the platform's
+ * power of attorney, and no contract at all (the fees are each firm's).
+ */
+export function paperModelFor(
+  rows: readonly ModelRow[],
+  firmId: string,
+  kind: "procuracao" | "contrato",
+): string | null {
+  const firm = rows.filter((t) => t.org_id === firmId && documentOf(t) === kind);
+  if (firm.length > 0) {
+    return firm.find((t) => t.is_default === true)?.id ?? (firm.length === 1 ? firm[0].id : null);
+  }
+  if (kind !== "procuracao") return null;
+  return rows.find((t) => t.org_id === null && documentOf(t) === kind && t.is_default === true)?.id ?? null;
 }
 
 export async function loadLibrary(
@@ -177,7 +209,7 @@ export async function loadLibrary(
     readSources(supabase, firmId),
     supabase
       .from("draft_templates")
-      .select("id, org_id, provisional, name, proceeding_kind, is_default, body, updated_by, updated_at")
+      .select("id, org_id, provisional, name, document_kind, proceeding_kind, is_default, body, updated_by, updated_at")
       .or(`org_id.eq.${firmId},org_id.is.null`)
       .order("name"),
     supabase.rpc("firm_team", { target_org: firmId }),
@@ -197,14 +229,19 @@ export async function loadLibrary(
     // The firm's own first, then the platform's.
     .sort((a, b) => Number(a.org_id === null) - Number(b.org_id === null) || a.name.localeCompare(b.name));
   const used = new Set(
-    [modelForKind(templateRows, firmId, "juizado"), modelForKind(templateRows, firmId, "comum")].filter(
-      (id): id is string => id !== null,
-    ),
+    [
+      modelForKind(templateRows, firmId, "juizado"),
+      modelForKind(templateRows, firmId, "comum"),
+      paperModelFor(templateRows, firmId, "procuracao"),
+      paperModelFor(templateRows, firmId, "contrato"),
+    ].filter((id): id is string => id !== null),
   );
 
   const missing = new Map<string, MissingSource>();
   const templateList: LibraryTemplate[] = templateRows.map((template) => {
-    const cited = distinctCitations(extractCitations(template.body));
+    const documentKind = documentOf(template);
+    // What a paper cites is no piece's: no gate reads it, and the library is not asked for it.
+    const cited = documentKind === "piece" ? distinctCitations(extractCitations(template.body)) : [];
     const outside = cited.filter((citation) => !isCovered(citation, verified));
     for (const citation of outside) {
       const known = missing.get(citation.key);
@@ -223,6 +260,7 @@ export async function loadLibrary(
     return {
       id: template.id,
       name: template.name,
+      documentKind,
       proceedingKind:
         template.proceeding_kind === "juizado" || template.proceeding_kind === "comum"
           ? template.proceeding_kind

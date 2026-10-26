@@ -4,7 +4,7 @@ import { cookies } from "next/headers";
 import { getTranslations } from "next-intl/server";
 
 import { momentLabel, type SecondFactorState } from "@/lib/ai/approvals";
-import { firmAutonomyOf } from "@/lib/firm/autonomy";
+import { claimDefaultsOf, firmAutonomyOf } from "@/lib/firm/autonomy";
 import { getMemberContext } from "@/lib/member/context";
 import { IMPERSONATION_MARKER_COOKIE } from "@flyee/auth";
 
@@ -23,10 +23,11 @@ async function loadAutonomy(): Promise<AutonomyState> {
   if (!context) return { kind: "unavailable" };
   if (!context.firm) return { kind: "no-firm" };
   const firm = context.firm;
-  const [autonomy, team, signers, assurance, cookieStore] = await Promise.all([
+  const [autonomy, team, signers, defaults, assurance, cookieStore] = await Promise.all([
     context.supabase.rpc("firm_autonomy", { target_org: firm.id }),
     context.supabase.rpc("firm_team", { target_org: firm.id }),
     context.supabase.from("firm_signers").select("user_id").eq("org_id", firm.id),
+    context.supabase.from("firm_claim_defaults").select("incident, cents").eq("org_id", firm.id),
     context.supabase.auth.mfa.getAuthenticatorAssuranceLevel(),
     cookies(),
   ]);
@@ -65,6 +66,8 @@ async function loadAutonomy(): Promise<AutonomyState> {
               ),
               signs: signing.has(person.user_id),
             })),
+    // The claim the firm asks by default for each kind of problem (0052); its card says when it could not be read.
+    claimDefaults: defaults.error ? null : claimDefaultsOf(defaults.data),
     decisions: decisions.map((decision) => ({
       ...decision,
       changedByName: decision.changedBy ? names.get(decision.changedBy) || null : null,

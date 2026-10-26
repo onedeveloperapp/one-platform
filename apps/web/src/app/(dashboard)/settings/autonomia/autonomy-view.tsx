@@ -24,21 +24,24 @@ import {
 } from "@mui/material";
 
 import EmptyState from "@/components/product/empty-state";
+import { CurrencyField } from "@/components/product/fields";
 import PageHeader from "@/components/product/page-header";
 import StatusChip from "@/components/product/status-chip";
 import NiListCircle from "@/icons/nexture/ni-list-circle";
 import NiRobot from "@/icons/nexture/ni-robot";
 import NiUsers from "@/icons/nexture/ni-users";
 import type { SecondFactorState } from "@/lib/ai/approvals";
+import { type Incident, INCIDENT_KEY, INCIDENTS } from "@/lib/cases/cases";
 import {
   autonomyErrorKey,
   type AutonomyMode,
+  type ClaimDefault,
   DECISION_KEY,
   type FirmAutonomy,
   LAWYER_ACTS,
   MODE_KEY,
 } from "@/lib/firm/autonomy";
-import { setFirmAutonomy, setFirmSigner } from "@/lib/firm/autonomy-actions";
+import { setFirmAutonomy, setFirmClaimDefault, setFirmSigner } from "@/lib/firm/autonomy-actions";
 
 export type AutonomyDecisionView = FirmAutonomy & { changedByName: string | null; changedLabel: string | null };
 
@@ -55,6 +58,8 @@ export type AutonomyState =
       decisions: AutonomyDecisionView[];
       /** Null when who signs could not be read: its card says so, and the decisions stay. */
       signers: AutonomySigner[] | null;
+      /** The claim the firm asks by default for each kind of problem; null when it could not be read. */
+      claimDefaults: ClaimDefault[] | null;
     }
   | { kind: "no-firm" }
   | { kind: "unavailable" }
@@ -200,6 +205,13 @@ export default function AutonomyView({ state }: { state: AutonomyState }) {
               // Who signs as the page read it last: what a partner switched starts again from it.
               key={ready.signers?.map((signer) => `${signer.userId}:${signer.signs}`).join(",") ?? "-"}
               signers={ready.signers}
+              editable={ready.partner && !ready.supportVisit && ready.secondFactor === "ok"}
+              onSaved={() => router.refresh()}
+            />
+            <ClaimDefaultsCard
+              // The defaults as the page read them last: what a partner saved starts again from it.
+              key={ready.claimDefaults?.map((row) => `${row.incident}:${row.cents}`).join(",") ?? "-"}
+              defaults={ready.claimDefaults}
               editable={ready.partner && !ready.supportVisit && ready.secondFactor === "ok"}
               onSaved={() => router.refresh()}
             />
@@ -480,6 +492,146 @@ function SignersCard({
           <Alert severity="info" className="neutral bg-background-paper/60!">
             {t("autonomy-signers-none")}
           </Alert>
+        )}
+        {problem && (
+          <Alert severity="error" className="neutral bg-background-paper/60!" onClose={() => setProblem(null)}>
+            {t(autonomyErrorKey(problem))}
+          </Alert>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+/** Reais as a person reads them: 10.000,00. */
+const reais = (cents: number): string =>
+  new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(cents / 100);
+
+/**
+ * The claim the firm asks by default for each kind of problem (migration
+ * 0052). Where a claimant of a case has no claim, ONE writes the default of
+ * the case's kind of problem and goes on; a claim a person wrote is never
+ * changed, and a kind with no default waits for the claim on the case. A
+ * partner with the second factor says each one, or takes it off.
+ */
+function ClaimDefaultsCard({
+  defaults,
+  editable,
+  onSaved,
+}: {
+  defaults: ClaimDefault[] | null;
+  editable: boolean;
+  onSaved: () => void;
+}) {
+  const t = useTranslations("product");
+  const saved = new Map((defaults ?? []).map((row) => [row.incident, row.cents]));
+  // What a partner typed, as the field holds it (reais with their decimals), until the page reads it back.
+  const [typed, setTyped] = useState<Partial<Record<Incident, string>>>(() =>
+    Object.fromEntries((defaults ?? []).map((row) => [row.incident, (row.cents / 100).toFixed(2)])),
+  );
+  const [busy, setBusy] = useState<Incident | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
+
+  const centsOf = (incident: Incident): number | null => {
+    const raw = typed[incident] ?? "";
+    const value = Number(raw);
+    return raw !== "" && Number.isFinite(value) && value > 0 ? Math.round(value * 100) : null;
+  };
+
+  const save = async (incident: Incident, cents: number | null) => {
+    setBusy(incident);
+    setProblem(null);
+    try {
+      const result = await setFirmClaimDefault(incident, cents);
+      if (!result.ok) setProblem(result.code);
+      else onSaved();
+    } catch {
+      setProblem("failed");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <Card component="section" aria-labelledby="valor-do-pedido-title" id="valor-do-pedido">
+      <CardContent className="flex flex-col gap-3">
+        <Typography id="valor-do-pedido-title" variant="h5" component="h2" className="mb-0">
+          {t("autonomy-claims-title")}
+        </Typography>
+        <Typography variant="body2" className="text-text-secondary">
+          {t("autonomy-claims-body")}
+        </Typography>
+        {defaults === null ? (
+          <Alert
+            severity="error"
+            className="neutral bg-background-paper/60!"
+            action={
+              <Button color="inherit" size="small" onClick={onSaved}>
+                {t("autonomy-retry")}
+              </Button>
+            }
+          >
+            {t("autonomy-claims-load-error")}
+          </Alert>
+        ) : (
+          <Box component="ul" className="m-0 flex list-none flex-col gap-3 p-0">
+            {INCIDENTS.map((incident) => {
+              const current = saved.get(incident) ?? null;
+              const label = t(INCIDENT_KEY[incident]);
+              return (
+                <Box component="li" key={incident} className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                  {editable ? (
+                    <>
+                      <CurrencyField
+                        size="small"
+                        className="sm:max-w-xs"
+                        fullWidth
+                        id={`claim-default-${incident}`}
+                        name={`claim-default-${incident}`}
+                        label={label}
+                        currencySymbol="R$"
+                        value={typed[incident] ?? ""}
+                        disabled={busy !== null}
+                        onChange={(event) => setTyped((before) => ({ ...before, [incident]: event.target.value }))}
+                      />
+                      <Box className="flex flex-row gap-1">
+                        <Button
+                          variant="text"
+                          color="grey"
+                          size="small"
+                          disabled={busy !== null || centsOf(incident) === null || centsOf(incident) === current}
+                          onClick={() => void save(incident, centsOf(incident))}
+                        >
+                          {t("autonomy-claims-save")}
+                        </Button>
+                        {current !== null && (
+                          <Button
+                            variant="text"
+                            color="grey"
+                            size="small"
+                            disabled={busy !== null}
+                            onClick={() => void save(incident, null)}
+                            aria-label={t("autonomy-claims-remove-label", { kind: label })}
+                          >
+                            {t("autonomy-claims-remove")}
+                          </Button>
+                        )}
+                      </Box>
+                    </>
+                  ) : (
+                    <Box className="flex w-full flex-wrap items-center justify-between gap-2">
+                      <Typography variant="body1">{label}</Typography>
+                      <Typography variant="body1" className={current === null ? "text-text-secondary" : undefined}>
+                        {current === null
+                          ? t("autonomy-claims-none")
+                          : t("autonomy-claims-value", { value: reais(current) })}
+                      </Typography>
+                    </Box>
+                  )}
+                </Box>
+              );
+            })}
+          </Box>
         )}
         {problem && (
           <Alert severity="error" className="neutral bg-background-paper/60!" onClose={() => setProblem(null)}>

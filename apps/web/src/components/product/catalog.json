@@ -79,6 +79,12 @@
       "use": "A lifecycle state as a NAMED badge: a module version (rascunho, publicada, retirada), a meeting, a roadmap item, a subscription, a lead. The template's tiny pastel button rendered as a span (no focus, reads as text). The tone tints the badge and the word is always text-primary, because the pastel label in the tone itself fails contrast on this palette. Never colour alone, never an outlined Chip for a state."
     },
     {
+      "name": "AttentionList",
+      "from": "@/components/product/attention-list",
+      "props": "id, title, description?, total, groups[{key,title,tone: danger | attention,items[{id,href,tag,title,detail?,count?}]}]",
+      "use": "What holds a firm's cases until somebody acts, where a person starts the day: one card coloured by its most urgent group (danger = past its time, attention = waiting on the firm), each line one thing with its kind as a StatusChip tag, what it is and of which case, one click from where it is done. The hue rides on the bar at the left of each line and on the badges, never on the words. Not for counters (StatTile) nor for a list of records to manage (DataTable)."
+    },
+    {
       "name": "MessageBubble",
       "from": "@/components/product/message-bubble",
       "props": "side ('in' | 'out'), sideLabel, children, meta?, note?, className?",

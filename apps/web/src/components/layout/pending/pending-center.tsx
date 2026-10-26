@@ -22,13 +22,21 @@ import {
 } from "@mui/material";
 
 import EmptyState from "@/components/product/empty-state";
+import StatusChip from "@/components/product/status-chip";
 import NiCalendarClock from "@/icons/nexture/ni-calendar-clock";
 import NiClock from "@/icons/nexture/ni-clock";
 import NiCross from "@/icons/nexture/ni-cross";
 import NiInbox from "@/icons/nexture/ni-inbox";
 import NiListCheck from "@/icons/nexture/ni-list-check";
 import NiRobot from "@/icons/nexture/ni-robot";
-import { type PendingGroup, type PendingGroupKey, type PendingText, urgentIds } from "@/lib/firm/pending";
+import {
+  type PendingGroup,
+  type PendingGroupKey,
+  type PendingText,
+  pendingWaitsOnFirm,
+  sayPending,
+  urgentIds,
+} from "@/lib/firm/pending";
 import { readPendingCenter } from "@/lib/firm/pending-actions";
 import { cn } from "@/lib/utils";
 
@@ -67,18 +75,7 @@ export default function PendingCenter() {
   /** What was urgent at the last read; nothing on the first one, which tells nothing. */
   const seen = useRef<Set<string> | null>(null);
 
-  const say = useCallback(
-    (text: PendingText) => {
-      const values = Object.fromEntries(
-        Object.entries(text.values ?? {}).map(([name, value]) => [
-          name,
-          typeof value === "object" ? t(value.message) : value,
-        ]),
-      );
-      return t(text.key, values);
-    },
-    [t],
-  );
+  const say = useCallback((text: PendingText) => sayPending(t, text), [t]);
 
   const load = useCallback(async () => {
     let read: Awaited<ReturnType<typeof readPendingCenter>>;
@@ -129,6 +126,8 @@ export default function PendingCenter() {
 
   const badge = state.kind === "ready" ? state.badge : 0;
   const late = state.kind === "ready" && state.late;
+  // Red when something passed its time; the accent of "look at this" when a case waits on the firm.
+  const waits = state.kind === "ready" && pendingWaitsOnFirm(state.groups);
 
   const toggle = () => {
     if (!open) void load();
@@ -141,7 +140,7 @@ export default function PendingCenter() {
         <Badge
           badgeContent={badge}
           max={99}
-          color={late ? "error" : "primary"}
+          color={late ? "error" : waits ? "warning" : "primary"}
           slotProps={{ badge: { className: "right-2 top-2 pointer-events-none", "aria-hidden": true } }}
         >
           <Button
@@ -236,7 +235,15 @@ export default function PendingCenter() {
                         className="rounded-lg px-2"
                       >
                         <ListItemText
-                          primary={say(item.label)}
+                          primary={
+                            <Box component="span" className="flex flex-col items-start gap-1">
+                              <StatusChip
+                                label={say(item.tag)}
+                                tone={group.key === "late" ? "danger" : group.key === "one" ? "attention" : "neutral"}
+                              />
+                              <span>{say(item.label)}</span>
+                            </Box>
+                          }
                           secondary={item.detail ? say(item.detail) : undefined}
                           slotProps={{ primary: { variant: "body1" }, secondary: { variant: "body2" } }}
                         />

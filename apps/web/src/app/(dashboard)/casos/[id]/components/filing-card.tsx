@@ -170,6 +170,7 @@ const SIGNATURE_STALE = new Set([
   "package_outdated",
   "family_split_unchosen",
   "civil_court_unanswered",
+  "power_of_attorney_unsigned",
 ]);
 
 function Lawsuit({

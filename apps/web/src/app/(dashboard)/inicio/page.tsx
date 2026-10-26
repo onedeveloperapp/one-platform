@@ -2,6 +2,7 @@ import { loadSetupState } from "../configurar/setup-state";
 import SetupView, { type SetupState } from "../configurar/setup-view";
 import HomeView, { type HomeState } from "./home-view";
 
+import { attentionGroups, pendingGroups, readFirmPending } from "@/lib/firm/pending";
 import { isManager } from "@/lib/firm/roles";
 import { readFirmToday, todayViewerOf } from "@/lib/firm/today";
 import { getMemberContext } from "@/lib/member/context";
@@ -16,6 +17,11 @@ import { getOnboardingState } from "@flyee/onboarding";
  * out. Who manages a firm that is still being set up also sees what is
  * missing, from facts (`firm_setup_facts`). Deadlines, hearings and cases
  * join the same answer as their milestones arrive.
+ *
+ * First of all, every item that holds a case until somebody of the firm acts
+ * (`firm_pending`, the same lines as the center of the header), each with
+ * its kind named and its colour: what passed its time in red, what waits on
+ * the firm in the accent of "look at this".
  *
  * Who manages a firm whose first questions were never answered is asked them
  * here, before the home (the screen of `/configurar`, migration 0044):
@@ -34,8 +40,9 @@ async function loadHome(): Promise<HomeState | { kind: "setup"; setup: SetupStat
   const viewer = todayViewerOf(firm);
   const flowKey = onboardingFlowKey(context.userId, firm.id);
 
-  const [today, facts, checklist] = await Promise.all([
+  const [today, pending, facts, checklist] = await Promise.all([
     context.supabase.rpc("firm_today", { target_org: firm.id }),
+    context.supabase.rpc("firm_pending", { target_org: firm.id }),
     // The setup is for who can do something about it: who manages the firm.
     manager ? getActivationFacts(context.supabase, firm.id) : Promise.resolve(null),
     manager ? getOnboardingState(context.supabase, flowKey) : Promise.resolve(null),
@@ -43,6 +50,7 @@ async function loadHome(): Promise<HomeState | { kind: "setup"; setup: SetupStat
   if (facts && !isSetupAnswered(facts)) return { kind: "setup", setup: await loadSetupState(context) };
   const read = today.error ? null : readFirmToday(today.data);
   if (!read) return { kind: "error" };
+  const waiting = pending.error ? null : readFirmPending(pending.data);
 
   return {
     kind: "ready",
@@ -50,6 +58,9 @@ async function loadHome(): Promise<HomeState | { kind: "setup"; setup: SetupStat
     firm: { name: firm.name },
     manager,
     today: read,
+    // What holds a case until somebody of the firm acts, as the center of the header says it (0044, 0053); null
+    // when it could not be read, which the home says, never as nothing waiting.
+    attention: waiting ? attentionGroups(pendingGroups(read, waiting, viewer)) : null,
     triagesPublications: viewer.triagesPublications,
     worksDeadlines: viewer.worksDeadlines,
     confirmsDeadlines: viewer.confirmsDeadlines,

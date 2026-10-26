@@ -31,7 +31,16 @@ import NiBook from "@/icons/nexture/ni-book";
 import NiDocumentFull from "@/icons/nexture/ni-document-full";
 import NiShieldCheck from "@/icons/nexture/ni-shield-check";
 import NiUsers from "@/icons/nexture/ni-users";
-import { DRAFT_MARK_KEY, DRAFT_MARKS, libraryErrorKey, unknownMarks } from "@/lib/cases/drafts";
+import {
+  DRAFT_MARK_KEY,
+  DRAFT_MARKS,
+  libraryErrorKey,
+  type ModelDocument,
+  modelMarks,
+  PAPER_MARK_KEY,
+  PAPER_MARKS,
+  unknownMarks,
+} from "@/lib/cases/drafts";
 import {
   readDraftTemplate,
   removeDraftTemplate,
@@ -56,6 +65,16 @@ const KIND_KEY: Record<"juizado" | "comum", string> = {
   juizado: "case-proceeding-kind-juizado",
   comum: "case-proceeding-kind-comum",
 };
+
+/** What a model writes (0054), in the screen's words, and what ONE does with it. */
+const DOCUMENT_KEY: Record<ModelDocument, { label: string; help: string }> = {
+  piece: { label: "library-document-piece", help: "library-document-piece-help" },
+  procuracao: { label: "library-document-procuracao", help: "library-document-procuracao-help" },
+  contrato: { label: "library-document-contrato", help: "library-document-contrato-help" },
+};
+
+/** Which default a model would take the place of: a piece's is of its kind of lawsuit, a paper's of the paper. */
+const defaultSlot = (writes: ModelDocument, kind: Kind): string => (writes === "piece" ? (kind ?? "any") : writes);
 
 /** Why nobody can check a citation as a model writes it: the model is what changes, never the library. */
 const GAP_KEY: Record<NonNullable<MissingSource["gap"]>, string> = {
@@ -312,14 +331,22 @@ export default function LibraryView({ state, citation }: { state: LibraryState; 
                         </Typography>
                         <Typography variant="body2" className="text-text-secondary">
                           {[
-                            t(
-                              template.proceedingKind ? KIND_KEY[template.proceedingKind] : "library-template-kind-any",
-                            ),
-                            t("library-template-cited", { count: template.cited }),
+                            template.documentKind !== "piece"
+                              ? t(DOCUMENT_KEY[template.documentKind].label)
+                              : t(
+                                  template.proceedingKind
+                                    ? KIND_KEY[template.proceedingKind]
+                                    : "library-template-kind-any",
+                                ),
+                            template.documentKind === "piece"
+                              ? t("library-template-cited", { count: template.cited })
+                              : null,
                             template.updatedBy
                               ? t("library-template-updated", { name: template.updatedBy, when: template.updatedLabel })
                               : t("library-template-updated-at", { when: template.updatedLabel }),
-                          ].join(" · ")}
+                          ]
+                            .filter(Boolean)
+                            .join(" · ")}
                         </Typography>
                       </Box>
                       {template.platform ? (
@@ -508,7 +535,7 @@ export default function LibraryView({ state, citation }: { state: LibraryState; 
               .filter(
                 (template) => template.isDefault && !template.platform && template.id !== templateForm.template?.id,
               )
-              .map((template) => [template.proceedingKind ?? "any", template.name]),
+              .map((template) => [defaultSlot(template.documentKind, template.proceedingKind), template.name]),
           )}
           onClose={() => setTemplateForm(null)}
           onSaved={() => {
@@ -827,6 +854,8 @@ function RemoveDialog({
   const t = useTranslations("product");
   const [pending, startTransition] = useTransition();
   const [errorCode, setErrorCode] = useState<string | null>(null);
+  // A paper the client signs, not a piece: what was sent of it stays.
+  const paper = template.documentKind !== "piece";
 
   const remove = () =>
     startTransition(async () => {
@@ -849,7 +878,11 @@ function RemoveDialog({
         closeLabel={t("library-close")}
       />
       <DialogContent className="flex flex-col gap-4">
-        <Typography variant="body1">{t("library-template-remove-body", { name: template.name })}</Typography>
+        <Typography variant="body1">
+          {t(paper ? "library-template-remove-body-paper" : "library-template-remove-body", {
+            name: template.name,
+          })}
+        </Typography>
         <Refusal code={errorCode} />
         <Box className="flex flex-wrap gap-2">
           <Button variant="contained" disabled={pending} onClick={remove}>
@@ -872,16 +905,20 @@ function copyName(name: string): string {
     .slice(0, 120);
 }
 
-/** What saying a model is the default means, for the kind it is written for. */
-function defaultKey(kind: Kind): string {
+/** What saying a model is the default means, for what it writes and the kind it is written for. */
+function defaultKey(writes: ModelDocument, kind: Kind): string {
+  if (writes === "procuracao") return "library-template-default-procuracao";
+  if (writes === "contrato") return "library-template-default-contrato";
   if (kind === null) return "library-template-default-any";
   return kind === "comum" ? "library-template-default-comum" : "library-template-default-juizado";
 }
 
 /**
- * A model of the firm: its name, the kind of proceeding it is written for,
- * whether it is the default ONE writes the pieces of that kind from, and its
- * text, with the marks the platform fills in with the facts of a lawsuit.
+ * A model of the firm: its name, what it writes (the piece of a lawsuit, a
+ * power of attorney or a fee contract, 0054), the kind of proceeding a piece
+ * is written for, whether it is the default ONE writes from (the pieces of
+ * that kind, or the paper it sends clients to sign), and its text, with the
+ * marks the platform fills in with the facts of a lawsuit or of a client.
  * The text of a model already there, and whether it is the default now, are
  * read when the dialog opens, and the dialog never closes over what nobody
  * saved without asking. A model made the default of a kind says which one
@@ -905,6 +942,7 @@ function TemplateDialog({
   const t = useTranslations("product");
   const [pending, startTransition] = useTransition();
   const [name, setName] = useState(template?.name ?? (copyOf ? copyName(copyOf.name) : ""));
+  const [writes, setWrites] = useState<ModelDocument>(template?.documentKind ?? copyOf?.documentKind ?? "piece");
   const [kind, setKind] = useState<Kind>(template?.proceedingKind ?? copyOf?.proceedingKind ?? null);
   // Whether it is the default as it was read when the dialog opened, and as it is on screen.
   const [savedDefault, setSavedDefault] = useState(template?.isDefault ?? false);
@@ -943,13 +981,27 @@ function TemplateDialog({
     };
   }, [readId, copying]);
 
-  const odd = unknownMarks(body ?? "");
+  // A power of attorney or a contract, which a client signs: written with the client's facts, never a lawsuit's.
+  const paper = writes !== "piece";
+  const odd = unknownMarks(body ?? "", modelMarks(writes));
+  // The marks this document is written with, each with what the platform writes in its place.
+  const marks: { mark: string; key: string }[] =
+    writes === "piece"
+      ? DRAFT_MARKS.map((mark) => ({ mark, key: DRAFT_MARK_KEY[mark] }))
+      : PAPER_MARKS.map((mark) => ({ mark, key: PAPER_MARK_KEY[mark] }));
   const complete = name.trim().length >= 2 && (body ?? "").trim().length >= 20;
   const changed =
     name !== (template?.name ?? "") ||
+    writes !== (template?.documentKind ?? "piece") ||
     kind !== (template?.proceedingKind ?? null) ||
     isDefault !== savedDefault ||
     (body ?? "") !== (saved ?? "");
+  // The default of one document or kind is not the default of another: said again for a new one, by the person;
+  // back to its own, the model is what it was.
+  const defaultFor = (nextDocument: ModelDocument, nextKind: Kind) =>
+    nextDocument === (template?.documentKind ?? "piece") && nextKind === (template?.proceedingKind ?? null)
+      ? savedDefault
+      : false;
   // Nothing closes the dialog while a save is on its way (a refusal must find it open), nor over unsaved text.
   const close = () => {
     if (pending) return;
@@ -972,7 +1024,8 @@ function TemplateDialog({
         const result = await saveDraftTemplate({
           templateId,
           name,
-          proceedingKind: kind,
+          documentKind: writes,
+          proceedingKind: writes === "piece" ? kind : null,
           isDefault,
           body: body ?? "",
         });
@@ -1009,24 +1062,45 @@ function TemplateDialog({
           />
           <TextField
             select
-            label={t("library-template-kind")}
-            value={kind ?? "any"}
+            label={t("library-template-document")}
+            value={writes}
             // Chosen once the model is read: what it is now is what the choice starts from.
             onChange={(event) => {
-              const next: Kind =
-                event.target.value === "juizado" || event.target.value === "comum" ? event.target.value : null;
-              setKind(next);
-              // The default of one kind is not the default of another: said again for a new kind, by the person; back
-              // to its own kind, the model is what it was.
-              setIsDefault(next === (template?.proceedingKind ?? null) ? savedDefault : false);
+              const next: ModelDocument =
+                event.target.value === "procuracao" || event.target.value === "contrato" ? event.target.value : "piece";
+              // A paper serves every lawsuit: it names no kind of lawsuit.
+              const nextKind = next === "piece" ? kind : null;
+              setWrites(next);
+              setKind(nextKind);
+              setIsDefault(defaultFor(next, nextKind));
             }}
             disabled={pending || body === null}
-            className="min-w-56"
+            helperText={t(DOCUMENT_KEY[writes].help)}
+            className="min-w-56 flex-1"
           >
-            <MenuItem value="any">{t("library-template-kind-any")}</MenuItem>
-            <MenuItem value="juizado">{t(KIND_KEY.juizado)}</MenuItem>
-            <MenuItem value="comum">{t(KIND_KEY.comum)}</MenuItem>
+            <MenuItem value="piece">{t(DOCUMENT_KEY.piece.label)}</MenuItem>
+            <MenuItem value="procuracao">{t(DOCUMENT_KEY.procuracao.label)}</MenuItem>
+            <MenuItem value="contrato">{t(DOCUMENT_KEY.contrato.label)}</MenuItem>
           </TextField>
+          {writes === "piece" ? (
+            <TextField
+              select
+              label={t("library-template-kind")}
+              value={kind ?? "any"}
+              onChange={(event) => {
+                const next: Kind =
+                  event.target.value === "juizado" || event.target.value === "comum" ? event.target.value : null;
+                setKind(next);
+                setIsDefault(defaultFor(writes, next));
+              }}
+              disabled={pending || body === null}
+              className="min-w-56"
+            >
+              <MenuItem value="any">{t("library-template-kind-any")}</MenuItem>
+              <MenuItem value="juizado">{t(KIND_KEY.juizado)}</MenuItem>
+              <MenuItem value="comum">{t(KIND_KEY.comum)}</MenuItem>
+            </TextField>
+          ) : null}
         </Box>
         <Box className="flex flex-col">
           <FormControlLabel
@@ -1037,11 +1111,11 @@ function TemplateDialog({
                 disabled={pending || body === null}
               />
             }
-            label={t(defaultKey(kind))}
+            label={t(defaultKey(writes, kind))}
           />
-          {isDefault && defaults[kind ?? "any"] ? (
+          {isDefault && defaults[defaultSlot(writes, kind)] ? (
             <Typography variant="body2" className="text-text-secondary">
-              {t("library-template-default-replaces", { name: defaults[kind ?? "any"] })}
+              {t("library-template-default-replaces", { name: defaults[defaultSlot(writes, kind)] })}
             </Typography>
           ) : null}
         </Box>
@@ -1053,7 +1127,7 @@ function TemplateDialog({
           <>
             <TextField
               label={t("library-template-body")}
-              helperText={t("library-template-body-help")}
+              helperText={t(paper ? "library-template-body-help-paper" : "library-template-body-help")}
               value={body}
               onChange={(event) => setBody(event.target.value)}
               disabled={pending}
@@ -1064,20 +1138,22 @@ function TemplateDialog({
               slotProps={{ htmlInput: { spellCheck: true, lang: "pt-BR" } }}
             />
             <Box component="dl" className="m-0 grid grid-cols-1 gap-x-6 gap-y-1 sm:grid-cols-2">
-              {DRAFT_MARKS.map((mark) => (
+              {marks.map(({ mark, key }) => (
                 <Box key={mark} className="flex flex-wrap gap-x-1">
                   <Typography component="dt" variant="body2" className="font-semibold">
                     {`[[${mark}]]`}
                   </Typography>
                   <Typography component="dd" variant="body2" className="text-text-secondary m-0">
-                    {t(DRAFT_MARK_KEY[mark])}
+                    {t(key)}
                   </Typography>
                 </Box>
               ))}
             </Box>
             {odd.length > 0 ? (
               <Alert severity="warning" className="neutral bg-background-paper/60!">
-                {t("draft-unknown-marks", { marks: odd.map((mark) => `[[${mark}]]`).join(", ") })}
+                {t(paper ? "paper-unknown-marks" : "draft-unknown-marks", {
+                  marks: odd.map((mark) => `[[${mark}]]`).join(", "),
+                })}
               </Alert>
             ) : null}
           </>

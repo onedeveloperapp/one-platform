@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { queueCaseAdvance } from "@/lib/cases/advance-work";
-import { sourceFromCitation } from "@/lib/cases/drafts";
+import { isModelDocument, type ModelDocument, sourceFromCitation } from "@/lib/cases/drafts";
 import { getMemberContext } from "@/lib/member/context";
 
 /**
@@ -104,10 +104,12 @@ export async function retireLegalSource(input: { sourceId: string; reason: strin
   return result;
 }
 
-/** A lawyer writes a model of the firm, or changes one. */
+/** A lawyer writes a model of the firm, or changes one: of a piece, or of a paper ONE sends clients to sign (0054). */
 export async function saveDraftTemplate(input: {
   templateId?: string | null;
   name: string;
+  /** What the model writes; a piece when not said. */
+  documentKind?: ModelDocument;
   proceedingKind: "juizado" | "comum" | null;
   /** The model ONE writes the pieces of its kind from: the one before stops being it. */
   isDefault: boolean;
@@ -121,6 +123,7 @@ export async function saveDraftTemplate(input: {
     target_template: input.templateId ?? null,
     fields: {
       name: clean(input.name, 120).trim(),
+      document_kind: isModelDocument(input.documentKind) ? input.documentKind : "piece",
       proceeding_kind:
         input.proceedingKind === "juizado" || input.proceedingKind === "comum" ? input.proceedingKind : null,
       is_default: input.isDefault === true,

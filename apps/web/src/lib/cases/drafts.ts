@@ -89,9 +89,46 @@ export const DRAFT_MARK_KEY: Record<(typeof DRAFT_MARKS)[number], string> = {
   ADVOGADOS: "draft-mark-advogados",
 };
 
+/**
+ * The facts of a person of a case a power of attorney or a fee contract names
+ * by a mark (`case_paper_filled`, migration 0054): the database writes them in
+ * when ONE issues the paper for that person.
+ */
+export const PAPER_MARKS = [
+  "OUTORGANTE",
+  "CONTRATANTE",
+  "OUTORGADOS",
+  "ESCRITORIO",
+  "RE",
+  "OBJETO",
+  "LOCAL_DATA",
+  "NOME",
+] as const;
+export const PAPER_MARK_KEY: Record<(typeof PAPER_MARKS)[number], string> = {
+  OUTORGANTE: "paper-mark-outorgante",
+  CONTRATANTE: "paper-mark-contratante",
+  OUTORGADOS: "paper-mark-outorgados",
+  ESCRITORIO: "paper-mark-escritorio",
+  RE: "paper-mark-re",
+  OBJETO: "paper-mark-objeto",
+  LOCAL_DATA: "paper-mark-local-data",
+  NOME: "paper-mark-nome",
+};
+
+/** What a model of the library writes (0054): the piece of a lawsuit, a power of attorney or a fee contract. */
+export const MODEL_DOCUMENTS = ["piece", "procuracao", "contrato"] as const;
+export type ModelDocument = (typeof MODEL_DOCUMENTS)[number];
+
+export const isModelDocument = (value: unknown): value is ModelDocument =>
+  (MODEL_DOCUMENTS as readonly unknown[]).includes(value);
+
+/** The marks a model of a document may use. */
+export const modelMarks = (document: ModelDocument): readonly string[] =>
+  document === "piece" ? DRAFT_MARKS : PAPER_MARKS;
+
 /** The marks of a text that are none of the ones the platform fills: a typo to put right before approving. */
-export function unknownMarks(text: string): string[] {
-  const known = new Set<string>(DRAFT_MARKS);
+export function unknownMarks(text: string, marks: readonly string[] = DRAFT_MARKS): string[] {
+  const known = new Set<string>(marks);
   const found = new Set<string>();
   for (const match of String(text ?? "").matchAll(/\[\[([^\]]{0,60})\]\]/g)) {
     if (!known.has(match[1])) found.add(match[1]);

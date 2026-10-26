@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  attentionGroups,
   daysSince,
   type FirmPending,
   LINK_REASONS,
@@ -8,13 +9,18 @@ import {
   type PendingGroup,
   pendingGroups,
   pendingLate,
+  pendingWaitsOnFirm,
   readFirmPending,
+  sayPending,
   urgentIds,
 } from "@/lib/firm/pending";
 import type { FirmToday, TodayViewer } from "@/lib/firm/today";
 import messages from "@flyee/content/messages/pt-BR.json";
 
 const product = messages.product as Record<string, string>;
+
+const ENVELOPE_A = "e5300000-0000-4000-8000-00000000000a";
+const ENVELOPE_B = "e5300000-0000-4000-8000-00000000000b";
 
 const NOTHING: FirmToday = {
   approvalsMine: 0,
@@ -64,6 +70,9 @@ const QUIET: FirmPending = {
   documentsStale: 0,
   documentsStaleHours: 24,
   oneWaitsStaleDays: 2,
+  signaturesToConfirm: [],
+  signaturesToConfirmTotal: 0,
+  packageSignaturesFailed: 0,
 };
 
 const PARTNER: TodayViewer = {
@@ -262,8 +271,9 @@ describe("the center of what waits for somebody", () => {
     // The third deadline past its day was not listed: one line says it, and leads to the list.
     expect(late.items[2]).toMatchObject({ href: "/prazos?ver=vencidos", count: 1 });
     // A case waiting three days is late; one waiting since today is ONE's to carry on once somebody acts.
+    // The claim of each claimant is written on the case's own card of how it goes to court.
     expect(late.items[4]).toMatchObject({
-      href: `/casos/${CASE_A}`,
+      href: `/casos/${CASE_A}#como-vai-a-juizo`,
       detail: { key: "pending-case-waits", values: { days: 4, reason: { message: "advance-waiting-claims-missing" } } },
     });
     expect(group(groups, "one")!.items[0]).toMatchObject({
@@ -401,6 +411,74 @@ describe("the center of what waits for somebody", () => {
     expect(ids(groups, "one")).toEqual(["need:approvals"]);
   });
 
+  it("names the kind of every line, and asks a person for each signature that waits on the firm", () => {
+    const pending: FirmPending = {
+      ...QUIET,
+      signaturesToConfirm: [
+        {
+          envelopeId: ENVELOPE_A,
+          caseId: CASE_A,
+          seq: 7,
+          client: "Mariana Duarte",
+          status: "received",
+          // Sent back two days before NOW: longer than the papers may wait.
+          since: "2026-10-20T12:00:00Z",
+        },
+        {
+          envelopeId: ENVELOPE_B,
+          caseId: CASE_B,
+          seq: 8,
+          client: "",
+          status: "uncertain",
+          since: "2026-10-22T11:00:00Z",
+        },
+      ],
+      signaturesToConfirmTotal: 2,
+      packageSignaturesFailed: 2,
+      oneWaits: [{ caseId: CASE_A, seq: 7, client: "Mariana Duarte", waiting: "claims_missing", since: null }],
+      oneWaitsTotal: 1,
+    };
+    const groups = pendingGroups(NOTHING, pending, PARTNER, NOW);
+    const late = groups.find((entry) => entry.key === "late");
+    const one = groups.find((entry) => entry.key === "one");
+    expect(late?.items.map((item) => item.id)).toEqual([`signature:${ENVELOPE_A}`]);
+    expect(late?.items[0]).toMatchObject({
+      href: `/casos/${CASE_A}#case-signatures`,
+      tag: { key: "pending-tag-signature" },
+      label: { key: "pending-signature", values: { client: "Mariana Duarte" } },
+      detail: { key: "pending-signature-received", values: { seq: 7 } },
+    });
+    expect(one?.items.map((item) => item.id)).toEqual([
+      `case:${CASE_A}:claims_missing`,
+      `signature:${ENVELOPE_B}`,
+      "packages:signature-failed",
+    ]);
+    expect(one?.items[0].tag).toEqual({ key: "advance-tag-claims" });
+    expect(one?.items[1]).toMatchObject({
+      label: { key: "pending-signature-unnamed" },
+      detail: { key: "pending-signature-uncertain", values: { seq: 8 } },
+    });
+    expect(one?.items[2]).toMatchObject({ href: "/protocolo", count: 2, tag: { key: "pending-tag-filing" } });
+    // What holds a case for the home: what passed its time, then what waits on the firm; never what is only to
+    // look at.
+    expect(attentionGroups(groups).map((entry) => entry.key)).toEqual(["late", "one"]);
+    expect(pendingWaitsOnFirm(groups)).toBe(true);
+    expect(pendingWaitsOnFirm(pendingGroups(NOTHING, QUIET, PARTNER, NOW))).toBe(false);
+  });
+
+  it("says a line's words with whatever translates them, its values said first", () => {
+    const t = (key: string, values?: Record<string, string | number>) =>
+      `${key}(${Object.entries(values ?? {})
+        .map(([name, value]) => `${name}=${value}`)
+        .join(",")})`;
+    expect(
+      sayPending(t, {
+        key: "pending-case-waits",
+        values: { days: 2, reason: { message: "advance-waiting-claims-missing" } },
+      }),
+    ).toBe("pending-case-waits(days=2,reason=advance-waiting-claims-missing())");
+  });
+
   it("has words for every line it can show", () => {
     const today: FirmToday = {
       ...NOTHING,
@@ -479,12 +557,19 @@ describe("the center of what waits for somebody", () => {
         { conversationId: CONVERSATION_B, contact: "", reason: "Reclamou do escritório.", since: null, late: false },
       ],
       conversationsCalledTotal: 3,
+      signaturesToConfirm: [
+        { envelopeId: ENVELOPE_A, caseId: CASE_A, seq: 7, client: "Mariana Duarte", status: "received", since: null },
+        { envelopeId: ENVELOPE_B, caseId: CASE_B, seq: 8, client: "", status: "uncertain", since: null },
+      ],
+      signaturesToConfirmTotal: 3,
+      packageSignaturesFailed: 1,
     };
     const groups = pendingGroups(today, pending, PARTNER, NOW);
     const keys = new Set<string>();
     for (const entry of groups) {
       keys.add(`pending-group-${entry.key}`);
       for (const item of entry.items) {
+        keys.add(item.tag.key);
         keys.add(item.label.key);
         if (item.detail) keys.add(item.detail.key);
         for (const value of Object.values({ ...item.label.values, ...item.detail?.values })) {

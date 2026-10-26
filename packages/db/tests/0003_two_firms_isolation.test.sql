@@ -277,6 +277,15 @@ insert into public.tracked_legs (org_id, trip_id, position, flight_number, origi
 insert into public.flight_alerts (org_id, trip_id, kind, rule_version) values
   ('b1000000-0000-4000-8000-00000000000a', 'ae900000-0000-4000-8000-00000000000a', 'cancelled', 'flight-problem-v1'),
   ('b1000000-0000-4000-8000-00000000000b', 'ae900000-0000-4000-8000-00000000000b', 'cancelled', 'flight-problem-v1');
+-- The claim each firm asks by default (0052), and the power of attorney ONE sent its client to sign (0054).
+insert into public.firm_claim_defaults (org_id, incident, cents) values
+  ('b1000000-0000-4000-8000-00000000000a', 'delay', 800000),
+  ('b1000000-0000-4000-8000-00000000000b', 'cancellation', 1000000);
+insert into public.case_papers (org_id, case_id, person_id, kind, document_id) values
+  ('b1000000-0000-4000-8000-00000000000a', 'a3000000-0000-4000-8000-00000000000a', 'a2000000-0000-4000-8000-00000000000a',
+   'procuracao', 'a7000000-0000-4000-8000-00000000000a'),
+  ('b1000000-0000-4000-8000-00000000000b', 'a3000000-0000-4000-8000-00000000000b', 'a2000000-0000-4000-8000-00000000000b',
+   'procuracao', 'a7000000-0000-4000-8000-00000000000b');
 -- record_versions: written by the versioning triggers of the inserts above.
 
 -- Tables keyed by the person.
@@ -412,12 +421,12 @@ select is(
   array[
     'admin_complaints', 'ai_runs', 'approvals', 'audit_events', 'billing_operations', 'case_advances', 'case_documents',
     'case_draft_citations', 'case_draft_versions', 'case_drafts', 'case_events',
-    'case_parties', 'case_statements',
+    'case_papers', 'case_parties', 'case_statements',
     'case_weather', 'cases', 'certificate_inventory', 'civil_court_answers', 'client_consents', 'client_links', 'client_notices', 'connections',
     'consent_acceptances',
     'deadlines', 'djen_captures', 'dossiers', 'draft_templates', 'entitlement_grants', 'files', 'filing_package_items', 'filing_packages',
     'filing_receipts', 'firm_autonomy', 'firm_calendars',
-    'firm_invitations', 'firm_notice_kinds', 'firm_signers', 'flight_alerts', 'flight_checks', 'flight_segments', 'hearings', 'import_batches', 'import_rows', 'invoices',
+    'firm_claim_defaults', 'firm_invitations', 'firm_notice_kinds', 'firm_signers', 'flight_alerts', 'flight_checks', 'flight_segments', 'hearings', 'import_batches', 'import_rows', 'invoices',
     'issued_documents', 'lawyer_signature_uses', 'legal_sources', 'memberships',
     'movements', 'notice_optins', 'onboarding_state',
     'people',
@@ -588,12 +597,12 @@ select is(
    from pg_temp.firm_rows('b1000000-0000-4000-8000-00000000000a') where visible > 0),
   array[
     'admin_complaints', 'ai_runs', 'approvals', 'case_advances', 'case_documents', 'case_draft_citations', 'case_draft_versions',
-    'case_drafts', 'case_events', 'case_parties', 'case_statements',
+    'case_drafts', 'case_events', 'case_papers', 'case_parties', 'case_statements',
     'case_weather', 'cases', 'certificate_inventory', 'civil_court_answers', 'client_consents',
     'client_links', 'client_notices',
     'consent_acceptances', 'deadlines', 'djen_captures', 'dossiers', 'draft_templates', 'entitlement_grants', 'files',
     'filing_package_items', 'filing_packages',
-    'filing_receipts', 'firm_autonomy', 'firm_calendars', 'firm_notice_kinds', 'firm_signers', 'flight_alerts', 'flight_checks', 'flight_segments', 'hearings', 'import_batches',
+    'filing_receipts', 'firm_autonomy', 'firm_calendars', 'firm_claim_defaults', 'firm_notice_kinds', 'firm_signers', 'flight_alerts', 'flight_checks', 'flight_segments', 'hearings', 'import_batches',
     'import_rows', 'invoices', 'issued_documents', 'lawyer_signature_uses', 'legal_sources',
     'memberships', 'movements', 'notice_optins', 'people', 'proceeding_lawyers', 'proceeding_parties', 'proceeding_tracking', 'proceedings',
     'publication_readings', 'publications',
@@ -631,12 +640,12 @@ select is(
   array[
     'admin_complaints', 'ai_runs', 'approvals', 'audit_events', 'billing_operations', 'case_advances', 'case_documents',
     'case_draft_citations', 'case_draft_versions', 'case_drafts', 'case_events',
-    'case_parties', 'case_statements',
+    'case_papers', 'case_parties', 'case_statements',
     'case_weather', 'cases', 'certificate_inventory', 'civil_court_answers', 'client_consents', 'client_links', 'client_notices', 'connections',
     'consent_acceptances',
     'deadlines', 'djen_captures', 'dossiers', 'draft_templates', 'entitlement_grants', 'files', 'filing_package_items', 'filing_packages',
     'filing_receipts', 'firm_autonomy', 'firm_calendars',
-    'firm_invitations', 'firm_notice_kinds', 'firm_signers', 'flight_alerts', 'flight_checks', 'flight_segments', 'hearings', 'import_batches', 'import_rows', 'invoices',
+    'firm_claim_defaults', 'firm_invitations', 'firm_notice_kinds', 'firm_signers', 'flight_alerts', 'flight_checks', 'flight_segments', 'hearings', 'import_batches', 'import_rows', 'invoices',
     'issued_documents', 'lawyer_signature_uses', 'legal_sources', 'memberships',
     'movements', 'notice_optins', 'onboarding_state',
     'people',
