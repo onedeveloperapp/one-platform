@@ -112,12 +112,15 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
   const lawyer = state.firmFunction === "socio" || state.firmFunction === "advogado";
   const partner = state.firmFunction === "socio";
   const registered = state.registrations.length > 0;
+  // Who signs is chosen with the second factor confirmed (set_firm_signer asks for it). Without it the step
+  // shows the choice as it stands and goes on: the choice waits for O que o ONE decide, never blocks the step.
+  const choosesSigner = partner && state.secondFactor === "ok";
 
   // ---------- Who answers, at the bar ----------
   const [uf, setUf] = useState("");
   const [number, setNumber] = useState("");
   const [touched, setTouched] = useState(false);
-  const [signs, setSigns] = useState(partner ? true : state.signs);
+  const [signs, setSigns] = useState(choosesSigner ? true : state.signs);
   const [oabError, setOabError] = useState<string | null>(null);
   const numberOk = NUMBER_PATTERN.test(cleanNumber(number));
   const oabReady = !lawyer || registered || (Boolean(uf) && numberOk);
@@ -153,7 +156,7 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
         return false;
       }
     }
-    if (partner && signs !== state.signs) {
+    if (choosesSigner && signs !== state.signs) {
       const chosen = await setFirmSigner(state.userId, signs);
       if (!chosen.ok) {
         setOabError(t(autonomyErrorKey(chosen.code)));
@@ -294,7 +297,7 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
                   <Switch
                     checked={signs}
                     onChange={(event) => setSigns(event.target.checked)}
-                    disabled={blocked || state.secondFactor !== "ok"}
+                    disabled={blocked || !choosesSigner}
                   />
                 }
                 label={t("setup-oab-signs")}
@@ -302,23 +305,29 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
               <Typography variant="body2" className="text-text-secondary">
                 {t("setup-oab-signs-help")}
               </Typography>
-              {state.secondFactor !== "ok" ? (
+              {state.secondFactor === "missing" ? (
                 <Alert
                   severity="warning"
                   className="neutral bg-background-paper/60! mt-2"
                   action={
-                    <Button
-                      color="inherit"
-                      size="small"
-                      href={
-                        state.secondFactor === "challenge" ? "/auth/two-factor?next=/configurar" : "/settings/security"
-                      }
-                    >
-                      {t("setup-second-factor-action")}
+                    <Button color="inherit" size="small" href="/settings/security">
+                      {t("setup-second-factor-missing-action")}
                     </Button>
                   }
                 >
-                  {t("setup-second-factor")}
+                  {t("setup-second-factor-missing")}
+                </Alert>
+              ) : state.secondFactor === "challenge" ? (
+                <Alert
+                  severity="warning"
+                  className="neutral bg-background-paper/60! mt-2"
+                  action={
+                    <Button color="inherit" size="small" href="/auth/two-factor?next=/configurar">
+                      {t("setup-second-factor-challenge-action")}
+                    </Button>
+                  }
+                >
+                  {t("setup-second-factor-challenge")}
                 </Alert>
               ) : null}
             </Box>
