@@ -275,6 +275,8 @@ set local role authenticated;
 insert into res values ('lawsuit_1', public.save_proceeding(pg_temp.got('case_1', 'case_id')::uuid, null,
   '{"kind": "juizado", "court": "TJGO", "comarca": "Goiânia", "forum_basis": "domicile", "forum_city": "Goiânia", "system": "projudi"}'::jsonb,
   array[pg_temp.got('case_1', 'party_id')::uuid]));
+-- The system is ONE's, and the firm approves it (0066): that gate comes first.
+select public.decide_court_system(pg_temp.got('lawsuit_1', 'proceeding_id')::uuid, true);
 reset role;
 select pg_temp.as_backend();
 set local role service_role;

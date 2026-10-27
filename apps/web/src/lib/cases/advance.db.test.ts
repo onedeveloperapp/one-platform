@@ -11,8 +11,9 @@ import type { AiProviderName } from "@flyee/ai/types";
  * at the bar in that state; the first text of the piece is asked of the AI
  * from the firm's default model, read, approved by ONE and issued as the
  * petition; and the filing package is asked for with the papers that go to
- * court. A case that still lacks something says what ONE waits for, and a
- * firm where a person creates the lawsuits is left alone.
+ * court, once a partner approved the court system ONE named for the lawsuit
+ * (migration 0066). A case that still lacks something says what ONE waits
+ * for, and a firm where a person creates the lawsuits is left alone.
  *
  * It runs only when a migrated database is at hand
  * (`npm run test:db:roundtrip`); otherwise it is skipped. What stands in is
@@ -282,8 +283,14 @@ describe.skipIf(!DB_URL)("ONE carrying a case on, from its lawsuits to its filin
        from public.proceedings p where p.case_id = $1`,
       [ready.caseId],
     );
-    // No system the platform confirmed: the lawsuit names none yet.
-    expect(lawsuit).toMatchObject({ kind: "juizado", court: "TJGO", system: null, status: "planned", lawyers: [ANA] });
+    // ONE named the system the platform's table gives for the court and kind, unconfirmed as it is (0066).
+    expect(lawsuit).toMatchObject({
+      kind: "juizado",
+      court: "TJGO",
+      system: "projudi",
+      status: "planned",
+      lawyers: [ANA],
+    });
     const [stage] = await sql.unsafe(`select status from public.cases where id = $1`, [ready.caseId]);
     expect(stage.status).toBe("drafting");
     const [draft] = await sql.unsafe(
@@ -292,19 +299,24 @@ describe.skipIf(!DB_URL)("ONE carrying a case on, from its lawsuits to its filin
     );
     expect(draft).toMatchObject({ status: "issued", requested_auto: true, requested_by: null, approved_auto: true });
 
-    // The package waits for the court's system; once the platform confirms it, ONE names it and asks for the package,
-    // with the papers that go to court and never the firm's contract.
+    // The package waits for the firm to approve the system ONE named; once a partner approves it, the case is woken
+    // and ONE asks for the package, with the papers that go to court and never the firm's contract.
     expect((await carry(ready.caseId)).waiting).toBe(1);
-    expect((await advanceOf(ready.caseId)).waiting).toBe("system_unknown");
-    await sql.unsafe(
-      `update public.court_systems set confirmed = true where court = 'TJGO' and proceeding_kind = 'juizado' and system = 'projudi'`,
-    );
+    expect((await advanceOf(ready.caseId)).waiting).toBe("system_unapproved");
+    const approved = await call(as(ANA), "decide_court_system", {
+      target_proceeding: lawsuit.id,
+      target_approve: true,
+    });
+    expect(approved.code).toBe("approved");
     expect((await advanceOf(ready.caseId)).after).toBeNull();
     const second = await carry(ready.caseId);
     expect(second.acted).toBe(1);
     expect(packagesAsked).toHaveLength(1);
-    const [named] = await sql.unsafe(`select system from public.proceedings where case_id = $1`, [ready.caseId]);
-    expect(named.system).toBe("projudi");
+    const [named] = await sql.unsafe(
+      `select system, system_by_one, created_by_one, system_approved_by::text as approved_by from public.proceedings where case_id = $1`,
+      [ready.caseId],
+    );
+    expect(named).toMatchObject({ system: "projudi", system_by_one: true, created_by_one: true, approved_by: ANA });
     const [filing] = await sql.unsafe(
       `select status, requested_by, petition_document_id::text as petition, array(select unnest(document_ids)::text) as documents
        from public.filing_packages where id = $1`,

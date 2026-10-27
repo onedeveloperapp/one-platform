@@ -26,6 +26,8 @@ export const ADVANCE_WAITING = [
   "no_model",
   "documents_waiting",
   "system_unknown",
+  "system_unapproved",
+  "system_refused",
   "held",
   "suspension_pending",
   "family_split_unchosen",
@@ -77,6 +79,8 @@ const WAITING_KEY: Record<AdvanceWaiting, string> = {
   no_model: "advance-waiting-no-model",
   documents_waiting: "advance-waiting-documents-waiting",
   system_unknown: "advance-waiting-system-unknown",
+  system_unapproved: "advance-waiting-system-unapproved",
+  system_refused: "advance-waiting-system-refused",
   held: "advance-waiting-held",
   suspension_pending: "advance-waiting-suspension-pending",
   family_split_unchosen: "advance-waiting-family-split",
@@ -103,6 +107,8 @@ const WAITING_TAG_KEY: Record<AdvanceWaiting, string> = {
   no_model: "advance-tag-model",
   documents_waiting: "advance-tag-documents",
   system_unknown: "advance-tag-system",
+  system_unapproved: "advance-tag-system",
+  system_refused: "advance-tag-system",
   held: "advance-tag-held",
   suspension_pending: "advance-tag-suspension",
   family_split_unchosen: "advance-tag-family",
@@ -143,6 +149,8 @@ export function waitingFix(code: string): { href: string; key: string } | null {
  */
 export function waitingHref(code: string, caseId: string): string {
   if (code === "claims_missing") return `/casos/${caseId}#como-vai-a-juizo`;
+  // The system ONE named for a lawsuit is approved, or not, under that lawsuit (0066).
+  if (code === "system_unapproved") return `/casos/${caseId}#case-proceedings`;
   return waitingFix(code)?.href ?? `/casos/${caseId}`;
 }
 

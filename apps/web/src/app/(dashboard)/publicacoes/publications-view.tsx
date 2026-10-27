@@ -1287,7 +1287,10 @@ function PublicationCard({
                 said
                   ? t("publication-triage-done", { category: t(CATEGORY_KEY[category]) })
                   : row.byAi && row.triagedLabel
-                    ? t("publication-by-ai", { when: row.triagedLabel })
+                    ? // What ONE classified may be wrong, until a person checked it.
+                      row.reviewedBy
+                      ? t("publication-by-ai", { when: row.triagedLabel })
+                      : [t("publication-by-ai", { when: row.triagedLabel }), t("publication-one-may-err")].join(" · ")
                     : row.triagedBy && row.triagedLabel
                       ? t("publication-triaged-by", { name: row.triagedBy, when: row.triagedLabel })
                       : row.triagedLabel

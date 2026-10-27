@@ -10,6 +10,7 @@ import {
   saveCourtNote,
   saveDeadlineAct,
 } from "./actions";
+import CourtSystemsCard from "./court-systems-card";
 import { useRouter } from "next/navigation";
 import { useCallback, useState } from "react";
 
@@ -43,11 +44,12 @@ import type {
   CourtNoteRecord,
   DeadlineActRecord,
 } from "@/lib/admin/calendar";
+import type { CourtSystemRefusal } from "@/lib/admin/court-systems";
 import type { ConsoleState } from "@/lib/admin/session";
 import { todayInBrasilia, weekdayOf } from "@/lib/deadlines/deadlines";
 import { formatDayBr } from "@flyee/rules/person";
 
-type State = ConsoleState<{ calendar: CalendarConsole; thisYear: number }>;
+type State = ConsoleState<{ calendar: CalendarConsole; thisYear: number; systems: CourtSystemRefusal[] | null }>;
 
 const KIND_LABEL: Record<CalendarDayRecord["kind"], string> = {
   closed: "Sem expediente",
@@ -359,6 +361,8 @@ export default function CalendarConsoleView({ state }: { state: State }) {
               )}
             </CardContent>
           </Card>
+
+          <CourtSystemsCard refusals={state.systems} />
         </Grid>
 
         <Grid size={{ xs: 12, lg: 7 }}>

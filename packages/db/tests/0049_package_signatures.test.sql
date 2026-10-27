@@ -105,6 +105,8 @@ begin
   saved := public.save_proceeding((made ->> 'case_id')::uuid, null,
     '{"kind": "juizado", "court": "TJGO", "comarca": "Goiânia", "forum_basis": "domicile", "system": "projudi"}'::jsonb,
     array[(made ->> 'party_id')::uuid]);
+  -- The system is ONE's, and the firm approves it (0066): a package waits for that.
+  perform public.decide_court_system((saved ->> 'proceeding_id')::uuid, true);
   reset role;
   foreach mark in array marks loop
     perform pg_temp.as_backend();
@@ -615,7 +617,11 @@ set local role authenticated;
 select public.request_package_signature((select id from pg_temp.package('package_b')));
 reset role;
 
--- A package that no longer says what its lawsuit is (its system changed since it was built): nobody signs it.
+-- A package that no longer says what its lawsuit is (its system changed since it was built): nobody signs it. (Since
+-- 0066 a planned lawsuit's system is its court's row, and a change of the row gives up the package; the system is
+-- moved here by hand, with those triggers off, to try the signature's own check.)
+alter table public.proceedings disable trigger proceedings_court_system;
+alter table public.proceedings disable trigger proceedings_system_changed;
 update public.proceedings set system = 'eproc' where id = (select proceeding_id from pg_temp.package('package_b'));
 select pg_temp.as_backend();
 set local role service_role;
@@ -626,6 +632,8 @@ set local role authenticated;
 insert into res values ('b_outdated_request', public.request_package_signature((select id from pg_temp.package('package_b'))));
 reset role;
 update public.proceedings set system = 'projudi' where id = (select proceeding_id from pg_temp.package('package_b'));
+alter table public.proceedings enable trigger proceedings_court_system;
+alter table public.proceedings enable trigger proceedings_system_changed;
 select ok(
   pg_temp.got('b_outdated_claim', 'claim') is null
   and pg_temp.got('b_outdated_request', 'code') = 'package_outdated'

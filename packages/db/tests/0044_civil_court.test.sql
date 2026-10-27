@@ -200,9 +200,11 @@ select ok(
   'each claimant of the lawsuit planned in the civil court is asked, a minor through who answers for them, in the words of the setting'
 );
 
--- No package without every word: the gate stops before anything else is looked at.
+-- No package without every word: the gate stops before anything else is looked at. (The system ONE named for the
+-- lawsuit is approved by the firm first, 0066: that gate comes before every other.)
 select pg_temp.sign_in('ae440000-0000-4000-8000-000000000001');
 set local role authenticated;
+select public.decide_court_system(pg_temp.got('lawsuit', 'id')::uuid, true);
 insert into res values ('package_early', public.request_filing_package(pg_temp.got('lawsuit', 'id')::uuid,
   gen_random_uuid(), '{}'));
 reset role;
@@ -465,6 +467,7 @@ insert into res values ('case_3', public.create_case('be440000-0000-4000-8000-00
 insert into res values ('lawsuit_3', public.save_proceeding(pg_temp.got('case_3', 'case_id')::uuid, null,
   '{"kind": "juizado", "court": "TJGO", "comarca": "Goiânia", "forum_basis": "domicile", "system": "projudi"}'::jsonb,
   array[pg_temp.got('case_3', 'party_id')::uuid]));
+select public.decide_court_system(pg_temp.got('lawsuit_3', 'proceeding_id')::uuid, true);
 insert into res values ('guardian_3', public.save_case_person(pg_temp.got('case_3', 'case_id')::uuid,
   pg_temp.got('case_3', 'person_id')::uuid, '{}'::jsonb, 'guardian'));
 insert into res values ('minor_3', public.save_case_person(pg_temp.got('case_3', 'case_id')::uuid, null,

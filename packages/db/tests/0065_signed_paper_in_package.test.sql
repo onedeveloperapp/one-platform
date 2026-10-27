@@ -50,6 +50,8 @@ declare
     '{"kind": "juizado", "court": "TJGO", "comarca": "Goiânia", "forum_basis": "domicile", "system": "projudi"}'::jsonb,
     array[(made ->> 'party_id')::uuid]);
 begin
+  -- The system is ONE's, and the firm approves it (0066): a package waits for that.
+  perform public.decide_court_system((lawsuit ->> 'proceeding_id')::uuid, true);
   return made || jsonb_build_object('proceeding_id', lawsuit ->> 'proceeding_id');
 end;
 $$;

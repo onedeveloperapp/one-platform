@@ -1,6 +1,7 @@
 import CalendarConsoleView from "./calendar-console-view";
 
 import { loadCalendarConsole } from "@/lib/admin/calendar";
+import { loadCourtSystemRefusals } from "@/lib/admin/court-systems";
 import { loadConsole } from "@/lib/admin/session";
 import { todayInBrasilia } from "@/lib/deadlines/deadlines";
 
@@ -31,6 +32,8 @@ export default async function CalendarConsolePage({
       thisYear,
     ),
     thisYear,
+    // What the firms did not approve of the systems ONE named (0066): a list that could not be read is said so.
+    systems: await loadCourtSystemRefusals(supabase).catch(() => null),
   }));
   return <CalendarConsoleView state={state} />;
 }

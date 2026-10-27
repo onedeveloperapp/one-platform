@@ -108,6 +108,8 @@ insert into res values ('case', public.create_case('be900000-0000-4000-8000-0000
 insert into res values ('lawsuit', public.save_proceeding(pg_temp.got('case', 'case_id')::uuid, null,
   '{"kind": "juizado", "court": "TJCE", "comarca": "Fortaleza", "forum_basis": "domicile", "system": "pje"}'::jsonb,
   array[pg_temp.got('case', 'party_id')::uuid]));
+-- The system is ONE's, from the court's row, and the firm approves it (0066).
+select public.decide_court_system(pg_temp.got('lawsuit', 'proceeding_id')::uuid, true);
 reset role;
 select pg_temp.as_backend();
 set local role service_role;

@@ -97,6 +97,14 @@ export type CaseProceeding = {
   forumCity: string | null;
   status: "planned" | "filed" | "closed";
   filedAt: string | null;
+  /** The system is ONE's, from the court's row of the platform's table (migration 0066). */
+  systemByOne: boolean;
+  /** The firm's approval of the system, as its decision: who and when (nobody named for one chosen before 0066). */
+  systemApproval: { by: string | null; at: string } | null;
+  /** The firm did not approve the system, and said why: the platform checks the court's acts. */
+  systemRefusal: { by: string | null; at: string; reason: string } | null;
+  /** ONE created the lawsuit, by the rules of the case. */
+  createdByOne: boolean;
   parties: string[];
   lawyers: string[];
 };
@@ -271,6 +279,8 @@ export type CaseState =
       confirmsDeadlines: boolean;
       /** The person reading is a partner or a lawyer of the firm: who decides to file or to hold. */
       lawyer: boolean;
+      /** The person reading approves, or not, the court system ONE names for a lawsuit (0066). */
+      decidesCourtSystem: boolean;
       /** The day in Brazil's official time: who is a minor is decided by it. */
       today: string;
       /** The CPF registry is configured in this environment. */

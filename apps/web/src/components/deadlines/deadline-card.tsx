@@ -347,6 +347,12 @@ export default function DeadlineCard({
           {history.join(" · ")}
         </Typography>
       ) : null}
+      {/* A deadline ONE read from a publication or confirmed by itself may be wrong, and the firm reads it so. */}
+      {open && (row.proposedAuto || row.confirmedAuto) ? (
+        <Typography variant="body2" className="text-text-secondary">
+          {t("deadline-one-may-err")}
+        </Typography>
+      ) : null}
 
       {error ? (
         <Alert severity="error" className="neutral bg-background-paper/60!">

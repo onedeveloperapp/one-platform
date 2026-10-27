@@ -219,6 +219,12 @@ describe.skipIf(!DB_URL)("a filing package signed by ONE with a lawyer's certifi
       target_parties: [opened.party_id],
     });
     proceedingId = String(saved.proceeding_id);
+    // ONE named the lawsuit's system from the platform's table; the firm approves it before any package (0066).
+    const approved = await call(asAna(), "decide_court_system", {
+      target_proceeding: proceedingId,
+      target_approve: true,
+    });
+    expect(approved.code).toBe("approved");
     await sql.unsafe(`insert into public.proceeding_lawyers (proceeding_id, user_id, org_id) values ($1, $2, $3)`, [
       proceedingId,
       BRUNO,

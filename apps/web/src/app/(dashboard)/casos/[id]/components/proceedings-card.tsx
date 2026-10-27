@@ -2,6 +2,7 @@
 
 import type { CaseProceeding, CaseState } from "../case-types";
 import CourtCourse from "./court-course";
+import CourtSystem from "./court-system";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 
@@ -37,7 +38,8 @@ import { formatDayBr } from "@flyee/rules/person";
 type Ready = Extract<CaseState, { kind: "ready" }>;
 
 const KINDS = ["juizado", "comum"] as const;
-const SYSTEMS = ["projudi", "eproc", "pje", "esaj", "outro"] as const;
+// The systems a lawsuit may name: ONE names a planned lawsuit's (0066), so the dialog offers none.
+type System = "projudi" | "eproc" | "pje" | "esaj" | "outro";
 const BASES = ["domicile", "event_place", "defendant_seat", "other"] as const;
 const STATUSES = ["planned", "filed", "closed"] as const;
 
@@ -45,7 +47,7 @@ const KIND_KEY: Record<(typeof KINDS)[number], string> = {
   juizado: "case-proceeding-kind-juizado",
   comum: "case-proceeding-kind-comum",
 };
-const SYSTEM_KEY: Record<(typeof SYSTEMS)[number], string> = {
+const SYSTEM_KEY: Record<System, string> = {
   projudi: "case-system-projudi",
   eproc: "case-system-eproc",
   pje: "case-system-pje",
@@ -70,7 +72,7 @@ const STATUS_TONE: Record<(typeof STATUSES)[number], StatusTone> = {
 };
 
 const systemLabel = (t: (key: string) => string, system: string | null) =>
-  system && system in SYSTEM_KEY ? t(SYSTEM_KEY[system as (typeof SYSTEMS)[number]]) : null;
+  system && system in SYSTEM_KEY ? t(SYSTEM_KEY[system as System]) : null;
 
 /**
  * The lawsuits of the case: one in the small-claims court for the adults,
@@ -161,7 +163,8 @@ export default function ProceedingsCard({
           courtName(proceeding.court),
           proceeding.comarca,
           proceeding.unit,
-          systemLabel(t, proceeding.system),
+          // A planned lawsuit's system is said with the firm's word on it, below (`CourtSystem`).
+          proceeding.status === "planned" ? null : systemLabel(t, proceeding.system),
         ]
           .filter(Boolean)
           .join(" · ");
@@ -217,6 +220,12 @@ export default function ProceedingsCard({
                 })}
               </Typography>
             )}
+            {proceeding.createdByOne && proceeding.status === "planned" && (
+              <Typography variant="body2" className="text-text-secondary">
+                {t("case-proceeding-created-by-one")}
+              </Typography>
+            )}
+            <CourtSystem state={state} proceeding={proceeding} writable={writable} onChanged={onChanged} />
             <CourtCourse
               caseId={state.case.id}
               proceedingId={proceeding.id}
@@ -437,31 +446,16 @@ function ProceedingDialog({
                 onChange={(event) => set("unit", event.target.value)}
               />
             </Grid>
-            <Grid size={{ xs: 12, sm: 6 }}>
-              {select(
-                "system",
-                t("case-proceeding-system"),
-                SYSTEMS.map((value) => ({ value, label: t(SYSTEM_KEY[value]) })),
-                true,
-              )}
-            </Grid>
-            <Grid size={{ xs: 12, sm: 6 }} className="flex items-center">
-              {known && (
-                <Box className="flex flex-col gap-1">
-                  <Typography variant="body2">
-                    {known.confirmed
-                      ? t("case-proceeding-system-known", { system: systemLabel(t, known.system) ?? known.system })
-                      : t("case-proceeding-system-sampled", { system: systemLabel(t, known.system) ?? known.system })}
-                  </Typography>
-                  {known.system !== values.system && (
-                    <Box>
-                      <Button size="small" variant="text" onClick={() => set("system", known.system)} disabled={busy}>
-                        {t("case-proceeding-system-use")}
-                      </Button>
-                    </Box>
-                  )}
-                </Box>
-              )}
+            {/* The system is ONE's, from the court and the kind (0066): the firm approves it under the lawsuit,
+                never picks it here. What the lawsuit has is sent back as it is. */}
+            <Grid size={12}>
+              <Typography variant="body2" className="text-text-secondary">
+                {values.status === "planned"
+                  ? known
+                    ? t("case-proceeding-system-by-one", { system: systemLabel(t, known.system) ?? known.system })
+                    : t("case-proceeding-system-by-one-none")
+                  : t("case-proceeding-system-filed")}
+              </Typography>
             </Grid>
             {known?.notes && (
               <Grid size={12}>

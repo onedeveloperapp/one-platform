@@ -141,7 +141,7 @@ async function loadCase(id: string): Promise<CaseState> {
     supabase
       .from("proceedings")
       .select(
-        "id, kind, court, comarca, unit, system, cnj, forum_basis, forum_reason, forum_city, status, filed_at, proceeding_parties(party_id), proceeding_lawyers(user_id)",
+        "id, kind, court, comarca, unit, system, cnj, forum_basis, forum_reason, forum_city, status, filed_at, system_by_one, system_approved_by, system_approved_at, system_refused_by, system_refused_at, system_refused_reason, created_by_one, proceeding_parties(party_id), proceeding_lawyers(user_id)",
       )
       .eq("case_id", id)
       .eq("org_id", firm)
@@ -371,6 +371,13 @@ async function loadCase(id: string): Promise<CaseState> {
         forum_city: string | null;
         status: CaseProceeding["status"];
         filed_at: string | null;
+        system_by_one: boolean | null;
+        system_approved_by: string | null;
+        system_approved_at: string | null;
+        system_refused_by: string | null;
+        system_refused_at: string | null;
+        system_refused_reason: string | null;
+        created_by_one: boolean | null;
         proceeding_parties: { party_id: string }[];
         proceeding_lawyers: { user_id: string }[];
       }[]
@@ -387,6 +394,19 @@ async function loadCase(id: string): Promise<CaseState> {
       forumCity: proceeding.forum_city,
       status: proceeding.status,
       filedAt: proceeding.filed_at,
+      systemByOne: proceeding.system_by_one === true,
+      systemApproval: proceeding.system_approved_at
+        ? { by: proceeding.system_approved_by, at: proceeding.system_approved_at }
+        : null,
+      systemRefusal:
+        proceeding.system_refused_at && proceeding.system_refused_reason
+          ? {
+              by: proceeding.system_refused_by,
+              at: proceeding.system_refused_at,
+              reason: proceeding.system_refused_reason,
+            }
+          : null,
+      createdByOne: proceeding.created_by_one === true,
       parties: proceeding.proceeding_parties.map((party) => party.party_id),
       lawyers: proceeding.proceeding_lawyers.map((lawyer) => lawyer.user_id),
     })),
@@ -561,6 +581,7 @@ async function loadCase(id: string): Promise<CaseState> {
     worksDeadlines: ["socio", "advogado", "controladoria"].includes(context.firm.firmFunction),
     confirmsDeadlines: context.firm.firmFunction === "socio" || context.firm.firmFunction === "controladoria",
     lawyer: context.firm.firmFunction === "socio" || context.firm.firmFunction === "advogado",
+    decidesCourtSystem: ["socio", "advogado", "controladoria"].includes(context.firm.firmFunction),
     partner: context.firm.firmFunction === "socio",
     today: todayInBrazil(),
     cpfLookup: cpfLookup() !== null,

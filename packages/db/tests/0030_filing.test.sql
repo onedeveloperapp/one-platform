@@ -77,6 +77,8 @@ insert into res values ('proceeding', public.save_proceeding(pg_temp.got('case',
 -- A lawsuit with no court system named yet.
 insert into res values ('proceeding_bare', public.save_proceeding(pg_temp.got('case', 'case_id')::uuid, null,
   '{"kind": "comum"}'::jsonb));
+-- The system is ONE's, from the court's row, and the firm approves it (0066): a package waits for that.
+select public.decide_court_system(pg_temp.got('proceeding', 'proceeding_id')::uuid, true);
 reset role;
 select pg_temp.sign_in('ae100000-0000-4000-8000-000000000004');
 set local role authenticated;
@@ -84,6 +86,7 @@ insert into res values ('case_b', public.create_case('be100000-0000-4000-8000-00
   '{"full_name": "Paulo Teste"}'::jsonb));
 insert into res values ('proceeding_b', public.save_proceeding(pg_temp.got('case_b', 'case_id')::uuid, null,
   '{"kind": "juizado", "court": "TJGO", "system": "projudi"}'::jsonb));
+select public.decide_court_system(pg_temp.got('proceeding_b', 'proceeding_id')::uuid, true);
 reset role;
 
 -- The files: a petition, an identity, a long scan that passes the limit, a photo, and files of firm B.
@@ -481,6 +484,7 @@ select pg_temp.sign_in('ae100000-0000-4000-8000-000000000001');
 set local role authenticated;
 select public.save_proceeding(pg_temp.got('case', 'case_id')::uuid, pg_temp.got('proceeding_bare', 'proceeding_id')::uuid,
   '{"kind": "comum", "court": "TJGO", "system": "projudi"}'::jsonb);
+select public.decide_court_system(pg_temp.got('proceeding_bare', 'proceeding_id')::uuid, true);
 insert into res values ('ask_h', public.request_filing_package(pg_temp.got('proceeding_bare', 'proceeding_id')::uuid,
   pg_temp.got('petition', 'document_id')::uuid, array[pg_temp.got('scan', 'document_id')::uuid]));
 reset role;
@@ -600,7 +604,11 @@ insert into res values ('receipt_not_ready', public.attach_filing_receipt(pg_tem
   pg_temp.got('receipts', 'ana')::uuid, '5000202-39.2099.8.09.0051', (now() at time zone 'America/Sao_Paulo')::date));
 reset role;
 
--- The lawsuit moves to another system after the package was built: the package no longer says what it is.
+-- The lawsuit moves to another system after the package was built: the package no longer says what it is. (Since
+-- 0066 a planned lawsuit's system is its court's row, and a change of the row gives up the package; the system is
+-- moved here by hand, with those triggers off, to try the receipt's own check.)
+alter table public.proceedings disable trigger proceedings_court_system;
+alter table public.proceedings disable trigger proceedings_system_changed;
 update public.proceedings set system = 'pje' where id = pg_temp.got('proceeding', 'proceeding_id')::uuid;
 select pg_temp.sign_in('ae100000-0000-4000-8000-000000000001');
 set local role authenticated;
@@ -608,6 +616,8 @@ insert into res values ('receipt_moved', public.attach_filing_receipt(pg_temp.go
   pg_temp.got('receipts', 'ana')::uuid, '5000202-39.2099.8.09.0051', (now() at time zone 'America/Sao_Paulo')::date));
 reset role;
 update public.proceedings set system = 'projudi' where id = pg_temp.got('proceeding', 'proceeding_id')::uuid;
+alter table public.proceedings enable trigger proceedings_court_system;
+alter table public.proceedings enable trigger proceedings_system_changed;
 -- A document of the package is refused after the build.
 update public.case_documents set status = 'rejected', rejected_reason = 'Ilegível.' where id = pg_temp.got('identity', 'document_id')::uuid;
 select pg_temp.sign_in('ae100000-0000-4000-8000-000000000001');

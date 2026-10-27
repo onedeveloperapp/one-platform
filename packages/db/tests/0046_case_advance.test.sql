@@ -380,6 +380,20 @@ select public.record_case_advance(pg_temp.got('case_1', 'case_id')::uuid, pg_tem
   pg_temp.got('steps_held', 'waiting'));
 reset role;
 update public.cases set suspension_decision = 'file' where id = pg_temp.got('case_1', 'case_id')::uuid;
+-- The system of the lawsuit is ONE's, and the package waits for the firm to approve it (0066).
+select pg_temp.as_backend();
+set local role service_role;
+insert into res values ('claim_unapproved', pg_temp.claim(pg_temp.got('case_1', 'case_id')::uuid));
+insert into res values ('steps_unapproved', public.advance_case_steps(pg_temp.got('case_1', 'case_id')::uuid,
+  pg_temp.got('claim_unapproved', 'claim')::integer, true));
+select public.record_case_advance(pg_temp.got('case_1', 'case_id')::uuid, pg_temp.got('claim_unapproved', 'claim')::integer,
+  pg_temp.got('steps_unapproved', 'waiting'));
+reset role;
+select pg_temp.sign_in('a4600000-0000-4000-8000-000000000001');
+set local role authenticated;
+insert into res values ('system_approved', public.decide_court_system(
+  (select p.id from public.proceedings p where p.case_id = pg_temp.got('case_1', 'case_id')::uuid), true));
+reset role;
 select pg_temp.as_backend();
 set local role service_role;
 insert into res values ('claim_package', pg_temp.claim(pg_temp.got('case_1', 'case_id')::uuid));
@@ -395,6 +409,9 @@ select ok(
   and pg_temp.got('steps_pending', 'waiting') = 'suspension_pending'
   and pg_temp.got('steps_held', 'waiting') = 'held'
   and jsonb_array_length((select payload -> 'packages' from res where name = 'steps_held')) = 0
+  and pg_temp.got('steps_unapproved', 'waiting') = 'system_unapproved'
+  and jsonb_array_length((select payload -> 'packages' from res where name = 'steps_unapproved')) = 0
+  and pg_temp.got('system_approved', 'code') = 'approved'
   and jsonb_array_length((select payload -> 'packages' from res where name = 'steps_package')) = 1
   and (select f.status = 'requested' and f.requested_by is null
               and f.document_ids @> array[pg_temp.got('doc_identity', 'document_id')::uuid, pg_temp.got('doc_evidence', 'document_id')::uuid]

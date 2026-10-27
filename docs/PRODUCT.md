@@ -52,7 +52,7 @@ Além da função, cada pessoa tem um papel na conta do escritório (titular, ad
 | 2026-10-21 | Nenhum componente que exija licença paga (só os pacotes MIT do MUI X). Repositório próprio (`onedeveloperapp/one-platform`), publicado pela Vercel via GitHub Actions. |
 | 2026-10-27 | **Valor da Causa Pedido.** O valor que cada autor pede tem esse nome em todas as telas, e o escritório escolhe se o define, por tipo de problema. Sem valor definido, a ação vai sem valor e o juiz define: a peça diz "o valor que este Juízo arbitrar". |
 | 2026-10-27 | Os dados que o cliente preencheria vêm dos documentos que ele manda, e por isso os documentos vêm primeiro no link. A agência vinculada ao escritório anexa os documentos do passageiro e o ONE os usa, com a concordância do passageiro no contrato da agência (substitui a decisão de 8/10 de que a agência não passava dados). Falta escolher como a agência entra no ONE, e o parecer sobre captação de clientes responde se o escritório pode receber clientes assim. |
-| 2026-10-27 | O que o ONE gera ou decide diz que ele pode errar, para o escritório estar sempre ciente. O sistema do tribunal de cada ação é do ONE, e o escritório só aprova ou não (a construir). |
+| 2026-10-27 | O que o ONE gera ou decide diz que ele pode errar, para o escritório estar sempre ciente. O sistema do tribunal de cada ação é do ONE, e o escritório só aprova ou não: a aprovação fica como decisão do escritório, e quem não aprova diz por quê, para a plataforma conferir nos atos do tribunal. |
 
 **Regras de produto que valem em tudo**
 
@@ -80,7 +80,7 @@ O que existe hoje, na ordem em que o caso anda. "Construído" quer dizer código
 | Reclamação administrativa | O escritório registra o canal (Anac Passageiro, consumidor.gov.br, Procon, a companhia), o protocolo e o prazo de resposta. O ONE não protocola nada lá. | `/casos/[id]` | Construído. |
 | A peça | A IA escreve o primeiro texto a partir do modelo do escritório, sem receber CPF, endereço ou telefone. Só é aprovado o texto cujas citações estão todas na biblioteca conferida do escritório e sem nada a completar; o advogado aprova na prévia o texto exato, ou direto no card da peça, sem revisar (com o mesmo portão), ou devolve à IA com o que mudar. O PDF sai em nome do escritório. | `/casos/[id]`, `/biblioteca` | Construído (só a petição inicial). |
 | Dossiê | Documento do caso, com código público de verificação: quem é cada pessoa, o que fizeram no link, o que assinaram, o que contaram, o que foi tentado antes. | `/casos/[id]`, `/verificar/[code]` | Construído. |
-| Pacote de protocolo | Os arquivos na ordem, com nomes simples, divididos pelo limite do sistema (Projudi, eproc, PJe), com o passo a passo do sistema. No Projudi do TJGO, o ONE assina cada arquivo (`.p7s`) com a autorização em nuvem de um advogado da ação. O advogado protocola com o próprio login e anexa o recibo. | `/protocolo`, `/casos/[id]` | Construído. O protocolo pelo próprio ONE (MNI) é o próximo passo. |
+| Pacote de protocolo | Os arquivos na ordem, com nomes simples, divididos pelo limite do sistema (Projudi, eproc, PJe), com o passo a passo do sistema. O sistema de cada ação é o que o ONE define pelo tribunal e pelo tipo de processo, e o pacote espera um sócio, um advogado ou a controladoria aprovar; quem não aprova diz por quê, e a plataforma confere nos atos do tribunal. No Projudi do TJGO, o ONE assina cada arquivo (`.p7s`) com a autorização em nuvem de um advogado da ação. O advogado protocola com o próprio login e anexa o recibo. | `/protocolo`, `/casos/[id]` | Construído. O protocolo pelo próprio ONE (MNI) é o próximo passo. |
 | Carteira existente | Importação da planilha do sistema anterior (Excel ou texto), lida no navegador, com conferência linha a linha antes de gravar, e desfeita se preciso. | `/casos/importar` | Construído. |
 | Andamento | O processo é lido no tribunal pelo número: Projudi do TJGO pelo webservice público; os outros tribunais por um agregador ainda a escolher. | `/casos/[id]` | Construído (TJGO); fora de Goiás espera o agregador. |
 | Publicações | O DJEN é lido por inscrição na OAB de cada advogado; uma pessoa tria (prazo, audiência, decisão, pagamento, ciência, outro); a IA tria em modo sombra e, nas categorias que bateram a meta, com amostra. | `/publicacoes` | Construído. |
@@ -113,7 +113,7 @@ O que existe hoje, na ordem em que o caso anda. "Construído" quer dizer código
 
 ## 5. O que o ONE decide sozinho
 
-Cada decisão abaixo tem três modos, escolhidos por um sócio com o segundo fator em `/settings/autonomia`: **o ONE decide sozinho** (o padrão da plataforma), **o ONE decide e uma parte espera a conferência de uma pessoa**, ou **uma pessoa decide**. O operador pode segurar uma decisão em todos os escritórios quando a medida dela cai. Toda decisão do ONE fica na linha do tempo do caso e na auditoria como do ONE.
+Cada decisão abaixo tem três modos, escolhidos por um sócio com o segundo fator em `/settings/autonomia`: **o ONE decide sozinho** (o padrão da plataforma), **o ONE decide e uma parte espera a conferência de uma pessoa**, ou **uma pessoa decide**. O operador pode segurar uma decisão em todos os escritórios quando a medida dela cai. Toda decisão do ONE fica na linha do tempo do caso e na auditoria como do ONE. O que o ONE gera ou decide diz na tela, ao lado, que ele pode errar e o que conferir: a ação que ele criou, o sistema do tribunal que ele definiu, os dados que ele leu dos documentos, o prazo, a audiência, a classificação de uma publicação, a decisão do Tema 1.417, a peça e a petição que ele aprovou.
 
 | Decisão (como a tela diz) | O que o ONE faz sozinho |
 | --- | --- |
@@ -122,14 +122,14 @@ Cada decisão abaixo tem três modos, escolhidos por um sócio com o segundo fat
 | Aprovar o primeiro texto da peça | Aprova o texto da IA quando todas as citações estão na biblioteca e nada ficou a completar, e gera o PDF. Um texto que um advogado tocou nunca é aprovado pelo ONE. |
 | Confirmar os prazos | Confirma no dia contado, sempre pelo dia mais cedo quando a contagem supôs algo. |
 | Decidir entre protocolar ou segurar (Tema 1.417) | Segura no risco alto, protocola no médio, baixo ou fora do tema; não decide quando a triagem não sabe. |
-| Criar as ações do caso | Cria as ações que as regras planejam quando o caso tem o que elas pedem. |
+| Criar as ações do caso | Cria as ações que as regras planejam quando o caso tem o que elas pedem, cada uma com o sistema do tribunal que a tabela da plataforma dá para o tribunal e o tipo de processo. |
 | Pedir a peça à IA | Pede o primeiro texto do modelo padrão do escritório para aquele tipo de ação. |
-| Montar o pacote de protocolo | Pede o pacote quando a peça vira a petição e os documentos estão aceitos. |
+| Montar o pacote de protocolo | Pede o pacote quando a peça vira a petição, os documentos estão aceitos e o escritório aprovou o sistema do tribunal da ação. |
 | Assinar os arquivos do protocolo | Assina com a autorização em nuvem de um advogado da ação, onde o sistema aceita arquivo assinado. |
 | Propor o prazo de uma publicação | Lê o prazo de uma publicação que uma pessoa triou como prazo e o propõe, só quando o texto não deixa dúvida. |
 | Registrar a audiência de uma publicação | Lê a audiência de uma publicação triada como audiência e a registra, só quando o texto não deixa dúvida. |
 
-**O que continua sempre com uma pessoa:** triar uma publicação como prazo, audiência, decisão ou pagamento (a IA fica em modo sombra nessas categorias); devolver uma resposta da IA com o que mudar; protocolar no sistema do tribunal; escolher outro foro; dividir uma família.
+**O que continua sempre com uma pessoa:** triar uma publicação como prazo, audiência, decisão ou pagamento (a IA fica em modo sombra nessas categorias); devolver uma resposta da IA com o que mudar; protocolar no sistema do tribunal; aprovar ou não o sistema do tribunal que o ONE definiu para cada ação; escolher outro foro; dividir uma família.
 
 As tarefas de IA que existem: `caso.documento.conferencia`, `caso.relato.transcricao`, `caso.relato.cronologia`, `caso.peca.minuta`, `publicacao.triagem`, `publicacao.prazo`, `publicacao.audiencia` e `plataforma.verificacao` (a checagem do executor, sem dado de cliente). O modelo de cada uma é dado da versão publicada das instruções, trocado pelo operador em `/admin/ai`.
 

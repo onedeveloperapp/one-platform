@@ -345,6 +345,35 @@ export async function saveProceeding(input: {
   return result;
 }
 
+/**
+ * The firm's word on the court system ONE named for a planned lawsuit (migration 0066): approved, as the decision
+ * of who approves it, or not approved, with the reason the platform reads to check the court's acts.
+ */
+export async function decideCourtSystem(input: {
+  caseId: string;
+  proceedingId: string;
+  approve: boolean;
+  reason?: string | null;
+}): Promise<CaseResult> {
+  const context = await getMemberContext();
+  if (!context?.firm || !isId(input?.caseId) || !isId(input?.proceedingId)) {
+    return { ok: false, code: "proceeding_not_found" };
+  }
+  const approve = input.approve === true;
+  const { data, error } = await context.supabase.rpc("decide_court_system", {
+    target_proceeding: input.proceedingId,
+    target_approve: approve,
+    target_reason: approve ? null : typeof input.reason === "string" ? input.reason.slice(0, 600) : null,
+  });
+  const result = fold(data, error, () => ({}));
+  if (result.ok) {
+    refresh(input.caseId);
+    // Approved, ONE may now ask for the lawsuit's package (0039).
+    await queueCaseAdvance(input.caseId);
+  }
+  return result;
+}
+
 export async function removeProceeding(caseId: string, proceedingId: string): Promise<CaseResult> {
   const context = await getMemberContext();
   if (!context?.firm || !isId(proceedingId)) return { ok: false, code: "not_found" };

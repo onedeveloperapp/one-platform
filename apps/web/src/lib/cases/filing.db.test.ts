@@ -290,6 +290,12 @@ describe.skipIf(!DB_URL)("a filing package, built by the worker against the data
       target_parties: [partyId],
     });
     proceedingId = String(lawsuit.proceeding_id);
+    // ONE named the lawsuit's system from the platform's table; the firm approves it before any package (0066).
+    const approved = await call(asAna(), "decide_court_system", {
+      target_proceeding: proceedingId,
+      target_approve: true,
+    });
+    expect(approved.code).toBe("approved");
 
     await addDocument("petition", "petition", "inicial.pdf", "application/pdf", await textPdf(6));
     await addDocument("identity", "identity", "rg.pdf", "application/pdf", await textPdf(1), true);

@@ -1,6 +1,7 @@
 "use client";
 
 import type { CaseFiling, CaseProceeding, CaseState } from "../case-types";
+import CourtSystem from "./court-system";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -178,6 +179,8 @@ const SIGNATURE_STALE = new Set([
   "family_split_unchosen",
   "civil_court_unanswered",
   "power_of_attorney_unsigned",
+  "system_unapproved",
+  "system_refused",
 ]);
 
 function Lawsuit({
@@ -378,6 +381,8 @@ function Lawsuit({
   const formOpen = canBuild && (!filing || again);
   // The package there is stays in sight unless the form took its place.
   const showPackage = Boolean(filing) && !formOpen;
+  // The system ONE named for the lawsuit still waits for the firm's word (0066): no package is built before it.
+  const systemWaits = proceeding.status === "planned" && proceeding.system !== null && !proceeding.systemApproval;
   // Built for the lawsuit as it was: one that moved, or whose documents changed, is built again before it is filed.
   const outdated =
     filing !== null &&
@@ -705,6 +710,11 @@ function Lawsuit({
 
       {formOpen ? (
         <Box className="flex flex-col gap-3">
+          {/* The package is built for the system ONE named, once the firm approved it (0066): the approval is here
+              too, where the package is asked for. */}
+          {systemWaits ? (
+            <CourtSystem state={state} proceeding={proceeding} writable={writable} onChanged={onChanged} />
+          ) : null}
           <TextField
             select
             fullWidth
@@ -746,7 +756,12 @@ function Lawsuit({
             ))}
           </Box>
           <Box className="flex flex-row flex-wrap gap-2">
-            <Button variant="contained" size="small" disabled={busy !== null || !petition} onClick={() => void ask()}>
+            <Button
+              variant="contained"
+              size="small"
+              disabled={busy !== null || !petition || systemWaits}
+              onClick={() => void ask()}
+            >
               {busy === "ask" ? t("cases-working") : t("filing-build")}
             </Button>
             {again ? (
