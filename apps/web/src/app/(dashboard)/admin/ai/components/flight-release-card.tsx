@@ -3,19 +3,9 @@
 import { setFlightAlertsRelease } from "../actions";
 import { useState } from "react";
 
-import {
-  Alert,
-  Box,
-  Button,
-  Card,
-  CardContent,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  TextField,
-  Typography,
-} from "@mui/material";
+import { Alert, Box, Button, Dialog, DialogActions, DialogContent, TextField, Typography } from "@mui/material";
 
+import CollapsibleCard from "@/components/product/collapsible-card";
 import DialogHeader from "@/components/product/dialog-header";
 import MetricBars from "@/components/product/metric-bars";
 import StatusChip from "@/components/product/status-chip";
@@ -52,81 +42,79 @@ export default function FlightReleaseCard({
   const left = Math.max(status.dailyReads - status.readsToday, 0);
 
   return (
-    <Card component="section" aria-labelledby="flight-release">
-      <CardContent className="flex flex-col gap-4">
-        <Box className="flex flex-row flex-wrap items-start justify-between gap-2">
-          <Box className="flex min-w-0 flex-1 basis-72 flex-col gap-1">
-            <Typography id="flight-release" variant="h5" component="h2" className="mb-0">
-              Avisos de voo a passageiros reais
-            </Typography>
-            <Typography variant="body2" className="text-text-secondary">
-              O ONE lê na FlightAware os voos que acompanha e, quando a regra encontra um problema, escreve primeiro ao
-              passageiro. O chat de teste recebe sempre; um passageiro real só depois da liberação, dada aqui com a nota
-              do parecer jurídico sobre captação de clientela (Código de Ética da OAB, art. 7º, e Provimento 205/2021).
-            </Typography>
-          </Box>
-          <StatusChip
-            tone={status.released ? "positive" : "attention"}
-            label={status.released ? "Liberado" : "Bloqueado até a liberação"}
-          />
-        </Box>
-
-        {status.released || status.releasedNote ? (
-          <Typography variant="body2" className="text-text-secondary">
-            {status.released ? "Liberado" : "Bloqueado de novo"}
-            {status.releasedAt ? ` em ${WHEN.format(new Date(status.releasedAt))}` : ""}
-            {status.releasedBy ? ` por ${status.releasedBy}` : ""}
-            {status.releasedNote ? `: ${status.releasedNote}` : ""}
-          </Typography>
-        ) : null}
-
-        {sourceOn ? (
-          <UsageMeter
-            headline={`${NUMBER.format(status.readsToday)} de ${NUMBER.format(status.dailyReads)} leituras hoje`}
-            caption="Cada trecho lido na FlightAware é cobrado. O teto diário é configuração da plataforma."
-            segments={[
-              {
-                key: "read",
-                label: "Lidas hoje",
-                value: status.readsToday,
-                display: NUMBER.format(status.readsToday),
-                tone: status.readsToday >= status.dailyReads ? "attention" : "primary",
-              },
-              { key: "left", label: "Restam", value: left, display: NUMBER.format(left), tone: "empty" },
-            ]}
-            ariaLabel="Leituras da FlightAware hoje"
-          />
-        ) : (
-          <Alert severity="info" className="neutral bg-background-paper/60!">
-            A chave da FlightAware (FLIGHTAWARE_API_KEY) não está neste ambiente: nenhum voo é lido, nem o do chat de
-            teste.
-          </Alert>
-        )}
-
-        <MetricBars
-          whole={false}
-          items={[
-            { key: "real", label: "Viagens reais acompanhadas", value: status.followingReal },
-            { key: "test", label: "Voos de verdade em chats de teste", value: status.followingTest, tone: "secondary" },
-            {
-              key: "held",
-              label: "Avisos guardados sem liberação",
-              value: status.heldAlerts,
-              tone: status.heldAlerts > 0 ? "attention" : "empty",
-            },
-          ]}
+    <CollapsibleCard
+      id="flight-release"
+      title="Avisos de voo a passageiros reais"
+      chip={
+        <StatusChip
+          tone={status.released ? "positive" : "attention"}
+          label={status.released ? "Liberado" : "Bloqueado até a liberação"}
         />
+      }
+      summary={
+        sourceOn
+          ? `${NUMBER.format(status.readsToday)} de ${NUMBER.format(status.dailyReads)} leituras hoje · ${NUMBER.format(status.followingReal)} ${status.followingReal === 1 ? "viagem real acompanhada" : "viagens reais acompanhadas"}`
+          : "Sem a chave da FlightAware neste ambiente"
+      }
+      description="O ONE lê na FlightAware os voos que acompanha e, quando a regra encontra um problema, escreve primeiro ao passageiro. O chat de teste recebe sempre; um passageiro real só depois da liberação, dada aqui com a nota do parecer jurídico sobre captação de clientela (Código de Ética da OAB, art. 7º, e Provimento 205/2021)."
+      // Alerts kept for a real passenger wait for this card: they are what the operator comes to weigh.
+      defaultOpen={status.heldAlerts > 0}
+    >
+      {status.released || status.releasedNote ? (
+        <Typography variant="body2" className="text-text-secondary">
+          {status.released ? "Liberado" : "Bloqueado de novo"}
+          {status.releasedAt ? ` em ${WHEN.format(new Date(status.releasedAt))}` : ""}
+          {status.releasedBy ? ` por ${status.releasedBy}` : ""}
+          {status.releasedNote ? `: ${status.releasedNote}` : ""}
+        </Typography>
+      ) : null}
 
-        <Box>
-          <Button
-            variant={status.released ? "outlined" : "contained"}
-            color={status.released ? "grey" : "primary"}
-            onClick={() => setChanging(true)}
-          >
-            {status.released ? "Bloquear de novo" : "Liberar para passageiros reais"}
-          </Button>
-        </Box>
-      </CardContent>
+      {sourceOn ? (
+        <UsageMeter
+          headline={`${NUMBER.format(status.readsToday)} de ${NUMBER.format(status.dailyReads)} leituras hoje`}
+          caption="Cada trecho lido na FlightAware é cobrado. O teto diário é configuração da plataforma."
+          segments={[
+            {
+              key: "read",
+              label: "Lidas hoje",
+              value: status.readsToday,
+              display: NUMBER.format(status.readsToday),
+              tone: status.readsToday >= status.dailyReads ? "attention" : "primary",
+            },
+            { key: "left", label: "Restam", value: left, display: NUMBER.format(left), tone: "empty" },
+          ]}
+          ariaLabel="Leituras da FlightAware hoje"
+        />
+      ) : (
+        <Alert severity="info" className="neutral bg-background-paper/60!">
+          A chave da FlightAware (FLIGHTAWARE_API_KEY) não está neste ambiente: nenhum voo é lido, nem o do chat de
+          teste.
+        </Alert>
+      )}
+
+      <MetricBars
+        whole={false}
+        items={[
+          { key: "real", label: "Viagens reais acompanhadas", value: status.followingReal },
+          { key: "test", label: "Voos de verdade em chats de teste", value: status.followingTest, tone: "secondary" },
+          {
+            key: "held",
+            label: "Avisos guardados sem liberação",
+            value: status.heldAlerts,
+            tone: status.heldAlerts > 0 ? "attention" : "empty",
+          },
+        ]}
+      />
+
+      <Box>
+        <Button
+          variant={status.released ? "outlined" : "contained"}
+          color={status.released ? "grey" : "primary"}
+          onClick={() => setChanging(true)}
+        >
+          {status.released ? "Bloquear de novo" : "Liberar para passageiros reais"}
+        </Button>
+      </Box>
       {changing ? (
         <ReleaseDialog
           release={!status.released}
@@ -137,7 +125,7 @@ export default function FlightReleaseCard({
           }}
         />
       ) : null}
-    </Card>
+    </CollapsibleCard>
   );
 }
 

@@ -6,8 +6,9 @@ import { usePathname, useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
 
-import { Alert, Box, Button, Card, CardContent, Grid, MenuItem, TextField, Typography } from "@mui/material";
+import { Alert, Box, Button, Grid, MenuItem, TextField, Typography } from "@mui/material";
 
+import CollapsibleCard from "@/components/product/collapsible-card";
 import ConfirmActionDialog from "@/components/product/confirm-action-dialog";
 import EmptyState from "@/components/product/empty-state";
 import { CpfField } from "@/components/product/fields";
@@ -122,24 +123,19 @@ export default function CloudSignatureCard({
   if (!data) {
     return (
       <Grid size={12}>
-        <Card component="section" aria-labelledby="team-cloud-signature">
-          <CardContent className="flex flex-col gap-3">
-            <Typography id="team-cloud-signature" variant="h5" component="h2" className="mb-0">
-              {t("psc-title")}
-            </Typography>
-            <Alert
-              severity="error"
-              className="neutral bg-background-paper/60!"
-              action={
-                <Button color="inherit" size="small" onClick={onChanged}>
-                  {t("team-retry")}
-                </Button>
-              }
-            >
-              {t("psc-read-error")}
-            </Alert>
-          </CardContent>
-        </Card>
+        <CollapsibleCard id="team-cloud-signature" title={t("psc-title")} defaultOpen bodyClassName="gap-3">
+          <Alert
+            severity="error"
+            className="neutral bg-background-paper/60!"
+            action={
+              <Button color="inherit" size="small" onClick={onChanged}>
+                {t("team-retry")}
+              </Button>
+            }
+          >
+            {t("psc-read-error")}
+          </Alert>
+        </CollapsibleCard>
       </Grid>
     );
   }
@@ -307,269 +303,282 @@ export default function CloudSignatureCard({
     </Alert>
   ) : null;
 
+  // Closed, the card says whether ONE may sign now and at which provider, or, for who reads the team, how many
+  // colleagues it may sign for. It opens by itself on the provider's answer, on the way back to a case, and while
+  // an authorization fails.
+  const mineInForce = inForce[0] ?? null;
+  const teamInForce = data.team.filter((item) => item.state === "active" || item.state === "failing").length;
+  const failingNow = inForce.some((item) => item.state === "failing");
+  const summary = mayAuthorize
+    ? mineInForce
+      ? [mineInForce.pscName, mineInForce.untilLabel ? t("psc-until", { when: mineInForce.untilLabel }) : null]
+          .filter(Boolean)
+          .join(" · ")
+      : t("psc-mine-empty-title")
+    : teamInForce > 0
+      ? t("psc-summary-team", { count: teamInForce })
+      : t("psc-summary-team-none");
+
   return (
     <Grid size={12}>
-      <Card component="section" aria-labelledby="team-cloud-signature">
-        <CardContent className="flex flex-col gap-5">
-          <Box className="flex flex-col gap-1">
-            <Typography id="team-cloud-signature" variant="h5" component="h2" className="mb-0">
-              {t("psc-title")}
-            </Typography>
-            <Typography variant="body2" className="text-text-secondary max-w-3xl">
-              {mayAuthorize ? t("psc-body") : t("psc-body-reader")}
-            </Typography>
-          </Box>
+      <CollapsibleCard
+        id="team-cloud-signature"
+        title={t("psc-title")}
+        summary={summary}
+        chip={failingNow ? <StatusChip label={t(STATE.failing.key)} tone={STATE.failing.tone} /> : null}
+        description={mayAuthorize ? t("psc-body") : t("psc-body-reader")}
+        defaultOpen={Boolean(outcome) || Boolean(backToCase) || failingNow}
+        bodyClassName="gap-5"
+      >
+        {outcome ? (
+          <Alert
+            severity={OUTCOME_SEVERITY[outcome]}
+            className="neutral bg-background-paper/60!"
+            onClose={() => setOutcome(null)}
+            action={
+              backToCase && (outcome === "autorizada" || outcome === "teste-pendente") ? (
+                <Button color="inherit" size="small" href={`/casos/${backToCase}#case-filing`} LinkComponent={Link}>
+                  {t("psc-back-to-case")}
+                </Button>
+              ) : undefined
+            }
+          >
+            {t(SIGNATURE_OUTCOME_KEY[outcome])}
+          </Alert>
+        ) : null}
+        {errorCode ? (
+          <Alert severity="error" className="neutral bg-background-paper/60!" onClose={() => setErrorCode(null)}>
+            {t(signatureActionErrorKey(errorCode))}
+          </Alert>
+        ) : null}
+        {readOnly ? (
+          <Alert severity="info" className="neutral bg-background-paper/60!">
+            {t("psc-support-visit")}
+          </Alert>
+        ) : null}
 
-          {outcome ? (
-            <Alert
-              severity={OUTCOME_SEVERITY[outcome]}
-              className="neutral bg-background-paper/60!"
-              onClose={() => setOutcome(null)}
-              action={
-                backToCase && (outcome === "autorizada" || outcome === "teste-pendente") ? (
-                  <Button color="inherit" size="small" href={`/casos/${backToCase}#case-filing`} LinkComponent={Link}>
-                    {t("psc-back-to-case")}
-                  </Button>
-                ) : undefined
-              }
-            >
-              {t(SIGNATURE_OUTCOME_KEY[outcome])}
-            </Alert>
-          ) : null}
-          {errorCode ? (
-            <Alert severity="error" className="neutral bg-background-paper/60!" onClose={() => setErrorCode(null)}>
-              {t(signatureActionErrorKey(errorCode))}
-            </Alert>
-          ) : null}
-          {readOnly ? (
-            <Alert severity="info" className="neutral bg-background-paper/60!">
-              {t("psc-support-visit")}
-            </Alert>
-          ) : null}
-
-          {nothingHere ? (
-            <Alert severity="info" className="neutral bg-background-paper/60!">
-              {t("psc-none-offered")}
-            </Alert>
-          ) : (
-            <>
-              {mayAuthorize ? (
-                <Box className="flex flex-col gap-4">
-                  {data.mine.length > 0 ? (
-                    <Box component="ul" className="m-0 flex list-none flex-col p-0">
-                      {data.mine.map((item) => row(item, false))}
-                    </Box>
-                  ) : (
-                    <EmptyState
-                      icon={<NiPen size="large" />}
-                      title={t("psc-mine-empty-title")}
-                      description={t("psc-mine-empty-body")}
-                      titleAs="h3"
-                      className="py-8"
-                    />
-                  )}
-                  {inForce.length > 0 ? (
-                    <Typography variant="body2" className="text-text-secondary max-w-3xl">
-                      {t("psc-end-help")}
-                    </Typography>
-                  ) : null}
-
-                  {readOnly ? null : data.offers.length === 0 ? (
-                    <Alert severity="info" className="neutral bg-background-paper/60!">
-                      {t("psc-none-offered")}
-                    </Alert>
-                  ) : gated ? (
-                    secondFactorAlert
-                  ) : !data.declaredCpf || changingCpf ? (
-                    <Box className="flex flex-col gap-2">
-                      <Typography variant="subtitle1" component="h3" className="mb-0">
-                        {t("psc-cpf-title")}
-                      </Typography>
-                      <Typography variant="body2" className="text-text-secondary max-w-3xl">
-                        {t("psc-cpf-body")}
-                      </Typography>
-                      <Grid container spacing={3} className="items-start">
-                        <Grid size={{ xs: 12, sm: 5 }}>
-                          <CpfField
-                            fullWidth
-                            size="small"
-                            id="psc-cpf"
-                            label={t("psc-cpf-label")}
-                            value={cpf}
-                            disabled={busy !== null}
-                            invalidMessage={t("psc-action-invalid-cpf")}
-                            onChange={(event) => setCpf(event.target.value)}
-                          />
-                        </Grid>
-                        <Grid size={{ xs: 12, sm: "auto" }}>
-                          <Box className="flex flex-row flex-wrap gap-2">
-                            <Button
-                              variant="contained"
-                              disabled={busy !== null || onlyDigits(cpf).length !== 11}
-                              onClick={() => void declare()}
-                            >
-                              {busy === "cpf" ? t("psc-cpf-saving") : t("psc-cpf-save")}
-                            </Button>
-                            {changingCpf ? (
-                              <Button
-                                variant="text"
-                                color="grey"
-                                disabled={busy !== null}
-                                onClick={() => setChangingCpf(false)}
-                              >
-                                {t("team-certificate-cancel")}
-                              </Button>
-                            ) : null}
-                          </Box>
-                        </Grid>
-                      </Grid>
-                    </Box>
-                  ) : (
-                    <Box className="flex flex-col gap-3">
-                      <Box className="flex flex-row flex-wrap items-center gap-2">
-                        <Typography variant="body2" className="text-text-secondary">
-                          {t("psc-cpf-declared", { cpf: data.declaredCpf })}
-                        </Typography>
-                        {inForce.length === 0 ? (
-                          <Button variant="text" color="grey" size="small" onClick={() => setChangingCpf(true)}>
-                            {t("psc-cpf-change")}
-                          </Button>
-                        ) : null}
-                      </Box>
-                      <Grid container spacing={3} className="items-start">
-                        <Grid size={{ xs: 12, sm: 5 }}>
-                          <TextField
-                            select
-                            fullWidth
-                            size="small"
-                            id="psc-provider"
-                            label={t("psc-provider")}
-                            value={psc}
-                            disabled={busy !== null}
-                            onChange={(event) => setPsc(event.target.value)}
-                          >
-                            {data.offers.map((offer) => (
-                              <MenuItem key={offer.slug} value={offer.slug}>
-                                {offer.name}
-                              </MenuItem>
-                            ))}
-                          </TextField>
-                        </Grid>
-                        <Grid size={{ xs: 12, sm: 4 }}>
-                          <TextField
-                            select
-                            fullWidth
-                            size="small"
-                            id="psc-hours"
-                            label={t("psc-hours")}
-                            value={hours}
-                            disabled={busy !== null}
-                            onChange={(event) => setHours(Number(event.target.value) as SignatureHours)}
-                          >
-                            {SIGNATURE_HOURS.map((value) => (
-                              <MenuItem key={value} value={value}>
-                                {t(SIGNATURE_HOURS_KEY[value])}
-                              </MenuItem>
-                            ))}
-                          </TextField>
-                        </Grid>
-                        <Grid size={{ xs: 12, sm: 3 }}>
-                          <Button
-                            variant={inForce.length > 0 ? "outlined" : "contained"}
-                            color={inForce.length > 0 ? "grey" : "primary"}
-                            fullWidth
-                            disabled={busy !== null || !psc}
-                            onClick={() => void authorize()}
-                          >
-                            {busy === "authorize"
-                              ? t("psc-authorizing")
-                              : inForce.length > 0
-                                ? t("psc-authorize-again")
-                                : t("psc-authorize")}
-                          </Button>
-                        </Grid>
-                      </Grid>
-                    </Box>
-                  )}
-                </Box>
-              ) : null}
-
-              {readsTeam ? (
-                <Box className="flex flex-col gap-1">
-                  <Typography variant="subtitle1" component="h3" className="mb-0">
-                    {t("psc-team-title")}
-                  </Typography>
-                  <Typography variant="body2" className="text-text-secondary max-w-3xl">
-                    {t("psc-team-body")}
-                  </Typography>
-                  {data.team.length > 0 ? (
-                    <Box component="ul" className="m-0 flex list-none flex-col p-0">
-                      {data.team.map((item) => row(item, true))}
-                    </Box>
-                  ) : (
-                    <Typography variant="body2" className="text-text-secondary py-2">
-                      {t("psc-team-empty")}
-                    </Typography>
-                  )}
-                </Box>
-              ) : null}
-
-              <Box className="flex flex-col gap-1">
-                <Typography variant="subtitle1" component="h3" className="mb-0">
-                  {t("psc-uses-title")}
-                </Typography>
-                {data.uses.length === 0 ? (
-                  <Typography variant="body2" className="text-text-secondary">
-                    {t("psc-uses-empty")}
-                  </Typography>
+        {nothingHere ? (
+          <Alert severity="info" className="neutral bg-background-paper/60!">
+            {t("psc-none-offered")}
+          </Alert>
+        ) : (
+          <>
+            {mayAuthorize ? (
+              <Box className="flex flex-col gap-4">
+                {data.mine.length > 0 ? (
+                  <Box component="ul" className="m-0 flex list-none flex-col p-0">
+                    {data.mine.map((item) => row(item, false))}
+                  </Box>
                 ) : (
-                  <>
-                    <Typography variant="body2" className="text-text-secondary">
-                      {t("psc-uses-help")}
+                  <EmptyState
+                    icon={<NiPen size="large" />}
+                    title={t("psc-mine-empty-title")}
+                    description={t("psc-mine-empty-body")}
+                    titleAs="h3"
+                    className="py-8"
+                  />
+                )}
+                {inForce.length > 0 ? (
+                  <Typography variant="body2" className="text-text-secondary max-w-3xl">
+                    {t("psc-end-help")}
+                  </Typography>
+                ) : null}
+
+                {readOnly ? null : data.offers.length === 0 ? (
+                  <Alert severity="info" className="neutral bg-background-paper/60!">
+                    {t("psc-none-offered")}
+                  </Alert>
+                ) : gated ? (
+                  secondFactorAlert
+                ) : !data.declaredCpf || changingCpf ? (
+                  <Box className="flex flex-col gap-2">
+                    <Typography variant="subtitle1" component="h3" className="mb-0">
+                      {t("psc-cpf-title")}
                     </Typography>
-                    <Box component="ul" className="m-0 flex list-none flex-col p-0">
-                      {data.uses.map((use) => (
-                        <Box
-                          component="li"
-                          key={use.id}
-                          className="border-grey-100 flex flex-col gap-1 border-b py-2 last:border-b-0"
-                        >
-                          <Box className="flex flex-row flex-wrap items-center gap-3">
-                            <Typography variant="body2" component="p" className="mb-0 min-w-0 flex-1">
-                              {[
-                                t(USE_PURPOSE_KEY[use.purpose] ?? "psc-use-filing"),
-                                t("psc-use-files", { count: use.documents }),
-                                use.whenLabel,
-                                readsTeam && use.personName ? t("psc-use-by", { name: use.personName }) : null,
-                              ]
-                                .filter(Boolean)
-                                .join(" · ")}
-                              {use.caseId && use.caseSeq !== null ? (
-                                <>
-                                  {" · "}
-                                  <Link href={`/casos/${use.caseId}`} className="text-text-primary underline">
-                                    {t("psc-use-case", { seq: use.caseSeq })}
-                                  </Link>
-                                </>
-                              ) : null}
-                            </Typography>
-                            <StatusChip label={t(USE_STATE[use.status].key)} tone={USE_STATE[use.status].tone} />
-                          </Box>
-                          {use.status === "failed" ? (
-                            <Typography variant="body2" className="text-text-secondary">
-                              {t(signatureErrorKey(use.errorCode))}
-                            </Typography>
+                    <Typography variant="body2" className="text-text-secondary max-w-3xl">
+                      {t("psc-cpf-body")}
+                    </Typography>
+                    <Grid container spacing={3} className="items-start">
+                      <Grid size={{ xs: 12, sm: 5 }}>
+                        <CpfField
+                          fullWidth
+                          size="small"
+                          id="psc-cpf"
+                          label={t("psc-cpf-label")}
+                          value={cpf}
+                          disabled={busy !== null}
+                          invalidMessage={t("psc-action-invalid-cpf")}
+                          onChange={(event) => setCpf(event.target.value)}
+                        />
+                      </Grid>
+                      <Grid size={{ xs: 12, sm: "auto" }}>
+                        <Box className="flex flex-row flex-wrap gap-2">
+                          <Button
+                            variant="contained"
+                            disabled={busy !== null || onlyDigits(cpf).length !== 11}
+                            onClick={() => void declare()}
+                          >
+                            {busy === "cpf" ? t("psc-cpf-saving") : t("psc-cpf-save")}
+                          </Button>
+                          {changingCpf ? (
+                            <Button
+                              variant="text"
+                              color="grey"
+                              disabled={busy !== null}
+                              onClick={() => setChangingCpf(false)}
+                            >
+                              {t("team-certificate-cancel")}
+                            </Button>
                           ) : null}
                         </Box>
-                      ))}
+                      </Grid>
+                    </Grid>
+                  </Box>
+                ) : (
+                  <Box className="flex flex-col gap-3">
+                    <Box className="flex flex-row flex-wrap items-center gap-2">
+                      <Typography variant="body2" className="text-text-secondary">
+                        {t("psc-cpf-declared", { cpf: data.declaredCpf })}
+                      </Typography>
+                      {inForce.length === 0 ? (
+                        <Button variant="text" color="grey" size="small" onClick={() => setChangingCpf(true)}>
+                          {t("psc-cpf-change")}
+                        </Button>
+                      ) : null}
                     </Box>
-                  </>
+                    <Grid container spacing={3} className="items-start">
+                      <Grid size={{ xs: 12, sm: 5 }}>
+                        <TextField
+                          select
+                          fullWidth
+                          size="small"
+                          id="psc-provider"
+                          label={t("psc-provider")}
+                          value={psc}
+                          disabled={busy !== null}
+                          onChange={(event) => setPsc(event.target.value)}
+                        >
+                          {data.offers.map((offer) => (
+                            <MenuItem key={offer.slug} value={offer.slug}>
+                              {offer.name}
+                            </MenuItem>
+                          ))}
+                        </TextField>
+                      </Grid>
+                      <Grid size={{ xs: 12, sm: 4 }}>
+                        <TextField
+                          select
+                          fullWidth
+                          size="small"
+                          id="psc-hours"
+                          label={t("psc-hours")}
+                          value={hours}
+                          disabled={busy !== null}
+                          onChange={(event) => setHours(Number(event.target.value) as SignatureHours)}
+                        >
+                          {SIGNATURE_HOURS.map((value) => (
+                            <MenuItem key={value} value={value}>
+                              {t(SIGNATURE_HOURS_KEY[value])}
+                            </MenuItem>
+                          ))}
+                        </TextField>
+                      </Grid>
+                      <Grid size={{ xs: 12, sm: 3 }}>
+                        <Button
+                          variant={inForce.length > 0 ? "outlined" : "contained"}
+                          color={inForce.length > 0 ? "grey" : "primary"}
+                          fullWidth
+                          disabled={busy !== null || !psc}
+                          onClick={() => void authorize()}
+                        >
+                          {busy === "authorize"
+                            ? t("psc-authorizing")
+                            : inForce.length > 0
+                              ? t("psc-authorize-again")
+                              : t("psc-authorize")}
+                        </Button>
+                      </Grid>
+                    </Grid>
+                  </Box>
                 )}
               </Box>
-            </>
-          )}
-        </CardContent>
-      </Card>
+            ) : null}
+
+            {readsTeam ? (
+              <Box className="flex flex-col gap-1">
+                <Typography variant="subtitle1" component="h3" className="mb-0">
+                  {t("psc-team-title")}
+                </Typography>
+                <Typography variant="body2" className="text-text-secondary max-w-3xl">
+                  {t("psc-team-body")}
+                </Typography>
+                {data.team.length > 0 ? (
+                  <Box component="ul" className="m-0 flex list-none flex-col p-0">
+                    {data.team.map((item) => row(item, true))}
+                  </Box>
+                ) : (
+                  <Typography variant="body2" className="text-text-secondary py-2">
+                    {t("psc-team-empty")}
+                  </Typography>
+                )}
+              </Box>
+            ) : null}
+
+            <Box className="flex flex-col gap-1">
+              <Typography variant="subtitle1" component="h3" className="mb-0">
+                {t("psc-uses-title")}
+              </Typography>
+              {data.uses.length === 0 ? (
+                <Typography variant="body2" className="text-text-secondary">
+                  {t("psc-uses-empty")}
+                </Typography>
+              ) : (
+                <>
+                  <Typography variant="body2" className="text-text-secondary">
+                    {t("psc-uses-help")}
+                  </Typography>
+                  <Box component="ul" className="m-0 flex list-none flex-col p-0">
+                    {data.uses.map((use) => (
+                      <Box
+                        component="li"
+                        key={use.id}
+                        className="border-grey-100 flex flex-col gap-1 border-b py-2 last:border-b-0"
+                      >
+                        <Box className="flex flex-row flex-wrap items-center gap-3">
+                          <Typography variant="body2" component="p" className="mb-0 min-w-0 flex-1">
+                            {[
+                              t(USE_PURPOSE_KEY[use.purpose] ?? "psc-use-filing"),
+                              t("psc-use-files", { count: use.documents }),
+                              use.whenLabel,
+                              readsTeam && use.personName ? t("psc-use-by", { name: use.personName }) : null,
+                            ]
+                              .filter(Boolean)
+                              .join(" · ")}
+                            {use.caseId && use.caseSeq !== null ? (
+                              <>
+                                {" · "}
+                                <Link href={`/casos/${use.caseId}`} className="text-text-primary underline">
+                                  {t("psc-use-case", { seq: use.caseSeq })}
+                                </Link>
+                              </>
+                            ) : null}
+                          </Typography>
+                          <StatusChip label={t(USE_STATE[use.status].key)} tone={USE_STATE[use.status].tone} />
+                        </Box>
+                        {use.status === "failed" ? (
+                          <Typography variant="body2" className="text-text-secondary">
+                            {t(signatureErrorKey(use.errorCode))}
+                          </Typography>
+                        ) : null}
+                      </Box>
+                    ))}
+                  </Box>
+                </>
+              )}
+            </Box>
+          </>
+        )}
+      </CollapsibleCard>
 
       {ending ? (
         <ConfirmActionDialog

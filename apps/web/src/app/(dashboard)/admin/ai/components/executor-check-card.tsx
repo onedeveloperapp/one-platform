@@ -3,8 +3,9 @@
 import { runExecutorCheck } from "../actions";
 import { useState } from "react";
 
-import { Alert, Autocomplete, Box, Button, Card, CardContent, TextField, Typography } from "@mui/material";
+import { Alert, Autocomplete, Box, Button, TextField, Typography } from "@mui/material";
 
+import CollapsibleCard from "@/components/product/collapsible-card";
 import ConfirmActionDialog from "@/components/product/confirm-action-dialog";
 import NiPlay from "@/icons/nexture/ni-play";
 import {
@@ -117,82 +118,79 @@ export default function ExecutorCheckCard({
   };
 
   return (
-    <Card component="section" aria-labelledby="ai-executor-check">
-      <CardContent className="flex flex-col gap-4">
-        <Box className="flex flex-col gap-1">
-          <Typography id="ai-executor-check" variant="h5" component="h2" className="mb-0">
-            Verificação do executor
-          </Typography>
-          <Typography variant="body1" className="text-text-secondary max-w-3xl">
-            Faz uma pergunta fixa ao modelo, sem nenhum dado de cliente, em nome de um escritório. Serve para ver o
-            caminho inteiro funcionar ali: as instruções em vigor, a chamada, o custo lançado na conta do escritório e a
-            resposta na fila de aprovações dele.
-          </Typography>
-        </Box>
+    <CollapsibleCard
+      id="ai-executor-check"
+      title="Verificação do executor"
+      summary={
+        blocked ??
+        (provider === "missing"
+          ? "O provedor desta tarefa não tem chave neste ambiente"
+          : `Pergunta fixa a ${model}, em nome de um escritório`)
+      }
+      description="Faz uma pergunta fixa ao modelo, sem nenhum dado de cliente, em nome de um escritório. Serve para ver o caminho inteiro funcionar ali: as instruções em vigor, a chamada, o custo lançado na conta do escritório e a resposta na fila de aprovações dele."
+    >
+      {blocked ? (
+        <Alert severity="info" className="neutral bg-background-paper/60!">
+          {blocked}
+        </Alert>
+      ) : null}
 
-        {blocked ? (
-          <Alert severity="info" className="neutral bg-background-paper/60!">
-            {blocked}
-          </Alert>
-        ) : null}
+      {provider === "missing" ? (
+        <Alert severity="warning" className="neutral bg-background-paper/60!">
+          O provedor desta tarefa ({task?.provider}) não tem chave neste ambiente. A verificação pode ser rodada, e vai
+          ficar registrada como falha, sem custo.
+        </Alert>
+      ) : null}
 
-        {provider === "missing" ? (
-          <Alert severity="warning" className="neutral bg-background-paper/60!">
-            O provedor desta tarefa ({task?.provider}) não tem chave neste ambiente. A verificação pode ser rodada, e
-            vai ficar registrada como falha, sem custo.
-          </Alert>
-        ) : null}
+      <Box className="flex flex-col gap-3 md:flex-row md:items-start">
+        <Autocomplete
+          className="md:min-w-96"
+          options={firms}
+          value={firm}
+          onChange={(_, value) => {
+            setFirm(value);
+            setOutcome(null);
+          }}
+          getOptionLabel={(option) => option.name}
+          getOptionKey={(option) => option.id}
+          isOptionEqualToValue={(option, value) => option.id === value.id}
+          noOptionsText="Nenhum escritório com este nome"
+          disabled={Boolean(blocked)}
+          renderInput={(params) => (
+            <TextField
+              {...params}
+              label="Escritório"
+              size="small"
+              helperText={
+                firms.length >= FIRM_CHOICE_LIMIT
+                  ? `A lista mostra os primeiros ${FIRM_CHOICE_LIMIT} escritórios em ordem alfabética.`
+                  : undefined
+              }
+            />
+          )}
+        />
+        <Button
+          variant="contained"
+          startIcon={<NiPlay size="medium" />}
+          disabled={Boolean(blocked) || !firm}
+          onClick={() => setConfirming(true)}
+          className="flex-none"
+        >
+          Rodar a verificação
+        </Button>
+      </Box>
 
-        <Box className="flex flex-col gap-3 md:flex-row md:items-start">
-          <Autocomplete
-            className="md:min-w-96"
-            options={firms}
-            value={firm}
-            onChange={(_, value) => {
-              setFirm(value);
-              setOutcome(null);
-            }}
-            getOptionLabel={(option) => option.name}
-            getOptionKey={(option) => option.id}
-            isOptionEqualToValue={(option, value) => option.id === value.id}
-            noOptionsText="Nenhum escritório com este nome"
-            disabled={Boolean(blocked)}
-            renderInput={(params) => (
-              <TextField
-                {...params}
-                label="Escritório"
-                size="small"
-                helperText={
-                  firms.length >= FIRM_CHOICE_LIMIT
-                    ? `A lista mostra os primeiros ${FIRM_CHOICE_LIMIT} escritórios em ordem alfabética.`
-                    : undefined
-                }
-              />
-            )}
-          />
-          <Button
-            variant="contained"
-            startIcon={<NiPlay size="medium" />}
-            disabled={Boolean(blocked) || !firm}
-            onClick={() => setConfirming(true)}
-            className="flex-none"
-          >
-            Rodar a verificação
-          </Button>
-        </Box>
+      {firms.length === 0 && !blocked ? (
+        <Typography variant="body2" className="text-text-secondary">
+          Nenhum escritório foi fundado ainda. A verificação precisa de um para lançar o custo e receber a resposta.
+        </Typography>
+      ) : null}
 
-        {firms.length === 0 && !blocked ? (
-          <Typography variant="body2" className="text-text-secondary">
-            Nenhum escritório foi fundado ainda. A verificação precisa de um para lançar o custo e receber a resposta.
-          </Typography>
-        ) : null}
-
-        {outcome ? (
-          <Alert severity={outcome.tone} className="neutral bg-background-paper/60!" role="status">
-            {outcome.text}
-          </Alert>
-        ) : null}
-      </CardContent>
+      {outcome ? (
+        <Alert severity={outcome.tone} className="neutral bg-background-paper/60!" role="status">
+          {outcome.text}
+        </Alert>
+      ) : null}
 
       {confirming && firm ? (
         <ConfirmActionDialog
@@ -221,6 +219,6 @@ export default function ExecutorCheckCard({
           onClose={() => setConfirming(false)}
         />
       ) : null}
-    </Card>
+    </CollapsibleCard>
   );
 }

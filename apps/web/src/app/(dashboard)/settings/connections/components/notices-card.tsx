@@ -7,8 +7,6 @@ import {
   Alert,
   Box,
   Button,
-  Card,
-  CardContent,
   Dialog,
   DialogActions,
   DialogContent,
@@ -19,6 +17,7 @@ import {
   Typography,
 } from "@mui/material";
 
+import CollapsibleCard from "@/components/product/collapsible-card";
 import DialogHeader from "@/components/product/dialog-header";
 import StatusChip, { type StatusTone } from "@/components/product/status-chip";
 import UsageMeter from "@/components/product/usage-meter";
@@ -113,22 +112,32 @@ export default function NoticesCard({
     }
   };
 
+  // How the kinds stand: how many are on, and how many keep a client from being told (refused, paused, not a
+  // utility message, or on and still not going out). The closed card says it, and opens while some do.
+  const states = notices.kinds.map((kind) => kindState(kind));
+  const on = states.filter((state) => state === "on").length;
+  const troubled = notices.kinds.filter(
+    (kind, index) =>
+      states[index] === "refused" ||
+      states[index] === "paused" ||
+      states[index] === "not_utility" ||
+      (kind.enabled && Boolean(kind.blocker) && kind.blocker !== "kind_off"),
+  ).length;
+
+  // Inside another screen's flow the section carries its own heading; on this screen the card's header is it.
+  const header = (
+    <Box className="flex flex-col gap-1">
+      <Typography id="connections-notices" variant="subtitle2" component="h3" className="mb-0">
+        {t("notices-title")}
+      </Typography>
+      <Typography variant="body2" className="text-text-secondary max-w-3xl">
+        {t("notices-body")}
+      </Typography>
+    </Box>
+  );
+
   const content = (
     <>
-      <Box className="flex flex-col gap-1">
-        <Typography
-          id="connections-notices"
-          variant={embedded ? "subtitle2" : "h5"}
-          component={embedded ? "h3" : "h2"}
-          className="mb-0"
-        >
-          {t("notices-title")}
-        </Typography>
-        <Typography variant="body2" className="text-text-secondary max-w-3xl">
-          {t("notices-body")}
-        </Typography>
-      </Box>
-
       {notices.accounts === 0 ? (
         <Alert severity="info" className="neutral bg-background-paper/60!">
           {t("notices-no-number")}
@@ -237,6 +246,7 @@ export default function NoticesCard({
   if (embedded) {
     return (
       <Box component="section" id="avisos" aria-labelledby="connections-notices" className="flex flex-col gap-4">
+        {header}
         {content}
         {dialog}
       </Box>
@@ -244,9 +254,21 @@ export default function NoticesCard({
   }
   return (
     <Grid size={12}>
-      <Card component="section" id="avisos" aria-labelledby="connections-notices">
-        <CardContent className="flex flex-col gap-4">{content}</CardContent>
-      </Card>
+      <CollapsibleCard
+        id="connections-notices"
+        anchor="avisos"
+        title={t("notices-title")}
+        summary={on > 0 ? t("notices-summary", { on, total: notices.kinds.length }) : t("notices-summary-none")}
+        chip={
+          troubled > 0 ? (
+            <StatusChip tone="attention" label={t("notices-summary-troubled", { count: troubled })} />
+          ) : null
+        }
+        description={t("notices-body")}
+        defaultOpen={troubled > 0}
+      >
+        {content}
+      </CollapsibleCard>
       {dialog}
     </Grid>
   );

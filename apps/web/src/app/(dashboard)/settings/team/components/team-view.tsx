@@ -126,7 +126,7 @@ export default function TeamView({ state }: { state: TeamState }) {
           <>
             <PeopleCard data={ready} onChanged={refresh} onInvite={() => setInviting(true)} />
             {manager && <InvitationsCard data={ready} onChanged={refresh} onInvite={() => setInviting(true)} />}
-            <OabCard registrations={ready.myOab} onChanged={refresh} />
+            <OabCard registrations={ready.myOab} lawyer={lawyer} onChanged={refresh} />
             {lawyer && <CertificatesCard entries={ready.myCertificates} today={ready.today} onChanged={refresh} />}
             {(lawyer || readsTeamSignatures) && (
               <CloudSignatureCard

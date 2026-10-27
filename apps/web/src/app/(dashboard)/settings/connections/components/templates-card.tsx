@@ -3,8 +3,9 @@
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 
-import { Alert, Box, Button, Card, CardContent, Grid, Typography } from "@mui/material";
+import { Alert, Box, Button, Grid, Typography } from "@mui/material";
 
+import CollapsibleCard from "@/components/product/collapsible-card";
 import EmptyState from "@/components/product/empty-state";
 import StatusChip from "@/components/product/status-chip";
 import NiMessage from "@/icons/nexture/ni-message";
@@ -49,104 +50,123 @@ export default function TemplatesCard({
     onChanged();
   };
 
+  // How the account's templates stand by what the vendor decided: what the closed card says of them. A refused one
+  // opens it, and so does an account with none, whose card is where they are read again.
+  const byStatus = (status: string) => templates.filter((template) => template.status === status).length;
+  const approved = byStatus("approved");
+  const reviewing = byStatus("pending");
+  const refused = byStatus("rejected");
+  const stopped = templates.length - approved - reviewing - refused;
+
   return (
     <Grid size={12}>
-      <Card component="section" aria-labelledby="connections-templates">
-        <CardContent className="flex flex-col gap-4">
-          <Box className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between md:gap-4">
-            <Box className="flex min-w-0 flex-col gap-1">
-              <Typography id="connections-templates" variant="h5" component="h2" className="mb-0">
-                {t("connections-templates-title")}
-              </Typography>
-              <Typography variant="body2" className="text-text-secondary max-w-3xl">
-                {t("connections-templates-body")}
-              </Typography>
-            </Box>
-            <Button
-              variant="outlined"
-              color="grey"
-              startIcon={<NiRefresh size="medium" />}
-              onClick={() => void sync()}
-              disabled={busy || readOnly}
-              className="flex-none"
-            >
-              {busy ? t("connections-working") : t("connections-templates-sync")}
-            </Button>
-          </Box>
+      <CollapsibleCard
+        id="connections-templates"
+        title={t("connections-templates-title")}
+        summary={
+          templates.length === 0
+            ? t("connections-templates-empty-title")
+            : [
+                t("connections-templates-summary", { count: templates.length }),
+                approved > 0 ? t("connections-templates-summary-approved", { count: approved }) : null,
+                reviewing > 0 ? t("connections-templates-summary-pending", { count: reviewing }) : null,
+                stopped > 0 ? t("connections-templates-summary-stopped", { count: stopped }) : null,
+              ]
+                .filter(Boolean)
+                .join(" · ")
+        }
+        chip={
+          refused > 0 ? (
+            <StatusChip label={t("connections-templates-summary-rejected", { count: refused })} tone="danger" />
+          ) : null
+        }
+        description={t("connections-templates-body")}
+        action={
+          <Button
+            variant="outlined"
+            color="grey"
+            startIcon={<NiRefresh size="medium" />}
+            onClick={() => void sync()}
+            disabled={busy || readOnly}
+          >
+            {busy ? t("connections-working") : t("connections-templates-sync")}
+          </Button>
+        }
+        defaultOpen={templates.length === 0 || refused > 0}
+      >
+        {status?.kind === "synced" ? (
+          <Alert
+            severity="success"
+            role="status"
+            className="neutral bg-background-paper/60!"
+            onClose={() => setStatus(null)}
+          >
+            {t("connections-templates-synced")}
+          </Alert>
+        ) : null}
+        {status?.kind === "error" ? (
+          <Alert severity="error" className="neutral bg-background-paper/60!">
+            {t(connectErrorKey(status.code))}
+          </Alert>
+        ) : null}
 
-          {status?.kind === "synced" ? (
-            <Alert
-              severity="success"
-              role="status"
-              className="neutral bg-background-paper/60!"
-              onClose={() => setStatus(null)}
-            >
-              {t("connections-templates-synced")}
-            </Alert>
-          ) : null}
-          {status?.kind === "error" ? (
-            <Alert severity="error" className="neutral bg-background-paper/60!">
-              {t(connectErrorKey(status.code))}
-            </Alert>
-          ) : null}
-
-          {templates.length === 0 ? (
-            <EmptyState
-              icon={<NiMessage size="large" />}
-              title={t("connections-templates-empty-title")}
-              description={t("connections-templates-empty-body")}
-              action={readOnly ? undefined : { label: t("connections-templates-sync"), onClick: () => void sync() }}
-            />
-          ) : (
-            <Box component="ul" className="m-0 flex list-none flex-col p-0">
-              {templates.map((template) => {
-                const state = templateStatus(template.status);
-                const findings = checkTemplate({
-                  name: template.name,
-                  category: template.category,
-                  body: template.body,
-                  headerText: template.headerText,
-                  footerText: template.footerText,
-                })
-                  .filter((finding) => finding.severity === "warning")
-                  .flatMap((finding) => {
-                    const key = findingKey(finding.code);
-                    return key ? [key] : [];
-                  });
-                return (
-                  <Box
-                    component="li"
-                    key={template.id}
-                    className="border-grey-100 flex flex-col gap-2 border-b py-3 last:border-b-0"
-                  >
-                    <Box className="flex flex-row flex-wrap items-center gap-2">
-                      <Typography variant="subtitle2" component="p" className="min-w-0 flex-1 break-all">
-                        {template.name}
-                      </Typography>
-                      <StatusChip label={t(state.key)} tone={state.tone} />
-                    </Box>
-                    <Typography variant="body1" className="text-text-primary whitespace-pre-wrap">
-                      {[template.headerText, template.body, template.footerText].filter(Boolean).join("\n\n")}
+        {templates.length === 0 ? (
+          <EmptyState
+            titleAs="h3"
+            icon={<NiMessage size="large" />}
+            title={t("connections-templates-empty-title")}
+            description={t("connections-templates-empty-body")}
+            action={readOnly ? undefined : { label: t("connections-templates-sync"), onClick: () => void sync() }}
+          />
+        ) : (
+          <Box component="ul" className="m-0 flex list-none flex-col p-0">
+            {templates.map((template) => {
+              const state = templateStatus(template.status);
+              const findings = checkTemplate({
+                name: template.name,
+                category: template.category,
+                body: template.body,
+                headerText: template.headerText,
+                footerText: template.footerText,
+              })
+                .filter((finding) => finding.severity === "warning")
+                .flatMap((finding) => {
+                  const key = findingKey(finding.code);
+                  return key ? [key] : [];
+                });
+              return (
+                <Box
+                  component="li"
+                  key={template.id}
+                  className="border-grey-100 flex flex-col gap-2 border-b py-3 last:border-b-0"
+                >
+                  <Box className="flex flex-row flex-wrap items-center gap-2">
+                    <Typography variant="subtitle2" component="p" className="min-w-0 flex-1 break-all">
+                      {template.name}
                     </Typography>
-                    {findings.length > 0 ? (
-                      <Box className="flex flex-col gap-1">
-                        <Typography variant="body2" className="text-text-secondary">
-                          {t("connections-findings-intro")}
-                        </Typography>
-                        <Box className="flex flex-row flex-wrap gap-1.5">
-                          {findings.map((key) => (
-                            <StatusChip key={key} label={t(key)} tone="attention" />
-                          ))}
-                        </Box>
-                      </Box>
-                    ) : null}
+                    <StatusChip label={t(state.key)} tone={state.tone} />
                   </Box>
-                );
-              })}
-            </Box>
-          )}
-        </CardContent>
-      </Card>
+                  <Typography variant="body1" className="text-text-primary whitespace-pre-wrap">
+                    {[template.headerText, template.body, template.footerText].filter(Boolean).join("\n\n")}
+                  </Typography>
+                  {findings.length > 0 ? (
+                    <Box className="flex flex-col gap-1">
+                      <Typography variant="body2" className="text-text-secondary">
+                        {t("connections-findings-intro")}
+                      </Typography>
+                      <Box className="flex flex-row flex-wrap gap-1.5">
+                        {findings.map((key) => (
+                          <StatusChip key={key} label={t(key)} tone="attention" />
+                        ))}
+                      </Box>
+                    </Box>
+                  ) : null}
+                </Box>
+              );
+            })}
+          </Box>
+        )}
+      </CollapsibleCard>
     </Grid>
   );
 }

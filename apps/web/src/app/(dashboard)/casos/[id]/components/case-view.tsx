@@ -27,7 +27,7 @@ import { useCallback, useState } from "react";
 
 import { Alert, Box, Button, Card, CardContent, Grid, Typography } from "@mui/material";
 
-import { CollapsibleGroup, useCollapsibleGroup } from "@/components/product/collapsible-card";
+import { CollapsibleGroup, CollapsibleGroupToggle } from "@/components/product/collapsible-card";
 import EmptyState from "@/components/product/empty-state";
 import PageHeader from "@/components/product/page-header";
 import StatusChip from "@/components/product/status-chip";
@@ -66,9 +66,6 @@ export default function CaseView({ state: read }: { state: CaseState }) {
   const router = useRouter();
   const [staging, setStaging] = useState(false);
   const refresh = useCallback(() => router.refresh(), [router]);
-  // Each card opens by itself when the case's stage is about it or something in it waits for a person; the
-  // person may open or close every one at once to read the whole case.
-  const sections = useCollapsibleGroup();
   // The case as it was last read whole. A card of this screen asks again by itself while the backend works
   // (a piece being written, a document being checked): one of those reads that fails must not take the
   // screen away from a person who is in the middle of a text.
@@ -208,12 +205,10 @@ export default function CaseView({ state: read }: { state: CaseState }) {
         />
       ) : null}
 
-      <CollapsibleGroup command={sections.command}>
-        <Box className="-mb-3 flex justify-end">
-          <Button variant="text" color="grey" size="small" onClick={() => sections.setAll(!sections.allOpen)}>
-            {sections.allOpen ? t("case-sections-close-all") : t("case-sections-open-all")}
-          </Button>
-        </Box>
+      {/* Each card opens by itself when the case's stage is about it or something in it waits for a person; the
+          person may open or close every one at once to read the whole case. */}
+      <CollapsibleGroup>
+        <CollapsibleGroupToggle className="-mb-3" />
         <Grid container spacing={3}>
           <Grid size={{ xs: 12, lg: 8 }} className="flex flex-col gap-3">
             {showMissing && (

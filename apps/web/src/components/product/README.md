@@ -8,7 +8,7 @@ Building blocks for the authenticated app (dashboard/product screens) — the co
 - `ActivationProgress` — completion-drive ring (Gestalt closure). The one research-backed gamification pattern — no points/badges/streaks.
 - `SetupWizard` — multi-step setup shell (progressive disclosure): one decision per screen with a visible progress rail, so long setups don't feel long.
 - `MessageBubble` — one message of a conversation, on the side of who said it.
-- `CollapsibleCard` — a card of a long screen of many cards that a person opens when they need it: closed, it says where things stand in one line and, with a StatusChip, what waits for a person; `CollapsibleGroup` opens or closes them all at once. The case screen opens on arrival only the cards of the stage and the ones where something waits (`lib/cases/sections.ts`).
+- `CollapsibleCard` — a card of a long screen of many cards that a person opens when they need it: closed, it says where things stand in one line and, with a StatusChip, what waits for a person; `CollapsibleGroup` opens or closes them all at once. The case screen opens on arrival only the cards of the stage and the ones where something waits (`lib/cases/sections.ts`); `/settings/autonomia`, `/settings/team`, `/settings/connections` and `/admin/ai` use it the same way.
 
 ## Where the setup checklist is wired
 

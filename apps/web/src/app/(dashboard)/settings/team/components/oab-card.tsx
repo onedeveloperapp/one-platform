@@ -8,8 +8,6 @@ import {
   Alert,
   Box,
   Button,
-  Card,
-  CardContent,
   FormControl,
   FormControlLabel,
   FormHelperText,
@@ -23,6 +21,7 @@ import {
   Typography,
 } from "@mui/material";
 
+import CollapsibleCard from "@/components/product/collapsible-card";
 import EmptyState from "@/components/product/empty-state";
 import StatusChip from "@/components/product/status-chip";
 import NiScale from "@/icons/nexture/ni-scale";
@@ -48,9 +47,12 @@ const KIND_LABEL_KEY: Record<OabRegistration["kind"], string> = {
  */
 export default function OabCard({
   registrations,
+  lawyer,
   onChanged,
 }: {
   registrations: OabRegistration[];
+  /** The person signs or files: without a registration, nothing the courts publish in their name is found. */
+  lawyer: boolean;
   onChanged: () => void;
 }) {
   const t = useTranslations("product");
@@ -106,165 +108,168 @@ export default function OabCard({
 
   return (
     <Grid size={12}>
-      <Card component="section" aria-labelledby="team-oab">
-        <CardContent className="flex flex-col gap-5">
-          <Box className="flex flex-col gap-1">
-            <Typography id="team-oab" variant="h5" component="h2" className="mb-0">
-              {t("team-oab-title")}
-            </Typography>
-            <Typography variant="body2" className="text-text-secondary">
-              {t("team-oab-body")}
-            </Typography>
+      <CollapsibleCard
+        id="team-oab"
+        title={t("team-oab-title")}
+        summary={
+          registrations.length === 0
+            ? t("team-oab-empty-title")
+            : registrations
+                .map((registration) => `${formatOab(registration)} (${t(KIND_LABEL_KEY[registration.kind])})`)
+                .join(", ")
+        }
+        description={t("team-oab-body")}
+        defaultOpen={lawyer && registrations.length === 0}
+        bodyClassName="gap-5"
+      >
+        {registrations.length === 0 && !adding ? (
+          <EmptyState
+            titleAs="h3"
+            icon={<NiScale size="large" />}
+            title={t("team-oab-empty-title")}
+            description={t("team-oab-empty-body")}
+            action={{ label: t("team-oab-add"), onClick: startAdding }}
+            className="py-10"
+          />
+        ) : (
+          <Box component="ul" className="m-0 flex list-none flex-col p-0">
+            {registrations.map((registration) => (
+              <Box
+                component="li"
+                key={registration.id}
+                className="border-grey-100 flex flex-row flex-wrap items-center gap-3 border-b py-3 last:border-b-0"
+              >
+                <Typography variant="subtitle2" component="p" className="flex-1">
+                  {formatOab(registration)}
+                </Typography>
+                <StatusChip
+                  label={t(KIND_LABEL_KEY[registration.kind])}
+                  tone={registration.kind === "principal" ? "primary" : "neutral"}
+                />
+                <Button
+                  variant="text"
+                  color="grey"
+                  size="small"
+                  onClick={() => void remove(registration)}
+                  disabled={busy}
+                >
+                  {t("team-oab-remove")}
+                </Button>
+              </Box>
+            ))}
           </Box>
+        )}
 
-          {registrations.length === 0 && !adding ? (
-            <EmptyState
-              icon={<NiScale size="large" />}
-              title={t("team-oab-empty-title")}
-              description={t("team-oab-empty-body")}
-              action={{ label: t("team-oab-add"), onClick: startAdding }}
-              className="py-10"
-            />
-          ) : (
-            <Box component="ul" className="m-0 flex list-none flex-col p-0">
-              {registrations.map((registration) => (
-                <Box
-                  component="li"
-                  key={registration.id}
-                  className="border-grey-100 flex flex-row flex-wrap items-center gap-3 border-b py-3 last:border-b-0"
-                >
-                  <Typography variant="subtitle2" component="p" className="flex-1">
-                    {formatOab(registration)}
-                  </Typography>
-                  <StatusChip
-                    label={t(KIND_LABEL_KEY[registration.kind])}
-                    tone={registration.kind === "principal" ? "primary" : "neutral"}
-                  />
-                  <Button
-                    variant="text"
-                    color="grey"
-                    size="small"
-                    onClick={() => void remove(registration)}
+        {adding && (
+          <Box className="flex flex-col gap-3">
+            <Grid container spacing={3}>
+              <Grid size={{ xs: 12, sm: 4 }}>
+                <FormControl fullWidth className="outlined" variant="standard" error={touched && !uf}>
+                  <FormLabel component="label" htmlFor="team-oab-uf" id="team-oab-uf-label">
+                    {t("team-oab-uf")}
+                  </FormLabel>
+                  <Select
+                    id="team-oab-uf-select"
+                    labelId="team-oab-uf-label"
+                    inputProps={{ id: "team-oab-uf" }}
+                    value={uf}
+                    displayEmpty
+                    onChange={(event) => setUf(String(event.target.value))}
                     disabled={busy}
                   >
-                    {t("team-oab-remove")}
-                  </Button>
-                </Box>
-              ))}
-            </Box>
-          )}
-
-          {adding && (
-            <Box className="flex flex-col gap-3">
-              <Grid container spacing={3}>
-                <Grid size={{ xs: 12, sm: 4 }}>
-                  <FormControl fullWidth className="outlined" variant="standard" error={touched && !uf}>
-                    <FormLabel component="label" htmlFor="team-oab-uf" id="team-oab-uf-label">
-                      {t("team-oab-uf")}
-                    </FormLabel>
-                    <Select
-                      id="team-oab-uf-select"
-                      labelId="team-oab-uf-label"
-                      inputProps={{ id: "team-oab-uf" }}
-                      value={uf}
-                      displayEmpty
-                      onChange={(event) => setUf(String(event.target.value))}
-                      disabled={busy}
-                    >
-                      <MenuItem value="" disabled>
-                        {t("team-oab-uf-placeholder")}
+                    <MenuItem value="" disabled>
+                      {t("team-oab-uf-placeholder")}
+                    </MenuItem>
+                    {OAB_STATES.map((state) => (
+                      <MenuItem key={state} value={state} disabled={taken.has(state)}>
+                        {state}
                       </MenuItem>
-                      {OAB_STATES.map((state) => (
-                        <MenuItem key={state} value={state} disabled={taken.has(state)}>
-                          {state}
-                        </MenuItem>
-                      ))}
-                    </Select>
-                    {touched && !uf ? <FormHelperText>{t("team-oab-uf-required")}</FormHelperText> : null}
-                  </FormControl>
-                </Grid>
-                <Grid size={{ xs: 12, sm: 8 }}>
-                  <FormControl
-                    fullWidth
-                    className="outlined"
-                    variant="standard"
-                    error={(touched || number.length > 0) && !numberOk}
-                  >
-                    <FormLabel component="label" htmlFor="team-oab-number">
-                      {t("team-oab-number")}
-                    </FormLabel>
-                    <Input
-                      id="team-oab-number"
-                      value={number}
-                      inputMode="numeric"
-                      autoComplete="off"
-                      onChange={(event) => setNumber(event.target.value)}
-                      onBlur={() => setTouched(true)}
-                      disabled={busy}
-                      aria-describedby="team-oab-number-help"
-                    />
-                    <FormHelperText id="team-oab-number-help">
-                      {(touched || number.length > 0) && !numberOk
-                        ? t("team-error-oab-invalid")
-                        : t("team-oab-number-help")}
-                    </FormHelperText>
-                  </FormControl>
-                </Grid>
+                    ))}
+                  </Select>
+                  {touched && !uf ? <FormHelperText>{t("team-oab-uf-required")}</FormHelperText> : null}
+                </FormControl>
               </Grid>
-
-              <FormControl component="fieldset">
-                <FormLabel component="legend" id="team-oab-kind" className="mb-1">
-                  {t("team-oab-kind")}
-                </FormLabel>
-                <RadioGroup
-                  row
-                  className="gap-x-6"
-                  aria-labelledby="team-oab-kind"
-                  value={kind}
-                  onChange={(event) => setKind(event.target.value === "principal" ? "principal" : "suplementar")}
+              <Grid size={{ xs: 12, sm: 8 }}>
+                <FormControl
+                  fullWidth
+                  className="outlined"
+                  variant="standard"
+                  error={(touched || number.length > 0) && !numberOk}
                 >
-                  <FormControlLabel
-                    value="principal"
-                    disabled={busy || hasPrincipal}
-                    control={<Radio size="small" />}
-                    label={t("team-oab-principal")}
-                  />
-                  <FormControlLabel
-                    value="suplementar"
+                  <FormLabel component="label" htmlFor="team-oab-number">
+                    {t("team-oab-number")}
+                  </FormLabel>
+                  <Input
+                    id="team-oab-number"
+                    value={number}
+                    inputMode="numeric"
+                    autoComplete="off"
+                    onChange={(event) => setNumber(event.target.value)}
+                    onBlur={() => setTouched(true)}
                     disabled={busy}
-                    control={<Radio size="small" />}
-                    label={t("team-oab-suplementar")}
+                    aria-describedby="team-oab-number-help"
                   />
-                </RadioGroup>
-                <FormHelperText>{hasPrincipal ? t("team-oab-kind-help-has") : t("team-oab-kind-help")}</FormHelperText>
-              </FormControl>
-            </Box>
-          )}
+                  <FormHelperText id="team-oab-number-help">
+                    {(touched || number.length > 0) && !numberOk
+                      ? t("team-error-oab-invalid")
+                      : t("team-oab-number-help")}
+                  </FormHelperText>
+                </FormControl>
+              </Grid>
+            </Grid>
 
-          {errorCode && (
-            <Alert severity="error" className="neutral bg-background-paper/60!">
-              {t(teamErrorKey(errorCode))}
-            </Alert>
-          )}
+            <FormControl component="fieldset">
+              <FormLabel component="legend" id="team-oab-kind" className="mb-1">
+                {t("team-oab-kind")}
+              </FormLabel>
+              <RadioGroup
+                row
+                className="gap-x-6"
+                aria-labelledby="team-oab-kind"
+                value={kind}
+                onChange={(event) => setKind(event.target.value === "principal" ? "principal" : "suplementar")}
+              >
+                <FormControlLabel
+                  value="principal"
+                  disabled={busy || hasPrincipal}
+                  control={<Radio size="small" />}
+                  label={t("team-oab-principal")}
+                />
+                <FormControlLabel
+                  value="suplementar"
+                  disabled={busy}
+                  control={<Radio size="small" />}
+                  label={t("team-oab-suplementar")}
+                />
+              </RadioGroup>
+              <FormHelperText>{hasPrincipal ? t("team-oab-kind-help-has") : t("team-oab-kind-help")}</FormHelperText>
+            </FormControl>
+          </Box>
+        )}
 
-          {adding ? (
-            <Box className="flex flex-row gap-2">
-              <Button variant="contained" onClick={() => void save()} disabled={busy}>
-                {busy ? t("team-working") : t("team-oab-save")}
-              </Button>
-              <Button variant="text" color="grey" onClick={() => setAdding(false)} disabled={busy}>
-                {t("team-cancel")}
-              </Button>
-            </Box>
-          ) : registrations.length > 0 ? (
-            <Box>
-              <Button variant="outlined" color="grey" onClick={startAdding} disabled={busy}>
-                {t("team-oab-add-another")}
-              </Button>
-            </Box>
-          ) : null}
-        </CardContent>
-      </Card>
+        {errorCode && (
+          <Alert severity="error" className="neutral bg-background-paper/60!">
+            {t(teamErrorKey(errorCode))}
+          </Alert>
+        )}
+
+        {adding ? (
+          <Box className="flex flex-row gap-2">
+            <Button variant="contained" onClick={() => void save()} disabled={busy}>
+              {busy ? t("team-working") : t("team-oab-save")}
+            </Button>
+            <Button variant="text" color="grey" onClick={() => setAdding(false)} disabled={busy}>
+              {t("team-cancel")}
+            </Button>
+          </Box>
+        ) : registrations.length > 0 ? (
+          <Box>
+            <Button variant="outlined" color="grey" onClick={startAdding} disabled={busy}>
+              {t("team-oab-add-another")}
+            </Button>
+          </Box>
+        ) : null}
+      </CollapsibleCard>
     </Grid>
   );
 }

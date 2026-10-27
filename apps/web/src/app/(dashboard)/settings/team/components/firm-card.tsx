@@ -4,20 +4,9 @@ import { type TeamData, teamErrorKey } from "../team-types";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 
-import {
-  Alert,
-  Box,
-  Button,
-  Card,
-  CardContent,
-  FormControl,
-  FormHelperText,
-  FormLabel,
-  Grid,
-  Input,
-  Typography,
-} from "@mui/material";
+import { Alert, Box, Button, FormControl, FormHelperText, FormLabel, Grid, Input } from "@mui/material";
 
+import CollapsibleCard from "@/components/product/collapsible-card";
 import { renameFirm } from "@/lib/firm/actions";
 
 /**
@@ -51,59 +40,54 @@ export default function FirmCard({ data, onChanged }: { data: TeamData; onChange
 
   return (
     <Grid size={12}>
-      <Card component="section" aria-labelledby="team-firm">
-        <CardContent className="flex flex-col gap-5">
-          <Box className="flex flex-col gap-1">
-            <Typography id="team-firm" variant="h5" component="h2" className="mb-0">
-              {t("team-firm-title")}
-            </Typography>
-            <Typography variant="body2" className="text-text-secondary">
-              {t("team-firm-body")}
-            </Typography>
-          </Box>
-
-          <Grid container spacing={3}>
-            <Grid size={{ xs: 12, md: 8 }}>
-              <FormControl fullWidth className="outlined" variant="standard" error={!valid}>
-                <FormLabel component="label" htmlFor="team-firm-name">
-                  {t("team-firm-name")}
-                </FormLabel>
-                <Input
-                  id="team-firm-name"
-                  value={name}
-                  autoComplete="organization"
-                  onChange={(event) => {
-                    setName(event.target.value);
-                    setStatus(null);
-                  }}
-                  disabled={busy}
-                  aria-describedby="team-firm-name-help"
-                />
-                <FormHelperText id="team-firm-name-help">
-                  {valid ? t("team-firm-name-help") : t("team-error-firm-name")}
-                </FormHelperText>
-              </FormControl>
-            </Grid>
+      <CollapsibleCard
+        id="team-firm"
+        title={t("team-firm-title")}
+        summary={data.firm.name}
+        description={t("team-firm-body")}
+        bodyClassName="gap-5"
+      >
+        <Grid container spacing={3}>
+          <Grid size={{ xs: 12, md: 8 }}>
+            <FormControl fullWidth className="outlined" variant="standard" error={!valid}>
+              <FormLabel component="label" htmlFor="team-firm-name">
+                {t("team-firm-name")}
+              </FormLabel>
+              <Input
+                id="team-firm-name"
+                value={name}
+                autoComplete="organization"
+                onChange={(event) => {
+                  setName(event.target.value);
+                  setStatus(null);
+                }}
+                disabled={busy}
+                aria-describedby="team-firm-name-help"
+              />
+              <FormHelperText id="team-firm-name-help">
+                {valid ? t("team-firm-name-help") : t("team-error-firm-name")}
+              </FormHelperText>
+            </FormControl>
           </Grid>
+        </Grid>
 
-          {status?.kind === "saved" && (
-            <Alert severity="success" className="neutral bg-background-paper/60!">
-              {t("team-firm-saved")}
-            </Alert>
-          )}
-          {status?.kind === "error" && (
-            <Alert severity="error" className="neutral bg-background-paper/60!">
-              {t(teamErrorKey(status.code))}
-            </Alert>
-          )}
+        {status?.kind === "saved" && (
+          <Alert severity="success" className="neutral bg-background-paper/60!">
+            {t("team-firm-saved")}
+          </Alert>
+        )}
+        {status?.kind === "error" && (
+          <Alert severity="error" className="neutral bg-background-paper/60!">
+            {t(teamErrorKey(status.code))}
+          </Alert>
+        )}
 
-          <Box>
-            <Button variant="contained" onClick={() => void save()} disabled={busy || !valid || !changed}>
-              {busy ? t("team-working") : t("team-save")}
-            </Button>
-          </Box>
-        </CardContent>
-      </Card>
+        <Box>
+          <Button variant="contained" onClick={() => void save()} disabled={busy || !valid || !changed}>
+            {busy ? t("team-working") : t("team-save")}
+          </Button>
+        </Box>
+      </CollapsibleCard>
     </Grid>
   );
 }

@@ -5,8 +5,9 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 
-import { Box, Button, Card, CardContent, Grid, Typography } from "@mui/material";
+import { Box, Button, Grid } from "@mui/material";
 
+import CollapsibleCard from "@/components/product/collapsible-card";
 import ConfirmActionDialog from "@/components/product/confirm-action-dialog";
 import { leaveFirm } from "@/lib/firm/actions";
 
@@ -33,25 +34,26 @@ export default function LeaveCard({ data }: { data: TeamData }) {
 
   return (
     <Grid size={12}>
-      <Card component="section" aria-labelledby="team-leave">
-        <CardContent className="flex flex-col gap-4">
-          <Box className="flex flex-col gap-1">
-            <Typography id="team-leave" variant="h5" component="h2" className="mb-0">
-              {t("team-leave-title")}
-            </Typography>
-            <Typography variant="body2" className="text-text-secondary">
-              {owner ? t("team-leave-owner", { firm: data.firm.name }) : t("team-leave-body", { firm: data.firm.name })}
-            </Typography>
+      <CollapsibleCard
+        id="team-leave"
+        title={t("team-leave-title")}
+        summary={
+          owner
+            ? t("team-leave-summary-owner", { firm: data.firm.name })
+            : t("team-leave-summary", { firm: data.firm.name })
+        }
+        description={
+          owner ? t("team-leave-owner", { firm: data.firm.name }) : t("team-leave-body", { firm: data.firm.name })
+        }
+      >
+        {!owner && (
+          <Box>
+            <Button variant="outlined" color="grey" onClick={() => setConfirming(true)}>
+              {t("team-leave-action")}
+            </Button>
           </Box>
-          {!owner && (
-            <Box>
-              <Button variant="outlined" color="grey" onClick={() => setConfirming(true)}>
-                {t("team-leave-action")}
-              </Button>
-            </Box>
-          )}
-        </CardContent>
-      </Card>
+        )}
+      </CollapsibleCard>
 
       {confirming && (
         <ConfirmActionDialog

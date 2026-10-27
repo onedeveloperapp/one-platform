@@ -14,6 +14,7 @@ import { useCallback, useState } from "react";
 
 import { Alert, Box, Button, Card, CardContent, Grid, Typography } from "@mui/material";
 
+import CollapsibleCard, { CollapsibleGroup, CollapsibleGroupToggle } from "@/components/product/collapsible-card";
 import ComparisonTable from "@/components/product/comparison-table";
 import EmptyState from "@/components/product/empty-state";
 import { StatTile } from "@/components/product/home-tiles";
@@ -170,255 +171,266 @@ export default function AiConsoleView({ state }: { state: AiConsoleState }) {
   const listedFirms = spend.byFirm.filter((row) => row.orgId !== null).length;
 
   return (
-    <Grid container spacing={5}>
-      <Grid size={12}>{header}</Grid>
+    // Below the cost, each task and each tool is a card that opens where something went wrong (a run that failed,
+    // a reading that is late, a call with no price) and otherwise says in one line how it stands.
+    <CollapsibleGroup>
+      <Grid container spacing={5}>
+        <Grid size={12}>{header}</Grid>
 
-      {readiness.fake ? (
-        <Grid size={12}>
-          <Alert severity="info" className="neutral bg-background-paper/60!">
-            O provedor de teste está ligado neste ambiente (AI_FAKE_PROVIDER=1): nenhuma chamada sai daqui, e as
-            execuções ficam registradas no modelo “fake”, que não tem preço. Em produção a variável é ignorada.
-          </Alert>
-        </Grid>
-      ) : null}
-
-      <Grid size={12}>
-        <Box className="grid grid-cols-2 gap-2.5 lg:grid-cols-4">
-          <StatTile
-            icon={<NiMoney size="large" />}
-            tone="primary"
-            label={`Custo em ${formatNumber(spend.windowDays)} dias`}
-            value={formatUsdMicros(totals.costUsdMicros)}
-            hint={
-              totalBrl
-                ? `${totalBrl} na cotação da tabela de preços`
-                : "Sem cotação na tabela de preços, o custo aparece só em dólar"
-            }
-          />
-          <StatTile
-            icon={<NiSparkle size="large" />}
-            tone="secondary"
-            label="Chamadas aos modelos"
-            value={formatNumber(totals.calls)}
-            hint="Cada chamada que chegou a um provedor, com ou sem resposta aproveitada"
-          />
-          <StatTile
-            icon={<NiReceipt size="large" />}
-            tone={totals.unpricedCalls > 0 ? "accent-3" : "secondary"}
-            label="Chamadas sem preço"
-            value={formatNumber(totals.unpricedCalls)}
-            hint="Chamadas de um modelo que não está na tabela de preços: o custo delas é desconhecido, não zero"
-          />
-          <StatTile
-            icon={<NiBriefcase size="large" />}
-            tone="secondary"
-            label="Escritórios com custo"
-            value={formatNumber(spend.firmsWithSpend)}
-            hint="Escritórios para os quais alguma chamada foi feita no período"
-          />
-        </Box>
-      </Grid>
-
-      {totals.unpricedCalls > 0 ? (
-        <Grid size={12}>
-          <Alert severity="warning" className="neutral bg-background-paper/60!">
-            {formatNumber(totals.unpricedCalls)}{" "}
-            {totals.unpricedCalls === 1 ? "chamada não tem preço" : "chamadas não têm preço"}: o custo acima não as
-            inclui. Cadastre o modelo na tabela de preços, no fim desta página, e os lançamentos antigos são
-            recalculados.
-          </Alert>
-        </Grid>
-      ) : null}
-
-      {totals.calls === 0 ? (
-        <Grid size={12}>
-          <EmptyState
-            icon={<NiMoney size="large" />}
-            title={
-              spend.measuringSince
-                ? `Nenhuma chamada nos últimos ${formatNumber(spend.windowDays)} dias`
-                : "Nenhuma chamada de IA até agora"
-            }
-            description={
-              spend.measuringSince
-                ? `A última medição começou em ${formatDate(spend.measuringSince)}. Quando uma tarefa rodar, o custo aparece aqui, por escritório, por tarefa e por modelo.`
-                : "Cada chamada a um modelo é lançada na conta do escritório para o qual foi feita. A verificação do executor é a primeira que você pode rodar: ela mostra o caminho inteiro funcionando."
-            }
-            action={{ label: "Ir para a verificação", href: "#ai-executor-check" }}
-          />
-        </Grid>
-      ) : (
-        <>
-          <Grid size={{ xs: 12, lg: 7 }}>
-            <Card component="section" aria-labelledby="ai-cost-firms" className="h-full">
-              <CardContent className="flex flex-col gap-4">
-                <Box className="flex flex-col gap-1">
-                  <Typography id="ai-cost-firms" variant="h5" component="h2" className="mb-0">
-                    Custo por escritório
-                  </Typography>
-                  <Typography variant="body2" className="text-text-secondary">
-                    Do maior para o menor, nos últimos {formatNumber(spend.windowDays)} dias.
-                    {spend.firmsWithSpend > listedFirms
-                      ? ` A lista traz os ${formatNumber(listedFirms)} de maior custo, de ${formatNumber(spend.firmsWithSpend)}.`
-                      : ""}
-                  </Typography>
-                </Box>
-                <ComparisonTable
-                  caption="Custo de IA por escritório"
-                  rowHeader="Escritório"
-                  columns={[
-                    { key: "calls", label: "Chamadas" },
-                    { key: "unpriced", label: "Sem preço" },
-                    { key: "cost", label: "Custo", highlight: true },
-                  ]}
-                  rows={shownFirms.map((row) => ({
-                    key: row.orgId ?? "platform",
-                    label: spendFirmName(row),
-                    muted: row.orgId === null,
-                    cells: [
-                      { primary: formatNumber(row.calls) },
-                      { primary: formatNumber(row.unpricedCalls) },
-                      costCell(row.costUsdMicros, usdToBrl),
-                    ],
-                  }))}
-                  footer={{
-                    key: "total",
-                    label: "Total do período",
-                    cells: [
-                      { primary: formatNumber(totals.calls) },
-                      { primary: formatNumber(totals.unpricedCalls) },
-                      costCell(totals.costUsdMicros, usdToBrl),
-                    ],
-                  }}
-                />
-                {spend.byFirm.length > FIRMS_SHOWN ? (
-                  <Box>
-                    <Button variant="text" color="grey" onClick={() => setAllFirms((current) => !current)}>
-                      {allFirms
-                        ? `Mostrar só os ${FIRMS_SHOWN} primeiros`
-                        : `Mostrar os ${formatNumber(spend.byFirm.length)}`}
-                    </Button>
-                  </Box>
-                ) : null}
-              </CardContent>
-            </Card>
+        {readiness.fake ? (
+          <Grid size={12}>
+            <Alert severity="info" className="neutral bg-background-paper/60!">
+              O provedor de teste está ligado neste ambiente (AI_FAKE_PROVIDER=1): nenhuma chamada sai daqui, e as
+              execuções ficam registradas no modelo “fake”, que não tem preço. Em produção a variável é ignorada.
+            </Alert>
           </Grid>
+        ) : null}
 
-          <Grid size={{ xs: 12, lg: 5 }}>
-            <Card component="section" aria-labelledby="ai-cost-breakdown" className="h-full">
-              <CardContent className="flex flex-col gap-5">
-                <Typography id="ai-cost-breakdown" variant="h5" component="h2" className="mb-0">
-                  Pelo que o custo foi pago
-                </Typography>
-                <ComparisonTable
-                  caption="Custo de IA por tarefa"
-                  rowHeader="Tarefa"
-                  columns={[
-                    { key: "calls", label: "Chamadas" },
-                    { key: "cost", label: "Custo", highlight: true },
-                  ]}
-                  rows={spend.byFeature.map((row) => ({
-                    key: row.feature,
-                    label: taskName(row.feature),
-                    note: taskName(row.feature) === row.feature ? undefined : row.feature,
-                    cells: [{ primary: formatNumber(row.calls) }, costCell(row.costUsdMicros, usdToBrl)],
-                  }))}
-                />
-                <ComparisonTable
-                  caption="Custo de IA por modelo"
-                  rowHeader="Modelo"
-                  columns={[
-                    { key: "calls", label: "Chamadas" },
-                    { key: "cost", label: "Custo", highlight: true },
-                  ]}
-                  rows={spend.byModel.map((row) => ({
-                    key: `${row.provider}:${row.model}`,
-                    label: row.model,
-                    note: row.priced ? row.provider : `${row.provider} · sem preço`,
-                    cells: [
-                      { primary: formatNumber(row.calls) },
-                      row.priced ? costCell(row.costUsdMicros, usdToBrl) : { primary: "sem preço" },
-                    ],
-                  }))}
-                />
-              </CardContent>
-            </Card>
-          </Grid>
-        </>
-      )}
-
-      <Grid size={12}>
-        <Box className="flex flex-col gap-1">
-          <Box className="flex flex-row items-center gap-1">
-            <Typography variant="h5" component="h2" className="mb-0">
-              Tarefas e a medida de cada uma
-            </Typography>
-            <InfoHint label="Uma tarefa só deixa de passar pela aprovação de uma pessoa quando a medida mostra que as respostas dela são aceitas como vieram. A mudança é registrada com o motivo." />
+        <Grid size={12}>
+          <Box className="grid grid-cols-2 gap-2.5 lg:grid-cols-4">
+            <StatTile
+              icon={<NiMoney size="large" />}
+              tone="primary"
+              label={`Custo em ${formatNumber(spend.windowDays)} dias`}
+              value={formatUsdMicros(totals.costUsdMicros)}
+              hint={
+                totalBrl
+                  ? `${totalBrl} na cotação da tabela de preços`
+                  : "Sem cotação na tabela de preços, o custo aparece só em dólar"
+              }
+            />
+            <StatTile
+              icon={<NiSparkle size="large" />}
+              tone="secondary"
+              label="Chamadas aos modelos"
+              value={formatNumber(totals.calls)}
+              hint="Cada chamada que chegou a um provedor, com ou sem resposta aproveitada"
+            />
+            <StatTile
+              icon={<NiReceipt size="large" />}
+              tone={totals.unpricedCalls > 0 ? "accent-3" : "secondary"}
+              label="Chamadas sem preço"
+              value={formatNumber(totals.unpricedCalls)}
+              hint="Chamadas de um modelo que não está na tabela de preços: o custo delas é desconhecido, não zero"
+            />
+            <StatTile
+              icon={<NiBriefcase size="large" />}
+              tone="secondary"
+              label="Escritórios com custo"
+              value={formatNumber(spend.firmsWithSpend)}
+              hint="Escritórios para os quais alguma chamada foi feita no período"
+            />
           </Box>
-          <Typography variant="body1" className="text-text-secondary">
-            Execuções e decisões dos últimos {formatNumber(accuracy.windowDays)} dias, somando todos os escritórios.
-          </Typography>
-        </Box>
-      </Grid>
-
-      {accuracy.tasks.length === 0 ? (
-        <Grid size={12}>
-          <EmptyState
-            icon={<NiRobot size="large" />}
-            title="Nenhuma tarefa no catálogo"
-            description="As tarefas chegam com as migrações. Sem nenhuma, a plataforma não pede nada a um modelo."
-          />
         </Grid>
-      ) : (
-        accuracy.tasks.map((task) => (
-          <Grid key={task.task} size={{ xs: 12, lg: 6 }}>
-            <TaskCard
-              task={task}
-              provider={providerState(task, readiness)}
-              prompts={prompts[task.task] ?? null}
-              onChanged={refresh}
+
+        {totals.unpricedCalls > 0 ? (
+          <Grid size={12}>
+            <Alert severity="warning" className="neutral bg-background-paper/60!">
+              {formatNumber(totals.unpricedCalls)}{" "}
+              {totals.unpricedCalls === 1 ? "chamada não tem preço" : "chamadas não têm preço"}: o custo acima não as
+              inclui. Cadastre o modelo na tabela de preços, no fim desta página, e os lançamentos antigos são
+              recalculados.
+            </Alert>
+          </Grid>
+        ) : null}
+
+        {totals.calls === 0 ? (
+          <Grid size={12}>
+            <EmptyState
+              icon={<NiMoney size="large" />}
+              title={
+                spend.measuringSince
+                  ? `Nenhuma chamada nos últimos ${formatNumber(spend.windowDays)} dias`
+                  : "Nenhuma chamada de IA até agora"
+              }
+              description={
+                spend.measuringSince
+                  ? `A última medição começou em ${formatDate(spend.measuringSince)}. Quando uma tarefa rodar, o custo aparece aqui, por escritório, por tarefa e por modelo.`
+                  : "Cada chamada a um modelo é lançada na conta do escritório para o qual foi feita. A verificação do executor é a primeira que você pode rodar: ela mostra o caminho inteiro funcionando."
+              }
+              action={{ label: "Ir para a verificação", href: "#ai-executor-check" }}
             />
           </Grid>
-        ))
-      )}
+        ) : (
+          <>
+            <Grid size={{ xs: 12, lg: 7 }}>
+              <Card component="section" aria-labelledby="ai-cost-firms" className="h-full">
+                <CardContent className="flex flex-col gap-4">
+                  <Box className="flex flex-col gap-1">
+                    <Typography id="ai-cost-firms" variant="h5" component="h2" className="mb-0">
+                      Custo por escritório
+                    </Typography>
+                    <Typography variant="body2" className="text-text-secondary">
+                      Do maior para o menor, nos últimos {formatNumber(spend.windowDays)} dias.
+                      {spend.firmsWithSpend > listedFirms
+                        ? ` A lista traz os ${formatNumber(listedFirms)} de maior custo, de ${formatNumber(spend.firmsWithSpend)}.`
+                        : ""}
+                    </Typography>
+                  </Box>
+                  <ComparisonTable
+                    caption="Custo de IA por escritório"
+                    rowHeader="Escritório"
+                    columns={[
+                      { key: "calls", label: "Chamadas" },
+                      { key: "unpriced", label: "Sem preço" },
+                      { key: "cost", label: "Custo", highlight: true },
+                    ]}
+                    rows={shownFirms.map((row) => ({
+                      key: row.orgId ?? "platform",
+                      label: spendFirmName(row),
+                      muted: row.orgId === null,
+                      cells: [
+                        { primary: formatNumber(row.calls) },
+                        { primary: formatNumber(row.unpricedCalls) },
+                        costCell(row.costUsdMicros, usdToBrl),
+                      ],
+                    }))}
+                    footer={{
+                      key: "total",
+                      label: "Total do período",
+                      cells: [
+                        { primary: formatNumber(totals.calls) },
+                        { primary: formatNumber(totals.unpricedCalls) },
+                        costCell(totals.costUsdMicros, usdToBrl),
+                      ],
+                    }}
+                  />
+                  {spend.byFirm.length > FIRMS_SHOWN ? (
+                    <Box>
+                      <Button variant="text" color="grey" onClick={() => setAllFirms((current) => !current)}>
+                        {allFirms
+                          ? `Mostrar só os ${FIRMS_SHOWN} primeiros`
+                          : `Mostrar os ${formatNumber(spend.byFirm.length)}`}
+                      </Button>
+                    </Box>
+                  ) : null}
+                </CardContent>
+              </Card>
+            </Grid>
 
-      <Grid size={{ xs: 12, lg: 5 }}>
-        <DjenHealthCard health={djen} captureOn={djenCaptureOn} />
-      </Grid>
-      <Grid size={{ xs: 12, lg: 7 }}>
-        <ShadowTriageCard measure={triage} onChanged={refresh} />
-      </Grid>
-      <Grid size={12}>
-        <AutonomyHoldCard catalog={autonomy} onChanged={refresh} />
-      </Grid>
-      <Grid size={12}>
-        <FlightReleaseCard status={flights} sourceOn={flightSourceOn} onChanged={refresh} />
-      </Grid>
-      <Grid size={12}>
-        <TriagePolicyCard measure={triage} onChanged={refresh} />
-      </Grid>
+            <Grid size={{ xs: 12, lg: 5 }}>
+              <Card component="section" aria-labelledby="ai-cost-breakdown" className="h-full">
+                <CardContent className="flex flex-col gap-5">
+                  <Typography id="ai-cost-breakdown" variant="h5" component="h2" className="mb-0">
+                    Pelo que o custo foi pago
+                  </Typography>
+                  <ComparisonTable
+                    caption="Custo de IA por tarefa"
+                    rowHeader="Tarefa"
+                    columns={[
+                      { key: "calls", label: "Chamadas" },
+                      { key: "cost", label: "Custo", highlight: true },
+                    ]}
+                    rows={spend.byFeature.map((row) => ({
+                      key: row.feature,
+                      label: taskName(row.feature),
+                      note: taskName(row.feature) === row.feature ? undefined : row.feature,
+                      cells: [{ primary: formatNumber(row.calls) }, costCell(row.costUsdMicros, usdToBrl)],
+                    }))}
+                  />
+                  <ComparisonTable
+                    caption="Custo de IA por modelo"
+                    rowHeader="Modelo"
+                    columns={[
+                      { key: "calls", label: "Chamadas" },
+                      { key: "cost", label: "Custo", highlight: true },
+                    ]}
+                    rows={spend.byModel.map((row) => ({
+                      key: `${row.provider}:${row.model}`,
+                      label: row.model,
+                      note: row.priced ? row.provider : `${row.provider} · sem preço`,
+                      cells: [
+                        { primary: formatNumber(row.calls) },
+                        row.priced ? costCell(row.costUsdMicros, usdToBrl) : { primary: "sem preço" },
+                      ],
+                    }))}
+                  />
+                </CardContent>
+              </Card>
+            </Grid>
+          </>
+        )}
 
-      <Grid size={12}>
-        <ExecutorCheckCard
-          task={checkTask}
-          provider={checkTask ? providerState(checkTask, readiness) : "none"}
-          firms={firms}
-          serviceAvailable={serviceAvailable}
-          onDone={refresh}
-        />
-      </Grid>
-
-      <Grid size={12}>
-        <Card component="section" aria-labelledby="ai-prices">
-          <CardContent className="flex flex-col gap-3">
-            <Typography id="ai-prices" variant="h5" component="h2" className="mb-0">
-              Tabela de preços dos modelos
+        <Grid size={12} className="flex flex-wrap items-end justify-between gap-2">
+          <Box className="flex flex-col gap-1">
+            <Box className="flex flex-row items-center gap-1">
+              <Typography variant="h5" component="h2" className="mb-0">
+                Tarefas e a medida de cada uma
+              </Typography>
+              <InfoHint label="Uma tarefa só deixa de passar pela aprovação de uma pessoa quando a medida mostra que as respostas dela são aceitas como vieram. A mudança é registrada com o motivo." />
+            </Box>
+            <Typography variant="body1" className="text-text-secondary">
+              Execuções e decisões dos últimos {formatNumber(accuracy.windowDays)} dias, somando todos os escritórios.
             </Typography>
+          </Box>
+          <CollapsibleGroupToggle />
+        </Grid>
+
+        {accuracy.tasks.length === 0 ? (
+          <Grid size={12}>
+            <EmptyState
+              icon={<NiRobot size="large" />}
+              title="Nenhuma tarefa no catálogo"
+              description="As tarefas chegam com as migrações. Sem nenhuma, a plataforma não pede nada a um modelo."
+            />
+          </Grid>
+        ) : (
+          accuracy.tasks.map((task) => (
+            <Grid key={task.task} size={12}>
+              <TaskCard
+                task={task}
+                provider={providerState(task, readiness)}
+                prompts={prompts[task.task] ?? null}
+                onChanged={refresh}
+              />
+            </Grid>
+          ))
+        )}
+
+        <Grid size={12}>
+          <DjenHealthCard health={djen} captureOn={djenCaptureOn} />
+        </Grid>
+        <Grid size={12}>
+          <ShadowTriageCard measure={triage} onChanged={refresh} />
+        </Grid>
+        <Grid size={12}>
+          <AutonomyHoldCard catalog={autonomy} onChanged={refresh} />
+        </Grid>
+        <Grid size={12}>
+          <FlightReleaseCard status={flights} sourceOn={flightSourceOn} onChanged={refresh} />
+        </Grid>
+        <Grid size={12}>
+          <TriagePolicyCard measure={triage} onChanged={refresh} />
+        </Grid>
+
+        <Grid size={12}>
+          <ExecutorCheckCard
+            task={checkTask}
+            provider={checkTask ? providerState(checkTask, readiness) : "none"}
+            firms={firms}
+            serviceAvailable={serviceAvailable}
+            onDone={refresh}
+          />
+        </Grid>
+
+        <Grid size={12}>
+          <CollapsibleCard
+            id="ai-prices"
+            title="Tabela de preços dos modelos"
+            summary={
+              totals.unpricedCalls > 0
+                ? `${formatNumber(totals.unpricedCalls)} ${totals.unpricedCalls === 1 ? "chamada sem preço" : "chamadas sem preço"} no período`
+                : "Todas as chamadas do período têm preço"
+            }
+            chip={totals.unpricedCalls > 0 ? <StatusChip label="Modelo sem preço" tone="attention" /> : null}
+            defaultOpen={totals.unpricedCalls > 0}
+            bodyClassName="gap-3"
+          >
             <AiPricesAdmin onSaved={refresh} />
-          </CardContent>
-        </Card>
+          </CollapsibleCard>
+        </Grid>
       </Grid>
-    </Grid>
+    </CollapsibleGroup>
   );
 }
 
@@ -477,98 +489,115 @@ function TaskCard({
     { key: "pending", label: "Esperando decisão agora", value: task.pending, tone: "empty" },
   ];
 
-  return (
-    <Card component="section" aria-label={task.name} className="h-full">
-      <CardContent className="flex h-full flex-col gap-5">
-        <Box className="flex flex-col gap-2">
-          <Box className="flex flex-row flex-wrap items-center gap-2">
-            <Typography variant="subtitle2" component="h3" className="mb-0">
-              {task.name}
-            </Typography>
-            <StatusChip label={autonomyLabel(task)} tone={AUTONOMY_TONE[task.autonomy]} />
-            <StatusChip label={chip.label} tone={chip.tone} />
-          </Box>
-          <Typography variant="body2" className="text-text-secondary">
-            {task.task}
-            {task.activeVersion !== null ? ` · versão ${task.activeVersion} das instruções` : ""}
-            {task.model ? ` · ${task.model}` : ""}
-            {` · decide: ${approversLabel(task.approvers)}`}
-          </Typography>
-        </Box>
+  // Closed, a task says how it ran and how its answers were taken; it opens by itself when some of its runs failed.
+  const never = task.runs === 0 && decided + task.pending === 0;
+  const summary = never
+    ? "Ainda não rodou"
+    : [
+        `${formatNumber(task.runs)} ${task.runs === 1 ? "execução" : "execuções"}`,
+        task.failed > 0 ? `${formatNumber(task.failed)} com falha` : "nenhuma falha",
+        task.shadow
+          ? "em modo sombra"
+          : share === null
+            ? "nenhuma resposta decidida"
+            : `${formatPercent(share)} aceitas como vieram`,
+      ].join(" · ");
 
-        {task.runs === 0 && decided + task.pending === 0 ? (
-          <EmptyState
-            icon={<NiRobot size="large" />}
-            title="Esta tarefa ainda não rodou"
-            description="Quando rodar, aparecem aqui as execuções, as falhas e o que quem decide fez com as respostas."
-            action={
-              task.task === EXECUTOR_CHECK_TASK
-                ? { label: "Ir para a verificação", href: "#ai-executor-check" }
-                : undefined
-            }
-            className="py-8"
-          />
-        ) : (
-          <>
+  return (
+    <CollapsibleCard
+      id={`ai-task-${task.task}`}
+      titleAs="h3"
+      title={task.name}
+      chip={
+        <>
+          <StatusChip label={autonomyLabel(task)} tone={AUTONOMY_TONE[task.autonomy]} />
+          <StatusChip label={chip.label} tone={chip.tone} />
+        </>
+      }
+      summary={summary}
+      description={[
+        task.task,
+        task.activeVersion !== null ? `versão ${task.activeVersion} das instruções` : null,
+        task.model,
+        `decide: ${approversLabel(task.approvers)}`,
+      ]
+        .filter(Boolean)
+        .join(" · ")}
+      defaultOpen={task.failed > 0}
+      bodyClassName="gap-5"
+    >
+      {never ? (
+        <EmptyState
+          icon={<NiRobot size="large" />}
+          titleAs="h4"
+          title="Esta tarefa ainda não rodou"
+          description="Quando rodar, aparecem aqui as execuções, as falhas e o que quem decide fez com as respostas."
+          action={
+            task.task === EXECUTOR_CHECK_TASK
+              ? { label: "Ir para a verificação", href: "#ai-executor-check" }
+              : undefined
+          }
+          className="py-8"
+        />
+      ) : (
+        // Open at the page's width, the runs and the answers read side by side.
+        <Box className="grid gap-5 lg:grid-cols-2">
+          <Box className="flex flex-col gap-3">
+            <Typography variant="body2" className="text-text-secondary">
+              Execuções no período
+            </Typography>
+            <MetricBars spacing="dense" total={task.runs} items={runItems} />
+          </Box>
+          {task.shadow ? (
+            <Typography variant="body2" className="text-text-secondary">
+              Em modo sombra, nenhuma resposta espera uma pessoa nem tem efeito. A comparação com o que as pessoas
+              fizeram está no quadro da triagem em sombra, abaixo.
+            </Typography>
+          ) : (
             <Box className="flex flex-col gap-3">
               <Typography variant="body2" className="text-text-secondary">
-                Execuções no período
+                O que quem decide fez com as respostas
               </Typography>
-              <MetricBars spacing="dense" total={task.runs} items={runItems} />
+              <MetricBars spacing="dense" total={decided + task.pending} items={answerItems} />
+              <Typography variant="body2" className="text-text-secondary">
+                {share === null
+                  ? "Ninguém decidiu uma resposta desta tarefa no período: sem decisões não há medida."
+                  : `Aceitas como vieram: ${formatPercent(share)} das ${formatNumber(decided)} decididas. É sobre este número que uma tarefa ganha autonomia.`}
+              </Typography>
             </Box>
-            {task.shadow ? (
-              <Typography variant="body2" className="text-text-secondary mt-auto">
-                Em modo sombra, nenhuma resposta espera uma pessoa nem tem efeito. A comparação com o que as pessoas
-                fizeram está no quadro da triagem em sombra, abaixo.
-              </Typography>
-            ) : (
-              <>
-                <Box className="flex flex-col gap-3">
-                  <Typography variant="body2" className="text-text-secondary">
-                    O que quem decide fez com as respostas
-                  </Typography>
-                  <MetricBars spacing="dense" total={decided + task.pending} items={answerItems} />
-                </Box>
-                <Typography variant="body2" className="text-text-secondary mt-auto">
-                  {share === null
-                    ? "Ninguém decidiu uma resposta desta tarefa no período: sem decisões não há medida."
-                    : `Aceitas como vieram: ${formatPercent(share)} das ${formatNumber(decided)} decididas. É sobre este número que uma tarefa ganha autonomia.`}
-                </Typography>
-              </>
-            )}
-          </>
-        )}
-
-        <Box className="border-grey-100 flex flex-col gap-3 border-t pt-4">
-          <Typography variant="body2" className="text-text-secondary">
-            {prompts?.lastPublishedAt
-              ? `${formatNumber(prompts.versions)} ${prompts.versions === 1 ? "versão publicada" : "versões publicadas"}, a última em ${formatDate(prompts.lastPublishedAt)}.`
-              : "Nenhuma versão das instruções publicada."}
-            {prompts?.active?.note ? ` Nota da versão em vigor: ${prompts.active.note}` : ""}
-          </Typography>
-          {saved ? (
-            <Alert
-              severity="success"
-              role="status"
-              className="neutral bg-background-paper/60!"
-              onClose={() => setSaved(null)}
-            >
-              {saved}
-            </Alert>
-          ) : null}
-          <Box className="flex flex-row flex-wrap gap-2">
-            <Button variant="outlined" color="grey" size="small" onClick={() => setDialog("instructions")}>
-              Nova versão das instruções
-            </Button>
-            {/* A task in shadow mode acts on nothing, whatever its autonomy says: there is nothing to change here. */}
-            {!task.shadow ? (
-              <Button variant="text" color="grey" size="small" onClick={() => setDialog("autonomy")}>
-                Mudar a autonomia
-              </Button>
-            ) : null}
-          </Box>
+          )}
         </Box>
-      </CardContent>
+      )}
+
+      <Box className="border-grey-100 flex flex-col gap-3 border-t pt-4">
+        <Typography variant="body2" className="text-text-secondary">
+          {prompts?.lastPublishedAt
+            ? `${formatNumber(prompts.versions)} ${prompts.versions === 1 ? "versão publicada" : "versões publicadas"}, a última em ${formatDate(prompts.lastPublishedAt)}.`
+            : "Nenhuma versão das instruções publicada."}
+          {prompts?.active?.note ? ` Nota da versão em vigor: ${prompts.active.note}` : ""}
+        </Typography>
+        {saved ? (
+          <Alert
+            severity="success"
+            role="status"
+            className="neutral bg-background-paper/60!"
+            onClose={() => setSaved(null)}
+          >
+            {saved}
+          </Alert>
+        ) : null}
+        <Box className="flex flex-row flex-wrap gap-2">
+          <Button variant="outlined" color="grey" size="small" onClick={() => setDialog("instructions")}>
+            Nova versão das instruções
+          </Button>
+          {/* A task in shadow mode acts on nothing, whatever its autonomy says: there is nothing to change here. */}
+          {!task.shadow ? (
+            <Button variant="text" color="grey" size="small" onClick={() => setDialog("autonomy")}>
+              Mudar a autonomia
+            </Button>
+          ) : null}
+        </Box>
+      </Box>
 
       {dialog === "instructions" ? (
         <TaskInstructionsDialog
@@ -593,6 +622,6 @@ function TaskCard({
           }}
         />
       ) : null}
-    </Card>
+    </CollapsibleCard>
   );
 }

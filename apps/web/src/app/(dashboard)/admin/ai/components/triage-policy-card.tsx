@@ -3,19 +3,9 @@
 import { setTriagePolicy } from "../actions";
 import { useState } from "react";
 
-import {
-  Alert,
-  Box,
-  Button,
-  Card,
-  CardContent,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  TextField,
-  Typography,
-} from "@mui/material";
+import { Alert, Box, Button, Dialog, DialogActions, DialogContent, TextField, Typography } from "@mui/material";
 
+import CollapsibleCard from "@/components/product/collapsible-card";
 import DialogHeader from "@/components/product/dialog-header";
 import InfoHint from "@/components/product/info-hint";
 import StatusChip from "@/components/product/status-chip";
@@ -55,100 +45,111 @@ export default function TriagePolicyCard({ measure, onChanged }: { measure: Tria
   const [editing, setEditing] = useState<{ category: TriageCategory; mode: "shadow" | "sampled" } | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const { goal } = measure;
+  const released = measure.byAiCategory.filter((row) => row.mode === "sampled").length;
+  // A category that met the goal and is still in the shadow is the operator's to weigh: the card opens for it.
+  const due = measure.byAiCategory.some(
+    (row) => row.mode === "shadow" && !ACTING_CATEGORIES.has(row.category) && meetsGoal(row, goal),
+  );
 
   return (
-    <Card component="section" aria-labelledby="ai-triage-policy" className="h-full">
-      <CardContent className="flex h-full flex-col gap-4">
-        <Box className="flex flex-col gap-1">
-          <Box className="flex flex-row items-center gap-1">
-            <Typography id="ai-triage-policy" variant="h5" component="h2" className="mb-0">
-              Categorias da triagem da IA
-            </Typography>
-            <InfoHint label="Numa categoria liberada, a resposta da IA é a triagem da publicação que ninguém triou ainda, nos escritórios que permitem, e uma parte espera a conferência de uma pessoa. A primeira pessoa que acha um prazo, uma audiência, uma decisão ou um pagamento onde a IA disse outra coisa, conferindo ou triando ela mesma, devolve a categoria à sombra. Prazo, audiência, decisão e pagamento nunca saem da sombra." />
-          </Box>
-          <Typography variant="body2" className="text-text-secondary">
-            Meta para liberar: {formatNumber(goal.minCompared)} publicações triadas por uma pessoa sem ver a resposta da
-            IA nos últimos {formatNumber(goal.windowDays)} dias, {formatNumber(goal.minAgreedPercent)}% de concordância
-            e no máximo {formatNumber(goal.maxMisses)}{" "}
-            {goal.maxMisses === 1 ? "prazo ou audiência perdidos" : "prazos ou audiências perdidos"}. Aplicadas pela IA
-            no período: {formatNumber(measure.applied)}; conferidas: {formatNumber(measure.checked)}; esperando
-            conferência: {formatNumber(measure.waitingReview)}.
-          </Typography>
-        </Box>
+    <CollapsibleCard
+      id="ai-triage-policy"
+      title="Categorias da triagem da IA"
+      chip={
+        <>
+          <InfoHint label="Numa categoria liberada, a resposta da IA é a triagem da publicação que ninguém triou ainda, nos escritórios que permitem, e uma parte espera a conferência de uma pessoa. A primeira pessoa que acha um prazo, uma audiência, uma decisão ou um pagamento onde a IA disse outra coisa, conferindo ou triando ela mesma, devolve a categoria à sombra. Prazo, audiência, decisão e pagamento nunca saem da sombra." />
+          {due ? <StatusChip label="Categoria na meta" tone="attention" /> : null}
+        </>
+      }
+      summary={
+        released > 0
+          ? `${released} de ${measure.byAiCategory.length} ${released === 1 ? "categoria liberada" : "categorias liberadas"}`
+          : "Todas as categorias em sombra"
+      }
+      description={
+        <>
+          Meta para liberar: {formatNumber(goal.minCompared)} publicações triadas por uma pessoa sem ver a resposta da
+          IA nos últimos {formatNumber(goal.windowDays)} dias, {formatNumber(goal.minAgreedPercent)}% de concordância e
+          no máximo {formatNumber(goal.maxMisses)}{" "}
+          {goal.maxMisses === 1 ? "prazo ou audiência perdidos" : "prazos ou audiências perdidos"}. Aplicadas pela IA no
+          período: {formatNumber(measure.applied)}; conferidas: {formatNumber(measure.checked)}; esperando conferência:{" "}
+          {formatNumber(measure.waitingReview)}.
+        </>
+      }
+      defaultOpen={due}
+    >
+      {notice ? (
+        <Alert
+          severity="success"
+          role="status"
+          className="neutral bg-background-paper/60!"
+          onClose={() => setNotice(null)}
+        >
+          {notice}
+        </Alert>
+      ) : null}
 
-        {notice ? (
-          <Alert
-            severity="success"
-            role="status"
-            className="neutral bg-background-paper/60!"
-            onClose={() => setNotice(null)}
-          >
-            {notice}
-          </Alert>
-        ) : null}
-
-        <Box component="ul" className="m-0 flex list-none flex-col gap-2 p-0">
-          {measure.byAiCategory.map((row) => {
-            const ready = meetsGoal(row, goal);
-            const acting = ACTING_CATEGORIES.has(row.category);
-            return (
-              <Box
-                component="li"
-                key={row.category}
-                className="border-grey-100 flex flex-wrap items-center gap-2 border-b pb-2"
-              >
-                <Box className="min-w-0 flex-1">
-                  <Typography variant="body2" className="font-semibold">
-                    {TRIAGE_CATEGORY_LABEL[row.category] ?? row.category}
-                  </Typography>
-                  <Typography variant="body2" className="text-text-secondary">
-                    {[
-                      `${formatNumber(row.compared)} comparadas`,
-                      row.compared > 0 ? `${formatPercent(ratio(row.agreed, row.compared))} de concordância` : null,
-                      `${formatNumber(row.misses)} ${row.misses === 1 ? "perdida" : "perdidas"}`,
-                      row.demotedAt
-                        ? `voltou à sombra em ${new Date(row.demotedAt).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })}`
-                        : null,
-                    ]
-                      .filter(Boolean)
-                      .join(" · ")}
-                  </Typography>
-                </Box>
-                <StatusChip
-                  tone={row.mode === "sampled" ? "positive" : "neutral"}
-                  label={
-                    row.mode === "sampled"
-                      ? `Liberada, ${row.samplePercent}% conferidas`
-                      : acting
-                        ? "Sempre em sombra"
-                        : "Em sombra"
-                  }
-                />
-                {acting ? null : row.mode === "sampled" ? (
-                  <Button
-                    variant="text"
-                    color="grey"
-                    size="small"
-                    onClick={() => setEditing({ category: row, mode: "shadow" })}
-                  >
-                    Voltar para a sombra
-                  </Button>
-                ) : (
-                  <Button
-                    variant="outlined"
-                    color="grey"
-                    size="small"
-                    disabled={!ready}
-                    onClick={() => setEditing({ category: row, mode: "sampled" })}
-                  >
-                    {ready ? "Liberar com amostra" : "Abaixo da meta"}
-                  </Button>
-                )}
+      <Box component="ul" className="m-0 flex list-none flex-col gap-2 p-0">
+        {measure.byAiCategory.map((row) => {
+          const ready = meetsGoal(row, goal);
+          const acting = ACTING_CATEGORIES.has(row.category);
+          return (
+            <Box
+              component="li"
+              key={row.category}
+              className="border-grey-100 flex flex-wrap items-center gap-2 border-b pb-2"
+            >
+              <Box className="min-w-0 flex-1">
+                <Typography variant="body2" className="font-semibold">
+                  {TRIAGE_CATEGORY_LABEL[row.category] ?? row.category}
+                </Typography>
+                <Typography variant="body2" className="text-text-secondary">
+                  {[
+                    `${formatNumber(row.compared)} comparadas`,
+                    row.compared > 0 ? `${formatPercent(ratio(row.agreed, row.compared))} de concordância` : null,
+                    `${formatNumber(row.misses)} ${row.misses === 1 ? "perdida" : "perdidas"}`,
+                    row.demotedAt
+                      ? `voltou à sombra em ${new Date(row.demotedAt).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })}`
+                      : null,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </Typography>
               </Box>
-            );
-          })}
-        </Box>
-      </CardContent>
+              <StatusChip
+                tone={row.mode === "sampled" ? "positive" : "neutral"}
+                label={
+                  row.mode === "sampled"
+                    ? `Liberada, ${row.samplePercent}% conferidas`
+                    : acting
+                      ? "Sempre em sombra"
+                      : "Em sombra"
+                }
+              />
+              {acting ? null : row.mode === "sampled" ? (
+                <Button
+                  variant="text"
+                  color="grey"
+                  size="small"
+                  onClick={() => setEditing({ category: row, mode: "shadow" })}
+                >
+                  Voltar para a sombra
+                </Button>
+              ) : (
+                <Button
+                  variant="outlined"
+                  color="grey"
+                  size="small"
+                  disabled={!ready}
+                  onClick={() => setEditing({ category: row, mode: "sampled" })}
+                >
+                  {ready ? "Liberar com amostra" : "Abaixo da meta"}
+                </Button>
+              )}
+            </Box>
+          );
+        })}
+      </Box>
 
       {editing ? (
         <PolicyDialog
@@ -162,7 +163,7 @@ export default function TriagePolicyCard({ measure, onChanged }: { measure: Tria
           }}
         />
       ) : null}
-    </Card>
+    </CollapsibleCard>
   );
 }
 

@@ -3,19 +3,9 @@
 import { setAutonomyHold } from "../actions";
 import { useState } from "react";
 
-import {
-  Alert,
-  Box,
-  Button,
-  Card,
-  CardContent,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  TextField,
-  Typography,
-} from "@mui/material";
+import { Alert, Box, Button, Dialog, DialogActions, DialogContent, TextField, Typography } from "@mui/material";
 
+import CollapsibleCard from "@/components/product/collapsible-card";
 import DialogHeader from "@/components/product/dialog-header";
 import StatusChip from "@/components/product/status-chip";
 import type { AutonomyCatalogEntry } from "@/lib/admin/ai";
@@ -25,6 +15,7 @@ const DECISION_LABEL: Record<string, string> = {
   reply_client: "Responder o cliente na conversa",
   open_case_from_chat: "Abrir o caso pela conversa",
   send_client_link: "Enviar o link ao cliente",
+  send_signature_papers: "Enviar a procuração e o contrato para o cliente assinar",
   document_check: "Aceitar ou recusar documentos",
   chronology: "Mandar a cronologia ao cliente",
   piece_text: "Aprovar o primeiro texto da peça",
@@ -55,62 +46,67 @@ export default function AutonomyHoldCard({
   onChanged: () => void;
 }) {
   const [changing, setChanging] = useState<{ entry: AutonomyCatalogEntry; held: boolean } | null>(null);
+  const held = catalog.filter((entry) => entry.held || entry.taskHeld).length;
 
   return (
-    <Card component="section" aria-labelledby="autonomy-hold">
-      <CardContent className="flex flex-col gap-3">
-        <Typography id="autonomy-hold" variant="h5" component="h2" className="mb-0">
-          O que o ONE decide sozinho nos escritórios
-        </Typography>
+    <CollapsibleCard
+      id="autonomy-hold"
+      title="O que o ONE decide sozinho nos escritórios"
+      chip={
+        held > 0 ? <StatusChip label={`${held} ${held === 1 ? "segurada" : "seguradas"}`} tone="attention" /> : null
+      }
+      summary={
+        held > 0
+          ? `Uma pessoa decide em todos os escritórios ${held === 1 ? "uma decisão" : `${held} decisões`} de ${catalog.length}`
+          : `Cada escritório escolhe as ${catalog.length} decisões`
+      }
+      description="Cada escritório escolhe em Configurações; por padrão o ONE decide. Segurar uma decisão faz uma pessoa decidir em todos os escritórios até ela ser liberada. A escolha de cada escritório fica guardada."
+      bodyClassName="gap-3"
+    >
+      {catalog.length === 0 ? (
         <Typography variant="body2" className="text-text-secondary">
-          Cada escritório escolhe em Configurações; por padrão o ONE decide. Segurar uma decisão faz uma pessoa decidir
-          em todos os escritórios até ela ser liberada. A escolha de cada escritório fica guardada.
+          Nenhuma decisão no catálogo.
         </Typography>
-        {catalog.length === 0 ? (
-          <Typography variant="body2" className="text-text-secondary">
-            Nenhuma decisão no catálogo.
-          </Typography>
-        ) : (
-          <Box component="ul" className="m-0 flex list-none flex-col gap-2 p-0">
-            {catalog.map((entry) => (
-              <Box
-                component="li"
-                key={entry.key}
-                className="border-grey-100 flex flex-wrap items-center gap-3 border-b pb-2 last:border-b-0"
-              >
-                <Box className="min-w-0 flex-1">
-                  <Typography variant="body2" className="font-semibold">
-                    {labelOf(entry.key)}
+      ) : (
+        <Box component="ul" className="m-0 flex list-none flex-col gap-2 p-0">
+          {catalog.map((entry) => (
+            <Box
+              component="li"
+              key={entry.key}
+              className="border-grey-100 flex flex-wrap items-center gap-3 border-b pb-2 last:border-b-0"
+            >
+              <Box className="min-w-0 flex-1">
+                <Typography variant="body2" className="font-semibold">
+                  {labelOf(entry.key)}
+                </Typography>
+                {entry.held && entry.heldNote ? (
+                  <Typography variant="body2" className="text-text-secondary">
+                    Segurada: {entry.heldNote}
                   </Typography>
-                  {entry.held && entry.heldNote ? (
-                    <Typography variant="body2" className="text-text-secondary">
-                      Segurada: {entry.heldNote}
-                    </Typography>
-                  ) : null}
-                  {entry.taskHeld ? (
-                    <Typography variant="body2" className="text-text-secondary">
-                      A tarefa de IA desta decisão está em aprovação: uma pessoa decide em todos os escritórios.
-                    </Typography>
-                  ) : null}
-                </Box>
-                <StatusChip
-                  tone={entry.held || entry.taskHeld ? "attention" : "positive"}
-                  label={entry.held || entry.taskHeld ? "Uma pessoa decide em todos" : "Cada escritório escolhe"}
-                />
-                <Button
-                  variant="text"
-                  color="grey"
-                  size="small"
-                  aria-label={`${entry.held ? "Liberar" : "Segurar"}: ${labelOf(entry.key)}`}
-                  onClick={() => setChanging({ entry, held: !entry.held })}
-                >
-                  {entry.held ? "Liberar" : "Segurar"}
-                </Button>
+                ) : null}
+                {entry.taskHeld ? (
+                  <Typography variant="body2" className="text-text-secondary">
+                    A tarefa de IA desta decisão está em aprovação: uma pessoa decide em todos os escritórios.
+                  </Typography>
+                ) : null}
               </Box>
-            ))}
-          </Box>
-        )}
-      </CardContent>
+              <StatusChip
+                tone={entry.held || entry.taskHeld ? "attention" : "positive"}
+                label={entry.held || entry.taskHeld ? "Uma pessoa decide em todos" : "Cada escritório escolhe"}
+              />
+              <Button
+                variant="text"
+                color="grey"
+                size="small"
+                aria-label={`${entry.held ? "Liberar" : "Segurar"}: ${labelOf(entry.key)}`}
+                onClick={() => setChanging({ entry, held: !entry.held })}
+              >
+                {entry.held ? "Liberar" : "Segurar"}
+              </Button>
+            </Box>
+          ))}
+        </Box>
+      )}
       {changing ? (
         <HoldDialog
           entry={changing.entry}
@@ -122,7 +118,7 @@ export default function AutonomyHoldCard({
           }}
         />
       ) : null}
-    </Card>
+    </CollapsibleCard>
   );
 }
 
