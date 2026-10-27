@@ -42,7 +42,7 @@ export const FAMILY_CHOICES: readonly FamilyChoice[] = ["together", "split"];
 export type PlannedClaimant = {
   partyId: string;
   minor: boolean;
-  /** What is asked for this claimant, in centavos; null while the firm has not set it. */
+  /** What is asked for this claimant, in centavos; null when no value is asked, and the judge defines it. */
   claimCents: number | null;
 };
 
@@ -68,8 +68,9 @@ export type FamilyPlan = "single" | "together" | "split";
 export type ProceedingsPlan = {
   proceedings: PlannedProceeding[];
   /**
-   * The adults whose claim is not set yet and whose court depends on it: placed in the small-claims court until it
-   * is. None when the family goes to the civil court anyway.
+   * The adults who ask no value and whose court would depend on it: placed in the small-claims court, where the
+   * judge defines the value within the ceiling (Lei 9.099/1995, art. 39). None when the family goes to the civil
+   * court anyway.
    */
   claimUnknown: string[];
   family: FamilyPlan;

@@ -334,7 +334,7 @@ describe.skipIf(!DB_URL)("ONE carrying a case on, from its lawsuits to its filin
     );
   });
 
-  it("says what it waits for when a case still lacks something, and looks again once it is there", async () => {
+  it("says what it waits for when a case still lacks something, looks again once it is there, and never waits for a value", async () => {
     const lacking = await readyCase(ANA, FIRM, "52998224725", { addressProof: false });
     expect((await carry(lacking.caseId)).waiting).toBe(1);
     expect((await advanceOf(lacking.caseId)).waiting).toBe("case_incomplete");
@@ -344,9 +344,20 @@ describe.skipIf(!DB_URL)("ONE carrying a case on, from its lawsuits to its filin
       ),
     ).toBe(0);
 
+    // A claimant with no Valor da Causa Pedido, in a firm that gives none: the case goes on, and its piece leaves
+    // the value to the court (0064).
     const unasked = await readyCase(ANA, FIRM, "11144477735", { claim: false });
-    await carry(unasked.caseId);
-    expect((await advanceOf(unasked.caseId)).waiting).toBe("claims_missing");
+    expect((await carry(unasked.caseId)).created).toBe(1);
+    expect((await advanceOf(unasked.caseId)).waiting).not.toBe("claims_missing");
+    const [claimant] = await sql.unsafe(`select claim_cents from public.case_parties where id = $1`, [unasked.partyId]);
+    expect(claimant.claim_cents).toBeNull();
+    const [piece] = await sql.unsafe(`select status, approved_body from public.case_drafts where case_id = $1`, [
+      unasked.caseId,
+    ]);
+    expect(piece.status).toBe("issued");
+    expect(String(piece.approved_body)).toContain(
+      "Pede-se a condenação da ré, assim: Maria Teste: o valor que este Juízo arbitrar. Dá-se à causa o valor que este Juízo arbitrar.",
+    );
 
     // The proof of address arrives and is accepted: the case is woken, and ONE goes on.
     await accepted(ANA, FIRM, lacking.caseId, "address_proof", lacking.partyId);

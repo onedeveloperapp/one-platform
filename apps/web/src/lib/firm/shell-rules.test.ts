@@ -523,7 +523,6 @@ describe("the firm's setup, from facts", () => {
     // Each step of the setup leads back to its own step of /configurar, never to another screen.
     expect(buildOnboardingSteps().map((step) => [step.key, step.href])).toEqual([
       ["oab", "/configurar?passo=oab"],
-      ["claims", "/configurar?passo=valores"],
       ["team", "/configurar?passo=equipe"],
       ["channel", "/configurar?passo=canal"],
       ["first-case", "/casos"],
@@ -539,26 +538,27 @@ describe("the firm's setup, from facts", () => {
   });
 
   it("marks a step done when the thing exists, and never by a click", () => {
-    const facts = { oab_signer: true, claim_defaults: true, team: false, channel: true, first_case: false };
-    expect(buildOnboardingSteps(facts).map((step) => step.done)).toEqual([true, true, false, true, false]);
+    const facts = { oab_signer: true, team: false, channel: true, first_case: false };
+    expect(buildOnboardingSteps(facts).map((step) => step.done)).toEqual([true, false, true, false]);
     expect(isActivated(facts)).toBe(false);
-    expect(isActivated({ oab_signer: true, claim_defaults: true, team: true, channel: true, first_case: true })).toBe(
+    expect(isActivated({ oab_signer: true, team: true, channel: true, first_case: true })).toBe(true);
+    // The Valor da Causa Pedido is the firm's to give or not (0064): a firm that gives none lacks nothing.
+    expect(isActivated({ oab_signer: true, claim_defaults: false, team: true, channel: true, first_case: true })).toBe(
       true,
     );
     // A fact the database did not answer is a step not done, never one assumed done.
-    expect(isActivated({ oab_signer: true, team: true, channel: true, first_case: true })).toBe(false);
+    expect(isActivated({ oab_signer: true, team: true, channel: true })).toBe(false);
   });
 
   it("asks no team of a firm that works alone", () => {
     const alone = {
       oab_signer: true,
-      claim_defaults: true,
       team: false,
       works_alone: true,
       channel: true,
       first_case: true,
     };
-    expect(buildOnboardingSteps(alone).map((step) => step.key)).toEqual(["oab", "claims", "channel", "first-case"]);
+    expect(buildOnboardingSteps(alone).map((step) => step.key)).toEqual(["oab", "channel", "first-case"]);
     expect(isActivated(alone)).toBe(true);
   });
 

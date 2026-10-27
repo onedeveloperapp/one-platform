@@ -175,6 +175,11 @@ export type CaseRules = {
   ceiling: Ceiling | null;
   /** What is asked for each claimant, by party, in centavos. */
   claims: Record<string, number | null>;
+  /**
+   * The firm's Valor da Causa Pedido for the case's kind of problem, in centavos: what a claimant with no value asks
+   * once the lawsuits are created. Null when the firm gives none: the lawsuit goes with no value, for the judge.
+   */
+  claimDefault: number | null;
   /** Where the lawsuits are filed by default. */
   domicile: { city: string; uf: string } | null;
   /** The cities of the airports of the trip: where another forum may be. */

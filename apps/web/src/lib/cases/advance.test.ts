@@ -90,11 +90,12 @@ describe("what ONE waits for before it creates a case's lawsuits", () => {
     expect(caseMissing({ parties: [], documents: [], segments: 0, required: REQUIRED, today: TODAY })).toEqual([]);
   });
 
-  it("waits for what is missing, then for what each claimant asks", () => {
+  it("waits for what is missing and for somebody who claims, never for a Valor da Causa Pedido (0064)", () => {
     expect(lawsuitsWaiting({ missing: [{ type: "flight" }], claims: [1000000] })).toBe("case_incomplete");
     expect(lawsuitsWaiting({ missing: [], claims: [] })).toBe("no_claimants");
-    expect(lawsuitsWaiting({ missing: [], claims: [1000000, null] })).toBe("claims_missing");
-    expect(lawsuitsWaiting({ missing: [], claims: [0] })).toBe("claims_missing");
+    // A claimant with no value goes with none, and the judge defines it.
+    expect(lawsuitsWaiting({ missing: [], claims: [1000000, null] })).toBeNull();
+    expect(lawsuitsWaiting({ missing: [], claims: [null] })).toBeNull();
     expect(lawsuitsWaiting({ missing: [], claims: [1000000, 500000] })).toBeNull();
   });
 });

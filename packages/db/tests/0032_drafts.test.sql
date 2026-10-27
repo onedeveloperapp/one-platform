@@ -451,7 +451,9 @@ select ok(
   and pg_temp.got('preview_incomplete', 'blocker') = 'draft_incomplete'
   and pg_temp.got('preview_incomplete', 'text') like '%[COMPLETAR: nacionalidade de Maria Teste]%'
   and pg_temp.got('preview_incomplete', 'text') like '%[COMPLETAR: endereço de Maria Teste]%'
-  and pg_temp.got('preview_incomplete', 'text') like '%[COMPLETAR: valor da causa]%'
+  -- A claimant with no Valor da Causa Pedido asks what the court arbitrates: nothing to fill in (0064).
+  and pg_temp.got('preview_incomplete', 'text') like '%Maria Teste: o valor que este Juízo arbitrar. Dá-se à causa o valor que este Juízo arbitrar.%'
+  and pg_temp.got('preview_incomplete', 'text') not like '%[COMPLETAR: valor%'
   and pg_temp.got('preview_incomplete', 'text') like '%CPF nº 123.456.789-09%'
   and pg_temp.got('preview_incomplete', 'text') not like '%[[%',
   'the facts of the lawsuit are written in by the database, and one that is not on record is left to fill in, which keeps the piece from being approved'
@@ -637,6 +639,11 @@ select is(
   0,
   'every column of every table that points at a file is one the database looks at before it forgets a file'
 );
+-- The system ONE named for the lawsuit is approved by the firm first (0066): a package waits for that.
+select pg_temp.sign_in('af100000-0000-4000-8000-000000000001');
+set local role authenticated;
+select public.decide_court_system(pg_temp.got('p1', 'proceeding_id')::uuid, true);
+reset role;
 select pg_temp.sign_in('af100000-0000-4000-8000-000000000002');
 set local role authenticated;
 insert into res values ('package', public.request_filing_package(pg_temp.got('p1', 'proceeding_id')::uuid, pg_temp.got('issue', 'document_id')::uuid));

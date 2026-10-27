@@ -1,6 +1,7 @@
 "use client";
 
 import SettingsMenu from "../components/settings-menu";
+import ClaimValueChoice from "./claim-value-choice";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -23,7 +24,6 @@ import {
 
 import CollapsibleCard, { CollapsibleGroup, CollapsibleGroupToggle } from "@/components/product/collapsible-card";
 import EmptyState from "@/components/product/empty-state";
-import { CurrencyField } from "@/components/product/fields";
 import PageHeader from "@/components/product/page-header";
 import StatusChip from "@/components/product/status-chip";
 import NiListCircle from "@/icons/nexture/ni-list-circle";
@@ -34,11 +34,15 @@ import { type Incident, INCIDENT_KEY, INCIDENTS } from "@/lib/cases/cases";
 import {
   autonomyErrorKey,
   type AutonomyMode,
+  type ClaimChoice,
+  claimChoiceOf,
   type ClaimDefault,
+  claimDefaultChanges,
   DECISION_KEY,
   type FirmAutonomy,
   LAWYER_ACTS,
   MODE_KEY,
+  typedClaims,
 } from "@/lib/firm/autonomy";
 import { setFirmAutonomy, setFirmClaimDefault, setFirmSigner } from "@/lib/firm/autonomy-actions";
 
@@ -57,7 +61,7 @@ export type AutonomyState =
       decisions: AutonomyDecisionView[];
       /** Null when who signs could not be read: its card says so, and the decisions stay. */
       signers: AutonomySigner[] | null;
-      /** The claim the firm asks by default for each kind of problem; null when it could not be read. */
+      /** The firm's Valor da Causa Pedido for each kind of problem it gives one for; null when it could not be read. */
       claimDefaults: ClaimDefault[] | null;
     }
   | { kind: "no-firm" }
@@ -210,7 +214,7 @@ export default function AutonomyView({ state }: { state: AutonomyState }) {
                 editable={ready.partner && !ready.supportVisit && ready.secondFactor === "ok"}
                 onSaved={() => router.refresh()}
               />
-              <ClaimDefaultsCard
+              <ClaimValueCard
                 defaults={ready.claimDefaults}
                 editable={ready.partner && !ready.supportVisit && ready.secondFactor === "ok"}
                 onSaved={() => router.refresh()}
@@ -574,14 +578,15 @@ const reais = (cents: number): string =>
   new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(cents / 100);
 
 /**
- * The claim the firm asks by default for each kind of problem (migration
- * 0052). Where a claimant of a case has no claim, ONE writes the default of
- * the case's kind of problem and goes on; a claim a person wrote is never
- * changed, and a kind with no default waits for the claim on the case. A
- * partner with the second factor says each one, or takes it off. Closed, it
- * says how many kinds have one; it opens by itself while none has.
+ * The Valor da Causa Pedido (migrations 0052 and 0064): the value each
+ * claimant asks, by kind of problem, or none, and the lawsuits go with no
+ * value for the judge to define. Where the firm gives a value, ONE writes it
+ * for a claimant with none when the lawsuits are created; a value written on
+ * a case is never changed. A partner with the second factor chooses, and
+ * saves the whole choice at once, as in the setup of the firm. Closed, it
+ * says what the firm gave; it opens by itself only when it could not be read.
  */
-function ClaimDefaultsCard({
+function ClaimValueCard({
   defaults,
   editable,
   onSaved,
@@ -591,11 +596,12 @@ function ClaimDefaultsCard({
   onSaved: () => void;
 }) {
   const t = useTranslations("product");
+  const [saved, setSaved] = useState(false);
 
   return (
     <CollapsibleCard
-      id="valor-do-pedido-title"
-      anchor="valor-do-pedido"
+      id="valor-da-causa-pedido-title"
+      anchor="valor-da-causa-pedido"
       title={t("autonomy-claims-title")}
       summary={
         defaults === null
@@ -605,7 +611,7 @@ function ClaimDefaultsCard({
             : t("autonomy-claims-summary-none")
       }
       description={t("autonomy-claims-body")}
-      defaultOpen={defaults === null || defaults.length === 0}
+      defaultOpen={defaults === null}
       bodyClassName="gap-3"
     >
       {defaults === null ? (
@@ -620,123 +626,112 @@ function ClaimDefaultsCard({
         >
           {t("autonomy-claims-load-error")}
         </Alert>
-      ) : (
-        <ClaimDefaultsForm
-          // The defaults as the page read them last: what a partner saved starts again from it.
+      ) : editable ? (
+        <ClaimValueForm
+          // The values as the page read them last: what a partner saved starts again from it.
           key={defaults.map((row) => `${row.incident}:${row.cents}`).join(",")}
           defaults={defaults}
-          editable={editable}
-          onSaved={onSaved}
+          onSaved={() => {
+            setSaved(true);
+            onSaved();
+          }}
+          onTouched={() => setSaved(false)}
         />
+      ) : (
+        <Box component="ul" className="m-0 flex list-none flex-col gap-3 p-0">
+          {INCIDENTS.map((incident) => {
+            const current = defaults.find((row) => row.incident === incident)?.cents ?? null;
+            return (
+              <Box component="li" key={incident} className="flex w-full flex-wrap items-center justify-between gap-2">
+                <Typography variant="body1">{t(INCIDENT_KEY[incident])}</Typography>
+                <Typography variant="body1" className={current === null ? "text-text-secondary" : undefined}>
+                  {current === null ? t("autonomy-claims-none") : t("autonomy-claims-value", { value: reais(current) })}
+                </Typography>
+              </Box>
+            );
+          })}
+        </Box>
+      )}
+      {saved && (
+        <Alert severity="success" role="status" className="neutral bg-background-paper/60!">
+          {t("autonomy-claims-saved")}
+        </Alert>
       )}
     </CollapsibleCard>
   );
 }
 
-/** Each kind of problem with its default, typed and saved one at a time. */
-function ClaimDefaultsForm({
+/** The firm's choice as the form holds it, saved at once: each kind whose value changed, said or taken back. */
+function ClaimValueForm({
   defaults,
-  editable,
   onSaved,
+  onTouched,
 }: {
   defaults: ClaimDefault[];
-  editable: boolean;
   onSaved: () => void;
+  onTouched: () => void;
 }) {
   const t = useTranslations("product");
-  const saved = new Map(defaults.map((row) => [row.incident, row.cents]));
-  // What a partner typed, as the field holds it (reais with their decimals), until the page reads it back.
-  const [typed, setTyped] = useState<Partial<Record<Incident, string>>>(() =>
-    Object.fromEntries(defaults.map((row) => [row.incident, (row.cents / 100).toFixed(2)])),
-  );
-  const [busy, setBusy] = useState<Incident | null>(null);
-  const [problem, setProblem] = useState<string | null>(null);
+  const [choice, setChoice] = useState<ClaimChoice>(() => claimChoiceOf(defaults));
+  const [typed, setTyped] = useState<Partial<Record<Incident, string>>>(() => typedClaims(defaults));
+  const [busy, setBusy] = useState(false);
+  // A refusal of the database by its code, or the kind typed with something that is no amount.
+  const [problem, setProblem] = useState<{ code: string } | { invalid: Incident } | null>(null);
+  const planned = claimDefaultChanges(choice, typed, defaults);
+  const changed = !planned.ok || planned.changes.length > 0;
 
-  const centsOf = (incident: Incident): number | null => {
-    const raw = typed[incident] ?? "";
-    const value = Number(raw);
-    return raw !== "" && Number.isFinite(value) && value > 0 ? Math.round(value * 100) : null;
-  };
-
-  const save = async (incident: Incident, cents: number | null) => {
-    setBusy(incident);
+  const save = async () => {
     setProblem(null);
+    if (!planned.ok) {
+      setProblem({ invalid: planned.invalid });
+      return;
+    }
+    setBusy(true);
     try {
-      const result = await setFirmClaimDefault(incident, cents);
-      if (!result.ok) setProblem(result.code);
-      else onSaved();
+      for (const change of planned.changes) {
+        const result = await setFirmClaimDefault(change.incident, change.cents);
+        if (!result.ok) {
+          setProblem({ code: result.code });
+          return;
+        }
+      }
+      onSaved();
     } catch {
-      setProblem("failed");
+      setProblem({ code: "failed" });
     } finally {
-      setBusy(null);
+      setBusy(false);
     }
   };
 
   return (
-    <>
-      <Box component="ul" className="m-0 flex list-none flex-col gap-3 p-0">
-        {INCIDENTS.map((incident) => {
-          const current = saved.get(incident) ?? null;
-          const label = t(INCIDENT_KEY[incident]);
-          return (
-            <Box component="li" key={incident} className="flex flex-col gap-2 sm:flex-row sm:items-center">
-              {editable ? (
-                <>
-                  <CurrencyField
-                    size="small"
-                    className="sm:max-w-xs"
-                    fullWidth
-                    id={`claim-default-${incident}`}
-                    name={`claim-default-${incident}`}
-                    label={label}
-                    currencySymbol="R$"
-                    value={typed[incident] ?? ""}
-                    disabled={busy !== null}
-                    onChange={(event) => setTyped((before) => ({ ...before, [incident]: event.target.value }))}
-                  />
-                  <Box className="flex flex-row gap-1">
-                    <Button
-                      variant="text"
-                      color="grey"
-                      size="small"
-                      disabled={busy !== null || centsOf(incident) === null || centsOf(incident) === current}
-                      onClick={() => void save(incident, centsOf(incident))}
-                    >
-                      {t("autonomy-claims-save")}
-                    </Button>
-                    {current !== null && (
-                      <Button
-                        variant="text"
-                        color="grey"
-                        size="small"
-                        disabled={busy !== null}
-                        onClick={() => void save(incident, null)}
-                        aria-label={t("autonomy-claims-remove-label", { kind: label })}
-                      >
-                        {t("autonomy-claims-remove")}
-                      </Button>
-                    )}
-                  </Box>
-                </>
-              ) : (
-                <Box className="flex w-full flex-wrap items-center justify-between gap-2">
-                  <Typography variant="body1">{label}</Typography>
-                  <Typography variant="body1" className={current === null ? "text-text-secondary" : undefined}>
-                    {current === null
-                      ? t("autonomy-claims-none")
-                      : t("autonomy-claims-value", { value: reais(current) })}
-                  </Typography>
-                </Box>
-              )}
-            </Box>
-          );
-        })}
-      </Box>
+    <Box className="flex flex-col gap-3">
+      <ClaimValueChoice
+        id="autonomy-claim"
+        choice={choice}
+        typed={typed}
+        disabled={busy}
+        onChoice={(next) => {
+          setChoice(next);
+          setProblem(null);
+          onTouched();
+        }}
+        onTyped={(incident, value) => {
+          setTyped((before) => ({ ...before, [incident]: value }));
+          onTouched();
+        }}
+      />
       {problem && (
         <Alert severity="error" className="neutral bg-background-paper/60!" onClose={() => setProblem(null)}>
-          {t(autonomyErrorKey(problem))}
+          {"invalid" in problem
+            ? t("claims-invalid", { kind: t(INCIDENT_KEY[problem.invalid]) })
+            : t(autonomyErrorKey(problem.code))}
         </Alert>
       )}
-    </>
+      <Box>
+        <Button variant="contained" size="small" disabled={busy || !changed} onClick={() => void save()}>
+          {busy ? t("cases-working") : t("autonomy-claims-save")}
+        </Button>
+      </Box>
+    </Box>
   );
 }

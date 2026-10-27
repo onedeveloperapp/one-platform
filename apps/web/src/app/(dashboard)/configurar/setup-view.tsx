@@ -1,6 +1,7 @@
 "use client";
 
 import TemplateDialog from "../biblioteca/template-dialog";
+import ClaimValueChoice from "../settings/autonomia/claim-value-choice";
 import ConnectCard from "../settings/connections/components/connect-card";
 import NoticesCard from "../settings/connections/components/notices-card";
 import SignatureAccountCard from "../settings/connections/components/signature-account-card";
@@ -28,14 +29,20 @@ import {
   Typography,
 } from "@mui/material";
 
-import { CurrencyField } from "@/components/product/fields";
 import PageHeader from "@/components/product/page-header";
 import SecondFactorPrompt from "@/components/product/second-factor-prompt";
 import SetupWizard, { type WizardStep } from "@/components/product/setup-wizard";
 import type { SecondFactorState } from "@/lib/ai/approvals";
-import { type Incident, INCIDENT_KEY, INCIDENTS } from "@/lib/cases/cases";
+import { type Incident, INCIDENT_KEY } from "@/lib/cases/cases";
 import { addOabRegistration, answerFirmSetup, inviteToFirm } from "@/lib/firm/actions";
-import { autonomyErrorKey, type ClaimDefault } from "@/lib/firm/autonomy";
+import {
+  autonomyErrorKey,
+  type ClaimChoice,
+  claimChoiceOf,
+  type ClaimDefault,
+  claimDefaultChanges,
+  typedClaims,
+} from "@/lib/firm/autonomy";
 import { setFirmClaimDefault, setFirmSigner } from "@/lib/firm/autonomy-actions";
 import { FIRM_FUNCTIONS, type FirmFunction, formatOab, OAB_STATES, type OabRegistration } from "@/lib/firm/roles";
 import { SETUP_STEPS, type SetupStepKey } from "@/lib/firm/setup-steps";
@@ -96,18 +103,11 @@ const PAPER_WORDS: Record<Paper, { title: string; firm: string; one: string; mak
   },
 };
 
-/** A claim as the field holds it (reais with their decimals): none when blank, `invalid` when it is no amount. */
-const centsOf = (raw: string | undefined): number | null | "invalid" => {
-  const text = (raw ?? "").trim();
-  if (text === "") return null;
-  const value = Number(text);
-  return Number.isFinite(value) && value > 0 ? Math.round(value * 100) : "invalid";
-};
-
 /**
  * What a firm sets up for ONE to work for it, one decision per screen: who
- * answers and whether they sign what ONE prepares, the claim the firm asks by
- * default for each kind of problem, whether it works alone, the papers its
+ * answers and whether they sign what ONE prepares, the Valor da Causa Pedido
+ * (a value for each kind of problem, or none for the judge to define),
+ * whether it works alone, the papers its
  * clients sign, and the channel to them. Each step does its own work where it
  * is: the second factor a decision asks for is set up in the step, the
  * models are written in a dialog over it, the signature account, the test
@@ -195,12 +195,10 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
       <SecondFactorPrompt id={id} state={factor} reason={reason} onConfirmed={onFactor} />
     ) : null;
 
-  // ---------- The claim the firm asks ----------
-  const savedClaims = new Map((state.claimDefaults ?? []).map((row) => [row.incident, row.cents]));
-  // What was typed, as the field holds it, until the page reads it back.
-  const [claims, setClaims] = useState<Partial<Record<Incident, string>>>(() =>
-    Object.fromEntries((state.claimDefaults ?? []).map((row) => [row.incident, (row.cents / 100).toFixed(2)])),
-  );
+  // ---------- The Valor da Causa Pedido ----------
+  // What was chosen and typed, as the fields hold it, until the page reads it back.
+  const [claimChoice, setClaimChoice] = useState<ClaimChoice>(() => claimChoiceOf(state.claimDefaults ?? []));
+  const [claims, setClaims] = useState<Partial<Record<Incident, string>>>(() => typedClaims(state.claimDefaults ?? []));
   const [claimsError, setClaimsError] = useState<string | null>(null);
   const claimsEditable = partner && !locked && !blocked && state.claimDefaults !== null;
 
@@ -225,10 +223,9 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
   const [leaving, setLeaving] = useState(false);
 
   // A flow left half way opens where something is missing; one answered before opens at its start, and the list
-  // on the home opens the step it names.
+  // on the home opens the step it names. The Valor da Causa Pedido is never missing: with none, the judge defines it.
   const missing: [boolean, SetupStepKey][] = [
     [(lawyer && !registered) || (partner && !state.signs), "oab"],
-    [partner && state.claimDefaults !== null && state.claimDefaults.length === 0, "valores"],
     [state.worksAlone === null, "equipe"],
     [!state.whatsapp, "canal"],
   ];
@@ -260,24 +257,25 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
     return true;
   };
 
-  // Each kind whose field changed is said or taken back; one that is no amount keeps the step, saying which.
+  // Each kind whose value changed is said or taken back (all of them, for no value); one that is no amount keeps
+  // the step, saying which.
   const saveClaims = async (): Promise<boolean> => {
     setClaimsError(null);
     if (!claimsEditable) return true;
-    for (const incident of INCIDENTS) {
-      const cents = centsOf(claims[incident]);
-      if (cents === "invalid") {
-        setClaimsError(t("setup-claims-invalid", { kind: t(INCIDENT_KEY[incident]) }));
-        return false;
-      }
-      if (cents === (savedClaims.get(incident) ?? null)) continue;
-      const result = await setFirmClaimDefault(incident, cents);
+    const planned = claimDefaultChanges(claimChoice, claims, state.claimDefaults ?? []);
+    if (!planned.ok) {
+      setClaimsError(t("claims-invalid", { kind: t(INCIDENT_KEY[planned.invalid]) }));
+      return false;
+    }
+    for (const change of planned.changes) {
+      const result = await setFirmClaimDefault(change.incident, change.cents);
       if (!result.ok) {
         setClaimsError(t(autonomyErrorKey(result.code)));
+        refresh();
         return false;
       }
     }
-    refresh();
+    if (planned.changes.length > 0) refresh();
     return true;
   };
 
@@ -486,23 +484,17 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
               {t("autonomy-claims-load-error")}
             </Alert>
           ) : (
-            <Grid container spacing={3}>
-              {INCIDENTS.map((incident) => (
-                <Grid key={incident} size={{ xs: 12, sm: 6 }}>
-                  <CurrencyField
-                    size="small"
-                    fullWidth
-                    id={`setup-claim-${incident}`}
-                    name={`setup-claim-${incident}`}
-                    label={t(INCIDENT_KEY[incident])}
-                    currencySymbol="R$"
-                    value={claims[incident] ?? ""}
-                    disabled={!claimsEditable}
-                    onChange={(event) => setClaims((before) => ({ ...before, [incident]: event.target.value }))}
-                  />
-                </Grid>
-              ))}
-            </Grid>
+            <ClaimValueChoice
+              id="setup-claim"
+              choice={claimChoice}
+              typed={claims}
+              disabled={!claimsEditable}
+              onChoice={(choice) => {
+                setClaimChoice(choice);
+                setClaimsError(null);
+              }}
+              onTyped={(incident, value) => setClaims((before) => ({ ...before, [incident]: value }))}
+            />
           )}
           {claimsError ? (
             <Alert severity="error" className="neutral bg-background-paper/60!" role="alert">

@@ -59,6 +59,12 @@ export type RuleFacts = {
   family: FamilyState;
   /** What the platform read of each court on a family split. */
   courtNotes: CourtNote[];
+  /**
+   * The firm's Valor da Causa Pedido for the case's kind of problem (0052), in cents: what a claimant with no value
+   * asks once the lawsuits are created. Null when the firm gives none: the lawsuit goes with no value, and the judge
+   * defines it (0064).
+   */
+  claimDefault: number | null;
 };
 
 const DEFAULT_WEATHER: WeatherSettings = {
@@ -105,7 +111,7 @@ export async function loadRuleFacts(
   if (error) throw new Error("case_unreadable");
   if (!row) return null;
 
-  const [parties, segments, wages, settings, reports, causes, registrations, notes] = await Promise.all([
+  const [parties, segments, wages, settings, reports, causes, registrations, notes, claimDefault] = await Promise.all([
     supabase
       .from("case_parties")
       .select("id, role, guardian_id, claim_cents, people(birth_date, city, uf)")
@@ -131,6 +137,12 @@ export async function loadRuleFacts(
     supabase.rpc("firm_causes_by_state", { target_org: firmId, target_year: year }),
     supabase.from("oab_registrations").select("user_id, uf"),
     supabase.from("court_notes").select("court, stance, summary, sources, read_on").eq("topic", "family_split"),
+    supabase
+      .from("firm_claim_defaults")
+      .select("cents")
+      .eq("org_id", firmId)
+      .eq("incident", String(row.incident))
+      .maybeSingle(),
   ]);
   if (
     parties.error ||
@@ -140,7 +152,8 @@ export async function loadRuleFacts(
     reports.error ||
     causes.error ||
     registrations.error ||
-    notes.error
+    notes.error ||
+    claimDefault.error
   ) {
     throw new Error("rule_facts_unreadable");
   }
@@ -263,7 +276,14 @@ export async function loadRuleFacts(
     })),
     family: familyOf(row),
     courtNotes: courtNotesOf(notes.data),
+    claimDefault: centsOf((claimDefault.data as { cents?: unknown } | null)?.cents),
   };
+}
+
+/** A value the database answered in cents, as a number; null when there is none. */
+function centsOf(value: unknown): number | null {
+  const cents = typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN;
+  return Number.isInteger(cents) && cents > 0 ? cents : null;
 }
 
 /**

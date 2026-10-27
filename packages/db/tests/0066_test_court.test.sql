@@ -266,9 +266,11 @@ select ok(
        from public.publications where id = pg_temp.got('answer', 'published')::uuid)
   and pg_temp.got('pay_early', 'code') = 'not_final'
   and pg_temp.got('judgment', 'code') = 'done'
+  -- The petition asked no value: the court arbitrates the indemnity (0064).
   and (select document_type = 'Sentença' and body like '%JULGO PROCEDENTE%'
+              and body like '%danos morais que arbitro em R$ 5.000,00 (cinco mil reais) por autor, com correção%'
        from public.publications where id = pg_temp.got('judgment', 'published')::uuid),
-  'the court asks for an answer within 15 days and gives its judgment, and pays nothing before the judgment is final'
+  'the court asks for an answer within 15 days and gives its judgment, arbitrating the indemnity a petition with no value left to it, and pays nothing before the judgment is final'
 );
 
 select pg_temp.as_backend();

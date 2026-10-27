@@ -119,7 +119,11 @@ export function autonomyErrorKey(code: string): string {
   return "autonomy-error-failed";
 }
 
-/** The claim a firm asks by default for a kind of problem (migration 0052), in cents. */
+/**
+ * The Valor da Causa Pedido a firm gives for a kind of problem (migration 0052), in cents: what each claimant of a
+ * case of that kind asks, written by ONE (or by the lawsuits a person creates) for a claimant with none. A kind
+ * with none goes with no value, and the judge defines it (0064).
+ */
 export type ClaimDefault = { incident: Incident; cents: number };
 
 /** The firm's default claims as the database answered them; a row that is not one is left out. */
@@ -132,4 +136,42 @@ export function claimDefaultsOf(raw: unknown): ClaimDefault[] {
       ? [{ incident: row.incident as Incident, cents }]
       : [];
   });
+}
+
+/** What the firm chose of the Valor da Causa Pedido: a value for some kind of problem, or no value (0064). */
+export type ClaimChoice = "define" | "judge";
+
+/** The choice the firm's values say: any value given is a choice to define one. */
+export const claimChoiceOf = (defaults: ClaimDefault[]): ClaimChoice => (defaults.length > 0 ? "define" : "judge");
+
+/** The firm's values as the fields hold them: reais with their decimals. */
+export const typedClaims = (defaults: ClaimDefault[]): Partial<Record<Incident, string>> =>
+  Object.fromEntries(defaults.map((row) => [row.incident, (row.cents / 100).toFixed(2)]));
+
+/** A value as a field holds it, in cents: none when blank, `invalid` when it is no amount the database keeps. */
+export function typedCents(raw: string | undefined): number | null | "invalid" {
+  const text = (raw ?? "").trim();
+  if (text === "") return null;
+  const value = Number(text);
+  return Number.isFinite(value) && value > 0 && value <= 1_000_000_000 ? Math.round(value * 100) : "invalid";
+}
+
+/**
+ * What saving the firm's choice writes, in the order of the kinds: each kind whose value changed, with its new
+ * value or none (a kind left blank goes with no value); choosing no value takes off every value the firm had.
+ * The first kind typed with something that is no amount stops it, named.
+ */
+export function claimDefaultChanges(
+  choice: ClaimChoice,
+  typed: Partial<Record<Incident, string>>,
+  saved: ClaimDefault[],
+): { ok: true; changes: { incident: Incident; cents: number | null }[] } | { ok: false; invalid: Incident } {
+  const before = new Map(saved.map((row) => [row.incident, row.cents]));
+  const changes: { incident: Incident; cents: number | null }[] = [];
+  for (const incident of INCIDENTS) {
+    const cents = choice === "judge" ? null : typedCents(typed[incident]);
+    if (cents === "invalid") return { ok: false, invalid: incident };
+    if (cents !== (before.get(incident) ?? null)) changes.push({ incident, cents });
+  }
+  return { ok: true, changes };
 }

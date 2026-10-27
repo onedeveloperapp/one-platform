@@ -20,7 +20,7 @@ import {
 import CollapsibleCard from "@/components/product/collapsible-card";
 import { CurrencyField } from "@/components/product/fields";
 import StatusChip, { type StatusTone } from "@/components/product/status-chip";
-import { caseErrorKey, CLIENT_STAGES } from "@/lib/cases/cases";
+import { caseErrorKey, INCIDENT_KEY } from "@/lib/cases/cases";
 import { createPlannedProceedings, readCaseWeather, saveSuspension, setPartyClaim } from "@/lib/cases/rule-actions";
 import {
   caseDomicile,
@@ -32,7 +32,7 @@ import {
   SIGN_KEY,
   STATED_CAUSE_KEY,
 } from "@/lib/cases/rules";
-import { beforeCourt, opensOnArrival } from "@/lib/cases/sections";
+import { opensOnArrival } from "@/lib/cases/sections";
 import { planProceedings } from "@flyee/rules/proceedings";
 import { STATED_CAUSES, type StatedCause, type SuspensionRisk, triageSuspension } from "@flyee/rules/suspension";
 import type { WeatherSign } from "@flyee/rules/weather";
@@ -111,7 +111,11 @@ export default function RulesCard({
   // The parties as the rules read them, the same way the server does (a minor by the birth date, or by a
   // guardian while none is written; the domicile of each lawsuit's own claimants).
   const parties = ruleParties(state.parties, rules.claims);
-  // The plan as the rule gives it for what is on screen: a typed value moves a claimant at once.
+  // The firm's Valor da Causa Pedido for the case's kind of problem is written for a claimant with none when the
+  // lawsuits are created, by ONE or here; once they are, a blank value goes with none, for the judge to define.
+  const claimDefault = state.proceedings.length === 0 ? rules.claimDefault : null;
+  // The plan as the rule gives it for what is on screen: a typed value moves a claimant at once, and a blank one
+  // asks what the lawsuits would be created with.
   const plan = rules.ceiling
     ? planProceedings({
         ceilingCents: rules.ceiling.cents,
@@ -121,7 +125,7 @@ export default function RulesCard({
           .map((party) => ({
             partyId: party.partyId,
             minor: isMinorParty(party, state.today),
-            claimCents: centsOf(party.partyId),
+            claimCents: centsOf(party.partyId) ?? claimDefault,
           })),
       })
     : null;
@@ -159,8 +163,8 @@ export default function RulesCard({
       : signs.map((sign) => (sign in SIGN_KEY ? t(SIGN_KEY[sign as WeatherSign]) : sign)).join(", ");
 
   // What the rule plans and what the firm decided on the suspension, in one line; and what keeps the plan from
-  // standing: a claimant with no value asked, or one who said no to the civil court.
-  const claimsMissing = beforeCourt(state.case.status) && claimants.some((party) => !rules.claims[party.partyId]);
+  // standing: a claimant who said no to the civil court. A claimant with no Valor da Causa Pedido is no such thing:
+  // the lawsuit goes with no value, and the judge defines it (0064).
   const civilDeclined = state.civilCourt.some((need) => need.accepted === false);
   const planned = plan ? [...new Set(plan.proceedings.map((proceeding) => t(KIND_KEY[proceeding.kind])))] : [];
   // In the drafting the card is where the lawsuits are created: once they are, the case goes on in their cards.
@@ -177,20 +181,9 @@ export default function RulesCard({
       ]
         .filter(Boolean)
         .join(" · ")}
-      chip={
-        civilDeclined ? (
-          <StatusChip tone="attention" label={t("case-rules-summary-civil-declined")} />
-        ) : claimsMissing ? (
-          <StatusChip tone="attention" label={t("case-rules-summary-claims")} />
-        ) : null
-      }
+      chip={civilDeclined ? <StatusChip tone="attention" label={t("case-rules-summary-civil-declined")} /> : null}
       description={t("case-rules-body")}
-      // A value missing is said from the start, and opens the card once the client's part is gathered.
-      defaultOpen={opensOnArrival(
-        state.case.status,
-        "rules",
-        civilDeclined || toCreate || (claimsMissing && !CLIENT_STAGES.includes(state.case.status)),
-      )}
+      defaultOpen={opensOnArrival(state.case.status, "rules", civilDeclined || toCreate)}
       bodyClassName="gap-5"
     >
       {problem && (
@@ -301,6 +294,14 @@ export default function RulesCard({
                     </Box>
                   </Box>
                 ))}
+                <Typography variant="body2" className="text-text-secondary">
+                  {claimDefault !== null
+                    ? t("case-plan-claim-default", {
+                        kind: t(INCIDENT_KEY[state.case.incident]),
+                        value: money(claimDefault),
+                      })
+                    : t("case-plan-claim-judge")}
+                </Typography>
               </Box>
             )}
 

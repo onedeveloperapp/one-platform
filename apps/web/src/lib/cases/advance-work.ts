@@ -233,8 +233,8 @@ async function createLawsuits(
   facts: LawsuitFacts,
   day: string,
 ): Promise<{ waiting: string | null; created: boolean; lost: boolean }> {
-  // A claimant nobody set a claim for takes the firm's default for the case's kind of problem, written by the
-  // database as ONE (0052); with none, the case waits for the claim.
+  // A claimant with no Valor da Causa Pedido takes the firm's value for the case's kind of problem, written by the
+  // database as ONE (0052); with none, the claim goes with no value and the judge defines it (0064).
   const unclaimed = facts.parties.filter(
     (party) => party.role === "claimant" && !(typeof party.claimCents === "number" && party.claimCents > 0),
   );

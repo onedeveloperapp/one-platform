@@ -9,7 +9,11 @@ import type { Missing } from "@/lib/cases/cases";
  * words (`product` namespace).
  */
 
-/** What ONE may wait for to go on, as the worker records it (`case_advances.waiting`). */
+/**
+ * What ONE may wait for to go on, as the worker records it (`case_advances.waiting`). `claims_missing` is no
+ * longer written (0064: a claimant with no Valor da Causa Pedido goes with no value, for the judge to define);
+ * its words stay for a record written before.
+ */
 export const ADVANCE_WAITING = [
   "case_incomplete",
   "claims_missing",
@@ -51,12 +55,13 @@ export const isAdvanceWaiting = (value: unknown): value is AdvanceWaiting =>
  * What ONE waits for before it creates a case's lawsuits, or null when the
  * case has what they need: nothing the case screen lists as missing (each
  * person's data, the documents the setting names, a leg of the trip), and
- * what each claimant asks, which the value of the cause is made of.
+ * somebody who claims. The Valor da Causa Pedido of each claimant is never
+ * waited for (0064): with none, the lawsuit goes with no value and the
+ * judge defines it.
  */
 export function lawsuitsWaiting(input: { missing: Missing[]; claims: (number | null)[] }): AdvanceWaiting | null {
   if (input.missing.length > 0) return "case_incomplete";
   if (input.claims.length === 0) return "no_claimants";
-  if (input.claims.some((cents) => cents === null || !(cents > 0))) return "claims_missing";
   return null;
 }
 
@@ -126,14 +131,15 @@ export function waitingFix(code: string): { href: string; key: string } | null {
   if (code === "no_signer") return { href: "/settings/autonomia#quem-assina", key: "advance-fix-signer" };
   if (code === "no_model") return { href: "/biblioteca", key: "advance-fix-model" };
   if (code === "claims_missing") {
-    return { href: "/settings/autonomia#valor-do-pedido", key: "advance-fix-claim-default" };
+    return { href: "/settings/autonomia#valor-da-causa-pedido", key: "advance-fix-claim-default" };
   }
   return null;
 }
 
 /**
- * Where a person goes to put right what ONE waits for in a case: the claim of each claimant is written on the
- * case itself (its card of how it goes to court); what is the firm's to say goes to where the firm says it.
+ * Where a person goes to put right what ONE waits for in a case: the Valor da Causa Pedido of each claimant is
+ * written on the case itself (its card of how it goes to court); what is the firm's to say goes to where the firm
+ * says it.
  */
 export function waitingHref(code: string, caseId: string): string {
   if (code === "claims_missing") return `/casos/${caseId}#como-vai-a-juizo`;

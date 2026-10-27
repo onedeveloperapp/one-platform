@@ -290,9 +290,11 @@ export async function recordCivilCourtAnswer(
  * civil court, unless a lawyer split it (the adults in the small-claims court,
  * the minors in the civil court); each at the domicile of its own claimants
  * (for the minors, of who answers for them), in that state's court, with the
- * system the court table confirms. The database creates them all at once,
- * under the case's lock, each with every check of a lawsuit. The lawyers who
- * sign are chosen afterwards, on each lawsuit.
+ * system the court table confirms. A claimant with no Valor da Causa Pedido
+ * is given the firm's value for the case's kind of problem first, and with
+ * none goes with no value, for the judge to define. The database creates
+ * them all at once, under the case's lock, each with every check of a
+ * lawsuit. The lawyers who sign are chosen afterwards, on each lawsuit.
  */
 export async function createPlannedProceedings(
   caseId: string,
@@ -320,8 +322,31 @@ export async function createPlannedProceedings(
     context.supabase.from("court_systems").select("court, proceeding_kind, system, confirmed"),
   ]);
   if (courts.error || systems.error) return { ok: false, code: "unavailable" };
+  // A claimant with no Valor da Causa Pedido takes the firm's value for the case's kind of problem, as when ONE
+  // creates the lawsuits (0052), before the plan reads it; with none, the claim goes with no value and the judge
+  // defines it (0064).
+  const claimDefault = facts.claimDefault;
+  const unvalued = facts.parties.filter((party) => party.role === "claimant" && party.claimCents === null);
+  if (claimDefault !== null) {
+    for (const party of unvalued) {
+      const { data, error } = await context.supabase.rpc("set_party_claim", {
+        target_case: caseId,
+        target_party: party.partyId,
+        target_cents: claimDefault,
+      });
+      const written = answerOf(data, error);
+      if (!written.ok) {
+        refresh(caseId);
+        return written;
+      }
+    }
+  }
+  const parties =
+    claimDefault === null
+      ? facts.parties
+      : facts.parties.map((party) => (unvalued.includes(party) ? { ...party, claimCents: claimDefault } : party));
   const planned = lawsuitPlan({
-    parties: facts.parties,
+    parties,
     wages: facts.wages,
     ceilingTimes: facts.ceilingTimes,
     familyChoice: facts.family.choice,

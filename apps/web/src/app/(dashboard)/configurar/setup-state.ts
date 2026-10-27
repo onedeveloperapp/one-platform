@@ -16,8 +16,8 @@ import { IMPERSONATION_MARKER_COOKIE } from "@flyee/auth";
 /**
  * What the firm's setup shows (migrations 0044, 0052, 0054, 0056), read under
  * the person's own session: their registrations at the bar and whether they
- * sign what ONE prepares, the claim the firm asks by default for each kind of
- * problem, what the firm answered, which paper ONE sends clients to sign of
+ * sign what ONE prepares, the Valor da Causa Pedido of each kind of problem
+ * the firm gives one for, what the firm answered, which paper ONE sends clients to sign of
  * each kind, and the firm's connections as their own screen reads them (the
  * signature account, the test chat, the number), so every step acts where it
  * is. Read by `/configurar` and by the home, which asks the questions itself

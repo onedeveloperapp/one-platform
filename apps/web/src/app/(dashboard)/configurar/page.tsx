@@ -13,9 +13,10 @@ export async function generateMetadata(): Promise<Metadata> {
 
 /**
  * /configurar: what a firm sets up for ONE to work for it, by who manages it
- * (migrations 0044, 0052, 0054, 0056): the registration at the bar of who
- * answers and whether they sign what ONE prepares, the claim the firm asks by
- * default, whether it works alone, the papers its clients sign and the
+ * (migrations 0044, 0052, 0054, 0056, 0064): the registration at the bar of
+ * who answers and whether they sign what ONE prepares, the Valor da Causa
+ * Pedido (or none, for the judge to define), whether it works alone, the
+ * papers its clients sign and the
  * channel to them, each done in its step, the second factor and the
  * connections included. The home asks them itself while they were never
  * answered; this address opens them again from the list on the home, at the

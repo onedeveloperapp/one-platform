@@ -512,6 +512,7 @@ async function loadCase(id: string): Promise<CaseState> {
       claims: Object.fromEntries(
         facts.parties.filter((party) => party.role === "claimant").map((party) => [party.partyId, party.claimCents]),
       ),
+      claimDefault: facts.claimDefault,
       domicile: caseDomicile(facts.parties, todayInBrazil()),
       tripPlaces: tripPlaces(facts.segments, facts.airports),
       statedCause: facts.statedCause,

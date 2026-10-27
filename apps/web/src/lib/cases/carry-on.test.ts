@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 
 import { waitingFix, waitingHref } from "@/lib/cases/advance";
 import { INCIDENTS } from "@/lib/cases/cases";
-import { claimDefaultsOf } from "@/lib/firm/autonomy";
+import { claimChoiceOf, claimDefaultChanges, claimDefaultsOf, typedCents, typedClaims } from "@/lib/firm/autonomy";
 import { WHATSAPP_COPY } from "@/lib/messages/whatsapp-copy";
 import { OCCASIONAL_CAUSES_PER_YEAR } from "@flyee/rules/state-count";
 
@@ -53,10 +53,49 @@ describe("what ONE carries on by itself where the firm said how (0052)", () => {
     expect(claimDefaultsOf(null)).toEqual([]);
   });
 
-  it("sends a missing claim to the case's own card, and the default to where the firm says it", () => {
+  it("reads the firm's choice of the Valor da Causa Pedido from its values, and writes only what changed (0064)", () => {
+    const saved = [
+      { incident: "delay" as const, cents: 1000000 },
+      { incident: "cancellation" as const, cents: 800000 },
+    ];
+    expect(claimChoiceOf(saved)).toBe("define");
+    expect(claimChoiceOf([])).toBe("judge");
+    expect(typedClaims(saved)).toEqual({ delay: "10000.00", cancellation: "8000.00" });
+
+    expect(typedCents(" ")).toBeNull();
+    expect(typedCents("1500.5")).toBe(150050);
+    expect(typedCents("0")).toBe("invalid");
+    expect(typedCents("dez")).toBe("invalid");
+    expect(typedCents("1000000001")).toBe("invalid");
+
+    // A value changed, one taken off by leaving it blank, one new; the rest as it was.
+    expect(claimDefaultChanges("define", { delay: "12000", cancellation: "", overbooking: "9000.00" }, saved)).toEqual({
+      ok: true,
+      changes: [
+        { incident: "delay", cents: 1200000 },
+        { incident: "cancellation", cents: null },
+        { incident: "overbooking", cents: 900000 },
+      ],
+    });
+    expect(claimDefaultChanges("define", typedClaims(saved), saved)).toEqual({ ok: true, changes: [] });
+    // No value at all: every value the firm had is taken off, whatever is still typed.
+    expect(claimDefaultChanges("judge", typedClaims(saved), saved)).toEqual({
+      ok: true,
+      changes: [
+        { incident: "delay", cents: null },
+        { incident: "cancellation", cents: null },
+      ],
+    });
+    expect(claimDefaultChanges("define", { delay: "abc", baggage_lost: "x" }, saved)).toEqual({
+      ok: false,
+      invalid: "delay",
+    });
+  });
+
+  it("sends a wait for a value, written before 0064, to the case's own card, and the firm's value to where it is said", () => {
     const caseId = "6f4a1c2e-0000-4000-8000-000000000001";
     expect(waitingHref("claims_missing", caseId)).toBe(`/casos/${caseId}#como-vai-a-juizo`);
-    expect(waitingFix("claims_missing")?.href).toBe("/settings/autonomia#valor-do-pedido");
+    expect(waitingFix("claims_missing")?.href).toBe("/settings/autonomia#valor-da-causa-pedido");
     expect(waitingHref("no_signer", caseId)).toBe("/settings/autonomia#quem-assina");
     expect(waitingHref("documents_waiting", caseId)).toBe(`/casos/${caseId}`);
   });
