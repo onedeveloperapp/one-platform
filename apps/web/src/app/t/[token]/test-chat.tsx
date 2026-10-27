@@ -10,6 +10,7 @@ import StatusChip, { type StatusTone } from "@/components/product/status-chip";
 import NiPaperclip from "@/icons/nexture/ni-paperclip";
 import NiPlane from "@/icons/nexture/ni-plane";
 import NiRefresh from "@/icons/nexture/ni-refresh";
+import NiScale from "@/icons/nexture/ni-scale";
 import NiSendRight from "@/icons/nexture/ni-send-right";
 import { mimeOf, uploadToSignedUrl } from "@/lib/files/browser-upload";
 import { flightLabel } from "@/lib/flight-alerts/words";
@@ -307,6 +308,17 @@ export default function TestChat({
           <Typography variant="body2" className="text-text-secondary">
             {t("test-chat-subtitle", { firm: view.firm })}
           </Typography>
+          <Box>
+            <Button
+              variant="text"
+              color="primary"
+              size="small"
+              href={`/t/${token}/tribunal`}
+              startIcon={<NiScale size="small" />}
+            >
+              {t("test-chat-court")}
+            </Button>
+          </Box>
         </Box>
 
         {/* The tabs scroll inside their own width: the theme's tabs reach a little past it on a phone. */}

@@ -60,15 +60,19 @@ export default function CourtCourse({
     }
   };
 
-  // Who reads it here: Projudi for TJGO's lawsuits, the aggregator for the others, when each is on.
-  const reader = view.source === "projudi" ? facts.courtsOn : facts.aggregatorOn;
-  const from =
-    view.source === "projudi"
+  // Who reads it here: Projudi for TJGO's lawsuits, the aggregator for the others, when each is on; the lawsuit of a
+  // test case is the test court's (0061), which acts when whoever tests says so, and is never off.
+  const test = view.source === "teste";
+  const reader = test ? true : view.source === "projudi" ? facts.courtsOn : facts.aggregatorOn;
+  const from = test
+    ? t("course-from-test")
+    : view.source === "projudi"
       ? t("course-from-projudi")
       : view.vendor
         ? t("course-from-vendor", { vendor: view.vendor })
         : t("course-from-aggregator");
   const state = (() => {
+    if (test && view.status === "waiting") return t("course-test-waiting");
     if (!reader) return view.source === "projudi" || !facts.courtsOn ? t("course-off") : t("course-no-aggregator");
     // A reading given up says so first: a request it held was answered by it.
     if (view.status === "failed") return t("course-failed");
@@ -84,7 +88,7 @@ export default function CourtCourse({
     .filter(Boolean)
     .join(" · ");
   const shown = all ? view.movements : view.movements.slice(0, FIRST_SHOWN);
-  const mayRead = writable && reader && !view.asked;
+  const mayRead = writable && reader && !view.asked && !test;
 
   return (
     <Box

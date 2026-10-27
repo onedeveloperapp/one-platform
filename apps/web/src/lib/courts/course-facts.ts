@@ -35,7 +35,8 @@ export type CoursePending = {
 
 export type CourseView = {
   status: CourseStatus;
-  source: "projudi" | "aggregator";
+  /** Who reads it: TJGO's Projudi, the aggregator, or the test court of a test case (0061), which no switch turns off. */
+  source: "projudi" | "aggregator" | "teste";
   /** The aggregator that read it, by its name, when one did. */
   vendor: string | null;
   readLabel: string | null;
@@ -125,7 +126,12 @@ export async function loadCourseFacts(
 
   const byProceeding: Record<string, CourseView> = {};
   for (const row of rows) {
-    if (!isCourseStatus(row.status) || (row.source !== "projudi" && row.source !== "aggregator")) continue;
+    if (
+      !isCourseStatus(row.status) ||
+      (row.source !== "projudi" && row.source !== "aggregator" && row.source !== "teste")
+    ) {
+      continue;
+    }
     const snapshot = row.snapshot ?? {};
     const seen = row.seen_until ? Date.parse(row.seen_until) : null;
     const label = (instant: string | null) => (instant ? momentLabel(instant, timeZone) : null);
