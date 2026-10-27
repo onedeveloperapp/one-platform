@@ -9,11 +9,13 @@
     "./errors": "./src/errors.ts",
     "./types": "./src/types.ts",
     "./strict-schema": "./src/strict-schema.ts",
+    "./anthropic-schema": "./src/anthropic-schema.ts",
+    "./schema-order": "./src/schema-order.ts",
     "./runs": "./src/runs.ts",
     "./fake": "./src/fake.ts"
   },
   "scripts": {
-    "test": "node --experimental-strip-types --test src/providers/openai.test.ts src/providers/anthropic.test.ts src/errors.test.ts src/strict-schema.test.ts src/runs.test.ts"
+    "test": "node --experimental-strip-types --test src/providers/openai.test.ts src/providers/anthropic.test.ts src/errors.test.ts src/strict-schema.test.ts src/anthropic-schema.test.ts src/runs.test.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.132.1",

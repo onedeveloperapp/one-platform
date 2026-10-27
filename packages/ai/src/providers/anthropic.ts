@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 
+import { toAnthropicJsonSchema } from "@flyee/ai/anthropic-schema";
 import { StructuredOutputError } from "@flyee/ai/errors";
 import {
   type AssistantConfig,
@@ -139,7 +140,8 @@ export class AnthropicProvider implements ChatProvider {
       messages: toAnthropicMessages(messages),
       output_config: {
         ...(config.effort ? { effort: config.effort } : {}),
-        format: { type: "json_schema", schema: output.schema },
+        // In the order the task meant, and with only the limits the API takes (`anthropic-schema.ts`).
+        format: { type: "json_schema", schema: toAnthropicJsonSchema(output.schema) as Record<string, unknown> },
       },
     };
     let response: Anthropic.Message;
@@ -160,7 +162,10 @@ export class AnthropicProvider implements ChatProvider {
               sum + (block.type === "text" ? block.text.length : block.type === "thinking" ? block.thinking.length : 0),
             0,
           );
-          const usage = { ...message.usage, output_tokens: Math.max(message.usage.output_tokens ?? 0, Math.ceil(written / 3)) };
+          const usage = {
+            ...message.usage,
+            output_tokens: Math.max(message.usage.output_tokens ?? 0, Math.ceil(written / 3)),
+          };
           reportUsage(onUsage, usageOf(usage, message.model ?? config.model));
         }
         throw error;

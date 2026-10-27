@@ -1,3 +1,5 @@
+import { inRequiredOrder } from "@flyee/ai/schema-order";
+
 /**
  * Convert a plain JSON Schema into the dialect OpenAI's `strict` structured
  * output requires.
@@ -73,7 +75,8 @@ export function toStrictJsonSchema(schema: unknown): unknown {
     const wasRequired = new Set(Array.isArray(next.required) ? (next.required as string[]) : []);
     const properties: JsonSchema = {};
 
-    for (const [key, value] of Object.entries(next.properties)) {
+    // In the order the task meant: the model writes them in this order (`schema-order.ts`).
+    for (const [key, value] of inRequiredOrder(next.properties, next.required)) {
       const converted = toStrictJsonSchema(value);
       properties[key] = wasRequired.has(key) || !isObject(converted) ? converted : nullable(converted);
     }

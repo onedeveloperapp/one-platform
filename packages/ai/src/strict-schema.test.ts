@@ -49,7 +49,11 @@ describe("toStrictJsonSchema", () => {
       properties: {
         signs: {
           type: "array",
-          items: { type: "object", properties: { text: { type: "string" }, fieldKey: { type: "string" } }, required: ["text"] },
+          items: {
+            type: "object",
+            properties: { text: { type: "string" }, fieldKey: { type: "string" } },
+            required: ["text"],
+          },
         },
       },
       required: ["signs"],
@@ -124,5 +128,19 @@ describe("strictSchemaViolations", () => {
       required: [],
     });
     assert.deepEqual(strictSchemaViolations(strict), []);
+  });
+});
+
+describe("toStrictJsonSchema, the order", () => {
+  it("lists the properties in the order `required` names them, the others after, as the model writes them", () => {
+    // As the database keeps a schema: jsonb puts the shortest keys first, whatever order they were written in.
+    const strict = toStrictJsonSchema({
+      type: "object",
+      properties: { b: { type: "string" }, aa: { type: "string" }, c: { type: "string" } },
+      required: ["aa", "b"],
+    }) as { properties: Record<string, unknown>; required: string[] };
+
+    assert.deepEqual(Object.keys(strict.properties), ["aa", "b", "c"]);
+    assert.deepEqual(strict.required, ["aa", "b", "c"]);
   });
 });
