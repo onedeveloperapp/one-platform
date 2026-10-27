@@ -18,6 +18,7 @@ import {
   numberLabel,
   STEP_KEY,
   stepOpen,
+  stepWaits,
   type TestCourtLawsuit,
   type TestCourtPackage,
   type TestCourtView,
@@ -55,6 +56,8 @@ export default function TestCourt({ token, initial }: { token: string; initial: 
   const [notice, setNotice] = useState<Notice | null>(null);
   const [received, setReceived] = useState<Record<string, boolean>>({});
   const [copied, setCopied] = useState<string | null>(null);
+  // The clock a hearing's step opens by, moved with each read of the court.
+  const [now, setNow] = useState(() => Date.now());
 
   const refresh = useCallback(async () => {
     const read = await readTestCourt(token);
@@ -63,6 +66,7 @@ export default function TestCourt({ token, initial }: { token: string; initial: 
 
   useEffect(() => {
     const timer = window.setInterval(() => {
+      setNow(Date.now());
       if (document.visibilityState === "visible") void refresh();
     }, VIEW_EVERY_MS);
     return () => window.clearInterval(timer);
@@ -73,7 +77,13 @@ export default function TestCourt({ token, initial }: { token: string; initial: 
     setNotice(null);
     try {
       const answer = await actTestCourt(token, lawsuit.id, step);
-      if (!answer.ok) {
+      if (!answer.ok && answer.code === "hearing_later" && answer.hearingAt) {
+        setNotice({
+          tone: "error",
+          text: t("test-court-error-hearing-later", { when: momentWords(answer.hearingAt) }),
+          at: lawsuit.id,
+        });
+      } else if (!answer.ok) {
         setNotice({ tone: "error", text: t(answerKey(answer.code)), at: lawsuit.id });
       } else if (step === "audiencia" && answer.hearingAt) {
         setNotice({
@@ -299,7 +309,8 @@ export default function TestCourt({ token, initial }: { token: string; initial: 
                     <Box component="ol" className="m-0 flex list-none flex-col gap-2 p-0">
                       {COURT_STEPS.map((step) => {
                         const done = lawsuit.done.includes(step);
-                        const open = lawsuit.status === "filed" && stepOpen(step, lawsuit.done);
+                        const waits = stepWaits(step, lawsuit.hearingAt, now);
+                        const open = lawsuit.status === "filed" && stepOpen(step, lawsuit.done) && !waits;
                         return (
                           <Box
                             key={step}
@@ -313,7 +324,9 @@ export default function TestCourt({ token, initial }: { token: string; initial: 
                               <Typography variant="body2" className="text-text-secondary">
                                 {step === "audiencia" && done && lawsuit.hearing
                                   ? t("test-court-hearing-set", { when: lawsuit.hearing })
-                                  : t(STEP_KEY[step].body)}
+                                  : !done && waits && lawsuit.hearing
+                                    ? t("test-court-hearing-wait", { when: lawsuit.hearing })
+                                    : t(STEP_KEY[step].body)}
                               </Typography>
                             </Box>
                             {done ? (

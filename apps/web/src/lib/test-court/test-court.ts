@@ -41,6 +41,11 @@ export function stepOpen(step: CourtStep, done: readonly string[]): boolean {
   return NEEDS[step].every((needed) => done.includes(needed));
 }
 
+/** Whether a step waits for its time: a hearing is held from its moment, never before it (the database checks the same). */
+export function stepWaits(step: CourtStep, hearingAt: number | null, now: number): boolean {
+  return step === "audiencia_realizada" && hearingAt !== null && now < hearingAt;
+}
+
 /** The words of each step, in the `product` namespace: what the court does, and what the firm then sees in ONE. */
 export const STEP_KEY: Record<CourtStep, { title: string; body: string }> = {
   distribuicao: { title: "test-court-step-distribuicao", body: "test-court-step-distribuicao-body" },
@@ -60,6 +65,7 @@ export const STEP_KEY: Record<CourtStep, { title: string; body: string }> = {
 const ANSWER_KEY: Record<string, string> = {
   already: "test-court-error-already",
   archived: "test-court-error-archived",
+  hearing_later: "test-court-error-hearing-later",
   not_distributed: "test-court-error-not-distributed",
   no_hearing: "test-court-error-no-hearing",
   no_judgment: "test-court-error-no-judgment",
@@ -94,6 +100,8 @@ export type TestCourtLawsuit = {
   done: CourtStep[];
   /** When the hearing the court set is, as its movement says it. */
   hearing: string | null;
+  /** The instant of that hearing, in milliseconds: the court holds it from then. */
+  hearingAt: number | null;
 };
 
 export type TestCourtView = { firm: string; packages: TestCourtPackage[]; lawsuits: TestCourtLawsuit[] };
@@ -109,6 +117,9 @@ const rows = (value: unknown): Record<string, unknown>[] =>
   Array.isArray(value)
     ? value.filter((item): item is Record<string, unknown> => typeof item === "object" && item !== null)
     : [];
+/** An instant the database writes in UTC (2026-10-27T13:15:00Z), in milliseconds. */
+const instant = (value: unknown): number | null =>
+  typeof value === "string" && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/.test(value) ? Date.parse(value) : null;
 
 /** The page's view from what `test_court_view` answers; null for a link that opens nothing. */
 export function testCourtViewOf(raw: unknown): TestCourtView | null {
@@ -151,6 +162,7 @@ export function testCourtViewOf(raw: unknown): TestCourtView | null {
           status: text(row.status) ?? "filed",
           done: (Array.isArray(row.done) ? row.done : []).filter(isCourtStep),
           hearing: text(row.hearing),
+          hearingAt: instant(row.hearing_at),
         },
       ];
     }),

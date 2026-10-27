@@ -1,15 +1,15 @@
 begin;
 create extension if not exists pgtap;
-select plan(12);
+select plan(14);
 
 -- ============================================================
--- The test court (0061): a case a trip of the test chat opened is a test
--- case for good; its lawsuits are the test court's, never read from a real
--- source; and the firm's test chat link acts as their court, numbering a
--- lawsuit and moving it step by step, each movement kept as a reading keeps
--- it and each publication as a capture of the DJEN keeps it. Two firms:
--- nothing of one reaches the other, and a case that is not a test is never
--- touched.
+-- The test court (0061, 0062): a case a trip of the test chat opened is a
+-- test case for good; its lawsuits are the test court's, never read from a
+-- real source; and the firm's test chat link acts as their court, numbering
+-- a lawsuit and moving it step by step, each movement kept as a reading
+-- keeps it and each publication as a capture of the DJEN keeps it, a
+-- hearing held only from its moment. Two firms: nothing of one reaches the
+-- other, and a case that is not a test is never touched.
 --
 -- Every person, firm and number here is invented.
 -- ============================================================
@@ -217,7 +217,7 @@ insert into res values ('hearing', public.test_court_act('link-do-tribunal-de-te
 reset role;
 select ok(
   pg_temp.got('hearing', 'code') = 'done' and pg_temp.got('hearing', 'published') is not null
-  and (pg_temp.got('hearing', 'hearing_at'))::timestamp at time zone 'America/Sao_Paulo' > now() + interval '29 minutes'
+  and (pg_temp.got('hearing', 'hearing_at'))::timestamp at time zone 'America/Sao_Paulo' >= now() + interval '10 minutes'
   and extract(hour from (pg_temp.got('hearing', 'hearing_at'))::timestamp) between 7 and 19
   and (select p.hash like 'teste-audiencia-%' and p.court = 'TJGO' and p.cnj = '50001236020998090051'
               and p.proceeding_id = pg_temp.got('test_go', 'proceeding_id')::uuid
@@ -231,7 +231,24 @@ select ok(
        from public.publications p where p.id = pg_temp.got('hearing', 'published')::uuid)
   and exists (select 1 from public.case_events e where e.case_id = pg_temp.got('case_t', 'case_id')::uuid
               and e.kind = 'publication_captured'),
-  'setting a hearing publishes it to the lawyers of the lawsuit, at least half an hour ahead and in the hours of a hearing'
+  'setting a hearing publishes it to the lawyers of the lawsuit, at least ten minutes ahead and in the hours of a hearing'
+);
+
+select pg_temp.as_backend();
+set local role service_role;
+insert into res values ('held_early', public.test_court_act('link-do-tribunal-de-teste-da-souza-0001',
+  pg_temp.got('test_go', 'proceeding_id')::uuid, 'audiencia_realizada'));
+insert into res values ('view_hearing', public.test_court_view('link-do-tribunal-de-teste-da-souza-0001'));
+reset role;
+select ok(
+  pg_temp.got('held_early', 'code') = 'hearing_later'
+  and pg_temp.got('held_early', 'hearing_at') = pg_temp.got('hearing', 'hearing_at')
+  and (pg_temp.got('view_hearing', 'lawsuits')::jsonb -> 0 ->> 'hearing_at')::timestamptz
+    = (pg_temp.got('hearing', 'hearing_at'))::timestamp at time zone 'America/Sao_Paulo'
+  and not exists (select 1 from public.movements
+                  where proceeding_id = pg_temp.got('test_go', 'proceeding_id')::uuid
+                    and source_id like 'teste:audiencia\_realizada:%'),
+  'the court holds no hearing before its moment, and its page reads that moment'
 );
 
 select pg_temp.as_backend();
@@ -286,6 +303,31 @@ select ok(
   'firm B reads none of what the test court did for firm A'
 );
 reset role;
+
+-- Firm B's hearing, set and then come: its movement written as of a minute ago.
+select pg_temp.as_backend();
+set local role service_role;
+insert into res values ('b_distributed', public.test_court_act('link-do-tribunal-de-teste-da-rocha-0002',
+  pg_temp.got('test_b', 'proceeding_id')::uuid, 'distribuicao'));
+insert into res values ('b_hearing', public.test_court_act('link-do-tribunal-de-teste-da-rocha-0002',
+  pg_temp.got('test_b', 'proceeding_id')::uuid, 'audiencia'));
+reset role;
+update public.movements
+set detail = to_char((now() at time zone 'America/Sao_Paulo') - interval '1 minute', 'DD/MM/YYYY "às" HH24:MI') || ', presencial'
+where proceeding_id = pg_temp.got('test_b', 'proceeding_id')::uuid and source_id = 'teste:audiencia:1';
+select pg_temp.as_backend();
+set local role service_role;
+insert into res values ('b_held', public.test_court_act('link-do-tribunal-de-teste-da-rocha-0002',
+  pg_temp.got('test_b', 'proceeding_id')::uuid, 'audiencia_realizada'));
+reset role;
+select ok(
+  pg_temp.got('b_distributed', 'code') = 'done' and pg_temp.got('b_hearing', 'code') = 'done'
+  and pg_temp.got('b_held', 'code') = 'done'
+  and exists (select 1 from public.movements
+              where proceeding_id = pg_temp.got('test_b', 'proceeding_id')::uuid
+                and source_id = 'teste:audiencia_realizada:1' and title = 'Audiência de conciliação realizada'),
+  'once its moment came, the court holds the hearing'
+);
 
 select ok(
   not has_function_privilege('anon', 'public.test_court_act(text, uuid, text)', 'execute')

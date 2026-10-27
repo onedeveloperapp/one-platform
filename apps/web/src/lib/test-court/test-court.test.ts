@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { receiptBlocks, stepOpen, testCourtViewOf, unitOf } from "@/lib/test-court/test-court";
+import { receiptBlocks, stepOpen, stepWaits, testCourtViewOf, unitOf } from "@/lib/test-court/test-court";
 
 // Every firm, person and number here is invented: the lawsuits are of 2099.
 
@@ -25,6 +25,14 @@ describe("the order of the test court", () => {
   it("takes each step once, and nothing after the archiving", () => {
     expect(stepOpen("distribuicao", ["distribuicao"])).toBe(false);
     expect(stepOpen("manifestacao", ["distribuicao", "sentenca", "arquivamento"])).toBe(false);
+  });
+
+  it("holds a hearing from its moment, never before it", () => {
+    const at = Date.parse("2099-10-27T13:15:00Z");
+    expect(stepWaits("audiencia_realizada", at, at - 60_000)).toBe(true);
+    expect(stepWaits("audiencia_realizada", at, at)).toBe(false);
+    expect(stepWaits("audiencia_realizada", null, at)).toBe(false);
+    expect(stepWaits("sentenca", at, at - 60_000)).toBe(false);
   });
 });
 
@@ -61,16 +69,20 @@ describe("what the test court's page reads", () => {
           status: "filed",
           done: ["distribuicao", "audiencia", "outra-coisa"],
           hearing: "27/10/2026 às 15:30, presencial",
+          hearing_at: "2026-10-27T18:30:00Z",
         },
+        { id: "l4", cnj: "50001236020998090052", hearing_at: "27/10/2026 15:30" },
         { id: "l3" },
       ],
     });
     expect(view?.firm).toBe("Souza Advogados");
     expect(view?.packages).toHaveLength(1);
     expect(view?.packages[0]).toMatchObject({ caseSeq: 1, files: 5, number: "50001231620998090001" });
-    expect(view?.lawsuits).toHaveLength(1);
+    expect(view?.lawsuits).toHaveLength(2);
     expect(view?.lawsuits[0].done).toEqual(["distribuicao", "audiencia"]);
     expect(view?.lawsuits[0].hearing).toBe("27/10/2026 às 15:30, presencial");
+    expect(view?.lawsuits[0].hearingAt).toBe(Date.parse("2026-10-27T18:30:00Z"));
+    expect(view?.lawsuits[1].hearingAt).toBeNull();
   });
 });
 

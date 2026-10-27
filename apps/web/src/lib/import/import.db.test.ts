@@ -340,8 +340,9 @@ describe.skipIf(!DB_URL)("a firm's portfolio, from the spreadsheet to its cases 
     const { listFirmCases } = await import("@/lib/cases/list-actions");
     const all = await listFirmCases({ filter: null, search: "", page: 0, pageSize: 25 });
     if (!all.ok) throw new Error("the list was not read");
-    // Maria's and Bruna's cases (with the client), the three brought in court, and the one brought ended.
-    expect(all.page.counts).toMatchObject({ all: 6, going: 5, open: 2, filed: 3, ended: 1, andamento: 0 });
+    // Bruna's case (with the client); Maria's, which went to court with the lawsuit the firm recorded filed
+    // (0062), and the three brought in court; and the one brought ended.
+    expect(all.page.counts).toMatchObject({ all: 6, going: 5, open: 1, filed: 4, ended: 1, andamento: 0 });
     expect(all.page.total).toBe(5);
     expect(all.page.rows.every((row) => row.status !== "closed")).toBe(true);
 
