@@ -207,6 +207,8 @@ const ERROR_KEY: Record<string, string> = {
   draft_being_issued: "draft-error-being-issued",
   draft_in_course: "draft-error-in-course",
   draft_changed: "draft-error-changed",
+  // The latest text became another version between the card that offered it and its approval as it is.
+  version_changed: "draft-approve-as-is-changed",
   approve_on_case: "draft-error-approve-on-case",
   not_allowed: "draft-error-not-allowed",
   not_editable: "draft-error-not-editable",
@@ -246,6 +248,22 @@ const ERROR_KEY: Record<string, string> = {
   several_citations: "library-error-several",
 };
 export const draftErrorKey = (code: string): string => ERROR_KEY[code] ?? "draft-error-failed";
+
+/**
+ * What approving the latest text of a piece as it is takes from how the database fills it
+ * (`preview_case_draft`): its version and the mark of its text, which `approve_case_draft` approves and
+ * nothing else, so the text approved is the one the gate read. Only the version the person was offered, and
+ * only with nothing keeping it from being approved (said as what is missing, as anywhere).
+ */
+export function approvalOf(
+  seen: { version: number; hash: string; blocker: string | null },
+  offered: number,
+): { ok: true; version: number; hash: string } | { ok: false; code: string } {
+  if (seen.version !== offered) return { ok: false, code: "version_changed" };
+  if (seen.blocker) return { ok: false, code: seen.blocker };
+  if (!/^[0-9a-f]{32}$/.test(seen.hash)) return { ok: false, code: "draft_changed" };
+  return { ok: true, version: seen.version, hash: seen.hash };
+}
 /** The same answers on the screen of the library, where what was not found is a source or a model. */
 export const libraryErrorKey = (code: string): string =>
   code === "not_found"

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
-import { hasPersonMark } from "@/lib/cases/drafts";
+import { approvalOf, hasPersonMark } from "@/lib/cases/drafts";
 import { settleDraftReading, settleDraftWork } from "@/lib/cases/drafts-work";
 import { getMemberContext } from "@/lib/member/context";
 
@@ -220,6 +220,40 @@ export async function approveCaseDraft(input: {
     refresh(input.caseId);
   }
   return result;
+}
+
+/**
+ * A partner or a lawyer approves the latest text of a piece as it is, from its case's card, without opening it
+ * (the owner's request of 2026-10-27): the database writes the facts of the lawsuit in and answers what keeps it
+ * from being approved (`preview_case_draft`), and that very text is approved (`approve_case_draft`, by its
+ * version and the mark of its text), so what is approved is what the gate read. Only the version the card
+ * offered: another one that came meanwhile is never approved unseen.
+ */
+export async function approveCaseDraftAsIs(input: {
+  caseId: string;
+  draftId: string;
+  version: number;
+}): Promise<DraftResult> {
+  const context = await getMemberContext();
+  if (!context?.firm || !isId(input?.caseId) || !isId(input?.draftId)) return { ok: false, code: "draft_not_found" };
+  const { data, error } = await context.supabase.rpc("preview_case_draft", { target_draft: input.draftId });
+  const seen = fold(data, error, (answer) => ({
+    version: Number(answer.version ?? 0),
+    hash: typeof answer.hash === "string" ? answer.hash : "",
+    blocker: typeof answer.blocker === "string" ? answer.blocker : null,
+  }));
+  if (!seen.ok) return seen;
+  const approval = approvalOf(seen, Number.isInteger(input.version) ? input.version : -1);
+  if (!approval.ok) {
+    refresh(input.caseId);
+    return approval;
+  }
+  return approveCaseDraft({
+    caseId: input.caseId,
+    draftId: input.draftId,
+    version: approval.version,
+    hash: approval.hash,
+  });
 }
 
 /** A partner or a lawyer takes back an approval whose document was not made: the draft is a text to correct again. */

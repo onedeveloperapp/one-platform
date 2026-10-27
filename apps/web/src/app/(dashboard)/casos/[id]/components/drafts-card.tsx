@@ -27,6 +27,7 @@ import NiDocumentFull from "@/icons/nexture/ni-document-full";
 import { caseLabel } from "@/lib/cases/cases";
 import {
   approveCaseDraft,
+  approveCaseDraftAsIs,
   cancelCaseDraft,
   previewCaseDraft,
   readCaseDraftText,
@@ -359,6 +360,8 @@ function Lawsuit({
   // refresh brings meanwhile never redirects it, and a text that changed since is not turned down unseen.
   const [rejectingOn, setRejectingOn] = useState<{ id: string; version: number } | null>(null);
   const [discardingId, setDiscardingId] = useState<string | null>(null);
+  // The draft an approval as it is was offered on, and the version offered: never another one approved unseen.
+  const [approvingOn, setApprovingOn] = useState<{ id: string; version: number } | null>(null);
   const [note, setNote] = useState("");
   const [templateId, setTemplateId] = useState("");
 
@@ -368,6 +371,7 @@ function Lawsuit({
   const rejectStale =
     draft !== null && rejectingOn !== null && rejectingOn.id === draft.id && rejectingOn.version !== draft.version;
   const discarding = draft !== null && discardingId === draft.id;
+  const approving = draft !== null && approvingOn !== null && approvingOn.id === draft.id;
   // Every text given up or turned down before keeps its words, one click away: the newest first.
   const earlier = drafts
     .filter(
@@ -436,6 +440,9 @@ function Lawsuit({
     draft !== null &&
     (revision !== null ? lawyer && (revision.failed || draft.slow) : late || (status === "failed" && planned));
   const mayDiscard = writable && draft !== null && ["generating", "proposed", "failed"].includes(draft.status);
+  // A partner or a lawyer approves the text as it is, without opening it, once what it cites was read and while
+  // the AI rewrites nothing: the database's gate answers as for an approval from the preview.
+  const mayApproveAsIs = status === "proposed" && writable && lawyer && draft !== null && draft.checked && !revision;
   const hasText = draft !== null && draft.version > 0;
 
   const headingId = `lawsuit-${proceeding.id}`;
@@ -644,6 +651,18 @@ function Lawsuit({
               {t(writable && lawyer && !revising ? "draft-open" : "draft-read")}
             </Button>
           ) : null}
+          {mayApproveAsIs ? (
+            <Button
+              variant="outlined"
+              disabled={pending}
+              onClick={() => {
+                setErrorCode(null);
+                setApprovingOn({ id: draft.id, version: draft.version });
+              }}
+            >
+              {t("draft-approve-as-is")}
+            </Button>
+          ) : null}
           {mayReject ? (
             <Button
               variant="outlined"
@@ -774,6 +793,38 @@ function Lawsuit({
             </Box>
           )}
         </Box>
+      ) : null}
+
+      {approving && draft && approvingOn ? (
+        // Opened on this very draft and version: a refresh that shows another one closes it instead of aiming it there.
+        <ConfirmActionDialog
+          key={`${draft.id}:${approvingOn.version}`}
+          title={t("draft-approve-as-is-title")}
+          consequences={[
+            t("draft-approve-as-is-does", { version: approvingOn.version }),
+            t("draft-approve-as-is-petition"),
+          ]}
+          requireReason={false}
+          confirmLabel={t("draft-approve-as-is-yes", { version: approvingOn.version })}
+          cancelLabel={t("draft-approve-as-is-back")}
+          busyLabel={t("draft-approve-as-is-busy")}
+          onConfirm={async () => {
+            try {
+              const result = await approveCaseDraftAsIs({ caseId, draftId: draft.id, version: approvingOn.version });
+              onChanged();
+              if (result.ok) return null;
+              // What keeps it from being approved, or a newer version, is said on the card, where the text opens.
+              if (isDraftBlocker(result.code) || result.code === "version_changed") {
+                setErrorCode(result.code);
+                return null;
+              }
+              return t(draftErrorKey(result.code));
+            } catch {
+              return t("draft-error-failed");
+            }
+          }}
+          onClose={() => setApprovingOn(null)}
+        />
       ) : null}
 
       {discarding && draft ? (

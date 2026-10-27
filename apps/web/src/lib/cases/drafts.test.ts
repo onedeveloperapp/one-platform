@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 
 import { TASK_OUTPUT_KEYS } from "@/lib/admin/ai";
 import {
+  approvalOf,
   citedSources,
   DRAFT_MARK_KEY,
   DRAFT_MARKS,
@@ -224,6 +225,21 @@ describe("what a screen says of a refusal", () => {
     expect(product[libraryErrorKey("too_long")]).toBeTruthy();
     expect(product[draftErrorKey("body_too_short")]).toBeTruthy();
     expect(product[draftErrorKey("case_closed")]).toBeTruthy();
+  });
+
+  it("approves a text as it is only in the version offered, with nothing keeping it, by the mark the gate read", () => {
+    const hash = "0123456789abcdef0123456789abcdef";
+    expect(approvalOf({ version: 3, hash, blocker: null }, 3)).toEqual({ ok: true, version: 3, hash });
+    // Another version came meanwhile: never approved unseen, and said as such.
+    expect(approvalOf({ version: 4, hash, blocker: null }, 3)).toEqual({ ok: false, code: "version_changed" });
+    expect(product[draftErrorKey("version_changed")]).toBeTruthy();
+    expect(isDraftBlocker("version_changed")).toBe(false);
+    // What keeps it from being approved is said as what is missing, as in the preview.
+    expect(approvalOf({ version: 3, hash, blocker: "citations_not_verified" }, 3)).toEqual({
+      ok: false,
+      code: "citations_not_verified",
+    });
+    expect(approvalOf({ version: 3, hash: "", blocker: null }, 3)).toEqual({ ok: false, code: "draft_changed" });
   });
 
   it("tries again what may pass by itself, and nothing else", () => {
