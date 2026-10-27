@@ -19,27 +19,35 @@ const ptBR = {
       "O link é só seu. Se tiver qualquer dúvida, responda esta mensagem.",
     ].join("\n\n"),
   /**
-   * ONE's word once the client said, on their link, that they sent everything (0055): it arrived, and what comes
-   * next, the power of attorney first when one ONE sent waits for their signature.
+   * ONE's word once the client said, on their link, that they sent everything (0055), or once their case has all
+   * it needs and moved on before they said it (0057): it arrived, and what comes next, the power of attorney first
+   * when one ONE sent waits for their signature. A case that moved on takes no more papers on the link.
    */
-  caseReceived: (input: { firstName: string; paperWaiting: boolean }): string =>
-    [
-      input.firstName
-        ? `Recebi o seu aviso de que terminou, ${input.firstName}. Obrigado.`
-        : "Recebi o seu aviso de que terminou. Obrigado.",
+  caseReceived: (input: { firstName: string; paperWaiting: boolean; finished: boolean }): string => {
+    const prepares = input.finished
+      ? "O escritório confere os documentos e prepara a ação."
+      : "O escritório prepara a ação.";
+    return [
+      input.finished
+        ? input.firstName
+          ? `Recebi o seu aviso de que terminou, ${input.firstName}. Obrigado.`
+          : "Recebi o seu aviso de que terminou. Obrigado."
+        : input.firstName
+          ? `Recebi tudo o que o seu caso precisa, ${input.firstName}. Obrigado.`
+          : "Recebi tudo o que o seu caso precisa. Obrigado.",
       "Os próximos passos:",
       ...(input.paperWaiting
         ? [
             "1. Assine a procuração que está no seu link. Ela autoriza o escritório a entrar com a ação em seu nome.",
-            "2. O escritório confere os documentos e prepara a ação.",
+            `2. ${prepares}`,
             "3. Quando a ação for protocolada, o escritório avisa você por aqui.",
           ]
-        : [
-            "1. O escritório confere os documentos e prepara a ação.",
-            "2. Quando a ação for protocolada, o escritório avisa você por aqui.",
-          ]),
-      "Se lembrar de mais alguma coisa, ainda pode enviar pelo mesmo link.",
-    ].join("\n"),
+        : [`1. ${prepares}`, "2. Quando a ação for protocolada, o escritório avisa você por aqui."]),
+      input.finished
+        ? "Se lembrar de mais alguma coisa, ainda pode enviar pelo mesmo link."
+        : "Se precisar mudar alguma coisa, me diga por aqui.",
+    ].join("\n");
+  },
 };
 
 export type WhatsAppCopy = typeof ptBR;

@@ -65,15 +65,28 @@ describe("what ONE carries on by itself where the firm said how (0052)", () => {
 describe("what the client hears once they finished (0055)", () => {
   it("says it arrived and the next steps, the power of attorney first when one waits for them", () => {
     const words = WHATSAPP_COPY["pt-BR"].caseReceived;
-    const waiting = words({ firstName: "Mariana", paperWaiting: true });
+    const waiting = words({ firstName: "Mariana", paperWaiting: true, finished: true });
     expect(waiting.startsWith("Recebi o seu aviso de que terminou, Mariana.")).toBe(true);
     expect(waiting).toContain("1. Assine a procuração que está no seu link.");
     expect(waiting).toContain("3. Quando a ação for protocolada, o escritório avisa você por aqui.");
-    const none = words({ firstName: "", paperWaiting: false });
+    expect(waiting).toContain("ainda pode enviar pelo mesmo link");
+    const none = words({ firstName: "", paperWaiting: false, finished: true });
     expect(none.startsWith("Recebi o seu aviso de que terminou. Obrigado.")).toBe(true);
     expect(none).not.toContain("procuração");
     expect(none).toContain("1. O escritório confere os documentos e prepara a ação.");
     // The rules of copy for clients: no dash, no exclamation, no emoji.
     for (const text of [waiting, none]) expect(text).not.toMatch(/[—–!]|\p{Extended_Pictographic}/u);
+  });
+
+  it("says the case has what it needs when it moved on before they said they finished (0057)", () => {
+    const moved = WHATSAPP_COPY["pt-BR"].caseReceived({ firstName: "Mariana", paperWaiting: true, finished: false });
+    expect(moved.startsWith("Recebi tudo o que o seu caso precisa, Mariana. Obrigado.")).toBe(true);
+    expect(moved).not.toContain("terminou");
+    expect(moved).toContain("1. Assine a procuração que está no seu link.");
+    expect(moved).toContain("2. O escritório prepara a ação.");
+    // Its link takes no more papers: nothing is said of sending more there.
+    expect(moved).not.toContain("mesmo link");
+    expect(moved).toContain("Se precisar mudar alguma coisa, me diga por aqui.");
+    expect(moved).not.toMatch(/[—–!]|\p{Extended_Pictographic}/u);
   });
 });

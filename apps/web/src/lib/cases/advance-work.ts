@@ -473,6 +473,7 @@ async function sayReceived(service: SupabaseClient, held: HeldAdvance): Promise<
     person_id?: unknown;
     full_name?: unknown;
     paper_waiting?: unknown;
+    finished?: unknown;
   }[];
   for (const person of people) {
     if (typeof person.person_id !== "string") continue;
@@ -483,6 +484,8 @@ async function sayReceived(service: SupabaseClient, held: HeldAdvance): Promise<
       target_body: WHATSAPP_COPY["pt-BR"].caseReceived({
         firstName: firstNameOf(typeof person.full_name === "string" ? person.full_name : null),
         paperWaiting: person.paper_waiting === true,
+        // A client who did not say they finished hears that their case has what it needs (0057).
+        finished: person.finished !== false,
       }),
     });
     if (refused) {
@@ -528,31 +531,6 @@ export async function advanceClaimedCase(
         return "lost";
       }
     }
-    // The papers the client signs once they finished: issued and sent before the lawsuits, which do not wait for
-    // them (only the filing does, 0054).
-    let papersWaiting: string | null = null;
-    if (held.papersDue) {
-      const papers = await sendPapers(service, held);
-      if (papers.lost) {
-        await deliverMessages(asked.messages, follow);
-        return "lost";
-      }
-      if (papers.failed) failed = true;
-      papersWaiting = papers.waiting;
-      if (papers.envelopes > 0) asked.papers = papers.envelopes;
-      // An envelope of the firm's ZapSign account is opened by the backend (0023).
-      if (papers.zapsign) await sendEvent("one/signature.requested", {}).catch(() => undefined);
-    }
-    // Once the papers went, the client hears that what they sent arrived and what comes next (0055).
-    if (held.receivedDue) {
-      const told = await sayReceived(service, held);
-      asked.messages.push(...told.messages);
-      if (told.failed) failed = true;
-      if (told.lost) {
-        await deliverMessages(asked.messages, follow);
-        return "lost";
-      }
-    }
     const day = today();
     // The case is read when its lawsuits or a package are what to look at: both need what the screen says it lacks.
     const facts = held.lawsuitsDue || held.packageDue ? await loadLawsuitFacts(service, held.caseId) : null;
@@ -568,6 +546,32 @@ export async function advanceClaimedCase(
       }
       waiting = lawsuits.waiting;
       created = lawsuits.created;
+    }
+    // The papers the client signs, once they finished or their case moved on (0054, 0057): the lawsuits just
+    // created move it on, so they are looked for again right then, never left for a later look. The lawsuits do
+    // not wait for the papers (only the filing does).
+    let papersWaiting: string | null = null;
+    if (held.papersDue || created) {
+      const papers = await sendPapers(service, held);
+      if (papers.lost) {
+        await deliverMessages(asked.messages, follow);
+        return "lost";
+      }
+      if (papers.failed) failed = true;
+      papersWaiting = papers.waiting;
+      if (papers.envelopes > 0) asked.papers = papers.envelopes;
+      // An envelope of the firm's ZapSign account is opened by the backend (0023).
+      if (papers.zapsign) await sendEvent("one/signature.requested", {}).catch(() => undefined);
+    }
+    // Once the papers went, the client hears that what they sent arrived and what comes next (0055, 0057).
+    if (held.receivedDue || created) {
+      const told = await sayReceived(service, held);
+      asked.messages.push(...told.messages);
+      if (told.failed) failed = true;
+      if (told.lost) {
+        await deliverMessages(asked.messages, follow);
+        return "lost";
+      }
     }
     const { data, error } = await service.rpc("advance_case_steps", {
       target_case: held.caseId,

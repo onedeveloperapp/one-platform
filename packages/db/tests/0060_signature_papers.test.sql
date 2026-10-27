@@ -197,7 +197,7 @@ select ok(
   and pg_temp.got('to_issue_1', 'code') = 'due' and pg_temp.got('to_issue_1', 'kind') = 'procuracao'
   and pg_temp.got('to_issue_1', 'body') like 'PROCURAÇÃO. MARIANA TESTE, nacionalidade brasileira, pessoa solteira, profissão Professora, CPF nº 123.456.789-09, com endereço em Rua das Flores, nº 10, Centro, Goiânia/GO, CEP 74000-000 nomeia %'
   and pg_temp.got('to_issue_1', 'body') like '%Ana Souza, OAB/GO nº 60001, do escritório Souza Advogados%'
-  and pg_temp.got('to_issue_1', 'body') like '%contra a companhia aérea LATAM em razão de o cancelamento do voo LA 3456 de GRU para REC, de 24/10/2026.%'
+  and pg_temp.got('to_issue_1', 'body') like '%contra TAM Linhas Aéreas S.A., CNPJ nº 02.012.862/0001-60 em razão de o cancelamento do voo LA 3456 de GRU para REC, de 24/10/2026.%'
   and pg_temp.got('to_issue_1', 'body') like '%Goiânia, % de % de %. Mariana Teste',
   'the sweep takes a case owed a paper, and the paper says who grants it, to whom, against whom, why, where and when, as the case has it'
 );
