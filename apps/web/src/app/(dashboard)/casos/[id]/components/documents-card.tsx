@@ -32,7 +32,7 @@ import {
   FILE_REFUSAL_KEY,
   isDocumentKind,
 } from "@/lib/cases/cases";
-import { processingErrorKey } from "@/lib/cases/document-check";
+import { processingErrorKey, readDataDiffers, type ReadDiffer } from "@/lib/cases/document-check";
 import { PHOTO_PROBLEM_KEY } from "@/lib/cases/document-quality";
 import { opensOnArrival } from "@/lib/cases/sections";
 import { mimeOf, uploadToSignedUrl } from "@/lib/files/browser-upload";
@@ -43,6 +43,11 @@ const STATUS_TONE: Record<CaseDocument["status"], StatusTone> = {
   received: "info",
   accepted: "positive",
   rejected: "attention",
+};
+const READ_DIFFER_KEY: Record<ReadDiffer, string> = {
+  cpf: "read-item-cpf",
+  birth_date: "read-item-birth-date",
+  postal_code: "read-item-postal-code",
 };
 const SOURCE_KEY: Record<CaseDocument["source"], string> = {
   client: "case-document-source-client",
@@ -81,6 +86,14 @@ export default function DocumentsCard({
 
   const personOf = (partyId: string | null) =>
     state.parties.find((candidate) => candidate.partyId === partyId)?.person.full_name ?? null;
+  const list = new Intl.ListFormat("pt-BR", { style: "long", type: "conjunction" });
+  // What a document of a person says otherwise than their record (migration 0063), never of a refused one.
+  const differsOf = (document: CaseDocument) => {
+    const person = state.parties.find((candidate) => candidate.partyId === document.partyId)?.person;
+    return person && document.check && document.status !== "rejected"
+      ? readDataDiffers(document.check.answer.data, person)
+      : [];
+  };
   const toReview = state.documents.filter((document) => document.status === "received");
   const decided = state.documents.filter((document) => document.status !== "received");
 
@@ -181,6 +194,14 @@ export default function DocumentsCard({
             .join(" ")}
         </Typography>
       ) : null}
+      {differsOf(document).length > 0 && (
+        // A fact of the record the document says otherwise: ONE changed nothing, and who decides looks at it.
+        <Typography variant="body2" className="text-text-primary">
+          {t("case-document-read-differs", {
+            fields: list.format(differsOf(document).map((field) => t(READ_DIFFER_KEY[field]))),
+          })}
+        </Typography>
+      )}
       {document.status === "rejected" && document.rejectedReason && (
         <Typography variant="body2" className="text-text-secondary">
           {t("client-document-rejected", {

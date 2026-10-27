@@ -57,6 +57,7 @@ import {
   type SegmentValues,
   segmentValues,
 } from "@/lib/cases/forms";
+import { beingRead, READ_ITEM_KEY, readFieldsOf, readItems } from "@/lib/cases/read-fields";
 import { mimeOf, uploadToSignedUrl } from "@/lib/files/browser-upload";
 import { formatDayBr, isMinorOn } from "@flyee/rules/person";
 
@@ -202,17 +203,9 @@ export default function ClientFolder({
       )}
 
       <ClientCourse lawsuits={tasks.course} />
-      <ClientNotices token={token} notices={tasks.notices} editable={editable} onSaved={() => router.refresh()} />
       <ClientTerms token={token} terms={tasks.terms} onSaved={() => router.refresh()} />
       <ClientCivilCourt token={token} items={tasks.civilCourt} onSaved={() => router.refresh()} />
-      <People token={token} people={view.people} today={today} editable={editable} onSaved={() => router.refresh()} />
-      <Trip token={token} view={view} editable={editable} onSaved={() => router.refresh()} />
-      <ClientStatements
-        token={token}
-        statements={tasks.statements}
-        editable={editable}
-        onSaved={() => router.refresh()}
-      />
+      {/* The documents first: ONE reads the data of each person and the trip in them (migration 0063). */}
       <Documents
         token={token}
         view={view}
@@ -221,6 +214,22 @@ export default function ClientFolder({
         editable={editable}
         onSaved={() => router.refresh()}
       />
+      <People
+        token={token}
+        people={view.people}
+        documents={view.documents}
+        today={today}
+        editable={editable}
+        onSaved={() => router.refresh()}
+      />
+      <Trip token={token} view={view} editable={editable} onSaved={() => router.refresh()} />
+      <ClientStatements
+        token={token}
+        statements={tasks.statements}
+        editable={editable}
+        onSaved={() => router.refresh()}
+      />
+      <ClientNotices token={token} notices={tasks.notices} editable={editable} onSaved={() => router.refresh()} />
       <ClientSignatures token={token} signatures={tasks.signatures} editable onSaved={() => router.refresh()} />
       {editable && (
         <Finish
@@ -253,12 +262,14 @@ function ProblemAlert({ problem }: { problem: Problem }) {
 function People({
   token,
   people,
+  documents,
   today,
   editable,
   onSaved,
 }: {
   token: string;
   people: ClientPerson[];
+  documents: OpenView["documents"];
   today: string;
   editable: boolean;
   onSaved: () => void;
@@ -269,9 +280,19 @@ function People({
   const [initial, setInitial] = useState<PersonValues>(personValues(null));
   const [problem, setProblem] = useState<Problem>(null);
   const [busy, setBusy] = useState(false);
+  const list = new Intl.ListFormat("pt-BR", { style: "long", type: "conjunction" });
 
   const formOf = (person: ClientPerson | null): readonly PersonField[] =>
     !person || isMinorOn(person.birth_date, today) === true ? MINOR_FORM : ADULT_FORM;
+  // What ONE read from a document of the person and nobody changed since: said under each field while the
+  // value in the form is still the one the document gave.
+  const readOf = (person: ClientPerson | null): ReadonlySet<PersonField> => {
+    if (!person) return new Set();
+    // Compared as the form sends them: a CEP the mask wrote with its dash is the same CEP.
+    const changed = new Set(Object.keys(personFields(values, formOf(person), initial)));
+    const marks = readFieldsOf(person.read_fields);
+    return new Set((Object.keys(marks) as PersonField[]).filter((field) => !changed.has(field)));
+  };
 
   const edit = (person: ClientPerson | null) => {
     const start = personValues(person);
@@ -314,6 +335,7 @@ function People({
         errorField={problem?.field}
         errorText={problem ? t(caseErrorKey(problem.code)) : null}
         disabled={busy}
+        read={readOf(person)}
       />
       {problem && !problem.field && <ProblemAlert problem={problem} />}
       <Box className="flex flex-wrap gap-2">
@@ -344,6 +366,8 @@ function People({
           const left = formOf(person)
             .filter((field) => field !== "complement" && field !== "email" && field !== "phone")
             .filter((field) => !String(person[field] ?? "").trim());
+          const read = readItems(readFieldsOf(person.read_fields));
+          const reading = left.length > 0 && beingRead(person.party_ids ?? [person.party_id], documents);
           return (
             <Box key={person.person_id} className="border-grey-100 flex flex-col gap-3 rounded-2xl border p-4">
               <Box className="flex flex-wrap items-center justify-between gap-2">
@@ -369,6 +393,16 @@ function People({
               {left.length > 0 && open !== person.person_id && (
                 <Typography variant="body2" className="text-text-secondary">
                   {left.map((field) => t(PERSON_FIELD_KEY[field])).join(" · ")}
+                </Typography>
+              )}
+              {read.length > 0 && open !== person.person_id && (
+                <Typography variant="body2" className="text-text-primary">
+                  {t("client-person-read", { items: list.format(read.map((item) => t(READ_ITEM_KEY[item]))) })}
+                </Typography>
+              )}
+              {reading && (
+                <Typography variant="body2" className="text-text-secondary" role="status">
+                  {t("client-person-reading")}
                 </Typography>
               )}
               {open === person.person_id

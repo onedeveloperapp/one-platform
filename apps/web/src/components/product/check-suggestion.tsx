@@ -9,6 +9,8 @@ import { TILE_TONE } from "@/components/product/tile-tone";
 import NiSparkle from "@/icons/nexture/ni-sparkle";
 import { type CheckAnswer, localMoment } from "@/lib/cases/document-check";
 import { cn } from "@/lib/utils";
+import { formatCep, formatCpf } from "@flyee/fields";
+import { formatDayBr } from "@flyee/rules/person";
 
 const MATCH_KEY: Record<CheckAnswer["matches"], string> = {
   sim: "check-suggestion-match-yes",
@@ -20,7 +22,8 @@ const MATCH_KEY: Record<CheckAnswer["matches"], string> = {
  * What the AI read in a document and suggests doing with it, as a person
  * reads it before deciding: the suggestion named (accept or refuse), the
  * reason the client would read, what the file turned out to be, the name on
- * it, and the legs of the trip it carries. It decides nothing: the card that
+ * it, what it says of its person (the CPF, the birth date, the nationality,
+ * the address), and the legs of the trip it carries. It decides nothing: the card that
  * holds it offers the decision.
  *
  * Closest catalog shape: the tinted icon box of `TILE_TONE` with a
@@ -33,6 +36,18 @@ export default function CheckSuggestion({ answer, className }: { answer: CheckAn
   const t = useTranslations("product");
   const refuse = answer.decision === "recusar";
   const tone = TILE_TONE["accent-4"];
+  const data = answer.data;
+  const address = data
+    ? [
+        [data.street, data.number].filter(Boolean).join(", "),
+        data.complement,
+        data.district,
+        [data.city, data.uf].filter(Boolean).join("/"),
+        data.postalCode ? formatCep(data.postalCode) : "",
+      ]
+        .filter(Boolean)
+        .join(" · ")
+    : "";
 
   const facts: { key: string; label: string; value: string }[] = [
     { key: "identified", label: t("check-suggestion-identified"), value: answer.identified },
@@ -43,6 +58,11 @@ export default function CheckSuggestion({ answer, className }: { answer: CheckAn
     },
     { key: "name", label: t("check-suggestion-name"), value: answer.nameOnDocument },
     { key: "match", label: t("check-suggestion-match"), value: t(MATCH_KEY[answer.matches]) },
+    // What the document says of its person (migration 0063): written where the record has nothing, once accepted.
+    { key: "cpf", label: t("check-suggestion-cpf"), value: data?.cpf ? formatCpf(data.cpf) : "" },
+    { key: "birth", label: t("check-suggestion-birth-date"), value: formatDayBr(data?.birthDate) ?? "" },
+    { key: "nationality", label: t("check-suggestion-nationality"), value: data?.nationality ?? "" },
+    { key: "address", label: t("check-suggestion-address"), value: address },
     { key: "notes", label: t("check-suggestion-notes"), value: answer.notes },
   ].filter((fact) => fact.value !== "");
 

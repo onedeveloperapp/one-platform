@@ -66,11 +66,18 @@ describe("ONE in a conversation", () => {
     });
     expect(message).toContain("Pronto, Rafael. O escritório abriu o seu caso, número {caso}.");
     expect(message).toContain("1. Abra o seu link: https://one.invalid/c/token");
-    expect(message).toContain("2. Preencha os seus dados e os de Laura.");
-    expect(message).not.toMatch(/[–—!]/);
-    expect(caseStepsMessage({ passengerName: "Mariana Teste", url: "u", minors: [] })).toContain(
-      "2. Preencha os seus dados.",
+    // The documents first: the firm reads each person's data in them, and the passenger confirms what was read.
+    expect(message).toContain(
+      "2. Envie a foto do documento de identidade de cada um (o seu e o de Laura), um comprovante de endereço e o cartão de embarque ou o bilhete.",
     );
+    expect(message).toContain("3. Confira os seus dados e os de Laura, que o escritório leu nos documentos");
+    expect(message).not.toMatch(/[–—!]/);
+    const alone = caseStepsMessage({ passengerName: "Mariana Teste", url: "u", minors: [] });
+    expect(alone).toContain("2. Envie a foto do seu documento de identidade, um comprovante de endereço");
+    expect(alone).toContain("3. Confira os seus dados, que o escritório leu nos documentos, e complete o que faltar.");
+    expect(
+      caseStepsMessage({ passengerName: "Rafael Teste", url: "u", minors: ["Laura Teste", "Pedro Teste"] }),
+    ).toContain("(o seu, o de Laura e o de Pedro)");
     expect(declinedMessage("Pedro Teste")).toBe(
       "Tudo bem, Pedro. O escritório não vai seguir com este caso. Se mudar de ideia, é só escrever aqui.",
     );

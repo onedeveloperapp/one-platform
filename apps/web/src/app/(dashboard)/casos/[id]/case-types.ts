@@ -6,6 +6,7 @@ import type { DocumentQuality } from "@/lib/cases/document-quality";
 import type { CaseDossier, CaseDraft, CasePieces } from "@/lib/cases/draft-facts";
 import type { CivilCourtNeed, CourtNote, FamilyState } from "@/lib/cases/family";
 import type { CaseFiling } from "@/lib/cases/filing-facts";
+import type { ReadFields } from "@/lib/cases/read-fields";
 import type { Ceiling, LawyerCauses, WeatherAssessment } from "@/lib/cases/rules";
 import type { CaseAudio, CaseComplaint, CaseStatement } from "@/lib/cases/statement-facts";
 import type { ComplaintChannel } from "@/lib/cases/statements";
@@ -29,6 +30,8 @@ export type CasePerson = PersonData & {
     nameMatches: boolean | null;
   } | null;
   updatedVia: "firm" | "client";
+  /** The fields ONE read from a document of theirs (migration 0063), until a person writes them. */
+  readFields: ReadFields;
 };
 
 /** One person in the case: a claimant (an adult, or a minor with who answers for them) or a guardian. */

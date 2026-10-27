@@ -462,6 +462,8 @@ export const TASK_OUTPUT_KEYS: Record<string, readonly string[]> = {
     "legivel",
     "nome_no_documento",
     "confere_com_a_pessoa",
+    // What the document says of its person: the database writes it where the record has nothing (0063).
+    "dados_lidos",
     "observacoes",
     "trechos",
   ],

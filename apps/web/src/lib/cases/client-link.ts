@@ -15,6 +15,8 @@ export type ClientPerson = PersonData & {
   is_holder: boolean;
   /** Every party the person takes in the case (a parent is a claimant and a guardian). */
   party_ids: string[];
+  /** The fields ONE read from a document of theirs (migration 0063), as the database keeps them: `readFieldsOf`. */
+  read_fields?: unknown;
 };
 
 export type ClientSegment = {
@@ -40,6 +42,8 @@ export type ClientDocument = {
   rejected_reason: string | null;
   name: string;
   created_at: string;
+  /** Whether the backend is still reading it (migration 0024): `pending` or `working` while it is. */
+  processing?: string;
 };
 
 export type ClientLinkView =

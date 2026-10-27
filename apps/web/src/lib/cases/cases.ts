@@ -203,6 +203,7 @@ export const EVENT_KEY: Record<string, string> = {
   client_term_accepted: "case-event-client-term-accepted",
   signature_signed_after_cancel: "case-event-signature-signed-after-cancel",
   segments_read: "case-event-segments-read",
+  person_read: "case-event-person-read",
   claim_set: "case-event-claim-set",
   claim_defaulted: "case-event-claim-defaulted",
   suspension_saved: "case-event-suspension-saved",
@@ -519,8 +520,9 @@ export const isNeedMet = (need: DocumentNeed, documents: CaseDocumentState[]): b
 
 /**
  * What a case still needs before the firm can prepare it, in the order a
- * person fills it: each person's data, the documents the setting names, and
- * at least one leg of the trip. `today` decides who is a minor.
+ * person fills it: the documents the setting names first (ONE reads a
+ * person's data in them, migration 0063), then each person's data, and at
+ * least one leg of the trip. `today` decides who is a minor.
  */
 export function missingItems(input: {
   holder: PersonData;
@@ -534,16 +536,16 @@ export function missingItems(input: {
   const missing: Missing[] = [];
   const isMinor = (person: PersonData) => isMinorOn(person.birth_date, input.today) === true;
 
-  const people = [input.holder, ...input.claimants.filter((person) => person.person_id !== input.holder.person_id)];
-  for (const person of people) {
-    const fields = missingFields(person, isMinor(person) ? MINOR_FIELDS : ADULT_FIELDS);
-    if (fields.length > 0) missing.push({ type: "fields", personId: person.person_id, name: person.full_name, fields });
-  }
-
   for (const need of documentNeeds(input)) {
     if (!isNeedMet(need, input.documents)) {
       missing.push({ type: "document", kind: need.kind, personId: need.personId, name: need.name });
     }
+  }
+
+  const people = [input.holder, ...input.claimants.filter((person) => person.person_id !== input.holder.person_id)];
+  for (const person of people) {
+    const fields = missingFields(person, isMinor(person) ? MINOR_FIELDS : ADULT_FIELDS);
+    if (fields.length > 0) missing.push({ type: "fields", personId: person.person_id, name: person.full_name, fields });
   }
 
   if (input.segments === 0) missing.push({ type: "flight" });

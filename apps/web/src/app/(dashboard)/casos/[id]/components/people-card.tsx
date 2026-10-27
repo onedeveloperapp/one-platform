@@ -33,6 +33,7 @@ import {
   type PersonValues,
   personValues,
 } from "@/lib/cases/forms";
+import { READ_ITEM_KEY, readItems } from "@/lib/cases/read-fields";
 import { opensOnArrival } from "@/lib/cases/sections";
 import { formatCpf, formatPhoneBr } from "@flyee/fields";
 import { ageOn, formatDayBr, isMinorOn } from "@flyee/rules/person";
@@ -90,6 +91,7 @@ export default function PeopleCard({
   >(null);
 
   const members = membersOf(state.parties);
+  const list = new Intl.ListFormat("pt-BR", { style: "long", type: "conjunction" });
   const nameOfParty = (partyId: string | null) =>
     state.parties.find((party) => party.partyId === partyId)?.person.full_name ?? "";
   const minor = (person: CasePerson) => isMinorOn(person.birth_date, state.today) === true;
@@ -245,6 +247,13 @@ export default function PeopleCard({
             {person.updatedVia === "client" && (
               <Typography variant="body2" className="text-text-secondary">
                 {t("case-person-by-client")}
+              </Typography>
+            )}
+            {readItems(person.readFields).length > 0 && (
+              <Typography variant="body2" className="text-text-secondary">
+                {t("case-person-read", {
+                  items: list.format(readItems(person.readFields).map((item) => t(READ_ITEM_KEY[item]))),
+                })}
               </Typography>
             )}
             {writable && (

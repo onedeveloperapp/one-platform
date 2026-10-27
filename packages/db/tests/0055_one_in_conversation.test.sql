@@ -502,12 +502,14 @@ select ok(
   'each case ONE opens takes the firm''s next number'
 );
 
+-- The third version (0063) keeps the second's words and names the documents first among the next steps.
 select ok(
   (select array_agg(v.version::text || ':' || v.is_active::text order by v.version) from public.prompt_versions v
-   where v.task = 'atendimento.conversa') = array['1:false', '2:true']
+   where v.task = 'atendimento.conversa') = array['1:false', '2:false', '3:true']
   and (select v.system_prompt like '%Responda você mesmo o caminho do caso, sem chamar ninguém%'
+              and v.system_prompt like '%os próximos passos (abrir o link, enviar os documentos, conferir os dados%'
        from public.prompt_versions v where v.task = 'atendimento.conversa' and v.is_active),
-  'the second instructions are in force: ONE answers the course of a case itself and calls a person when it cannot go on'
+  'the instructions in force have ONE answer the course of a case itself, documents first, and call a person when it cannot go on'
 );
 
 select * from finish();

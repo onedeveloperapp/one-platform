@@ -22,6 +22,11 @@ import {
  * contract (`AddressLookupProvider` resolves null, never throws): the user
  * simply types the address manually — the form is never blocked.
  *
+ * Only a CEP somebody types is looked up, never the one the form opened
+ * with: an address already on record (typed before, or read from the
+ * client's proof of address) is not rewritten by the lookup's just because
+ * the form was opened.
+ *
  * Provider defaults to ViaCEP (BR); inject any `AddressLookupProvider` for
  * other markets. Persist `onlyDigits(value)`.
  */
@@ -40,7 +45,8 @@ export default function CepField({
   const [looking, setLooking] = useState(false);
   const value = String(props.value ?? "");
   const cep = onlyDigits(value);
-  const lastLookedUp = useRef<string | null>(null);
+  // The CEP the form opened with counts as looked up already.
+  const lastLookedUp = useRef<string | null>(cep.length === 8 ? cep : null);
   const callbackRef = useRef(onAddressFound);
   callbackRef.current = onAddressFound;
   const providerRef = useRef(provider);

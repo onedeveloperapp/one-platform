@@ -224,6 +224,20 @@ describe.skipIf(!DB_URL)("ONE in the conversation, from the first word on a flig
               legivel: true,
               nome_no_documento: "MARIANA TESTE",
               confere_com_a_pessoa: "sim",
+              // What the identity says of its person (0063): the name on record already, and nothing else.
+              dados_lidos: {
+                nome_completo: "Mariana Teste",
+                cpf: "",
+                data_nascimento: "",
+                nacionalidade: "",
+                cep: "",
+                logradouro: "",
+                numero: "",
+                complemento: "",
+                bairro: "",
+                cidade: "",
+                uf: "",
+              },
               observacoes: "",
               trechos: [],
             }

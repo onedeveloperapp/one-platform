@@ -45,19 +45,25 @@ export function quickAnswer(text: string | null | undefined): QuickAnswer | null
   return null;
 }
 
-/** The message after a yes: the case's number (marked `{caso}`, the database writes it), the link and the next steps. */
+/**
+ * The message after a yes: the case's number (marked `{caso}`, the database writes it), the link and the next
+ * steps, the documents first: the firm reads each person's data in them (migration 0063), and the passenger
+ * confirms what was read and completes the rest.
+ */
 export function caseStepsMessage(input: { passengerName: string; url: string; minors: string[] }): string {
   const name = firstNameOf(input.passengerName) || input.passengerName;
   const others = input.minors.map((minor) => firstNameOf(minor) || minor).filter(Boolean);
-  const data =
+  const list = new Intl.ListFormat("pt-BR", { style: "long", type: "conjunction" });
+  const identities =
     others.length === 0
-      ? "Preencha os seus dados."
-      : `Preencha os seus dados e os ${others.length === 1 ? "de" : "de cada uma das crianças:"} ${others.join(" e ")}.`;
+      ? "a foto do seu documento de identidade"
+      : `a foto do documento de identidade de cada um (${list.format(["o seu", ...others.map((other) => `o de ${other}`)])})`;
+  const whose = others.length === 0 ? "os seus dados" : `os seus dados e os de ${list.format(others)}`;
   return [
     `Pronto, ${name}. O escritório abriu o seu caso, número {caso}. Os próximos passos:`,
     `1. Abra o seu link: ${input.url}`,
-    `2. ${data}`,
-    "3. Envie a foto do documento de identidade, um comprovante de endereço e o cartão de embarque ou o bilhete.",
+    `2. Envie ${identities}, um comprovante de endereço e o cartão de embarque ou o bilhete.`,
+    `3. Confira ${whose}, que o escritório leu nos documentos, e complete o que faltar.`,
     "4. Conte o que aconteceu, por texto ou por áudio.",
     "O link é só seu. Se alguém mais viajou com você, me diga aqui.",
   ].join("\n");

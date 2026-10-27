@@ -128,7 +128,7 @@ describe("what a case still needs", () => {
     ]);
   });
 
-  it("asks each claimant for their identity, the holder for the proof of address and the case for the ticket", () => {
+  it("asks each claimant for their identity, the holder for the proof of address and the case for the ticket, first", () => {
     const missing = missingItems({
       holder,
       claimants: [holder, child],
@@ -137,11 +137,12 @@ describe("what a case still needs", () => {
       required: REQUIRED,
       today: "2026-10-09",
     });
+    // The documents come before the data: ONE reads a person's data in them.
     expect(missing).toEqual([
-      { type: "fields", personId: "p-2", name: "Joao Teste", fields: ["cpf"] },
       { type: "document", kind: "identity", personId: "p-2", name: "Joao Teste" },
       { type: "document", kind: "address_proof", personId: "p-1", name: "Maria Teste" },
       { type: "document", kind: "ticket", personId: null, name: null },
+      { type: "fields", personId: "p-2", name: "Joao Teste", fields: ["cpf"] },
       { type: "flight" },
     ]);
   });

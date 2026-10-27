@@ -12,6 +12,9 @@ import {
   processingErrorKey,
   processingPlan,
   readCheckAnswer,
+  type ReadData,
+  readDataDiffers,
+  readNothing,
   sameOutput,
 } from "@/lib/cases/document-check";
 import messages from "@flyee/content/messages/pt-BR.json";
@@ -20,12 +23,20 @@ const ROOT = path.resolve(__dirname, "../../../../..");
 const MIGRATION = fs.readFileSync(path.join(ROOT, "packages/db/migrations/0024_document_checks.sql"), "utf8");
 const product = messages.product as Record<string, string>;
 
+type Schema = { required: string[]; properties: Record<string, Schema & { type?: string }> };
+
+/** A task's schema as a migration writes it. */
+const schemaOf = (migration: string, name: string): Schema => {
+  const match = /\$schema\$([\s\S]*?)\$schema\$/.exec(migration);
+  if (!match) throw new Error(`schema not found in ${name}`);
+  return JSON.parse(match[1]) as Schema;
+};
+
 /** The task's schema as migration 0024 seeds it. */
-const SEEDED_SCHEMA = (() => {
-  const match = /\$schema\$([\s\S]*?)\$schema\$/.exec(MIGRATION);
-  if (!match) throw new Error("schema not found in 0024");
-  return JSON.parse(match[1]) as { required: string[]; properties: Record<string, unknown> };
-})();
+const SEEDED_SCHEMA = schemaOf(MIGRATION, "0024");
+/** And the one in force, as migration 0063 publishes it: the second version, which reads the person's data. */
+const IN_FORCE = fs.readFileSync(path.join(ROOT, "packages/db/migrations/0063_data_from_documents.sql"), "utf8");
+const SCHEMA_IN_FORCE = schemaOf(IN_FORCE, "0063");
 
 const answer = (overrides: Record<string, unknown> = {}): Record<string, unknown> => ({
   decisao: "aceitar",
@@ -116,8 +127,96 @@ describe("what the model is told", () => {
 
 describe("the answer", () => {
   it("asks the model for exactly the fields the code reads, and the console keeps them", () => {
-    expect([...SEEDED_SCHEMA.required].sort()).toEqual([...TASK_OUTPUT_KEYS[DOCUMENT_CHECK_TASK]].sort());
-    expect(Object.keys(SEEDED_SCHEMA.properties).sort()).toEqual([...TASK_OUTPUT_KEYS[DOCUMENT_CHECK_TASK]].sort());
+    expect([...SCHEMA_IN_FORCE.required].sort()).toEqual([...TASK_OUTPUT_KEYS[DOCUMENT_CHECK_TASK]].sort());
+    expect(Object.keys(SCHEMA_IN_FORCE.properties).sort()).toEqual([...TASK_OUTPUT_KEYS[DOCUMENT_CHECK_TASK]].sort());
+    // The second version keeps every field of the first, which the answers on record carry.
+    for (const field of SEEDED_SCHEMA.required) expect(SCHEMA_IN_FORCE.required).toContain(field);
+  });
+
+  it("asks for what a document says of its person, every field named in the instructions and none a limit", () => {
+    const read = SCHEMA_IN_FORCE.properties.dados_lidos;
+    const fields = [
+      "nome_completo",
+      "cpf",
+      "data_nascimento",
+      "nacionalidade",
+      "cep",
+      "logradouro",
+      "numero",
+      "complemento",
+      "bairro",
+      "cidade",
+      "uf",
+    ];
+    expect(read.type).toBe("object");
+    expect(read.required).toEqual(fields);
+    expect(Object.keys(read.properties)).toEqual(fields);
+    for (const field of fields) {
+      expect(IN_FORCE).toContain(field);
+      // Only what Anthropic's structured output takes: a string, with no length or pattern.
+      expect(Object.keys(read.properties[field]).filter((key) => key !== "type" && key !== "description")).toEqual([]);
+    }
+    // Read where the person's data are, and never the issuing company's address.
+    expect(IN_FORCE).toContain("nunca a data de expedição nem a de validade");
+    expect(IN_FORCE).toContain("nunca o da empresa que o emitiu");
+  });
+
+  it("reads what a document says of its person, digits as digits, and nothing from an answer of the first version", () => {
+    const read = readCheckAnswer(
+      answer({
+        tipo_identificado: "RG",
+        trechos: [],
+        dados_lidos: {
+          nome_completo: "  Maria  Teste de Souza ",
+          cpf: "529.982.247-25",
+          data_nascimento: "1985-04-02",
+          nacionalidade: "Brasileira",
+          cep: "74000-000",
+          logradouro: "",
+          numero: "",
+          complemento: "",
+          bairro: "",
+          cidade: "",
+          uf: "go",
+        },
+      }),
+    );
+    expect(read?.data).toEqual({
+      fullName: "Maria Teste de Souza",
+      cpf: "52998224725",
+      birthDate: "1985-04-02",
+      nationality: "brasileira",
+      postalCode: "74000000",
+      street: "",
+      number: "",
+      complement: "",
+      district: "",
+      city: "",
+      uf: "GO",
+    });
+    expect(readCheckAnswer(answer({ dados_lidos: { data_nascimento: "02/04/1985" } }))?.data?.birthDate).toBe("");
+    expect(readCheckAnswer(answer())?.data).toBeNull();
+    expect(readNothing(readCheckAnswer(answer())?.data ?? null)).toBe(true);
+    expect(readNothing(read?.data ?? null)).toBe(false);
+  });
+
+  it("says what the record says otherwise than the document, only where both have it", () => {
+    const data = readCheckAnswer(
+      answer({
+        dados_lidos: { cpf: "52998224725", data_nascimento: "1985-04-02", cep: "74000000" },
+      }),
+    )?.data as ReadData;
+    expect(readDataDiffers(data, { cpf: "52998224725", birth_date: "1985-04-02", postal_code: "74000000" })).toEqual(
+      [],
+    );
+    expect(readDataDiffers(data, { cpf: "11144477735", birth_date: "1985-04-03", postal_code: "74000001" })).toEqual([
+      "cpf",
+      "birth_date",
+      "postal_code",
+    ]);
+    // Nothing on record, or nothing read: nothing differs.
+    expect(readDataDiffers(data, { cpf: null, birth_date: null, postal_code: null })).toEqual([]);
+    expect(readDataDiffers(null, { cpf: "11144477735", birth_date: null, postal_code: null })).toEqual([]);
   });
 
   it("is read back for the screens, and anything else is not an answer", () => {
@@ -190,7 +289,7 @@ describe("the next version of a task's instructions", () => {
     model: "claude-sonnet-5-5",
     effort: "low",
     systemPrompt: "Você confere arquivos de clientes e responde só com o objeto pedido.",
-    outputSchema: JSON.stringify(SEEDED_SCHEMA),
+    outputSchema: JSON.stringify(SCHEMA_IN_FORCE),
     maxTokens: 4096,
     note: "Pede o localizador também no cartão de embarque.",
   };
@@ -211,11 +310,15 @@ describe("the next version of a task's instructions", () => {
   });
 
   it("never drops a field the code of the task reads", () => {
-    const schema = structuredClone(SEEDED_SCHEMA);
+    const schema = structuredClone(SCHEMA_IN_FORCE);
     schema.required = schema.required.filter((key) => key !== "trechos");
     const problem = promptDraftProblem({ ...draft, outputSchema: JSON.stringify(schema) });
     expect(problem?.field).toBe("outputSchema");
     expect(problem?.message).toContain("trechos");
+    // Nor goes back to the first version, which read nothing of the person.
+    expect(promptDraftProblem({ ...draft, outputSchema: JSON.stringify(SEEDED_SCHEMA) })?.message).toContain(
+      "dados_lidos",
+    );
     // A task the code reads nothing of particular from only needs an object.
     expect(
       promptDraftProblem({

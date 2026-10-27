@@ -128,6 +128,25 @@ export type CheckLeg = {
   booking: string;
 };
 
+/**
+ * What a document says of its person, as the model read it (`dados_lidos`, migration 0063): an identity's name,
+ * CPF, birth date and nationality, a proof of address's address. Each empty when the file does not carry it. The
+ * database writes them where the person's record has nothing, once the document is accepted.
+ */
+export type ReadData = {
+  fullName: string;
+  cpf: string;
+  birthDate: string;
+  nationality: string;
+  postalCode: string;
+  street: string;
+  number: string;
+  complement: string;
+  district: string;
+  city: string;
+  uf: string;
+};
+
 export type CheckAnswer = {
   decision: "aceitar" | "recusar";
   reason: string;
@@ -137,12 +156,37 @@ export type CheckAnswer = {
   matches: "sim" | "nao" | "sem_nome";
   notes: string;
   legs: CheckLeg[];
+  /** Null for an answer of the first version of the task's instructions, which read nothing of the person. */
+  data: ReadData | null;
 };
 
 const text = (value: unknown): string => (typeof value === "string" ? value.trim() : "");
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
+
+const digits = (value: unknown): string => text(value).replace(/\D/g, "");
+
+function readDataOf(value: unknown): ReadData | null {
+  if (!isRecord(value)) return null;
+  return {
+    fullName: text(value.nome_completo).replace(/\s+/g, " "),
+    cpf: digits(value.cpf),
+    birthDate: /^\d{4}-\d{2}-\d{2}$/.test(text(value.data_nascimento)) ? text(value.data_nascimento) : "",
+    nationality: text(value.nacionalidade).toLowerCase(),
+    postalCode: digits(value.cep),
+    street: text(value.logradouro),
+    number: text(value.numero),
+    complement: text(value.complemento),
+    district: text(value.bairro),
+    city: text(value.cidade),
+    uf: text(value.uf).toUpperCase(),
+  };
+}
+
+/** True when the answer read nothing of the person. */
+export const readNothing = (data: ReadData | null): boolean =>
+  !data || Object.values(data).every((value) => value === "");
 
 /** The model's answer (or the one a person approved) as the screens read it; null when it is not one. */
 export function readCheckAnswer(output: unknown): CheckAnswer | null {
@@ -158,6 +202,7 @@ export function readCheckAnswer(output: unknown): CheckAnswer | null {
     nameOnDocument: text(output.nome_no_documento),
     matches: matches === "sim" || matches === "nao" ? matches : "sem_nome",
     notes: text(output.observacoes),
+    data: readDataOf(output.dados_lidos),
     legs: (Array.isArray(output.trechos) ? output.trechos : []).filter(isRecord).map((leg) => ({
       flight: text(leg.voo),
       origin: text(leg.origem).toUpperCase(),
@@ -167,6 +212,29 @@ export function readCheckAnswer(output: unknown): CheckAnswer | null {
       booking: text(leg.reserva).toUpperCase(),
     })),
   };
+}
+
+/** A fact of a person's record the document says otherwise: for the firm to look at, never changed by ONE. */
+export type ReadDiffer = "cpf" | "birth_date" | "postal_code";
+
+/**
+ * What the person's record says that the document read says otherwise (the record and the document both have
+ * it): a CPF, a birth date, a postal code. A name that is not the person's is the answer's own `matches`.
+ */
+export function readDataDiffers(
+  data: ReadData | null,
+  person: { cpf: string | null; birth_date: string | null; postal_code: string | null },
+): ReadDiffer[] {
+  if (!data) return [];
+  const differs = (record: string | null, read: string) =>
+    Boolean(record) && read !== "" && String(record).replace(/\D/g, "") !== read.replace(/\D/g, "");
+  return [
+    differs(person.cpf, data.cpf) ? ("cpf" as const) : null,
+    person.birth_date && data.birthDate && person.birth_date.slice(0, 10) !== data.birthDate
+      ? ("birth_date" as const)
+      : null,
+    differs(person.postal_code, data.postalCode) ? ("postal_code" as const) : null,
+  ].filter((field): field is ReadDiffer => field !== null);
 }
 
 /**

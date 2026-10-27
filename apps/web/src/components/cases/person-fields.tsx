@@ -24,6 +24,7 @@ export default function PersonFields({
   errorField,
   errorText,
   disabled,
+  read,
 }: {
   idPrefix: string;
   values: PersonValues;
@@ -33,6 +34,8 @@ export default function PersonFields({
   errorField?: string | null;
   errorText?: string | null;
   disabled?: boolean;
+  /** The fields ONE read from a document (migration 0063), said under each while what is there is still the document's. */
+  read?: ReadonlySet<PersonField>;
 }) {
   const t = useTranslations("product");
   const has = (field: PersonField) => shown.includes(field);
@@ -47,7 +50,7 @@ export default function PersonFields({
     size: "small" as const,
     disabled,
     error: Boolean(errorOf(field)),
-    helperText: errorOf(field),
+    helperText: errorOf(field) ?? (read?.has(field) ? t("person-field-read") : undefined),
   });
 
   return (

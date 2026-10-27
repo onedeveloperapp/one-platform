@@ -22,6 +22,7 @@ import { readQuality } from "@/lib/cases/document-quality";
 import { loadCasePieces } from "@/lib/cases/draft-facts";
 import { loadCaseFilings } from "@/lib/cases/filing-facts";
 import { cpfLookup } from "@/lib/cases/identity";
+import { readFieldsOf } from "@/lib/cases/read-fields";
 import { loadCivilCourt, loadRuleFacts } from "@/lib/cases/rule-facts";
 import { assessWeather, caseDomicile, smallClaimsCeiling, tripPlaces } from "@/lib/cases/rules";
 import { loadStatementFacts } from "@/lib/cases/statement-facts";
@@ -113,7 +114,7 @@ async function loadCase(id: string): Promise<CaseState> {
     supabase
       .from("case_parties")
       .select(
-        "id, person_id, role, guardian_id, people(id, full_name, cpf, birth_date, nationality, marital_status, profession, email, phone, postal_code, street, address_number, complement, district, city, uf, cpf_registry_result, cpf_checked_at, cpf_registry_name, cpf_registry_situation, cpf_registry_regular, cpf_name_matches, updated_via)",
+        "id, person_id, role, guardian_id, people(id, full_name, cpf, birth_date, nationality, marital_status, profession, email, phone, postal_code, street, address_number, complement, district, city, uf, cpf_registry_result, cpf_checked_at, cpf_registry_name, cpf_registry_situation, cpf_registry_regular, cpf_name_matches, updated_via, read_fields)",
       )
       .eq("case_id", id)
       .eq("org_id", firm)
@@ -293,6 +294,7 @@ async function loadCase(id: string): Promise<CaseState> {
               }
             : null,
           updatedVia: person.updated_via === "client" ? "client" : "firm",
+          readFields: readFieldsOf(person.read_fields),
         },
       },
     ];
