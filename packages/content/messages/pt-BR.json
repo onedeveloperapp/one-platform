@@ -1574,6 +1574,7 @@
     "client-title": "Seu caso com {firm}",
     "client-intro": "Aqui você envia ao escritório os seus dados, os do seu voo e os seus documentos. O que você salva chega na hora.",
     "client-locked": "O escritório já está preparando o seu caso, e os seus dados e documentos não mudam mais por esta página. Se precisar mudar alguma coisa, fale com o escritório.",
+    "client-locked-court": "O seu processo já foi para o tribunal, e os seus dados e documentos não mudam mais por esta página. Se precisar mudar alguma coisa, fale com o escritório.",
     "client-missing-title": "O que ainda falta",
     "client-missing-none": "Está tudo aqui. Quando terminar, avise o escritório no fim da página.",
     "client-missing-fields": "Dados de {name}",

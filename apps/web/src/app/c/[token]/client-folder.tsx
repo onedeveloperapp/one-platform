@@ -167,7 +167,7 @@ export default function ClientFolder({
             {facts.join(" · ")}
           </Typography>
           <Typography variant="body1" className="text-text-primary">
-            {editable ? t("client-intro") : t("client-locked")}
+            {editable ? t("client-intro") : tasks.course.length > 0 ? t("client-locked-court") : t("client-locked")}
           </Typography>
         </CardContent>
       </Card>
