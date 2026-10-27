@@ -8,8 +8,6 @@ import {
   Alert,
   Box,
   Button,
-  Card,
-  CardContent,
   Checkbox,
   FormControl,
   FormControlLabel,
@@ -21,9 +19,11 @@ import {
   Typography,
 } from "@mui/material";
 
+import CollapsibleCard from "@/components/product/collapsible-card";
 import StatusChip from "@/components/product/status-chip";
 import { createClientLink, type LinkDelivery, revokeClientLink } from "@/lib/cases/actions";
 import { caseErrorKey, CLIENT_STAGES, LINK_OWED_KEY } from "@/lib/cases/cases";
+import { opensOnArrival } from "@/lib/cases/sections";
 import { isMinorOn } from "@flyee/rules/person";
 
 type Ready = Extract<CaseState, { kind: "ready" }>;
@@ -122,189 +122,195 @@ export default function ClientLinkCard({
     }
   };
 
+  // Each link in force by where its person stands, and whether somebody of the case is owed one ONE cannot send.
+  const linkState = (link: (typeof open)[number]) =>
+    link.finishedAt ? t("case-link-finished") : link.visits > 0 ? t("case-link-opened") : t("case-link-not-opened");
+  const unsent = state.linksOwed.some((owed) => owed.reason !== "sending");
+
   return (
-    <Card component="section" aria-labelledby="case-link">
-      <CardContent className="flex flex-col gap-3">
-        <Box className="flex flex-col gap-1">
-          <Typography id="case-link" variant="h5" component="h2" className="mb-0">
-            {t("case-link-title")}
+    <CollapsibleCard
+      id="case-link"
+      title={t("case-link-title")}
+      summary={
+        open.length > 0
+          ? open.map((link) => `${nameOf(link.personId)}: ${linkState(link)}`).join(" · ")
+          : t("case-link-summary-none")
+      }
+      chip={unsent ? <StatusChip tone="attention" label={t("case-link-summary-owed")} /> : null}
+      description={t("case-link-body")}
+      defaultOpen={opensOnArrival(state.case.status, "link", unsent)}
+      bodyClassName="gap-3"
+    >
+      {open.map((link) => (
+        <Box key={link.id} className="border-grey-100 flex flex-col gap-1 rounded-2xl border p-3">
+          <Box className="flex flex-wrap items-center justify-between gap-2">
+            <Typography variant="body1" className="font-semibold break-words">
+              {nameOf(link.personId)}
+            </Typography>
+            <StatusChip
+              tone={link.finishedAt ? "positive" : link.visits > 0 ? "info" : "neutral"}
+              label={
+                link.finishedAt
+                  ? t("case-link-finished")
+                  : link.visits > 0
+                    ? t("case-link-opened")
+                    : t("case-link-not-opened")
+              }
+            />
+          </Box>
+          <Typography variant="body2" className="text-text-secondary">
+            {[
+              t("case-link-made", { when: moment(link.createdAt) }),
+              t("case-link-until", { when: moment(link.expiresAt) }),
+            ].join(" · ")}
           </Typography>
           <Typography variant="body2" className="text-text-secondary">
-            {t("case-link-body")}
+            {[
+              t("case-link-visits", { count: link.visits }),
+              link.lastOpenedAt ? t("case-link-last", { when: moment(link.lastOpenedAt) }) : null,
+              t("case-link-files", { count: link.uploads }),
+            ]
+              .filter(Boolean)
+              .join(" · ")}
           </Typography>
-        </Box>
-
-        {open.map((link) => (
-          <Box key={link.id} className="border-grey-100 flex flex-col gap-1 rounded-2xl border p-3">
-            <Box className="flex flex-wrap items-center justify-between gap-2">
-              <Typography variant="body1" className="font-semibold break-words">
-                {nameOf(link.personId)}
-              </Typography>
-              <StatusChip
-                tone={link.finishedAt ? "positive" : link.visits > 0 ? "info" : "neutral"}
-                label={
-                  link.finishedAt
-                    ? t("case-link-finished")
-                    : link.visits > 0
-                      ? t("case-link-opened")
-                      : t("case-link-not-opened")
-                }
-              />
-            </Box>
-            <Typography variant="body2" className="text-text-secondary">
-              {[
-                t("case-link-made", { when: moment(link.createdAt) }),
-                t("case-link-until", { when: moment(link.expiresAt) }),
-              ].join(" · ")}
-            </Typography>
-            <Typography variant="body2" className="text-text-secondary">
-              {[
-                t("case-link-visits", { count: link.visits }),
-                link.lastOpenedAt ? t("case-link-last", { when: moment(link.lastOpenedAt) }) : null,
-                t("case-link-files", { count: link.uploads }),
-              ]
-                .filter(Boolean)
-                .join(" · ")}
-            </Typography>
-            {writable && (
-              <Box className="pt-1">
-                <Button variant="text" color="grey" size="small" disabled={busy} onClick={() => void revoke(link.id)}>
-                  {t("case-link-revoke")}
-                </Button>
-              </Box>
-            )}
-          </Box>
-        ))}
-
-        {state.linksOwed.length > 0 && (
-          <Box className="flex flex-col gap-1">
-            {state.linksOwed.map((owed) => (
-              <Typography key={owed.personId} variant="body2" className="text-text-secondary">
-                {t(LINK_OWED_KEY[owed.reason], { name: nameOf(owed.personId) })}
-              </Typography>
-            ))}
-          </Box>
-        )}
-
-        {state.consents.length > 0 && (
-          <Box className="flex flex-col gap-1">
-            <Typography variant="body2" className="font-semibold">
-              {t("case-link-consents")}
-            </Typography>
-            {state.consents.map((consent) => (
-              <Typography
-                key={`${consent.personId}-${consent.title}-${consent.version}`}
-                variant="body2"
-                className="text-text-secondary"
-              >
-                {t("case-link-consent", {
-                  title: consent.title,
-                  version: consent.version,
-                  name: nameOf(consent.personId),
-                  when: moment(consent.acceptedAt),
-                })}
-              </Typography>
-            ))}
-          </Box>
-        )}
-
-        {made && (
-          <Box className="flex flex-col gap-2">
-            <FormControl className="outlined" variant="standard">
-              <FormLabel htmlFor="case-link-url">{t("case-link-url")}</FormLabel>
-              <Input id="case-link-url" value={made.url} readOnly aria-describedby="case-link-url-help" />
-              <FormHelperText id="case-link-url-help">
-                {copied ? t("case-link-copied") : t("case-link-once")}
-              </FormHelperText>
-            </FormControl>
-            <Box>
-              <Button variant="outlined" color="grey" size="small" onClick={() => void copy()}>
-                {t("case-link-copy")}
+          {writable && (
+            <Box className="pt-1">
+              <Button variant="text" color="grey" size="small" disabled={busy} onClick={() => void revoke(link.id)}>
+                {t("case-link-revoke")}
               </Button>
             </Box>
-            {made.whatsapp && (
-              <Alert
-                severity={made.whatsapp === "sent" || made.whatsapp === "queued" ? "success" : "warning"}
-                className="neutral bg-background-paper/60!"
-              >
-                {t(DELIVERY_KEY[made.whatsapp])}
-              </Alert>
-            )}
+          )}
+        </Box>
+      ))}
+
+      {state.linksOwed.length > 0 && (
+        <Box className="flex flex-col gap-1">
+          {state.linksOwed.map((owed) => (
+            <Typography key={owed.personId} variant="body2" className="text-text-secondary">
+              {t(LINK_OWED_KEY[owed.reason], { name: nameOf(owed.personId) })}
+            </Typography>
+          ))}
+        </Box>
+      )}
+
+      {state.consents.length > 0 && (
+        <Box className="flex flex-col gap-1">
+          <Typography variant="body2" className="font-semibold">
+            {t("case-link-consents")}
+          </Typography>
+          {state.consents.map((consent) => (
+            <Typography
+              key={`${consent.personId}-${consent.title}-${consent.version}`}
+              variant="body2"
+              className="text-text-secondary"
+            >
+              {t("case-link-consent", {
+                title: consent.title,
+                version: consent.version,
+                name: nameOf(consent.personId),
+                when: moment(consent.acceptedAt),
+              })}
+            </Typography>
+          ))}
+        </Box>
+      )}
+
+      {made && (
+        <Box className="flex flex-col gap-2">
+          <FormControl className="outlined" variant="standard">
+            <FormLabel htmlFor="case-link-url">{t("case-link-url")}</FormLabel>
+            <Input id="case-link-url" value={made.url} readOnly aria-describedby="case-link-url-help" />
+            <FormHelperText id="case-link-url-help">
+              {copied ? t("case-link-copied") : t("case-link-once")}
+            </FormHelperText>
+          </FormControl>
+          <Box>
+            <Button variant="outlined" color="grey" size="small" onClick={() => void copy()}>
+              {t("case-link-copy")}
+            </Button>
           </Box>
-        )}
+          {made.whatsapp && (
+            <Alert
+              severity={made.whatsapp === "sent" || made.whatsapp === "queued" ? "success" : "warning"}
+              className="neutral bg-background-paper/60!"
+            >
+              {t(DELIVERY_KEY[made.whatsapp])}
+            </Alert>
+          )}
+        </Box>
+      )}
 
-        {problem && (
-          <Alert severity="error" className="neutral bg-background-paper/60!" onClose={() => setProblem(null)}>
-            {t(caseErrorKey(problem))}
-          </Alert>
-        )}
+      {problem && (
+        <Alert severity="error" className="neutral bg-background-paper/60!" onClose={() => setProblem(null)}>
+          {t(caseErrorKey(problem))}
+        </Alert>
+      )}
 
-        {writable && !ended && (
-          <Box className="flex flex-col gap-3">
-            {adults.length === 0 ? (
-              <Typography variant="body2" className="text-text-secondary">
-                {t("case-link-no-adult")}
-              </Typography>
-            ) : (
-              <>
-                {adults.length > 1 && (
-                  <TextField
-                    select
+      {writable && !ended && (
+        <Box className="flex flex-col gap-3">
+          {adults.length === 0 ? (
+            <Typography variant="body2" className="text-text-secondary">
+              {t("case-link-no-adult")}
+            </Typography>
+          ) : (
+            <>
+              {adults.length > 1 && (
+                <TextField
+                  select
+                  size="small"
+                  fullWidth
+                  id="case-link-person"
+                  label={t("case-link-person")}
+                  value={personId}
+                  disabled={busy}
+                  onChange={(event) => setPersonId(event.target.value)}
+                >
+                  {adults.map((person) => (
+                    <MenuItem key={person.person_id} value={person.person_id}>
+                      {person.full_name}
+                    </MenuItem>
+                  ))}
+                </TextField>
+              )}
+              <FormControlLabel
+                control={
+                  <Checkbox
                     size="small"
-                    fullWidth
-                    id="case-link-person"
-                    label={t("case-link-person")}
-                    value={personId}
+                    checked={sendOnWhatsApp}
                     disabled={busy}
-                    onChange={(event) => setPersonId(event.target.value)}
-                  >
-                    {adults.map((person) => (
-                      <MenuItem key={person.person_id} value={person.person_id}>
-                        {person.full_name}
-                      </MenuItem>
-                    ))}
-                  </TextField>
-                )}
-                <FormControlLabel
-                  control={
-                    <Checkbox
-                      size="small"
-                      checked={sendOnWhatsApp}
-                      disabled={busy}
-                      onChange={(event) => setSendOnWhatsApp(event.target.checked)}
-                    />
-                  }
-                  label={t("case-link-send-whatsapp")}
-                />
-                <Box>
-                  <Button
-                    variant={open.length > 0 ? "outlined" : "contained"}
-                    color={open.length > 0 ? "grey" : "primary"}
-                    disabled={busy || !personId}
-                    onClick={() => void create()}
-                  >
-                    {busy
-                      ? t("cases-working")
-                      : open.some((link) => link.personId === personId)
-                        ? t("case-link-new")
-                        : t("case-link-create")}
-                  </Button>
-                </Box>
-                {open.some((link) => link.personId === personId) && (
-                  <Typography variant="body2" className="text-text-secondary">
-                    {t("case-link-replaces")}
-                  </Typography>
-                )}
-              </>
-            )}
-            {!CLIENT_STAGES.includes(state.case.status) && (
-              <Typography variant="body2" className="text-text-secondary">
-                {t("case-link-read-only")}
-              </Typography>
-            )}
-          </Box>
-        )}
-      </CardContent>
-    </Card>
+                    onChange={(event) => setSendOnWhatsApp(event.target.checked)}
+                  />
+                }
+                label={t("case-link-send-whatsapp")}
+              />
+              <Box>
+                <Button
+                  variant={open.length > 0 ? "outlined" : "contained"}
+                  color={open.length > 0 ? "grey" : "primary"}
+                  disabled={busy || !personId}
+                  onClick={() => void create()}
+                >
+                  {busy
+                    ? t("cases-working")
+                    : open.some((link) => link.personId === personId)
+                      ? t("case-link-new")
+                      : t("case-link-create")}
+                </Button>
+              </Box>
+              {open.some((link) => link.personId === personId) && (
+                <Typography variant="body2" className="text-text-secondary">
+                  {t("case-link-replaces")}
+                </Typography>
+              )}
+            </>
+          )}
+          {!CLIENT_STAGES.includes(state.case.status) && (
+            <Typography variant="body2" className="text-text-secondary">
+              {t("case-link-read-only")}
+            </Typography>
+          )}
+        </Box>
+      )}
+    </CollapsibleCard>
   );
 }

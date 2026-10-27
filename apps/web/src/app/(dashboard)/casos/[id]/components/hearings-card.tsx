@@ -5,10 +5,14 @@ import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 
-import { Alert, Box, Button, Card, CardContent, Typography } from "@mui/material";
+import { Alert, Box, Button, Typography } from "@mui/material";
 
 import HearingCard from "@/components/hearings/hearing-card";
 import HearingDialog from "@/components/hearings/hearing-dialog";
+import CollapsibleCard from "@/components/product/collapsible-card";
+import StatusChip from "@/components/product/status-chip";
+import { opensOnArrival } from "@/lib/cases/sections";
+import { momentIn } from "@/lib/hearings/hearings";
 import { formatCnj } from "@flyee/rules/cnj";
 
 type Ready = Extract<CaseState, { kind: "ready" }>;
@@ -49,106 +53,123 @@ export default function HearingsCard({
       .filter(Boolean)
       .join(" · ");
 
+  // The next hearing to come, in the zone it is said in; and the ones whose time passed with no word on what
+  // came of them. A hearing in the coming week opens the card too.
+  const nowAt = Date.parse(hearings.now);
+  const silent = hearings.upcoming.filter(
+    (row) =>
+      row.status === "scheduled" && Date.parse(row.startsAt) + Math.max(hearings.durationMinutes, 1) * 60_000 <= nowAt,
+  ).length;
+  const coming =
+    hearings.upcoming.find((row) => row.status === "scheduled" && Date.parse(row.startsAt) > nowAt) ?? null;
+  const comingAt = coming ? momentIn(coming.startsAt, coming.timeZone) : null;
+  const soon = coming !== null && Date.parse(coming.startsAt) - nowAt < 7 * 24 * 60 * 60 * 1000;
+
   return (
-    <Card component="section" aria-labelledby="case-hearings">
-      <CardContent className="flex flex-col gap-3">
-        <Box className="flex flex-wrap items-center gap-3">
-          <Typography id="case-hearings" variant="h5" component="h2" className="mb-0 min-w-0 flex-1">
-            {t("case-hearings-title")}
-          </Typography>
-          <Button variant="text" color="grey" size="small" href="/agenda" LinkComponent={Link}>
-            {t("case-hearings-all")}
-          </Button>
-        </Box>
+    <CollapsibleCard
+      id="case-hearings"
+      title={t("case-hearings-title")}
+      summary={
+        comingAt
+          ? t("case-hearings-summary-next", { day: comingAt.day, time: comingAt.time })
+          : t("case-hearings-summary-none")
+      }
+      chip={
+        silent > 0 ? <StatusChip tone="attention" label={t("case-hearings-summary-silent", { count: silent })} /> : null
+      }
+      action={
+        <Button variant="outlined" color="grey" size="small" href="/agenda" LinkComponent={Link}>
+          {t("case-hearings-all")}
+        </Button>
+      }
+      defaultOpen={opensOnArrival(state.case.status, "hearings", silent > 0 || soon)}
+      bodyClassName="gap-3"
+    >
+      {notice ? (
+        <Alert
+          severity="success"
+          role="status"
+          className="neutral bg-background-paper/60!"
+          onClose={() => setNotice(null)}
+        >
+          {notice}
+        </Alert>
+      ) : null}
 
-        {notice ? (
-          <Alert
-            severity="success"
-            role="status"
-            className="neutral bg-background-paper/60!"
-            onClose={() => setNotice(null)}
-          >
-            {notice}
-          </Alert>
-        ) : null}
-
-        {hearings.upcoming.length === 0 ? (
-          <Typography variant="body2" className="text-text-secondary">
-            {t("case-hearings-none")}
-          </Typography>
-        ) : (
-          <Box component="ul" className="m-0 flex list-none flex-col gap-3 p-0">
-            {hearings.upcoming.map((row) => (
-              <Box component="li" key={`${row.id}:${row.revision}:${row.status}`}>
-                <HearingCard
-                  row={row}
-                  now={hearings.now}
-                  durationMinutes={hearings.durationMinutes}
-                  colleagues={state.colleagues}
-                  mayWork={mayWork}
-                  showCase={false}
-                  embedded
-                  onChanged={onChanged}
-                />
-              </Box>
-            ))}
-          </Box>
-        )}
-
-        {hearings.past.length > 0 ? (
-          <Box className="flex flex-col gap-3">
-            <Box>
-              <Button
-                variant="text"
-                color="grey"
-                size="small"
-                className="-ml-2"
-                onClick={() => setShowPast((now) => !now)}
-              >
-                {showPast
-                  ? t("case-hearings-past-hide")
-                  : t("case-hearings-past-show", { count: hearings.past.length })}
-              </Button>
+      {hearings.upcoming.length === 0 ? (
+        <Typography variant="body2" className="text-text-secondary">
+          {t("case-hearings-none")}
+        </Typography>
+      ) : (
+        <Box component="ul" className="m-0 flex list-none flex-col gap-3 p-0">
+          {hearings.upcoming.map((row) => (
+            <Box component="li" key={`${row.id}:${row.revision}:${row.status}`}>
+              <HearingCard
+                row={row}
+                now={hearings.now}
+                durationMinutes={hearings.durationMinutes}
+                colleagues={state.colleagues}
+                mayWork={mayWork}
+                showCase={false}
+                embedded
+                onChanged={onChanged}
+              />
             </Box>
-            {showPast ? (
-              <Box component="ul" className="m-0 flex list-none flex-col gap-3 p-0">
-                {hearings.past.map((row) => (
-                  <Box component="li" key={`${row.id}:${row.revision}:${row.status}`}>
-                    <HearingCard
-                      row={row}
-                      now={hearings.now}
-                      durationMinutes={hearings.durationMinutes}
-                      colleagues={state.colleagues}
-                      mayWork={mayWork}
-                      showCase={false}
-                      embedded
-                      onChanged={onChanged}
-                    />
-                  </Box>
-                ))}
-              </Box>
-            ) : null}
-          </Box>
-        ) : null}
+          ))}
+        </Box>
+      )}
 
-        {mayWork && filed.length > 0 ? (
-          <Box className="border-grey-100 flex flex-wrap items-center gap-2 border-t pt-3">
-            {filed.map((proceeding) => (
-              <Button
-                key={proceeding.id}
-                variant="outlined"
-                color="grey"
-                size="small"
-                onClick={() => setAdding(proceeding)}
-              >
-                {filed.length === 1
-                  ? t("case-hearings-add")
-                  : t("case-hearings-add-lawsuit", { lawsuit: lawsuitLabel(proceeding) })}
-              </Button>
-            ))}
+      {hearings.past.length > 0 ? (
+        <Box className="flex flex-col gap-3">
+          <Box>
+            <Button
+              variant="text"
+              color="grey"
+              size="small"
+              className="-ml-2"
+              onClick={() => setShowPast((now) => !now)}
+            >
+              {showPast ? t("case-hearings-past-hide") : t("case-hearings-past-show", { count: hearings.past.length })}
+            </Button>
           </Box>
-        ) : null}
-      </CardContent>
+          {showPast ? (
+            <Box component="ul" className="m-0 flex list-none flex-col gap-3 p-0">
+              {hearings.past.map((row) => (
+                <Box component="li" key={`${row.id}:${row.revision}:${row.status}`}>
+                  <HearingCard
+                    row={row}
+                    now={hearings.now}
+                    durationMinutes={hearings.durationMinutes}
+                    colleagues={state.colleagues}
+                    mayWork={mayWork}
+                    showCase={false}
+                    embedded
+                    onChanged={onChanged}
+                  />
+                </Box>
+              ))}
+            </Box>
+          ) : null}
+        </Box>
+      ) : null}
+
+      {mayWork && filed.length > 0 ? (
+        <Box className="border-grey-100 flex flex-wrap items-center gap-2 border-t pt-3">
+          {filed.map((proceeding) => (
+            <Button
+              key={proceeding.id}
+              variant="outlined"
+              color="grey"
+              size="small"
+              onClick={() => setAdding(proceeding)}
+            >
+              {filed.length === 1
+                ? t("case-hearings-add")
+                : t("case-hearings-add-lawsuit", { lawsuit: lawsuitLabel(proceeding) })}
+            </Button>
+          ))}
+        </Box>
+      ) : null}
 
       {adding ? (
         <HearingDialog
@@ -166,6 +187,6 @@ export default function HearingsCard({
           }}
         />
       ) : null}
-    </Card>
+    </CollapsibleCard>
   );
 }

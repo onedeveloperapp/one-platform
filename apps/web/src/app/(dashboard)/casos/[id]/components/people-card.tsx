@@ -8,8 +8,6 @@ import {
   Alert,
   Box,
   Button,
-  Card,
-  CardContent,
   Dialog,
   DialogActions,
   DialogContent,
@@ -22,6 +20,7 @@ import {
 } from "@mui/material";
 
 import PersonFields from "@/components/cases/person-fields";
+import CollapsibleCard from "@/components/product/collapsible-card";
 import DialogHeader from "@/components/product/dialog-header";
 import StatusChip, { type StatusTone } from "@/components/product/status-chip";
 import { checkCpf, removeCaseParty, saveCasePerson } from "@/lib/cases/actions";
@@ -34,6 +33,7 @@ import {
   type PersonValues,
   personValues,
 } from "@/lib/cases/forms";
+import { opensOnArrival } from "@/lib/cases/sections";
 import { formatCpf, formatPhoneBr } from "@flyee/fields";
 import { ageOn, formatDayBr, isMinorOn } from "@flyee/rules/person";
 
@@ -93,6 +93,15 @@ export default function PeopleCard({
   const nameOfParty = (partyId: string | null) =>
     state.parties.find((party) => party.partyId === partyId)?.person.full_name ?? "";
   const minor = (person: CasePerson) => isMinorOn(person.birth_date, state.today) === true;
+  // What is still missing of a person: a child has a shorter form, and an adult's contact is never required.
+  const leftOf = (person: CasePerson) =>
+    missingFields(
+      person,
+      minor(person)
+        ? MINOR_FORM
+        : ADULT_FORM.filter((field) => field !== "complement" && field !== "email" && field !== "phone"),
+    );
+  const incomplete = members.filter((member) => leftOf(member.person).length > 0).length;
 
   const roleLine = (member: Member) =>
     member.parties
@@ -137,131 +146,138 @@ export default function PeopleCard({
   };
 
   return (
-    <Card component="section" aria-labelledby="case-people">
-      <CardContent className="flex flex-col gap-4">
-        <Box className="flex flex-wrap items-start justify-between gap-2">
-          <Box className="flex flex-col gap-1">
-            <Typography id="case-people" variant="h5" component="h2" className="mb-0">
-              {t("case-people-title")}
-            </Typography>
-            <Typography variant="body2" className="text-text-secondary">
-              {t("case-people-body")}
-            </Typography>
-          </Box>
-          {writable && (
-            <Button variant="outlined" color="grey" size="small" onClick={() => setEditing("new")}>
-              {t("case-people-add")}
-            </Button>
-          )}
-        </Box>
+    <CollapsibleCard
+      id="case-people"
+      title={t("case-people-title")}
+      summary={
+        members.length === 0
+          ? t("case-people-summary-none")
+          : members.length <= 3
+            ? members.map((member) => member.person.full_name).join(", ")
+            : t("case-people-summary-many", {
+                names: members
+                  .slice(0, 2)
+                  .map((member) => member.person.full_name)
+                  .join(", "),
+                count: members.length - 2,
+              })
+      }
+      chip={
+        incomplete > 0 ? (
+          <StatusChip tone="attention" label={t("case-people-summary-incomplete", { count: incomplete })} />
+        ) : null
+      }
+      description={t("case-people-body")}
+      action={
+        writable ? (
+          <Button variant="outlined" color="grey" size="small" onClick={() => setEditing("new")}>
+            {t("case-people-add")}
+          </Button>
+        ) : null
+      }
+      defaultOpen={opensOnArrival(state.case.status, "people", incomplete > 0)}
+    >
+      {notice?.kind === "error" && (
+        <Alert severity="error" className="neutral bg-background-paper/60!" onClose={() => setNotice(null)}>
+          {t(caseErrorKey(notice.code))}
+        </Alert>
+      )}
+      {notice?.kind === "checked" && (
+        <Alert
+          severity={notice.result === "found" && notice.matches !== false ? "success" : "warning"}
+          className="neutral bg-background-paper/60!"
+          onClose={() => setNotice(null)}
+        >
+          {notice.result !== "found"
+            ? t("case-cpf-done-refused")
+            : notice.matches === false
+              ? t("case-cpf-done-differs")
+              : t("case-cpf-done")}
+        </Alert>
+      )}
 
-        {notice?.kind === "error" && (
-          <Alert severity="error" className="neutral bg-background-paper/60!" onClose={() => setNotice(null)}>
-            {t(caseErrorKey(notice.code))}
-          </Alert>
-        )}
-        {notice?.kind === "checked" && (
-          <Alert
-            severity={notice.result === "found" && notice.matches !== false ? "success" : "warning"}
-            className="neutral bg-background-paper/60!"
-            onClose={() => setNotice(null)}
-          >
-            {notice.result !== "found"
-              ? t("case-cpf-done-refused")
-              : notice.matches === false
-                ? t("case-cpf-done-differs")
-                : t("case-cpf-done")}
-          </Alert>
-        )}
-
-        {members.map((member) => {
-          const person = member.person;
-          const isMinor = minor(person);
-          const left = missingFields(
-            person,
-            isMinor
-              ? MINOR_FORM
-              : ADULT_FORM.filter((field) => field !== "complement" && field !== "email" && field !== "phone"),
-          );
-          const chip = registryChip(person);
-          const age = ageOn(person.birth_date, state.today);
-          const facts = [
-            person.cpf ? formatCpf(person.cpf) : null,
-            person.birth_date
-              ? `${formatDayBr(person.birth_date)}${age !== null ? ` (${t("case-age", { age })})` : ""}`
-              : null,
-            person.phone ? formatPhoneBr(person.phone.replace(/^55(?=\d{10,11}$)/, "")) : null,
-            person.email,
-            [person.city, person.uf].filter(Boolean).join("/") || null,
-          ].filter(Boolean);
-          const mayCheck = state.cpfLookup && !isMinor && Boolean(person.cpf) && Boolean(person.birth_date);
-          return (
-            <Box key={person.person_id} className="border-grey-100 flex flex-col gap-2 rounded-2xl border p-4">
-              <Box className="flex flex-wrap items-start justify-between gap-2">
-                <Box className="flex min-w-0 flex-col">
-                  <Typography variant="body1" className="font-semibold break-words">
-                    {person.full_name}
-                  </Typography>
-                  <Typography variant="body2" className="text-text-secondary">
-                    {roleLine(member)}
-                  </Typography>
-                </Box>
-                {!isMinor && <StatusChip tone={chip.tone} label={t(chip.key, chip.values ?? {})} />}
+      {members.map((member) => {
+        const person = member.person;
+        const isMinor = minor(person);
+        const left = leftOf(person);
+        const chip = registryChip(person);
+        const age = ageOn(person.birth_date, state.today);
+        const facts = [
+          person.cpf ? formatCpf(person.cpf) : null,
+          person.birth_date
+            ? `${formatDayBr(person.birth_date)}${age !== null ? ` (${t("case-age", { age })})` : ""}`
+            : null,
+          person.phone ? formatPhoneBr(person.phone.replace(/^55(?=\d{10,11}$)/, "")) : null,
+          person.email,
+          [person.city, person.uf].filter(Boolean).join("/") || null,
+        ].filter(Boolean);
+        const mayCheck = state.cpfLookup && !isMinor && Boolean(person.cpf) && Boolean(person.birth_date);
+        return (
+          <Box key={person.person_id} className="border-grey-100 flex flex-col gap-2 rounded-2xl border p-4">
+            <Box className="flex flex-wrap items-start justify-between gap-2">
+              <Box className="flex min-w-0 flex-col">
+                <Typography variant="body1" className="font-semibold break-words">
+                  {person.full_name}
+                </Typography>
+                <Typography variant="body2" className="text-text-secondary">
+                  {roleLine(member)}
+                </Typography>
               </Box>
-              {facts.length > 0 && (
-                <Typography variant="body2" className="break-words">
-                  {facts.join(" · ")}
-                </Typography>
-              )}
-              {person.registry?.name && person.registry.nameMatches === false && (
-                <Typography variant="body2" className="text-text-secondary">
-                  {t("case-cpf-registry-name", { name: person.registry.name })}
-                </Typography>
-              )}
-              {left.length > 0 && (
-                <Typography variant="body2" className="text-text-secondary">
-                  {t("case-person-missing", {
-                    fields: left.map((field) => t(PERSON_FIELD_KEY[field as PersonField])).join(", "),
-                  })}
-                </Typography>
-              )}
-              {person.updatedVia === "client" && (
-                <Typography variant="body2" className="text-text-secondary">
-                  {t("case-person-by-client")}
-                </Typography>
-              )}
-              {writable && (
-                <Box className="flex flex-wrap gap-2 pt-1">
-                  <Button variant="outlined" color="grey" size="small" onClick={() => setEditing(member)}>
-                    {t("case-person-edit")}
-                  </Button>
-                  {mayCheck && (
-                    <Button variant="text" size="small" disabled={busy !== null} onClick={() => void check(member)}>
-                      {busy === person.person_id ? t("cases-working") : t("case-cpf-check")}
-                    </Button>
-                  )}
-                  {members.length > 1 && (
-                    <Button
-                      variant="text"
-                      color="grey"
-                      size="small"
-                      disabled={busy !== null}
-                      onClick={() => void remove(member)}
-                    >
-                      {t("case-person-remove")}
-                    </Button>
-                  )}
-                </Box>
-              )}
+              {!isMinor && <StatusChip tone={chip.tone} label={t(chip.key, chip.values ?? {})} />}
             </Box>
-          );
-        })}
-        {!state.cpfLookup && (
-          <Typography variant="body2" className="text-text-secondary">
-            {t("case-cpf-not-configured")}
-          </Typography>
-        )}
-      </CardContent>
+            {facts.length > 0 && (
+              <Typography variant="body2" className="break-words">
+                {facts.join(" · ")}
+              </Typography>
+            )}
+            {person.registry?.name && person.registry.nameMatches === false && (
+              <Typography variant="body2" className="text-text-secondary">
+                {t("case-cpf-registry-name", { name: person.registry.name })}
+              </Typography>
+            )}
+            {left.length > 0 && (
+              <Typography variant="body2" className="text-text-secondary">
+                {t("case-person-missing", {
+                  fields: left.map((field) => t(PERSON_FIELD_KEY[field as PersonField])).join(", "),
+                })}
+              </Typography>
+            )}
+            {person.updatedVia === "client" && (
+              <Typography variant="body2" className="text-text-secondary">
+                {t("case-person-by-client")}
+              </Typography>
+            )}
+            {writable && (
+              <Box className="flex flex-wrap gap-2 pt-1">
+                <Button variant="outlined" color="grey" size="small" onClick={() => setEditing(member)}>
+                  {t("case-person-edit")}
+                </Button>
+                {mayCheck && (
+                  <Button variant="text" size="small" disabled={busy !== null} onClick={() => void check(member)}>
+                    {busy === person.person_id ? t("cases-working") : t("case-cpf-check")}
+                  </Button>
+                )}
+                {members.length > 1 && (
+                  <Button
+                    variant="text"
+                    color="grey"
+                    size="small"
+                    disabled={busy !== null}
+                    onClick={() => void remove(member)}
+                  >
+                    {t("case-person-remove")}
+                  </Button>
+                )}
+              </Box>
+            )}
+          </Box>
+        );
+      })}
+      {!state.cpfLookup && (
+        <Typography variant="body2" className="text-text-secondary">
+          {t("case-cpf-not-configured")}
+        </Typography>
+      )}
 
       {editing && (
         <PersonDialog
@@ -275,7 +291,7 @@ export default function PeopleCard({
           }}
         />
       )}
-    </Card>
+    </CollapsibleCard>
   );
 }
 

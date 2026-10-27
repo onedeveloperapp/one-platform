@@ -5,10 +5,13 @@ import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 
-import { Alert, Box, Button, Card, CardContent, Typography } from "@mui/material";
+import { Alert, Box, Button, Typography } from "@mui/material";
 
 import DeadlineCard from "@/components/deadlines/deadline-card";
 import DeadlineDialog from "@/components/deadlines/deadline-dialog";
+import CollapsibleCard from "@/components/product/collapsible-card";
+import StatusChip from "@/components/product/status-chip";
+import { opensOnArrival } from "@/lib/cases/sections";
 import { formatCnj } from "@flyee/rules/cnj";
 import { formatDayBr } from "@flyee/rules/person";
 
@@ -53,108 +56,133 @@ export default function DeadlinesCard({
       .filter(Boolean)
       .join(" · ");
 
+  // What of the case's deadlines waits for a person, the most pressing first: past its day, to be confirmed,
+  // to be looked at again. The open ones come the nearest first.
+  const overdue = deadlines.open.filter((row) => row.overdue).length;
+  const toConfirm = deadlines.open.filter((row) => row.status === "proposed").length;
+  const toReview = deadlines.open.filter((row) => row.review).length;
+  const nearest = deadlines.open.map((row) => row.urgentOn ?? row.dueOn).find(Boolean) ?? null;
+
   return (
-    <Card component="section" aria-labelledby="case-deadlines">
-      <CardContent className="flex flex-col gap-3">
-        <Box className="flex flex-wrap items-center gap-3">
-          <Typography id="case-deadlines" variant="h5" component="h2" className="mb-0 min-w-0 flex-1">
-            {t("case-deadlines-title")}
-          </Typography>
-          <Button variant="text" color="grey" size="small" href="/prazos" LinkComponent={Link}>
-            {t("case-deadlines-all")}
-          </Button>
-        </Box>
+    <CollapsibleCard
+      id="case-deadlines"
+      title={t("case-deadlines-title")}
+      summary={
+        deadlines.open.length === 0
+          ? t("case-deadlines-summary-none")
+          : [
+              t("case-deadlines-summary", { count: deadlines.open.length }),
+              nearest ? t("case-deadlines-summary-next", { day: formatDayBr(nearest) ?? nearest }) : null,
+            ]
+              .filter(Boolean)
+              .join(" · ")
+      }
+      chip={
+        overdue > 0 ? (
+          <StatusChip tone="danger" label={t("case-deadlines-summary-overdue", { count: overdue })} />
+        ) : toConfirm > 0 ? (
+          <StatusChip tone="attention" label={t("case-deadlines-summary-confirm", { count: toConfirm })} />
+        ) : toReview > 0 ? (
+          <StatusChip tone="attention" label={t("case-deadlines-summary-review", { count: toReview })} />
+        ) : null
+      }
+      action={
+        <Button variant="outlined" color="grey" size="small" href="/prazos" LinkComponent={Link}>
+          {t("case-deadlines-all")}
+        </Button>
+      }
+      defaultOpen={opensOnArrival(state.case.status, "deadlines", overdue + toConfirm + toReview > 0)}
+      bodyClassName="gap-3"
+    >
+      {notice ? (
+        <Alert
+          severity="success"
+          role="status"
+          className="neutral bg-background-paper/60!"
+          onClose={() => setNotice(null)}
+        >
+          {notice}
+        </Alert>
+      ) : null}
 
-        {notice ? (
-          <Alert
-            severity="success"
-            role="status"
-            className="neutral bg-background-paper/60!"
-            onClose={() => setNotice(null)}
-          >
-            {notice}
-          </Alert>
-        ) : null}
-
-        {deadlines.open.length === 0 ? (
-          <Typography variant="body2" className="text-text-secondary">
-            {t("case-deadlines-none")}
-          </Typography>
-        ) : (
-          <Box component="ul" className="m-0 flex list-none flex-col gap-3 p-0">
-            {deadlines.open.map((row) => (
-              <Box component="li" key={`${row.id}:${row.revision}:${row.status}`}>
-                <DeadlineCard
-                  row={row}
-                  today={deadlines.today}
-                  soonDays={deadlines.soonDays}
-                  acts={state.deadlineActs}
-                  mayConfirm={mayConfirm}
-                  mayWork={mayWork}
-                  showCase={false}
-                  embedded
-                  onChanged={onChanged}
-                />
-              </Box>
-            ))}
-          </Box>
-        )}
-
-        {deadlines.closedCount > 0 ? (
-          <Box className="flex flex-col gap-3">
-            <Box>
-              <Button
-                variant="text"
-                color="grey"
-                size="small"
-                className="-ml-2"
-                onClick={() => setShowClosed((now) => !now)}
-              >
-                {showClosed
-                  ? t("case-deadlines-closed-hide")
-                  : t("case-deadlines-closed-show", { count: deadlines.closedCount })}
-              </Button>
+      {deadlines.open.length === 0 ? (
+        <Typography variant="body2" className="text-text-secondary">
+          {t("case-deadlines-none")}
+        </Typography>
+      ) : (
+        <Box component="ul" className="m-0 flex list-none flex-col gap-3 p-0">
+          {deadlines.open.map((row) => (
+            <Box component="li" key={`${row.id}:${row.revision}:${row.status}`}>
+              <DeadlineCard
+                row={row}
+                today={deadlines.today}
+                soonDays={deadlines.soonDays}
+                acts={state.deadlineActs}
+                mayConfirm={mayConfirm}
+                mayWork={mayWork}
+                showCase={false}
+                embedded
+                onChanged={onChanged}
+              />
             </Box>
-            {showClosed ? (
-              <Box component="ul" className="m-0 flex list-none flex-col gap-3 p-0">
-                {deadlines.closed.map((row) => (
-                  <Box component="li" key={`${row.id}:${row.revision}:${row.status}`}>
-                    <DeadlineCard
-                      row={row}
-                      today={deadlines.today}
-                      soonDays={deadlines.soonDays}
-                      acts={state.deadlineActs}
-                      mayConfirm={mayConfirm}
-                      mayWork={mayWork}
-                      showCase={false}
-                      embedded
-                      onChanged={onChanged}
-                    />
-                  </Box>
-                ))}
-              </Box>
-            ) : null}
-          </Box>
-        ) : null}
+          ))}
+        </Box>
+      )}
 
-        {mayWork && filed.length > 0 ? (
-          <Box className="border-grey-100 flex flex-wrap items-center gap-2 border-t pt-3">
-            {filed.map((proceeding) => (
-              <Button
-                key={proceeding.id}
-                variant="outlined"
-                color="grey"
-                size="small"
-                onClick={() => setAdding(proceeding)}
-              >
-                {filed.length === 1
-                  ? t("case-deadlines-add")
-                  : t("case-deadlines-add-lawsuit", { lawsuit: lawsuitLabel(proceeding) })}
-              </Button>
-            ))}
+      {deadlines.closedCount > 0 ? (
+        <Box className="flex flex-col gap-3">
+          <Box>
+            <Button
+              variant="text"
+              color="grey"
+              size="small"
+              className="-ml-2"
+              onClick={() => setShowClosed((now) => !now)}
+            >
+              {showClosed
+                ? t("case-deadlines-closed-hide")
+                : t("case-deadlines-closed-show", { count: deadlines.closedCount })}
+            </Button>
           </Box>
-        ) : null}
-      </CardContent>
+          {showClosed ? (
+            <Box component="ul" className="m-0 flex list-none flex-col gap-3 p-0">
+              {deadlines.closed.map((row) => (
+                <Box component="li" key={`${row.id}:${row.revision}:${row.status}`}>
+                  <DeadlineCard
+                    row={row}
+                    today={deadlines.today}
+                    soonDays={deadlines.soonDays}
+                    acts={state.deadlineActs}
+                    mayConfirm={mayConfirm}
+                    mayWork={mayWork}
+                    showCase={false}
+                    embedded
+                    onChanged={onChanged}
+                  />
+                </Box>
+              ))}
+            </Box>
+          ) : null}
+        </Box>
+      ) : null}
+
+      {mayWork && filed.length > 0 ? (
+        <Box className="border-grey-100 flex flex-wrap items-center gap-2 border-t pt-3">
+          {filed.map((proceeding) => (
+            <Button
+              key={proceeding.id}
+              variant="outlined"
+              color="grey"
+              size="small"
+              onClick={() => setAdding(proceeding)}
+            >
+              {filed.length === 1
+                ? t("case-deadlines-add")
+                : t("case-deadlines-add-lawsuit", { lawsuit: lawsuitLabel(proceeding) })}
+            </Button>
+          ))}
+        </Box>
+      ) : null}
 
       {adding ? (
         <DeadlineDialog
@@ -172,6 +200,6 @@ export default function DeadlinesCard({
           }}
         />
       ) : null}
-    </Card>
+    </CollapsibleCard>
   );
 }

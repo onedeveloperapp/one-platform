@@ -4,9 +4,10 @@ import type { CaseSegment, CaseState } from "../case-types";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 
-import { Alert, Box, Button, Card, CardContent, Dialog, DialogActions, DialogContent, Typography } from "@mui/material";
+import { Alert, Box, Button, Dialog, DialogActions, DialogContent, Typography } from "@mui/material";
 
 import SegmentFields from "@/components/cases/segment-fields";
+import CollapsibleCard from "@/components/product/collapsible-card";
 import DialogHeader from "@/components/product/dialog-header";
 import EmptyState from "@/components/product/empty-state";
 import StatusChip, { type StatusTone } from "@/components/product/status-chip";
@@ -14,6 +15,7 @@ import NiPlane from "@/icons/nexture/ni-plane";
 import { removeFlightSegment, saveFlightSegment } from "@/lib/cases/actions";
 import { caseErrorKey, formatLocalTime } from "@/lib/cases/cases";
 import { segmentFields, type SegmentValues, segmentValues } from "@/lib/cases/forms";
+import { beforeCourt, opensOnArrival } from "@/lib/cases/sections";
 import { lookupFlight, recheckFlight } from "@/lib/flights/actions";
 import type { LegChecks, SourceView, WallTime } from "@/lib/flights/facts";
 import { flightErrorKey, lookupFailureKey, recordFailureKey } from "@/lib/flights/words";
@@ -83,116 +85,135 @@ export default function TripCard({
     else onChanged();
   };
 
+  // The trip in one line, and whether the leg of the problem is marked: the rules read that leg.
+  const legs = state.segments
+    .map((segment) =>
+      [segment.flight_number, [segment.origin_iata, segment.destination_iata].filter(Boolean).join(" → ")]
+        .filter(Boolean)
+        .join(" "),
+    )
+    .filter(Boolean);
+  const affected = state.segments.find((segment) => segment.affected) ?? null;
+  const affectedDelay = affected
+    ? arrivalDelayMinutes(affected.scheduled_arrival_local, affected.actual_arrival_local)
+    : null;
+  const unmarked = beforeCourt(state.case.status) && state.segments.length > 0 && affected === null;
+
   return (
-    <Card component="section" aria-labelledby="case-trip">
-      <CardContent className="flex flex-col gap-4">
-        <Box className="flex flex-wrap items-start justify-between gap-2">
-          <Box className="flex flex-col gap-1">
-            <Typography id="case-trip" variant="h5" component="h2" className="mb-0">
-              {t("case-trip-title")}
-            </Typography>
-            <Typography variant="body2" className="text-text-secondary">
-              {t("case-trip-body")}
-            </Typography>
-          </Box>
-          {writable && state.segments.length > 0 && (
-            <Button variant="outlined" color="grey" size="small" onClick={() => setEditing("new")}>
-              {t("client-trip-add")}
-            </Button>
-          )}
-        </Box>
+    <CollapsibleCard
+      id="case-trip"
+      title={t("case-trip-title")}
+      summary={
+        state.segments.length === 0
+          ? t("case-trip-empty-title")
+          : [
+              legs.join(", ") || t("case-trip-summary-legs", { count: state.segments.length }),
+              affectedDelay !== null && affectedDelay > 0
+                ? t("case-trip-delay", { delay: hoursAndMinutes(affectedDelay) })
+                : null,
+            ]
+              .filter(Boolean)
+              .join(" · ")
+      }
+      chip={unmarked ? <StatusChip tone="attention" label={t("case-trip-summary-unmarked")} /> : null}
+      description={t("case-trip-body")}
+      action={
+        writable && state.segments.length > 0 ? (
+          <Button variant="outlined" color="grey" size="small" onClick={() => setEditing("new")}>
+            {t("client-trip-add")}
+          </Button>
+        ) : null
+      }
+      defaultOpen={opensOnArrival(state.case.status, "trip", unmarked, state.segments.length === 0)}
+    >
+      {problem && (
+        <Alert severity="error" className="neutral bg-background-paper/60!" onClose={() => setProblem(null)}>
+          {t(caseErrorKey(problem))}
+        </Alert>
+      )}
 
-        {problem && (
-          <Alert severity="error" className="neutral bg-background-paper/60!" onClose={() => setProblem(null)}>
-            {t(caseErrorKey(problem))}
-          </Alert>
-        )}
+      {state.segments.length === 0 && (
+        <EmptyState
+          titleAs="h3"
+          icon={<NiPlane />}
+          title={t("case-trip-empty-title")}
+          description={t("case-trip-empty-body")}
+          action={writable ? { label: t("client-trip-add"), onClick: () => setEditing("new") } : undefined}
+        />
+      )}
 
-        {state.segments.length === 0 && (
-          <EmptyState
-            icon={<NiPlane />}
-            title={t("case-trip-empty-title")}
-            description={t("case-trip-empty-body")}
-            action={writable ? { label: t("client-trip-add"), onClick: () => setEditing("new") } : undefined}
-          />
-        )}
-
-        {state.segments.map((segment) => {
-          const delay = arrivalDelayMinutes(segment.scheduled_arrival_local, segment.actual_arrival_local);
-          const times = [
-            segment.scheduled_departure_local
-              ? t("case-trip-scheduled", {
-                  departure: formatLocalTime(segment.scheduled_departure_local),
-                  arrival: formatLocalTime(segment.scheduled_arrival_local) || "?",
-                })
-              : null,
-            segment.actual_arrival_local
-              ? t("case-trip-actual-arrival", { time: formatLocalTime(segment.actual_arrival_local) })
-              : null,
-          ].filter(Boolean);
-          return (
-            <Box key={segment.id} className="border-grey-100 flex flex-col gap-2 rounded-2xl border p-4">
-              <Box className="flex flex-wrap items-start justify-between gap-2">
-                <Box className="flex min-w-0 flex-col">
-                  <Typography variant="body1" className="font-semibold">
-                    {[
-                      segment.flight_number,
-                      [segment.origin_iata, segment.destination_iata].filter(Boolean).join(" → "),
-                    ]
-                      .filter(Boolean)
-                      .join(" · ") || t("client-trip-leg", { position: segment.position })}
+      {state.segments.map((segment) => {
+        const delay = arrivalDelayMinutes(segment.scheduled_arrival_local, segment.actual_arrival_local);
+        const times = [
+          segment.scheduled_departure_local
+            ? t("case-trip-scheduled", {
+                departure: formatLocalTime(segment.scheduled_departure_local),
+                arrival: formatLocalTime(segment.scheduled_arrival_local) || "?",
+              })
+            : null,
+          segment.actual_arrival_local
+            ? t("case-trip-actual-arrival", { time: formatLocalTime(segment.actual_arrival_local) })
+            : null,
+        ].filter(Boolean);
+        return (
+          <Box key={segment.id} className="border-grey-100 flex flex-col gap-2 rounded-2xl border p-4">
+            <Box className="flex flex-wrap items-start justify-between gap-2">
+              <Box className="flex min-w-0 flex-col">
+                <Typography variant="body1" className="font-semibold">
+                  {[segment.flight_number, [segment.origin_iata, segment.destination_iata].filter(Boolean).join(" → ")]
+                    .filter(Boolean)
+                    .join(" · ") || t("client-trip-leg", { position: segment.position })}
+                </Typography>
+                {segment.booking_reference && (
+                  <Typography variant="body2" className="text-text-secondary">
+                    {t("case-trip-booking", { code: segment.booking_reference })}
                   </Typography>
-                  {segment.booking_reference && (
-                    <Typography variant="body2" className="text-text-secondary">
-                      {t("case-trip-booking", { code: segment.booking_reference })}
-                    </Typography>
-                  )}
-                </Box>
-                <Box className="flex flex-wrap gap-1">
-                  {segment.affected && <StatusChip tone="attention" label={t("client-trip-affected")} />}
-                  {delay !== null && delay > 0 && (
-                    <StatusChip tone="info" label={t("case-trip-delay", { delay: hoursAndMinutes(delay) })} />
-                  )}
-                </Box>
+                )}
               </Box>
-              {times.map((line) => (
-                <Typography key={line} variant="body2">
-                  {line}
-                </Typography>
-              ))}
-              {segment.source === "client" && (
-                <Typography variant="body2" className="text-text-secondary">
-                  {t("case-trip-by-client")}
-                </Typography>
-              )}
-              <LegCheck
-                caseId={state.case.id}
-                segment={segment}
-                checks={state.flights.bySegment[segment.id] ?? { vra: null, flightaware: null }}
-                lookupAvailable={state.flights.lookupAvailable}
-                writable={writable}
-                onChanged={onChanged}
-              />
-              {writable && (
-                <Box className="flex flex-wrap gap-2 pt-1">
-                  <Button variant="outlined" color="grey" size="small" onClick={() => setEditing(segment)}>
-                    {t("client-edit")}
-                  </Button>
-                  <Button
-                    variant="text"
-                    color="grey"
-                    size="small"
-                    disabled={busy !== null}
-                    onClick={() => void remove(segment)}
-                  >
-                    {t("client-trip-remove")}
-                  </Button>
-                </Box>
-              )}
+              <Box className="flex flex-wrap gap-1">
+                {segment.affected && <StatusChip tone="attention" label={t("client-trip-affected")} />}
+                {delay !== null && delay > 0 && (
+                  <StatusChip tone="info" label={t("case-trip-delay", { delay: hoursAndMinutes(delay) })} />
+                )}
+              </Box>
             </Box>
-          );
-        })}
-      </CardContent>
+            {times.map((line) => (
+              <Typography key={line} variant="body2">
+                {line}
+              </Typography>
+            ))}
+            {segment.source === "client" && (
+              <Typography variant="body2" className="text-text-secondary">
+                {t("case-trip-by-client")}
+              </Typography>
+            )}
+            <LegCheck
+              caseId={state.case.id}
+              segment={segment}
+              checks={state.flights.bySegment[segment.id] ?? { vra: null, flightaware: null }}
+              lookupAvailable={state.flights.lookupAvailable}
+              writable={writable}
+              onChanged={onChanged}
+            />
+            {writable && (
+              <Box className="flex flex-wrap gap-2 pt-1">
+                <Button variant="outlined" color="grey" size="small" onClick={() => setEditing(segment)}>
+                  {t("client-edit")}
+                </Button>
+                <Button
+                  variant="text"
+                  color="grey"
+                  size="small"
+                  disabled={busy !== null}
+                  onClick={() => void remove(segment)}
+                >
+                  {t("client-trip-remove")}
+                </Button>
+              </Box>
+            )}
+          </Box>
+        );
+      })}
 
       {editing && (
         <SegmentDialog
@@ -205,7 +226,7 @@ export default function TripCard({
           }}
         />
       )}
-    </Card>
+    </CollapsibleCard>
   );
 }
 

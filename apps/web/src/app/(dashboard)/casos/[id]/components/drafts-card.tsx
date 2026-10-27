@@ -9,8 +9,6 @@ import {
   Alert,
   Box,
   Button,
-  Card,
-  CardContent,
   CircularProgress,
   Dialog,
   DialogContent,
@@ -19,6 +17,7 @@ import {
   Typography,
 } from "@mui/material";
 
+import CollapsibleCard from "@/components/product/collapsible-card";
 import ConfirmActionDialog from "@/components/product/confirm-action-dialog";
 import DialogHeader from "@/components/product/dialog-header";
 import EmptyState from "@/components/product/empty-state";
@@ -54,6 +53,7 @@ import {
   personMarks,
   unknownMarks,
 } from "@/lib/cases/drafts";
+import { opensOnArrival } from "@/lib/cases/sections";
 import { type ChangeBlock, textChanges } from "@/lib/cases/text-changes";
 
 type Ready = Extract<CaseState, { kind: "ready" }>;
@@ -181,62 +181,87 @@ export default function DraftsCard({
   const open = editing ? (drafts.find((draft) => draft.id === editing) ?? null) : null;
   const openLawsuit = open ? state.proceedings.find((proceeding) => proceeding.id === open.proceedingId) : undefined;
 
+  // The piece each lawsuit has now, as its own block shows it, and whether one waits for a lawyer or failed.
+  const pieces = lawsuits.map((proceeding) => ({
+    proceeding,
+    draft: draftToShow(drafts.filter((draft) => draft.proceedingId === proceeding.id)),
+  }));
+  const toRevise = pieces.some(({ draft }) => draft?.status === "proposed");
+  const notWritten = pieces.some(({ draft }) => draft?.status === "failed");
+  const noPiece = t("drafts-summary-none");
+
   return (
-    <Card component="section" aria-labelledby="case-drafts">
-      <CardContent className="flex flex-col gap-4">
-        <Box className="flex flex-col gap-1">
-          <Typography id="case-drafts" variant="h5" component="h2" className="mb-0">
-            {t("drafts-title")}
-          </Typography>
-          <Typography variant="body2" className="text-text-secondary">
-            {t("drafts-body")}
-          </Typography>
-        </Box>
+    <CollapsibleCard
+      id="case-drafts"
+      title={t("drafts-title")}
+      summary={
+        state.proceedings.length === 0
+          ? t("drafts-empty-title")
+          : lawsuits.length === 0
+            ? t("drafts-filed-title")
+            : pieces
+                .map(
+                  ({ proceeding, draft }) =>
+                    `${t(KIND_KEY[proceeding.kind])}: ${draft ? t(DRAFT_STATUS_KEY[draft.status]) : noPiece}`,
+                )
+                .join(" · ")
+      }
+      chip={
+        notWritten ? (
+          <StatusChip tone="danger" label={t("draft-status-failed")} />
+        ) : toRevise ? (
+          <StatusChip tone="attention" label={t("draft-status-proposed")} />
+        ) : null
+      }
+      description={t("drafts-body")}
+      defaultOpen={opensOnArrival(state.case.status, "drafts", toRevise || notWritten, lawsuits.length === 0)}
+    >
+      {state.proceedings.length === 0 ? (
+        <EmptyState
+          titleAs="h3"
+          icon={<NiDocumentFull />}
+          title={t("drafts-empty-title")}
+          description={t("drafts-empty-body")}
+          className="py-8"
+        />
+      ) : lawsuits.length === 0 ? (
+        <EmptyState
+          titleAs="h3"
+          icon={<NiDocumentFull />}
+          title={t("drafts-filed-title")}
+          description={t("drafts-filed-body")}
+          className="py-8"
+        />
+      ) : state.pieces.templates.length === 0 && drafts.length === 0 ? (
+        <EmptyState
+          titleAs="h3"
+          icon={<NiDocumentFull />}
+          title={t("drafts-no-template-title")}
+          description={t(state.lawyer ? "drafts-no-template-body-lawyer" : "drafts-no-template-body")}
+          action={{ label: t("drafts-no-template-action"), href: "/biblioteca" }}
+          className="py-8"
+        />
+      ) : (
+        lawsuits.map((proceeding) => (
+          <Lawsuit
+            key={proceeding.id}
+            state={state}
+            proceeding={proceeding}
+            title={titleOf(proceeding)}
+            drafts={drafts.filter((draft) => draft.proceedingId === proceeding.id)}
+            writable={writable}
+            onChanged={onChanged}
+            onEdit={setEditing}
+            onRead={(draft) => setReading({ draft, title: titleOf(proceeding) })}
+          />
+        ))
+      )}
 
-        {state.proceedings.length === 0 ? (
-          <EmptyState
-            icon={<NiDocumentFull />}
-            title={t("drafts-empty-title")}
-            description={t("drafts-empty-body")}
-            className="py-8"
-          />
-        ) : lawsuits.length === 0 ? (
-          <EmptyState
-            icon={<NiDocumentFull />}
-            title={t("drafts-filed-title")}
-            description={t("drafts-filed-body")}
-            className="py-8"
-          />
-        ) : state.pieces.templates.length === 0 && drafts.length === 0 ? (
-          <EmptyState
-            icon={<NiDocumentFull />}
-            title={t("drafts-no-template-title")}
-            description={t(state.lawyer ? "drafts-no-template-body-lawyer" : "drafts-no-template-body")}
-            action={{ label: t("drafts-no-template-action"), href: "/biblioteca" }}
-            className="py-8"
-          />
-        ) : (
-          lawsuits.map((proceeding) => (
-            <Lawsuit
-              key={proceeding.id}
-              state={state}
-              proceeding={proceeding}
-              title={titleOf(proceeding)}
-              drafts={drafts.filter((draft) => draft.proceedingId === proceeding.id)}
-              writable={writable}
-              onChanged={onChanged}
-              onEdit={setEditing}
-              onRead={(draft) => setReading({ draft, title: titleOf(proceeding) })}
-            />
-          ))
-        )}
-
-        {lawsuits.length > 0 ? (
-          <Typography variant="body2" className="text-text-secondary">
-            {t("drafts-outside")}
-          </Typography>
-        ) : null}
-      </CardContent>
+      {lawsuits.length > 0 ? (
+        <Typography variant="body2" className="text-text-secondary">
+          {t("drafts-outside")}
+        </Typography>
+      ) : null}
 
       {open ? (
         <DraftDialog
@@ -256,7 +281,7 @@ export default function DraftsCard({
           onClose={() => setReading(null)}
         />
       ) : null}
-    </Card>
+    </CollapsibleCard>
   );
 }
 

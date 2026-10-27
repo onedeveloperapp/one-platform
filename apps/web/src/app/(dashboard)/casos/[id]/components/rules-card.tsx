@@ -9,8 +9,6 @@ import {
   Alert,
   Box,
   Button,
-  Card,
-  CardContent,
   FormControlLabel,
   MenuItem,
   Radio,
@@ -19,9 +17,10 @@ import {
   Typography,
 } from "@mui/material";
 
+import CollapsibleCard from "@/components/product/collapsible-card";
 import { CurrencyField } from "@/components/product/fields";
 import StatusChip, { type StatusTone } from "@/components/product/status-chip";
-import { caseErrorKey } from "@/lib/cases/cases";
+import { caseErrorKey, CLIENT_STAGES } from "@/lib/cases/cases";
 import { createPlannedProceedings, readCaseWeather, saveSuspension, setPartyClaim } from "@/lib/cases/rule-actions";
 import {
   caseDomicile,
@@ -33,6 +32,7 @@ import {
   SIGN_KEY,
   STATED_CAUSE_KEY,
 } from "@/lib/cases/rules";
+import { beforeCourt, opensOnArrival } from "@/lib/cases/sections";
 import { planProceedings } from "@flyee/rules/proceedings";
 import { STATED_CAUSES, type StatedCause, type SuspensionRisk, triageSuspension } from "@flyee/rules/suspension";
 import type { WeatherSign } from "@flyee/rules/weather";
@@ -158,325 +158,347 @@ export default function RulesCard({
       ? t("case-suspension-weather-clear")
       : signs.map((sign) => (sign in SIGN_KEY ? t(SIGN_KEY[sign as WeatherSign]) : sign)).join(", ");
 
+  // What the rule plans and what the firm decided on the suspension, in one line; and what keeps the plan from
+  // standing: a claimant with no value asked, or one who said no to the civil court.
+  const claimsMissing = beforeCourt(state.case.status) && claimants.some((party) => !rules.claims[party.partyId]);
+  const civilDeclined = state.civilCourt.some((need) => need.accepted === false);
+  const planned = plan ? [...new Set(plan.proceedings.map((proceeding) => t(KIND_KEY[proceeding.kind])))] : [];
+  // In the drafting the card is where the lawsuits are created: once they are, the case goes on in their cards.
+  const toCreate = state.case.status === "drafting" && state.proceedings.length === 0;
+
   return (
-    <Card component="section" aria-labelledby="case-rules" id="como-vai-a-juizo">
-      <CardContent className="flex flex-col gap-5">
-        <Box className="flex flex-col gap-1">
-          <Typography id="case-rules" variant="h5" component="h2" className="mb-0">
-            {t("case-rules-title")}
-          </Typography>
+    <CollapsibleCard
+      id="case-rules"
+      anchor="como-vai-a-juizo"
+      title={t("case-rules-title")}
+      summary={[
+        planned.join(", ") || null,
+        t("case-rules-summary-suspension", { decision: t(DECISION_KEY[rules.decision]) }),
+      ]
+        .filter(Boolean)
+        .join(" · ")}
+      chip={
+        civilDeclined ? (
+          <StatusChip tone="attention" label={t("case-rules-summary-civil-declined")} />
+        ) : claimsMissing ? (
+          <StatusChip tone="attention" label={t("case-rules-summary-claims")} />
+        ) : null
+      }
+      description={t("case-rules-body")}
+      // A value missing is said from the start, and opens the card once the client's part is gathered.
+      defaultOpen={opensOnArrival(
+        state.case.status,
+        "rules",
+        civilDeclined || toCreate || (claimsMissing && !CLIENT_STAGES.includes(state.case.status)),
+      )}
+      bodyClassName="gap-5"
+    >
+      {problem && (
+        <Alert severity="error" className="neutral bg-background-paper/60!" onClose={() => setProblem(null)}>
+          {t(caseErrorKey(problem))}
+        </Alert>
+      )}
+      {done && (
+        <Alert
+          severity="success"
+          role="status"
+          className="neutral bg-background-paper/60!"
+          onClose={() => setDone(null)}
+        >
+          {done}
+        </Alert>
+      )}
+
+      <Box className="flex flex-col gap-3">
+        <Typography variant="subtitle2" component="h3" className="mb-0">
+          {t("case-plan-title")}
+        </Typography>
+        {claimants.length === 0 ? (
           <Typography variant="body2" className="text-text-secondary">
-            {t("case-rules-body")}
+            {t("case-plan-empty")}
           </Typography>
-        </Box>
-
-        {problem && (
-          <Alert severity="error" className="neutral bg-background-paper/60!" onClose={() => setProblem(null)}>
-            {t(caseErrorKey(problem))}
-          </Alert>
-        )}
-        {done && (
-          <Alert
-            severity="success"
-            role="status"
-            className="neutral bg-background-paper/60!"
-            onClose={() => setDone(null)}
-          >
-            {done}
-          </Alert>
-        )}
-
-        <Box className="flex flex-col gap-3">
-          <Typography variant="subtitle2" component="h3" className="mb-0">
-            {t("case-plan-title")}
-          </Typography>
-          {claimants.length === 0 ? (
-            <Typography variant="body2" className="text-text-secondary">
-              {t("case-plan-empty")}
-            </Typography>
-          ) : (
-            <>
-              {plan?.proceedings.map((proceeding) => (
-                <Box key={proceeding.kind} className="border-grey-100 flex flex-col gap-2 rounded-2xl border p-4">
-                  <Box>
-                    <StatusChip
-                      tone={proceeding.kind === "juizado" ? "primary" : "info"}
-                      label={t(KIND_KEY[proceeding.kind])}
-                    />
-                  </Box>
-                  <Box component="ul" className="m-0 flex list-none flex-col gap-1 p-0">
-                    {proceeding.partyIds.map((partyId) => (
-                      <Typography component="li" variant="body1" key={partyId}>
-                        {t("case-plan-claimant", {
-                          name: nameOf(partyId),
-                          reason: t(PLAN_REASON_KEY[proceeding.reasons[partyId]]),
-                        })}
-                      </Typography>
-                    ))}
-                  </Box>
-                  <Typography variant="body2" className="text-text-secondary">
-                    {forumOf(proceeding.partyIds)
-                      ? t("case-plan-forum", {
-                          city: forumOf(proceeding.partyIds)?.city ?? "",
-                          uf: forumOf(proceeding.partyIds)?.uf ?? "",
-                        })
-                      : t("case-plan-no-domicile")}
-                  </Typography>
+        ) : (
+          <>
+            {plan?.proceedings.map((proceeding) => (
+              <Box key={proceeding.kind} className="border-grey-100 flex flex-col gap-2 rounded-2xl border p-4">
+                <Box>
+                  <StatusChip
+                    tone={proceeding.kind === "juizado" ? "primary" : "info"}
+                    label={t(KIND_KEY[proceeding.kind])}
+                  />
                 </Box>
-              ))}
-              {plan && <FamilyPlanBox state={state} family={plan.family} writable={writable} onChanged={onChanged} />}
-              <Typography variant="body2" className="text-text-secondary">
-                {rules.ceiling
-                  ? t("case-plan-ceiling", {
-                      ceiling: money(rules.ceiling.cents),
-                      times: rules.ceiling.times,
-                      wage: money(rules.ceiling.minimumWage.cents),
-                      act: rules.ceiling.minimumWage.act,
-                    })
-                  : t("case-plan-ceiling-unknown")}
-              </Typography>
-              {plan && plan.claimUnknown.length > 0 && (
-                <Typography variant="body2" className="text-text-secondary">
-                  {t("case-plan-claim-unknown")}
-                </Typography>
-              )}
-
-              {writable && (
-                <Box className="flex flex-col gap-2">
-                  {claimants.map((party) => (
-                    <Box key={party.partyId} className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                      <CurrencyField
-                        size="small"
-                        className="sm:max-w-xs"
-                        fullWidth
-                        id={`case-claim-${party.partyId}`}
-                        name={`claim-${party.partyId}`}
-                        label={t("case-plan-claim-label", { name: party.person.full_name })}
-                        currencySymbol="R$"
-                        value={claims[party.partyId] ?? ""}
-                        disabled={busy !== null}
-                        onChange={(event) =>
-                          setClaims((current) => ({ ...current, [party.partyId]: event.target.value }))
-                        }
-                      />
-                      <Box>
-                        <Button
-                          variant="text"
-                          color="grey"
-                          size="small"
-                          disabled={busy !== null || centsOf(party.partyId) === (rules.claims[party.partyId] ?? null)}
-                          onClick={() =>
-                            void run(
-                              `claim-${party.partyId}`,
-                              () => setPartyClaim(state.case.id, party.partyId, centsOf(party.partyId)),
-                              null,
-                            )
-                          }
-                        >
-                          {t("case-plan-claim-save")}
-                        </Button>
-                      </Box>
-                    </Box>
+                <Box component="ul" className="m-0 flex list-none flex-col gap-1 p-0">
+                  {proceeding.partyIds.map((partyId) => (
+                    <Typography component="li" variant="body1" key={partyId}>
+                      {t("case-plan-claimant", {
+                        name: nameOf(partyId),
+                        reason: t(PLAN_REASON_KEY[proceeding.reasons[partyId]]),
+                      })}
+                    </Typography>
                   ))}
                 </Box>
-              )}
-
-              {state.proceedings.length > 0 ? (
                 <Typography variant="body2" className="text-text-secondary">
-                  {t("case-plan-exists")}
+                  {forumOf(proceeding.partyIds)
+                    ? t("case-plan-forum", {
+                        city: forumOf(proceeding.partyIds)?.city ?? "",
+                        uf: forumOf(proceeding.partyIds)?.uf ?? "",
+                      })
+                    : t("case-plan-no-domicile")}
                 </Typography>
-              ) : writable && plan && plan.proceedings.length > 0 ? (
-                <Box className="flex flex-col gap-1">
-                  <Box>
-                    <Button
-                      variant="contained"
-                      disabled={busy !== null || unsavedClaim || !everyForumKnown}
-                      onClick={() =>
-                        void run(
-                          "plan",
-                          () => createPlannedProceedings(state.case.id, rules.family.choice),
-                          t("case-plan-created"),
-                        )
-                      }
-                    >
-                      {busy === "plan" ? t("cases-working") : t("case-plan-create")}
-                    </Button>
-                  </Box>
-                  {unsavedClaim && (
-                    <Typography variant="body2" className="text-text-secondary">
-                      {t("case-plan-unsaved")}
-                    </Typography>
-                  )}
-                </Box>
-              ) : null}
-            </>
-          )}
-        </Box>
-
-        <CivilCourtAnswers state={state} writable={writable} onChanged={onChanged} />
-
-        <Box className="border-grey-100 flex flex-col gap-3 border-t pt-5">
-          <Typography variant="subtitle2" component="h3" className="mb-0">
-            {t("case-suspension-title")}
-          </Typography>
-          <Typography variant="body2" className="text-text-secondary">
-            {t("case-suspension-body")}
-          </Typography>
-
-          <TextField
-            select
-            size="small"
-            className="sm:max-w-md"
-            fullWidth
-            id="case-stated-cause"
-            label={t("case-suspension-cause-label")}
-            value={cause}
-            disabled={!writable || busy !== null}
-            onChange={(event) => setTouchedCause(event.target.value)}
-          >
-            <MenuItem value="">{t("case-field-choose")}</MenuItem>
-            {STATED_CAUSES.map((value) => (
-              <MenuItem key={value} value={value}>
-                {t(STATED_CAUSE_KEY[value])}
-              </MenuItem>
+              </Box>
             ))}
-          </TextField>
-
-          <Box className="flex flex-col gap-2">
-            {rules.weather.readAt === null ? (
+            {plan && <FamilyPlanBox state={state} family={plan.family} writable={writable} onChanged={onChanged} />}
+            <Typography variant="body2" className="text-text-secondary">
+              {rules.ceiling
+                ? t("case-plan-ceiling", {
+                    ceiling: money(rules.ceiling.cents),
+                    times: rules.ceiling.times,
+                    wage: money(rules.ceiling.minimumWage.cents),
+                    act: rules.ceiling.minimumWage.act,
+                  })
+                : t("case-plan-ceiling-unknown")}
+            </Typography>
+            {plan && plan.claimUnknown.length > 0 && (
               <Typography variant="body2" className="text-text-secondary">
-                {t("case-suspension-weather-none")}
+                {t("case-plan-claim-unknown")}
               </Typography>
-            ) : (
-              <Box component="ul" className="m-0 flex list-none flex-col gap-1 p-0">
-                {rules.weather.airports.map((airport) => (
-                  <Typography component="li" variant="body1" key={airport.iata}>
-                    {airport.state === "uncovered"
-                      ? t("case-suspension-weather-uncovered", { airport: airport.iata })
-                      : airport.state === "no_hour"
-                        ? t("case-suspension-weather-no-hour", { airport: airport.iata })
-                        : airport.state === "stale"
-                          ? t("case-suspension-weather-stale", { airport: airport.iata })
-                          : airport.count === 0
-                            ? t("case-suspension-weather-empty", { airport: airport.iata })
-                            : t("case-suspension-weather-line", {
-                                icao: airport.iata,
-                                count: airport.count,
-                                signs: signWords(airport.signs),
-                              })}
-                  </Typography>
+            )}
+
+            {writable && (
+              <Box className="flex flex-col gap-2">
+                {claimants.map((party) => (
+                  <Box key={party.partyId} className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                    <CurrencyField
+                      size="small"
+                      className="sm:max-w-xs"
+                      fullWidth
+                      id={`case-claim-${party.partyId}`}
+                      name={`claim-${party.partyId}`}
+                      label={t("case-plan-claim-label", { name: party.person.full_name })}
+                      currencySymbol="R$"
+                      value={claims[party.partyId] ?? ""}
+                      disabled={busy !== null}
+                      onChange={(event) =>
+                        setClaims((current) => ({ ...current, [party.partyId]: event.target.value }))
+                      }
+                    />
+                    <Box>
+                      <Button
+                        variant="text"
+                        color="grey"
+                        size="small"
+                        disabled={busy !== null || centsOf(party.partyId) === (rules.claims[party.partyId] ?? null)}
+                        onClick={() =>
+                          void run(
+                            `claim-${party.partyId}`,
+                            () => setPartyClaim(state.case.id, party.partyId, centsOf(party.partyId)),
+                            null,
+                          )
+                        }
+                      >
+                        {t("case-plan-claim-save")}
+                      </Button>
+                    </Box>
+                  </Box>
                 ))}
               </Box>
             )}
-            {writable && (
+
+            {state.proceedings.length > 0 ? (
+              <Typography variant="body2" className="text-text-secondary">
+                {t("case-plan-exists")}
+              </Typography>
+            ) : writable && plan && plan.proceedings.length > 0 ? (
               <Box className="flex flex-col gap-1">
                 <Box>
                   <Button
-                    variant="outlined"
-                    color="grey"
-                    size="small"
-                    disabled={busy !== null || !rules.weatherConfigured}
+                    variant="contained"
+                    disabled={busy !== null || unsavedClaim || !everyForumKnown}
                     onClick={() =>
-                      void run("weather", () => readCaseWeather(state.case.id), t("case-suspension-weather-done"))
+                      void run(
+                        "plan",
+                        () => createPlannedProceedings(state.case.id, rules.family.choice),
+                        t("case-plan-created"),
+                      )
                     }
                   >
-                    {busy === "weather" ? t("cases-working") : t("case-suspension-weather-read")}
+                    {busy === "plan" ? t("cases-working") : t("case-plan-create")}
                   </Button>
                 </Box>
-                {!rules.weatherConfigured && (
+                {unsavedClaim && (
                   <Typography variant="body2" className="text-text-secondary">
-                    {t("case-suspension-weather-off")}
+                    {t("case-plan-unsaved")}
                   </Typography>
                 )}
               </Box>
-            )}
-          </Box>
+            ) : null}
+          </>
+        )}
+      </Box>
 
-          <Box className="border-grey-100 flex flex-col gap-2 rounded-2xl border p-4">
-            <Box className="flex flex-wrap items-center gap-2">
-              <Typography variant="body1" className="font-semibold">
-                {t("case-suspension-risk-label")}
-              </Typography>
-              <StatusChip tone={RISK_TONE[triage.risk]} label={t(RISK_KEY[triage.risk])} />
-            </Box>
-            <Box component="ul" className="text-text-primary m-0 flex list-disc flex-col gap-1 pl-5">
-              {triage.grounds.map((ground) => (
-                <Typography component="li" variant="body2" key={ground}>
-                  {t(GROUND_KEY[ground])}
+      <CivilCourtAnswers state={state} writable={writable} onChanged={onChanged} />
+
+      <Box className="border-grey-100 flex flex-col gap-3 border-t pt-5">
+        <Typography variant="subtitle2" component="h3" className="mb-0">
+          {t("case-suspension-title")}
+        </Typography>
+        <Typography variant="body2" className="text-text-secondary">
+          {t("case-suspension-body")}
+        </Typography>
+
+        <TextField
+          select
+          size="small"
+          className="sm:max-w-md"
+          fullWidth
+          id="case-stated-cause"
+          label={t("case-suspension-cause-label")}
+          value={cause}
+          disabled={!writable || busy !== null}
+          onChange={(event) => setTouchedCause(event.target.value)}
+        >
+          <MenuItem value="">{t("case-field-choose")}</MenuItem>
+          {STATED_CAUSES.map((value) => (
+            <MenuItem key={value} value={value}>
+              {t(STATED_CAUSE_KEY[value])}
+            </MenuItem>
+          ))}
+        </TextField>
+
+        <Box className="flex flex-col gap-2">
+          {rules.weather.readAt === null ? (
+            <Typography variant="body2" className="text-text-secondary">
+              {t("case-suspension-weather-none")}
+            </Typography>
+          ) : (
+            <Box component="ul" className="m-0 flex list-none flex-col gap-1 p-0">
+              {rules.weather.airports.map((airport) => (
+                <Typography component="li" variant="body1" key={airport.iata}>
+                  {airport.state === "uncovered"
+                    ? t("case-suspension-weather-uncovered", { airport: airport.iata })
+                    : airport.state === "no_hour"
+                      ? t("case-suspension-weather-no-hour", { airport: airport.iata })
+                      : airport.state === "stale"
+                        ? t("case-suspension-weather-stale", { airport: airport.iata })
+                        : airport.count === 0
+                          ? t("case-suspension-weather-empty", { airport: airport.iata })
+                          : t("case-suspension-weather-line", {
+                              icao: airport.iata,
+                              count: airport.count,
+                              signs: signWords(airport.signs),
+                            })}
                 </Typography>
               ))}
             </Box>
-            <Typography variant="body2" className="text-text-secondary">
-              {t("case-suspension-risk-note")}
-            </Typography>
-          </Box>
-
-          <RadioGroup
-            aria-label={t("case-suspension-decision-label")}
-            value={decision}
-            onChange={(event) => setTouchedDecision(event.target.value as (typeof DECISIONS)[number])}
-          >
-            {DECISIONS.map((value) => (
-              <FormControlLabel
-                key={value}
-                value={value}
-                disabled={!writable || !state.lawyer || busy !== null}
-                control={<Radio size="small" />}
-                label={t(DECISION_KEY[value])}
-              />
-            ))}
-          </RadioGroup>
-          {rules.decisionAuto && rules.decision !== "pending" ? (
-            <Typography variant="body2" className="text-text-secondary">
-              {t(state.lawyer ? "case-suspension-decided-auto-lawyer" : "case-suspension-decided-auto")}
-            </Typography>
-          ) : !state.lawyer ? (
-            <Typography variant="body2" className="text-text-secondary">
-              {t("case-suspension-decision-who")}
-            </Typography>
-          ) : null}
+          )}
           {writable && (
-            <Box>
-              <Button
-                variant="contained"
-                disabled={
-                  busy !== null ||
-                  (cause === (rules.statedCause ?? "") &&
-                    decision === rules.decision &&
-                    // A lawyer makes ONE's decision their own by saving it as it is.
-                    !(rules.decisionAuto && state.lawyer))
-                }
-                onClick={() =>
-                  void run(
-                    "suspension",
-                    // The decision goes only when this person chose one: a screen opened earlier never undoes a colleague's.
-                    async () => {
-                      const result = await saveSuspension(state.case.id, {
-                        statedCause: cause || null,
-                        decision:
-                          touchedDecision !== null && touchedDecision !== rules.decision
-                            ? touchedDecision
-                            : // Saved as it is by a lawyer, ONE's decision becomes theirs.
-                              rules.decisionAuto && state.lawyer
-                              ? decision
-                              : null,
-                      });
-                      if (result.ok) {
-                        setTouchedCause(null);
-                        setTouchedDecision(null);
-                      }
-                      return result;
-                    },
-                    t("case-suspension-saved"),
-                  )
-                }
-              >
-                {busy === "suspension" ? t("cases-working") : t("case-suspension-save")}
-              </Button>
+            <Box className="flex flex-col gap-1">
+              <Box>
+                <Button
+                  variant="outlined"
+                  color="grey"
+                  size="small"
+                  disabled={busy !== null || !rules.weatherConfigured}
+                  onClick={() =>
+                    void run("weather", () => readCaseWeather(state.case.id), t("case-suspension-weather-done"))
+                  }
+                >
+                  {busy === "weather" ? t("cases-working") : t("case-suspension-weather-read")}
+                </Button>
+              </Box>
+              {!rules.weatherConfigured && (
+                <Typography variant="body2" className="text-text-secondary">
+                  {t("case-suspension-weather-off")}
+                </Typography>
+              )}
             </Box>
           )}
         </Box>
-      </CardContent>
-    </Card>
+
+        <Box className="border-grey-100 flex flex-col gap-2 rounded-2xl border p-4">
+          <Box className="flex flex-wrap items-center gap-2">
+            <Typography variant="body1" className="font-semibold">
+              {t("case-suspension-risk-label")}
+            </Typography>
+            <StatusChip tone={RISK_TONE[triage.risk]} label={t(RISK_KEY[triage.risk])} />
+          </Box>
+          <Box component="ul" className="text-text-primary m-0 flex list-disc flex-col gap-1 pl-5">
+            {triage.grounds.map((ground) => (
+              <Typography component="li" variant="body2" key={ground}>
+                {t(GROUND_KEY[ground])}
+              </Typography>
+            ))}
+          </Box>
+          <Typography variant="body2" className="text-text-secondary">
+            {t("case-suspension-risk-note")}
+          </Typography>
+        </Box>
+
+        <RadioGroup
+          aria-label={t("case-suspension-decision-label")}
+          value={decision}
+          onChange={(event) => setTouchedDecision(event.target.value as (typeof DECISIONS)[number])}
+        >
+          {DECISIONS.map((value) => (
+            <FormControlLabel
+              key={value}
+              value={value}
+              disabled={!writable || !state.lawyer || busy !== null}
+              control={<Radio size="small" />}
+              label={t(DECISION_KEY[value])}
+            />
+          ))}
+        </RadioGroup>
+        {rules.decisionAuto && rules.decision !== "pending" ? (
+          <Typography variant="body2" className="text-text-secondary">
+            {t(state.lawyer ? "case-suspension-decided-auto-lawyer" : "case-suspension-decided-auto")}
+          </Typography>
+        ) : !state.lawyer ? (
+          <Typography variant="body2" className="text-text-secondary">
+            {t("case-suspension-decision-who")}
+          </Typography>
+        ) : null}
+        {writable && (
+          <Box>
+            <Button
+              variant="contained"
+              disabled={
+                busy !== null ||
+                (cause === (rules.statedCause ?? "") &&
+                  decision === rules.decision &&
+                  // A lawyer makes ONE's decision their own by saving it as it is.
+                  !(rules.decisionAuto && state.lawyer))
+              }
+              onClick={() =>
+                void run(
+                  "suspension",
+                  // The decision goes only when this person chose one: a screen opened earlier never undoes a colleague's.
+                  async () => {
+                    const result = await saveSuspension(state.case.id, {
+                      statedCause: cause || null,
+                      decision:
+                        touchedDecision !== null && touchedDecision !== rules.decision
+                          ? touchedDecision
+                          : // Saved as it is by a lawyer, ONE's decision becomes theirs.
+                            rules.decisionAuto && state.lawyer
+                            ? decision
+                            : null,
+                    });
+                    if (result.ok) {
+                      setTouchedCause(null);
+                      setTouchedDecision(null);
+                    }
+                    return result;
+                  },
+                  t("case-suspension-saved"),
+                )
+              }
+            >
+              {busy === "suspension" ? t("cases-working") : t("case-suspension-save")}
+            </Button>
+          </Box>
+        )}
+      </Box>
+    </CollapsibleCard>
   );
 }

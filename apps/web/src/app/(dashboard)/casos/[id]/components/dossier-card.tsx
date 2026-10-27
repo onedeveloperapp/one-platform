@@ -4,12 +4,14 @@ import type { CaseDossier, CaseState } from "../case-types";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 
-import { Alert, Box, Button, Card, CardContent, CircularProgress, Typography } from "@mui/material";
+import { Alert, Box, Button, CircularProgress, Typography } from "@mui/material";
 
+import CollapsibleCard from "@/components/product/collapsible-card";
 import EmptyState from "@/components/product/empty-state";
 import MetricBars from "@/components/product/metric-bars";
 import NiDocumentCheck from "@/icons/nexture/ni-document-check";
 import { openCaseDossier, requestCaseDossier } from "@/lib/cases/dossier-actions";
+import { opensOnArrival } from "@/lib/cases/sections";
 
 type Ready = Extract<CaseState, { kind: "ready" }>;
 
@@ -105,118 +107,121 @@ export default function DossierCard({
   };
 
   return (
-    <Card component="section" aria-labelledby="case-dossier">
-      <CardContent className="flex flex-col gap-3">
-        <Box className="flex flex-col gap-1">
-          <Typography id="case-dossier" variant="h5" component="h2" className="mb-0">
-            {t("dossier-title")}
-          </Typography>
+    <CollapsibleCard
+      id="case-dossier"
+      title={t("dossier-title")}
+      summary={
+        latest
+          ? latest.issuedLabel
+            ? t("dossier-issued-at", { when: latest.issuedLabel })
+            : t("dossier-issued")
+          : t("dossier-none-title")
+      }
+      description={t("dossier-body")}
+      defaultOpen={opensOnArrival(state.case.status, "dossier", false)}
+      bodyClassName="gap-3"
+    >
+      {errorCode ? (
+        <Alert
+          severity="error"
+          className="neutral bg-background-paper/60!"
+          onClose={() => setErrorCode(null)}
+          closeText={t("draft-close")}
+        >
+          {t(errorKey(errorCode))}
+        </Alert>
+      ) : null}
+
+      {busy === "generate" ? (
+        <Box className="flex items-center gap-3 py-2" role="status">
+          <CircularProgress size={20} aria-hidden />
           <Typography variant="body2" className="text-text-secondary">
-            {t("dossier-body")}
+            {t("dossier-generating")}
           </Typography>
         </Box>
+      ) : inCourse ? (
+        <Alert severity="info" className="neutral bg-background-paper/60!">
+          {t("dossier-in-course", { when: last?.requestedLabel ?? "" })}
+        </Alert>
+      ) : unfinished ? (
+        <Alert severity="warning" className="neutral bg-background-paper/60!">
+          {t("dossier-unfinished", { when: last?.requestedLabel ?? "" })}
+        </Alert>
+      ) : null}
 
-        {errorCode ? (
-          <Alert
-            severity="error"
-            className="neutral bg-background-paper/60!"
-            onClose={() => setErrorCode(null)}
-            closeText={t("draft-close")}
-          >
-            {t(errorKey(errorCode))}
-          </Alert>
-        ) : null}
-
-        {busy === "generate" ? (
-          <Box className="flex items-center gap-3 py-2" role="status">
-            <CircularProgress size={20} aria-hidden />
-            <Typography variant="body2" className="text-text-secondary">
-              {t("dossier-generating")}
+      {latest ? (
+        <Box className="flex flex-col gap-3">
+          <Box className="flex flex-col gap-0.5">
+            <Typography variant="subtitle2" component="h3" className="mb-0">
+              {latest.issuedLabel ? t("dossier-issued-at", { when: latest.issuedLabel }) : t("dossier-issued")}
             </Typography>
-          </Box>
-        ) : inCourse ? (
-          <Alert severity="info" className="neutral bg-background-paper/60!">
-            {t("dossier-in-course", { when: last?.requestedLabel ?? "" })}
-          </Alert>
-        ) : unfinished ? (
-          <Alert severity="warning" className="neutral bg-background-paper/60!">
-            {t("dossier-unfinished", { when: last?.requestedLabel ?? "" })}
-          </Alert>
-        ) : null}
-
-        {latest ? (
-          <Box className="flex flex-col gap-3">
-            <Box className="flex flex-col gap-0.5">
-              <Typography variant="subtitle2" component="h3" className="mb-0">
-                {latest.issuedLabel ? t("dossier-issued-at", { when: latest.issuedLabel }) : t("dossier-issued")}
+            {latest.verifyCode ? (
+              // Text, so that it is selected and copied: the code is what somebody types at /verificar.
+              <Typography variant="body2" className="text-text-secondary">
+                {t("dossier-code-label")}{" "}
+                <Box component="span" className="text-text-primary font-mono select-all">
+                  {latest.verifyCode}
+                </Box>
               </Typography>
-              {latest.verifyCode ? (
-                // Text, so that it is selected and copied: the code is what somebody types at /verificar.
-                <Typography variant="body2" className="text-text-secondary">
-                  {t("dossier-code-label")}{" "}
-                  <Box component="span" className="text-text-primary font-mono select-all">
-                    {latest.verifyCode}
-                  </Box>
-                </Typography>
-              ) : null}
-            </Box>
-            <MetricBars
-              whole={false}
-              spacing="dense"
-              items={HOLDS.filter(([key]) => typeof latest.summary[key] === "number").map(([key, label]) => ({
-                key,
-                label: t(label),
-                value: latest.summary[key],
-              }))}
-            />
-            <Box className="flex flex-wrap gap-2">
-              <Button variant="contained" size="small" disabled={busy !== null} onClick={() => void open(latest.id)}>
-                {t(busy === latest.id ? "dossier-opening" : "dossier-open")}
+            ) : null}
+          </Box>
+          <MetricBars
+            whole={false}
+            spacing="dense"
+            items={HOLDS.filter(([key]) => typeof latest.summary[key] === "number").map(([key, label]) => ({
+              key,
+              label: t(label),
+              value: latest.summary[key],
+            }))}
+          />
+          <Box className="flex flex-wrap gap-2">
+            <Button variant="contained" size="small" disabled={busy !== null} onClick={() => void open(latest.id)}>
+              {t(busy === latest.id ? "dossier-opening" : "dossier-open")}
+            </Button>
+            {writable ? (
+              <Button
+                variant="outlined"
+                color="grey"
+                size="small"
+                disabled={busy !== null}
+                onClick={() => void generate()}
+              >
+                {t("dossier-generate-again")}
               </Button>
-              {writable ? (
+            ) : null}
+          </Box>
+          {issued.length > 1 ? (
+            <Box className="border-grey-100 flex flex-col gap-1 border-t pt-2">
+              <Typography variant="body2" className="text-text-secondary">
+                {t("dossier-earlier")}
+              </Typography>
+              {issued.slice(1, 5).map((dossier) => (
                 <Button
-                  variant="outlined"
+                  key={dossier.id}
+                  variant="text"
                   color="grey"
                   size="small"
                   disabled={busy !== null}
-                  onClick={() => void generate()}
+                  onClick={() => void open(dossier.id)}
+                  className="-ml-2 self-start"
+                  aria-label={t("dossier-open-of", { when: dossier.issuedLabel ?? dossier.requestedLabel })}
                 >
-                  {t("dossier-generate-again")}
+                  {dossier.issuedLabel ?? dossier.requestedLabel}
                 </Button>
-              ) : null}
+              ))}
             </Box>
-            {issued.length > 1 ? (
-              <Box className="border-grey-100 flex flex-col gap-1 border-t pt-2">
-                <Typography variant="body2" className="text-text-secondary">
-                  {t("dossier-earlier")}
-                </Typography>
-                {issued.slice(1, 5).map((dossier) => (
-                  <Button
-                    key={dossier.id}
-                    variant="text"
-                    color="grey"
-                    size="small"
-                    disabled={busy !== null}
-                    onClick={() => void open(dossier.id)}
-                    className="-ml-2 self-start"
-                    aria-label={t("dossier-open-of", { when: dossier.issuedLabel ?? dossier.requestedLabel })}
-                  >
-                    {dossier.issuedLabel ?? dossier.requestedLabel}
-                  </Button>
-                ))}
-              </Box>
-            ) : null}
-          </Box>
-        ) : busy !== "generate" ? (
-          <EmptyState
-            icon={<NiDocumentCheck />}
-            title={t("dossier-none-title")}
-            description={t("dossier-none-body")}
-            action={writable ? { label: t("dossier-generate"), onClick: () => void generate() } : undefined}
-            className="py-6"
-          />
-        ) : null}
-      </CardContent>
-    </Card>
+          ) : null}
+        </Box>
+      ) : busy !== "generate" ? (
+        <EmptyState
+          titleAs="h3"
+          icon={<NiDocumentCheck />}
+          title={t("dossier-none-title")}
+          description={t("dossier-none-body")}
+          action={writable ? { label: t("dossier-generate"), onClick: () => void generate() } : undefined}
+          className="py-6"
+        />
+      ) : null}
+    </CollapsibleCard>
   );
 }

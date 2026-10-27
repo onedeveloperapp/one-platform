@@ -9,8 +9,6 @@ import {
   Alert,
   Box,
   Button,
-  Card,
-  CardContent,
   Checkbox,
   Dialog,
   DialogActions,
@@ -24,6 +22,7 @@ import {
   Typography,
 } from "@mui/material";
 
+import CollapsibleCard from "@/components/product/collapsible-card";
 import DialogHeader from "@/components/product/dialog-header";
 import EmptyState from "@/components/product/empty-state";
 import StatusChip, { type StatusTone } from "@/components/product/status-chip";
@@ -31,6 +30,7 @@ import NiScale from "@/icons/nexture/ni-scale";
 import { removeProceeding, saveProceeding } from "@/lib/cases/actions";
 import { caseErrorKey } from "@/lib/cases/cases";
 import { caseDomicile, lawyerNeedsSupplementary, ruleParties } from "@/lib/cases/rules";
+import { opensOnArrival } from "@/lib/cases/sections";
 import { formatCnj } from "@flyee/rules/cnj";
 import { formatDayBr } from "@flyee/rules/person";
 
@@ -110,131 +110,142 @@ export default function ProceedingsCard({
     else onChanged();
   };
 
+  // What the courts did that nobody of the firm saw yet, over every lawsuit of the case.
+  const unseen = state.proceedings.reduce(
+    (sum, proceeding) => sum + (state.course.byProceeding[proceeding.id]?.unseen ?? 0),
+    0,
+  );
+  const lineOf = (proceeding: CaseProceeding) =>
+    `${[t(KIND_KEY[proceeding.kind]), courtName(proceeding.court)].filter(Boolean).join(", ")}: ${t(STATUS_KEY[proceeding.status])}`;
+
   return (
-    <Card component="section" aria-labelledby="case-proceedings">
-      <CardContent className="flex flex-col gap-4">
-        <Box className="flex flex-wrap items-start justify-between gap-2">
-          <Box className="flex flex-col gap-1">
-            <Typography id="case-proceedings" variant="h5" component="h2" className="mb-0">
-              {t("case-proceedings-title")}
-            </Typography>
-            <Typography variant="body2" className="text-text-secondary">
-              {t("case-proceedings-body")}
-            </Typography>
-          </Box>
-          {writable && state.proceedings.length > 0 && (
-            <Button variant="outlined" color="grey" size="small" onClick={() => setEditing("new")}>
-              {t("case-proceedings-add")}
-            </Button>
-          )}
-        </Box>
+    <CollapsibleCard
+      id="case-proceedings"
+      title={t("case-proceedings-title")}
+      summary={
+        state.proceedings.length === 0 ? t("case-proceedings-empty-title") : state.proceedings.map(lineOf).join(" · ")
+      }
+      chip={
+        unseen > 0 ? (
+          <StatusChip tone="attention" label={t("case-proceedings-summary-moved", { count: unseen })} />
+        ) : null
+      }
+      description={t("case-proceedings-body")}
+      action={
+        writable && state.proceedings.length > 0 ? (
+          <Button variant="outlined" color="grey" size="small" onClick={() => setEditing("new")}>
+            {t("case-proceedings-add")}
+          </Button>
+        ) : null
+      }
+      defaultOpen={opensOnArrival(state.case.status, "proceedings", unseen > 0, state.proceedings.length === 0)}
+    >
+      {problem && (
+        <Alert severity="error" className="neutral bg-background-paper/60!" onClose={() => setProblem(null)}>
+          {t(caseErrorKey(problem))}
+        </Alert>
+      )}
 
-        {problem && (
-          <Alert severity="error" className="neutral bg-background-paper/60!" onClose={() => setProblem(null)}>
-            {t(caseErrorKey(problem))}
-          </Alert>
-        )}
+      {state.proceedings.length === 0 && (
+        <EmptyState
+          titleAs="h3"
+          icon={<NiScale />}
+          title={t("case-proceedings-empty-title")}
+          description={t("case-proceedings-empty-body")}
+          action={writable ? { label: t("case-proceedings-add"), onClick: () => setEditing("new") } : undefined}
+        />
+      )}
 
-        {state.proceedings.length === 0 && (
-          <EmptyState
-            icon={<NiScale />}
-            title={t("case-proceedings-empty-title")}
-            description={t("case-proceedings-empty-body")}
-            action={writable ? { label: t("case-proceedings-add"), onClick: () => setEditing("new") } : undefined}
-          />
-        )}
-
-        {state.proceedings.map((proceeding) => {
-          const where = [
-            courtName(proceeding.court),
-            proceeding.comarca,
-            proceeding.unit,
-            systemLabel(t, proceeding.system),
-          ]
-            .filter(Boolean)
-            .join(" · ");
-          return (
-            <Box key={proceeding.id} className="border-grey-100 flex flex-col gap-2 rounded-2xl border p-4">
-              <Box className="flex flex-wrap items-start justify-between gap-2">
-                <Box className="flex min-w-0 flex-col">
-                  <Typography variant="body1" className="font-semibold">
-                    {t(KIND_KEY[proceeding.kind])}
+      {state.proceedings.map((proceeding) => {
+        const where = [
+          courtName(proceeding.court),
+          proceeding.comarca,
+          proceeding.unit,
+          systemLabel(t, proceeding.system),
+        ]
+          .filter(Boolean)
+          .join(" · ");
+        return (
+          <Box key={proceeding.id} className="border-grey-100 flex flex-col gap-2 rounded-2xl border p-4">
+            <Box className="flex flex-wrap items-start justify-between gap-2">
+              <Box className="flex min-w-0 flex-col">
+                <Typography variant="body1" className="font-semibold">
+                  {t(KIND_KEY[proceeding.kind])}
+                </Typography>
+                {where && (
+                  <Typography variant="body2" className="text-text-secondary">
+                    {where}
                   </Typography>
-                  {where && (
-                    <Typography variant="body2" className="text-text-secondary">
-                      {where}
-                    </Typography>
-                  )}
-                </Box>
-                <StatusChip tone={STATUS_TONE[proceeding.status]} label={t(STATUS_KEY[proceeding.status])} />
+                )}
               </Box>
-              {proceeding.cnj && (
-                <Typography variant="body2" className="font-mono">
-                  {[
-                    formatCnj(proceeding.cnj) ?? proceeding.cnj,
-                    proceeding.filedAt
-                      ? t("case-proceeding-filed-on", { date: formatDayBr(proceeding.filedAt) ?? "" })
-                      : null,
-                  ]
-                    .filter(Boolean)
-                    .join(" · ")}
-                </Typography>
-              )}
-              {proceeding.forumBasis && (
-                <Typography variant="body2">
-                  {t("case-proceeding-forum", {
-                    basis:
-                      proceeding.forumBasis in BASIS_KEY
-                        ? t(BASIS_KEY[proceeding.forumBasis as (typeof BASES)[number]])
-                        : proceeding.forumBasis,
-                  })}
-                  {proceeding.forumReason ? `: ${proceeding.forumReason}` : ""}
-                </Typography>
-              )}
-              {proceeding.parties.length > 0 && (
-                <Typography variant="body2" className="text-text-secondary">
-                  {t("case-proceeding-claimants", {
-                    names: proceeding.parties.map(nameOfParty).filter(Boolean).join(", "),
-                  })}
-                </Typography>
-              )}
-              {proceeding.lawyers.length > 0 && (
-                <Typography variant="body2" className="text-text-secondary">
-                  {t("case-proceeding-lawyers", {
-                    names: proceeding.lawyers.map(nameOfLawyer).filter(Boolean).join(", "),
-                  })}
-                </Typography>
-              )}
-              <CourtCourse
-                caseId={state.case.id}
-                proceedingId={proceeding.id}
-                view={state.course.byProceeding[proceeding.id]}
-                facts={state.course}
-                writable={writable}
-                onChanged={onChanged}
-              />
-              {writable && (
-                <Box className="flex flex-wrap gap-2 pt-1">
-                  <Button variant="outlined" color="grey" size="small" onClick={() => setEditing(proceeding)}>
-                    {t("client-edit")}
-                  </Button>
-                  {proceeding.status === "planned" && (
-                    <Button
-                      variant="text"
-                      color="grey"
-                      size="small"
-                      disabled={busy !== null}
-                      onClick={() => void remove(proceeding)}
-                    >
-                      {t("client-trip-remove")}
-                    </Button>
-                  )}
-                </Box>
-              )}
+              <StatusChip tone={STATUS_TONE[proceeding.status]} label={t(STATUS_KEY[proceeding.status])} />
             </Box>
-          );
-        })}
-      </CardContent>
+            {proceeding.cnj && (
+              <Typography variant="body2" className="font-mono">
+                {[
+                  formatCnj(proceeding.cnj) ?? proceeding.cnj,
+                  proceeding.filedAt
+                    ? t("case-proceeding-filed-on", { date: formatDayBr(proceeding.filedAt) ?? "" })
+                    : null,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </Typography>
+            )}
+            {proceeding.forumBasis && (
+              <Typography variant="body2">
+                {t("case-proceeding-forum", {
+                  basis:
+                    proceeding.forumBasis in BASIS_KEY
+                      ? t(BASIS_KEY[proceeding.forumBasis as (typeof BASES)[number]])
+                      : proceeding.forumBasis,
+                })}
+                {proceeding.forumReason ? `: ${proceeding.forumReason}` : ""}
+              </Typography>
+            )}
+            {proceeding.parties.length > 0 && (
+              <Typography variant="body2" className="text-text-secondary">
+                {t("case-proceeding-claimants", {
+                  names: proceeding.parties.map(nameOfParty).filter(Boolean).join(", "),
+                })}
+              </Typography>
+            )}
+            {proceeding.lawyers.length > 0 && (
+              <Typography variant="body2" className="text-text-secondary">
+                {t("case-proceeding-lawyers", {
+                  names: proceeding.lawyers.map(nameOfLawyer).filter(Boolean).join(", "),
+                })}
+              </Typography>
+            )}
+            <CourtCourse
+              caseId={state.case.id}
+              proceedingId={proceeding.id}
+              view={state.course.byProceeding[proceeding.id]}
+              facts={state.course}
+              writable={writable}
+              onChanged={onChanged}
+            />
+            {writable && (
+              <Box className="flex flex-wrap gap-2 pt-1">
+                <Button variant="outlined" color="grey" size="small" onClick={() => setEditing(proceeding)}>
+                  {t("client-edit")}
+                </Button>
+                {proceeding.status === "planned" && (
+                  <Button
+                    variant="text"
+                    color="grey"
+                    size="small"
+                    disabled={busy !== null}
+                    onClick={() => void remove(proceeding)}
+                  >
+                    {t("client-trip-remove")}
+                  </Button>
+                )}
+              </Box>
+            )}
+          </Box>
+        );
+      })}
 
       {editing && (
         <ProceedingDialog
@@ -247,7 +258,7 @@ export default function ProceedingsCard({
           }}
         />
       )}
-    </Card>
+    </CollapsibleCard>
   );
 }
 

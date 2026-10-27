@@ -5,20 +5,9 @@ import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import {
-  Alert,
-  Box,
-  Button,
-  Card,
-  CardContent,
-  Checkbox,
-  FormControlLabel,
-  Grid,
-  MenuItem,
-  TextField,
-  Typography,
-} from "@mui/material";
+import { Alert, Box, Button, Checkbox, FormControlLabel, Grid, MenuItem, TextField, Typography } from "@mui/material";
 
+import CollapsibleCard from "@/components/product/collapsible-card";
 import ConfirmActionDialog from "@/components/product/confirm-action-dialog";
 import EmptyState from "@/components/product/empty-state";
 import StatusChip, { type StatusTone } from "@/components/product/status-chip";
@@ -48,6 +37,7 @@ import {
   requestFilingPackage,
   requestPackageSignature,
 } from "@/lib/cases/filing-actions";
+import { opensOnArrival } from "@/lib/cases/sections";
 import { mimeOf, uploadToSignedUrl } from "@/lib/files/browser-upload";
 import { signatureErrorKey, signatureErrorSaid } from "@/lib/psc/signature";
 import { filingKindOf } from "@flyee/courts/filing";
@@ -122,42 +112,59 @@ export default function FilingCard({
     return () => window.clearInterval(timer);
   }, [polling, onChanged, pollRound]);
 
-  return (
-    <Card component="section" aria-labelledby="case-filing">
-      <CardContent className="flex flex-col gap-4">
-        <Box className="flex flex-col gap-1">
-          <Typography id="case-filing" variant="h5" component="h2" className="mb-0">
-            {t("filing-title")}
-          </Typography>
-          <Typography variant="body2" className="text-text-secondary">
-            {t("filing-body")}
-          </Typography>
-        </Box>
+  // The package each lawsuit has now, and whether one is ready to be filed or could not be built.
+  const packages = lawsuits.map((proceeding) => ({ proceeding, filing: currentFiling(state.filings, proceeding) }));
+  const readyToFile = packages.some(({ filing }) => filing?.status === "ready" && !filing.blocker);
+  const notBuilt = packages.some(({ filing }) => filing?.status === "failed");
+  const noPackage = t("filing-summary-none");
 
-        {lawsuits.length === 0 ? (
-          <EmptyState
-            icon={<NiScale />}
-            titleAs="h3"
-            title={t("filing-empty-title")}
-            description={t("filing-empty-body")}
-            className="py-8"
+  return (
+    <CollapsibleCard
+      id="case-filing"
+      title={t("filing-title")}
+      summary={
+        lawsuits.length === 0
+          ? t("filing-empty-title")
+          : packages
+              .map(
+                ({ proceeding, filing }) =>
+                  `${t(KIND_KEY[proceeding.kind])}: ${filing ? t(PACKAGE_STATUS_KEY[filing.status]) : noPackage}`,
+              )
+              .join(" · ")
+      }
+      chip={
+        notBuilt ? (
+          <StatusChip tone="danger" label={t("filing-status-failed")} />
+        ) : readyToFile ? (
+          <StatusChip tone="attention" label={t("filing-status-ready")} />
+        ) : null
+      }
+      description={t("filing-body")}
+      defaultOpen={opensOnArrival(state.case.status, "filing", readyToFile || notBuilt, lawsuits.length === 0)}
+    >
+      {lawsuits.length === 0 ? (
+        <EmptyState
+          icon={<NiScale />}
+          titleAs="h3"
+          title={t("filing-empty-title")}
+          description={t("filing-empty-body")}
+          className="py-8"
+        />
+      ) : (
+        lawsuits.map((proceeding) => (
+          <Lawsuit
+            key={proceeding.id}
+            state={state}
+            proceeding={proceeding}
+            // The package that means something for this lawsuit now: the one in course, or the one filed.
+            filing={currentFiling(state.filings, proceeding)}
+            writable={writable}
+            onChanged={onChanged}
+            onStarted={restartPolling}
           />
-        ) : (
-          lawsuits.map((proceeding) => (
-            <Lawsuit
-              key={proceeding.id}
-              state={state}
-              proceeding={proceeding}
-              // The package that means something for this lawsuit now: the one in course, or the one filed.
-              filing={currentFiling(state.filings, proceeding)}
-              writable={writable}
-              onChanged={onChanged}
-              onStarted={restartPolling}
-            />
-          ))
-        )}
-      </CardContent>
-    </Card>
+        ))
+      )}
+    </CollapsibleCard>
   );
 }
 

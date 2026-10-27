@@ -9,8 +9,6 @@ import {
   Alert,
   Box,
   Button,
-  Card,
-  CardContent,
   Checkbox,
   Dialog,
   DialogActions,
@@ -25,12 +23,14 @@ import {
   Typography,
 } from "@mui/material";
 
+import CollapsibleCard from "@/components/product/collapsible-card";
 import DialogHeader from "@/components/product/dialog-header";
 import EmptyState from "@/components/product/empty-state";
 import StatusChip, { type StatusTone } from "@/components/product/status-chip";
 import NiPen from "@/icons/nexture/ni-pen";
 import { openCaseFile } from "@/lib/cases/actions";
 import { caseErrorKey, DOCUMENT_KIND_KEY, isDocumentKind } from "@/lib/cases/cases";
+import { opensOnArrival } from "@/lib/cases/sections";
 import { cancelSignature, confirmSignature, refreshSignature, requestSignature } from "@/lib/signatures/actions";
 import { isMinorOn } from "@flyee/rules/person";
 
@@ -65,6 +65,8 @@ const STATUS: Record<string, { key: string; tone: StatusTone }> = {
 };
 
 const ENDED = ["signed", "refused", "expired", "cancelled"];
+/** What waits for the firm: a file the client signed elsewhere and sent back, or an envelope ZapSign did not take. */
+const NEEDS_PERSON = ["received", "failed", "uncertain"];
 const SIGNABLE_KINDS = ["power_of_attorney", "contract", "other"];
 
 /**
@@ -121,132 +123,145 @@ export default function SignaturesCard({
     }
   };
 
+  const kindOf = (envelope: CaseEnvelope) => {
+    const original = documentOf(envelope.documentId);
+    return original && isDocumentKind(original.kind)
+      ? t(DOCUMENT_KIND_KEY[original.kind])
+      : t("case-signature-document");
+  };
+  const statusOf = (envelope: CaseEnvelope) => t((STATUS[envelope.status] ?? STATUS.pending).key);
+  const needs = state.envelopes.find((envelope) => NEEDS_PERSON.includes(envelope.status)) ?? null;
+
   return (
-    <Card component="section" aria-labelledby="case-signatures">
-      <CardContent className="flex flex-col gap-4">
-        <Box className="flex flex-wrap items-start justify-between gap-2">
-          <Box className="flex flex-col gap-1">
-            <Typography id="case-signatures" variant="h5" component="h2" className="mb-0">
-              {t("case-signatures-title")}
-            </Typography>
-            <Typography variant="body2" className="text-text-secondary">
-              {t("case-signatures-body")}
-            </Typography>
-          </Box>
-          {writable && state.envelopes.length > 0 && (
-            <Button variant="outlined" color="grey" size="small" onClick={() => setRequesting(true)}>
-              {t("case-signatures-request")}
-            </Button>
-          )}
-        </Box>
+    <CollapsibleCard
+      id="case-signatures"
+      title={t("case-signatures-title")}
+      summary={
+        state.envelopes.length === 0
+          ? t("case-signatures-empty-title")
+          : state.envelopes
+              .slice(0, 3)
+              .map((envelope) => `${kindOf(envelope)}: ${statusOf(envelope)}`)
+              .join(" · ")
+      }
+      chip={needs ? <StatusChip tone="attention" label={statusOf(needs)} /> : null}
+      description={t("case-signatures-body")}
+      action={
+        writable && state.envelopes.length > 0 ? (
+          <Button variant="outlined" color="grey" size="small" onClick={() => setRequesting(true)}>
+            {t("case-signatures-request")}
+          </Button>
+        ) : null
+      }
+      defaultOpen={opensOnArrival(state.case.status, "signatures", needs !== null, state.envelopes.length === 0)}
+    >
+      {problem && (
+        <Alert severity="error" className="neutral bg-background-paper/60!" onClose={() => setProblem(null)}>
+          {t(caseErrorKey(problem))}
+        </Alert>
+      )}
 
-        {problem && (
-          <Alert severity="error" className="neutral bg-background-paper/60!" onClose={() => setProblem(null)}>
-            {t(caseErrorKey(problem))}
-          </Alert>
-        )}
+      {state.envelopes.length === 0 && (
+        <EmptyState
+          titleAs="h3"
+          icon={<NiPen />}
+          title={t("case-signatures-empty-title")}
+          description={t("case-signatures-empty-body")}
+          action={writable ? { label: t("case-signatures-request"), onClick: () => setRequesting(true) } : undefined}
+        />
+      )}
 
-        {state.envelopes.length === 0 && (
-          <EmptyState
-            icon={<NiPen />}
-            title={t("case-signatures-empty-title")}
-            description={t("case-signatures-empty-body")}
-            action={writable ? { label: t("case-signatures-request"), onClick: () => setRequesting(true) } : undefined}
-          />
-        )}
-
-        {state.envelopes.map((envelope) => {
-          const original = documentOf(envelope.documentId);
-          const signed = documentOf(envelope.signedDocumentId);
-          const returned = state.documents.find(
-            (document) => document.envelopeId === envelope.id && document.id !== envelope.signedDocumentId,
-          );
-          const status = STATUS[envelope.status] ?? STATUS.pending;
-          const ended = ENDED.includes(envelope.status);
-          return (
-            <Box key={envelope.id} className="border-grey-100 flex flex-col gap-2 rounded-2xl border p-4">
-              <Box className="flex flex-wrap items-start justify-between gap-2">
-                <Box className="flex min-w-0 flex-col">
-                  <Typography variant="body1" className="font-semibold">
-                    {original && isDocumentKind(original.kind)
-                      ? t(DOCUMENT_KIND_KEY[original.kind])
-                      : t("case-signature-document")}
-                    {" · "}
-                    {t(METHOD_KEY[envelope.method])}
+      {state.envelopes.map((envelope) => {
+        const original = documentOf(envelope.documentId);
+        const signed = documentOf(envelope.signedDocumentId);
+        const returned = state.documents.find(
+          (document) => document.envelopeId === envelope.id && document.id !== envelope.signedDocumentId,
+        );
+        const status = STATUS[envelope.status] ?? STATUS.pending;
+        const ended = ENDED.includes(envelope.status);
+        return (
+          <Box key={envelope.id} className="border-grey-100 flex flex-col gap-2 rounded-2xl border p-4">
+            <Box className="flex flex-wrap items-start justify-between gap-2">
+              <Box className="flex min-w-0 flex-col">
+                <Typography variant="body1" className="font-semibold">
+                  {original && isDocumentKind(original.kind)
+                    ? t(DOCUMENT_KIND_KEY[original.kind])
+                    : t("case-signature-document")}
+                  {" · "}
+                  {t(METHOD_KEY[envelope.method])}
+                </Typography>
+                {original && (
+                  <Typography variant="body2" className="text-text-secondary break-all">
+                    {original.name}
                   </Typography>
-                  {original && (
-                    <Typography variant="body2" className="text-text-secondary break-all">
-                      {original.name}
-                    </Typography>
-                  )}
-                </Box>
-                <StatusChip tone={status.tone} label={t(status.key)} />
-              </Box>
-
-              {envelope.signers.map((signer) => (
-                <Box key={signer.position} className="flex flex-wrap items-center gap-2">
-                  <Typography variant="body2">
-                    {signer.signedAt
-                      ? t("case-signature-signer-signed", { name: signer.name })
-                      : t("case-signature-signer-waiting", { name: signer.name })}
-                  </Typography>
-                  {writable && !signer.signedAt && envelope.status === "pending" && signer.signUrl && (
-                    <Button variant="text" size="small" onClick={() => void copy(signer.signUrl ?? "")}>
-                      {t("case-signature-copy-link")}
-                    </Button>
-                  )}
-                </Box>
-              ))}
-
-              {envelope.lastError && (envelope.status === "failed" || envelope.status === "uncertain") && (
-                <Typography variant="body2" className="text-text-secondary">
-                  {t("case-signature-failed-help")}
-                </Typography>
-              )}
-              {envelope.status === "pending" && envelope.lastError && (
-                <Typography variant="body2" className="text-text-secondary">
-                  {t("case-signature-pending-problem")}
-                </Typography>
-              )}
-              {envelope.endedReason && (
-                <Typography variant="body2" className="text-text-secondary">
-                  {t("case-closed-reason", { reason: envelope.endedReason })}
-                </Typography>
-              )}
-
-              <Box className="flex flex-wrap gap-2 pt-1">
-                {signed && (
-                  <Button variant="outlined" color="grey" size="small" onClick={() => void open(signed.fileId)}>
-                    {t("case-signature-open-signed")}
-                  </Button>
-                )}
-                {returned && envelope.status === "received" && (
-                  <Button variant="outlined" color="grey" size="small" onClick={() => void open(returned.fileId)}>
-                    {t("case-signature-open-returned")}
-                  </Button>
-                )}
-                {writable && envelope.method === "zapsign" && envelope.status === "pending" && (
-                  <Button variant="text" size="small" disabled={busy !== null} onClick={() => void refresh(envelope)}>
-                    {busy === envelope.id ? t("cases-working") : t("case-signature-refresh")}
-                  </Button>
-                )}
-                {writable &&
-                  envelope.method !== "zapsign" &&
-                  (envelope.status === "pending" || envelope.status === "received") && (
-                    <Button variant="contained" size="small" onClick={() => setConfirming(envelope)}>
-                      {t("case-signature-confirm")}
-                    </Button>
-                  )}
-                {writable && !ended && (
-                  <Button variant="text" color="grey" size="small" onClick={() => setCancelling(envelope)}>
-                    {t("case-signature-cancel")}
-                  </Button>
                 )}
               </Box>
+              <StatusChip tone={status.tone} label={t(status.key)} />
             </Box>
-          );
-        })}
-      </CardContent>
+
+            {envelope.signers.map((signer) => (
+              <Box key={signer.position} className="flex flex-wrap items-center gap-2">
+                <Typography variant="body2">
+                  {signer.signedAt
+                    ? t("case-signature-signer-signed", { name: signer.name })
+                    : t("case-signature-signer-waiting", { name: signer.name })}
+                </Typography>
+                {writable && !signer.signedAt && envelope.status === "pending" && signer.signUrl && (
+                  <Button variant="text" size="small" onClick={() => void copy(signer.signUrl ?? "")}>
+                    {t("case-signature-copy-link")}
+                  </Button>
+                )}
+              </Box>
+            ))}
+
+            {envelope.lastError && (envelope.status === "failed" || envelope.status === "uncertain") && (
+              <Typography variant="body2" className="text-text-secondary">
+                {t("case-signature-failed-help")}
+              </Typography>
+            )}
+            {envelope.status === "pending" && envelope.lastError && (
+              <Typography variant="body2" className="text-text-secondary">
+                {t("case-signature-pending-problem")}
+              </Typography>
+            )}
+            {envelope.endedReason && (
+              <Typography variant="body2" className="text-text-secondary">
+                {t("case-closed-reason", { reason: envelope.endedReason })}
+              </Typography>
+            )}
+
+            <Box className="flex flex-wrap gap-2 pt-1">
+              {signed && (
+                <Button variant="outlined" color="grey" size="small" onClick={() => void open(signed.fileId)}>
+                  {t("case-signature-open-signed")}
+                </Button>
+              )}
+              {returned && envelope.status === "received" && (
+                <Button variant="outlined" color="grey" size="small" onClick={() => void open(returned.fileId)}>
+                  {t("case-signature-open-returned")}
+                </Button>
+              )}
+              {writable && envelope.method === "zapsign" && envelope.status === "pending" && (
+                <Button variant="text" size="small" disabled={busy !== null} onClick={() => void refresh(envelope)}>
+                  {busy === envelope.id ? t("cases-working") : t("case-signature-refresh")}
+                </Button>
+              )}
+              {writable &&
+                envelope.method !== "zapsign" &&
+                (envelope.status === "pending" || envelope.status === "received") && (
+                  <Button variant="contained" size="small" onClick={() => setConfirming(envelope)}>
+                    {t("case-signature-confirm")}
+                  </Button>
+                )}
+              {writable && !ended && (
+                <Button variant="text" color="grey" size="small" onClick={() => setCancelling(envelope)}>
+                  {t("case-signature-cancel")}
+                </Button>
+              )}
+            </Box>
+          </Box>
+        );
+      })}
 
       {requesting && (
         <RequestDialog
@@ -281,7 +296,7 @@ export default function SignaturesCard({
           }}
         />
       )}
-    </Card>
+    </CollapsibleCard>
   );
 }
 

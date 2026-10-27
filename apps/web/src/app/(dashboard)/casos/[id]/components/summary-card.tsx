@@ -8,8 +8,6 @@ import {
   Alert,
   Box,
   Button,
-  Card,
-  CardContent,
   Dialog,
   DialogActions,
   DialogContent,
@@ -19,9 +17,11 @@ import {
   Typography,
 } from "@mui/material";
 
+import CollapsibleCard from "@/components/product/collapsible-card";
 import DialogHeader from "@/components/product/dialog-header";
 import { updateCase } from "@/lib/cases/actions";
 import { caseErrorKey, CAUSE_KEY, CAUSES, INCIDENT_KEY, INCIDENTS, ORIGIN_KEY, ORIGINS } from "@/lib/cases/cases";
+import { opensOnArrival } from "@/lib/cases/sections";
 import { formatDayBr } from "@flyee/rules/person";
 
 type Ready = Extract<CaseState, { kind: "ready" }>;
@@ -57,43 +57,47 @@ export default function SummaryCard({
   ];
 
   return (
-    <Card component="section" aria-labelledby="case-summary">
-      <CardContent className="flex flex-col gap-3">
-        <Box className="flex items-start justify-between gap-2">
-          <Typography id="case-summary" variant="h5" component="h2" className="mb-0">
-            {t("case-summary-title")}
+    <CollapsibleCard
+      id="case-summary"
+      title={t("case-summary-title")}
+      summary={[t(INCIDENT_KEY[current.incident]), airline, current.flightDate ? formatDayBr(current.flightDate) : null]
+        .filter(Boolean)
+        .join(" · ")}
+      summaryClosedOnly
+      action={
+        writable ? (
+          <Button variant="outlined" color="grey" size="small" onClick={() => setEditing(true)}>
+            {t("client-edit")}
+          </Button>
+        ) : null
+      }
+      defaultOpen={opensOnArrival(state.case.status, "summary", false)}
+      bodyClassName="gap-3"
+    >
+      <Box component="dl" className="m-0 flex flex-col gap-2">
+        {facts
+          .filter((fact) => fact.value)
+          .map((fact) => (
+            <Box key={fact.label} className="flex flex-col">
+              <Typography variant="body2" component="dt" className="text-text-secondary">
+                {fact.label}
+              </Typography>
+              <Typography variant="body1" component="dd" className="m-0">
+                {fact.value}
+              </Typography>
+            </Box>
+          ))}
+      </Box>
+      {current.summary && (
+        <Box className="flex flex-col gap-1">
+          <Typography variant="body2" className="text-text-secondary">
+            {t("case-field-summary")}
           </Typography>
-          {writable && (
-            <Button variant="text" size="small" onClick={() => setEditing(true)}>
-              {t("client-edit")}
-            </Button>
-          )}
+          <Typography variant="body1" className="break-words whitespace-pre-line">
+            {current.summary}
+          </Typography>
         </Box>
-        <Box component="dl" className="m-0 flex flex-col gap-2">
-          {facts
-            .filter((fact) => fact.value)
-            .map((fact) => (
-              <Box key={fact.label} className="flex flex-col">
-                <Typography variant="body2" component="dt" className="text-text-secondary">
-                  {fact.label}
-                </Typography>
-                <Typography variant="body1" component="dd" className="m-0">
-                  {fact.value}
-                </Typography>
-              </Box>
-            ))}
-        </Box>
-        {current.summary && (
-          <Box className="flex flex-col gap-1">
-            <Typography variant="body2" className="text-text-secondary">
-              {t("case-field-summary")}
-            </Typography>
-            <Typography variant="body1" className="break-words whitespace-pre-line">
-              {current.summary}
-            </Typography>
-          </Box>
-        )}
-      </CardContent>
+      )}
 
       {editing && (
         <SummaryDialog
@@ -105,7 +109,7 @@ export default function SummaryCard({
           }}
         />
       )}
-    </Card>
+    </CollapsibleCard>
   );
 }
 

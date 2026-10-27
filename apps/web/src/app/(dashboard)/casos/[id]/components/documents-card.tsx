@@ -8,8 +8,6 @@ import {
   Alert,
   Box,
   Button,
-  Card,
-  CardContent,
   Dialog,
   DialogActions,
   DialogContent,
@@ -19,6 +17,7 @@ import {
 } from "@mui/material";
 
 import CheckSuggestion from "@/components/product/check-suggestion";
+import CollapsibleCard from "@/components/product/collapsible-card";
 import DialogHeader from "@/components/product/dialog-header";
 import EmptyState from "@/components/product/empty-state";
 import StatusChip, { type StatusTone } from "@/components/product/status-chip";
@@ -35,6 +34,7 @@ import {
 } from "@/lib/cases/cases";
 import { processingErrorKey } from "@/lib/cases/document-check";
 import { PHOTO_PROBLEM_KEY } from "@/lib/cases/document-quality";
+import { opensOnArrival } from "@/lib/cases/sections";
 import { mimeOf, uploadToSignedUrl } from "@/lib/files/browser-upload";
 
 type Ready = Extract<CaseState, { kind: "ready" }>;
@@ -231,112 +231,126 @@ export default function DocumentsCard({
     </Box>
   );
 
+  const accepted = state.documents.filter((document) => document.status === "accepted").length;
+  const refused = state.documents.filter((document) => document.status === "rejected").length;
+
   return (
-    <Card component="section" aria-labelledby="case-documents">
-      <CardContent className="flex flex-col gap-4">
-        <Box className="flex flex-col gap-1">
-          <Typography id="case-documents" variant="h5" component="h2" className="mb-0">
-            {t("case-documents-title")}
+    <CollapsibleCard
+      id="case-documents"
+      title={t("case-documents-title")}
+      summary={
+        state.documents.length === 0
+          ? t("case-documents-empty-title")
+          : [
+              t("case-documents-summary", { count: state.documents.length }),
+              accepted > 0 ? t("case-documents-summary-accepted", { count: accepted }) : null,
+              refused > 0 ? t("case-documents-summary-refused", { count: refused }) : null,
+            ]
+              .filter(Boolean)
+              .join(" · ")
+      }
+      chip={
+        toReview.length > 0 ? (
+          <StatusChip tone="attention" label={t("case-documents-to-review", { count: toReview.length })} />
+        ) : null
+      }
+      description={t("case-documents-body")}
+      defaultOpen={opensOnArrival(state.case.status, "documents", toReview.length > 0, state.documents.length === 0)}
+    >
+      {problem && (
+        <Alert severity="error" className="neutral bg-background-paper/60!" onClose={() => setProblem(null)}>
+          {t(caseErrorKey(problem))}
+        </Alert>
+      )}
+
+      {state.documents.length === 0 && (
+        <EmptyState
+          titleAs="h3"
+          icon={<NiPaperclip />}
+          title={t("case-documents-empty-title")}
+          description={t("case-documents-empty-body")}
+        />
+      )}
+
+      {toReview.length > 0 && (
+        <Box className="flex flex-col gap-2">
+          <Typography variant="subtitle2" component="h3">
+            {t("case-documents-to-review", { count: toReview.length })}
           </Typography>
-          <Typography variant="body2" className="text-text-secondary">
-            {t("case-documents-body")}
-          </Typography>
+          {toReview.map(row)}
         </Box>
+      )}
+      {decided.length > 0 && (
+        <Box className="flex flex-col gap-2">
+          <Typography variant="subtitle2" component="h3">
+            {t("case-documents-decided")}
+          </Typography>
+          {decided.map(row)}
+        </Box>
+      )}
 
-        {problem && (
-          <Alert severity="error" className="neutral bg-background-paper/60!" onClose={() => setProblem(null)}>
-            {t(caseErrorKey(problem))}
-          </Alert>
-        )}
-
-        {state.documents.length === 0 && (
-          <EmptyState
-            icon={<NiPaperclip />}
-            title={t("case-documents-empty-title")}
-            description={t("case-documents-empty-body")}
+      {writable && (
+        <Box className="border-grey-100 flex flex-col gap-3 rounded-2xl border p-4">
+          <Typography variant="body1" className="font-semibold">
+            {t("case-documents-add")}
+          </Typography>
+          <Box className="flex flex-col gap-3 sm:flex-row">
+            <TextField
+              select
+              size="small"
+              fullWidth
+              id="case-document-kind"
+              label={t("client-documents-kind")}
+              value={kind}
+              onChange={(event) => setKind(event.target.value as DocumentKind)}
+            >
+              {DOCUMENT_KINDS.map((value) => (
+                <MenuItem key={value} value={value}>
+                  {t(DOCUMENT_KIND_KEY[value])}
+                </MenuItem>
+              ))}
+            </TextField>
+            <TextField
+              select
+              size="small"
+              fullWidth
+              id="case-document-person"
+              label={t("client-documents-person")}
+              value={party}
+              onChange={(event) => setParty(event.target.value)}
+            >
+              <MenuItem value="">{t("case-documents-whole-case")}</MenuItem>
+              {state.parties.map((candidate) => (
+                <MenuItem key={candidate.partyId} value={candidate.partyId}>
+                  {candidate.person.full_name}
+                </MenuItem>
+              ))}
+            </TextField>
+          </Box>
+          <input
+            ref={input}
+            type="file"
+            hidden
+            accept="application/pdf,image/jpeg,image/png,image/webp,image/heic,image/heif"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              event.target.value = "";
+              if (file) void send(file);
+            }}
           />
-        )}
-
-        {toReview.length > 0 && (
-          <Box className="flex flex-col gap-2">
-            <Typography variant="subtitle2" component="h3">
-              {t("case-documents-to-review", { count: toReview.length })}
-            </Typography>
-            {toReview.map(row)}
+          <Box>
+            <Button
+              variant="outlined"
+              color="grey"
+              size="small"
+              disabled={busy !== null}
+              onClick={() => input.current?.click()}
+            >
+              {busy === "upload" ? t("client-documents-sending") : t("client-documents-choose")}
+            </Button>
           </Box>
-        )}
-        {decided.length > 0 && (
-          <Box className="flex flex-col gap-2">
-            <Typography variant="subtitle2" component="h3">
-              {t("case-documents-decided")}
-            </Typography>
-            {decided.map(row)}
-          </Box>
-        )}
-
-        {writable && (
-          <Box className="border-grey-100 flex flex-col gap-3 rounded-2xl border p-4">
-            <Typography variant="body1" className="font-semibold">
-              {t("case-documents-add")}
-            </Typography>
-            <Box className="flex flex-col gap-3 sm:flex-row">
-              <TextField
-                select
-                size="small"
-                fullWidth
-                id="case-document-kind"
-                label={t("client-documents-kind")}
-                value={kind}
-                onChange={(event) => setKind(event.target.value as DocumentKind)}
-              >
-                {DOCUMENT_KINDS.map((value) => (
-                  <MenuItem key={value} value={value}>
-                    {t(DOCUMENT_KIND_KEY[value])}
-                  </MenuItem>
-                ))}
-              </TextField>
-              <TextField
-                select
-                size="small"
-                fullWidth
-                id="case-document-person"
-                label={t("client-documents-person")}
-                value={party}
-                onChange={(event) => setParty(event.target.value)}
-              >
-                <MenuItem value="">{t("case-documents-whole-case")}</MenuItem>
-                {state.parties.map((candidate) => (
-                  <MenuItem key={candidate.partyId} value={candidate.partyId}>
-                    {candidate.person.full_name}
-                  </MenuItem>
-                ))}
-              </TextField>
-            </Box>
-            <input
-              ref={input}
-              type="file"
-              hidden
-              accept="application/pdf,image/jpeg,image/png,image/webp,image/heic,image/heif"
-              onChange={(event) => {
-                const file = event.target.files?.[0];
-                event.target.value = "";
-                if (file) void send(file);
-              }}
-            />
-            <Box>
-              <Button
-                variant="outlined"
-                color="grey"
-                size="small"
-                disabled={busy !== null}
-                onClick={() => input.current?.click()}
-              >
-                {busy === "upload" ? t("client-documents-sending") : t("client-documents-choose")}
-              </Button>
-            </Box>
-          </Box>
-        )}
-      </CardContent>
+        </Box>
+      )}
 
       {refusing && (
         <RefuseDialog
@@ -349,7 +363,7 @@ export default function DocumentsCard({
           }}
         />
       )}
-    </Card>
+    </CollapsibleCard>
   );
 }
 

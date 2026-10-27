@@ -85,6 +85,12 @@
       "use": "What holds a firm's cases until somebody acts, where a person starts the day: one card coloured by its most urgent group (danger = past its time, attention = waiting on the firm), each line one thing with its kind as a StatusChip tag, what it is and of which case, one click from where it is done. The hue rides on the bar at the left of each line and on the badges, never on the words. Not for counters (StatTile) nor for a list of records to manage (DataTable)."
     },
     {
+      "name": "CollapsibleCard",
+      "from": "@/components/product/collapsible-card",
+      "props": "id, anchor?, title, summary?, summaryClosedOnly?, chip?, description?, action?, defaultOpen?, bodyClassName?, children; CollapsibleGroup + useCollapsibleGroup() to open or close every card of a screen at once",
+      "use": "A card of a long screen of many cards (the case screen) that a person opens when they need it. Closed, it still says where things stand in one line (summary) and, when something there waits for a person, what (chip, a StatusChip): the screen reads as a list of where things stand. Its header is a disclosure button inside the h2 (aria-expanded, aria-controls) stretched over the whole header; the description and the card own action live in the body, so every closed card has the same shape. A link to the heading id (or to anchor) opens it and brings it into view. Open on arrival only where the work of the moment is (a pure rule, like lib/cases/sections.ts), read once so a card never opens or closes by itself. Not for a short screen of two or three cards, which stay plain Cards."
+    },
+    {
       "name": "MessageBubble",
       "from": "@/components/product/message-bubble",
       "props": "side ('in' | 'out'), sideLabel, children, meta?, note?, className?",

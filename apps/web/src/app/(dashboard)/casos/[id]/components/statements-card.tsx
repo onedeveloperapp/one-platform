@@ -5,12 +5,14 @@ import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useRef, useState } from "react";
 
-import { Alert, Box, Button, Card, CardContent, MenuItem, TextField, Typography } from "@mui/material";
+import { Alert, Box, Button, MenuItem, TextField, Typography } from "@mui/material";
 
+import CollapsibleCard from "@/components/product/collapsible-card";
 import EmptyState from "@/components/product/empty-state";
 import StatusChip, { type StatusTone } from "@/components/product/status-chip";
 import NiMicrophone from "@/icons/nexture/ni-microphone";
 import { openCaseFile } from "@/lib/cases/actions";
+import { opensOnArrival } from "@/lib/cases/sections";
 import {
   addCaseStatement,
   finishStatementUpload,
@@ -415,147 +417,171 @@ export default function StatementsCard({
     );
   };
 
+  // Where the accounts stand, and what in them waits for a person: a client who said the chronology is wrong,
+  // an audio of the case's people not used yet, or work that stopped.
+  const stages = state.statements.map(statementStage);
+  const contested = stages.includes("contested");
+  const stopped = state.statements.some(
+    (statement, index) => statement.stalled || stages[index] === "not_transcribed" || stages[index] === "not_proposed",
+  );
+  const unused = writable ? state.audios.length : 0;
+  const waitChip = contested ? (
+    <StatusChip tone="attention" label={t(STAGE_KEY.contested)} />
+  ) : unused > 0 ? (
+    <StatusChip tone="attention" label={t("case-statements-summary-audios", { count: unused })} />
+  ) : stopped ? (
+    <StatusChip tone="attention" label={t("case-statements-summary-stalled")} />
+  ) : null;
+
   return (
-    <Card component="section" aria-labelledby="case-statements">
-      <CardContent className="flex flex-col gap-4">
-        <Box className="flex flex-col gap-1">
-          <Typography id="case-statements" variant="h5" component="h2" className="mb-0">
-            {t("case-statements-title")}
+    <CollapsibleCard
+      id="case-statements"
+      title={t("case-statements-title")}
+      summary={
+        state.statements.length === 0
+          ? t("case-statements-empty-title")
+          : state.statements.length === 1
+            ? [t("case-statements-summary", { count: 1 }), t(STAGE_KEY[stages[0]])].join(" · ")
+            : t("case-statements-summary", { count: state.statements.length })
+      }
+      chip={waitChip}
+      description={t("case-statements-body")}
+      defaultOpen={opensOnArrival(
+        state.case.status,
+        "statements",
+        waitChip !== null,
+        state.statements.length === 0 && state.audios.length === 0,
+      )}
+    >
+      {problem && (
+        <Alert severity="error" className="neutral bg-background-paper/60!" onClose={() => setProblem(null)}>
+          {t(statementErrorKey(problem))}
+        </Alert>
+      )}
+
+      {state.statements.length === 0 ? (
+        <EmptyState
+          titleAs="h3"
+          icon={<NiMicrophone />}
+          title={t("case-statements-empty-title")}
+          description={t("case-statements-empty-body")}
+          className="py-8"
+        />
+      ) : (
+        <Box className="flex flex-col gap-2">{state.statements.map(row)}</Box>
+      )}
+
+      {writable && state.audios.length > 0 && (
+        <Box className="border-grey-100 flex flex-col gap-2 rounded-2xl border p-4">
+          <Typography variant="body1" className="font-semibold">
+            {t("case-statements-audios-title")}
           </Typography>
           <Typography variant="body2" className="text-text-secondary">
-            {t("case-statements-body")}
+            {t("case-statements-audios-body")}
           </Typography>
+          <Box component="ul" className="m-0 flex list-none flex-col gap-2 p-0">
+            {state.audios.map((audio) => (
+              <Box component="li" key={audio.fileId} className="flex flex-wrap items-center gap-2">
+                <Typography variant="body1" className="min-w-0 flex-1">
+                  {t("case-statements-audio-line", { name: audio.contactName, when: audio.receivedLabel })}
+                </Typography>
+                <Button
+                  variant="outlined"
+                  color="grey"
+                  size="small"
+                  disabled={busy !== null}
+                  onClick={() => void listen(audio.fileId)}
+                >
+                  {t("case-statement-listen")}
+                </Button>
+                <Button
+                  variant="contained"
+                  size="small"
+                  disabled={busy !== null}
+                  onClick={() =>
+                    void run(audio.fileId, () =>
+                      addCaseStatement({ caseId: state.case.id, partyId: audio.partyId, fileId: audio.fileId }),
+                    )
+                  }
+                >
+                  {t("case-statements-audio-use")}
+                </Button>
+              </Box>
+            ))}
+          </Box>
         </Box>
+      )}
 
-        {problem && (
-          <Alert severity="error" className="neutral bg-background-paper/60!" onClose={() => setProblem(null)}>
-            {t(statementErrorKey(problem))}
-          </Alert>
-        )}
-
-        {state.statements.length === 0 ? (
-          <EmptyState
-            icon={<NiMicrophone />}
-            title={t("case-statements-empty-title")}
-            description={t("case-statements-empty-body")}
-            className="py-8"
-          />
-        ) : (
-          <Box className="flex flex-col gap-2">{state.statements.map(row)}</Box>
-        )}
-
-        {writable && state.audios.length > 0 && (
-          <Box className="border-grey-100 flex flex-col gap-2 rounded-2xl border p-4">
-            <Typography variant="body1" className="font-semibold">
-              {t("case-statements-audios-title")}
-            </Typography>
-            <Typography variant="body2" className="text-text-secondary">
-              {t("case-statements-audios-body")}
-            </Typography>
-            <Box component="ul" className="m-0 flex list-none flex-col gap-2 p-0">
-              {state.audios.map((audio) => (
-                <Box component="li" key={audio.fileId} className="flex flex-wrap items-center gap-2">
-                  <Typography variant="body1" className="min-w-0 flex-1">
-                    {t("case-statements-audio-line", { name: audio.contactName, when: audio.receivedLabel })}
-                  </Typography>
-                  <Button
-                    variant="outlined"
-                    color="grey"
-                    size="small"
-                    disabled={busy !== null}
-                    onClick={() => void listen(audio.fileId)}
-                  >
-                    {t("case-statement-listen")}
-                  </Button>
-                  <Button
-                    variant="contained"
-                    size="small"
-                    disabled={busy !== null}
-                    onClick={() =>
-                      void run(audio.fileId, () =>
-                        addCaseStatement({ caseId: state.case.id, partyId: audio.partyId, fileId: audio.fileId }),
-                      )
-                    }
-                  >
-                    {t("case-statements-audio-use")}
-                  </Button>
-                </Box>
-              ))}
-            </Box>
-          </Box>
-        )}
-
-        {writable && tellers.length > 0 && (
-          <Box className="border-grey-100 flex flex-col gap-3 rounded-2xl border p-4">
-            <Typography variant="body1" className="font-semibold">
-              {t("case-statements-add")}
-            </Typography>
-            {tellers.length > 1 && (
-              <TextField
-                select
-                size="small"
-                className="sm:max-w-md"
-                fullWidth
-                id="case-statement-party"
-                label={t("case-statements-who")}
-                value={party}
-                disabled={busy !== null}
-                onChange={(event) => setParty(event.target.value)}
-              >
-                {tellers.map((candidate) => (
-                  <MenuItem key={candidate.partyId} value={candidate.partyId}>
-                    {candidate.person.full_name}
-                  </MenuItem>
-                ))}
-              </TextField>
-            )}
+      {writable && tellers.length > 0 && (
+        <Box className="border-grey-100 flex flex-col gap-3 rounded-2xl border p-4">
+          <Typography variant="body1" className="font-semibold">
+            {t("case-statements-add")}
+          </Typography>
+          {tellers.length > 1 && (
             <TextField
-              fullWidth
-              multiline
-              minRows={3}
-              maxRows={12}
+              select
               size="small"
-              id="case-statement-text"
-              label={t("case-statements-text")}
-              helperText={t("case-statements-text-help")}
-              value={text}
+              className="sm:max-w-md"
+              fullWidth
+              id="case-statement-party"
+              label={t("case-statements-who")}
+              value={party}
               disabled={busy !== null}
-              slotProps={{ htmlInput: { maxLength: 20000 } }}
-              onChange={(event) => setText(event.target.value)}
-            />
-            <input
-              ref={input}
-              type="file"
-              hidden
-              accept={STATEMENT_AUDIO_ACCEPT}
-              onChange={(event) => {
-                const file = event.target.files?.[0];
-                event.target.value = "";
-                if (file) void sendAudio(file);
-              }}
-            />
-            <Box className="flex flex-row flex-wrap gap-2">
-              <Button
-                variant="contained"
-                size="small"
-                disabled={busy !== null || text.trim().length < MIN_TEXT}
-                onClick={() => void sendText()}
-              >
-                {busy === "text" ? t("cases-working") : t("case-statements-save-text")}
-              </Button>
-              <Button
-                variant="outlined"
-                color="grey"
-                size="small"
-                disabled={busy !== null}
-                onClick={() => input.current?.click()}
-              >
-                {busy === "audio" ? t("client-documents-sending") : t("case-statements-upload-audio")}
-              </Button>
-            </Box>
+              onChange={(event) => setParty(event.target.value)}
+            >
+              {tellers.map((candidate) => (
+                <MenuItem key={candidate.partyId} value={candidate.partyId}>
+                  {candidate.person.full_name}
+                </MenuItem>
+              ))}
+            </TextField>
+          )}
+          <TextField
+            fullWidth
+            multiline
+            minRows={3}
+            maxRows={12}
+            size="small"
+            id="case-statement-text"
+            label={t("case-statements-text")}
+            helperText={t("case-statements-text-help")}
+            value={text}
+            disabled={busy !== null}
+            slotProps={{ htmlInput: { maxLength: 20000 } }}
+            onChange={(event) => setText(event.target.value)}
+          />
+          <input
+            ref={input}
+            type="file"
+            hidden
+            accept={STATEMENT_AUDIO_ACCEPT}
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              event.target.value = "";
+              if (file) void sendAudio(file);
+            }}
+          />
+          <Box className="flex flex-row flex-wrap gap-2">
+            <Button
+              variant="contained"
+              size="small"
+              disabled={busy !== null || text.trim().length < MIN_TEXT}
+              onClick={() => void sendText()}
+            >
+              {busy === "text" ? t("cases-working") : t("case-statements-save-text")}
+            </Button>
+            <Button
+              variant="outlined"
+              color="grey"
+              size="small"
+              disabled={busy !== null}
+              onClick={() => input.current?.click()}
+            >
+              {busy === "audio" ? t("client-documents-sending") : t("case-statements-upload-audio")}
+            </Button>
           </Box>
-        )}
-      </CardContent>
-    </Card>
+        </Box>
+      )}
+    </CollapsibleCard>
   );
 }

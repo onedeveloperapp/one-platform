@@ -5,21 +5,12 @@ import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 
-import {
-  Alert,
-  Box,
-  Button,
-  Card,
-  CardContent,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  TextField,
-  Typography,
-} from "@mui/material";
+import { Alert, Box, Button, Dialog, DialogActions, DialogContent, TextField, Typography } from "@mui/material";
 
+import CollapsibleCard from "@/components/product/collapsible-card";
 import DialogHeader from "@/components/product/dialog-header";
 import StatusChip, { type StatusTone } from "@/components/product/status-chip";
+import { opensOnArrival } from "@/lib/cases/sections";
 import { recordNoticeOptin } from "@/lib/notices/actions";
 import type { CaseNoticePerson } from "@/lib/notices/facts";
 import { blockerKey, isNoticeKind, isUnconfirmed, KIND_KEY, noticeErrorKey, sentKey } from "@/lib/notices/notices";
@@ -66,121 +57,130 @@ export default function NoticesCard({
   const names = new Map(notices.people.map((person) => [person.personId, person.name]));
   const off = notices.kindsOn.length === 0;
 
-  return (
-    <Card component="section" aria-labelledby="case-notices">
-      <CardContent className="flex flex-col gap-3">
-        <Box className="flex flex-wrap items-center gap-3">
-          <Typography id="case-notices" variant="h5" component="h2" className="mb-0 min-w-0 flex-1">
-            {t("case-notices-title")}
-          </Typography>
-          {state.managesFirm ? (
-            <Button variant="text" color="grey" size="small" href="/settings/connections#avisos" LinkComponent={Link}>
-              {t("case-notices-settings")}
-            </Button>
-          ) : null}
-        </Box>
-        {off ? (
-          <Typography variant="body2" className="text-text-secondary">
-            {state.managesFirm ? t("case-notices-off-manager") : t("case-notices-off")}
-          </Typography>
-        ) : null}
+  const unreached = notices.people.filter((person) => person.blocker).length;
 
-        {notices.people.length > 0 ? (
-          <Box component="ul" className="m-0 flex list-none flex-col gap-2 p-0">
-            {notices.people.map((person) => (
-              <Box
-                component="li"
-                key={person.personId}
-                className="border-grey-100 flex flex-wrap items-center gap-2 border-b pb-2 last:border-b-0"
-              >
-                <Box className="flex min-w-0 flex-1 flex-col">
-                  <Typography variant="subtitle2" component="p" className="mb-0 break-words">
-                    {person.name}
-                  </Typography>
-                  <Typography variant="body2" className="text-text-secondary">
-                    {person.phone ? phoneLabel(person.phone) : t("case-notices-no-phone")}
-                  </Typography>
-                </Box>
-                <StatusChip
-                  tone={person.blocker ? "attention" : "positive"}
-                  label={
-                    person.blocker
-                      ? t(blockerKey(person.blocker))
-                      : person.optin?.source === "client"
-                        ? t("case-notices-agreed-link", { day: person.optin.recordedLabel })
-                        : t("case-notices-agreed-firm", { day: person.optin?.recordedLabel ?? "" })
-                  }
-                />
-                {writable && person.phone && person.blocker === "no_optin" ? (
-                  <Button
-                    variant="outlined"
-                    color="grey"
-                    size="small"
-                    onClick={() => setAsking({ person, agreed: true })}
-                  >
-                    {t("case-notices-record")}
-                  </Button>
-                ) : null}
-                {writable && person.optin?.current ? (
-                  <Button variant="text" color="grey" size="small" onClick={() => setAsking({ person, agreed: false })}>
-                    {t("case-notices-withdraw")}
-                  </Button>
-                ) : null}
+  return (
+    <CollapsibleCard
+      id="case-notices"
+      title={t("case-notices-title")}
+      summary={
+        off
+          ? t("case-notices-summary-off")
+          : notices.people.length === 0
+            ? t("case-notices-summary-nobody")
+            : unreached > 0
+              ? t("case-notices-summary-unreached", { count: unreached })
+              : t("case-notices-summary-reached")
+      }
+      action={
+        state.managesFirm ? (
+          <Button variant="outlined" color="grey" size="small" href="/settings/connections#avisos" LinkComponent={Link}>
+            {t("case-notices-settings")}
+          </Button>
+        ) : null
+      }
+      defaultOpen={opensOnArrival(state.case.status, "notices", false)}
+      bodyClassName="gap-3"
+    >
+      {off ? (
+        <Typography variant="body2" className="text-text-secondary">
+          {state.managesFirm ? t("case-notices-off-manager") : t("case-notices-off")}
+        </Typography>
+      ) : null}
+
+      {notices.people.length > 0 ? (
+        <Box component="ul" className="m-0 flex list-none flex-col gap-2 p-0">
+          {notices.people.map((person) => (
+            <Box
+              component="li"
+              key={person.personId}
+              className="border-grey-100 flex flex-wrap items-center gap-2 border-b pb-2 last:border-b-0"
+            >
+              <Box className="flex min-w-0 flex-1 basis-40 flex-col">
+                <Typography variant="subtitle2" component="p" className="mb-0 break-words">
+                  {person.name}
+                </Typography>
+                <Typography variant="body2" className="text-text-secondary">
+                  {person.phone ? phoneLabel(person.phone) : t("case-notices-no-phone")}
+                </Typography>
               </Box>
+              <StatusChip
+                tone={person.blocker ? "attention" : "positive"}
+                label={
+                  person.blocker
+                    ? t(blockerKey(person.blocker))
+                    : person.optin?.source === "client"
+                      ? t("case-notices-agreed-link", { day: person.optin.recordedLabel })
+                      : t("case-notices-agreed-firm", { day: person.optin?.recordedLabel ?? "" })
+                }
+              />
+              {writable && person.phone && person.blocker === "no_optin" ? (
+                <Button
+                  variant="outlined"
+                  color="grey"
+                  size="small"
+                  onClick={() => setAsking({ person, agreed: true })}
+                >
+                  {t("case-notices-record")}
+                </Button>
+              ) : null}
+              {writable && person.optin?.current ? (
+                <Button variant="text" color="grey" size="small" onClick={() => setAsking({ person, agreed: false })}>
+                  {t("case-notices-withdraw")}
+                </Button>
+              ) : null}
+            </Box>
+          ))}
+        </Box>
+      ) : null}
+
+      {notices.due.length > 0 ? (
+        <Box className="flex flex-col gap-1">
+          <Typography variant="body2" className="font-semibold">
+            {t("case-notices-due")}
+          </Typography>
+          <Box component="ul" className="m-0 flex list-disc flex-col gap-1 pl-5">
+            {notices.due.map((item, index) => (
+              <Typography key={index} component="li" variant="body2">
+                {t("case-notices-due-item", {
+                  kind: kindLabel(item.kind),
+                  name: names.get(item.personId) ?? "",
+                  state: item.blocker ? t(blockerKey(item.blocker)) : t("case-notices-due-going"),
+                })}
+              </Typography>
             ))}
           </Box>
-        ) : null}
+        </Box>
+      ) : null}
 
-        {notices.due.length > 0 ? (
-          <Box className="flex flex-col gap-1">
-            <Typography variant="body2" className="font-semibold">
-              {t("case-notices-due")}
-            </Typography>
-            <Box component="ul" className="m-0 flex list-disc flex-col gap-1 pl-5">
-              {notices.due.map((item, index) => (
-                <Typography key={index} component="li" variant="body2">
-                  {t("case-notices-due-item", {
-                    kind: kindLabel(item.kind),
-                    name: names.get(item.personId) ?? "",
-                    state: item.blocker ? t(blockerKey(item.blocker)) : t("case-notices-due-going"),
-                  })}
-                </Typography>
-              ))}
-            </Box>
-          </Box>
-        ) : null}
-
-        {notices.sent.length > 0 ? (
-          <Box className="flex flex-col gap-2">
-            <Typography variant="body2" className="font-semibold">
-              {t("case-notices-sent")}
-            </Typography>
-            <Box component="ul" className="m-0 flex list-none flex-col gap-3 p-0">
-              {notices.sent.map((item) => {
-                const unconfirmed = isUnconfirmed(item.status, item.error);
-                return (
-                  <Box component="li" key={item.id} className="flex flex-col gap-1">
-                    <Box className="flex flex-wrap items-center gap-2">
-                      <Typography variant="body2" className="min-w-0 flex-1">
-                        {[kindLabel(item.kind), names.get(item.personId), item.reservedLabel]
-                          .filter(Boolean)
-                          .join(" · ")}
-                      </Typography>
-                      <StatusChip
-                        tone={unconfirmed ? "attention" : (SENT_TONE[item.status] ?? "info")}
-                        label={t(unconfirmed ? "notice-sent-unconfirmed" : sentKey(item.status))}
-                      />
-                    </Box>
-                    <Typography variant="body2" className="text-text-secondary line-clamp-3 break-words">
-                      {item.body}
+      {notices.sent.length > 0 ? (
+        <Box className="flex flex-col gap-2">
+          <Typography variant="body2" className="font-semibold">
+            {t("case-notices-sent")}
+          </Typography>
+          <Box component="ul" className="m-0 flex list-none flex-col gap-3 p-0">
+            {notices.sent.map((item) => {
+              const unconfirmed = isUnconfirmed(item.status, item.error);
+              return (
+                <Box component="li" key={item.id} className="flex flex-col gap-1">
+                  <Box className="flex flex-wrap items-center gap-2">
+                    <Typography variant="body2" className="min-w-0 flex-1">
+                      {[kindLabel(item.kind), names.get(item.personId), item.reservedLabel].filter(Boolean).join(" · ")}
                     </Typography>
+                    <StatusChip
+                      tone={unconfirmed ? "attention" : (SENT_TONE[item.status] ?? "info")}
+                      label={t(unconfirmed ? "notice-sent-unconfirmed" : sentKey(item.status))}
+                    />
                   </Box>
-                );
-              })}
-            </Box>
+                  <Typography variant="body2" className="text-text-secondary line-clamp-3 break-words">
+                    {item.body}
+                  </Typography>
+                </Box>
+              );
+            })}
           </Box>
-        ) : null}
-      </CardContent>
+        </Box>
+      ) : null}
       {asking ? (
         <OptinDialog
           caseId={state.case.id}
@@ -193,7 +193,7 @@ export default function NoticesCard({
           }}
         />
       ) : null}
-    </Card>
+    </CollapsibleCard>
   );
 }
 

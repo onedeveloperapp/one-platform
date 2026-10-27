@@ -8,8 +8,6 @@ import {
   Alert,
   Box,
   Button,
-  Card,
-  CardContent,
   Dialog,
   DialogActions,
   DialogContent,
@@ -19,11 +17,13 @@ import {
   Typography,
 } from "@mui/material";
 
+import CollapsibleCard from "@/components/product/collapsible-card";
 import DialogHeader from "@/components/product/dialog-header";
 import EmptyState from "@/components/product/empty-state";
 import StatusChip, { type StatusTone } from "@/components/product/status-chip";
 import NiFlag from "@/icons/nexture/ni-flag";
 import { caseErrorKey } from "@/lib/cases/cases";
+import { opensOnArrival } from "@/lib/cases/sections";
 import { removeAdminComplaint, saveAdminComplaint } from "@/lib/cases/statement-actions";
 import {
   answerDueOn,
@@ -84,106 +84,109 @@ export default function ComplaintCard({
     }
   };
 
+  const anyOverdue = state.complaints.some((complaint) => complaintOverdue(complaint, state.today));
+
   return (
-    <Card component="section" aria-labelledby="case-complaints">
-      <CardContent className="flex flex-col gap-4">
-        <Box className="flex flex-wrap items-start justify-between gap-3">
-          <Box className="flex min-w-0 flex-col gap-1">
-            <Typography id="case-complaints" variant="h5" component="h2" className="mb-0">
-              {t("case-complaints-title")}
-            </Typography>
-            <Typography variant="body2" className="text-text-secondary">
-              {t("case-complaints-body")}
-            </Typography>
-          </Box>
-          {writable && state.complaints.length > 0 && (
-            <Button variant="outlined" color="grey" size="small" onClick={() => setEditing("new")}>
-              {t("case-complaints-add")}
-            </Button>
-          )}
-        </Box>
+    <CollapsibleCard
+      id="case-complaints"
+      title={t("case-complaints-title")}
+      summary={
+        state.complaints.length === 0
+          ? t("case-complaints-empty-title")
+          : state.complaints
+              .map((complaint) => `${t(CHANNEL_KEY[complaint.channel])}: ${t(OUTCOME_KEY[complaint.outcome])}`)
+              .join(" · ")
+      }
+      chip={anyOverdue ? <StatusChip tone="attention" label={t("case-complaint-overdue")} /> : null}
+      description={t("case-complaints-body")}
+      action={
+        writable && state.complaints.length > 0 ? (
+          <Button variant="outlined" color="grey" size="small" onClick={() => setEditing("new")}>
+            {t("case-complaints-add")}
+          </Button>
+        ) : null
+      }
+      defaultOpen={opensOnArrival(state.case.status, "complaints", anyOverdue)}
+    >
+      {problem && (
+        <Alert severity="error" className="neutral bg-background-paper/60!" onClose={() => setProblem(null)}>
+          {t(caseErrorKey(problem))}
+        </Alert>
+      )}
 
-        {problem && (
-          <Alert severity="error" className="neutral bg-background-paper/60!" onClose={() => setProblem(null)}>
-            {t(caseErrorKey(problem))}
-          </Alert>
-        )}
-
-        {state.complaints.length === 0 ? (
-          <EmptyState
-            icon={<NiFlag />}
-            title={t("case-complaints-empty-title")}
-            description={t("case-complaints-empty-body")}
-            action={writable ? { label: t("case-complaints-add"), onClick: () => setEditing("new") } : undefined}
-            className="py-8"
-          />
-        ) : (
-          <Box className="flex flex-col gap-2">
-            {state.complaints.map((complaint) => {
-              const overdue = complaintOverdue(complaint, state.today);
-              return (
-                <Box key={complaint.id} className="border-grey-100 flex flex-col gap-2 rounded-2xl border p-4">
-                  <Box className="flex flex-wrap items-start justify-between gap-2">
-                    <Box className="flex min-w-0 flex-col">
-                      <Typography variant="body1" className="font-semibold">
-                        {t(CHANNEL_KEY[complaint.channel])}
-                      </Typography>
-                      <Typography variant="body2" className="text-text-secondary break-all">
-                        {[
-                          complaint.protocol
-                            ? t("case-complaint-protocol-line", { protocol: complaint.protocol })
-                            : null,
-                          complaint.filedOn
-                            ? t("case-complaint-filed-line", { day: formatDayBr(complaint.filedOn) ?? "" })
-                            : null,
-                          complaint.answeredOn
-                            ? t("case-complaint-answered-line", { day: formatDayBr(complaint.answeredOn) ?? "" })
-                            : complaint.answerDueOn
-                              ? t("case-complaint-due-line", { day: formatDayBr(complaint.answerDueOn) ?? "" })
-                              : null,
-                        ]
-                          .filter(Boolean)
-                          .join(" · ")}
-                      </Typography>
-                    </Box>
-                    <StatusChip
-                      tone={overdue ? "attention" : OUTCOME_TONE[complaint.outcome]}
-                      label={overdue ? t("case-complaint-overdue") : t(OUTCOME_KEY[complaint.outcome])}
-                    />
-                  </Box>
-                  {complaint.notes ? (
-                    <Typography variant="body1" className="text-text-primary whitespace-pre-wrap">
-                      {complaint.notes}
+      {state.complaints.length === 0 ? (
+        <EmptyState
+          titleAs="h3"
+          icon={<NiFlag />}
+          title={t("case-complaints-empty-title")}
+          description={t("case-complaints-empty-body")}
+          action={writable ? { label: t("case-complaints-add"), onClick: () => setEditing("new") } : undefined}
+          className="py-8"
+        />
+      ) : (
+        <Box className="flex flex-col gap-2">
+          {state.complaints.map((complaint) => {
+            const overdue = complaintOverdue(complaint, state.today);
+            return (
+              <Box key={complaint.id} className="border-grey-100 flex flex-col gap-2 rounded-2xl border p-4">
+                <Box className="flex flex-wrap items-start justify-between gap-2">
+                  <Box className="flex min-w-0 flex-col">
+                    <Typography variant="body1" className="font-semibold">
+                      {t(CHANNEL_KEY[complaint.channel])}
                     </Typography>
-                  ) : null}
-                  {writable && (
-                    <Box className="flex flex-wrap gap-2 pt-1">
-                      <Button
-                        variant="outlined"
-                        color="grey"
-                        size="small"
-                        disabled={busy !== null}
-                        onClick={() => setEditing(complaint)}
-                      >
-                        {t("case-complaint-edit")}
-                      </Button>
-                      <Button
-                        variant="text"
-                        color="grey"
-                        size="small"
-                        disabled={busy !== null}
-                        onClick={() => void remove(complaint)}
-                      >
-                        {t("case-complaint-remove")}
-                      </Button>
-                    </Box>
-                  )}
+                    <Typography variant="body2" className="text-text-secondary break-all">
+                      {[
+                        complaint.protocol ? t("case-complaint-protocol-line", { protocol: complaint.protocol }) : null,
+                        complaint.filedOn
+                          ? t("case-complaint-filed-line", { day: formatDayBr(complaint.filedOn) ?? "" })
+                          : null,
+                        complaint.answeredOn
+                          ? t("case-complaint-answered-line", { day: formatDayBr(complaint.answeredOn) ?? "" })
+                          : complaint.answerDueOn
+                            ? t("case-complaint-due-line", { day: formatDayBr(complaint.answerDueOn) ?? "" })
+                            : null,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </Typography>
+                  </Box>
+                  <StatusChip
+                    tone={overdue ? "attention" : OUTCOME_TONE[complaint.outcome]}
+                    label={overdue ? t("case-complaint-overdue") : t(OUTCOME_KEY[complaint.outcome])}
+                  />
                 </Box>
-              );
-            })}
-          </Box>
-        )}
-      </CardContent>
+                {complaint.notes ? (
+                  <Typography variant="body1" className="text-text-primary whitespace-pre-wrap">
+                    {complaint.notes}
+                  </Typography>
+                ) : null}
+                {writable && (
+                  <Box className="flex flex-wrap gap-2 pt-1">
+                    <Button
+                      variant="outlined"
+                      color="grey"
+                      size="small"
+                      disabled={busy !== null}
+                      onClick={() => setEditing(complaint)}
+                    >
+                      {t("case-complaint-edit")}
+                    </Button>
+                    <Button
+                      variant="text"
+                      color="grey"
+                      size="small"
+                      disabled={busy !== null}
+                      onClick={() => void remove(complaint)}
+                    >
+                      {t("case-complaint-remove")}
+                    </Button>
+                  </Box>
+                )}
+              </Box>
+            );
+          })}
+        </Box>
+      )}
 
       {editing && (
         <ComplaintDialog
@@ -196,7 +199,7 @@ export default function ComplaintCard({
           }}
         />
       )}
-    </Card>
+    </CollapsibleCard>
   );
 }
 
