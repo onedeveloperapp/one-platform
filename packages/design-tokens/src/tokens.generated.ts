@@ -151,12 +151,12 @@ export const common = {
 export const themes = {
   "blue": {
     "light": {
-      "primary": "191 100% 46%",
-      "primary-light": "191 100% 56%",
-      "primary-dark": "191 100% 36%",
-      "secondary": "207 85% 42%",
-      "secondary-light": "207 85% 52%",
-      "secondary-dark": "207 85% 32%",
+      "primary": "207 85% 42%",
+      "primary-light": "207 85% 52%",
+      "primary-dark": "207 85% 32%",
+      "secondary": "191 100% 46%",
+      "secondary-light": "191 100% 56%",
+      "secondary-dark": "191 100% 36%",
       "accent-1": "272 92% 66%",
       "accent-1-light": "272 92% 76%",
       "accent-1-dark": "272 92% 56%",
@@ -171,12 +171,12 @@ export const themes = {
       "accent-4-dark": "32 89% 55%"
     },
     "dark": {
-      "primary": "191 100% 46%",
-      "primary-light": "191 100% 56%",
-      "primary-dark": "191 100% 36%",
-      "secondary": "207 85% 42%",
-      "secondary-light": "207 85% 52%",
-      "secondary-dark": "207 85% 32%",
+      "primary": "207 85% 62%",
+      "primary-light": "207 85% 72%",
+      "primary-dark": "207 85% 42%",
+      "secondary": "191 100% 46%",
+      "secondary-light": "191 100% 56%",
+      "secondary-dark": "191 100% 36%",
       "accent-1": "272 92% 66%",
       "accent-1-light": "272 92% 76%",
       "accent-1-dark": "272 92% 56%",

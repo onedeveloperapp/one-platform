@@ -23,7 +23,7 @@
 
     &.Mui-selected,
     &.Mui-selected:hover {
-      @apply bg-primary text-text-contrast;
+      @apply bg-primary text-text-contrast dark:bg-primary-dark;
     }
 
     &.Mui-disabled {

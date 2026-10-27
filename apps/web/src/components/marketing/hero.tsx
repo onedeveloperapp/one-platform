@@ -2,6 +2,7 @@ import { Button } from "@mui/material";
 
 import Link from "@/components/marketing/locale-link";
 import Section from "@/components/marketing/section";
+import { cn } from "@/lib/utils";
 
 export type HeroCta = { label: string; href: string; icon?: React.ReactNode };
 
@@ -73,7 +74,15 @@ export default function Hero({
   const entrance = { "--hero-media-delay": `${((lines - 1) * 0.12 + 0.25).toFixed(2)}s` } as React.CSSProperties;
 
   const ctas = action ?? (
-    <div className="flex flex-col items-center gap-2 sm:flex-row">
+    // Stacked on a phone, the buttons line up with the copy: centred in the centre layout, at its start in the split.
+    // A row too narrow for both (the split's copy column around 1024px) puts the second under the first, never a label
+    // on two lines.
+    <div
+      className={cn(
+        "flex flex-col gap-2 sm:flex-row sm:flex-wrap",
+        layout === "split" ? "items-start" : "items-center",
+      )}
+    >
       {primaryCta && (
         <Button
           size="large"
@@ -117,7 +126,10 @@ export default function Hero({
         >
           <div data-hero-copy className="flex flex-col items-start gap-6 text-left">
             {eyebrow && <p className="text-primary font-eyebrow tracking-eyebrow text-xs uppercase">{eyebrow}</p>}
-            <h1 className="font-display text-display-xl text-text-primary [&_em]:text-primary font-extrabold [&_em]:not-italic">
+            {/* display-lg beside the media: the title holds two lines in the narrower copy column,
+                as the home's blueprint (2026-10-26) sets it, and balanced, so a screen that needs three
+                never leaves one word alone on the last. */}
+            <h1 className="font-display text-display-lg text-text-primary [&_em]:text-primary font-extrabold text-balance [&_em]:not-italic">
               {title}
             </h1>
             <p className="text-text-secondary text-lg leading-6 md:text-xl md:leading-7">{subtitle}</p>

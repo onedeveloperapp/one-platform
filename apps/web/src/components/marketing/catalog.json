@@ -3,11 +3,11 @@
   "contract": [
     "Every content block sits in <Section>/<Container>/<SectionHeader> — spacing/width come from marketing tokens, never per-page values",
     "Tokens only: hsl(var(--token)) / token Tailwind classes; must look right in the active palette × light/dark",
-    "Headings: font-display text-display-{2xl,xl,lg,md} (fluid clamp scale, no breakpoint font jumps). The face has two weights: font-bold (Black) on the display scale, font-normal (Regular) on any heading under 24px",
-    "Copy through the marketing i18n namespace in BOTH locales (pt-BR, en)",
+    "Headings: font-display text-display-{2xl,xl,lg,md} (fluid clamp scale, no breakpoint font jumps). Urbanist: font-extrabold on the display scale, font-bold on any heading below it",
+    "Copy through the marketing i18n namespace (pt-BR, ONE's one language); no hardcoded strings",
     "Icons only via @/icons/nexture/ni-* alias; meaningful concept icons, never decoration",
     "Exactly one <h1> per page (Hero, or SectionHeader/PricingSection as/headingAs=\"h1\")",
-    "New public pages: folder under app/[locale]/(marketing) named after the Portuguese path + declared in src/i18n/routing.ts (pt-BR and English addresses) + src/app/sitemap.ts when indexed + generateMetadata spreading publicPageMetadata (lib/seo.ts)",
+    "New public pages: folder under app/[locale]/(marketing) named after the Portuguese path + declared in src/i18n/routing.ts + src/app/sitemap.ts when indexed + generateMetadata spreading publicPageMetadata (lib/seo.ts)",
     "Internal links through <LocaleLink> (also as MUI LinkComponent) with the Portuguese path: it renders the address of the language being read; /auth/* and external URLs pass through",
     "Structured data via <JsonLd> only; Organization/FAQPage/Product already emitted by layout/Faq/PricingSection",
     "Motion is CSS first: the hero entrance (built into <Hero>), <Float>, <Reveal> (a transition started by watchEntry in motion.ts), <CountUp>; transform + opacity; reduced-motion safe. No scripted timeline, no ScrollTrigger: GSAP is loaded by <Parallax> alone, on demand",
@@ -32,14 +32,14 @@
       "file": "product-composition.tsx",
       "role": "evidence",
       "props": "frame (ProductFrame/screenshot), satellites: {children, position: top-left|top-right|right|bottom-right|bottom-left|left, depth: front|back, rotate: -6..6, float, floatDelay, parallax, hideBelow}[] (2–4)",
-      "use": "LAYERED hero media — central frame + floating chips overlapping its edges (the reference-site look); collapses to a chip row below md; the hero entrance (CSS) choreographs the frame and then the satellites (premium bar #9)"
+      "use": "LAYERED hero media — central frame + floating chips overlapping its edges (the reference-site look); collapses to a chip row below md; the hero entrance (CSS) choreographs the frame and then the satellites (premium bar #9); the composition gives each satellite its shadow on the layer that floats with it (a shadow left on the still wrapper showed as a second edge under a floating chip)"
     },
     {
       "name": "SatelliteChips",
       "file": "satellite-chips.tsx",
       "role": "evidence",
-      "props": "KpiChip{label,value,delta?,tone} · TrendChip{label,data?,tone} · AvatarRowChip{names,label} · ReadoutChip{text,tone}",
-      "use": "ready-made satellites for ProductComposition; REAL localized content only — a satellite that lies is worse than none"
+      "props": "KpiChip{label,value,delta?,tone} · TrendChip{label,data?,tone} · AvatarRowChip{names,label} · ReadoutChip{text,tone} · RingChip{label,total,parts:{label,value,tone}[]}",
+      "use": "ready-made satellites for ProductComposition; REAL localized content only — a satellite that lies is worse than none; the hue rides on the pill, the dot or the ring and the words keep text colours (a hue as small text over its own tint fails 4.5:1); RingChip is a donut of 2–4 parts with its total in the centre and a dot legend"
     },
     {
       "name": "ProductShot",
@@ -52,7 +52,7 @@
       "name": "Band",
       "file": "band.tsx",
       "role": "layout",
-      "props": "angle: -2..2, background: contrast|primary-soft|paper, spacing, decor: none|grid|dots, id",
+      "props": "angle: -2..2, background: contrast|primary-soft|paper, spacing: default|compact|tight (half the compact space, for a one-line strip), decor: none|grid|dots, id, track",
       "use": "full-bleed ANGLED contrast strip — the diagonal-band breakout; background skews, content stays level; use INSTEAD of <Section> for that block (premium bar #10)"
     },
     {
@@ -119,6 +119,20 @@
       "use": "browser chrome for REAL product screenshots; token wireframe placeholder without children; glow = primary halo, the expensive-product hero treatment"
     },
     {
+      "name": "PhoneFrame",
+      "file": "phone-frame.tsx",
+      "role": "evidence",
+      "props": "time? (the status bar's clock), className, children (the screen)",
+      "use": "a phone's chrome (status bar with the clock, the island, signal and battery) around a drawn screen, the frame of a ProductComposition when the evidence is what a client sees on their phone; its bezel is the deep band, so it reads as a phone under any palette"
+    },
+    {
+      "name": "CaseMedia",
+      "file": "case-media.tsx",
+      "role": "evidence",
+      "props": "ClientChat{firm, status, messages: {from: firm|client, text, time, link?}[], inputLabel} · ClientLinkPanel{firm, label, value, caption, documentsLabel, documents: {icon, label}[]} · CaseStageChart{title, total, stages: {label, value}[], highlight?}",
+      "use": "ONE's product evidence drawn with tokens until its screens can be captured: a client's conversation on the firm's WhatsApp, answered by ONE (inside PhoneFrame), the client's link with the papers it gathered (a feature row's grey panel), the firm's cases by stage (a container: columns when the card is wide, a row per stage when it is narrow); every word from the marketing namespace, invented people only, and the page says the data is an example in a caption"
+    },
+    {
       "name": "DataVizPlaceholder",
       "file": "data-viz-placeholder.tsx",
       "role": "evidence",
@@ -129,8 +143,8 @@
       "name": "FeatureRows",
       "file": "feature-row.tsx",
       "funnel": "desire (depth)",
-      "props": "items: {eyebrow?, title, body, bullets?, media, tone}, decor, id, children? (what closes the same chapter, one row gap under the rows: the store grid under the featured app)",
-      "use": "alternating text↔evidence zig-zag for the 2–4 flagship features; use INSTEAD of a second card grid; decor=\"grid\" makes it the page's technical section; the eyebrow is text-coloured with a hue bar (no palette hue passes as small text on a light ground)"
+      "props": "items: {eyebrow?, title, body, bullets?, media, caption? (a line under the media: whose data it is), tone, cta?: {label, href, variant: primary|secondary}}, start: copy|media (which side the first row puts on the left at md+), decor, id, track, children? (what closes the same chapter, one row gap under the rows)",
+      "use": "alternating text↔evidence zig-zag for the 2–4 flagship features; use INSTEAD of a second card grid; decor=\"grid\" makes it the page's technical section; the eyebrow is text-coloured with a hue bar (no palette hue passes as small text on a light ground); a row's cta is the page's primary action repeated or its secondary (pastel) one; a drawn screen carries caption=\"Telas com dados de exemplo\""
     },
     {
       "name": "BentoGrid",
@@ -157,15 +171,15 @@
       "name": "FeatureGrid",
       "file": "feature-grid.tsx",
       "funnel": "desire",
-      "props": "features: {icon, title, description, tone}",
-      "use": "benefit-led card grid, meaningful icon per family hue; never the only archetype on a page (premium bar #2)"
+      "props": "features: {icon, title, description, tone}, variant: card|tinted, id, track",
+      "use": "benefit-led card grid, meaningful icon per family hue; never the only archetype on a page (premium bar #2); variant=\"tinted\" is a borderless wash of each family hue with the icon in a paper circle beside the title (the home's blueprint); three or six cards stand three abreast from md and stack below it"
     },
     {
       "name": "LogoCloud",
       "file": "logo-cloud.tsx",
       "funnel": "trust",
-      "props": "label, items: {name, logo?}",
-      "use": "client strip; muted wordmarks until real token-tinted SVG logos exist"
+      "props": "label, items: {name, logo?}, band? (the strip on a full-bleed contrast Band tilted a degree: the page's breakout), track",
+      "use": "trust strip; muted wordmarks until real token-tinted SVG logos exist; never a client who is not one (ONE's home lists the court systems it works with, and its label says so)"
     },
     {
       "name": "PricingSection",
@@ -178,15 +192,15 @@
       "name": "Faq",
       "file": "faq.tsx",
       "funnel": "objection handling",
-      "props": "eyebrow?, title, subtitle?, items: {question, answer}, id?, layout: stack|split (sticky intro + list), link?: {label, href}",
+      "props": "eyebrow?, title, subtitle?, items: {question, answer, id?}, id?, track?, layout: stack|split (sticky intro + list)|aside (centred heading, the list beside a card for who did not find their question), link?: {label, href} (split), aside?: {title, body, cta: {label, href}} (aside)",
       "use": "REAL purchase objections (price, lock-in, security, updates) answered plainly; emits FAQPage JsonLd"
     },
     {
       "name": "Cta",
       "file": "cta.tsx",
       "funnel": "recovery",
-      "props": "title, subtitle, cta, secondaryCta? (deep: a second button; panel: a text link beside the button), points?: string[] (deep only), kicker?, decor: none|orbit|mesh|dots, variant: panel|deep",
-      "use": "last conversion opportunity as a bordered console panel with primary glow + optional mono kicker; repeats the primary CTA verbatim; decor=\"orbit\" is the classic closer"
+      "props": "title, subtitle, cta, secondaryCta? (deep and deep-panel: a second action; panel: a text link beside the button), points?: string[] (deep only), kicker?, decor: none|orbit|mesh|dots, variant: panel|deep|deep-panel",
+      "use": "last conversion opportunity as a bordered console panel with primary glow + optional mono kicker; repeats the primary CTA verbatim; decor=\"orbit\" is the classic closer; variant=\"deep-panel\" is the deep band in a rounded panel with rays from the bottom left and a glow of the primary at the top right (the home's blueprint)"
     },
     {
       "name": "Reveal",

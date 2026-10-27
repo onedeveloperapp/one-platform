@@ -45,9 +45,9 @@ const POSITION: Record<NonNullable<Satellite["position"]>, string> = {
   left: "md:absolute md:top-1/2 md:-left-8",
 };
 
-const DEPTH: Record<NonNullable<Satellite["depth"]>, string> = {
-  front: "z-20 shadow-darker-sm",
-  back: "z-0 shadow-xs",
+const DEPTH: Record<NonNullable<Satellite["depth"]>, { layer: string; shadow: string }> = {
+  front: { layer: "z-20", shadow: "shadow-darker-sm" },
+  back: { layer: "z-0", shadow: "shadow-xs" },
 };
 
 const ROTATE: Record<NonNullable<Satellite["rotate"]>, string> = {
@@ -79,21 +79,27 @@ export default function ProductComposition({
 
       {/* Mobile: centered chip row under the frame. md+: the box disappears
           (contents) and each satellite positions against the isolated root. */}
-      <div className="mt-4 flex flex-wrap justify-center gap-3 md:contents">
+      {/* items-start: each chip keeps its own height in the row, so a short one is not stretched under its shadow. */}
+      <div className="mt-4 flex flex-wrap items-start justify-center gap-3 md:contents">
         {satellites.slice(0, 4).map((satellite, index) => {
+          const depth = DEPTH[satellite.depth ?? "front"];
+          // The shadow rides on the layer that moves: left on the still wrapper, it stayed
+          // behind while the chip floated up and showed under it as a second edge.
+          const surface = cn("rounded-2xl", depth.shadow);
           const chip = satellite.float ? (
-            <Float delay={satellite.floatDelay ?? index * 0.6}>{satellite.children}</Float>
+            <Float delay={satellite.floatDelay ?? index * 0.6} className={surface}>
+              {satellite.children}
+            </Float>
           ) : (
-            satellite.children
+            <div className={surface}>{satellite.children}</div>
           );
           return (
             <div
               key={index}
               data-composition-satellite
               className={cn(
-                "rounded-2xl",
                 POSITION[satellite.position],
-                DEPTH[satellite.depth ?? "front"],
+                depth.layer,
                 ROTATE[satellite.rotate ?? 0],
                 satellite.hideBelow === "md" && "hidden md:block",
               )}

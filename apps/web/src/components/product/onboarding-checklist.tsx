@@ -90,7 +90,9 @@ export default function OnboardingChecklist({
                 <span
                   className={cn(
                     "flex h-6 w-6 flex-none items-center justify-center rounded-full border",
-                    done ? "border-primary bg-primary text-white" : "border-grey-200 text-transparent",
+                    done
+                      ? "border-primary bg-primary dark:border-primary-dark dark:bg-primary-dark text-white"
+                      : "border-grey-200 text-transparent",
                   )}
                 >
                   <NiCheck size="small" />

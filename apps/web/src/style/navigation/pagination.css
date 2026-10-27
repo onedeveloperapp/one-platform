@@ -58,7 +58,7 @@
       }
 
       &.Mui-selected {
-        @apply bg-primary text-text-contrast;
+        @apply bg-primary text-text-contrast dark:bg-primary-dark;
       }
 
       &.Mui-disabled {
@@ -122,7 +122,7 @@
       }
 
       &.Mui-selected {
-        @apply border-primary bg-primary/15 text-primary-dark;
+        @apply border-primary bg-primary/15 text-primary-dark dark:text-primary-light;
       }
     }
 

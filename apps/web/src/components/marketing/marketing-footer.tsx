@@ -18,10 +18,7 @@ const COLUMNS = [
   },
   {
     titleKey: "footer-account",
-    links: [
-      { key: "nav-sign-in", href: "/auth/sign-in" },
-      { key: "footer-waitlist", href: "/espera" },
-    ],
+    links: [{ key: "nav-sign-in", href: "/auth/sign-in" }],
   },
   {
     titleKey: "footer-company",
@@ -35,9 +32,12 @@ const COLUMNS = [
 ] as const;
 
 /**
- * The site closes on the deep band. `legalEntity` is the operating
- * company the terms and the privacy policy point at ("identified in the site
- * footer"); `primaryCta` follows the launch stage like the header.
+ * The site closes on a light area with the logo and the columns, and under
+ * it a thin deep band with the rights and the operating company, as the
+ * home's blueprint of 2026-10-26 draws it. `legalEntity` is the company the
+ * terms and the privacy policy point at ("identified in the site footer");
+ * `primaryCta` follows the launch stage like the header, and opens the
+ * account column.
  */
 export default function MarketingFooter({
   primaryCta,
@@ -49,26 +49,24 @@ export default function MarketingFooter({
   const t = useTranslations("marketing");
 
   return (
-    <footer className="bg-background-deep text-text-contrast w-full">
-      <Container className="flex flex-col gap-10 py-12 md:py-16">
-        <div className="flex flex-col gap-10 md:flex-row md:justify-between">
+    <footer className="w-full">
+      <div className="bg-grey-25 border-grey-100 border-t">
+        <Container className="flex flex-col gap-10 py-12 md:flex-row md:justify-between md:py-16">
           <div className="flex max-w-xs flex-col gap-3">
             <Link href="/" aria-label={t("nav-home")} className="flex items-center">
-              <Logo classNameFull="block" classNameMobile="hidden" tone="contrast" />
+              <Logo classNameFull="block" classNameMobile="hidden" />
             </Link>
-            <p className="text-text-contrast/65 text-base leading-5">{t("footer-tagline")}</p>
+            <p className="text-text-secondary text-base leading-6">{t("footer-tagline")}</p>
           </div>
 
-          <div className="grid grid-cols-2 gap-8 sm:grid-cols-3">
+          <div className="grid grid-cols-2 gap-8 sm:grid-cols-3 md:gap-16">
             {COLUMNS.map((column) => (
               <div key={column.titleKey} className="flex flex-col gap-2">
-                <p className="text-text-contrast/80 font-eyebrow tracking-eyebrow text-xs uppercase">
-                  {t(column.titleKey)}
-                </p>
+                <p className="text-text-primary font-heading text-base font-bold">{t(column.titleKey)}</p>
                 {column.titleKey === "footer-account" && (
                   <Link
                     href={primaryCta.href}
-                    className="text-text-contrast/60 hover:text-text-contrast text-base leading-6 transition-colors"
+                    className="text-text-secondary hover:text-text-primary text-base leading-6 transition-colors"
                     data-track="cta_click"
                     data-track-cta-id="footer"
                   >
@@ -79,7 +77,7 @@ export default function MarketingFooter({
                   <Link
                     key={link.key}
                     href={link.href}
-                    className="text-text-contrast/60 hover:text-text-contrast text-base leading-6 transition-colors"
+                    className="text-text-secondary hover:text-text-primary text-base leading-6 transition-colors"
                     {...(link.key === "nav-contact"
                       ? { "data-track": "contact_click", "data-track-location": "footer" }
                       : {})}
@@ -90,29 +88,29 @@ export default function MarketingFooter({
               </div>
             ))}
           </div>
-        </div>
+        </Container>
+      </div>
 
-        <div className="border-text-contrast/15 flex flex-col gap-2 border-t pt-6">
-          <div className="flex flex-col gap-1">
-            <p className="text-text-contrast/60 text-sm">
-              © {new Date().getFullYear()} {BRAND.name}. {t("footer-rights")}
+      <div className="bg-background-deep text-text-contrast/70">
+        <Container className="flex flex-col items-center gap-1 py-5 text-center text-sm md:flex-row md:justify-between md:text-left">
+          <p>
+            © {new Date().getFullYear()} {BRAND.name}. {t("footer-rights")}
+          </p>
+          {legalEntity && (
+            <p>
+              {[
+                legalEntity.name,
+                legalEntity.document
+                  ? t("footer-legal-document", { document: formatCnpj(legalEntity.document) })
+                  : null,
+                legalEntity.city,
+              ]
+                .filter(Boolean)
+                .join(" · ")}
             </p>
-            {legalEntity && (
-              <p className="text-text-contrast/60 text-sm">
-                {[
-                  legalEntity.name,
-                  legalEntity.document
-                    ? t("footer-legal-document", { document: formatCnpj(legalEntity.document) })
-                    : null,
-                  legalEntity.city,
-                ]
-                  .filter(Boolean)
-                  .join(" · ")}
-              </p>
-            )}
-          </div>
-        </div>
-      </Container>
+          )}
+        </Container>
+      </div>
     </footer>
   );
 }

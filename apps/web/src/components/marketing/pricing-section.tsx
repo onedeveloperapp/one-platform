@@ -171,7 +171,9 @@ export default function PricingSection({
                 onClick={() => setPeriod(option)}
                 className={cn(
                   "flex flex-row items-center gap-2 rounded-full px-4 py-2 text-sm font-bold transition-colors",
-                  selected ? "bg-primary text-text-contrast" : "text-text-secondary hover:text-text-primary",
+                  selected
+                    ? "bg-primary text-text-contrast dark:bg-primary-dark"
+                    : "text-text-secondary hover:text-text-primary",
                 )}
               >
                 {option === "monthly" ? periodToggle.monthly : periodToggle.yearly}

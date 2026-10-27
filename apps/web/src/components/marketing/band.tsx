@@ -5,6 +5,8 @@ import { cn } from "@/lib/utils";
 const SPACING = {
   default: "py-[var(--section-space)]",
   compact: "py-[var(--section-space-sm)]",
+  // A strip of one line (the names a page works with): half the compact space, so it reads as a band, not a chapter.
+  tight: "py-[calc(var(--section-space-sm)*0.5)]",
 } as const;
 
 const BACKGROUND = {
@@ -33,6 +35,7 @@ export default function Band({
   spacing = "default",
   decor = "none",
   id,
+  track,
   className,
   children,
 }: {
@@ -42,11 +45,17 @@ export default function Band({
   spacing?: keyof typeof SPACING;
   decor?: "none" | "grid" | "dots";
   id?: string;
+  /** The section's key in the measurement (`section_view`), as on <Section>. */
+  track?: string;
   className?: string;
   children: React.ReactNode;
 }) {
   return (
-    <section id={id} className={cn("relative isolate w-full overflow-x-clip", SPACING[spacing], className)}>
+    <section
+      id={id}
+      data-section={track}
+      className={cn("relative isolate w-full overflow-x-clip", SPACING[spacing], className)}
+    >
       {/* Skewed background layer; the extra vertical inset keeps tilted corners covered. */}
       <div
         aria-hidden

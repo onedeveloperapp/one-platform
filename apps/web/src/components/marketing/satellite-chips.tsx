@@ -4,8 +4,9 @@ import { cn } from "@/lib/utils";
 /**
  * Ready-made floating chips for <ProductComposition> satellites. All content
  * is REAL and localized (pass i18n strings) — a satellite that lies is worse
- * than no satellite. Token-driven, theme-aware, no photos. The satellite
- * wrapper owns the shadow; chips own the surface.
+ * than no satellite. Token-driven, theme-aware, no photos. The composition
+ * gives each satellite its shadow, on the layer that floats with it; chips
+ * own the surface.
  */
 const CHIP_BASE = "border-grey-100 bg-background-paper rounded-2xl border px-4 py-3";
 
@@ -27,8 +28,11 @@ export function KpiChip({
       <p className="text-text-secondary text-xs">{label}</p>
       <div className="flex items-baseline gap-2">
         <span className="font-display text-text-primary text-2xl font-bold tabular-nums">{value}</span>
+        {/* The hue on the pill, the word in a text colour: as small text a hue reads 1.8 to 4.2:1 over its own tint. */}
         {delta && (
-          <span className={cn("rounded-full px-1.5 py-0.5 text-xs font-semibold", hue.softBg, hue.text)}>{delta}</span>
+          <span className={cn("text-text-primary rounded-full px-1.5 py-0.5 text-xs font-semibold", hue.softBg)}>
+            {delta}
+          </span>
         )}
       </div>
     </div>
@@ -91,6 +95,74 @@ export function AvatarRowChip({ names, label }: { names: string[]; label: string
         })}
       </div>
       <p className="text-text-secondary text-xs">{label}</p>
+    </div>
+  );
+}
+
+/**
+ * A ring split in up to three parts with the total in its middle and a legend
+ * beside it: how one population divides, at a glance. Each part in its family
+ * hue; the words stay text colours.
+ */
+export function RingChip({
+  label,
+  total,
+  parts,
+}: {
+  label: string;
+  total: string;
+  parts: { label: string; value: number; tone: Tone }[];
+}) {
+  const sum = parts.reduce((acc, part) => acc + part.value, 0) || 1;
+  // A circle of radius 15.9155 has a circumference of 100, so each part's
+  // share is its dash length; each starts where the one before ended.
+  let start = 0;
+  const arcs = parts.slice(0, 3).map((part) => {
+    const share = (part.value / sum) * 100;
+    const arc = { ...part, share, start };
+    start += share;
+    return arc;
+  });
+  return (
+    <div className={cn(CHIP_BASE, "flex items-center gap-4")}>
+      <div className="relative h-20 w-20 flex-none">
+        <svg viewBox="0 0 36 36" className="h-20 w-20 -rotate-90" aria-hidden>
+          <circle cx="18" cy="18" r="15.9155" fill="none" stroke="hsl(var(--grey-100))" strokeWidth="3.6" />
+          {arcs.map((arc) => (
+            <circle
+              key={arc.label}
+              cx="18"
+              cy="18"
+              r="15.9155"
+              fill="none"
+              stroke={`hsl(var(${TONE[arc.tone].cssVar}))`}
+              strokeWidth="3.6"
+              strokeDasharray={`${Math.max(arc.share - 1.5, 0)} ${100 - Math.max(arc.share - 1.5, 0)}`}
+              strokeDashoffset={-arc.start}
+              strokeLinecap="round"
+            />
+          ))}
+        </svg>
+        <span className="font-display text-text-primary absolute inset-0 flex items-center justify-center text-lg font-bold tabular-nums">
+          {total}
+        </span>
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <p className="text-text-secondary text-xs">{label}</p>
+        <ul className="flex flex-col gap-1">
+          {arcs.map((arc) => (
+            <li key={arc.label} className="text-text-primary flex items-center gap-1.5 text-xs">
+              <span
+                aria-hidden
+                className="h-2 w-2 flex-none rounded-full"
+                style={{ backgroundColor: `hsl(var(${TONE[arc.tone].cssVar}))` }}
+              />
+              {arc.label}
+              <span className="text-text-secondary tabular-nums">{arc.value}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
     </div>
   );
 }

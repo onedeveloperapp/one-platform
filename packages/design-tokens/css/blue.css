@@ -2,15 +2,32 @@
 /* Theme Blue */
 /* --------------------------- */
 
+/*
+  ONE's provisional palette. The primary is the blue of the provisional logo's
+  tile (#1074C6, apps/web/public/brand/one-mark.svg) since 2026-10-26, by the
+  owner's request: it had been the cyan of the logo's dot (#00BFEB), which is
+  now the secondary, so both colours of the logo stay in the palette. On the
+  blue, a white label measures 4.7:1 (it was 1.9:1 on the cyan), and blue text
+  on white the same 4.7:1.
+
+  In dark mode no one blue does both jobs: words in the logo's blue measure
+  3:1 on the dark page, and a blue light enough to read there takes a white
+  label at 2.6:1. So the dark block moves the blue up a step, as the green
+  theme does: the primary (207 85% 62%) is the blue words, icons and bars
+  take, 5.9:1 on the page and 5.6:1 on a card; its light (72%) is the label of
+  a pastel or text button over its tint, 4.8:1 on the raised grey; and the
+  logo's own blue is its dark, the fill a white label goes on (a contained
+  button, a selected toggle or page, the passenger's bubble), 4.7:1.
+*/
 @layer base {
   .theme-blue {
-    --primary: 191 100% 46%;
-    --primary-light: 191 100% 56%;
-    --primary-dark: 191 100% 36%;
+    --primary: 207 85% 42%;
+    --primary-light: 207 85% 52%;
+    --primary-dark: 207 85% 32%;
 
-    --secondary: 207 85% 42%;
-    --secondary-light: 207 85% 52%;
-    --secondary-dark: 207 85% 32%;
+    --secondary: 191 100% 46%;
+    --secondary-light: 191 100% 56%;
+    --secondary-dark: 191 100% 36%;
 
     --accent-1: 272 92% 66%;
     --accent-1-light: 272 92% 76%;
@@ -31,13 +48,13 @@
     color-scheme: light;
   }
   .theme-blue.dark {
-    --primary: 191 100% 46%;
-    --primary-light: 191 100% 56%;
-    --primary-dark: 191 100% 36%;
+    --primary: 207 85% 62%;
+    --primary-light: 207 85% 72%;
+    --primary-dark: 207 85% 42%;
 
-    --secondary: 207 85% 42%;
-    --secondary-light: 207 85% 52%;
-    --secondary-dark: 207 85% 32%;
+    --secondary: 191 100% 46%;
+    --secondary-light: 191 100% 56%;
+    --secondary-dark: 191 100% 36%;
 
     --accent-1: 272 92% 66%;
     --accent-1-light: 272 92% 76%;

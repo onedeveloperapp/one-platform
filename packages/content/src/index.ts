@@ -17,9 +17,9 @@
  */
 export const BRAND = {
   name: "ONE",
-  tagline: "O software do escritório de contencioso de massa.",
+  tagline: "A automação com IA do escritório de contencioso de massa.",
   description:
-    "Do primeiro contato ao protocolo: casos, documentos, prazos e atendimento num só lugar, com o advogado no controle de cada decisão.",
+    "Do primeiro contato ao protocolo, o ONE leva cada caso com IA, e o escritório escolhe o que uma pessoa revisa.",
   /**
    * Canonical site URL — set NEXT_PUBLIC_SITE_URL in production (no trailing
    * slash). Not `??`: a defined-but-empty variable is not null, and an empty

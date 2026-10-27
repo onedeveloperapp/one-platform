@@ -23,8 +23,10 @@ import type { EmailLocale } from "../locale";
  * light values of packages/design-tokens (common.css and blue.css) copied by
  * hand: keep them aligned when the palette changes.
  *
- * The button carries the charcoal label, not white: white on this blue
- * (hsl 191 100% 46%) measures about 2.2:1, the charcoal about 6.1:1.
+ * The primary is the blue of the provisional logo's tile (hsl 207 85% 42%)
+ * since 2026-10-26, and the button carries a white label on it: 4.7:1, where
+ * the charcoal would measure 2.8:1. On the cyan it replaced the charcoal was
+ * the one that read.
  */
 export const COLOR = {
   ground: "#f9f8f6",
@@ -32,8 +34,8 @@ export const COLOR = {
   text: "#48433d",
   muted: "#716c65",
   rule: "#e8e6e3",
-  primary: "#00bfeb",
-  onPrimary: "#303030",
+  primary: "#1074c6",
+  onPrimary: "#ffffff",
   deep: "#303030",
   onDeep: "#f9f8f6",
 } as const;
