@@ -179,6 +179,9 @@ export default function SignaturesCard({
         );
         const status = STATUS[envelope.status] ?? STATUS.pending;
         const ended = ENDED.includes(envelope.status);
+        // What was signed outside ZapSign is signed once a person of the firm confirmed it: no provider says when
+        // each signer signed, and the line says it was the firm that checked.
+        const confirmedByFirm = envelope.status === "signed" && envelope.method !== "zapsign";
         return (
           <Box key={envelope.id} className="border-grey-100 flex flex-col gap-2 rounded-2xl border p-4">
             <Box className="flex flex-wrap items-start justify-between gap-2">
@@ -204,7 +207,9 @@ export default function SignaturesCard({
                 <Typography variant="body2">
                   {signer.signedAt
                     ? t("case-signature-signer-signed", { name: signer.name })
-                    : t("case-signature-signer-waiting", { name: signer.name })}
+                    : confirmedByFirm
+                      ? t("case-signature-signer-confirmed", { name: signer.name })
+                      : t("case-signature-signer-waiting", { name: signer.name })}
                 </Typography>
                 {writable && !signer.signedAt && envelope.status === "pending" && signer.signUrl && (
                   <Button variant="text" size="small" onClick={() => void copy(signer.signUrl ?? "")}>

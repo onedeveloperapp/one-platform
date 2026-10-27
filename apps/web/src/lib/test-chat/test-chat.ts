@@ -244,6 +244,29 @@ export function waitsForChoice(messages: readonly TestMessage[]): boolean {
   return Boolean(last && last.direction === "out" && last.template?.startsWith("one_aviso_voo"));
 }
 
+/** A piece of a message the firm wrote: words, or a web address the page opens as a link. */
+export type MessagePart = { text: string; href?: string };
+
+/**
+ * The words of a message the firm wrote, with each web address in it as a link, as WhatsApp shows them on the
+ * passenger's phone: the client's link ONE sends opens with a tap. A mark that ends a sentence right after an
+ * address is not part of it. The page reads only the firm's messages this way: the passenger's words stay as typed.
+ */
+export function messagePartsOf(body: string): MessagePart[] {
+  const parts: MessagePart[] = [];
+  let from = 0;
+  for (const match of body.matchAll(/https?:\/\/[^\s<>"'`]+/g)) {
+    const address = match[0].replace(/[.,;:!?)\]]+$/, "");
+    if (!/^https?:\/\/[^/]/.test(address)) continue;
+    const at = match.index ?? 0;
+    if (at > from) parts.push({ text: body.slice(from, at) });
+    parts.push({ text: address, href: address });
+    from = at + address.length;
+  }
+  if (from < body.length) parts.push({ text: body.slice(from) });
+  return parts;
+}
+
 /** The test chat as the connections screen shows it (`test_chat_link`). */
 export type TestChatCard = {
   on: boolean;

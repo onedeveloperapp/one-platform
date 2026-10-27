@@ -1897,6 +1897,7 @@
     "case-signature-status-uncertain": "Sem resposta da ZapSign",
     "case-signature-signer-signed": "{name} assinou",
     "case-signature-signer-waiting": "{name} ainda não assinou",
+    "case-signature-signer-confirmed": "Assinatura de {name} conferida pelo escritório",
     "case-signature-copy-link": "Copiar link de assinatura",
     "case-signature-failed-help": "Confira o documento na conta da ZapSign do escritório. Se ele não estiver lá, cancele e envie de novo.",
     "case-signature-open-signed": "Abrir o assinado",

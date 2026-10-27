@@ -3,7 +3,7 @@
 import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { Alert, Box, Button, Card, CardContent, Collapse, Tab, Tabs, TextField, Typography } from "@mui/material";
+import { Alert, Box, Button, Card, CardContent, Collapse, Link, Tab, Tabs, TextField, Typography } from "@mui/material";
 
 import MessageBubble from "@/components/product/message-bubble";
 import StatusChip, { type StatusTone } from "@/components/product/status-chip";
@@ -23,6 +23,7 @@ import {
   startTestMedia,
 } from "@/lib/test-chat/actions";
 import {
+  messagePartsOf,
   QUICK_REPLIES,
   REAL_FLIGHT,
   TEST_TOOLS,
@@ -96,6 +97,27 @@ const LEG_TONE: Record<string, StatusTone> = {
   changed: "attention",
   landed: "neutral",
 };
+
+/**
+ * What a message says. The firm's words carry each address as a link, as on the passenger's phone, opened beside
+ * the chat so the conversation stays where it was; the passenger's own words stay as typed.
+ */
+function MessageText({ body, firm }: { body: string; firm: boolean }) {
+  if (!firm) return <>{body}</>;
+  return (
+    <>
+      {messagePartsOf(body).map((part, index) =>
+        part.href ? (
+          <Link key={index} href={part.href} target="_blank" rel="noopener noreferrer" className="break-all">
+            {part.text}
+          </Link>
+        ) : (
+          <span key={index}>{part.text}</span>
+        ),
+      )}
+    </>
+  );
+}
 
 /**
  * The test chat, where a passenger's phone stands: the four ready passengers,
@@ -372,10 +394,18 @@ export default function TestChat({
                       {FILE_KEY[message.kind] ? (
                         <>
                           <em>{t(FILE_KEY[message.kind], { name: message.mediaFilename ?? "" })}</em>
-                          {message.body ? <span className="block">{message.body}</span> : null}
+                          {message.body ? (
+                            <span className="block">
+                              <MessageText body={message.body} firm={message.direction === "out"} />
+                            </span>
+                          ) : null}
                         </>
+                      ) : message.body !== null ? (
+                        <MessageText body={message.body} firm={message.direction === "out"} />
+                      ) : message.mediaFilename ? (
+                        message.mediaFilename
                       ) : (
-                        (message.body ?? (message.mediaFilename ? message.mediaFilename : t("test-chat-no-text")))
+                        t("test-chat-no-text")
                       )}
                     </MessageBubble>
                   ))
