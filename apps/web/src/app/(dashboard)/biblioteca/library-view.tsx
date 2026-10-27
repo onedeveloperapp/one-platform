@@ -3,7 +3,7 @@
 import TemplateDialog, { defaultSlot, DOCUMENT_KEY, KIND_KEY, Refusal } from "./template-dialog";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 
 import {
   Alert,
@@ -27,9 +27,13 @@ import StatusChip from "@/components/product/status-chip";
 import NiBook from "@/icons/nexture/ni-book";
 import NiDocumentFull from "@/icons/nexture/ni-document-full";
 import NiShieldCheck from "@/icons/nexture/ni-shield-check";
+import NiUploadCloud from "@/icons/nexture/ni-upload-cloud";
 import NiUsers from "@/icons/nexture/ni-users";
 import { removeDraftTemplate, retireLegalSource, saveLegalSource } from "@/lib/library/actions";
 import type { LibraryData, LibrarySource, LibraryTemplate, MissingSource } from "@/lib/library/facts";
+import { dismissModelFromDocument, watchModelImports } from "@/lib/library/import-actions";
+import type { LibraryImport } from "@/lib/library/import-read";
+import { IMPORT_ACCEPT, IMPORT_STATUS_KEY, importFailureKey } from "@/lib/library/imports";
 
 export type LibraryState =
   | {
@@ -50,6 +54,17 @@ const GAP_KEY: Record<NonNullable<MissingSource["gap"]>, string> = {
 };
 
 type SourceForm = { source: LibrarySource | null; citation: string };
+
+/** How often the library looks again at what ONE prepares, while it prepares something. */
+const WATCH_MS = 6_000;
+
+/** The tone each state of a request is said in: the word is always there, the tint only adds to it. */
+const IMPORT_TONE: Record<LibraryImport["status"], "info" | "positive" | "danger"> = {
+  reading: "info",
+  marking: "info",
+  ready: "positive",
+  failed: "danger",
+};
 
 /** How many sources the list shows before a person asks for more, and from how many on it offers a search. */
 const SOURCES_SHOWN = 60;
@@ -82,7 +97,13 @@ export default function LibraryView({ state, citation }: { state: LibraryState; 
     template: LibraryTemplate | null;
     /** A model of the platform the firm starts its own from. */
     copyOf?: LibraryTemplate;
+    /** A request ONE prepares or prepared a model for (0067). */
+    importId?: string;
+    /** A document the person just chose, for ONE to prepare the model from. */
+    file?: File;
   } | null>(null);
+  const documentInput = useRef<HTMLInputElement>(null);
+  const [dismissing, setDismissing] = useState<string | null>(null);
   const [removing, setRemoving] = useState<LibraryTemplate | null>(null);
   const [search, setSearch] = useState("");
   const [shown, setShown] = useState(SOURCES_SHOWN);
@@ -98,6 +119,46 @@ export default function LibraryView({ state, citation }: { state: LibraryState; 
   // What a firm may keep counts only its own models: the platform's are every firm's.
   const full = data !== null && data.templates.filter((template) => !template.platform).length >= data.maxTemplates;
   const addSource = (typed: string) => setSourceForm({ source: null, citation: typed });
+  // The file chooser opens in the person's own click: the dialog opens once a document is chosen.
+  const chooseDocument = () => documentInput.current?.click();
+  const imports = data?.imports ?? [];
+
+  // While ONE prepares a model, the library looks again by itself and reads anew when a state changed.
+  const pendingKey = imports
+    .filter((item) => item.status === "reading" || item.status === "marking")
+    .map((item) => `${item.id}:${item.status}`)
+    .sort()
+    .join(",");
+  useEffect(() => {
+    if (!pendingKey) return;
+    let open = true;
+    const timer = setInterval(() => {
+      watchModelImports()
+        .then((watched) => {
+          if (!open || !watched.ok) return;
+          const now = watched.pending
+            .map((item) => `${item.id}:${item.status}`)
+            .sort()
+            .join(",");
+          if (now !== pendingKey) router.refresh();
+        })
+        .catch(() => undefined);
+    }, WATCH_MS);
+    return () => {
+      open = false;
+      clearInterval(timer);
+    };
+  }, [pendingKey, router]);
+
+  const dismissImport = async (item: LibraryImport) => {
+    setDismissing(item.id);
+    try {
+      await dismissModelFromDocument(item.id);
+      changed();
+    } finally {
+      setDismissing(null);
+    }
+  };
 
   return (
     <Box className="flex flex-col gap-6">
@@ -152,12 +213,27 @@ export default function LibraryView({ state, citation }: { state: LibraryState; 
           icon={<NiBook size="large" />}
           title={t("library-first-title")}
           description={t(mayWrite ? "library-first-body" : "library-first-readonly")}
-          action={
+          action={mayWrite ? { label: t("library-import-start"), onClick: chooseDocument } : undefined}
+          secondaryAction={
             mayWrite
               ? { label: t("library-template-new"), onClick: () => setTemplateForm({ template: null }) }
               : undefined
           }
-          secondaryAction={mayWrite ? { label: t("library-add-source"), onClick: () => addSource("") } : undefined}
+        />
+      ) : null}
+
+      {mayWrite ? (
+        <input
+          ref={documentInput}
+          type="file"
+          hidden
+          accept={IMPORT_ACCEPT}
+          aria-label={t("library-import-start")}
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            event.target.value = "";
+            if (file) setTemplateForm({ template: null, file });
+          }}
         />
       ) : null}
 
@@ -252,14 +328,25 @@ export default function LibraryView({ state, citation }: { state: LibraryState; 
                   {t("library-templates-title")}
                 </Typography>
                 {mayWrite && data.templates.length > 0 ? (
-                  <Button
-                    variant="outlined"
-                    color="grey"
-                    disabled={full}
-                    onClick={() => setTemplateForm({ template: null })}
-                  >
-                    {t("library-template-new")}
-                  </Button>
+                  <Box className="flex flex-wrap gap-2">
+                    <Button
+                      variant="outlined"
+                      color="grey"
+                      startIcon={<NiUploadCloud size="medium" />}
+                      disabled={full}
+                      onClick={chooseDocument}
+                    >
+                      {t("library-import-start")}
+                    </Button>
+                    <Button
+                      variant="outlined"
+                      color="grey"
+                      disabled={full}
+                      onClick={() => setTemplateForm({ template: null })}
+                    >
+                      {t("library-template-new")}
+                    </Button>
+                  </Box>
                 ) : null}
               </Box>
               <Typography variant="body2" className="text-text-secondary">
@@ -270,16 +357,31 @@ export default function LibraryView({ state, citation }: { state: LibraryState; 
                   {t("library-templates-full", { count: data.maxTemplates })}
                 </Typography>
               ) : null}
+              {imports.length > 0 ? (
+                <Box component="ul" className="m-0 flex list-none flex-col p-0" aria-label={t("library-imports-label")}>
+                  {imports.map((item) => (
+                    <ImportRow
+                      key={item.id}
+                      item={item}
+                      busy={dismissing === item.id}
+                      onOpen={() => setTemplateForm({ template: null, importId: item.id })}
+                      onDismiss={() => void dismissImport(item)}
+                    />
+                  ))}
+                </Box>
+              ) : null}
               {data.templates.length === 0 ? (
                 <EmptyState
                   icon={<NiDocumentFull />}
                   title={t("library-templates-empty")}
                   description={t(mayWrite ? "library-templates-empty-body" : "library-first-readonly")}
-                  action={
+                  action={mayWrite ? { label: t("library-import-start"), onClick: chooseDocument } : undefined}
+                  secondaryAction={
                     mayWrite
                       ? { label: t("library-template-new"), onClick: () => setTemplateForm({ template: null }) }
                       : undefined
                   }
+                  titleAs="h3"
                   className="py-8"
                 />
               ) : (
@@ -495,6 +597,10 @@ export default function LibraryView({ state, citation }: { state: LibraryState; 
         <TemplateDialog
           template={templateForm.template}
           copyOf={templateForm.copyOf ?? null}
+          importId={templateForm.importId ?? null}
+          initialFile={templateForm.file ?? null}
+          importLimits={data?.importLimits ?? null}
+          onImportRequested={changed}
           defaults={Object.fromEntries(
             (data?.templates ?? [])
               .filter(
@@ -519,6 +625,74 @@ export default function LibraryView({ state, citation }: { state: LibraryState; 
           }}
         />
       ) : null}
+    </Box>
+  );
+}
+
+/**
+ * A document the firm sent for a model (0067), while ONE prepares it, once
+ * it is ready for a lawyer to check and save, or when nothing could be
+ * prepared and why: each state named, and the one thing to do next.
+ */
+function ImportRow({
+  item,
+  busy,
+  onOpen,
+  onDismiss,
+}: {
+  item: LibraryImport;
+  busy: boolean;
+  onOpen: () => void;
+  onDismiss: () => void;
+}) {
+  const t = useTranslations("product");
+  const working = item.status === "reading" || item.status === "marking";
+  const ready = item.status === "ready";
+  // What opening it is for: checking and saving a model that is ready, or following ONE while it prepares one.
+  const openKey = ready ? "library-import-review" : "library-import-follow";
+  return (
+    <Box component="li" className="border-grey-100 flex flex-wrap items-center gap-3 border-b py-3 last:border-b-0">
+      <Box className="flex min-w-0 flex-1 basis-60 flex-col">
+        <Typography variant="body1" className="font-semibold break-words">
+          {item.fileName}
+        </Typography>
+        <Typography variant="body2" className="text-text-secondary break-words">
+          {[
+            item.requestedBy
+              ? t("library-import-sent-by", { name: item.requestedBy, when: item.sentLabel })
+              : t("library-import-sent-at", { when: item.sentLabel }),
+            item.status === "failed" ? t(importFailureKey(item.failure)) : null,
+          ]
+            .filter(Boolean)
+            .join(" · ")}
+        </Typography>
+      </Box>
+      <StatusChip tone={IMPORT_TONE[item.status]} label={t(IMPORT_STATUS_KEY[item.status])} />
+      <Box className="flex flex-wrap gap-1">
+        {item.status !== "failed" ? (
+          <Button
+            variant={ready ? "contained" : "text"}
+            color={ready ? "primary" : "grey"}
+            size="small"
+            onClick={onOpen}
+            aria-label={ready ? t("library-import-review-label", { file: item.fileName }) : undefined}
+          >
+            {t(openKey)}
+          </Button>
+        ) : null}
+        <Button
+          variant="text"
+          color="grey"
+          size="small"
+          disabled={busy}
+          onClick={onDismiss}
+          aria-label={t(working ? "library-import-give-up-label" : "library-import-discard-label", {
+            file: item.fileName,
+          })}
+        >
+          {t(working ? "library-import-give-up" : "library-import-discard")}
+        </Button>
+      </Box>
     </Box>
   );
 }

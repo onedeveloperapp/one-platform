@@ -41,6 +41,23 @@ test("a file is what its first bytes say, whatever it is called", () => {
   assert.equal(detectMime(new Uint8Array()), null);
 });
 
+test("a Word document is told by the parts its package holds, never by its name", () => {
+  const part = (name: string) => [0x50, 0x4b, 0x03, 0x04, 20, 0, 0, 0, 8, 0, name, 0, 0, "<xml/>"];
+  // As a word processor writes it: the list of the package's types, then the text itself.
+  assert.equal(
+    detectMime(bytesOf(...part("[Content_Types].xml"), ...part("_rels/.rels"), ...part("word/document.xml"))),
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  );
+  // A spreadsheet or a presentation is the same kind of package with other parts.
+  assert.equal(detectMime(bytesOf(...part("[Content_Types].xml"), ...part("xl/workbook.xml"))), null);
+  assert.equal(detectMime(bytesOf(...part("[Content_Types].xml"), ...part("ppt/presentation.xml"))), null);
+  // A ZIP that only names the text, with no list of types, is no Word document; nor is the text's name alone.
+  assert.equal(detectMime(bytesOf(...part("word/document.xml"))), null);
+  assert.equal(detectMime(bytesOf("[Content_Types].xml word/document.xml")), null);
+  // An old .doc, or a Word document protected by a password: a compound file, no ZIP.
+  assert.equal(detectMime(bytesOf(0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1, "word/document.xml")), null);
+});
+
 test("what a messaging app carries is named too: a voice message, a recording, a video", () => {
   // Naming a type keeps nothing by itself: each purpose lists what it accepts
   // (`platform_settings.files`), and an upload of a person lists no sound and no video.

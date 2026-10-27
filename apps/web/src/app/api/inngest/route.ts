@@ -19,6 +19,7 @@ import { flightFunctions } from "@/lib/flights/jobs";
 import { hearingFunctions } from "@/lib/hearings/jobs";
 import { importFunctions } from "@/lib/import/jobs";
 import { leadFunctions } from "@/lib/lead-jobs";
+import { libraryFunctions } from "@/lib/library/jobs";
 import { maintenanceFunctions } from "@/lib/maintenance-jobs";
 import { newsletterFunctions } from "@/lib/newsletter-jobs";
 import { noticeFunctions } from "@/lib/notices/jobs";
@@ -52,6 +53,7 @@ export const { GET, POST, PUT } = serve({
     ...flightAlertFunctions,
     ...conversationFunctions,
     ...publicationFunctions,
+    ...libraryFunctions,
     ...whatsappFunctions,
     ...backupFunctions,
   ],

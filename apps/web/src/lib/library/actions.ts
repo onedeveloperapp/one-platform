@@ -104,9 +104,14 @@ export async function retireLegalSource(input: { sourceId: string; reason: strin
   return result;
 }
 
-/** A lawyer writes a model of the firm, or changes one: of a piece, or of a paper ONE sends clients to sign (0054). */
+/**
+ * A lawyer writes a model of the firm, or changes one: of a piece, or of a paper ONE sends clients to sign (0054).
+ * `importId` names what ONE prepared from a document (0067): the model is saved through the same checks, and the
+ * request goes with it, in one step.
+ */
 export async function saveDraftTemplate(input: {
   templateId?: string | null;
+  importId?: string | null;
   name: string;
   /** What the model writes; a piece when not said. */
   documentKind?: ModelDocument;
@@ -118,18 +123,22 @@ export async function saveDraftTemplate(input: {
   const context = await getMemberContext();
   if (!context?.firm) return { ok: false, code: "failed" };
   if (input.templateId && !isId(input.templateId)) return { ok: false, code: "not_found" };
-  const { data, error } = await context.supabase.rpc("save_draft_template", {
-    target_org: context.firm.id,
-    target_template: input.templateId ?? null,
-    fields: {
-      name: clean(input.name, 120).trim(),
-      document_kind: isModelDocument(input.documentKind) ? input.documentKind : "piece",
-      proceeding_kind:
-        input.proceedingKind === "juizado" || input.proceedingKind === "comum" ? input.proceedingKind : null,
-      is_default: input.isDefault === true,
-      body: clean(input.body, 250_000),
-    },
-  });
+  if (input.importId && (!isId(input.importId) || input.templateId)) return { ok: false, code: "not_found" };
+  const fields = {
+    name: clean(input.name, 120).trim(),
+    document_kind: isModelDocument(input.documentKind) ? input.documentKind : "piece",
+    proceeding_kind:
+      input.proceedingKind === "juizado" || input.proceedingKind === "comum" ? input.proceedingKind : null,
+    is_default: input.isDefault === true,
+    body: clean(input.body, 250_000),
+  };
+  const { data, error } = input.importId
+    ? await context.supabase.rpc("save_imported_template", { target_import: input.importId, fields })
+    : await context.supabase.rpc("save_draft_template", {
+        target_org: context.firm.id,
+        target_template: input.templateId ?? null,
+        fields,
+      });
   const result = fold(data, error, (answer) => ({ templateId: String(answer.template_id ?? "") }));
   if (result.ok) {
     refresh();

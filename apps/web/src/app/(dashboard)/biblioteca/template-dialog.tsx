@@ -1,7 +1,8 @@
 "use client";
 
+import ImportPanel from "./import-panel";
 import { useTranslations } from "next-intl";
-import { useEffect, useState, useTransition } from "react";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 
 import {
   Alert,
@@ -31,6 +32,7 @@ import {
 } from "@/lib/cases/drafts";
 import { readDraftTemplate, saveDraftTemplate } from "@/lib/library/actions";
 import type { LibraryTemplate } from "@/lib/library/facts";
+import type { ImportLimits, PreparedModel } from "@/lib/library/import-read";
 
 export type Kind = "juizado" | "comum" | null;
 export const KIND_KEY: Record<"juizado" | "comum", string> = {
@@ -87,6 +89,14 @@ function defaultKey(writes: ModelDocument, kind: Kind): string {
  * stops being it. Opened by the library and by the firm's setup, which asks
  * for a paper by name (a fee contract, the firm's own power of attorney) and
  * makes it the default the firm sends.
+ *
+ * A new model may start from a document the firm already uses (0067): the
+ * person sends it from the top of the dialog (or chose it before the dialog
+ * opened, `initialFile`), ONE prepares the model while the fields wait, and
+ * the dialog fills itself with it to be read, changed and saved; saving
+ * closes the request. `importId` opens the dialog on a request made before.
+ * What ONE prepared, untouched, is no work to lose: the dialog closes over it
+ * without asking, and it waits in the library.
  */
 export default function TemplateDialog({
   template,
@@ -94,6 +104,10 @@ export default function TemplateDialog({
   defaults,
   initialDocument,
   initialDefault = false,
+  importId = null,
+  initialFile = null,
+  importLimits = null,
+  onImportRequested,
   onClose,
   onSaved,
 }: {
@@ -106,6 +120,14 @@ export default function TemplateDialog({
   initialDocument?: ModelDocument;
   /** A new model opens as the default of what it writes, the one ONE then uses. */
   initialDefault?: boolean;
+  /** A request ONE prepares or prepared a model for, from a document the firm sent. */
+  importId?: string | null;
+  /** A document the person chose before the dialog opened: sent at once. */
+  initialFile?: File | null;
+  /** What may be sent for a model, as the setting says. */
+  importLimits?: ImportLimits | null;
+  /** ONE was asked for a model of a document: the screen behind the dialog lists the request. */
+  onImportRequested?: () => void;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -124,6 +146,15 @@ export default function TemplateDialog({
   const [body, setBody] = useState<string | null>(template || copyOf ? null : "");
   const [errorCode, setErrorCode] = useState<string | null>(null);
   const [leaving, setLeaving] = useState(false);
+  // A model ONE prepared from a document: the request it came from, and what it filled the dialog with.
+  const [imported, setImported] = useState<{
+    id: string;
+    name: string;
+    writes: ModelDocument;
+    kind: Kind;
+    body: string;
+  } | null>(null);
+  const [importBusy, setImportBusy] = useState(false);
   const templateId = template?.id ?? null;
   // What is read when the dialog opens: the model being edited, or the platform's one a copy starts from.
   const readId = templateId ?? copyOf?.id ?? null;
@@ -165,12 +196,38 @@ export default function TemplateDialog({
       ? DRAFT_MARKS.map((mark) => ({ mark, key: DRAFT_MARK_KEY[mark] }))
       : PAPER_MARKS.map((mark) => ({ mark, key: PAPER_MARK_KEY[mark] }));
   const complete = name.trim().length >= 2 && (body ?? "").trim().length >= 20;
+  // What "changed" is measured against: the model read, a new one, or what ONE prepared from a document.
+  const base = imported ?? {
+    name: template?.name ?? "",
+    writes: startDocument,
+    kind: template?.proceedingKind ?? null,
+    body: saved ?? "",
+  };
   const changed =
-    name !== (template?.name ?? "") ||
-    writes !== startDocument ||
-    kind !== (template?.proceedingKind ?? null) ||
+    name !== base.name ||
+    writes !== base.writes ||
+    kind !== base.kind ||
     isDefault !== startDefault ||
-    (body ?? "") !== (saved ?? "");
+    (body ?? "") !== base.body;
+  // A new model that may start from a document: neither a model being edited nor a copy of the platform's.
+  const mayImport = templateId === null && !copying;
+  // While ONE is sent the document or works on it, the fields wait: what it prepares fills them.
+  const locked = pending || importBusy;
+
+  // The name on screen, for what ONE prepared to keep one the person already typed.
+  const typedName = useRef(name);
+  typedName.current = name;
+
+  /** What ONE prepared fills the dialog; a name already typed stays the person's. */
+  const prepared = useCallback((id: string, model: PreparedModel, fileName: string) => {
+    const typed = typedName.current;
+    const named = typed.trim() ? typed : (model.name || fileName.replace(/\.(docx|pdf)$/i, "").trim()).slice(0, 120);
+    setName(named);
+    setWrites(model.documentKind);
+    setKind(model.proceedingKind);
+    setBody(model.body);
+    setImported({ id, name: named, writes: model.documentKind, kind: model.proceedingKind, body: model.body });
+  }, []);
   // The default of one document or kind is not the default of another: said again for a new one, by the person;
   // back to its own, the model is what it was.
   const defaultFor = (nextDocument: ModelDocument, nextKind: Kind) =>
@@ -196,6 +253,7 @@ export default function TemplateDialog({
       try {
         const result = await saveDraftTemplate({
           templateId,
+          importId: imported?.id ?? null,
           name,
           documentKind: writes,
           proceedingKind: writes === "piece" ? kind : null,
@@ -218,20 +276,34 @@ export default function TemplateDialog({
             ? "library-template-dialog-edit"
             : copying
               ? "library-template-dialog-copy"
-              : "library-template-dialog-new",
+              : importId || imported || initialFile
+                ? "library-template-dialog-import"
+                : "library-template-dialog-new",
         )}
         onClose={close}
         closeLabel={t("library-close")}
       />
       <DialogContent className="flex flex-col gap-4 pt-2!">
+        {mayImport ? (
+          <ImportPanel
+            importId={importId}
+            initialFile={initialFile}
+            limits={importLimits}
+            disabled={pending}
+            onBusy={setImportBusy}
+            onPrepared={prepared}
+            onCleared={() => setImported(null)}
+            onRequested={onImportRequested}
+          />
+        ) : null}
         <Box className="flex flex-wrap gap-3">
           <TextField
             label={t("library-template-name")}
             value={name}
             onChange={(event) => setName(event.target.value.slice(0, 120))}
-            disabled={pending}
+            disabled={locked}
             className="min-w-64 flex-1"
-            autoFocus={!template}
+            autoFocus={!template && !importId && !initialFile}
           />
           <TextField
             select
@@ -247,7 +319,7 @@ export default function TemplateDialog({
               setKind(nextKind);
               setIsDefault(defaultFor(next, nextKind));
             }}
-            disabled={pending || body === null}
+            disabled={locked || body === null}
             helperText={t(DOCUMENT_KEY[writes].help)}
             className="min-w-56 flex-1"
           >
@@ -266,7 +338,7 @@ export default function TemplateDialog({
                 setKind(next);
                 setIsDefault(defaultFor(writes, next));
               }}
-              disabled={pending || body === null}
+              disabled={locked || body === null}
               className="min-w-56"
             >
               <MenuItem value="any">{t("library-template-kind-any")}</MenuItem>
@@ -281,7 +353,7 @@ export default function TemplateDialog({
               <Checkbox
                 checked={isDefault}
                 onChange={(event) => setIsDefault(event.target.checked)}
-                disabled={pending || body === null}
+                disabled={locked || body === null}
               />
             }
             label={t(defaultKey(writes, kind))}
@@ -303,7 +375,7 @@ export default function TemplateDialog({
               helperText={t(paper ? "library-template-body-help-paper" : "library-template-body-help")}
               value={body}
               onChange={(event) => setBody(event.target.value)}
-              disabled={pending}
+              disabled={locked}
               multiline
               minRows={16}
               maxRows={30}
@@ -333,7 +405,8 @@ export default function TemplateDialog({
         ) : null}
         <Refusal code={errorCode} />
         <Box className="flex flex-wrap gap-2">
-          <Button variant="contained" disabled={pending || !complete || !changed} onClick={save}>
+          {/* What ONE prepared is saved as it came, too: reading it is the person's part. */}
+          <Button variant="contained" disabled={locked || !complete || !(changed || imported)} onClick={save}>
             {t("library-save")}
           </Button>
           <Button variant="text" color="grey" disabled={pending} onClick={close}>

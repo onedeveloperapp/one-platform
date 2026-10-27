@@ -2,6 +2,7 @@ import "server-only";
 
 import { momentLabel } from "@/lib/ai/approvals";
 import { isModelDocument, type ModelDocument, sourceLabel } from "@/lib/cases/drafts";
+import { type ImportLimits, importLimitsOf, type LibraryImport, readLibraryImports } from "@/lib/library/import-read";
 import {
   citationGap,
   distinctCitations,
@@ -84,6 +85,10 @@ export type LibraryData = {
   missing: MissingSource[];
   /** How many models a firm keeps, as the setting says. */
   maxTemplates: number;
+  /** What ONE prepares or prepared from a document the firm sent (0067): none for who does not write models. */
+  imports: LibraryImport[];
+  /** What may be sent for a model, as the setting says. */
+  importLimits: ImportLimits;
 };
 
 type SourceRow = {
@@ -267,7 +272,7 @@ export async function loadLibrary(
   firmId: string,
   timeZone: string | null | undefined,
 ): Promise<LibraryData> {
-  const [sourceRows, templates, team, settings] = await Promise.all([
+  const [sourceRows, templates, team, settings, importSetting] = await Promise.all([
     readSources(supabase, firmId),
     supabase
       .from("draft_templates")
@@ -276,6 +281,7 @@ export async function loadLibrary(
       .order("name"),
     supabase.rpc("firm_team", { target_org: firmId }),
     supabase.from("platform_settings").select("value").eq("key", "drafts").maybeSingle(),
+    supabase.from("platform_settings").select("value").eq("key", "template_imports").maybeSingle(),
   ]);
   if (templates.error || team.error) throw new Error("the library could not be read");
 
@@ -285,6 +291,7 @@ export async function loadLibrary(
       person.display_name?.trim() || person.email?.split("@")[0] || "",
     ]),
   );
+  const imports = await readLibraryImports(supabase, firmId, names, timeZone);
   const verified = new Set(sourceRows.filter((source) => source.status === "verified").map((source) => source.key));
 
   const templateRows = ((templates.data ?? []) as TemplateRow[])
@@ -366,5 +373,7 @@ export async function loadLibrary(
     templates: templateList,
     missing: [...missing.values()],
     maxTemplates: Number.isFinite(configured) && configured > 0 ? configured : 40,
+    imports,
+    importLimits: importLimitsOf(importSetting.data?.value),
   };
 }

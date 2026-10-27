@@ -43,6 +43,8 @@ export type JobEvents = {
   "one/flight.alerts": { data: { alertId: string | null } };
   /** A passenger wrote in a conversation ONE answers: its turn, once they stop writing. */
   "one/conversation.turn": { data: { conversationId: string } };
+  /** A lawyer sent a document for a model of the library: its text, then its marking, now instead of at the next sweep. */
+  "one/library.import.requested": { data: { importId: string } };
 };
 
 export const isInngestConfigured = Boolean(process.env.INNGEST_EVENT_KEY && process.env.INNGEST_SIGNING_KEY);

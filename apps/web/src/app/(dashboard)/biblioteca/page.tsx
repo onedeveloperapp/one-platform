@@ -1,5 +1,9 @@
 import LibraryView, { type LibraryState } from "./library-view";
 
+// A document sent for a model is read after the response where there are no jobs (0067): the transcription of a
+// PDF is a model writing the whole text back, which takes the time a step of the jobs has.
+export const maxDuration = 300;
+
 import { loadLibrary } from "@/lib/library/facts";
 import { getMemberContext } from "@/lib/member/context";
 import { isSupportVisit } from "@/lib/whatsapp/session";

@@ -42,6 +42,7 @@ export function mimeOf(file: { name: string; type: string }): string {
     webp: "image/webp",
     heic: "image/heic",
     heif: "image/heif",
+    docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   };
   return byExtension[extension] ?? "application/octet-stream";
 }

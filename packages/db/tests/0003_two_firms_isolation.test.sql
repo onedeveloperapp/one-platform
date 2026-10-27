@@ -333,6 +333,9 @@ insert into public.case_draft_citations (org_id, draft_id, version, position, ki
 insert into public.dossiers (org_id, case_id) values
   ('b1000000-0000-4000-8000-00000000000a', 'a3000000-0000-4000-8000-00000000000a'),
   ('b1000000-0000-4000-8000-00000000000b', 'a3000000-0000-4000-8000-00000000000b');
+insert into public.template_imports (org_id, file_name, source) values
+  ('b1000000-0000-4000-8000-00000000000a', 'inicial-a.docx', 'docx'),
+  ('b1000000-0000-4000-8000-00000000000b', 'inicial-b.docx', 'docx');
 
 create temporary table results (name text primary key, payload jsonb, id uuid);
 grant select, insert on results to authenticated;
@@ -432,7 +435,7 @@ select is(
     'people',
     'proceeding_lawyers', 'proceeding_parties', 'proceeding_tracking', 'proceedings', 'publication_readings', 'publications', 'record_versions',
     'signature_envelopes',
-    'subscriptions', 'test_chats', 'tracked_legs', 'tracked_trips',
+    'subscriptions', 'template_imports', 'test_chats', 'tracked_legs', 'tracked_trips',
     'wa_contacts',
     'wa_conversation_events', 'wa_conversations', 'wa_messages', 'wa_numbers', 'wa_optouts', 'wa_templates'
   ],
@@ -607,7 +610,7 @@ select is(
     'memberships', 'movements', 'notice_optins', 'people', 'proceeding_lawyers', 'proceeding_parties', 'proceeding_tracking', 'proceedings',
     'publication_readings', 'publications',
     'signature_envelopes',
-    'subscriptions', 'test_chats', 'tracked_legs', 'tracked_trips',
+    'subscriptions', 'template_imports', 'test_chats', 'tracked_legs', 'tracked_trips',
     'wa_contacts', 'wa_conversation_events', 'wa_conversations', 'wa_messages', 'wa_numbers', 'wa_optouts', 'wa_templates'
   ],
   'and of their own firm less than the owner: no audit trail, no history, no invitations, no checkout, no vendor accounts'
@@ -651,7 +654,7 @@ select is(
     'people',
     'proceeding_lawyers', 'proceeding_parties', 'proceeding_tracking', 'proceedings', 'publication_readings', 'publications', 'record_versions',
     'signature_envelopes',
-    'subscriptions', 'test_chats', 'tracked_legs', 'tracked_trips',
+    'subscriptions', 'template_imports', 'test_chats', 'tracked_legs', 'tracked_trips',
     'wa_contacts',
     'wa_conversation_events', 'wa_conversations', 'wa_messages', 'wa_numbers', 'wa_optouts', 'wa_templates'
   ],

@@ -49,6 +49,33 @@ function mp4Tracks(bytes: Uint8Array): { video: boolean; sound: boolean } {
   return { video, sound };
 }
 
+/** True when the bytes hold the name of a part, as a ZIP package writes the names of its parts. */
+function holdsName(bytes: Uint8Array, name: string): boolean {
+  const wanted = [...name].map((char) => char.charCodeAt(0));
+  for (let at = bytes.indexOf(wanted[0]); at !== -1; at = bytes.indexOf(wanted[0], at + 1)) {
+    if (startsWith(bytes, wanted, at)) return true;
+  }
+  return false;
+}
+
+/** What a Word document (`.docx`) is. */
+export const DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+
+/**
+ * True when the bytes are a Word document (`.docx`): a ZIP package of the
+ * Office Open XML kind that holds the main part of a text. A spreadsheet or a
+ * presentation is the same kind of package with other parts, and an old
+ * `.doc`, or a Word document protected by a password, is no ZIP at all: none
+ * of them is named one.
+ */
+function isWordPackage(bytes: Uint8Array): boolean {
+  return (
+    startsWith(bytes, [0x50, 0x4b, 0x03, 0x04]) &&
+    holdsName(bytes, "[Content_Types].xml") &&
+    holdsName(bytes, "word/document.xml")
+  );
+}
+
 /** The DER of the OID of a CMS SignedData (1.2.840.113549.1.7.2), as it opens a `.p7s`. */
 const SIGNED_DATA_OID = [0x06, 0x09, 0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x07, 0x02];
 
@@ -68,6 +95,7 @@ function startsAsSignedData(bytes: Uint8Array): boolean {
 export function detectMime(bytes: Uint8Array): string | null {
   if (startsAsPdf(bytes)) return "application/pdf";
   if (startsAsSignedData(bytes)) return "application/pkcs7-mime";
+  if (isWordPackage(bytes)) return DOCX_MIME;
   if (startsWith(bytes, [0xff, 0xd8, 0xff])) return "image/jpeg";
   if (startsWith(bytes, [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])) return "image/png";
   if (ascii(bytes, 0, 4) === "RIFF" && ascii(bytes, 8, 12) === "WEBP") return "image/webp";
