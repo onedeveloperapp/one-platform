@@ -1868,8 +1868,8 @@ export const people = pgTable("people", {
 	check("people_text_check", sql`(COALESCE(char_length(nationality), 0) <= 60) AND (COALESCE(char_length(profession), 0) <= 120) AND (COALESCE(char_length(street), 0) <= 200) AND (COALESCE(char_length(address_number), 0) <= 20) AND (COALESCE(char_length(complement), 0) <= 120) AND (COALESCE(char_length(district), 0) <= 120) AND (COALESCE(char_length(city), 0) <= 120)`),
 	check("people_birth_check", sql`(birth_date IS NULL) OR ((birth_date >= '1900-01-01'::date) AND (birth_date <= '2100-01-01'::date))`),
 	check("people_registry_check", sql`(cpf_registry_result IS NULL) OR (cpf_registry_result = ANY (ARRAY['found'::text, 'not_found'::text, 'birth_date_mismatch'::text, 'minor'::text]))`),
-	check("people_via_check", sql`updated_via = ANY (ARRAY['firm'::text, 'client'::text, 'document'::text])`),
 	check("people_read_fields_check", sql`(jsonb_typeof(read_fields) = 'object'::text) AND (octet_length((read_fields)::text) <= 4000)`),
+	check("people_via_check", sql`updated_via = ANY (ARRAY['firm'::text, 'client'::text, 'document'::text, 'partner'::text])`),
 ]);
 
 export const caseParties = pgTable("case_parties", {
@@ -2323,10 +2323,10 @@ export const caseDocuments = pgTable("case_documents", {
 	check("case_documents_kind_check", sql`kind = ANY (ARRAY['identity'::text, 'address_proof'::text, 'ticket'::text, 'boarding_pass'::text, 'receipt'::text, 'evidence'::text, 'power_of_attorney'::text, 'contract'::text, 'petition'::text, 'other'::text])`),
 	check("case_documents_status_check", sql`status = ANY (ARRAY['uploading'::text, 'received'::text, 'accepted'::text, 'rejected'::text])`),
 	check("case_documents_reason_check", sql`((status = 'rejected'::text) = (rejected_reason IS NOT NULL)) AND (COALESCE(char_length(rejected_reason), 0) <= 500)`),
-	check("case_documents_source_check", sql`source = ANY (ARRAY['client'::text, 'firm'::text, 'whatsapp'::text, 'signature'::text])`),
 	check("case_documents_processing_check", sql`processing = ANY (ARRAY['pending'::text, 'working'::text, 'done'::text, 'skipped'::text, 'failed'::text])`),
 	check("case_documents_processing_error_check", sql`(processing_error IS NULL) OR (processing_error ~ '^[a-z][a-z0-9_]{1,59}$'::text)`),
 	check("case_documents_quality_check", sql`(quality IS NULL) OR ((jsonb_typeof(quality) = 'object'::text) AND (octet_length((quality)::text) <= 2000))`),
+	check("case_documents_source_check", sql`source = ANY (ARRAY['client'::text, 'firm'::text, 'whatsapp'::text, 'signature'::text, 'partner'::text])`),
 ]);
 
 export const cases = pgTable("cases", {
@@ -2361,9 +2361,11 @@ export const cases = pgTable("cases", {
 	familyChoiceAt: timestamp("family_choice_at", { withTimezone: true, mode: 'string' }),
 	isTest: boolean("is_test").default(false).notNull(),
 	module: text().default('direito-do-passageiro').notNull(),
+	partnershipId: uuid("partnership_id"),
 }, (table) => [
-	index("cases_module_idx").using("btree", table.orgId.asc().nullsLast().op("uuid_ops"), table.module.asc().nullsLast().op("text_ops")),
+	index("cases_module_idx").using("btree", table.orgId.asc().nullsLast().op("text_ops"), table.module.asc().nullsLast().op("uuid_ops")),
 	index("cases_org_idx").using("btree", table.orgId.asc().nullsLast().op("uuid_ops"), table.status.asc().nullsLast().op("text_ops"), table.updatedAt.desc().nullsFirst().op("uuid_ops")),
+	index("cases_partnership_idx").using("btree", table.partnershipId.asc().nullsLast().op("uuid_ops")).where(sql`(partnership_id IS NOT NULL)`),
 	foreignKey({
 			columns: [table.orgId],
 			foreignColumns: [organizations.id],
@@ -2399,6 +2401,11 @@ export const cases = pgTable("cases", {
 			foreignColumns: [productModules.key],
 			name: "cases_module_fkey"
 		}).onDelete("restrict"),
+	foreignKey({
+			columns: [table.partnershipId],
+			foreignColumns: [partnerLinks.id],
+			name: "cases_partnership_id_fkey"
+		}).onDelete("set null"),
 	unique("cases_id_org_id_key").on(table.id, table.orgId),
 	unique("cases_org_id_seq_key").on(table.orgId, table.seq),
 	pgPolicy("cases_select_member", { as: "permissive", for: "select", to: ["authenticated"], using: sql`is_org_member(org_id)` }),
@@ -4654,6 +4661,13 @@ export const partnerLinks = pgTable("partner_links", {
 	check("partner_links_status_check", sql`status = ANY (ARRAY['active'::text, 'ended'::text])`),
 	check("partner_links_ended_check", sql`(status = 'ended'::text) = (ended_at IS NOT NULL)`),
 	check("partner_links_reason_check", sql`(end_reason IS NULL) OR ((char_length(end_reason) <= 500) AND (end_reason !~ '[[:cntrl:]]'::text))`),
+]);
+
+export const paxFileRemovals = pgTable("pax_file_removals", {
+	storagePath: text("storage_path").primaryKey().notNull(),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+	check("pax_file_removals_path_check", sql`storage_path ~ '^org/[0-9a-f-]{36}/[a-z_]+/[0-9a-f-]{36}$'::text`),
 ]);
 
 export const paxConfirmLinks = pgTable("pax_confirm_links", {

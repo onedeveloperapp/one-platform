@@ -355,3 +355,48 @@ export async function loadPeopleWithoutFirm(supabase: SupabaseClient): Promise<P
   if (error || !data) throw new Error("people_without_firm_failed");
   return data as PeopleWithoutFirm;
 }
+
+/**
+ * Each partnership of a travel agency with a firm (migrations 0069 to 0072), as the operator reads it: whose, since
+ * when, and counts only, never a passenger.
+ */
+export type PartnerOverviewRow = {
+  linkId: string;
+  agency: string;
+  firm: string;
+  status: "active" | "ended";
+  startedAt: string | null;
+  endedAt: string | null;
+  members: number;
+  travelers: number;
+  handedOver: number;
+  watched: number;
+  documents: number;
+};
+
+/** `admin_partner_overview`, read. Throws when it could not be read. */
+export async function loadPartnerOverview(supabase: SupabaseClient): Promise<PartnerOverviewRow[]> {
+  const { data, error } = await supabase.rpc("admin_partner_overview");
+  if (error || !Array.isArray(data)) throw new Error("partner_overview_failed");
+  const count = (value: unknown) => (typeof value === "number" && Number.isFinite(value) ? value : Number(value) || 0);
+  const text = (value: unknown) => (typeof value === "string" && value ? value : null);
+  return (data as Record<string, unknown>[]).flatMap((row) => {
+    const linkId = text(row.link_id);
+    if (!linkId) return [];
+    return [
+      {
+        linkId,
+        agency: text(row.agency) ?? "",
+        firm: text(row.firm) ?? "",
+        status: row.status === "ended" ? "ended" : "active",
+        startedAt: text(row.started_at),
+        endedAt: text(row.ended_at),
+        members: count(row.members),
+        travelers: count(row.travelers),
+        handedOver: count(row.handed_over),
+        watched: count(row.watched),
+        documents: count(row.documents),
+      },
+    ];
+  });
+}

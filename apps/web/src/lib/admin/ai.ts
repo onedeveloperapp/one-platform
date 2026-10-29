@@ -571,6 +571,9 @@ export type FlightWatchStatus = {
   releasedNote: string | null;
   readsToday: number;
   dailyReads: number;
+  /** Each firm's share of the day's reads (migration 0072), and the firms that read the most today. */
+  firmDailyReads: number;
+  firmsToday: { firm: string; reads: number }[];
   followingReal: number;
   followingTest: number;
   heldAlerts: number;
@@ -590,6 +593,11 @@ export async function loadFlightWatch(supabase: SupabaseClient): Promise<FlightW
     releasedNote: text(row.released_note),
     readsToday: count(row.reads_today),
     dailyReads: count(row.daily_reads),
+    firmDailyReads: count(row.firm_daily_reads),
+    firmsToday: (Array.isArray(row.firms_today) ? row.firms_today : []).flatMap((item) => {
+      const firm = (item ?? {}) as Record<string, unknown>;
+      return typeof firm.firm === "string" ? [{ firm: firm.firm, reads: count(firm.reads) }] : [];
+    }),
     followingReal: count(row.following_real),
     followingTest: count(row.following_test),
     heldAlerts: count(row.held_alerts),

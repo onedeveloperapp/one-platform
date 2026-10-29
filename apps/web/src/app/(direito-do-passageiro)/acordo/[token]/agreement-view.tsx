@@ -24,8 +24,14 @@ import {
   type AgreementView as View,
   LINK_TRIP_STATE_KEY,
 } from "@/modules/direito-do-passageiro/agency/agreement";
+import { downloadJson } from "@/modules/direito-do-passageiro/agency/download-json";
 import FileButton from "@/modules/direito-do-passageiro/agency/file-button";
-import { answerAgreement, readAgreement } from "@/modules/direito-do-passageiro/agency/link-actions";
+import {
+  answerAgreement,
+  exportAgreement,
+  forgetAgreement,
+  readAgreement,
+} from "@/modules/direito-do-passageiro/agency/link-actions";
 import {
   DOCUMENT_KIND_KEY,
   localTimeLabel,
@@ -58,6 +64,9 @@ export default function AgreementView({ token, initial }: { token: string; initi
   const [leaving, setLeaving] = useState(false);
   const [sending, setSending] = useState<string | null>(null);
   const [watchUntil, setWatchUntil] = useState(0);
+  const [rights, setRights] = useState<"download" | "forget" | null>(null);
+  const [forgetting, setForgetting] = useState(false);
+  const [gone, setGone] = useState(false);
   const status = useRef<HTMLDivElement>(null);
 
   const holder = view.people.find((person) => person.isHolder) ?? null;
@@ -135,6 +144,42 @@ export default function AgreementView({ token, initial }: { token: string; initi
     await reload();
     say({ ok: true, text: t("pax-link-document-sent") });
   };
+
+  const download = async () => {
+    setRights("download");
+    setMessage(null);
+    const result = await exportAgreement(token);
+    setRights(null);
+    if (!result.ok) {
+      say({ ok: false, text: t(paxErrorKey(result.code)) });
+      return;
+    }
+    downloadJson(result.data, "meus-dados.json");
+  };
+
+  const forget = async () => {
+    setRights("forget");
+    const result = await forgetAgreement(token);
+    setRights(null);
+    setForgetting(false);
+    if (!result.ok) {
+      say({ ok: false, text: t(paxErrorKey(result.code)) });
+      return;
+    }
+    setGone(true);
+  };
+
+  // Once deleted, nothing of the passenger is shown again: the page says so and stops.
+  if (gone) {
+    return (
+      <Paper elevation={0} className="bg-background-paper flex flex-col gap-3 rounded-4xl px-6 py-10 sm:px-12">
+        <Typography variant="h1" component="h1" className="mb-0">
+          {t("pax-link-gone-title")}
+        </Typography>
+        <Typography variant="body1">{t("pax-link-gone-body", { agency: view.agency })}</Typography>
+      </Paper>
+    );
+  }
 
   return (
     <>
@@ -306,9 +351,50 @@ export default function AgreementView({ token, initial }: { token: string; initi
         </Box>
       </Paper>
 
+      <Paper
+        component="section"
+        aria-labelledby="pax-link-rights"
+        elevation={0}
+        className="bg-background-paper flex flex-col gap-3 rounded-4xl px-6 py-8 sm:px-12"
+      >
+        <Typography id="pax-link-rights" variant="h4" component="h2" className="mb-0">
+          {t("pax-link-rights-title")}
+        </Typography>
+        <Typography variant="body2" className="text-text-secondary">
+          {t("pax-link-rights-body", { agency: view.agency })}
+        </Typography>
+        <Box className="flex flex-wrap gap-2">
+          <Button variant="outlined" color="grey" disabled={rights !== null} onClick={() => void download()}>
+            {rights === "download" ? t("pax-privacy-downloading") : t("pax-link-rights-download")}
+          </Button>
+          <Button variant="text" color="error" disabled={rights !== null} onClick={() => setForgetting(true)}>
+            {t("pax-link-rights-forget")}
+          </Button>
+        </Box>
+      </Paper>
+
       <Typography variant="body2" className="text-text-secondary px-2">
         {t("pax-link-footer", { agency: view.agency, firm: view.firm })}
       </Typography>
+
+      {forgetting && (
+        <Dialog open onClose={rights ? undefined : () => setForgetting(false)} aria-labelledby="pax-link-forget-title">
+          <DialogTitle id="pax-link-forget-title">{t("pax-link-forget-title")}</DialogTitle>
+          <DialogContent>
+            <Typography variant="body1">
+              {t("pax-link-forget-body", { agency: view.agency, firm: view.firm })}
+            </Typography>
+          </DialogContent>
+          <DialogActions>
+            <Button variant="text" color="grey" disabled={rights !== null} onClick={() => setForgetting(false)}>
+              {t("pax-link-forget-keep")}
+            </Button>
+            <Button variant="contained" color="error" disabled={rights !== null} onClick={() => void forget()}>
+              {rights === "forget" ? t("pax-link-forgetting") : t("pax-link-forget-confirm")}
+            </Button>
+          </DialogActions>
+        </Dialog>
+      )}
 
       {leaving && (
         <Dialog open onClose={busy ? undefined : () => setLeaving(false)} aria-labelledby="pax-link-leave-title">

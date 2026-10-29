@@ -35,6 +35,7 @@ import {
   type FirmsOverview,
   type FirmTotals,
   isBanned,
+  type PartnerOverviewRow,
   type PeopleWithoutFirm,
   type PersonWithoutFirm,
   PLAN_FILTERS,
@@ -46,6 +47,8 @@ import type { ConsoleState } from "@/lib/admin/session";
 export type FirmsState = ConsoleState<{
   overview: FirmsOverview;
   people: PeopleWithoutFirm;
+  /** The partnerships of travel agencies with the firms, in counts (0072). */
+  partners: PartnerOverviewRow[];
   selfId: string;
   /** False without SUPABASE_SERVICE_ROLE_KEY: the auth-admin actions are not offered. */
   serviceAvailable: boolean;
@@ -87,7 +90,7 @@ export default function FirmsView({
 }) {
   const router = useRouter();
   const [filter, setFilter] = useState<FilterKey>("firms");
-  const [tab, setTab] = useState<"firms" | "people">("firms");
+  const [tab, setTab] = useState<"firms" | "people" | "partners">("firms");
   const [query, setQuery] = useState("");
   const [dossier, setDossier] = useState<FirmRow | null>(null);
 
@@ -181,6 +184,36 @@ export default function FirmsView({
           />,
         ],
       },
+    ],
+    [],
+  );
+
+  const partnerColumns = useMemo<GridColDef<PartnerOverviewRow>[]>(
+    () => [
+      { field: "agency", headerName: "Agência", flex: 1, minWidth: 180 },
+      { field: "firm", headerName: "Escritório", flex: 1, minWidth: 180 },
+      {
+        field: "status",
+        headerName: "Situação",
+        width: 130,
+        renderCell: ({ row }) => (
+          <StatusChip
+            tone={row.status === "active" ? "positive" : "neutral"}
+            label={row.status === "active" ? "Ativa" : "Encerrada"}
+          />
+        ),
+      },
+      {
+        field: "startedAt",
+        headerName: "Desde",
+        width: 120,
+        valueGetter: (_, row) => (row.startedAt ? formatDate(row.startedAt) : ""),
+      },
+      { field: "members", headerName: "Pessoas da agência", width: 150, type: "number" },
+      { field: "travelers", headerName: "Passageiros", width: 120, type: "number" },
+      { field: "watched", headerName: "Viagens acompanhadas", width: 170, type: "number" },
+      { field: "handedOver", headerName: "Repassados ao escritório", width: 190, type: "number" },
+      { field: "documents", headerName: "Documentos na agência", width: 180, type: "number" },
     ],
     [],
   );
@@ -387,9 +420,31 @@ export default function FirmsView({
             <Tabs value={tab} onChange={(_, value) => setTab(value)} className="mb-4" aria-label="Listas do console">
               <Tab value="firms" label={`Escritórios (${formatNumber(visible.length)})`} />
               <Tab value="people" label={`Contas sem escritório (${formatNumber(ready.people.totals.people)})`} />
+              <Tab value="partners" label={`Parcerias com agências (${formatNumber(ready.partners.length)})`} />
             </Tabs>
 
-            {tab === "firms" ? (
+            {tab === "partners" ? (
+              ready.partners.length === 0 ? (
+                <EmptyState
+                  icon={<NiUsers size="large" />}
+                  title="Nenhuma parceria com agência ainda"
+                  description="Um escritório convida uma agência de viagens em Configurações, Parceiros. Cada parceria aparece aqui com o que a agência guarda, em números, nunca um passageiro."
+                />
+              ) : (
+                <DataTable<PartnerOverviewRow>
+                  rows={ready.partners}
+                  columns={partnerColumns}
+                  getRowId={(row) => row.linkId}
+                  pageSize={25}
+                  pageSizeOptions={[25, 50]}
+                  enableExport={false}
+                  labels={{ search: "Buscar por agência ou escritório" }}
+                  noResultsOverlay={
+                    <EmptyState icon={<NiUsers size="large" />} title="Nenhuma parceria corresponde à busca" />
+                  }
+                />
+              )
+            ) : tab === "firms" ? (
               firms.length === 0 ? (
                 <EmptyState
                   icon={<NiBriefcase size="large" />}

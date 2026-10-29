@@ -16,6 +16,7 @@ import {
   type PaxPage,
   paxPageOf,
 } from "@/modules/direito-do-passageiro/agency/passengers";
+import { removeForgottenBytes } from "@/modules/direito-do-passageiro/agency/retention-work";
 import { finishPaxUpload } from "@/modules/direito-do-passageiro/agency/uploads";
 import { createServiceClient } from "@flyee/auth/service";
 
@@ -333,4 +334,30 @@ export async function importPassengers(rows: PaxImportRow[]): Promise<
     legsAdded: count(result.data.legs_added),
     problems,
   };
+}
+
+/** What the agency keeps of a passenger, for them to take (their right of access): a file the screen hands over. */
+export async function exportPassenger(travelerId: string): Promise<PaxResult<{ data: unknown }>> {
+  const access = await agencyAccess();
+  if (!access.ok || !isId(travelerId)) return notAllowed;
+  const { data, error } = await access.context.supabase.rpc("pax_export_traveler", { target_traveler: travelerId });
+  const result = fold(data, error);
+  if (!result.ok) return result;
+  return { ok: true, code: result.code, data: result.data.data ?? null };
+}
+
+/**
+ * Who manages the agency deletes a passenger, on their request or because the agency no longer covers them: the
+ * record and everything of it; the bytes of their files are removed right after (and by the daily sweep, if not).
+ */
+export async function forgetPassenger(travelerId: string): Promise<PaxResult> {
+  const access = await agencyAccess();
+  if (!access.ok || !isId(travelerId)) return notAllowed;
+  const { data, error } = await access.context.supabase.rpc("pax_forget_traveler", { target_traveler: travelerId });
+  const result = fold(data, error);
+  if (!result.ok) return result;
+  const backend = service();
+  if (backend) await removeForgottenBytes(backend).catch(() => undefined);
+  refresh();
+  return { ok: true, code: result.code };
 }

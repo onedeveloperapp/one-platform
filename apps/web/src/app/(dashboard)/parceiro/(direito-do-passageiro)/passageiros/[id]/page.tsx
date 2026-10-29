@@ -41,6 +41,7 @@ export default async function PassengerPage({ params }: { params: Promise<{ id: 
         // A clause that could not be read is never said to be missing: the database refuses the link anyway.
         hasClause: clause.ok ? clause.value !== null : true,
         today: todayInBrazil(),
+        manager: access.agency.manager,
       }}
     />
   );

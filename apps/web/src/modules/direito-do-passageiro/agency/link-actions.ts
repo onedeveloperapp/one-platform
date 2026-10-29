@@ -8,6 +8,7 @@ import { isSupportVisit } from "@/lib/whatsapp/session";
 import { type AgreementView, isAgreementToken } from "@/modules/direito-do-passageiro/agency/agreement";
 import { openAgreement } from "@/modules/direito-do-passageiro/agency/link";
 import { PAX_DOCUMENT_KINDS } from "@/modules/direito-do-passageiro/agency/passengers";
+import { removeForgottenBytes } from "@/modules/direito-do-passageiro/agency/retention-work";
 import { finishPaxUpload } from "@/modules/direito-do-passageiro/agency/uploads";
 import { createServiceClient } from "@flyee/auth/service";
 
@@ -134,4 +135,38 @@ export async function finishAgreementUpload(token: string, fileId: string): Prom
   if (!isId(fileId)) return { ok: false, code: "not_found" };
   const finished = await finishPaxUpload(backend, fileId, { token });
   return finished.ok ? { ok: true, code: finished.code } : finished;
+}
+
+/** What is kept of the passenger and of the children they answer for, for them to take (their right of access). */
+export async function exportAgreement(token: string): Promise<LinkResult<{ data: unknown }>> {
+  if (!isAgreementToken(String(token ?? ""))) return { ok: false, code: "link_not_found" };
+  const supabase = createAnonClient();
+  if (!supabase) return unavailable;
+  const { data, error } = await supabase.rpc("pax_link_export", { target_token: token });
+  if (error) return { ok: false, code: "failed" };
+  const answer = (data ?? {}) as { ok?: boolean; code?: string; data?: unknown };
+  if (!answer.ok) return { ok: false, code: String(answer.code ?? "failed") };
+  return { ok: true, code: "exported", data: answer.data ?? [] };
+}
+
+/**
+ * The passenger deletes what is kept of them and of the children they answer for: the backend asks the database
+ * by the token (with what the server saw of the request), then removes the bytes of their files.
+ */
+export async function forgetAgreement(token: string): Promise<LinkResult<{ people: number }>> {
+  const closed = await refusal(token);
+  if (closed) return closed;
+  const backend = service();
+  if (!backend) return unavailable;
+  const seen = await headers();
+  const evidence = {
+    user_agent: (seen.get("user-agent") ?? "").slice(0, 300),
+    ip: (seen.get("x-forwarded-for") ?? "").split(",")[0]?.trim().slice(0, 64) ?? "",
+  };
+  const { data, error } = await backend.rpc("pax_link_forget", { target_token: token, target_evidence: evidence });
+  if (error) return { ok: false, code: "failed" };
+  const answer = (data ?? {}) as { ok?: boolean; code?: string; people?: number };
+  if (!answer.ok) return { ok: false, code: String(answer.code ?? "failed") };
+  await removeForgottenBytes(backend).catch(() => undefined);
+  return { ok: true, code: "forgotten", people: Math.max(0, Number(answer.people ?? 0) || 0) };
 }

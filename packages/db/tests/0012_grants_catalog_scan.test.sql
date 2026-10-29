@@ -83,7 +83,7 @@ select is(
     'client_link_save_person', 'client_link_save_segment', 'client_link_signature_original', 'client_link_signatures',
     'client_link_statements', 'client_link_terms', 'client_link_write_statement',
     'current_consent_terms', 'firm_invitation_preview', 'partner_invitation_preview',
-    'pax_link_answer', 'pax_link_open', 'pax_link_reserve_upload', 'supported_locales',
+    'pax_link_answer', 'pax_link_export', 'pax_link_open', 'pax_link_reserve_upload', 'supported_locales',
     'verify_document'
   ],
   'an anonymous visitor can call exactly the texts in force, what an invitation link shows, the languages, the check of a document''s public code and what a client''s link lets them do'
@@ -134,6 +134,8 @@ select is(
     'newsletter_deliveries',
     -- A passenger's link of an agency (0070): read through its functions, by the agency and by its token.
     'pax_confirm_links',
+    -- The bytes of an agency's forgotten files the backend owes removing (0072).
+    'pax_file_removals',
     'proceeding_signers_seen'
   ],
   'the tables only the backend touches are not readable by any session'

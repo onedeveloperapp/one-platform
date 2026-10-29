@@ -3,6 +3,7 @@
 import AgreementCard from "./components/agreement-card";
 import DocumentsCard from "./components/documents-card";
 import PersonCard from "./components/person-card";
+import PrivacyCard from "./components/privacy-card";
 import TripsCard from "./components/trips-card";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -17,7 +18,7 @@ import { CONSENT_KEY, type PaxDetail } from "@/modules/direito-do-passageiro/age
 export type PassengerState =
   | { kind: "missing" }
   | { kind: "failed" }
-  | { kind: "ready"; detail: PaxDetail; firm: string; hasClause: boolean; today: string };
+  | { kind: "ready"; detail: PaxDetail; firm: string; hasClause: boolean; today: string; manager: boolean };
 
 /**
  * One passenger, as the agency works on them. Who comes here wants the passenger ready for a problem with a
@@ -100,6 +101,9 @@ export default function PassengerView({ state }: { state: PassengerState }) {
       </Grid>
       <Grid size={12}>
         <TripsCard detail={detail} onChanged={refresh} />
+      </Grid>
+      <Grid size={12}>
+        <PrivacyCard detail={detail} manager={state.manager} />
       </Grid>
     </Grid>
   );

@@ -92,6 +92,19 @@ export default function FlightReleaseCard({
         </Alert>
       )}
 
+      {sourceOn && status.firmsToday.length > 0 ? (
+        <MetricBars
+          whole={false}
+          items={status.firmsToday.slice(0, 6).map((firm, index) => ({
+            key: `firm-${index}`,
+            label: firm.firm,
+            value: firm.reads,
+            hint: `Cada escritório lê até ${NUMBER.format(status.firmDailyReads)} trechos por dia, dentro do teto da plataforma.`,
+            tone: firm.reads >= status.firmDailyReads ? "attention" : "primary",
+          }))}
+        />
+      ) : null}
+
       <MetricBars
         whole={false}
         items={[

@@ -1,6 +1,6 @@
 import FirmsView from "./components/firms-view";
 
-import { loadFirmsOverview, loadPeopleWithoutFirm } from "@/lib/admin/firms";
+import { loadFirmsOverview, loadPartnerOverview, loadPeopleWithoutFirm } from "@/lib/admin/firms";
 import { loadConsole } from "@/lib/admin/session";
 
 export const metadata = { title: "Escritórios" };
@@ -13,10 +13,15 @@ export const metadata = { title: "Escritórios" };
 export default async function FirmsPage({ searchParams }: { searchParams: Promise<{ impersonation?: string }> }) {
   const { impersonation } = await searchParams;
   const state = await loadConsole(async ({ supabase, userId }) => {
-    const [overview, people] = await Promise.all([loadFirmsOverview(supabase), loadPeopleWithoutFirm(supabase)]);
+    const [overview, people, partners] = await Promise.all([
+      loadFirmsOverview(supabase),
+      loadPeopleWithoutFirm(supabase),
+      loadPartnerOverview(supabase),
+    ]);
     return {
       overview,
       people,
+      partners,
       selfId: userId,
       serviceAvailable: Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY),
     };

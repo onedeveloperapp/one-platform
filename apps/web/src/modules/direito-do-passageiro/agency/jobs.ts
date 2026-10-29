@@ -1,6 +1,7 @@
 import "server-only";
 
 import { claimPaxReadings, readClaimedPaxDocument } from "@/modules/direito-do-passageiro/agency/reading-work";
+import { removeForgottenBytes, sweepRetention } from "@/modules/direito-do-passageiro/agency/retention-work";
 import { createServiceClient } from "@flyee/auth/service";
 import { inngest } from "@flyee/jobs";
 
@@ -30,4 +31,19 @@ export const paxReadingsFunction = inngest.createFunction(
   },
 );
 
-export const agencyFunctions = [paxReadingsFunction];
+/**
+ * How long an agency's passengers are kept (migration 0072): once a day, who the setting keeps no longer is
+ * forgotten, and then the bytes of every file forgotten since (by the sweep, the agency or the passenger) are
+ * removed. The steps carry counts only.
+ */
+export const paxRetentionFunction = inngest.createFunction(
+  { id: "one-pax-retention", retries: 2, concurrency: { limit: 1 } },
+  { cron: "20 7 * * *" },
+  async ({ step }) => {
+    const swept = await step.run("sweep", () => sweepRetention(createServiceClient()));
+    const removed = await step.run("remove-bytes", () => removeForgottenBytes(createServiceClient()));
+    return { ...swept, removed };
+  },
+);
+
+export const agencyFunctions = [paxReadingsFunction, paxRetentionFunction];

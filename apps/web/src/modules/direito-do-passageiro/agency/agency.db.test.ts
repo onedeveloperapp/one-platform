@@ -318,4 +318,46 @@ describe.skipIf(!DB_URL)("an agency's passenger, from the agency's area to the f
     });
     expect(changed.code).toBe("handed_over");
   });
+
+  it("hands a passenger what is kept of them on the link, and deletes it with its files when they ask", async () => {
+    const saved = await call(as(DUDA), "pax_save_traveler", {
+      target_partnership: PARTNERSHIP,
+      target_traveler: null,
+      target_fields: { full_name: "Bruna Teste", phone: "(62) 99999-0002" },
+      target_guardian: null,
+    });
+    const bruna = String(saved.traveler_id);
+    const bytes = await paper("Identidade de teste da Bruna");
+    const reserved = await call(as(DUDA), "pax_reserve_document", {
+      target_traveler: bruna,
+      target_kind: "identity",
+      target_trip: null,
+      target_name: "rg-bruna.pdf",
+      target_mime: "application/pdf",
+      target_bytes: bytes.byteLength,
+    });
+    const path = String(reserved.storage_path);
+    bucket.set(path, bytes);
+    const { finishPaxUpload } = await import("@/modules/direito-do-passageiro/agency/uploads");
+    expect(await finishPaxUpload(backend() as never, String(reserved.file_id), { partnerId: AGENCY })).toMatchObject({
+      ok: true,
+    });
+    const token = "acordo-da-bruna-para-o-teste-de-ponta-a-ponta-0002";
+    await call(as(DUDA), "pax_issue_confirm_link", {
+      target_traveler: bruna,
+      target_token_hash: createHash("sha256").update(token, "utf8").digest("hex"),
+    });
+
+    const { exportAgreement, forgetAgreement } = await import("@/modules/direito-do-passageiro/agency/link-actions");
+    const exported = await exportAgreement(token);
+    expect(exported.ok).toBe(true);
+    const kept = (exported.ok ? exported.data : []) as Row[];
+    expect((kept[0].pessoa as Row).nome).toBe("Bruna Teste");
+    expect(kept[0].documentos as Row[]).toHaveLength(1);
+
+    expect(await forgetAgreement(token)).toEqual({ ok: true, code: "forgotten", people: 1 });
+    expect(bucket.has(path)).toBe(false);
+    expect(await sql.unsafe(`select id from public.pax_travelers where id = $1`, [bruna])).toHaveLength(0);
+    expect(await sql.unsafe(`select storage_path from public.pax_file_removals`)).toHaveLength(0);
+  });
 });
