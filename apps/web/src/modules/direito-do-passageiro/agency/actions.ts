@@ -5,6 +5,7 @@ import { createHash, randomBytes } from "node:crypto";
 
 import { FIRM_FILES_BUCKET } from "@/lib/files/store";
 import { memberUrl } from "@/lib/messages/format";
+import { mintApiKey } from "@/modules/direito-do-passageiro/agency/api";
 import { agencyAccess } from "@/modules/direito-do-passageiro/agency/facts";
 import type { PaxImportRow } from "@/modules/direito-do-passageiro/agency/import";
 import {
@@ -359,5 +360,36 @@ export async function forgetPassenger(travelerId: string): Promise<PaxResult> {
   const backend = service();
   if (backend) await removeForgottenBytes(backend).catch(() => undefined);
   refresh();
+  return { ok: true, code: result.code };
+}
+
+/**
+ * Who manages the agency creates a key for its booking system to call ONE's API (migration 0073): answered once, for
+ * the person to copy; the database keeps its hash alone.
+ */
+export async function createApiKey(label: string): Promise<PaxResult<{ key: string }>> {
+  const access = await agencyAccess();
+  if (!access.ok) return notAllowed;
+  const minted = mintApiKey();
+  const { data, error } = await access.context.supabase.rpc("pax_create_api_key", {
+    target_partnership: access.partnership.id,
+    target_label: String(label ?? "").slice(0, 80),
+    target_key_hash: minted.hash,
+    target_key_prefix: minted.prefix,
+  });
+  const result = fold(data, error);
+  if (!result.ok) return result;
+  revalidatePath("/parceiro/passageiros/integracao");
+  return { ok: true, code: result.code, key: minted.key };
+}
+
+/** Who manages the agency revokes a key: it answers nothing from then on. */
+export async function revokeApiKey(keyId: string): Promise<PaxResult> {
+  const access = await agencyAccess();
+  if (!access.ok || !isId(keyId)) return notAllowed;
+  const { data, error } = await access.context.supabase.rpc("pax_revoke_api_key", { target_key: keyId });
+  const result = fold(data, error);
+  if (!result.ok) return result;
+  revalidatePath("/parceiro/passageiros/integracao");
   return { ok: true, code: result.code };
 }

@@ -34,6 +34,9 @@ const PUBLIC_PREFIXES = [
   // signature / Inngest signing key), so they must NOT hit the auth redirect.
   "/api/webhooks",
   "/api/inngest",
+  // The API of a travel agency, partner of a firm in the passenger module: each call carries the agency's key,
+  // which the database checks (migration 0073).
+  "/api/parceiros/",
   // An invitation to a firm is opened from an e-mail, before the person signs
   // in or even has an account: the page shows who invites and sends them on.
   "/convite/",

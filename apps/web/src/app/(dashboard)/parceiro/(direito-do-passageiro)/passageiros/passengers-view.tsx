@@ -327,9 +327,14 @@ export default function PassengersView({ data }: { data: PassengersData | null }
       )}
 
       <Grid size={12}>
-        <Button variant="text" color="grey" onClick={() => setClauseOpen(true)}>
-          {t("pax-clause-open")}
-        </Button>
+        <Box className="flex flex-wrap gap-2">
+          <Button variant="text" color="grey" onClick={() => setClauseOpen(true)}>
+            {t("pax-clause-open")}
+          </Button>
+          <Button variant="text" color="grey" href="/parceiro/passageiros/integracao" LinkComponent={Link}>
+            {t("pax-api-title")}
+          </Button>
+        </Box>
       </Grid>
 
       {adding && (

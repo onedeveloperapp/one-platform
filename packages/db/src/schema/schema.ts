@@ -4978,6 +4978,49 @@ export const paxConsents = pgTable("pax_consents", {
 	check("pax_consents_evidence_check", sql`(jsonb_typeof(evidence) = 'object'::text) AND (octet_length((evidence)::text) <= 2000)`),
 ]);
 
+export const partnerApiKeys = pgTable("partner_api_keys", {
+	id: uuid().defaultRandom().primaryKey().notNull(),
+	partnerId: uuid("partner_id").notNull(),
+	partnershipId: uuid("partnership_id").notNull(),
+	label: text().notNull(),
+	keyPrefix: text("key_prefix").notNull(),
+	keyHash: text("key_hash").notNull(),
+	createdBy: uuid("created_by"),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	lastUsedAt: timestamp("last_used_at", { withTimezone: true, mode: 'string' }),
+	revokedAt: timestamp("revoked_at", { withTimezone: true, mode: 'string' }),
+	revokedBy: uuid("revoked_by"),
+	windowStart: timestamp("window_start", { withTimezone: true, mode: 'string' }),
+	windowCalls: integer("window_calls").default(0).notNull(),
+}, (table) => [
+	index("partner_api_keys_partnership_idx").using("btree", table.partnershipId.asc().nullsLast().op("uuid_ops")).where(sql`(revoked_at IS NULL)`),
+	foreignKey({
+			columns: [table.partnerId],
+			foreignColumns: [partners.id],
+			name: "partner_api_keys_partner_id_fkey"
+		}).onDelete("cascade"),
+	foreignKey({
+			columns: [table.partnershipId],
+			foreignColumns: [partnerLinks.id],
+			name: "partner_api_keys_partnership_id_fkey"
+		}).onDelete("cascade"),
+	foreignKey({
+			columns: [table.createdBy],
+			foreignColumns: [profiles.id],
+			name: "partner_api_keys_created_by_fkey"
+		}).onDelete("set null"),
+	foreignKey({
+			columns: [table.revokedBy],
+			foreignColumns: [profiles.id],
+			name: "partner_api_keys_revoked_by_fkey"
+		}).onDelete("set null"),
+	unique("partner_api_keys_key_hash_key").on(table.keyHash),
+	pgPolicy("partner_api_keys_select_partner", { as: "permissive", for: "select", to: ["authenticated"], using: sql`is_partner_member(partner_id)` }),
+	check("partner_api_keys_label_check", sql`((char_length(btrim(label)) >= 2) AND (char_length(btrim(label)) <= 60)) AND (label !~ '[[:cntrl:]]'::text)`),
+	check("partner_api_keys_prefix_check", sql`key_prefix ~ '^[A-Za-z0-9_-]{6,12}$'::text`),
+	check("partner_api_keys_hash_check", sql`key_hash ~ '^[0-9a-f]{64}$'::text`),
+]);
+
 export const paxTripTravelers = pgTable("pax_trip_travelers", {
 	tripId: uuid("trip_id").notNull(),
 	travelerId: uuid("traveler_id").notNull(),

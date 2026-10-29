@@ -1,7 +1,7 @@
 // GENERATED from packages/db/migrations by `npm run db:schema:pull`.
 // Regenerate after every migration instead of editing by hand.
 import { relations } from "drizzle-orm/relations";
-import { profiles, organizations, usersInAuth, memberships, auditEvents, consentTerms, consentAcceptances, accessEvents, platformSettings, notifications, announcements, onboardingState, oabRegistrations, firmInvitations, subscriptions, plans, coupons, billingOperations, subscriptionModules, modules, invoices, entitlementGrants, signupAttribution, metaAttribution, purchaseAttributions, productEvents, helpCategories, helpArticles, leads, blogPosts, blogComments, impersonationSessions, newsletterSends, aiSpend, aiTasks, promptVersions, autonomyDecisions, aiRuns, approvals, connections, connectionSecrets, waNumbers, files, partners, issuedDocuments, waTemplates, waConversations, waMessages, people, caseParties, cases, airports, flightSegments, proceedings, courts, clientLinks, caseEvents, signatureEnvelopes, caseDocuments, clientConsents, airlines, productModules, partnerLinks, caseWeather, civilCourtAnswers, caseStatements, adminComplaints, certificateInventory, filingReceipts, filingPackages, djenCaptures, draftTemplates, legalSources, publications, caseDrafts, caseDraftVersions, dossiers, flightChecks, proceedingTracking, movements, importBatches, importRows, courtCalendarDays, deadlineActs, deadlines, publicationTriagePolicies, firmCalendars, hearingEventRemovals, noticeOptins, caseAdvances, clientNotices, noticeKinds, hearings, proceedingSignersSeen, pscProviders, lawyerSignatureUses, lawyerCpfs, filingPackageItems, testChats, trackedLegs, trackedTrips, paxTrips, flightAlerts, waConversationEvents, casePapers, templateImports, partnerInvitations, paxConfirmLinks, paxTravelers, paxConsentTerms, paxDocuments, paxConsents, paxTripTravelers, announcementDismissals, newsletterDeliveries, proceedingParties, proceedingLawyers, firmSigners, firmModules, partnerMembers, waContacts, firmClaimDefaults, firmAutonomy, waOptouts, paxTripLegs, courtNotes, caseDraftCitations, courtCalendarYears, firmNoticeKinds, publicationReadings, courtSystems } from "./schema";
+import { profiles, organizations, usersInAuth, memberships, auditEvents, consentTerms, consentAcceptances, accessEvents, platformSettings, notifications, announcements, onboardingState, oabRegistrations, firmInvitations, subscriptions, plans, coupons, billingOperations, subscriptionModules, modules, invoices, entitlementGrants, signupAttribution, metaAttribution, purchaseAttributions, productEvents, helpCategories, helpArticles, leads, blogPosts, blogComments, impersonationSessions, newsletterSends, aiSpend, aiTasks, promptVersions, autonomyDecisions, aiRuns, approvals, connections, connectionSecrets, waNumbers, files, partners, issuedDocuments, waTemplates, waConversations, waMessages, people, caseParties, cases, airports, flightSegments, proceedings, courts, clientLinks, caseEvents, signatureEnvelopes, caseDocuments, clientConsents, airlines, productModules, partnerLinks, caseWeather, civilCourtAnswers, caseStatements, adminComplaints, certificateInventory, filingReceipts, filingPackages, djenCaptures, draftTemplates, legalSources, publications, caseDrafts, caseDraftVersions, dossiers, flightChecks, proceedingTracking, movements, importBatches, importRows, courtCalendarDays, deadlineActs, deadlines, publicationTriagePolicies, firmCalendars, hearingEventRemovals, noticeOptins, caseAdvances, clientNotices, noticeKinds, hearings, proceedingSignersSeen, pscProviders, lawyerSignatureUses, lawyerCpfs, filingPackageItems, testChats, trackedLegs, trackedTrips, paxTrips, flightAlerts, waConversationEvents, casePapers, templateImports, partnerInvitations, paxConfirmLinks, paxTravelers, paxConsentTerms, paxDocuments, paxConsents, partnerApiKeys, paxTripTravelers, announcementDismissals, newsletterDeliveries, proceedingParties, proceedingLawyers, firmSigners, firmModules, partnerMembers, waContacts, firmClaimDefaults, firmAutonomy, waOptouts, paxTripLegs, courtNotes, caseDraftCitations, courtCalendarYears, firmNoticeKinds, publicationReadings, courtSystems } from "./schema";
 
 export const organizationsRelations = relations(organizations, ({one, many}) => ({
 	profile: one(profiles, {
@@ -312,6 +312,12 @@ export const profilesRelations = relations(profiles, ({one, many}) => ({
 	paxTravelers: many(paxTravelers),
 	paxTrips: many(paxTrips),
 	paxDocuments: many(paxDocuments),
+	partnerApiKeys_createdBy: many(partnerApiKeys, {
+		relationName: "partnerApiKeys_createdBy_profiles_id"
+	}),
+	partnerApiKeys_revokedBy: many(partnerApiKeys, {
+		relationName: "partnerApiKeys_revokedBy_profiles_id"
+	}),
 	announcementDismissals: many(announcementDismissals),
 	proceedingLawyers: many(proceedingLawyers),
 	firmSigners_userId: many(firmSigners, {
@@ -854,6 +860,7 @@ export const partnersRelations = relations(partners, ({one, many}) => ({
 	paxTrips: many(paxTrips),
 	paxDocuments: many(paxDocuments),
 	paxConsents: many(paxConsents),
+	partnerApiKeys: many(partnerApiKeys),
 	partnerMembers: many(partnerMembers),
 }));
 
@@ -1350,6 +1357,7 @@ export const partnerLinksRelations = relations(partnerLinks, ({one, many}) => ({
 	paxConfirmLinks: many(paxConfirmLinks),
 	paxTravelers: many(paxTravelers),
 	paxTrips: many(paxTrips),
+	partnerApiKeys: many(partnerApiKeys),
 }));
 
 export const caseWeatherRelations = relations(caseWeather, ({one}) => ({
@@ -2374,6 +2382,27 @@ export const paxConsentsRelations = relations(paxConsents, ({one}) => ({
 	paxConfirmLink: one(paxConfirmLinks, {
 		fields: [paxConsents.confirmLinkId],
 		references: [paxConfirmLinks.id]
+	}),
+}));
+
+export const partnerApiKeysRelations = relations(partnerApiKeys, ({one}) => ({
+	partner: one(partners, {
+		fields: [partnerApiKeys.partnerId],
+		references: [partners.id]
+	}),
+	partnerLink: one(partnerLinks, {
+		fields: [partnerApiKeys.partnershipId],
+		references: [partnerLinks.id]
+	}),
+	profile_createdBy: one(profiles, {
+		fields: [partnerApiKeys.createdBy],
+		references: [profiles.id],
+		relationName: "partnerApiKeys_createdBy_profiles_id"
+	}),
+	profile_revokedBy: one(profiles, {
+		fields: [partnerApiKeys.revokedBy],
+		references: [profiles.id],
+		relationName: "partnerApiKeys_revokedBy_profiles_id"
 	}),
 }));
 

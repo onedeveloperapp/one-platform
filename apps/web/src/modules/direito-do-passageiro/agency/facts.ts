@@ -89,3 +89,33 @@ export async function readClause(
   if (error) return { ok: false };
   return { ok: true, value: data ? { version: Number(data.version), body: String(data.body) } : null };
 }
+
+/** A key of the partnership for the agency's system (migration 0073), as the agency reads it: never the key. */
+export type ApiKeyRow = {
+  id: string;
+  label: string;
+  prefix: string;
+  createdAt: string;
+  lastUsedAt: string | null;
+  revokedAt: string | null;
+};
+
+export async function readApiKeys(context: MemberContext, partnershipId: string): Promise<Read<ApiKeyRow[]>> {
+  const { data, error } = await context.supabase
+    .from("partner_api_keys")
+    .select("id, label, key_prefix, created_at, last_used_at, revoked_at")
+    .eq("partnership_id", partnershipId)
+    .order("created_at", { ascending: false });
+  if (error) return { ok: false };
+  return {
+    ok: true,
+    value: ((data ?? []) as Record<string, unknown>[]).map((row) => ({
+      id: String(row.id),
+      label: String(row.label ?? ""),
+      prefix: String(row.key_prefix ?? ""),
+      createdAt: String(row.created_at ?? ""),
+      lastUsedAt: typeof row.last_used_at === "string" ? row.last_used_at : null,
+      revokedAt: typeof row.revoked_at === "string" ? row.revoked_at : null,
+    })),
+  };
+}

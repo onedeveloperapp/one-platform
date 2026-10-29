@@ -22,7 +22,10 @@ import type { AiProviderName } from "@flyee/ai/types";
  */
 
 vi.mock("server-only", () => ({}));
-vi.mock("next/server", () => ({ after: () => undefined }));
+vi.mock("next/server", async (original) => ({
+  ...(await original<typeof import("next/server")>()),
+  after: () => undefined,
+}));
 vi.mock("next/headers", () => ({ headers: async () => new Map([["user-agent", "Navegador de teste"]]) }));
 vi.mock("@flyee/jobs", () => ({ sendEvent: async () => ({ sent: false, hint: "no job runner in this test" }) }));
 vi.mock("@/lib/whatsapp/session", () => ({ isSupportVisit: async () => false }));
@@ -359,5 +362,48 @@ describe.skipIf(!DB_URL)("an agency's passenger, from the agency's area to the f
     expect(bucket.has(path)).toBe(false);
     expect(await sql.unsafe(`select id from public.pax_travelers where id = $1`, [bruna])).toHaveLength(0);
     expect(await sql.unsafe(`select storage_path from public.pax_file_removals`)).toHaveLength(0);
+  });
+
+  it("lets the agency's system send passengers, issue a link and read a passenger with its key", async () => {
+    const { mintApiKey } = await import("@/modules/direito-do-passageiro/agency/api");
+    const minted = mintApiKey();
+    const created = await call(as(DUDA), "pax_create_api_key", {
+      target_partnership: PARTNERSHIP,
+      target_label: "Sistema de reservas de teste",
+      target_key_hash: minted.hash,
+      target_key_prefix: minted.prefix,
+    });
+    expect(created.code).toBe("created");
+    const post = (path: string, body: unknown, key = minted.key) =>
+      new Request(`https://one.invalid/api/parceiros/v1/${path}`, {
+        method: "POST",
+        headers: { authorization: `Bearer ${key}`, "content-type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+    const lines = await import("@/app/api/(direito-do-passageiro)/parceiros/v1/passageiros/route");
+    const sent = await lines.POST(
+      post("passageiros", { linhas: [{ nome: "Carla Teste", cpf: "123.456.789-09", whatsapp: "(62) 99999-0003" }] }),
+    );
+    expect(sent.status).toBe(200);
+    expect(await sent.json()).toMatchObject({ ok: true, adicionados: 1, recusadas: [] });
+
+    const links = await import("@/app/api/(direito-do-passageiro)/parceiros/v1/links/route");
+    const link = await links.POST(post("links", { cpf: "12345678909" }));
+    expect(await link.json()).toMatchObject({ ok: true, link: expect.stringContaining("/acordo/") });
+
+    const status = await import("@/app/api/(direito-do-passageiro)/parceiros/v1/situacao/route");
+    const read = await status.POST(post("situacao", { cpf: "123.456.789-09" }));
+    expect(await read.json()).toMatchObject({
+      ok: true,
+      acordo: "sem_resposta",
+      link_aberto: true,
+      com_o_escritorio: false,
+    });
+
+    // A key that is none, and no key at all, answer nothing.
+    expect((await status.POST(post("situacao", { cpf: "12345678909" }, `one_${"x".repeat(32)}`))).status).toBe(401);
+    const bare = new Request("https://one.invalid/api/parceiros/v1/situacao", { method: "POST", body: "{}" });
+    expect((await status.POST(bare)).status).toBe(401);
   });
 });
