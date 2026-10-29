@@ -6,10 +6,11 @@ import { measureFile } from "@flyee/documents/measure";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 /**
- * The second half of an upload of a document of the agency's area (migration 0070): the backend measures what
- * arrived (only a file reserved for a document still uploading), keeps it or refuses it, and the database turns
- * a kept one into a document the AI reads next. Sent by the agency (`partnerId`, the caller's own partner, read
- * from their session first) or by the passenger on their link (`token`).
+ * The second half of an upload of a document of the agency's area (migrations 0070 and 0074): the backend
+ * measures what arrived (only a file of a document still uploading), keeps it or refuses it, and the database
+ * turns a kept one into a document the AI reads next; a request that comes again after the measure, when the
+ * answer before it was lost, only finishes the document. Sent by the agency (`partnerId`, the caller's own
+ * partner, read from their session first) or by the passenger on their link (`token`).
  *
  * Every answer is a code: `failed` for what did not work now and may work at the next request. Nothing throws for
  * what a database or a storage did.
@@ -24,6 +25,8 @@ type ToFinish = {
   declared_mime: string;
   partner_id: string;
   created_by: string | null;
+  /** `reserved` until the bytes are measured; `stored` or `rejected` when an earlier request measured them (0074). */
+  file_status?: string;
 };
 
 export async function finishPaxUpload(
@@ -42,18 +45,21 @@ export async function finishPaxUpload(
   } catch {
     return failed;
   }
-  // Not a file of this link, or of the caller's partner, still waiting for its bytes.
+  // Not a file of this link, or of the caller's partner, still waiting for its document.
   if (!row || ("partnerId" in by && row.partner_id !== by.partnerId)) return { ok: false, code: "not_found" };
 
-  const store = supabaseFileStore(service);
-  const bytes = await store.get(row.storage_path);
-  if (!bytes) return { ok: false, code: "not_uploaded" };
-  try {
-    const confirmed = await store.confirm(fileId, await measureFile(bytes));
-    // What was refused does not stay in the bucket.
-    if (!confirmed.ok && confirmed.code === "rejected") await store.remove([row.storage_path]).catch(() => undefined);
-  } catch {
-    return failed;
+  // Bytes an earlier request measured, whose answer never reached the document, are not measured twice.
+  if ((row.file_status ?? "reserved") === "reserved") {
+    const store = supabaseFileStore(service);
+    const bytes = await store.get(row.storage_path);
+    if (!bytes) return { ok: false, code: "not_uploaded" };
+    try {
+      const confirmed = await store.confirm(fileId, await measureFile(bytes));
+      // What was refused does not stay in the bucket.
+      if (!confirmed.ok && confirmed.code === "rejected") await store.remove([row.storage_path]).catch(() => undefined);
+    } catch {
+      return failed;
+    }
   }
 
   try {

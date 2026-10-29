@@ -11,7 +11,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 /**
  * The backend's half of the flights ONE follows (migration 0047): what a
- * source says of a trip's legs is read by the rule (`flight-problem-v1`), and
+ * source says of a trip's legs is read by the rule (`flight-problem-v2`), and
  * a problem it finds is one alert per trip and fact, kept by the database;
  * each alert is claimed under a number, its values are written here from the
  * rule (`flight-alerts/words.ts` of the module), and the database sends it as the
@@ -22,6 +22,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 type LegRow = {
   position: number;
+  origin: string | null;
+  destination: string | null;
   departure: string;
   arrival: string;
   status: WatchedLeg["status"];
@@ -45,6 +47,8 @@ export function watchedLegs(raw: unknown): WatchedLeg[] {
             scheduledArrival: row.arrival,
             status: row.status as WatchedLeg["status"],
             estimatedArrival: typeof row.estimated_arrival === "string" ? row.estimated_arrival : null,
+            origin: typeof row.origin === "string" ? row.origin : null,
+            destination: typeof row.destination === "string" ? row.destination : null,
           },
         ]
       : [],

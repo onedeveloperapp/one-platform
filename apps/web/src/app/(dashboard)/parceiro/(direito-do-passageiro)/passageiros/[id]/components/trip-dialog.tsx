@@ -78,8 +78,11 @@ export default function TripDialog({
   };
 
   const legProblem = (index: number) => (problem?.position === index + 1 ? t(paxErrorKey(problem.code)) : undefined);
+  const travelersProblem = problem?.field === "travelers" ? t(paxErrorKey(problem.code)) : null;
   const generalProblem =
-    problem && !problem.position && problem.field !== "locator" ? t(paxErrorKey(problem.code)) : null;
+    problem && !problem.position && problem.field !== "locator" && problem.field !== "travelers"
+      ? t(paxErrorKey(problem.code))
+      : null;
   const complete = legs.every(
     (leg) =>
       leg.flightNumber.trim() && leg.originIata.trim() && leg.destinationIata.trim() && leg.departure && leg.arrival,
@@ -111,7 +114,8 @@ export default function TripDialog({
                 <PassengerMultiPicker
                   id="pax-trip-travelers"
                   label={t("pax-trip-travelers")}
-                  helperText={t("pax-trip-travelers-help")}
+                  helperText={travelersProblem ?? t("pax-trip-travelers-help")}
+                  error={Boolean(travelersProblem)}
                   value={travelers}
                   exclude={[holder.id]}
                   disabled={busy}

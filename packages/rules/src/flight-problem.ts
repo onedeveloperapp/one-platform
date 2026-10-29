@@ -1,17 +1,21 @@
 /**
  * Whether a trip ONE follows has a problem to tell its passenger
- * (`flight-problem-v1`), and what the airline owes them for it.
+ * (`flight-problem-v2`), and what the airline owes them for it.
  *
  * A trip is its legs, each in the local times of its airports, as a source
- * says them now (the test chat's tools, FlightAware). The rule reads:
+ * says them now (the test chat's tools, FlightAware), in the order they fly
+ * whatever their positions say. Its legs make one journey while each departs
+ * from where the one before landed within a day of it (a connection); a stay
+ * longer than that, or a leg from another airport, starts another journey (the
+ * way back of a round trip). The rule reads:
  *
  * - a leg cancelled: the trip is `cancelled`;
  * - a leg the airline changed (another flight, another time): `changed`;
- * - the trip's last leg landing late at the destination by the setting's
- *   minutes or more (four hours, where Resolução 400 of ANAC, art. 21, gives
- *   the passenger another flight, the refund or another way to travel):
- *   `delayed`, with by how much. A connection lost shows here: the leg after
- *   it lands later.
+ * - the last leg of a journey landing late at its destination by the
+ *   setting's minutes or more (four hours, where Resolução 400 of ANAC, art.
+ *   21, gives the passenger another flight, the refund or another way to
+ *   travel): `delayed`, with by how much, the first journey that is so. A
+ *   connection lost shows here: the leg after it lands later.
  *
  * Nothing else is a problem it tells: a delay shorter than the setting, a leg
  * still scheduled. A cancellation is said before a change, and a change before
@@ -27,7 +31,7 @@
  * owed; the words are the app's.
  */
 
-export const FLIGHT_PROBLEM_RULE = "flight-problem-v1";
+export const FLIGHT_PROBLEM_RULE = "flight-problem-v2";
 
 /** A leg of a trip as a source says it now. Times are local (`2026-10-22T08:10:00`), at the leg's own airports. */
 export type WatchedLeg = {
@@ -37,7 +41,13 @@ export type WatchedLeg = {
   status: "scheduled" | "delayed" | "cancelled" | "changed" | "landed";
   /** When the leg is now expected at its destination, local; null when nothing is said. */
   estimatedArrival: string | null;
+  /** Its airports, when known: a leg from another airport than the one the leg before landed at starts a journey. */
+  origin?: string | null;
+  destination?: string | null;
 };
+
+/** More than this between a leg's scheduled arrival and the next one's departure is a stay, never a connection. */
+export const CONNECTION_MAX_MINUTES = 24 * 60;
 
 export type FlightProblemKind = "cancelled" | "changed" | "delayed";
 
@@ -66,24 +76,53 @@ export function minutesBetween(earlier: string, later: string): number | null {
   return Math.round((to - from) / 60_000);
 }
 
+/** The legs in the order they fly: by their scheduled departure, then by position; a leg with no time goes last. */
+export function inFlightOrder(legs: readonly WatchedLeg[]): WatchedLeg[] {
+  const start = legs[0]?.scheduledDeparture ?? "";
+  const offset = (leg: WatchedLeg) => minutesBetween(start, leg.scheduledDeparture);
+  return [...legs].sort((a, b) => {
+    const left = offset(a);
+    const right = offset(b);
+    if (left !== null && right !== null && left !== right) return left - right;
+    if ((left === null) !== (right === null)) return left === null ? 1 : -1;
+    return a.position - b.position;
+  });
+}
+
+/** The journeys of a trip: its legs in the order they fly, cut where a stay or another airport starts the next. */
+export function journeysOf(legs: readonly WatchedLeg[]): WatchedLeg[][] {
+  const journeys: WatchedLeg[][] = [];
+  for (const leg of inFlightOrder(legs)) {
+    const current = journeys[journeys.length - 1];
+    const before = current?.[current.length - 1];
+    const gap = before ? minutesBetween(before.scheduledArrival, leg.scheduledDeparture) : null;
+    const elsewhere = Boolean(before?.destination && leg.origin && before.destination !== leg.origin);
+    if (!current || !before || elsewhere || (gap !== null && gap > CONNECTION_MAX_MINUTES)) journeys.push([leg]);
+    else current.push(leg);
+  }
+  return journeys;
+}
+
 /**
  * The problem of a trip, or null when there is nothing to tell. The legs may
- * come in any order; the last is the one of the highest position.
+ * come in any order; each journey is read at its own last leg.
  */
 export function flightProblem(legs: readonly WatchedLeg[], options: { delayMinutes: number }): FlightProblem | null {
   if (legs.length === 0) return null;
-  const ordered = [...legs].sort((a, b) => a.position - b.position);
+  const ordered = inFlightOrder(legs);
   const cancelled = ordered.find((leg) => leg.status === "cancelled");
   if (cancelled) return { kind: "cancelled", leg: cancelled.position, delayMinutes: null };
   const changed = ordered.find((leg) => leg.status === "changed");
   if (changed) return { kind: "changed", leg: changed.position, delayMinutes: null };
 
-  const last = ordered[ordered.length - 1];
-  if (!last.estimatedArrival) return null;
-  const late = minutesBetween(last.scheduledArrival, last.estimatedArrival);
   const threshold = Math.max(1, Math.round(options.delayMinutes));
-  if (late === null || late < threshold) return null;
-  return { kind: "delayed", leg: last.position, delayMinutes: late };
+  for (const journey of journeysOf(ordered)) {
+    const last = journey[journey.length - 1];
+    if (!last.estimatedArrival) continue;
+    const late = minutesBetween(last.scheduledArrival, last.estimatedArrival);
+    if (late !== null && late >= threshold) return { kind: "delayed", leg: last.position, delayMinutes: late };
+  }
+  return null;
 }
 
 /**

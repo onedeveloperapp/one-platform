@@ -440,7 +440,7 @@ select ok(
   and jsonb_array_length(pg_temp.got('imported', 'problems')::jsonb) = 2
   and exists (select 1 from public.pax_travelers t where t.cpf = '52998224725' and t.email = 'pedro@teste.invalid')
   and (select count(*) from public.pax_trip_travelers tt join public.pax_trips t on t.id = tt.trip_id
-       where t.locator = 'ABC123') = 2,
+       where t.locator = 'ABC123' and t.partnership_id = 'd7400000-0000-4000-8000-00000000000a') = 2,
   'a spreadsheet adds who is new, fills what the record lacks, groups the legs by locator and refuses a bad line alone'
 );
 

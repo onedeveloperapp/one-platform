@@ -328,11 +328,18 @@ insert into res values ('watch', public.admin_flight_watch_status());
 insert into res values ('partners', jsonb_build_object('list', public.admin_partner_overview()));
 insert into res values ('no_firm', public.admin_people_without_firm());
 reset role;
+-- The operator's lists are of every firm: read here only for this file's own firms and partnerships, as a
+-- database that is not empty (a hosted project) holds others.
+create temporary table own_partnerships as
+select x.value from jsonb_array_elements((select payload -> 'list' from res where name = 'partners')) x
+where x.value ->> 'link_id' in ('d7600000-0000-4000-8000-00000000000a', 'd7600000-0000-4000-8000-00000000000b');
+
 select ok(
-  (select payload -> 'firms_today' -> 0 ->> 'firm' from res where name = 'watch') = 'Souza Advogados'
+  exists (select 1 from jsonb_array_elements((select payload -> 'firms_today' from res where name = 'watch')) x
+          where x.value ->> 'firm' = 'Souza Advogados' and (x.value ->> 'reads')::integer > 0)
   and pg_temp.got('watch', 'firm_daily_reads') = '3'
-  and jsonb_array_length((select payload -> 'list' from res where name = 'partners')) = 2
-  and (select x.value ->> 'agency' from jsonb_array_elements((select payload -> 'list' from res where name = 'partners')) x limit 1)
+  and (select count(*) from own_partnerships) = 2
+  and (select o.value ->> 'agency' from own_partnerships o where o.value ->> 'link_id' = 'd7600000-0000-4000-8000-00000000000a')
       = 'Viagens Sol',
   'the operator reads each firm''s reads of the day, and each partnership in counts'
 );
@@ -340,8 +347,8 @@ select ok(
 select ok(
   not exists (select 1 from jsonb_array_elements((select payload -> 'people' from res where name = 'no_firm')) x
               where x.value ->> 'userId' in ('a7600000-0000-4000-8000-000000000003', 'a7600000-0000-4000-8000-000000000004'))
-  and (select (x.value ->> 'members')::integer
-       from jsonb_array_elements((select payload -> 'list' from res where name = 'partners')) x limit 1) = 2,
+  and (select (o.value ->> 'members')::integer from own_partnerships o
+       where o.value ->> 'link_id' = 'd7600000-0000-4000-8000-00000000000a') = 2,
   'the people of an agency are read with their partnership, never among the accounts waiting to found a firm'
 );
 

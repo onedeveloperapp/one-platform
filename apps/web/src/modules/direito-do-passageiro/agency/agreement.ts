@@ -35,6 +35,8 @@ export type AgreementPerson = {
   isHolder: boolean;
   minor: boolean;
   hasPhone: boolean;
+  /** The last four digits of the WhatsApp the alerts go to: the adult's alone, null with none on record. */
+  phoneEnd: string | null;
   documents: AgreementDocument[];
 };
 
@@ -44,7 +46,8 @@ export type AgreementView =
   | { state: "missing" }
   | { state: "ended"; agency: string }
   | { state: "expired"; agency: string }
-  | { state: "partnership_ended"; agency: string }
+  /** `rights`: the agency still keeps the passenger, and this link still takes or deletes it (0074). */
+  | { state: "partnership_ended"; agency: string; rights: boolean }
   | {
       state: "open" | "handed_over";
       agency: string;
@@ -74,7 +77,8 @@ export function agreementViewOf(raw: unknown): AgreementView {
   const agency = text(answer.agency) ?? "";
   if (answer.state === "ended") return { state: "ended", agency };
   if (answer.state === "expired") return { state: "expired", agency };
-  if (answer.state === "partnership_ended") return { state: "partnership_ended", agency };
+  if (answer.state === "partnership_ended")
+    return { state: "partnership_ended", agency, rights: answer.rights === true };
   if (answer.state !== "open" && answer.state !== "handed_over") return { state: "missing" };
   return {
     state: answer.state,
@@ -95,6 +99,7 @@ export function agreementViewOf(raw: unknown): AgreementView {
           isHolder: person.is_holder === true,
           minor: person.minor === true,
           hasPhone: person.has_phone === true,
+          phoneEnd: typeof person.phone_end === "string" && /^\d{4}$/.test(person.phone_end) ? person.phone_end : null,
           documents: list(person.documents).flatMap((entry): AgreementDocument[] => {
             const document = record(entry);
             const documentId = text(document.id);

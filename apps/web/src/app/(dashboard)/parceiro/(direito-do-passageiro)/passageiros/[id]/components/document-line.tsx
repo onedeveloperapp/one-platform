@@ -26,7 +26,8 @@ function readingSentence(t: ReturnType<typeof useTranslations>, document: PaxDoc
   const read = document.read;
   if (read.matches === false) {
     return t("pax-read-other", {
-      kind: t(DOCUMENT_KIND_KEY[document.kind]),
+      // The kind inside a sentence, as Portuguese writes a common noun there.
+      kind: t(DOCUMENT_KIND_KEY[document.kind]).toLocaleLowerCase("pt-BR"),
       identified: read.identified || t("pax-read-unknown"),
     });
   }

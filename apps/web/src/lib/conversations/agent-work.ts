@@ -261,12 +261,14 @@ async function openCase(service: SupabaseClient, held: Held, context: TurnContex
     await say(service, held, caseOpenedNoLinkMessage(alert.passengerName).replace("{caso}", String(answer.seq ?? "")));
     return;
   }
-  if (answer.code === "by_person") {
+  if (answer.code === "by_person" || answer.code === "agency_closed") {
     await say(service, held, byPersonMessage(alert.passengerName));
     await callPerson(
       service,
       held,
-      "O passageiro quer seguir, e abrir o caso pela conversa espera uma pessoa do escritório.",
+      answer.code === "agency_closed"
+        ? "O passageiro quer seguir, mas o acordo dele com a agência não está mais em vigor: uma pessoa do escritório abre o caso sem os dados da agência."
+        : "O passageiro quer seguir, e abrir o caso pela conversa espera uma pessoa do escritório.",
     );
     report.called += 1;
     return;

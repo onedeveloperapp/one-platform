@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap;
-select plan(15);
+select plan(16);
 
 -- ============================================================
 -- The handoff of an agency's passenger (0071): the passenger agrees on the
@@ -41,23 +41,24 @@ insert into public.partner_links (id, partner_id, org_id, module_key) values
   ('d7500000-0000-4000-8000-00000000000a', 'c7500000-0000-4000-8000-0000000000aa', 'b7500000-0000-4000-8000-00000000000a',
    'direito-do-passageiro');
 
--- Firm A already has Rafaela as a client, with no e-mail and no nationality; firm B has a Bruno of the same CPF.
+-- Firm A already has Rafaela as a client, with no e-mail and no nationality; firm B has a client of Lia's CPF.
 insert into public.people (id, org_id, full_name, cpf) values
   ('e7500000-0000-4000-8000-0000000000a1', 'b7500000-0000-4000-8000-00000000000a', 'Rafaela Teste Lima', '52998224725'),
-  ('e7500000-0000-4000-8000-0000000000b1', 'b7500000-0000-4000-8000-00000000000b', 'Bruno Teste', '11144477735');
+  ('e7500000-0000-4000-8000-0000000000b1', 'b7500000-0000-4000-8000-00000000000b', 'Lia Teste', '11144477735');
 
--- What the agency has of the trip: Rafaela, who holds it, Bruno, and Lia, a child Rafaela answers for.
+-- What the agency has of the trip: Rafaela, who holds it, Bruno, an adult who goes along and never agreed, and
+-- Lia, a child Rafaela answers for.
 insert into public.pax_travelers (id, partner_id, partnership_id, org_id, full_name, cpf, birth_date, phone, email,
                                   nationality, postal_code, street, address_number, district, city, uf) values
   ('f7500000-0000-4000-8000-000000000001', 'c7500000-0000-4000-8000-0000000000aa', 'd7500000-0000-4000-8000-00000000000a',
    'b7500000-0000-4000-8000-00000000000a', 'Rafaela Teste Lima', '52998224725', '1990-04-12', '5500988880006',
    'rafaela@teste.invalid', 'brasileira', '74000000', 'Rua Teste', '10', 'Centro', 'Goiânia', 'GO'),
   ('f7500000-0000-4000-8000-000000000002', 'c7500000-0000-4000-8000-0000000000aa', 'd7500000-0000-4000-8000-00000000000a',
-   'b7500000-0000-4000-8000-00000000000a', 'Bruno Teste', '11144477735', '1985-01-20', null,
+   'b7500000-0000-4000-8000-00000000000a', 'Bruno Teste', null, '1985-01-20', null,
    'bruno@teste.invalid', null, null, null, null, null, null, null);
-insert into public.pax_travelers (id, partner_id, partnership_id, org_id, full_name, birth_date, guardian_id) values
+insert into public.pax_travelers (id, partner_id, partnership_id, org_id, full_name, cpf, birth_date, guardian_id) values
   ('f7500000-0000-4000-8000-000000000003', 'c7500000-0000-4000-8000-0000000000aa', 'd7500000-0000-4000-8000-00000000000a',
-   'b7500000-0000-4000-8000-00000000000a', 'Lia Teste', (current_date - interval '8 years')::date,
+   'b7500000-0000-4000-8000-00000000000a', 'Lia Teste', '11144477735', (current_date - interval '8 years')::date,
    'f7500000-0000-4000-8000-000000000001');
 insert into public.pax_trips (id, partner_id, partnership_id, org_id, holder_id, locator) values
   ('17500000-0000-4000-8000-00000000000a', 'c7500000-0000-4000-8000-0000000000aa', 'd7500000-0000-4000-8000-00000000000a',
@@ -191,9 +192,19 @@ select ok(
   exists (select 1 from public.people p
           join public.case_parties cp on cp.person_id = p.id
           join handed h on h.case_id = cp.case_id
-          where p.org_id = 'b7500000-0000-4000-8000-00000000000a' and p.full_name = 'Bruno Teste' and p.cpf = '11144477735'
-            and p.birth_date = '1985-01-20' and p.email = 'bruno@teste.invalid' and cp.role = 'claimant' and cp.guardian_id is null),
+          where p.org_id = 'b7500000-0000-4000-8000-00000000000a' and p.full_name = 'Lia Teste' and p.cpf = '11144477735'
+            and p.birth_date = (current_date - interval '8 years')::date and p.updated_via = 'partner'
+            and cp.role = 'claimant' and cp.guardian_id is not null),
   'a passenger new to the firm takes the agency''s record, the CPF a client of another firm has included'
+);
+select ok(
+  not exists (select 1 from public.people p where p.org_id = 'b7500000-0000-4000-8000-00000000000a' and p.full_name = 'Bruno Teste')
+  and (select handed_over_at is null and case_id is null from public.pax_travelers where id = 'f7500000-0000-4000-8000-000000000002')
+  and (select t.companions from public.tracked_trips t where t.pax_trip_id = '17500000-0000-4000-8000-00000000000a') @>
+      '[{"name": "Lia Teste"}]'::jsonb
+  and jsonb_array_length((select t.companions from public.tracked_trips t
+                          where t.pax_trip_id = '17500000-0000-4000-8000-00000000000a')) = 1,
+  'an adult who goes along under nobody''s agreement of their own is neither followed with the trip nor handed to the firm'
 );
 select ok(
   exists (select 1 from public.people p
@@ -228,14 +239,14 @@ select ok(
   'what ONE read of the agency''s document stays marked as read, of the case''s document'
 );
 select ok(
-  (select count(*) from public.pax_travelers t join handed h on h.case_id = t.case_id where t.handed_over_at is not null) = 3
+  (select count(*) from public.pax_travelers t join handed h on h.case_id = t.case_id where t.handed_over_at is not null) = 2
   and public.pax_trip_state('17500000-0000-4000-8000-00000000000a') = 'case_opened',
   'the agency''s passengers are handed over, and the agency reads that the passenger is with the firm'
 );
 select ok(
   exists (select 1 from public.case_events e join handed h on h.case_id = e.case_id
           where e.kind = 'agency_handoff' and e.actor_type = 'system'
-            and (e.data ->> 'people')::integer = 3 and (e.data ->> 'documents')::integer = 2),
+            and (e.data ->> 'people')::integer = 2 and (e.data ->> 'documents')::integer = 2),
   'the case''s timeline tells the handoff'
 );
 

@@ -136,6 +136,8 @@ select is(
     'pax_confirm_links',
     -- The bytes of an agency's forgotten files the backend owes removing (0072).
     'pax_file_removals',
+    -- How many documents the AI read for each partnership in a day (0074).
+    'pax_reading_days',
     'proceeding_signers_seen'
   ],
   'the tables only the backend touches are not readable by any session'

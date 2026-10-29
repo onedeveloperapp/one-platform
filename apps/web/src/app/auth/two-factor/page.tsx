@@ -46,8 +46,10 @@ export default function TwoFactor() {
     load();
   }, [router]);
 
-  const verify = async () => {
-    if (!factorId || code.trim().length < 6 || busy) return;
+  // The code the boxes just completed, when they hand it over: the state of this render has not seen its last digit.
+  const verify = async (completed?: string) => {
+    const typed = (completed ?? code).trim();
+    if (!factorId || typed.length < 6 || busy) return;
     setError(null);
     setBusy(true);
     try {
@@ -60,7 +62,7 @@ export default function TwoFactor() {
       const { error: verifyError } = await supabase.auth.mfa.verify({
         factorId,
         challengeId: challenge.id,
-        code: code.trim(),
+        code: typed,
       });
       if (verifyError) {
         setError(t("two-factor-failed"));
@@ -122,7 +124,7 @@ export default function TwoFactor() {
                 label={t("two-factor-code")}
                 value={code}
                 onChange={setCode}
-                onComplete={() => void verify()}
+                onComplete={(value) => void verify(value)}
                 autoFocus
                 disabled={busy}
               />

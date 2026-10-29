@@ -151,19 +151,14 @@ export async function exportAgreement(token: string): Promise<LinkResult<{ data:
 
 /**
  * The passenger deletes what is kept of them and of the children they answer for: the backend asks the database
- * by the token (with what the server saw of the request), then removes the bytes of their files.
+ * by the token, then removes the bytes of their files. Nothing of the request is kept but that it was made.
  */
 export async function forgetAgreement(token: string): Promise<LinkResult<{ people: number }>> {
   const closed = await refusal(token);
   if (closed) return closed;
   const backend = service();
   if (!backend) return unavailable;
-  const seen = await headers();
-  const evidence = {
-    user_agent: (seen.get("user-agent") ?? "").slice(0, 300),
-    ip: (seen.get("x-forwarded-for") ?? "").split(",")[0]?.trim().slice(0, 64) ?? "",
-  };
-  const { data, error } = await backend.rpc("pax_link_forget", { target_token: token, target_evidence: evidence });
+  const { data, error } = await backend.rpc("pax_link_forget", { target_token: token });
   if (error) return { ok: false, code: "failed" };
   const answer = (data ?? {}) as { ok?: boolean; code?: string; people?: number };
   if (!answer.ok) return { ok: false, code: String(answer.code ?? "failed") };

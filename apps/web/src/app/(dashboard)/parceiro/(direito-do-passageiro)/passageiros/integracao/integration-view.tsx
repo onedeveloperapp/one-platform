@@ -70,9 +70,9 @@ function Code({ children, label }: { children: string; label: string }) {
     <Box
       component="pre"
       aria-label={label}
-      className="bg-grey-25 border-grey-100 m-0 overflow-x-auto rounded-2xl border p-4 text-sm"
+      className="bg-grey-25 border-grey-100 m-0 overflow-x-auto rounded-2xl border p-4 font-mono text-sm whitespace-pre"
     >
-      <code>{children}</code>
+      {children}
     </Box>
   );
 }

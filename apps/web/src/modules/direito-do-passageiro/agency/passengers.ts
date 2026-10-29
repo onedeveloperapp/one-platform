@@ -518,6 +518,10 @@ export function paxErrorKey(code: string): string {
       return "pax-error-time";
     case "too_many_legs":
       return "pax-error-too-many-legs";
+    case "too_many_travelers":
+      return "pax-error-too-many-travelers";
+    case "too_many_children":
+      return "pax-error-too-many-children";
     case "trip_locked":
       return "pax-error-trip-locked";
     case "invalid_kind":

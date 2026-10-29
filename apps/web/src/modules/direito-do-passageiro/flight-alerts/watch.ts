@@ -12,10 +12,12 @@ import type { FlightStatusProvider } from "@flyee/flights/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 /**
- * The flights ONE follows, read at their source (migration 0051): the
- * database claims the trips in their window, within the platform's daily
- * reads, under a number each; each leg is asked of FlightAware by its flight,
- * day and airports, what it says is kept on the leg (`record_trip_watch`),
+ * The flights ONE follows, read at their source (migrations 0051 and 0074):
+ * the database claims the trips with a leg inside its own window, within the
+ * platform's daily reads and each firm's share, under a number each; each leg
+ * it hands over is asked of FlightAware by its flight, day and airports (a
+ * round trip's way back is not read on the days in between), what it says is
+ * kept on the leg (`record_trip_watch`),
  * and the rule of 0047 reads the trip, an alert of a problem it finds told at
  * once as any other. A refused key stops the run with every claim given
  * back, and FlightAware out of reach gives the trip back for the next sweep:

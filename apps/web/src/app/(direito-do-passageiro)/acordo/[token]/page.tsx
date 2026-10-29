@@ -1,4 +1,5 @@
 import AgreementView from "./agreement-view";
+import RightsSection from "./rights-section";
 import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { getTranslations } from "next-intl/server";
@@ -36,7 +37,8 @@ function Frame({ children }: { children: React.ReactNode }) {
   );
 }
 
-function Notice({ title, body }: { title: string; body: string }) {
+/** What the link says when there is nothing to agree to, and, under it, what the passenger may still do. */
+function Notice({ title, body, children }: { title: string; body: string; children?: React.ReactNode }) {
   return (
     <Frame>
       <Paper elevation={0} className="bg-background-paper rounded-4xl px-6 py-10 sm:px-12">
@@ -47,6 +49,7 @@ function Notice({ title, body }: { title: string; body: string }) {
           {body}
         </Typography>
       </Paper>
+      {children}
     </Frame>
   );
 }
@@ -63,11 +66,26 @@ export default async function AgreementPage({ params }: { params: Promise<{ toke
   if (view.state === "ended" || view.state === "expired") {
     return <Notice title={t("pax-link-ended-title")} body={t("pax-link-ended-body", { agency: view.agency })} />;
   }
+  // The agency may still keep the passenger for a few days after the partnership ended or their data went to the
+  // firm: their rights over it stay on the link meanwhile.
   if (view.state === "partnership_ended") {
-    return <Notice title={t("pax-link-ended-title")} body={t("pax-link-partnership-body", { agency: view.agency })} />;
+    if (!view.rights) {
+      return (
+        <Notice title={t("pax-link-ended-title")} body={t("pax-link-partnership-body", { agency: view.agency })} />
+      );
+    }
+    return (
+      <Notice title={t("pax-link-ended-title")} body={t("pax-link-partnership-rights-body", { agency: view.agency })}>
+        <RightsSection token={token} agency={view.agency} firm={null} variant="ended" />
+      </Notice>
+    );
   }
   if (view.state === "handed_over") {
-    return <Notice title={t("pax-link-handed-title")} body={t("pax-link-handed-body", { firm: view.firm })} />;
+    return (
+      <Notice title={t("pax-link-handed-title")} body={t("pax-link-handed-body", { firm: view.firm })}>
+        <RightsSection token={token} agency={view.agency} firm={view.firm} variant="handed_over" />
+      </Notice>
+    );
   }
   return (
     <Frame>
