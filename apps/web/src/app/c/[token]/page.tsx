@@ -6,6 +6,7 @@ import { getTranslations } from "next-intl/server";
 import { Box, Paper, Typography } from "@mui/material";
 
 import { openClientLink, readClientTasks } from "@/lib/cases/client-link";
+import { isPreviewRobot } from "@/lib/links/preview-robot";
 
 /**
  * A client's folder: the page behind the link a firm sends a passenger
@@ -29,17 +30,6 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
   referrer: "no-referrer",
 };
-
-/**
- * The robots that fetch a link to draw its preview in a messenger or a feed.
- * A robot names itself first (`WhatsApp/2.24 A`, `facebookexternalhit/1.1`)
- * or says `compatible;`; a browser, an app's own included, starts with
- * `Mozilla/` and says no such thing, so a client never lands on the notice.
- */
-const PREVIEW_ROBOT_NAME =
-  /WhatsApp|facebookexternalhit|Facebot|TelegramBot|Twitterbot|Slackbot|Discordbot|LinkedInBot|SkypeUriPreview|Googlebot|bingbot|Applebot|redditbot|Embedly|vkShare|Pinterest/i;
-const isPreviewRobot = (agent: string) =>
-  PREVIEW_ROBOT_NAME.test(agent) && (!agent.startsWith("Mozilla/") || agent.includes("compatible;"));
 
 // What the client sees is read on every request: never a page cached for another token.
 export const dynamic = "force-dynamic";

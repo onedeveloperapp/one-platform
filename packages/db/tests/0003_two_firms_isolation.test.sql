@@ -247,6 +247,32 @@ insert into public.partner_links (id, partner_id, org_id, module_key) values
 insert into public.partner_invitations (org_id, module_key, partner_name, email, role, token_hash, expires_at) values
   ('b1000000-0000-4000-8000-00000000000a', 'direito-do-passageiro', 'Viagens Lua', 'lua@viagens.invalid', 'owner', repeat('e', 64), now() + interval '7 days'),
   ('b1000000-0000-4000-8000-00000000000b', 'direito-do-passageiro', 'Turismo Rio', 'rio@turismo.invalid', 'owner', repeat('f', 64), now() + interval '7 days');
+-- What each agency keeps of its passengers (0070): of the firm the partnership is with, read by the agency's people
+-- only. The firm reads none of it until a case is opened from it.
+insert into public.pax_travelers (id, partner_id, partnership_id, org_id, full_name) values
+  ('f5000000-0000-4000-8000-00000000000a', 'f3000000-0000-4000-8000-00000000000a', 'f4000000-0000-4000-8000-00000000000a', 'b1000000-0000-4000-8000-00000000000a', 'Passageira Sol'),
+  ('f5000000-0000-4000-8000-00000000000b', 'f3000000-0000-4000-8000-00000000000b', 'f4000000-0000-4000-8000-00000000000b', 'b1000000-0000-4000-8000-00000000000b', 'Passageiro Mar');
+insert into public.pax_trips (partner_id, partnership_id, org_id, holder_id) values
+  ('f3000000-0000-4000-8000-00000000000a', 'f4000000-0000-4000-8000-00000000000a', 'b1000000-0000-4000-8000-00000000000a', 'f5000000-0000-4000-8000-00000000000a'),
+  ('f3000000-0000-4000-8000-00000000000b', 'f4000000-0000-4000-8000-00000000000b', 'b1000000-0000-4000-8000-00000000000b', 'f5000000-0000-4000-8000-00000000000b');
+insert into public.files (id, org_id, partner_id, purpose, storage_path, name, declared_mime, declared_bytes, status, sha256, bytes, detected_mime, expires_at, confirmed_at) values
+  ('f6000000-0000-4000-8000-00000000000a', 'b1000000-0000-4000-8000-00000000000a', 'f3000000-0000-4000-8000-00000000000a', 'pax_document',
+   'org/b1000000-0000-4000-8000-00000000000a/pax_document/f6000000-0000-4000-8000-00000000000a',
+   'rg-sol.pdf', 'application/pdf', 100, 'stored', repeat('c', 64), 100, 'application/pdf', now() + interval '1 hour', now()),
+  ('f6000000-0000-4000-8000-00000000000b', 'b1000000-0000-4000-8000-00000000000b', 'f3000000-0000-4000-8000-00000000000b', 'pax_document',
+   'org/b1000000-0000-4000-8000-00000000000b/pax_document/f6000000-0000-4000-8000-00000000000b',
+   'rg-mar.pdf', 'application/pdf', 100, 'stored', repeat('d', 64), 100, 'application/pdf', now() + interval '1 hour', now());
+insert into public.pax_documents (partner_id, org_id, traveler_id, kind, file_id, source, reading) values
+  ('f3000000-0000-4000-8000-00000000000a', 'b1000000-0000-4000-8000-00000000000a', 'f5000000-0000-4000-8000-00000000000a', 'identity', 'f6000000-0000-4000-8000-00000000000a', 'partner', 'pending'),
+  ('f3000000-0000-4000-8000-00000000000b', 'b1000000-0000-4000-8000-00000000000b', 'f5000000-0000-4000-8000-00000000000b', 'identity', 'f6000000-0000-4000-8000-00000000000b', 'partner', 'pending');
+insert into public.pax_confirm_links (partner_id, partnership_id, org_id, holder_id, token_hash, expires_at) values
+  ('f3000000-0000-4000-8000-00000000000a', 'f4000000-0000-4000-8000-00000000000a', 'b1000000-0000-4000-8000-00000000000a', 'f5000000-0000-4000-8000-00000000000a', repeat('1', 64), now() + interval '30 days'),
+  ('f3000000-0000-4000-8000-00000000000b', 'f4000000-0000-4000-8000-00000000000b', 'b1000000-0000-4000-8000-00000000000b', 'f5000000-0000-4000-8000-00000000000b', repeat('2', 64), now() + interval '30 days');
+insert into public.pax_consents (partner_id, org_id, traveler_id, given_by, wording, answer) values
+  ('f3000000-0000-4000-8000-00000000000a', 'b1000000-0000-4000-8000-00000000000a', 'f5000000-0000-4000-8000-00000000000a', 'f5000000-0000-4000-8000-00000000000a',
+   'Concordo que a agência envie meus dados ao escritório.', 'agreed'),
+  ('f3000000-0000-4000-8000-00000000000b', 'b1000000-0000-4000-8000-00000000000b', 'f5000000-0000-4000-8000-00000000000b', 'f5000000-0000-4000-8000-00000000000b',
+   'Concordo que a agência envie meus dados ao escritório.', 'agreed');
 insert into public.notice_optins (person_id, org_id, phone, source, wording) values
   ('a2000000-0000-4000-8000-00000000000a', 'b1000000-0000-4000-8000-00000000000a', '5562999990001', 'client',
    'Quero receber os avisos do meu processo.'),

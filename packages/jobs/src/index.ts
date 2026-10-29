@@ -45,6 +45,8 @@ export type JobEvents = {
   "one/conversation.turn": { data: { conversationId: string } };
   /** A lawyer sent a document for a model of the library: its text, then its marking, now instead of at the next sweep. */
   "one/library.import.requested": { data: { importId: string } };
+  /** A travel agency, or its passenger on the link, sent a document (passenger module): the AI reads it now. */
+  "one/pax.document.uploaded": { data: { documentId: string } };
 };
 
 export const isInngestConfigured = Boolean(process.env.INNGEST_EVENT_KEY && process.env.INNGEST_SIGNING_KEY);

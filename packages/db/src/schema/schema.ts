@@ -1412,52 +1412,6 @@ export const connectionSecrets = pgTable("connection_secrets", {
 	check("connection_secrets_tag_check", sql`auth_tag ~ '^[A-Za-z0-9+/]{22}==$'::text`),
 ]);
 
-export const files = pgTable("files", {
-	id: uuid().defaultRandom().primaryKey().notNull(),
-	orgId: uuid("org_id").notNull(),
-	purpose: text().notNull(),
-	storagePath: text("storage_path").notNull(),
-	name: text().notNull(),
-	declaredMime: text("declared_mime").notNull(),
-	// You can use { mode: "bigint" } if numbers are exceeding js number limitations
-	declaredBytes: bigint("declared_bytes", { mode: "number" }).notNull(),
-	status: text().default('reserved').notNull(),
-	sha256: text(),
-	// You can use { mode: "bigint" } if numbers are exceeding js number limitations
-	bytes: bigint({ mode: "number" }),
-	detectedMime: text("detected_mime"),
-	pages: integer(),
-	rejectedReason: text("rejected_reason"),
-	uploadedBy: uuid("uploaded_by"),
-	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
-	expiresAt: timestamp("expires_at", { withTimezone: true, mode: 'string' }).notNull(),
-	confirmedAt: timestamp("confirmed_at", { withTimezone: true, mode: 'string' }),
-}, (table) => [
-	index("files_org_idx").using("btree", table.orgId.asc().nullsLast().op("timestamptz_ops"), table.createdAt.desc().nullsFirst().op("timestamptz_ops")),
-	index("files_reserved_idx").using("btree", table.expiresAt.asc().nullsLast().op("timestamptz_ops")).where(sql`(status = 'reserved'::text)`),
-	foreignKey({
-			columns: [table.orgId],
-			foreignColumns: [organizations.id],
-			name: "files_org_id_fkey"
-		}).onDelete("cascade"),
-	foreignKey({
-			columns: [table.uploadedBy],
-			foreignColumns: [profiles.id],
-			name: "files_uploaded_by_fkey"
-		}).onDelete("set null"),
-	unique("files_id_org_id_key").on(table.id, table.orgId),
-	unique("files_storage_path_key").on(table.storagePath),
-	pgPolicy("files_select_member", { as: "permissive", for: "select", to: ["authenticated"], using: sql`is_org_member(org_id)` }),
-	check("files_measured_check", sql`(status = 'reserved'::text) = (confirmed_at IS NULL)`),
-	check("files_purpose_check", sql`purpose ~ '^[a-z][a-z0-9_.-]{1,39}$'::text`),
-	check("files_name_check", sql`((char_length(btrim(name)) >= 1) AND (char_length(btrim(name)) <= 200)) AND (name !~ '[[:cntrl:]]'::text)`),
-	check("files_declared_check", sql`(declared_bytes > 0) AND (declared_mime ~ '^[a-z]+/[a-z0-9.+-]+$'::text)`),
-	check("files_status_check", sql`status = ANY (ARRAY['reserved'::text, 'stored'::text, 'rejected'::text])`),
-	check("files_sha_check", sql`(sha256 IS NULL) OR (sha256 ~ '^[0-9a-f]{64}$'::text)`),
-	check("files_stored_check", sql`(status <> 'stored'::text) OR ((sha256 IS NOT NULL) AND (bytes IS NOT NULL) AND (detected_mime IS NOT NULL))`),
-	check("files_rejected_check", sql`(status = 'rejected'::text) = (rejected_reason IS NOT NULL)`),
-]);
-
 export const waNumbers = pgTable("wa_numbers", {
 	id: uuid().defaultRandom().primaryKey().notNull(),
 	orgId: uuid("org_id").notNull(),
@@ -1500,6 +1454,60 @@ export const waNumbers = pgTable("wa_numbers", {
 	check("wa_numbers_disconnected_check", sql`(status = 'disconnected'::text) = (disconnected_at IS NOT NULL)`),
 	check("wa_numbers_progress_check", sql`(history_progress IS NULL) OR ((history_progress >= 0) AND (history_progress <= 100))`),
 	check("wa_numbers_provider_check", sql`provider = ANY (ARRAY['meta'::text, 'simulator'::text, 'test'::text])`),
+]);
+
+export const files = pgTable("files", {
+	id: uuid().defaultRandom().primaryKey().notNull(),
+	orgId: uuid("org_id").notNull(),
+	purpose: text().notNull(),
+	storagePath: text("storage_path").notNull(),
+	name: text().notNull(),
+	declaredMime: text("declared_mime").notNull(),
+	// You can use { mode: "bigint" } if numbers are exceeding js number limitations
+	declaredBytes: bigint("declared_bytes", { mode: "number" }).notNull(),
+	status: text().default('reserved').notNull(),
+	sha256: text(),
+	// You can use { mode: "bigint" } if numbers are exceeding js number limitations
+	bytes: bigint({ mode: "number" }),
+	detectedMime: text("detected_mime"),
+	pages: integer(),
+	rejectedReason: text("rejected_reason"),
+	uploadedBy: uuid("uploaded_by"),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	expiresAt: timestamp("expires_at", { withTimezone: true, mode: 'string' }).notNull(),
+	confirmedAt: timestamp("confirmed_at", { withTimezone: true, mode: 'string' }),
+	partnerId: uuid("partner_id"),
+}, (table) => [
+	index("files_org_idx").using("btree", table.orgId.asc().nullsLast().op("timestamptz_ops"), table.createdAt.desc().nullsFirst().op("timestamptz_ops")),
+	index("files_partner_idx").using("btree", table.partnerId.asc().nullsLast().op("uuid_ops")).where(sql`(partner_id IS NOT NULL)`),
+	index("files_reserved_idx").using("btree", table.expiresAt.asc().nullsLast().op("timestamptz_ops")).where(sql`(status = 'reserved'::text)`),
+	foreignKey({
+			columns: [table.orgId],
+			foreignColumns: [organizations.id],
+			name: "files_org_id_fkey"
+		}).onDelete("cascade"),
+	foreignKey({
+			columns: [table.uploadedBy],
+			foreignColumns: [profiles.id],
+			name: "files_uploaded_by_fkey"
+		}).onDelete("set null"),
+	foreignKey({
+			columns: [table.partnerId],
+			foreignColumns: [partners.id],
+			name: "files_partner_id_fkey"
+		}).onDelete("cascade"),
+	unique("files_id_org_id_key").on(table.id, table.orgId),
+	unique("files_storage_path_key").on(table.storagePath),
+	pgPolicy("files_select_member", { as: "permissive", for: "select", to: ["authenticated"], using: sql`(is_org_member(org_id) AND (partner_id IS NULL))` }),
+	pgPolicy("files_select_partner", { as: "permissive", for: "select", to: ["authenticated"] }),
+	check("files_measured_check", sql`(status = 'reserved'::text) = (confirmed_at IS NULL)`),
+	check("files_purpose_check", sql`purpose ~ '^[a-z][a-z0-9_.-]{1,39}$'::text`),
+	check("files_name_check", sql`((char_length(btrim(name)) >= 1) AND (char_length(btrim(name)) <= 200)) AND (name !~ '[[:cntrl:]]'::text)`),
+	check("files_declared_check", sql`(declared_bytes > 0) AND (declared_mime ~ '^[a-z]+/[a-z0-9.+-]+$'::text)`),
+	check("files_status_check", sql`status = ANY (ARRAY['reserved'::text, 'stored'::text, 'rejected'::text])`),
+	check("files_sha_check", sql`(sha256 IS NULL) OR (sha256 ~ '^[0-9a-f]{64}$'::text)`),
+	check("files_stored_check", sql`(status <> 'stored'::text) OR ((sha256 IS NOT NULL) AND (bytes IS NOT NULL) AND (detected_mime IS NOT NULL))`),
+	check("files_rejected_check", sql`(status = 'rejected'::text) = (rejected_reason IS NOT NULL)`),
 ]);
 
 export const issuedDocuments = pgTable("issued_documents", {
@@ -1833,6 +1841,7 @@ export const people = pgTable("people", {
 	createdBy: uuid("created_by"),
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	readFields: jsonb("read_fields").default({}).notNull(),
 }, (table) => [
 	uniqueIndex("people_cpf_idx").using("btree", table.orgId.asc().nullsLast().op("text_ops"), table.cpf.asc().nullsLast().op("uuid_ops")).where(sql`(cpf IS NOT NULL)`),
 	index("people_org_idx").using("btree", table.orgId.asc().nullsLast().op("timestamptz_ops"), table.createdAt.desc().nullsFirst().op("timestamptz_ops")),
@@ -1851,7 +1860,6 @@ export const people = pgTable("people", {
 	pgPolicy("people_select_member", { as: "permissive", for: "select", to: ["authenticated"], using: sql`is_org_member(org_id)` }),
 	check("people_name_check", sql`((char_length(full_name) >= 3) AND (char_length(full_name) <= 200)) AND (full_name !~ '[[:cntrl:]]'::text)`),
 	check("people_cpf_check", sql`(cpf IS NULL) OR cpf_is_valid(cpf)`),
-	check("people_via_check", sql`updated_via = ANY (ARRAY['firm'::text, 'client'::text])`),
 	check("people_marital_check", sql`(marital_status IS NULL) OR (marital_status = ANY (ARRAY['solteiro'::text, 'casado'::text, 'uniao_estavel'::text, 'divorciado'::text, 'separado'::text, 'viuvo'::text]))`),
 	check("people_email_check", sql`(email IS NULL) OR ((char_length(email) <= 254) AND (email ~ '^[^@[:space:]]+@[^@[:space:]]+\.[^@[:space:]]+$'::text))`),
 	check("people_phone_check", sql`(phone IS NULL) OR (phone ~ '^[0-9]{12,15}$'::text)`),
@@ -1860,6 +1868,8 @@ export const people = pgTable("people", {
 	check("people_text_check", sql`(COALESCE(char_length(nationality), 0) <= 60) AND (COALESCE(char_length(profession), 0) <= 120) AND (COALESCE(char_length(street), 0) <= 200) AND (COALESCE(char_length(address_number), 0) <= 20) AND (COALESCE(char_length(complement), 0) <= 120) AND (COALESCE(char_length(district), 0) <= 120) AND (COALESCE(char_length(city), 0) <= 120)`),
 	check("people_birth_check", sql`(birth_date IS NULL) OR ((birth_date >= '1900-01-01'::date) AND (birth_date <= '2100-01-01'::date))`),
 	check("people_registry_check", sql`(cpf_registry_result IS NULL) OR (cpf_registry_result = ANY (ARRAY['found'::text, 'not_found'::text, 'birth_date_mismatch'::text, 'minor'::text]))`),
+	check("people_via_check", sql`updated_via = ANY (ARRAY['firm'::text, 'client'::text, 'document'::text])`),
+	check("people_read_fields_check", sql`(jsonb_typeof(read_fields) = 'object'::text) AND (octet_length((read_fields)::text) <= 4000)`),
 ]);
 
 export const caseParties = pgTable("case_parties", {
@@ -1969,6 +1979,14 @@ export const proceedings = pgTable("proceedings", {
 	createdBy: uuid("created_by"),
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	filedMarkedAt: timestamp("filed_marked_at", { withTimezone: true, mode: 'string' }),
+	systemByOne: boolean("system_by_one").default(false).notNull(),
+	systemApprovedBy: uuid("system_approved_by"),
+	systemApprovedAt: timestamp("system_approved_at", { withTimezone: true, mode: 'string' }),
+	systemRefusedBy: uuid("system_refused_by"),
+	systemRefusedAt: timestamp("system_refused_at", { withTimezone: true, mode: 'string' }),
+	systemRefusedReason: text("system_refused_reason"),
+	createdByOne: boolean("created_by_one").default(false).notNull(),
 }, (table) => [
 	index("proceedings_case_idx").using("btree", table.caseId.asc().nullsLast().op("uuid_ops")),
 	uniqueIndex("proceedings_cnj_idx").using("btree", table.orgId.asc().nullsLast().op("uuid_ops"), table.cnj.asc().nullsLast().op("text_ops")).where(sql`(cnj IS NOT NULL)`),
@@ -1992,6 +2010,16 @@ export const proceedings = pgTable("proceedings", {
 			foreignColumns: [cases.id, cases.orgId],
 			name: "proceedings_case_id_org_id_fkey"
 		}).onDelete("cascade"),
+	foreignKey({
+			columns: [table.systemApprovedBy],
+			foreignColumns: [profiles.id],
+			name: "proceedings_system_approved_by_fkey"
+		}).onDelete("set null"),
+	foreignKey({
+			columns: [table.systemRefusedBy],
+			foreignColumns: [profiles.id],
+			name: "proceedings_system_refused_by_fkey"
+		}).onDelete("set null"),
 	unique("proceedings_id_org_id_key").on(table.id, table.orgId),
 	pgPolicy("proceedings_select_member", { as: "permissive", for: "select", to: ["authenticated"], using: sql`is_org_member(org_id)` }),
 	check("proceedings_kind_check", sql`kind = ANY (ARRAY['juizado'::text, 'comum'::text])`),
@@ -2002,6 +2030,7 @@ export const proceedings = pgTable("proceedings", {
 	check("proceedings_status_check", sql`status = ANY (ARRAY['planned'::text, 'filed'::text, 'closed'::text])`),
 	check("proceedings_filed_check", sql`(status = 'planned'::text) OR (cnj IS NOT NULL)`),
 	check("proceedings_text_check", sql`(COALESCE(char_length(comarca), 0) <= 120) AND (COALESCE(char_length(unit), 0) <= 200) AND (COALESCE(char_length(forum_reason), 0) <= 1000) AND (COALESCE(char_length(forum_city), 0) <= 120)`),
+	check("proceedings_system_decision_check", sql`(NOT ((system_approved_at IS NOT NULL) AND (system_refused_at IS NOT NULL))) AND ((system_refused_at IS NULL) = (system_refused_reason IS NULL)) AND ((system_refused_reason IS NULL) OR (((char_length(system_refused_reason) >= 8) AND (char_length(system_refused_reason) <= 500)) AND (system_refused_reason !~ '[[:cntrl:]]'::text)))`),
 ]);
 
 export const clientLinks = pgTable("client_links", {
@@ -2300,41 +2329,11 @@ export const caseDocuments = pgTable("case_documents", {
 	check("case_documents_quality_check", sql`(quality IS NULL) OR ((jsonb_typeof(quality) = 'object'::text) AND (octet_length((quality)::text) <= 2000))`),
 ]);
 
-export const caseWeather = pgTable("case_weather", {
-	id: uuid().defaultRandom().primaryKey().notNull(),
-	orgId: uuid("org_id").notNull(),
-	caseId: uuid("case_id").notNull(),
-	icao: text().notNull(),
-	observedAt: timestamp("observed_at", { withTimezone: true, mode: 'string' }).notNull(),
-	raw: text().notNull(),
-	signs: text().array().default(sql`'{}'`).notNull(),
-	source: text().default('redemet').notNull(),
-	readAt: timestamp("read_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
-}, (table) => [
-	index("case_weather_case_idx").using("btree", table.caseId.asc().nullsLast().op("timestamptz_ops"), table.observedAt.asc().nullsLast().op("uuid_ops")),
-	foreignKey({
-			columns: [table.orgId],
-			foreignColumns: [organizations.id],
-			name: "case_weather_org_id_fkey"
-		}).onDelete("cascade"),
-	foreignKey({
-			columns: [table.orgId, table.caseId],
-			foreignColumns: [cases.id, cases.orgId],
-			name: "case_weather_case_id_org_id_fkey"
-		}).onDelete("cascade"),
-	unique("case_weather_case_id_icao_observed_at_key").on(table.caseId, table.icao, table.observedAt),
-	pgPolicy("case_weather_select_member", { as: "permissive", for: "select", to: ["authenticated"], using: sql`is_org_member(org_id)` }),
-	check("case_weather_icao_check", sql`icao ~ '^[A-Z0-9]{4}$'::text`),
-	check("case_weather_raw_check", sql`(char_length(raw) >= 8) AND (char_length(raw) <= 1000)`),
-	check("case_weather_source_check", sql`source = 'redemet'::text`),
-	check("case_weather_signs_check", sql`cardinality(signs) <= 20`),
-]);
-
 export const cases = pgTable("cases", {
 	id: uuid().defaultRandom().primaryKey().notNull(),
 	orgId: uuid("org_id").notNull(),
 	seq: integer().notNull(),
-	incident: text().notNull(),
+	incident: text(),
 	airlineIata: text("airline_iata"),
 	flightDate: date("flight_date"),
 	cause: text().default('undetermined').notNull(),
@@ -2360,8 +2359,11 @@ export const cases = pgTable("cases", {
 	familyChoiceReason: text("family_choice_reason"),
 	familyChoiceBy: uuid("family_choice_by"),
 	familyChoiceAt: timestamp("family_choice_at", { withTimezone: true, mode: 'string' }),
+	isTest: boolean("is_test").default(false).notNull(),
+	module: text().default('direito-do-passageiro').notNull(),
 }, (table) => [
-	index("cases_org_idx").using("btree", table.orgId.asc().nullsLast().op("timestamptz_ops"), table.status.asc().nullsLast().op("timestamptz_ops"), table.updatedAt.desc().nullsFirst().op("uuid_ops")),
+	index("cases_module_idx").using("btree", table.orgId.asc().nullsLast().op("uuid_ops"), table.module.asc().nullsLast().op("text_ops")),
+	index("cases_org_idx").using("btree", table.orgId.asc().nullsLast().op("uuid_ops"), table.status.asc().nullsLast().op("text_ops"), table.updatedAt.desc().nullsFirst().op("uuid_ops")),
 	foreignKey({
 			columns: [table.orgId],
 			foreignColumns: [organizations.id],
@@ -2392,6 +2394,11 @@ export const cases = pgTable("cases", {
 			foreignColumns: [profiles.id],
 			name: "cases_family_choice_by_fkey"
 		}).onDelete("set null"),
+	foreignKey({
+			columns: [table.module],
+			foreignColumns: [productModules.key],
+			name: "cases_module_fkey"
+		}).onDelete("restrict"),
 	unique("cases_id_org_id_key").on(table.id, table.orgId),
 	unique("cases_org_id_seq_key").on(table.orgId, table.seq),
 	pgPolicy("cases_select_member", { as: "permissive", for: "select", to: ["authenticated"], using: sql`is_org_member(org_id)` }),
@@ -2408,6 +2415,37 @@ export const cases = pgTable("cases", {
 	check("cases_suspension_decision_check", sql`suspension_decision = ANY (ARRAY['pending'::text, 'file'::text, 'hold'::text])`),
 	check("cases_stated_cause_check", sql`(airline_stated_cause IS NULL) OR (airline_stated_cause = ANY (ARRAY['weather'::text, 'airport_infrastructure'::text, 'authority'::text, 'pandemic'::text, 'maintenance'::text, 'crew'::text, 'network'::text, 'overbooking'::text, 'none_given'::text, 'other'::text]))`),
 	check("cases_family_choice_check", sql`(family_choice = ANY (ARRAY['together'::text, 'split'::text])) AND ((family_choice = 'split'::text) = (family_choice_reason IS NOT NULL)) AND ((family_choice_reason IS NULL) OR ((char_length(family_choice_reason) >= 8) AND (char_length(family_choice_reason) <= 1000)))`),
+	check("cases_module_incident_check", sql`(module = 'direito-do-passageiro'::text) = (incident IS NOT NULL)`),
+]);
+
+export const caseWeather = pgTable("case_weather", {
+	id: uuid().defaultRandom().primaryKey().notNull(),
+	orgId: uuid("org_id").notNull(),
+	caseId: uuid("case_id").notNull(),
+	icao: text().notNull(),
+	observedAt: timestamp("observed_at", { withTimezone: true, mode: 'string' }).notNull(),
+	raw: text().notNull(),
+	signs: text().array().default(sql`'{}'`).notNull(),
+	source: text().default('redemet').notNull(),
+	readAt: timestamp("read_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+	index("case_weather_case_idx").using("btree", table.caseId.asc().nullsLast().op("timestamptz_ops"), table.observedAt.asc().nullsLast().op("uuid_ops")),
+	foreignKey({
+			columns: [table.orgId],
+			foreignColumns: [organizations.id],
+			name: "case_weather_org_id_fkey"
+		}).onDelete("cascade"),
+	foreignKey({
+			columns: [table.orgId, table.caseId],
+			foreignColumns: [cases.id, cases.orgId],
+			name: "case_weather_case_id_org_id_fkey"
+		}).onDelete("cascade"),
+	unique("case_weather_case_id_icao_observed_at_key").on(table.caseId, table.icao, table.observedAt),
+	pgPolicy("case_weather_select_member", { as: "permissive", for: "select", to: ["authenticated"], using: sql`is_org_member(org_id)` }),
+	check("case_weather_icao_check", sql`icao ~ '^[A-Z0-9]{4}$'::text`),
+	check("case_weather_raw_check", sql`(char_length(raw) >= 8) AND (char_length(raw) <= 1000)`),
+	check("case_weather_source_check", sql`source = 'redemet'::text`),
+	check("case_weather_signs_check", sql`cardinality(signs) <= 20`),
 ]);
 
 export const civilCourtAnswers = pgTable("civil_court_answers", {
@@ -2722,6 +2760,51 @@ export const djenCaptures = pgTable("djen_captures", {
 	check("djen_captures_skipped_items_check", sql`(jsonb_typeof(skipped_items) = 'array'::text) AND (jsonb_typeof(round_skipped_items) = 'array'::text)`),
 ]);
 
+export const draftTemplates = pgTable("draft_templates", {
+	id: uuid().defaultRandom().primaryKey().notNull(),
+	orgId: uuid("org_id"),
+	name: text().notNull(),
+	proceedingKind: text("proceeding_kind"),
+	body: text().notNull(),
+	isDefault: boolean("is_default").default(false).notNull(),
+	createdBy: uuid("created_by"),
+	updatedBy: uuid("updated_by"),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	provisional: boolean().default(false).notNull(),
+	documentKind: text("document_kind").default('piece').notNull(),
+}, (table) => [
+	uniqueIndex("draft_templates_default_idx").using("btree", sql`org_id`, sql`document_kind`, sql`COALESCE(proceeding_kind, ''::text)`).where(sql`is_default`),
+	uniqueIndex("draft_templates_name_idx").using("btree", sql`org_id`, sql`lower(btrim(name))`),
+	uniqueIndex("draft_templates_platform_default_idx").using("btree", sql`document_kind`, sql`COALESCE(proceeding_kind, ''::text)`).where(sql`((org_id IS NULL) AND is_default)`),
+	uniqueIndex("draft_templates_platform_name_idx").using("btree", sql`lower(btrim(name))`).where(sql`(org_id IS NULL)`),
+	foreignKey({
+			columns: [table.orgId],
+			foreignColumns: [organizations.id],
+			name: "draft_templates_org_id_fkey"
+		}).onDelete("cascade"),
+	foreignKey({
+			columns: [table.createdBy],
+			foreignColumns: [profiles.id],
+			name: "draft_templates_created_by_fkey"
+		}).onDelete("set null"),
+	foreignKey({
+			columns: [table.updatedBy],
+			foreignColumns: [profiles.id],
+			name: "draft_templates_updated_by_fkey"
+		}).onDelete("set null"),
+	unique("draft_templates_id_org_id_key").on(table.id, table.orgId),
+	pgPolicy("draft_templates_select_member", { as: "permissive", for: "select", to: ["authenticated"], using: sql`is_org_member(org_id)` }),
+	pgPolicy("draft_templates_select_platform", { as: "permissive", for: "select", to: ["authenticated"] }),
+	check("draft_templates_name_check", sql`((char_length(btrim(name)) >= 2) AND (char_length(btrim(name)) <= 120)) AND (name !~ '[[:cntrl:]]'::text)`),
+	check("draft_templates_kind_check", sql`(proceeding_kind IS NULL) OR (proceeding_kind = ANY (ARRAY['juizado'::text, 'comum'::text]))`),
+	check("draft_templates_body_check", sql`(char_length(body) >= 20) AND (char_length(body) <= 200000)`),
+	check("draft_templates_provisional_check", sql`(NOT provisional) OR (org_id IS NULL)`),
+	check("draft_templates_document_kind_check", sql`document_kind = ANY (ARRAY['piece'::text, 'procuracao'::text, 'contrato'::text])`),
+	check("draft_templates_paper_kind_check", sql`(document_kind = 'piece'::text) OR (proceeding_kind IS NULL)`),
+	check("draft_templates_platform_contract_check", sql`(org_id IS NOT NULL) OR (document_kind <> 'contrato'::text)`),
+]);
+
 export const legalSources = pgTable("legal_sources", {
 	id: uuid().defaultRandom().primaryKey().notNull(),
 	orgId: uuid("org_id"),
@@ -2896,47 +2979,6 @@ export const publications = pgTable("publications", {
 	check("publications_ai_error_check", sql`(ai_error IS NULL) OR (ai_error ~ '^[a-z][a-z0-9_]{1,59}$'::text)`),
 	check("publications_triage_check", sql`(category IS NULL) = (triaged_at IS NULL)`),
 	check("publications_review_check", sql`((NOT review_due) OR (ai_applied AND (category IS NOT NULL))) AND ((reviewed_at IS NULL) OR (category IS NOT NULL))`),
-]);
-
-export const draftTemplates = pgTable("draft_templates", {
-	id: uuid().defaultRandom().primaryKey().notNull(),
-	orgId: uuid("org_id"),
-	name: text().notNull(),
-	proceedingKind: text("proceeding_kind"),
-	body: text().notNull(),
-	isDefault: boolean("is_default").default(false).notNull(),
-	createdBy: uuid("created_by"),
-	updatedBy: uuid("updated_by"),
-	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
-	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
-	provisional: boolean().default(false).notNull(),
-}, (table) => [
-	uniqueIndex("draft_templates_default_idx").using("btree", sql`org_id`, sql`COALESCE(proceeding_kind, ''::text)`).where(sql`is_default`),
-	uniqueIndex("draft_templates_name_idx").using("btree", sql`org_id`, sql`lower(btrim(name))`),
-	uniqueIndex("draft_templates_platform_default_idx").using("btree", sql`COALESCE(proceeding_kind, ''::text)`).where(sql`((org_id IS NULL) AND is_default)`),
-	uniqueIndex("draft_templates_platform_name_idx").using("btree", sql`lower(btrim(name))`).where(sql`(org_id IS NULL)`),
-	foreignKey({
-			columns: [table.orgId],
-			foreignColumns: [organizations.id],
-			name: "draft_templates_org_id_fkey"
-		}).onDelete("cascade"),
-	foreignKey({
-			columns: [table.createdBy],
-			foreignColumns: [profiles.id],
-			name: "draft_templates_created_by_fkey"
-		}).onDelete("set null"),
-	foreignKey({
-			columns: [table.updatedBy],
-			foreignColumns: [profiles.id],
-			name: "draft_templates_updated_by_fkey"
-		}).onDelete("set null"),
-	unique("draft_templates_id_org_id_key").on(table.id, table.orgId),
-	pgPolicy("draft_templates_select_member", { as: "permissive", for: "select", to: ["authenticated"], using: sql`is_org_member(org_id)` }),
-	pgPolicy("draft_templates_select_platform", { as: "permissive", for: "select", to: ["authenticated"] }),
-	check("draft_templates_name_check", sql`((char_length(btrim(name)) >= 2) AND (char_length(btrim(name)) <= 120)) AND (name !~ '[[:cntrl:]]'::text)`),
-	check("draft_templates_kind_check", sql`(proceeding_kind IS NULL) OR (proceeding_kind = ANY (ARRAY['juizado'::text, 'comum'::text]))`),
-	check("draft_templates_body_check", sql`(char_length(body) >= 20) AND (char_length(body) <= 200000)`),
-	check("draft_templates_provisional_check", sql`(NOT provisional) OR (org_id IS NULL)`),
 ]);
 
 export const caseDrafts = pgTable("case_drafts", {
@@ -3246,12 +3288,12 @@ export const proceedingTracking = pgTable("proceeding_tracking", {
 	unique("proceeding_tracking_proceeding_id_key").on(table.proceedingId),
 	pgPolicy("proceeding_tracking_select_member", { as: "permissive", for: "select", to: ["authenticated"], using: sql`is_org_member(org_id)` }),
 	check("proceeding_tracking_cnj_check", sql`cnj ~ '^[0-9]{20}$'::text`),
-	check("proceeding_tracking_source_check", sql`source = ANY (ARRAY['projudi'::text, 'aggregator'::text])`),
 	check("proceeding_tracking_status_check", sql`status = ANY (ARRAY['waiting'::text, 'tracked'::text, 'not_found'::text, 'secret'::text, 'failed'::text, 'off'::text])`),
 	check("proceeding_tracking_snapshot_check", sql`(snapshot IS NULL) OR ((jsonb_typeof(snapshot) = 'object'::text) AND (octet_length((snapshot)::text) <= 65536))`),
 	check("proceeding_tracking_error_check", sql`(work_error IS NULL) OR (work_error ~ '^[a-z][a-z0-9_]{1,59}$'::text)`),
 	check("proceeding_tracking_unseen_check", sql`unseen_count >= 0`),
 	check("proceeding_tracking_vendor_check", sql`(vendor IS NULL) OR (vendor ~ '^[a-z][a-z0-9_-]{1,39}$'::text)`),
+	check("proceeding_tracking_source_check", sql`source = ANY (ARRAY['projudi'::text, 'aggregator'::text, 'teste'::text])`),
 ]);
 
 export const movements = pgTable("movements", {
@@ -3287,8 +3329,8 @@ export const movements = pgTable("movements", {
 	unique("movements_id_org_id_key").on(table.id, table.orgId),
 	unique("movements_proceeding_id_source_source_id_key").on(table.proceedingId, table.source, table.sourceId),
 	pgPolicy("movements_select_member", { as: "permissive", for: "select", to: ["authenticated"], using: sql`is_org_member(org_id)` }),
-	check("movements_source_check", sql`source = ANY (ARRAY['projudi'::text, 'aggregator'::text])`),
 	check("movements_text_check", sql`((char_length(source_id) >= 1) AND (char_length(source_id) <= 100)) AND ((char_length(title) >= 1) AND (char_length(title) <= 1000)) AND (COALESCE(char_length(detail), 0) <= 4000) AND (COALESCE(char_length(by_name), 0) <= 300)`),
+	check("movements_source_check", sql`source = ANY (ARRAY['projudi'::text, 'aggregator'::text, 'teste'::text])`),
 ]);
 
 export const importBatches = pgTable("import_batches", {
@@ -3654,8 +3696,8 @@ export const noticeKinds = pgTable("notice_kinds", {
 	pgPolicy("notice_kinds_select_all", { as: "permissive", for: "select", to: ["authenticated"], using: sql`true` }),
 	check("notice_kinds_base_check", sql`template_base ~ '^one_[a-z][a-z0-9_]{2,60}$'::text`),
 	check("notice_kinds_text_check", sql`((char_length(body) >= 20) AND (char_length(body) <= 1024)) AND ((char_length(footer) >= 1) AND (char_length(footer) <= 60))`),
-	check("notice_kinds_kind_check", sql`kind = ANY (ARRAY['hearing_reminder'::text, 'hearing_change'::text, 'lawsuit_update'::text, 'payment_alert'::text, 'document_refused'::text, 'flight_problem'::text])`),
-	check("notice_kinds_params_check", sql`((cardinality(params) >= 1) AND (cardinality(params) <= 9)) AND (cardinality(examples) = cardinality(params)) AND (params <@ ARRAY['first_name'::text, 'firm'::text, 'hearing'::text, 'lawsuit'::text, 'moment'::text, 'how'::text, 'change'::text, 'status'::text, 'document'::text, 'reason'::text, 'flight'::text, 'what'::text, 'assistance'::text])`),
+	check("notice_kinds_kind_check", sql`kind = ANY (ARRAY['hearing_reminder'::text, 'hearing_change'::text, 'lawsuit_update'::text, 'payment_alert'::text, 'document_refused'::text, 'flight_problem'::text, 'case_received'::text, 'lawsuit_filed'::text])`),
+	check("notice_kinds_params_check", sql`((cardinality(params) >= 1) AND (cardinality(params) <= 9)) AND (cardinality(examples) = cardinality(params)) AND (params <@ ARRAY['first_name'::text, 'firm'::text, 'hearing'::text, 'lawsuit'::text, 'moment'::text, 'how'::text, 'change'::text, 'status'::text, 'document'::text, 'reason'::text, 'flight'::text, 'what'::text, 'assistance'::text, 'next'::text, 'court'::text])`),
 ]);
 
 export const noticeOptins = pgTable("notice_optins", {
@@ -4232,13 +4274,76 @@ export const trackedLegs = pgTable("tracked_legs", {
 		}).onDelete("cascade"),
 	unique("tracked_legs_id_org_id_key").on(table.id, table.orgId),
 	unique("tracked_legs_trip_id_position_key").on(table.tripId, table.position),
-	pgPolicy("tracked_legs_select_member", { as: "permissive", for: "select", to: ["authenticated"], using: sql`is_org_member(org_id)` }),
+	pgPolicy("tracked_legs_select_member", { as: "permissive", for: "select", to: ["authenticated"], using: sql`(is_org_member(org_id) AND (EXISTS ( SELECT 1
+   FROM tracked_trips t
+  WHERE ((t.id = tracked_legs.trip_id) AND ((t.consent_channel <> 'agency'::text) OR (t.status = 'case_opened'::text))))))` }),
 	check("tracked_legs_position_check", sql`("position" >= 1) AND ("position" <= 6)`),
 	check("tracked_legs_flight_check", sql`flight_number ~ '^[A-Z0-9]{2}[0-9]{1,4}[A-Z]?$'::text`),
 	check("tracked_legs_airports_check", sql`(origin_iata ~ '^[A-Z]{3}$'::text) AND (destination_iata ~ '^[A-Z]{3}$'::text) AND (origin_iata <> destination_iata)`),
 	check("tracked_legs_status_check", sql`status = ANY (ARRAY['scheduled'::text, 'delayed'::text, 'cancelled'::text, 'changed'::text, 'landed'::text])`),
 	check("tracked_legs_source_check", sql`(status_source IS NULL) OR (status_source = ANY (ARRAY['simulated'::text, 'flightaware'::text]))`),
 	check("tracked_legs_estimate_check", sql`(status <> 'delayed'::text) OR (estimated_arrival_local IS NOT NULL)`),
+]);
+
+export const trackedTrips = pgTable("tracked_trips", {
+	id: uuid().defaultRandom().primaryKey().notNull(),
+	orgId: uuid("org_id").notNull(),
+	passengerName: text("passenger_name").notNull(),
+	phone: text().notNull(),
+	companions: jsonb().default([]).notNull(),
+	airlineIata: text("airline_iata").notNull(),
+	isTest: boolean("is_test").default(false).notNull(),
+	label: text(),
+	consentWording: text("consent_wording").notNull(),
+	consentAt: timestamp("consent_at", { withTimezone: true, mode: 'string' }).notNull(),
+	consentChannel: text("consent_channel").notNull(),
+	status: text().default('watching').notNull(),
+	caseId: uuid("case_id"),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	watch: text().default('flightaware').notNull(),
+	watchedAt: timestamp("watched_at", { withTimezone: true, mode: 'string' }),
+	watchClaims: integer("watch_claims").default(0).notNull(),
+	watchClaimedAt: timestamp("watch_claimed_at", { withTimezone: true, mode: 'string' }),
+	watchError: text("watch_error"),
+	watchDay: date("watch_day"),
+	watchReads: integer("watch_reads").default(0).notNull(),
+	paxTripId: uuid("pax_trip_id"),
+}, (table) => [
+	index("tracked_trips_phone_idx").using("btree", table.orgId.asc().nullsLast().op("text_ops"), table.phone.asc().nullsLast().op("uuid_ops")),
+	uniqueIndex("tracked_trips_test_label_idx").using("btree", table.orgId.asc().nullsLast().op("uuid_ops"), table.label.asc().nullsLast().op("uuid_ops")).where(sql`is_test`),
+	index("tracked_trips_watch_idx").using("btree", table.watchedAt.asc().nullsFirst().op("timestamptz_ops")).where(sql`((watch = 'flightaware'::text) AND (status = ANY (ARRAY['watching'::text, 'alerted'::text])))`),
+	foreignKey({
+			columns: [table.orgId],
+			foreignColumns: [organizations.id],
+			name: "tracked_trips_org_id_fkey"
+		}).onDelete("cascade"),
+	foreignKey({
+			columns: [table.orgId, table.caseId],
+			foreignColumns: [cases.id, cases.orgId],
+			name: "tracked_trips_case_id_org_id_fkey"
+		}).onDelete("set null"),
+	foreignKey({
+			columns: [table.paxTripId],
+			foreignColumns: [paxTrips.id],
+			name: "tracked_trips_pax_trip_id_fkey"
+		}).onDelete("set null"),
+	unique("tracked_trips_id_org_id_key").on(table.id, table.orgId),
+	unique("tracked_trips_pax_trip_id_key").on(table.paxTripId),
+	pgPolicy("tracked_trips_select_member", { as: "permissive", for: "select", to: ["authenticated"], using: sql`(is_org_member(org_id) AND ((consent_channel <> 'agency'::text) OR (status = 'case_opened'::text)))` }),
+	check("tracked_trips_test_check", sql`is_test = (label IS NOT NULL)`),
+	check("tracked_trips_name_check", sql`(char_length(btrim(passenger_name)) >= 2) AND (char_length(btrim(passenger_name)) <= 200)`),
+	check("tracked_trips_phone_check", sql`phone ~ '^[0-9]{12,15}$'::text`),
+	check("tracked_trips_airline_check", sql`airline_iata ~ '^[A-Z0-9]{2}$'::text`),
+	check("tracked_trips_companions_check", sql`(jsonb_typeof(companions) = 'array'::text) AND (jsonb_array_length(companions) <= 9)`),
+	check("tracked_trips_label_check", sql`(label IS NULL) OR (label ~ '^[a-z][a-z_]{2,40}$'::text)`),
+	check("tracked_trips_status_check", sql`status = ANY (ARRAY['watching'::text, 'alerted'::text, 'case_opened'::text, 'declined'::text, 'stopped'::text])`),
+	check("tracked_trips_watch_check", sql`watch = ANY (ARRAY['simulated'::text, 'flightaware'::text])`),
+	check("tracked_trips_watch_real_check", sql`is_test OR (watch = 'flightaware'::text)`),
+	check("tracked_trips_watch_error_check", sql`(watch_error IS NULL) OR (watch_error ~ '^[a-z][a-z0-9_]{1,59}$'::text)`),
+	check("tracked_trips_watch_reads_check", sql`watch_reads >= 0`),
+	check("tracked_trips_consent_check", sql`((char_length(consent_wording) >= 20) AND (char_length(consent_wording) <= 4000)) AND (consent_channel = ANY (ARRAY['test'::text, 'page'::text, 'whatsapp'::text, 'firm'::text, 'agency'::text]))`),
+	check("tracked_trips_agency_check", sql`(pax_trip_id IS NULL) OR (consent_channel = 'agency'::text)`),
 ]);
 
 export const flightAlerts = pgTable("flight_alerts", {
@@ -4277,7 +4382,9 @@ export const flightAlerts = pgTable("flight_alerts", {
 		}).onDelete("cascade"),
 	unique("flight_alerts_id_org_id_key").on(table.id, table.orgId),
 	unique("flight_alerts_trip_id_kind_key").on(table.tripId, table.kind),
-	pgPolicy("flight_alerts_select_member", { as: "permissive", for: "select", to: ["authenticated"], using: sql`is_org_member(org_id)` }),
+	pgPolicy("flight_alerts_select_member", { as: "permissive", for: "select", to: ["authenticated"], using: sql`(is_org_member(org_id) AND (EXISTS ( SELECT 1
+   FROM tracked_trips t
+  WHERE ((t.id = flight_alerts.trip_id) AND ((t.consent_channel <> 'agency'::text) OR (t.status = 'case_opened'::text))))))` }),
 	check("flight_alerts_reason_check", sql`(status = 'skipped'::text) = (reason IS NOT NULL)`),
 	check("flight_alerts_kind_check", sql`kind = ANY (ARRAY['cancelled'::text, 'changed'::text, 'delayed'::text])`),
 	check("flight_alerts_status_check", sql`status = ANY (ARRAY['due'::text, 'sent'::text, 'skipped'::text])`),
@@ -4320,57 +4427,562 @@ export const waConversationEvents = pgTable("wa_conversation_events", {
 	check("wa_conversation_events_kind_check", sql`kind = ANY (ARRAY['case_opened'::text, 'link_sent'::text, 'person_called'::text, 'taken_over'::text, 'returned_to_one'::text, 'declined'::text, 'stopped'::text, 'document_joined'::text, 'statement_joined'::text])`),
 ]);
 
-export const trackedTrips = pgTable("tracked_trips", {
+export const casePapers = pgTable("case_papers", {
 	id: uuid().defaultRandom().primaryKey().notNull(),
 	orgId: uuid("org_id").notNull(),
-	passengerName: text("passenger_name").notNull(),
-	phone: text().notNull(),
-	companions: jsonb().default([]).notNull(),
-	airlineIata: text("airline_iata").notNull(),
-	isTest: boolean("is_test").default(false).notNull(),
-	label: text(),
-	consentWording: text("consent_wording").notNull(),
-	consentAt: timestamp("consent_at", { withTimezone: true, mode: 'string' }).notNull(),
-	consentChannel: text("consent_channel").notNull(),
-	status: text().default('watching').notNull(),
-	caseId: uuid("case_id"),
+	caseId: uuid("case_id").notNull(),
+	personId: uuid("person_id").notNull(),
+	kind: text().notNull(),
+	templateId: uuid("template_id"),
+	documentId: uuid("document_id").notNull(),
+	envelopeId: uuid("envelope_id"),
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
-	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
-	watch: text().default('flightaware').notNull(),
-	watchedAt: timestamp("watched_at", { withTimezone: true, mode: 'string' }),
-	watchClaims: integer("watch_claims").default(0).notNull(),
-	watchClaimedAt: timestamp("watch_claimed_at", { withTimezone: true, mode: 'string' }),
-	watchError: text("watch_error"),
-	watchDay: date("watch_day"),
-	watchReads: integer("watch_reads").default(0).notNull(),
 }, (table) => [
-	index("tracked_trips_phone_idx").using("btree", table.orgId.asc().nullsLast().op("text_ops"), table.phone.asc().nullsLast().op("text_ops")),
-	uniqueIndex("tracked_trips_test_label_idx").using("btree", table.orgId.asc().nullsLast().op("uuid_ops"), table.label.asc().nullsLast().op("uuid_ops")).where(sql`is_test`),
-	index("tracked_trips_watch_idx").using("btree", table.watchedAt.asc().nullsFirst().op("timestamptz_ops")).where(sql`((watch = 'flightaware'::text) AND (status = ANY (ARRAY['watching'::text, 'alerted'::text])))`),
+	index("case_papers_envelope_idx").using("btree", table.envelopeId.asc().nullsLast().op("uuid_ops")).where(sql`(envelope_id IS NOT NULL)`),
 	foreignKey({
 			columns: [table.orgId],
 			foreignColumns: [organizations.id],
-			name: "tracked_trips_org_id_fkey"
+			name: "case_papers_org_id_fkey"
 		}).onDelete("cascade"),
+	foreignKey({
+			columns: [table.templateId],
+			foreignColumns: [draftTemplates.id],
+			name: "case_papers_template_id_fkey"
+		}).onDelete("set null"),
 	foreignKey({
 			columns: [table.orgId, table.caseId],
 			foreignColumns: [cases.id, cases.orgId],
-			name: "tracked_trips_case_id_org_id_fkey"
+			name: "case_papers_case_id_org_id_fkey"
+		}).onDelete("cascade"),
+	foreignKey({
+			columns: [table.orgId, table.personId],
+			foreignColumns: [people.id, people.orgId],
+			name: "case_papers_person_id_org_id_fkey"
+		}).onDelete("cascade"),
+	foreignKey({
+			columns: [table.orgId, table.documentId],
+			foreignColumns: [caseDocuments.id, caseDocuments.orgId],
+			name: "case_papers_document_id_org_id_fkey"
+		}).onDelete("cascade"),
+	foreignKey({
+			columns: [table.orgId, table.envelopeId],
+			foreignColumns: [signatureEnvelopes.id, signatureEnvelopes.orgId],
+			name: "case_papers_envelope_id_org_id_fkey"
 		}).onDelete("set null"),
-	unique("tracked_trips_id_org_id_key").on(table.id, table.orgId),
-	pgPolicy("tracked_trips_select_member", { as: "permissive", for: "select", to: ["authenticated"], using: sql`is_org_member(org_id)` }),
-	check("tracked_trips_test_check", sql`is_test = (label IS NOT NULL)`),
-	check("tracked_trips_name_check", sql`(char_length(btrim(passenger_name)) >= 2) AND (char_length(btrim(passenger_name)) <= 200)`),
-	check("tracked_trips_phone_check", sql`phone ~ '^[0-9]{12,15}$'::text`),
-	check("tracked_trips_airline_check", sql`airline_iata ~ '^[A-Z0-9]{2}$'::text`),
-	check("tracked_trips_companions_check", sql`(jsonb_typeof(companions) = 'array'::text) AND (jsonb_array_length(companions) <= 9)`),
-	check("tracked_trips_label_check", sql`(label IS NULL) OR (label ~ '^[a-z][a-z_]{2,40}$'::text)`),
-	check("tracked_trips_consent_check", sql`((char_length(consent_wording) >= 20) AND (char_length(consent_wording) <= 2000)) AND (consent_channel = ANY (ARRAY['test'::text, 'page'::text, 'whatsapp'::text, 'firm'::text]))`),
-	check("tracked_trips_status_check", sql`status = ANY (ARRAY['watching'::text, 'alerted'::text, 'case_opened'::text, 'declined'::text, 'stopped'::text])`),
-	check("tracked_trips_watch_check", sql`watch = ANY (ARRAY['simulated'::text, 'flightaware'::text])`),
-	check("tracked_trips_watch_real_check", sql`is_test OR (watch = 'flightaware'::text)`),
-	check("tracked_trips_watch_error_check", sql`(watch_error IS NULL) OR (watch_error ~ '^[a-z][a-z0-9_]{1,59}$'::text)`),
-	check("tracked_trips_watch_reads_check", sql`watch_reads >= 0`),
+	unique("case_papers_case_id_person_id_kind_key").on(table.caseId, table.personId, table.kind),
+	pgPolicy("case_papers_select_member", { as: "permissive", for: "select", to: ["authenticated"], using: sql`is_org_member(org_id)` }),
+	check("case_papers_kind_check", sql`kind = ANY (ARRAY['procuracao'::text, 'contrato'::text])`),
+]);
+
+export const productModules = pgTable("product_modules", {
+	key: text().primaryKey().notNull(),
+	name: text().notNull(),
+	isDefault: boolean("is_default").default(false).notNull(),
+	retiredAt: timestamp("retired_at", { withTimezone: true, mode: 'string' }),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+	pgPolicy("product_modules_select_all", { as: "permissive", for: "select", to: ["authenticated"], using: sql`true` }),
+	check("product_modules_key_check", sql`key ~ '^[a-z][a-z0-9-]{2,40}$'::text`),
+	check("product_modules_name_check", sql`((char_length(btrim(name)) >= 2) AND (char_length(btrim(name)) <= 80)) AND (name !~ '[[:cntrl:]]'::text)`),
+]);
+
+export const templateImports = pgTable("template_imports", {
+	id: uuid().defaultRandom().primaryKey().notNull(),
+	orgId: uuid("org_id").notNull(),
+	requestedBy: uuid("requested_by"),
+	fileId: uuid("file_id"),
+	fileName: text("file_name").notNull(),
+	source: text().notNull(),
+	status: text().default('reading').notNull(),
+	paragraphs: jsonb(),
+	proposal: jsonb(),
+	runId: uuid("run_id"),
+	failure: text(),
+	claims: integer().default(0).notNull(),
+	claimedAt: timestamp("claimed_at", { withTimezone: true, mode: 'string' }),
+	attempts: integer().default(0).notNull(),
+	runRound: integer("run_round").default(0).notNull(),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	readyAt: timestamp("ready_at", { withTimezone: true, mode: 'string' }),
+}, (table) => [
+	index("template_imports_due_idx").using("btree", table.createdAt.asc().nullsLast().op("timestamptz_ops")).where(sql`(status = ANY (ARRAY['reading'::text, 'marking'::text]))`),
+	index("template_imports_file_idx").using("btree", table.fileId.asc().nullsLast().op("uuid_ops")).where(sql`(file_id IS NOT NULL)`),
+	index("template_imports_org_idx").using("btree", table.orgId.asc().nullsLast().op("uuid_ops"), table.createdAt.desc().nullsFirst().op("uuid_ops")),
+	foreignKey({
+			columns: [table.orgId, table.fileId],
+			foreignColumns: [files.id, files.orgId],
+			name: "template_imports_file_id_org_id_fkey"
+		}).onDelete("set null"),
+	foreignKey({
+			columns: [table.orgId],
+			foreignColumns: [organizations.id],
+			name: "template_imports_org_id_fkey"
+		}).onDelete("cascade"),
+	foreignKey({
+			columns: [table.requestedBy],
+			foreignColumns: [profiles.id],
+			name: "template_imports_requested_by_fkey"
+		}).onDelete("set null"),
+	foreignKey({
+			columns: [table.runId],
+			foreignColumns: [aiRuns.id],
+			name: "template_imports_run_id_fkey"
+		}).onDelete("set null"),
+	unique("template_imports_id_org_id_key").on(table.id, table.orgId),
+	pgPolicy("template_imports_select_writer", { as: "permissive", for: "select", to: ["authenticated"], using: sql`has_firm_function(org_id, ARRAY['socio'::firm_function, 'advogado'::firm_function])` }),
+	check("template_imports_source_check", sql`source = ANY (ARRAY['docx'::text, 'pdf'::text])`),
+	check("template_imports_status_check", sql`status = ANY (ARRAY['reading'::text, 'marking'::text, 'ready'::text, 'failed'::text])`),
+	check("template_imports_name_check", sql`(char_length(btrim(file_name)) >= 1) AND (char_length(btrim(file_name)) <= 200)`),
+	check("template_imports_read_check", sql`(status = ANY (ARRAY['marking'::text, 'ready'::text])) = (paragraphs IS NOT NULL)`),
+	check("template_imports_ready_check", sql`(status = 'ready'::text) = ((proposal IS NOT NULL) AND (ready_at IS NOT NULL))`),
+	check("template_imports_failed_check", sql`(status = 'failed'::text) = (failure IS NOT NULL)`),
+]);
+
+export const partnerInvitations = pgTable("partner_invitations", {
+	id: uuid().defaultRandom().primaryKey().notNull(),
+	orgId: uuid("org_id"),
+	moduleKey: text("module_key"),
+	partnerName: text("partner_name"),
+	partnerId: uuid("partner_id"),
+	// TODO: failed to parse database type 'citext'
+	email: citext("email").notNull(),
+	role: text().notNull(),
+	tokenHash: text("token_hash").notNull(),
+	invitedBy: uuid("invited_by"),
+	expiresAt: timestamp("expires_at", { withTimezone: true, mode: 'string' }).notNull(),
+	acceptedAt: timestamp("accepted_at", { withTimezone: true, mode: 'string' }),
+	acceptedBy: uuid("accepted_by"),
+	revokedAt: timestamp("revoked_at", { withTimezone: true, mode: 'string' }),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+	index("partner_invitations_email_idx").using("btree", table.email.asc().nullsLast().op("citext_ops")).where(sql`((accepted_at IS NULL) AND (revoked_at IS NULL))`),
+	uniqueIndex("partner_invitations_one_open_firm_idx").using("btree", table.orgId.asc().nullsLast().op("citext_ops"), table.email.asc().nullsLast().op("citext_ops")).where(sql`((org_id IS NOT NULL) AND (accepted_at IS NULL) AND (revoked_at IS NULL))`),
+	uniqueIndex("partner_invitations_one_open_team_idx").using("btree", table.partnerId.asc().nullsLast().op("uuid_ops"), table.email.asc().nullsLast().op("uuid_ops")).where(sql`((partner_id IS NOT NULL) AND (accepted_at IS NULL) AND (revoked_at IS NULL))`),
+	foreignKey({
+			columns: [table.orgId],
+			foreignColumns: [organizations.id],
+			name: "partner_invitations_org_id_fkey"
+		}).onDelete("cascade"),
+	foreignKey({
+			columns: [table.moduleKey],
+			foreignColumns: [productModules.key],
+			name: "partner_invitations_module_key_fkey"
+		}).onDelete("restrict"),
+	foreignKey({
+			columns: [table.partnerId],
+			foreignColumns: [partners.id],
+			name: "partner_invitations_partner_id_fkey"
+		}).onDelete("cascade"),
+	foreignKey({
+			columns: [table.invitedBy],
+			foreignColumns: [profiles.id],
+			name: "partner_invitations_invited_by_fkey"
+		}).onDelete("set null"),
+	foreignKey({
+			columns: [table.acceptedBy],
+			foreignColumns: [profiles.id],
+			name: "partner_invitations_accepted_by_fkey"
+		}).onDelete("set null"),
+	unique("partner_invitations_token_hash_key").on(table.tokenHash),
+	pgPolicy("partner_invitations_select_manager", { as: "permissive", for: "select", to: ["authenticated"], using: sql`(((org_id IS NOT NULL) AND has_org_role(org_id, ARRAY['owner'::org_role, 'admin'::org_role])) OR ((partner_id IS NOT NULL) AND has_partner_role(partner_id, ARRAY['owner'::text, 'admin'::text])) OR is_superadmin())` }),
+	check("partner_invitations_kind_check", sql`((org_id IS NOT NULL) AND (module_key IS NOT NULL) AND (partner_name IS NOT NULL) AND (partner_id IS NULL) AND (role = 'owner'::text)) OR ((org_id IS NULL) AND (module_key IS NULL) AND (partner_name IS NULL) AND (partner_id IS NOT NULL) AND (role = ANY (ARRAY['admin'::text, 'member'::text])))`),
+	check("partner_invitations_name_check", sql`(partner_name IS NULL) OR (((char_length(btrim(partner_name)) >= 2) AND (char_length(btrim(partner_name)) <= 120)) AND (partner_name !~ '[[:cntrl:]]'::text))`),
+	check("partner_invitations_email_check", sql`((email)::text ~ '^[^@[:space:]]+@[^@[:space:]]+\.[^@[:space:]]+$'::text) AND (char_length((email)::text) <= 254)`),
+	check("partner_invitations_token_hash_check", sql`token_hash ~ '^[0-9a-f]{64}$'::text`),
+	check("partner_invitations_one_end", sql`(accepted_at IS NULL) OR (revoked_at IS NULL)`),
+]);
+
+export const partners = pgTable("partners", {
+	id: uuid().defaultRandom().primaryKey().notNull(),
+	kind: text().default('agency').notNull(),
+	name: text().notNull(),
+	createdBy: uuid("created_by"),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+	foreignKey({
+			columns: [table.createdBy],
+			foreignColumns: [profiles.id],
+			name: "partners_created_by_fkey"
+		}).onDelete("set null"),
+	pgPolicy("partners_select_member", { as: "permissive", for: "select", to: ["authenticated"], using: sql`(is_partner_member(id) OR is_superadmin())` }),
+	check("partners_kind_check", sql`kind = 'agency'::text`),
+	check("partners_name_check", sql`((char_length(btrim(name)) >= 2) AND (char_length(btrim(name)) <= 120)) AND (name !~ '[[:cntrl:]]'::text)`),
+]);
+
+export const partnerLinks = pgTable("partner_links", {
+	id: uuid().defaultRandom().primaryKey().notNull(),
+	partnerId: uuid("partner_id").notNull(),
+	orgId: uuid("org_id").notNull(),
+	moduleKey: text("module_key").notNull(),
+	status: text().default('active').notNull(),
+	startedAt: timestamp("started_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	startedBy: uuid("started_by"),
+	endedAt: timestamp("ended_at", { withTimezone: true, mode: 'string' }),
+	endedBy: uuid("ended_by"),
+	endReason: text("end_reason"),
+}, (table) => [
+	uniqueIndex("partner_links_one_active_idx").using("btree", table.partnerId.asc().nullsLast().op("text_ops"), table.moduleKey.asc().nullsLast().op("uuid_ops")).where(sql`(status = 'active'::text)`),
+	index("partner_links_org_idx").using("btree", table.orgId.asc().nullsLast().op("text_ops"), table.status.asc().nullsLast().op("uuid_ops")),
+	foreignKey({
+			columns: [table.partnerId],
+			foreignColumns: [partners.id],
+			name: "partner_links_partner_id_fkey"
+		}).onDelete("cascade"),
+	foreignKey({
+			columns: [table.orgId],
+			foreignColumns: [organizations.id],
+			name: "partner_links_org_id_fkey"
+		}).onDelete("cascade"),
+	foreignKey({
+			columns: [table.moduleKey],
+			foreignColumns: [productModules.key],
+			name: "partner_links_module_key_fkey"
+		}).onDelete("restrict"),
+	foreignKey({
+			columns: [table.startedBy],
+			foreignColumns: [profiles.id],
+			name: "partner_links_started_by_fkey"
+		}).onDelete("set null"),
+	foreignKey({
+			columns: [table.endedBy],
+			foreignColumns: [profiles.id],
+			name: "partner_links_ended_by_fkey"
+		}).onDelete("set null"),
+	unique("partner_links_id_org_id_key").on(table.id, table.orgId),
+	pgPolicy("partner_links_select_party", { as: "permissive", for: "select", to: ["authenticated"], using: sql`(is_partner_member(partner_id) OR is_org_member(org_id) OR is_superadmin())` }),
+	check("partner_links_status_check", sql`status = ANY (ARRAY['active'::text, 'ended'::text])`),
+	check("partner_links_ended_check", sql`(status = 'ended'::text) = (ended_at IS NOT NULL)`),
+	check("partner_links_reason_check", sql`(end_reason IS NULL) OR ((char_length(end_reason) <= 500) AND (end_reason !~ '[[:cntrl:]]'::text))`),
+]);
+
+export const paxConfirmLinks = pgTable("pax_confirm_links", {
+	id: uuid().defaultRandom().primaryKey().notNull(),
+	partnerId: uuid("partner_id").notNull(),
+	partnershipId: uuid("partnership_id").notNull(),
+	orgId: uuid("org_id").notNull(),
+	holderId: uuid("holder_id").notNull(),
+	tokenHash: text("token_hash").notNull(),
+	uploads: integer().default(0).notNull(),
+	createdBy: uuid("created_by"),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	expiresAt: timestamp("expires_at", { withTimezone: true, mode: 'string' }).notNull(),
+	endedAt: timestamp("ended_at", { withTimezone: true, mode: 'string' }),
+}, (table) => [
+	uniqueIndex("pax_confirm_links_one_open_idx").using("btree", table.holderId.asc().nullsLast().op("uuid_ops")).where(sql`(ended_at IS NULL)`),
+	foreignKey({
+			columns: [table.partnerId],
+			foreignColumns: [partners.id],
+			name: "pax_confirm_links_partner_id_fkey"
+		}).onDelete("cascade"),
+	foreignKey({
+			columns: [table.partnershipId],
+			foreignColumns: [partnerLinks.id],
+			name: "pax_confirm_links_partnership_id_fkey"
+		}).onDelete("cascade"),
+	foreignKey({
+			columns: [table.orgId],
+			foreignColumns: [organizations.id],
+			name: "pax_confirm_links_org_id_fkey"
+		}).onDelete("cascade"),
+	foreignKey({
+			columns: [table.holderId],
+			foreignColumns: [paxTravelers.id],
+			name: "pax_confirm_links_holder_id_fkey"
+		}).onDelete("cascade"),
+	foreignKey({
+			columns: [table.createdBy],
+			foreignColumns: [profiles.id],
+			name: "pax_confirm_links_created_by_fkey"
+		}).onDelete("set null"),
+	unique("pax_confirm_links_id_org_id_key").on(table.id, table.orgId),
+	unique("pax_confirm_links_token_hash_key").on(table.tokenHash),
+	check("pax_confirm_links_token_check", sql`token_hash ~ '^[0-9a-f]{64}$'::text`),
+	check("pax_confirm_links_uploads_check", sql`uploads >= 0`),
+]);
+
+export const paxConsentTerms = pgTable("pax_consent_terms", {
+	id: uuid().defaultRandom().primaryKey().notNull(),
+	partnerId: uuid("partner_id").notNull(),
+	version: integer().notNull(),
+	body: text().notNull(),
+	createdBy: uuid("created_by"),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+	foreignKey({
+			columns: [table.partnerId],
+			foreignColumns: [partners.id],
+			name: "pax_consent_terms_partner_id_fkey"
+		}).onDelete("cascade"),
+	foreignKey({
+			columns: [table.createdBy],
+			foreignColumns: [profiles.id],
+			name: "pax_consent_terms_created_by_fkey"
+		}).onDelete("set null"),
+	unique("pax_consent_terms_partner_id_version_key").on(table.partnerId, table.version),
+	pgPolicy("pax_consent_terms_select_partner", { as: "permissive", for: "select", to: ["authenticated"], using: sql`is_partner_member(partner_id)` }),
+	check("pax_consent_terms_version_check", sql`version > 0`),
+	check("pax_consent_terms_body_check", sql`((char_length(btrim(body)) >= 40) AND (char_length(btrim(body)) <= 1200)) AND (body !~ '[\x01-\x09\x0b-\x1f\x7f]'::text)`),
+]);
+
+export const paxTravelers = pgTable("pax_travelers", {
+	id: uuid().defaultRandom().primaryKey().notNull(),
+	partnerId: uuid("partner_id").notNull(),
+	partnershipId: uuid("partnership_id").notNull(),
+	orgId: uuid("org_id").notNull(),
+	fullName: text("full_name").notNull(),
+	cpf: text(),
+	birthDate: date("birth_date"),
+	phone: text(),
+	email: text(),
+	nationality: text(),
+	postalCode: text("postal_code"),
+	street: text(),
+	addressNumber: text("address_number"),
+	complement: text(),
+	district: text(),
+	city: text(),
+	uf: text(),
+	guardianId: uuid("guardian_id"),
+	readFields: jsonb("read_fields").default({}).notNull(),
+	updatedVia: text("updated_via").default('partner').notNull(),
+	caseId: uuid("case_id"),
+	handedOverAt: timestamp("handed_over_at", { withTimezone: true, mode: 'string' }),
+	createdBy: uuid("created_by"),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+	uniqueIndex("pax_travelers_cpf_idx").using("btree", table.partnershipId.asc().nullsLast().op("uuid_ops"), table.cpf.asc().nullsLast().op("uuid_ops")).where(sql`(cpf IS NOT NULL)`),
+	index("pax_travelers_guardian_idx").using("btree", table.guardianId.asc().nullsLast().op("uuid_ops")).where(sql`(guardian_id IS NOT NULL)`),
+	index("pax_travelers_partnership_idx").using("btree", table.partnershipId.asc().nullsLast().op("uuid_ops"), table.createdAt.desc().nullsFirst().op("timestamptz_ops")),
+	foreignKey({
+			columns: [table.partnerId],
+			foreignColumns: [partners.id],
+			name: "pax_travelers_partner_id_fkey"
+		}).onDelete("cascade"),
+	foreignKey({
+			columns: [table.partnershipId],
+			foreignColumns: [partnerLinks.id],
+			name: "pax_travelers_partnership_id_fkey"
+		}).onDelete("cascade"),
+	foreignKey({
+			columns: [table.orgId],
+			foreignColumns: [organizations.id],
+			name: "pax_travelers_org_id_fkey"
+		}).onDelete("cascade"),
+	foreignKey({
+			columns: [table.guardianId],
+			foreignColumns: [table.id],
+			name: "pax_travelers_guardian_id_fkey"
+		}).onDelete("set null"),
+	foreignKey({
+			columns: [table.createdBy],
+			foreignColumns: [profiles.id],
+			name: "pax_travelers_created_by_fkey"
+		}).onDelete("set null"),
+	foreignKey({
+			columns: [table.orgId, table.caseId],
+			foreignColumns: [cases.id, cases.orgId],
+			name: "pax_travelers_case_id_org_id_fkey"
+		}).onDelete("set null"),
+	unique("pax_travelers_id_org_id_key").on(table.id, table.orgId),
+	pgPolicy("pax_travelers_select_partner", { as: "permissive", for: "select", to: ["authenticated"], using: sql`is_partner_member(partner_id)` }),
+	check("pax_travelers_name_check", sql`((char_length(full_name) >= 3) AND (char_length(full_name) <= 200)) AND (full_name !~ '[[:cntrl:]]'::text) AND (full_name ~ '[[:alpha:]]'::text)`),
+	check("pax_travelers_cpf_check", sql`(cpf IS NULL) OR ((cpf ~ '^[0-9]{11}$'::text) AND cpf_is_valid(cpf))`),
+	check("pax_travelers_birth_check", sql`(birth_date IS NULL) OR ((birth_date >= '1900-01-01'::date) AND (birth_date <= '2100-01-01'::date))`),
+	check("pax_travelers_phone_check", sql`(phone IS NULL) OR (phone ~ '^[0-9]{12,15}$'::text)`),
+	check("pax_travelers_email_check", sql`(email IS NULL) OR ((char_length(email) <= 254) AND (email ~ '^[^@[:space:]]+@[^@[:space:]]+\.[^@[:space:]]+$'::text))`),
+	check("pax_travelers_postal_check", sql`(postal_code IS NULL) OR (postal_code ~ '^[0-9]{8}$'::text)`),
+	check("pax_travelers_uf_check", sql`(uf IS NULL) OR (uf ~ '^[A-Z]{2}$'::text)`),
+	check("pax_travelers_text_check", sql`(COALESCE(char_length(nationality), 0) <= 60) AND (COALESCE(char_length(street), 0) <= 200) AND (COALESCE(char_length(address_number), 0) <= 20) AND (COALESCE(char_length(complement), 0) <= 120) AND (COALESCE(char_length(district), 0) <= 120) AND (COALESCE(char_length(city), 0) <= 120)`),
+	check("pax_travelers_read_check", sql`(jsonb_typeof(read_fields) = 'object'::text) AND (octet_length((read_fields)::text) <= 4000)`),
+	check("pax_travelers_via_check", sql`updated_via = ANY (ARRAY['partner'::text, 'document'::text, 'passenger'::text])`),
+	check("pax_travelers_guardian_check", sql`(guardian_id IS NULL) OR (guardian_id <> id)`),
+]);
+
+export const paxTrips = pgTable("pax_trips", {
+	id: uuid().defaultRandom().primaryKey().notNull(),
+	partnerId: uuid("partner_id").notNull(),
+	partnershipId: uuid("partnership_id").notNull(),
+	orgId: uuid("org_id").notNull(),
+	holderId: uuid("holder_id").notNull(),
+	locator: text(),
+	createdBy: uuid("created_by"),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+	index("pax_trips_holder_idx").using("btree", table.holderId.asc().nullsLast().op("uuid_ops")),
+	index("pax_trips_partnership_idx").using("btree", table.partnershipId.asc().nullsLast().op("uuid_ops"), table.createdAt.desc().nullsFirst().op("timestamptz_ops")),
+	foreignKey({
+			columns: [table.partnerId],
+			foreignColumns: [partners.id],
+			name: "pax_trips_partner_id_fkey"
+		}).onDelete("cascade"),
+	foreignKey({
+			columns: [table.partnershipId],
+			foreignColumns: [partnerLinks.id],
+			name: "pax_trips_partnership_id_fkey"
+		}).onDelete("cascade"),
+	foreignKey({
+			columns: [table.orgId],
+			foreignColumns: [organizations.id],
+			name: "pax_trips_org_id_fkey"
+		}).onDelete("cascade"),
+	foreignKey({
+			columns: [table.holderId],
+			foreignColumns: [paxTravelers.id],
+			name: "pax_trips_holder_id_fkey"
+		}).onDelete("cascade"),
+	foreignKey({
+			columns: [table.createdBy],
+			foreignColumns: [profiles.id],
+			name: "pax_trips_created_by_fkey"
+		}).onDelete("set null"),
+	unique("pax_trips_id_org_id_key").on(table.id, table.orgId),
+	pgPolicy("pax_trips_select_partner", { as: "permissive", for: "select", to: ["authenticated"], using: sql`is_partner_member(partner_id)` }),
+	check("pax_trips_locator_check", sql`(locator IS NULL) OR (locator ~ '^[A-Z0-9]{5,8}$'::text)`),
+]);
+
+export const paxDocuments = pgTable("pax_documents", {
+	id: uuid().defaultRandom().primaryKey().notNull(),
+	partnerId: uuid("partner_id").notNull(),
+	orgId: uuid("org_id").notNull(),
+	travelerId: uuid("traveler_id").notNull(),
+	tripId: uuid("trip_id"),
+	kind: text().notNull(),
+	fileId: uuid("file_id").notNull(),
+	source: text().notNull(),
+	reading: text().default('uploading').notNull(),
+	readingClaims: integer("reading_claims").default(0).notNull(),
+	readingClaimedAt: timestamp("reading_claimed_at", { withTimezone: true, mode: 'string' }),
+	readingAttempts: integer("reading_attempts").default(0).notNull(),
+	readingError: text("reading_error"),
+	readOutput: jsonb("read_output"),
+	readRunId: uuid("read_run_id"),
+	readAt: timestamp("read_at", { withTimezone: true, mode: 'string' }),
+	caseDocumentId: uuid("case_document_id"),
+	createdBy: uuid("created_by"),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+	index("pax_documents_reading_idx").using("btree", table.createdAt.asc().nullsLast().op("timestamptz_ops")).where(sql`(reading = 'pending'::text)`),
+	index("pax_documents_traveler_idx").using("btree", table.travelerId.asc().nullsLast().op("uuid_ops"), table.createdAt.asc().nullsLast().op("timestamptz_ops")),
+	foreignKey({
+			columns: [table.partnerId],
+			foreignColumns: [partners.id],
+			name: "pax_documents_partner_id_fkey"
+		}).onDelete("cascade"),
+	foreignKey({
+			columns: [table.orgId],
+			foreignColumns: [organizations.id],
+			name: "pax_documents_org_id_fkey"
+		}).onDelete("cascade"),
+	foreignKey({
+			columns: [table.travelerId],
+			foreignColumns: [paxTravelers.id],
+			name: "pax_documents_traveler_id_fkey"
+		}).onDelete("cascade"),
+	foreignKey({
+			columns: [table.tripId],
+			foreignColumns: [paxTrips.id],
+			name: "pax_documents_trip_id_fkey"
+		}).onDelete("set null"),
+	foreignKey({
+			columns: [table.readRunId],
+			foreignColumns: [aiRuns.id],
+			name: "pax_documents_read_run_id_fkey"
+		}).onDelete("set null"),
+	foreignKey({
+			columns: [table.createdBy],
+			foreignColumns: [profiles.id],
+			name: "pax_documents_created_by_fkey"
+		}).onDelete("set null"),
+	foreignKey({
+			columns: [table.orgId, table.fileId],
+			foreignColumns: [files.id, files.orgId],
+			name: "pax_documents_file_id_org_id_fkey"
+		}).onDelete("cascade"),
+	unique("pax_documents_id_org_id_key").on(table.id, table.orgId),
+	unique("pax_documents_file_id_key").on(table.fileId),
+	pgPolicy("pax_documents_select_partner", { as: "permissive", for: "select", to: ["authenticated"], using: sql`is_partner_member(partner_id)` }),
+	check("pax_documents_kind_check", sql`kind = ANY (ARRAY['identity'::text, 'address_proof'::text, 'ticket'::text, 'boarding_pass'::text])`),
+	check("pax_documents_source_check", sql`source = ANY (ARRAY['partner'::text, 'passenger'::text])`),
+	check("pax_documents_reading_check", sql`reading = ANY (ARRAY['uploading'::text, 'pending'::text, 'working'::text, 'done'::text, 'failed'::text])`),
+	check("pax_documents_error_check", sql`(reading_error IS NULL) OR (reading_error ~ '^[a-z][a-z0-9_]{1,59}$'::text)`),
+	check("pax_documents_output_check", sql`(read_output IS NULL) OR (jsonb_typeof(read_output) = 'object'::text)`),
+]);
+
+export const paxConsents = pgTable("pax_consents", {
+	id: uuid().defaultRandom().primaryKey().notNull(),
+	partnerId: uuid("partner_id").notNull(),
+	orgId: uuid("org_id").notNull(),
+	travelerId: uuid("traveler_id").notNull(),
+	givenBy: uuid("given_by"),
+	termId: uuid("term_id"),
+	wording: text().notNull(),
+	answer: text().notNull(),
+	channel: text().default('link').notNull(),
+	confirmLinkId: uuid("confirm_link_id"),
+	evidence: jsonb().default({}).notNull(),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).default(sql`clock_timestamp()`).notNull(),
+}, (table) => [
+	index("pax_consents_traveler_idx").using("btree", table.travelerId.asc().nullsLast().op("timestamptz_ops"), table.createdAt.desc().nullsFirst().op("timestamptz_ops")),
+	foreignKey({
+			columns: [table.givenBy],
+			foreignColumns: [paxTravelers.id],
+			name: "pax_consents_given_by_fkey"
+		}).onDelete("set null"),
+	foreignKey({
+			columns: [table.orgId],
+			foreignColumns: [organizations.id],
+			name: "pax_consents_org_id_fkey"
+		}).onDelete("cascade"),
+	foreignKey({
+			columns: [table.travelerId],
+			foreignColumns: [paxTravelers.id],
+			name: "pax_consents_traveler_id_fkey"
+		}).onDelete("cascade"),
+	foreignKey({
+			columns: [table.partnerId],
+			foreignColumns: [partners.id],
+			name: "pax_consents_partner_id_fkey"
+		}).onDelete("cascade"),
+	foreignKey({
+			columns: [table.termId],
+			foreignColumns: [paxConsentTerms.id],
+			name: "pax_consents_term_id_fkey"
+		}).onDelete("set null"),
+	foreignKey({
+			columns: [table.confirmLinkId],
+			foreignColumns: [paxConfirmLinks.id],
+			name: "pax_consents_confirm_link_id_fkey"
+		}).onDelete("set null"),
+	unique("pax_consents_id_org_id_key").on(table.id, table.orgId),
+	pgPolicy("pax_consents_select_partner", { as: "permissive", for: "select", to: ["authenticated"], using: sql`is_partner_member(partner_id)` }),
+	check("pax_consents_answer_check", sql`answer = ANY (ARRAY['agreed'::text, 'declined'::text, 'withdrawn'::text])`),
+	check("pax_consents_channel_check", sql`channel = 'link'::text`),
+	check("pax_consents_wording_check", sql`(char_length(wording) >= 20) AND (char_length(wording) <= 4000)`),
+	check("pax_consents_evidence_check", sql`(jsonb_typeof(evidence) = 'object'::text) AND (octet_length((evidence)::text) <= 2000)`),
+]);
+
+export const paxTripTravelers = pgTable("pax_trip_travelers", {
+	tripId: uuid("trip_id").notNull(),
+	travelerId: uuid("traveler_id").notNull(),
+}, (table) => [
+	index("pax_trip_travelers_traveler_idx").using("btree", table.travelerId.asc().nullsLast().op("uuid_ops")),
+	foreignKey({
+			columns: [table.tripId],
+			foreignColumns: [paxTrips.id],
+			name: "pax_trip_travelers_trip_id_fkey"
+		}).onDelete("cascade"),
+	foreignKey({
+			columns: [table.travelerId],
+			foreignColumns: [paxTravelers.id],
+			name: "pax_trip_travelers_traveler_id_fkey"
+		}).onDelete("cascade"),
+	primaryKey({ columns: [table.tripId, table.travelerId], name: "pax_trip_travelers_pkey"}),
+	pgPolicy("pax_trip_travelers_select_partner", { as: "permissive", for: "select", to: ["authenticated"], using: sql`(EXISTS ( SELECT 1
+   FROM pax_trips t
+  WHERE ((t.id = pax_trip_travelers.trip_id) AND is_partner_member(t.partner_id))))` }),
 ]);
 
 export const announcementDismissals = pgTable("announcement_dismissals", {
@@ -4490,6 +5102,54 @@ export const firmSigners = pgTable("firm_signers", {
 	pgPolicy("firm_signers_select_member", { as: "permissive", for: "select", to: ["authenticated"], using: sql`is_org_member(org_id)` }),
 ]);
 
+export const firmModules = pgTable("firm_modules", {
+	orgId: uuid("org_id").notNull(),
+	moduleKey: text("module_key").notNull(),
+	enabledAt: timestamp("enabled_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	enabledBy: uuid("enabled_by"),
+}, (table) => [
+	foreignKey({
+			columns: [table.orgId],
+			foreignColumns: [organizations.id],
+			name: "firm_modules_org_id_fkey"
+		}).onDelete("cascade"),
+	foreignKey({
+			columns: [table.moduleKey],
+			foreignColumns: [productModules.key],
+			name: "firm_modules_module_key_fkey"
+		}).onDelete("restrict"),
+	foreignKey({
+			columns: [table.enabledBy],
+			foreignColumns: [profiles.id],
+			name: "firm_modules_enabled_by_fkey"
+		}).onDelete("set null"),
+	primaryKey({ columns: [table.orgId, table.moduleKey], name: "firm_modules_pkey"}),
+	pgPolicy("firm_modules_select_member", { as: "permissive", for: "select", to: ["authenticated"], using: sql`(is_org_member(org_id) OR is_superadmin())` }),
+]);
+
+export const partnerMembers = pgTable("partner_members", {
+	partnerId: uuid("partner_id").notNull(),
+	userId: uuid("user_id").notNull(),
+	role: text().notNull(),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+	uniqueIndex("partner_members_one_owner_idx").using("btree", table.partnerId.asc().nullsLast().op("uuid_ops")).where(sql`(role = 'owner'::text)`),
+	foreignKey({
+			columns: [table.partnerId],
+			foreignColumns: [partners.id],
+			name: "partner_members_partner_id_fkey"
+		}).onDelete("cascade"),
+	foreignKey({
+			columns: [table.userId],
+			foreignColumns: [profiles.id],
+			name: "partner_members_user_id_fkey"
+		}).onDelete("cascade"),
+	primaryKey({ columns: [table.partnerId, table.userId], name: "partner_members_pkey"}),
+	unique("partner_members_user_id_key").on(table.userId),
+	pgPolicy("partner_members_select_member", { as: "permissive", for: "select", to: ["authenticated"], using: sql`(is_partner_member(partner_id) OR is_superadmin())` }),
+	check("partner_members_role_check", sql`role = ANY (ARRAY['owner'::text, 'admin'::text, 'member'::text])`),
+]);
+
 export const productEventsDaily = pgTable("product_events_daily", {
 	day: date().notNull(),
 	eventName: text("event_name").notNull(),
@@ -4522,6 +5182,30 @@ export const waContacts = pgTable("wa_contacts", {
 	pgPolicy("wa_contacts_select_member", { as: "permissive", for: "select", to: ["authenticated"], using: sql`is_org_member(org_id)` }),
 	check("wa_contacts_wa_id_check", sql`contact_wa_id ~ '^[0-9]{8,15}$'::text`),
 	check("wa_contacts_name_check", sql`(char_length(btrim(saved_name)) >= 1) AND (char_length(btrim(saved_name)) <= 200)`),
+]);
+
+export const firmClaimDefaults = pgTable("firm_claim_defaults", {
+	orgId: uuid("org_id").notNull(),
+	incident: text().notNull(),
+	// You can use { mode: "bigint" } if numbers are exceeding js number limitations
+	cents: bigint({ mode: "number" }).notNull(),
+	changedBy: uuid("changed_by"),
+	changedAt: timestamp("changed_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+	foreignKey({
+			columns: [table.orgId],
+			foreignColumns: [organizations.id],
+			name: "firm_claim_defaults_org_id_fkey"
+		}).onDelete("cascade"),
+	foreignKey({
+			columns: [table.changedBy],
+			foreignColumns: [profiles.id],
+			name: "firm_claim_defaults_changed_by_fkey"
+		}).onDelete("set null"),
+	primaryKey({ columns: [table.orgId, table.incident], name: "firm_claim_defaults_pkey"}),
+	pgPolicy("firm_claim_defaults_select_member", { as: "permissive", for: "select", to: ["authenticated"], using: sql`is_org_member(org_id)` }),
+	check("firm_claim_defaults_incident_check", sql`incident = ANY (ARRAY['delay'::text, 'cancellation'::text, 'overbooking'::text, 'missed_connection'::text, 'downgrade'::text, 'baggage_lost'::text, 'baggage_damaged'::text, 'baggage_delayed'::text, 'other'::text])`),
+	check("firm_claim_defaults_cents_check", sql`(cents >= 1) AND (cents <= '100000000000'::bigint)`),
 ]);
 
 export const firmAutonomy = pgTable("firm_autonomy", {
@@ -4576,6 +5260,30 @@ export const waOptouts = pgTable("wa_optouts", {
 	check("wa_optouts_wa_id_check", sql`contact_wa_id ~ '^[0-9]{8,15}$'::text`),
 	check("wa_optouts_source_check", sql`source = ANY (ARRAY['keyword'::text, 'manual'::text])`),
 	check("wa_optouts_note_check", sql`(note IS NULL) OR (char_length(note) <= 500)`),
+]);
+
+export const paxTripLegs = pgTable("pax_trip_legs", {
+	tripId: uuid("trip_id").notNull(),
+	position: integer().notNull(),
+	flightNumber: text("flight_number").notNull(),
+	originIata: text("origin_iata").notNull(),
+	destinationIata: text("destination_iata").notNull(),
+	scheduledDepartureLocal: timestamp("scheduled_departure_local", { mode: 'string' }).notNull(),
+	scheduledArrivalLocal: timestamp("scheduled_arrival_local", { mode: 'string' }).notNull(),
+}, (table) => [
+	foreignKey({
+			columns: [table.tripId],
+			foreignColumns: [paxTrips.id],
+			name: "pax_trip_legs_trip_id_fkey"
+		}).onDelete("cascade"),
+	primaryKey({ columns: [table.tripId, table.position], name: "pax_trip_legs_pkey"}),
+	pgPolicy("pax_trip_legs_select_partner", { as: "permissive", for: "select", to: ["authenticated"], using: sql`(EXISTS ( SELECT 1
+   FROM pax_trips t
+  WHERE ((t.id = pax_trip_legs.trip_id) AND is_partner_member(t.partner_id))))` }),
+	check("pax_trip_legs_position_check", sql`("position" >= 1) AND ("position" <= 6)`),
+	check("pax_trip_legs_flight_check", sql`flight_number ~ '^[A-Z0-9]{2}[0-9]{1,4}[A-Z]?$'::text`),
+	check("pax_trip_legs_airports_check", sql`(origin_iata ~ '^[A-Z]{3}$'::text) AND (destination_iata ~ '^[A-Z]{3}$'::text) AND (origin_iata <> destination_iata)`),
+	check("pax_trip_legs_times_check", sql`(scheduled_arrival_local > (scheduled_departure_local - '12:00:00'::interval)) AND ((scheduled_departure_local >= '2000-01-01 00:00:00'::timestamp without time zone) AND (scheduled_departure_local <= '2100-01-01 00:00:00'::timestamp without time zone))`),
 ]);
 
 export const courtNotes = pgTable("court_notes", {

@@ -70,7 +70,8 @@ select is(
       -- in every new table of public, is one): it is no way in.
       and p.prorettype <> 'event_trigger'::regtype
   ),
-  -- The client_link_* functions are a client's way in, by the token of their link (0022, 0023, 0025, 0026, 0038).
+  -- The client_link_* functions are a client's way in, by the token of their link (0022, 0023, 0025, 0026, 0038);
+  -- the pax_link_* ones a passenger's, by the link of the agency's partnership (0070).
   array[
     'client_link_add_dependent', 'client_link_answer_chronology', 'client_link_civil_court', 'client_link_course',
     'client_link_discard_upload',
@@ -80,7 +81,8 @@ select is(
     'client_link_reserve_upload',
     'client_link_save_person', 'client_link_save_segment', 'client_link_signature_original', 'client_link_signatures',
     'client_link_statements', 'client_link_terms', 'client_link_write_statement',
-    'current_consent_terms', 'firm_invitation_preview', 'partner_invitation_preview', 'supported_locales',
+    'current_consent_terms', 'firm_invitation_preview', 'partner_invitation_preview',
+    'pax_link_answer', 'pax_link_open', 'pax_link_reserve_upload', 'supported_locales',
     'verify_document'
   ],
   'an anonymous visitor can call exactly the texts in force, what an invitation link shows, the languages, the check of a document''s public code and what a client''s link lets them do'
@@ -90,8 +92,10 @@ select ok(
   not has_column_privilege('anon', 'public.firm_invitations', 'token_hash', 'SELECT')
   and not has_column_privilege('authenticated', 'public.firm_invitations', 'token_hash', 'SELECT')
   and not has_column_privilege('anon', 'public.partner_invitations', 'token_hash', 'SELECT')
-  and not has_column_privilege('authenticated', 'public.partner_invitations', 'token_hash', 'SELECT'),
-  'no session can read the hash of an invitation link'
+  and not has_column_privilege('authenticated', 'public.partner_invitations', 'token_hash', 'SELECT')
+  and not has_column_privilege('anon', 'public.pax_confirm_links', 'token_hash', 'SELECT')
+  and not has_column_privilege('authenticated', 'public.pax_confirm_links', 'token_hash', 'SELECT'),
+  'no session can read the hash of an invitation link, nor of a passenger''s link'
 );
 
 select is(
@@ -127,6 +131,8 @@ select is(
     'lead_submissions',
     'meta_attribution',
     'newsletter_deliveries',
+    -- A passenger's link of an agency (0070): read through its functions, by the agency and by its token.
+    'pax_confirm_links',
     'proceeding_signers_seen'
   ],
   'the tables only the backend touches are not readable by any session'

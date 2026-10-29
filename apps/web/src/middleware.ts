@@ -49,6 +49,10 @@ const PUBLIC_PREFIXES = [
   // A firm's test chat: whoever tests has no account, the token in the path is
   // the way in (lib/test-chat/actions.ts).
   "/t/",
+  // A passenger of a travel agency, partner of a firm in the passenger module:
+  // no account, the token in the path is their way in to agree that ONE
+  // follows their flights (migration 0070).
+  "/acordo/",
   // Endpoints a person reaches from an e-mail, with no account or signed out:
   // each carries its own token (the unsubscribe link, lib/unsubscribe.ts). The
   // trailing slash is part of the rule: `/api/publicity` is not this folder.
@@ -159,7 +163,8 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith("/c/") ||
     pathname.startsWith("/t/") ||
     pathname.startsWith("/convite/") ||
-    pathname.startsWith("/parceria/");
+    pathname.startsWith("/parceria/") ||
+    pathname.startsWith("/acordo/");
 
   const withVisitCookies = <T extends NextResponse>(res: T): T => {
     if (tokenInPath) return res;
