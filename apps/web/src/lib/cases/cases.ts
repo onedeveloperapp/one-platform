@@ -8,18 +8,8 @@ import { isMinorOn } from "@flyee/rules/person";
  * reached through `lib/cases/actions.ts` and `lib/cases/client-link.ts`.
  */
 
-export const INCIDENTS = [
-  "delay",
-  "cancellation",
-  "overbooking",
-  "missed_connection",
-  "downgrade",
-  "baggage_lost",
-  "baggage_damaged",
-  "baggage_delayed",
-  "other",
-] as const;
-export type Incident = (typeof INCIDENTS)[number];
+// The kinds of problem of a case are its module's (`lib/modules/registry.ts`): the passenger's are in
+// `modules/direito-do-passageiro/incidents.ts`.
 
 export const CASE_STATUSES = [
   "intake",
@@ -101,18 +91,6 @@ export const UFS = [
 ] as const;
 
 // The `product` message key of each stored value, spelled out so the catalog check sees each one.
-
-export const INCIDENT_KEY: Record<Incident, string> = {
-  delay: "case-incident-delay",
-  cancellation: "case-incident-cancellation",
-  overbooking: "case-incident-overbooking",
-  missed_connection: "case-incident-missed-connection",
-  downgrade: "case-incident-downgrade",
-  baggage_lost: "case-incident-baggage-lost",
-  baggage_damaged: "case-incident-baggage-damaged",
-  baggage_delayed: "case-incident-baggage-delayed",
-  other: "case-incident-other",
-};
 
 export const STATUS_KEY: Record<CaseStatus, string> = {
   intake: "case-status-intake",
@@ -282,7 +260,6 @@ export const FILE_REFUSAL_KEY: Record<string, string> = {
   rejected: "case-file-refused-other",
 };
 
-export const isIncident = (value: unknown): value is Incident => (INCIDENTS as readonly unknown[]).includes(value);
 export const isCaseStatus = (value: unknown): value is CaseStatus =>
   (CASE_STATUSES as readonly unknown[]).includes(value);
 export const isDocumentKind = (value: unknown): value is DocumentKind =>

@@ -14,13 +14,12 @@ import { conversationFunctions } from "@/lib/conversations/jobs";
 import { courtFunctions } from "@/lib/courts/jobs";
 import { deadlineFunctions } from "@/lib/deadlines/jobs";
 import { fileFunctions } from "@/lib/files/jobs";
-import { flightAlertFunctions } from "@/lib/flight-alerts/jobs";
-import { flightFunctions } from "@/lib/flights/jobs";
 import { hearingFunctions } from "@/lib/hearings/jobs";
 import { importFunctions } from "@/lib/import/jobs";
 import { leadFunctions } from "@/lib/lead-jobs";
 import { libraryFunctions } from "@/lib/library/jobs";
 import { maintenanceFunctions } from "@/lib/maintenance-jobs";
+import { moduleJobs } from "@/lib/modules/jobs";
 import { newsletterFunctions } from "@/lib/newsletter-jobs";
 import { noticeFunctions } from "@/lib/notices/jobs";
 import { publicationFunctions } from "@/lib/publications/jobs";
@@ -44,17 +43,17 @@ export const { GET, POST, PUT } = serve({
     ...fileFunctions,
     ...signatureFunctions,
     ...caseFunctions,
-    ...flightFunctions,
     ...courtFunctions,
     ...importFunctions,
     ...deadlineFunctions,
     ...hearingFunctions,
     ...noticeFunctions,
-    ...flightAlertFunctions,
     ...conversationFunctions,
     ...publicationFunctions,
     ...libraryFunctions,
     ...whatsappFunctions,
     ...backupFunctions,
+    // The jobs of the modules installed (lib/modules/jobs.ts).
+    ...moduleJobs,
   ],
 });

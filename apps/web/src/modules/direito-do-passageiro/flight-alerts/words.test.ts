@@ -8,7 +8,7 @@ import {
   lateWords,
   listOf,
   whatWords,
-} from "@/lib/flight-alerts/words";
+} from "@/modules/direito-do-passageiro/flight-alerts/words";
 
 // Every flight and person here is invented; the cities are public reference data.
 

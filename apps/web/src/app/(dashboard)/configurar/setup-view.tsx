@@ -29,11 +29,11 @@ import {
   Typography,
 } from "@mui/material";
 
+import { useViewer } from "@/components/layout/viewer-context";
 import PageHeader from "@/components/product/page-header";
 import SecondFactorPrompt from "@/components/product/second-factor-prompt";
 import SetupWizard, { type WizardStep } from "@/components/product/setup-wizard";
 import type { SecondFactorState } from "@/lib/ai/approvals";
-import { type Incident, INCIDENT_KEY } from "@/lib/cases/cases";
 import { addOabRegistration, answerFirmSetup, inviteToFirm } from "@/lib/firm/actions";
 import {
   autonomyErrorKey,
@@ -47,6 +47,7 @@ import { setFirmClaimDefault, setFirmSigner } from "@/lib/firm/autonomy-actions"
 import { FIRM_FUNCTIONS, type FirmFunction, formatOab, OAB_STATES, type OabRegistration } from "@/lib/firm/roles";
 import { SETUP_STEPS, type SetupStepKey } from "@/lib/firm/setup-steps";
 import type { LibraryTemplate, SetupPaper } from "@/lib/library/facts";
+import { caseKindLabelKey, firmCaseKinds } from "@/lib/modules/registry";
 import type { ConnectionsState } from "@/lib/whatsapp/connections";
 
 export type SetupState =
@@ -198,7 +199,8 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
   // ---------- The Valor da Causa Pedido ----------
   // What was chosen and typed, as the fields hold it, until the page reads it back.
   const [claimChoice, setClaimChoice] = useState<ClaimChoice>(() => claimChoiceOf(state.claimDefaults ?? []));
-  const [claims, setClaims] = useState<Partial<Record<Incident, string>>>(() => typedClaims(state.claimDefaults ?? []));
+  const claimKinds = firmCaseKinds(useViewer()?.modules);
+  const [claims, setClaims] = useState<Partial<Record<string, string>>>(() => typedClaims(state.claimDefaults ?? []));
   const [claimsError, setClaimsError] = useState<string | null>(null);
   const claimsEditable = partner && !locked && !blocked && state.claimDefaults !== null;
 
@@ -262,9 +264,14 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
   const saveClaims = async (): Promise<boolean> => {
     setClaimsError(null);
     if (!claimsEditable) return true;
-    const planned = claimDefaultChanges(claimChoice, claims, state.claimDefaults ?? []);
+    const planned = claimDefaultChanges(
+      claimChoice,
+      claims,
+      state.claimDefaults ?? [],
+      claimKinds.map((kind) => kind.key),
+    );
     if (!planned.ok) {
-      setClaimsError(t("claims-invalid", { kind: t(INCIDENT_KEY[planned.invalid]) }));
+      setClaimsError(t("claims-invalid", { kind: t(caseKindLabelKey(planned.invalid) ?? "case-incident-other") }));
       return false;
     }
     for (const change of planned.changes) {
@@ -488,6 +495,7 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
               id="setup-claim"
               choice={claimChoice}
               typed={claims}
+              kinds={claimKinds}
               disabled={!claimsEditable}
               onChoice={(choice) => {
                 setClaimChoice(choice);

@@ -271,19 +271,21 @@ select is(
   -- each pair cascades from the firm in the same statement, and a file is
   -- never deleted while something names it.
   -- The references to the reference tables (an airline, an airport, a court,
-  -- a kind of notice) point at rows no firm deletes: a firm that goes takes
-  -- its cases, and its notices, with it.
+  -- a kind of notice, a product module) point at rows no firm deletes: a firm
+  -- that goes takes its cases, its notices and its modules with it.
   array[
     'ai_runs.prompt_version_id',
     'ai_runs.task',
     'approvals.task',
     'cases.airline_iata',
+    'cases.module',
     'client_consents.term_id',
     'client_notices.kind',
     'consent_acceptances.term_id',
     'filing_package_items.file_id',
     'filing_package_items.signed_file_id',
     'filing_receipts.file_id',
+    'firm_modules.module_key',
     'firm_notice_kinds.kind',
     'flight_segments.destination_iata',
     'flight_segments.origin_iata',

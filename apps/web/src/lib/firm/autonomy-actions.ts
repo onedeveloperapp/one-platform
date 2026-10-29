@@ -3,13 +3,11 @@
 import { revalidatePath } from "next/cache";
 
 import { queueCaseAdvance } from "@/lib/cases/advance-work";
-import { type Incident, INCIDENTS } from "@/lib/cases/cases";
 import { isAutonomyDecision, isAutonomyMode } from "@/lib/firm/autonomy";
 import { getMemberContext } from "@/lib/member/context";
+import { caseKindsOfFirm } from "@/lib/modules/registry";
 
 export type AutonomyResult = { ok: true; code: string } | { ok: false; code: string };
-
-const isIncident = (value: unknown): value is Incident => (INCIDENTS as readonly unknown[]).includes(value);
 
 /**
  * A partner chooses how ONE takes a decision of the firm (migration 0016,
@@ -60,7 +58,9 @@ export async function setFirmAutonomy(
  */
 export async function setFirmClaimDefault(incident: string, cents: number | null): Promise<AutonomyResult> {
   const context = await getMemberContext();
-  if (!context?.firm || !isIncident(incident)) return { ok: false, code: "failed" };
+  if (!context?.firm || !caseKindsOfFirm(context.modules).some((kind) => kind.key === incident)) {
+    return { ok: false, code: "failed" };
+  }
   if (cents !== null && (!Number.isInteger(cents) || cents < 1 || cents > 100_000_000_000)) {
     return { ok: false, code: "invalid_amount" };
   }

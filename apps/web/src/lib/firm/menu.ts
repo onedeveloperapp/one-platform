@@ -19,6 +19,8 @@ export type MenuViewer = {
   role: OrgRole | null;
   /** What the person does in the firm. Null with no firm. */
   firmFunction: FirmFunction | null;
+  /** The product modules the firm uses (migration 0068). None with no firm. */
+  modules: readonly string[];
   isSuperadmin: boolean;
   /**
    * The person owes the second factor the rule asks of them (lib/firm/gate-rules.ts):
@@ -37,6 +39,8 @@ export type MenuAccess = {
   manager?: boolean;
   /** Only these functions of the firm. */
   functions?: readonly FirmFunction[];
+  /** Only a firm that uses this product module (lib/modules/registry.ts). */
+  module?: string;
 };
 
 /**
@@ -50,6 +54,7 @@ export function canAccess(access: MenuAccess | undefined, viewer: MenuViewer | n
   if (!viewer.hasFirm) return access?.withoutFirm === true;
   if (access?.manager && !isManager(viewer.role)) return false;
   if (access?.functions && !(viewer.firmFunction && access.functions.includes(viewer.firmFunction))) return false;
+  if (access?.module && !viewer.modules.includes(access.module)) return false;
   return true;
 }
 

@@ -48,6 +48,8 @@ export type MemberContext = {
   /** The firm's id, or null. Kept beside `firm` for the many callers that only need the id. */
   orgId: string | null;
   firm: MemberFirm | null;
+  /** The product modules the firm uses (`firm_modules`, migration 0068); none with no firm. */
+  modules: string[];
   isSuperadmin: boolean;
   locale: LocaleOption;
   currency: BillingCurrency;
@@ -55,11 +57,13 @@ export type MemberContext = {
   entitlements: Entitlements;
 };
 
+type OrganizationRow = { name: string; firm_modules?: { module_key: string }[] | null };
+
 type MembershipRow = {
   org_id: string;
   role: OrgRole;
   firm_function: FirmFunction;
-  organizations: { name: string } | { name: string }[] | null;
+  organizations: OrganizationRow | OrganizationRow[] | null;
 };
 
 export const getMemberContext = cache(async (): Promise<MemberContext | null> => {
@@ -74,7 +78,7 @@ export const getMemberContext = cache(async (): Promise<MemberContext | null> =>
     // Filtered by the person: a member reads every membership of their firm.
     supabase
       .from("memberships")
-      .select("org_id, role, firm_function, organizations(name)")
+      .select("org_id, role, firm_function, organizations(name, firm_modules(module_key))")
       .eq("user_id", user.id)
       .maybeSingle(),
     supabase.from("profiles").select("display_name, timezone, is_superadmin").eq("id", user.id).maybeSingle(),
@@ -94,6 +98,7 @@ export const getMemberContext = cache(async (): Promise<MemberContext | null> =>
     email: user.email ?? "",
     orgId: firm?.id ?? null,
     firm,
+    modules: firm ? (organization?.firm_modules ?? []).map((row) => row.module_key) : [],
     isSuperadmin: Boolean(profile?.is_superadmin),
     locale,
     currency: resolveCurrency({ cookie: cookieStore.get(COOKIE_KEYS.currency)?.value, locale }),

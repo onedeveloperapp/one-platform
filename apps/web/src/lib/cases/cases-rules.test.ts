@@ -17,8 +17,6 @@ import {
   EVENT_KEY,
   FILE_REFUSAL_KEY,
   formatLocalTime,
-  INCIDENT_KEY,
-  INCIDENTS,
   isNeedMet,
   localTimeForField,
   MARITAL_KEY,
@@ -36,6 +34,7 @@ import {
 } from "@/lib/cases/cases";
 import { personFields, personValues, segmentFields, segmentValues } from "@/lib/cases/forms";
 import { WHATSAPP_COPY } from "@/lib/messages/whatsapp-copy";
+import { INCIDENT_KEY, INCIDENTS } from "@/modules/direito-do-passageiro/incidents";
 import messages from "@flyee/content/messages/pt-BR.json";
 
 vi.mock("server-only", () => ({}));

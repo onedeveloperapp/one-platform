@@ -13,7 +13,7 @@ import {
 import { loadConsole } from "@/lib/admin/session";
 import { providerReadiness } from "@/lib/ai/executor";
 import { isDjenCaptureOn } from "@/lib/courts/djen";
-import { flightStatusProvider } from "@/lib/flights/status";
+import { flightStatusProvider } from "@/modules/direito-do-passageiro/flights/status";
 
 export const metadata = { title: "IA" };
 

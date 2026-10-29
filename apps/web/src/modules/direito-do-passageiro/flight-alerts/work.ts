@@ -2,8 +2,8 @@ import "server-only";
 
 import { after } from "next/server";
 
-import { type AlertLeg, alertParams } from "@/lib/flight-alerts/words";
 import { deliverOutbox } from "@/lib/whatsapp/send";
+import { type AlertLeg, alertParams } from "@/modules/direito-do-passageiro/flight-alerts/words";
 import { createServiceClient } from "@flyee/auth/service";
 import { sendEvent } from "@flyee/jobs";
 import { FLIGHT_PROBLEM_RULE, type FlightProblem, flightProblem, type WatchedLeg } from "@flyee/rules/flight-problem";
@@ -14,7 +14,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
  * source says of a trip's legs is read by the rule (`flight-problem-v1`), and
  * a problem it finds is one alert per trip and fact, kept by the database;
  * each alert is claimed under a number, its values are written here from the
- * rule (`lib/flight-alerts/words.ts`), and the database sends it as the
+ * rule (`flight-alerts/words.ts` of the module), and the database sends it as the
  * firm's template, once, through the outbox of 0019, or says why it could
  * not. Nothing of a passenger is kept in a job's state: the steps carry ids
  * and counts.

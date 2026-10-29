@@ -13,7 +13,6 @@ import NiRefresh from "@/icons/nexture/ni-refresh";
 import NiScale from "@/icons/nexture/ni-scale";
 import NiSendRight from "@/icons/nexture/ni-send-right";
 import { mimeOf, uploadToSignedUrl } from "@/lib/files/browser-upload";
-import { flightLabel } from "@/lib/flight-alerts/words";
 import {
   followRealFlight,
   readTestChat,
@@ -34,6 +33,7 @@ import {
   TRIP_KEY,
   waitsForChoice,
 } from "@/lib/test-chat/test-chat";
+import { flightLabel } from "@/modules/direito-do-passageiro/flight-alerts/words";
 
 /** How often the conversation is read again while the page is open, and the trips' state. */
 const THREAD_EVERY_MS = 2_000;

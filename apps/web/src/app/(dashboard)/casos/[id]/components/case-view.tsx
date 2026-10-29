@@ -41,11 +41,11 @@ import {
   CLIENT_STAGES,
   DOCUMENT_KIND_KEY,
   groupOf,
-  INCIDENT_KEY,
   PERSON_FIELD_KEY,
   STATUS_KEY,
 } from "@/lib/cases/cases";
 import { type CivilCourtNeed, civilCourtPending } from "@/lib/cases/family";
+import { caseKindLabelKey } from "@/lib/modules/registry";
 
 /** How a missing word on the civil court is said: none yet, the adult's "no", or the "no" of who answers for a minor. */
 const civilMissingKey = (need: CivilCourtNeed): string =>
@@ -126,6 +126,7 @@ export default function CaseView({ state: read }: { state: CaseState }) {
   }
 
   const current = state.case;
+  const kindKey = caseKindLabelKey(current.incident);
   const writable = !state.supportVisit;
   // Whoever answers for the case: the first adult claimant, or else a guardian of the minors, never a minor.
   const holderParty = caseHolder(state.parties, state.today);
@@ -159,7 +160,7 @@ export default function CaseView({ state: read }: { state: CaseState }) {
           { label: t("cases-title"), href: "/casos" },
           { label: caseLabel(current.seq) },
         ]}
-        description={t(INCIDENT_KEY[current.incident])}
+        description={kindKey ? t(kindKey) : undefined}
         action={
           <Box className="flex flex-wrap items-center gap-2">
             <StatusChip tone={GROUP_TONE[groupOf(current.status)]} label={t(STATUS_KEY[current.status])} />

@@ -16,9 +16,9 @@ import { removeFlightSegment, saveFlightSegment } from "@/lib/cases/actions";
 import { caseErrorKey, formatLocalTime } from "@/lib/cases/cases";
 import { segmentFields, type SegmentValues, segmentValues } from "@/lib/cases/forms";
 import { beforeCourt, opensOnArrival } from "@/lib/cases/sections";
-import { lookupFlight, recheckFlight } from "@/lib/flights/actions";
-import type { LegChecks, SourceView, WallTime } from "@/lib/flights/facts";
-import { flightErrorKey, lookupFailureKey, recordFailureKey } from "@/lib/flights/words";
+import { lookupFlight, recheckFlight } from "@/modules/direito-do-passageiro/flights/actions";
+import type { LegChecks, SourceView, WallTime } from "@/modules/direito-do-passageiro/flights/facts";
+import { flightErrorKey, lookupFailureKey, recordFailureKey } from "@/modules/direito-do-passageiro/flights/words";
 import { arrivalDelayMinutes } from "@flyee/rules/flight";
 
 type Ready = Extract<CaseState, { kind: "ready" }>;

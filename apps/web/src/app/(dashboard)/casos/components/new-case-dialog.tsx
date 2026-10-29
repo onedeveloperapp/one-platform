@@ -18,10 +18,12 @@ import {
 } from "@mui/material";
 
 import PersonFields from "@/components/cases/person-fields";
+import { useViewer } from "@/components/layout/viewer-context";
 import DialogHeader from "@/components/product/dialog-header";
 import { createCase } from "@/lib/cases/actions";
-import { caseErrorKey, INCIDENT_KEY, INCIDENTS, ORIGIN_KEY, ORIGINS } from "@/lib/cases/cases";
+import { caseErrorKey, ORIGIN_KEY, ORIGINS } from "@/lib/cases/cases";
 import { personFields, type PersonValues, personValues } from "@/lib/cases/forms";
+import { firmCaseKinds } from "@/lib/modules/registry";
 
 /** Who the client is, at the start: the rest they fill on their link. */
 const FIRST_FIELDS = ["full_name", "cpf", "phone", "email"] as const;
@@ -45,6 +47,7 @@ export default function NewCaseDialog({
   onCreated: (caseId: string) => void;
 }) {
   const t = useTranslations("product");
+  const kinds = firmCaseKinds(useViewer()?.modules);
   const [client, setClient] = useState<PersonValues>(() =>
     personValues(prefill ? { full_name: prefill.name, phone: prefill.phone } : null),
   );
@@ -113,9 +116,9 @@ export default function NewCaseDialog({
                     helperText={fieldError("incident")}
                     onChange={(event) => setIncident(event.target.value)}
                   >
-                    {INCIDENTS.map((value) => (
-                      <MenuItem key={value} value={value}>
-                        {t(INCIDENT_KEY[value])}
+                    {kinds.map((kind) => (
+                      <MenuItem key={kind.key} value={kind.key}>
+                        {t(kind.labelKey)}
                       </MenuItem>
                     ))}
                   </TextField>

@@ -4,9 +4,9 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import { waitingFix, waitingHref } from "@/lib/cases/advance";
-import { INCIDENTS } from "@/lib/cases/cases";
 import { claimChoiceOf, claimDefaultChanges, claimDefaultsOf, typedCents, typedClaims } from "@/lib/firm/autonomy";
 import { WHATSAPP_COPY } from "@/lib/messages/whatsapp-copy";
+import { INCIDENTS } from "@/modules/direito-do-passageiro/incidents";
 import { OCCASIONAL_CAUSES_PER_YEAR } from "@flyee/rules/state-count";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../../..");
@@ -69,7 +69,9 @@ describe("what ONE carries on by itself where the firm said how (0052)", () => {
     expect(typedCents("1000000001")).toBe("invalid");
 
     // A value changed, one taken off by leaving it blank, one new; the rest as it was.
-    expect(claimDefaultChanges("define", { delay: "12000", cancellation: "", overbooking: "9000.00" }, saved)).toEqual({
+    expect(
+      claimDefaultChanges("define", { delay: "12000", cancellation: "", overbooking: "9000.00" }, saved, INCIDENTS),
+    ).toEqual({
       ok: true,
       changes: [
         { incident: "delay", cents: 1200000 },
@@ -77,16 +79,16 @@ describe("what ONE carries on by itself where the firm said how (0052)", () => {
         { incident: "overbooking", cents: 900000 },
       ],
     });
-    expect(claimDefaultChanges("define", typedClaims(saved), saved)).toEqual({ ok: true, changes: [] });
+    expect(claimDefaultChanges("define", typedClaims(saved), saved, INCIDENTS)).toEqual({ ok: true, changes: [] });
     // No value at all: every value the firm had is taken off, whatever is still typed.
-    expect(claimDefaultChanges("judge", typedClaims(saved), saved)).toEqual({
+    expect(claimDefaultChanges("judge", typedClaims(saved), saved, INCIDENTS)).toEqual({
       ok: true,
       changes: [
         { incident: "delay", cents: null },
         { incident: "cancellation", cents: null },
       ],
     });
-    expect(claimDefaultChanges("define", { delay: "abc", baggage_lost: "x" }, saved)).toEqual({
+    expect(claimDefaultChanges("define", { delay: "abc", baggage_lost: "x" }, saved, INCIDENTS)).toEqual({
       ok: false,
       invalid: "delay",
     });

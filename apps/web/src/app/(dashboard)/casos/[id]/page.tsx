@@ -16,7 +16,7 @@ import { cookies } from "next/headers";
 
 import { momentLabel } from "@/lib/ai/approvals";
 import { caseAdvanceOf } from "@/lib/cases/advance";
-import { CAUSES, isCaseStatus, isIncident, linksOwedOf, ORIGINS, type RequiredDocument } from "@/lib/cases/cases";
+import { CAUSES, isCaseStatus, linksOwedOf, ORIGINS, type RequiredDocument } from "@/lib/cases/cases";
 import { readCheckAnswer } from "@/lib/cases/document-check";
 import { readQuality } from "@/lib/cases/document-quality";
 import { loadCasePieces } from "@/lib/cases/draft-facts";
@@ -29,11 +29,12 @@ import { loadStatementFacts } from "@/lib/cases/statement-facts";
 import { loadCourseFacts } from "@/lib/courts/course-facts";
 import { caseDeadlines, deadlineActs } from "@/lib/deadlines/facts";
 import { isFirmFunction, isManager } from "@/lib/firm/roles";
-import { loadFlightChecks } from "@/lib/flights/facts";
-import { weatherProvider } from "@/lib/flights/weather";
 import { caseHearings, colleagues, courtZones } from "@/lib/hearings/facts";
 import { getMemberContext } from "@/lib/member/context";
+import { isCaseKindOf } from "@/lib/modules/registry";
 import { caseNotices } from "@/lib/notices/facts";
+import { loadFlightChecks } from "@/modules/direito-do-passageiro/flights/facts";
+import { weatherProvider } from "@/modules/direito-do-passageiro/flights/weather";
 import { IMPERSONATION_MARKER_COOKIE } from "@flyee/auth";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -83,13 +84,14 @@ async function loadCase(id: string): Promise<CaseState> {
   const { data: row, error } = await supabase
     .from("cases")
     .select(
-      "id, seq, incident, airline_iata, flight_date, cause, status, origin, summary, responsible_id, close_reason, created_at",
+      "id, seq, module, incident, airline_iata, flight_date, cause, status, origin, summary, responsible_id, close_reason, created_at",
     )
     .eq("id", id)
     .eq("org_id", firm)
     .maybeSingle();
   if (error) return { kind: "error" };
-  if (!row || !isIncident(row.incident) || !isCaseStatus(row.status)) return { kind: "not-found" };
+  if (!row || !isCaseStatus(row.status)) return { kind: "not-found" };
+  if (row.incident !== null && !isCaseKindOf(row.module, row.incident)) return { kind: "not-found" };
 
   const [
     parties,
@@ -308,6 +310,7 @@ async function loadCase(id: string): Promise<CaseState> {
     case: {
       id: row.id,
       seq: row.seq,
+      module: row.module,
       incident: row.incident,
       airlineIata: row.airline_iata,
       flightDate: row.flight_date,

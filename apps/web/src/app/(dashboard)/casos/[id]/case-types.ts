@@ -1,6 +1,6 @@
 import type { AirlineOption } from "../cases-types";
 
-import type { CaseStatus, Cause, Incident, LinkOwed, Origin, PersonData, RequiredDocument } from "@/lib/cases/cases";
+import type { CaseStatus, Cause, LinkOwed, Origin, PersonData, RequiredDocument } from "@/lib/cases/cases";
 import type { CheckAnswer } from "@/lib/cases/document-check";
 import type { DocumentQuality } from "@/lib/cases/document-quality";
 import type { CaseDossier, CaseDraft, CasePieces } from "@/lib/cases/draft-facts";
@@ -13,10 +13,10 @@ import type { ComplaintChannel } from "@/lib/cases/statements";
 import type { CourseFacts } from "@/lib/courts/course-facts";
 import type { CaseDeadlines, DeadlineAct } from "@/lib/deadlines/facts";
 import type { FirmFunction } from "@/lib/firm/roles";
-import type { FlightChecks } from "@/lib/flights/facts";
 import type { CaseHearings, Colleague } from "@/lib/hearings/facts";
 import type { CourtZones } from "@/lib/hearings/hearings";
 import type { CaseNotices } from "@/lib/notices/facts";
+import type { FlightChecks } from "@/modules/direito-do-passageiro/flights/facts";
 
 export type CasePerson = PersonData & {
   /** What the federal registry said of the CPF, when somebody asked. */
@@ -165,7 +165,10 @@ export type CourtSystem = {
 export type CaseDetail = {
   id: string;
   seq: number;
-  incident: Incident;
+  /** The product module of the case (migration 0068). */
+  module: string;
+  /** The kind of problem, one of its module's (lib/modules/registry.ts); null for a module that has none. */
+  incident: string | null;
   airlineIata: string | null;
   flightDate: string | null;
   cause: Cause;

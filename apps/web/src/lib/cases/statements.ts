@@ -1,4 +1,5 @@
-import { caseErrorKey, type Incident } from "@/lib/cases/cases";
+import { caseErrorKey } from "@/lib/cases/cases";
+import { caseKindForModel } from "@/lib/modules/registry";
 
 /**
  * The client's account of what happened, the administrative complaint and
@@ -80,18 +81,6 @@ export const isPassingStatementFailure = (code: string): boolean => PASSING_FAIL
 export const statementErrorKey = (code: string): string =>
   code === "type_not_allowed" ? "case-error-audio-type" : caseErrorKey(code);
 
-const INCIDENT_FOR_MODEL: Record<Incident, string> = {
-  delay: "atraso de voo",
-  cancellation: "cancelamento de voo",
-  overbooking: "preterição de embarque",
-  missed_connection: "perda de conexão",
-  downgrade: "rebaixamento de classe",
-  baggage_lost: "extravio de bagagem",
-  baggage_damaged: "bagagem danificada",
-  baggage_delayed: "atraso na entrega da bagagem",
-  other: "outro problema com a viagem",
-};
-
 const brDate = (value: string | null): string | null => {
   const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value ?? "");
   return match ? `${match[3]}/${match[2]}/${match[1]}` : null;
@@ -111,7 +100,7 @@ export function chronologyBriefing(
   returned: { proposal: string | null; firmNote: string | null } | null = null,
 ): string {
   const known = [
-    INCIDENT_FOR_MODEL[trip.incident as Incident] ?? null,
+    caseKindForModel(trip.incident),
     trip.airline ? `companhia ${trip.airline}` : null,
     brDate(trip.flightDate) ? `voo em ${brDate(trip.flightDate)}` : null,
   ].filter(Boolean);

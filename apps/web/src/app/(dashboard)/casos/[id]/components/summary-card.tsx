@@ -20,8 +20,9 @@ import {
 import CollapsibleCard from "@/components/product/collapsible-card";
 import DialogHeader from "@/components/product/dialog-header";
 import { updateCase } from "@/lib/cases/actions";
-import { caseErrorKey, CAUSE_KEY, CAUSES, INCIDENT_KEY, INCIDENTS, ORIGIN_KEY, ORIGINS } from "@/lib/cases/cases";
+import { caseErrorKey, CAUSE_KEY, CAUSES, ORIGIN_KEY, ORIGINS } from "@/lib/cases/cases";
 import { opensOnArrival } from "@/lib/cases/sections";
+import { caseKindLabelKey, caseKindsOf } from "@/lib/modules/registry";
 import { formatDayBr } from "@flyee/rules/person";
 
 type Ready = Extract<CaseState, { kind: "ready" }>;
@@ -46,9 +47,10 @@ export default function SummaryCard({
   const current = state.case;
   const airline = state.airlines.find((option) => option.iata === current.airlineIata)?.name ?? current.airlineIata;
   const responsible = state.team.find((member) => member.userId === current.responsibleId)?.name ?? null;
+  const kindKey = caseKindLabelKey(current.incident);
 
   const facts: { label: string; value: string | null }[] = [
-    { label: t("cases-field-incident"), value: t(INCIDENT_KEY[current.incident]) },
+    { label: t("cases-field-incident"), value: kindKey ? t(kindKey) : null },
     { label: t("cases-field-airline"), value: airline },
     { label: t("cases-field-flight-date"), value: current.flightDate ? formatDayBr(current.flightDate) : null },
     { label: t("case-field-cause"), value: t(CAUSE_KEY[current.cause]) },
@@ -60,7 +62,7 @@ export default function SummaryCard({
     <CollapsibleCard
       id="case-summary"
       title={t("case-summary-title")}
-      summary={[t(INCIDENT_KEY[current.incident]), airline, current.flightDate ? formatDayBr(current.flightDate) : null]
+      summary={[kindKey ? t(kindKey) : null, airline, current.flightDate ? formatDayBr(current.flightDate) : null]
         .filter(Boolean)
         .join(" · ")}
       summaryClosedOnly
@@ -202,7 +204,7 @@ function SummaryDialog({ state, onClose, onSaved }: { state: Ready; onClose: () 
               {select(
                 "incident",
                 t("cases-field-incident"),
-                INCIDENTS.map((value) => ({ value, label: t(INCIDENT_KEY[value]) })),
+                caseKindsOf(current.module).map((kind) => ({ value: kind.key, label: t(kind.labelKey) })),
                 false,
               )}
             </Grid>

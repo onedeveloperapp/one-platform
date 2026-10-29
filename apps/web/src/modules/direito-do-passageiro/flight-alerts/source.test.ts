@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { followedLegsOf, legReadingOf, localDay, localOf, shiftLocal } from "@/lib/flight-alerts/source";
 import { flightNumberOf, followableDay } from "@/lib/test-chat/test-chat";
+import {
+  followedLegsOf,
+  legReadingOf,
+  localDay,
+  localOf,
+  shiftLocal,
+} from "@/modules/direito-do-passageiro/flight-alerts/source";
 import type { FlightStatus } from "@flyee/flights/types";
 
 // Every flight here is invented.

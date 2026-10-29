@@ -9,10 +9,10 @@ import { finishLinkUpload, takeBackClientUpload } from "@/lib/cases/client-uploa
 import { queueDocumentProcessing } from "@/lib/cases/documents-work";
 import { queueStatementWork } from "@/lib/cases/statements-work";
 import { FIRM_FILES_BUCKET, supabaseFileStore } from "@/lib/files/store";
-import { queueFlightCheck } from "@/lib/flights/checks-work";
 import { settleNotices } from "@/lib/notices/work";
 import { createAnonClient } from "@/lib/public-content";
 import { isSupportVisit } from "@/lib/whatsapp/session";
+import { queueFlightCheck } from "@/modules/direito-do-passageiro/flights/checks-work";
 import { createServiceClient } from "@flyee/auth/service";
 import { measureFile } from "@flyee/documents/measure";
 

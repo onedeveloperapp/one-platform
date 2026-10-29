@@ -27,7 +27,7 @@ import NiPen from "@/icons/nexture/ni-pen";
 import NiScale from "@/icons/nexture/ni-scale";
 import NiTimeline from "@/icons/nexture/ni-timeline";
 import NiUsers from "@/icons/nexture/ni-users";
-import { caseLabel, groupOf, INCIDENT_KEY, STATUS_KEY } from "@/lib/cases/cases";
+import { caseLabel, groupOf, STATUS_KEY } from "@/lib/cases/cases";
 import {
   type CaseFilter,
   type CaseListPage,
@@ -38,6 +38,7 @@ import {
   PAGE_SIZES,
 } from "@/lib/cases/list";
 import { listFirmCases } from "@/lib/cases/list-actions";
+import { caseKindLabelKey } from "@/lib/modules/registry";
 import { formatDayBr } from "@flyee/rules/person";
 
 const FILTER_TILE: Record<CaseFilter, { label: string; hint: string; tone: TileTone; icon: React.ReactNode }> = {
@@ -254,7 +255,7 @@ function CasesList({ ready }: { ready: Ready }) {
               {params.row.client || t("cases-no-client")}
             </Typography>
             <Typography variant="body2" className="text-text-secondary truncate">
-              {t(INCIDENT_KEY[params.row.incident])}
+              {t(caseKindLabelKey(params.row.incident) ?? "case-incident-other")}
             </Typography>
           </Box>
         ),

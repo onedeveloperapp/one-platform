@@ -6,10 +6,6 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { firstNameOf } from "@/lib/cases/cases";
 import { FIRM_FILES_BUCKET } from "@/lib/files/bucket";
 import { isManager } from "@/lib/firm/roles";
-import { localOf } from "@/lib/flight-alerts/source";
-import { watchTrips } from "@/lib/flight-alerts/watch";
-import { evaluateTrip, tellFlightAlerts } from "@/lib/flight-alerts/work";
-import { flightStatusProvider } from "@/lib/flights/status";
 import { getMemberContext } from "@/lib/member/context";
 import { stagedPath } from "@/lib/test-chat/staging";
 import {
@@ -29,6 +25,10 @@ import { applyEvents } from "@/lib/whatsapp/events";
 import { supabaseInbox } from "@/lib/whatsapp/inbox";
 import { queueMediaFetch } from "@/lib/whatsapp/media";
 import { isSupportVisit } from "@/lib/whatsapp/session";
+import { localOf } from "@/modules/direito-do-passageiro/flight-alerts/source";
+import { watchTrips } from "@/modules/direito-do-passageiro/flight-alerts/watch";
+import { evaluateTrip, tellFlightAlerts } from "@/modules/direito-do-passageiro/flight-alerts/work";
+import { flightStatusProvider } from "@/modules/direito-do-passageiro/flights/status";
 import { createServiceClient } from "@flyee/auth/service";
 import type { SupabaseClient } from "@supabase/supabase-js";
 

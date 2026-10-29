@@ -287,7 +287,7 @@ describe.skipIf(!DB_URL)("the legs of a case, checked against ANAC's official re
   });
 
   it("checks every leg the record can answer, a few months of the record a run, each downloaded once", async () => {
-    const { checkFlights } = await import("@/lib/flights/checks-work");
+    const { checkFlights } = await import("@/modules/direito-do-passageiro/flights/checks-work");
     const server = anac();
     const first = await checkFlights(backend() as never, { fetch: server.run, now: NOW });
     // August and September in this run; April waits for the next one, with no attempt spent.
@@ -345,7 +345,7 @@ describe.skipIf(!DB_URL)("the legs of a case, checked against ANAC's official re
   });
 
   it("shows each leg beside what the record says, in each airport's own time", async () => {
-    const { loadFlightChecks } = await import("@/lib/flights/facts");
+    const { loadFlightChecks } = await import("@/modules/direito-do-passageiro/flights/facts");
     const segments = await sql.unsafe(
       `select id, flight_number, origin_iata, destination_iata,
               to_char(scheduled_departure_local, 'YYYY-MM-DD"T"HH24:MI') as scheduled_departure_local,
@@ -403,7 +403,7 @@ describe.skipIf(!DB_URL)("the legs of a case, checked against ANAC's official re
   });
 
   it("starts the check of a leg over when its flight changes, and keeps it when only its arrival does", async () => {
-    const { checkFlights } = await import("@/lib/flights/checks-work");
+    const { checkFlights } = await import("@/modules/direito-do-passageiro/flights/checks-work");
     await asAna().rpc("save_flight_segment", {
       target_case: caseId,
       target_segment: legs.late,

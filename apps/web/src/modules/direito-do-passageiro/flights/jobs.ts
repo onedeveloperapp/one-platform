@@ -1,4 +1,4 @@
-import { checkFlights } from "@/lib/flights/checks-work";
+import { checkFlights } from "@/modules/direito-do-passageiro/flights/checks-work";
 import { createServiceClient } from "@flyee/auth/service";
 import { inngest } from "@flyee/jobs";
 

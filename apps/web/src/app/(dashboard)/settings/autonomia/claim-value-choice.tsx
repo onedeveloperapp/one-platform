@@ -5,8 +5,8 @@ import { useTranslations } from "next-intl";
 import { Box, FormControl, FormControlLabel, FormLabel, Grid, Radio, RadioGroup, Typography } from "@mui/material";
 
 import { CurrencyField } from "@/components/product/fields";
-import { type Incident, INCIDENT_KEY, INCIDENTS } from "@/lib/cases/cases";
 import type { ClaimChoice } from "@/lib/firm/autonomy";
+import type { CaseKind } from "@/lib/modules/types";
 
 /**
  * The firm's choice of the Valor da Causa Pedido (migrations 0052 and 0064):
@@ -21,6 +21,7 @@ export default function ClaimValueChoice({
   id,
   choice,
   typed,
+  kinds,
   disabled,
   onChoice,
   onTyped,
@@ -29,10 +30,12 @@ export default function ClaimValueChoice({
   id: string;
   choice: ClaimChoice;
   /** Each kind's value as its field holds it (reais with their decimals). */
-  typed: Partial<Record<Incident, string>>;
+  typed: Partial<Record<string, string>>;
+  /** The kinds of problem of the firm's modules (lib/modules/registry.ts), in their order. */
+  kinds: readonly CaseKind[];
   disabled: boolean;
   onChoice: (choice: ClaimChoice) => void;
-  onTyped: (incident: Incident, value: string) => void;
+  onTyped: (incident: string, value: string) => void;
 }) {
   const t = useTranslations("product");
 
@@ -77,18 +80,18 @@ export default function ClaimValueChoice({
 
       {choice === "define" && (
         <Grid container spacing={3}>
-          {INCIDENTS.map((incident) => (
-            <Grid key={incident} size={{ xs: 12, sm: 6 }}>
+          {kinds.map((kind) => (
+            <Grid key={kind.key} size={{ xs: 12, sm: 6 }}>
               <CurrencyField
                 size="small"
                 fullWidth
-                id={`${id}-${incident}`}
-                name={`${id}-${incident}`}
-                label={t(INCIDENT_KEY[incident])}
+                id={`${id}-${kind.key}`}
+                name={`${id}-${kind.key}`}
+                label={t(kind.labelKey)}
                 currencySymbol="R$"
-                value={typed[incident] ?? ""}
+                value={typed[kind.key] ?? ""}
                 disabled={disabled}
-                onChange={(event) => onTyped(incident, event.target.value)}
+                onChange={(event) => onTyped(kind.key, event.target.value)}
               />
             </Grid>
           ))}

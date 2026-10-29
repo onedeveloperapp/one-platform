@@ -1,4 +1,4 @@
-import { type Incident, INCIDENTS } from "@/lib/cases/cases";
+import { caseKindLabelKey } from "@/lib/modules/registry";
 
 /**
  * What each firm lets ONE decide alone (migration 0016, `autonomy_decisions`
@@ -124,7 +124,7 @@ export function autonomyErrorKey(code: string): string {
  * case of that kind asks, written by ONE (or by the lawsuits a person creates) for a claimant with none. A kind
  * with none goes with no value, and the judge defines it (0064).
  */
-export type ClaimDefault = { incident: Incident; cents: number };
+export type ClaimDefault = { incident: string; cents: number };
 
 /** The firm's default claims as the database answered them; a row that is not one is left out. */
 export function claimDefaultsOf(raw: unknown): ClaimDefault[] {
@@ -132,8 +132,11 @@ export function claimDefaultsOf(raw: unknown): ClaimDefault[] {
   return raw.flatMap((item): ClaimDefault[] => {
     const row = (item ?? {}) as { incident?: unknown; cents?: unknown };
     const cents = typeof row.cents === "number" ? row.cents : typeof row.cents === "string" ? Number(row.cents) : NaN;
-    return (INCIDENTS as readonly unknown[]).includes(row.incident) && Number.isInteger(cents) && cents > 0
-      ? [{ incident: row.incident as Incident, cents }]
+    return typeof row.incident === "string" &&
+      caseKindLabelKey(row.incident) !== null &&
+      Number.isInteger(cents) &&
+      cents > 0
+      ? [{ incident: row.incident, cents }]
       : [];
   });
 }
@@ -145,7 +148,7 @@ export type ClaimChoice = "define" | "judge";
 export const claimChoiceOf = (defaults: ClaimDefault[]): ClaimChoice => (defaults.length > 0 ? "define" : "judge");
 
 /** The firm's values as the fields hold them: reais with their decimals. */
-export const typedClaims = (defaults: ClaimDefault[]): Partial<Record<Incident, string>> =>
+export const typedClaims = (defaults: ClaimDefault[]): Partial<Record<string, string>> =>
   Object.fromEntries(defaults.map((row) => [row.incident, (row.cents / 100).toFixed(2)]));
 
 /** A value as a field holds it, in cents: none when blank, `invalid` when it is no amount the database keeps. */
@@ -157,18 +160,20 @@ export function typedCents(raw: string | undefined): number | null | "invalid" {
 }
 
 /**
- * What saving the firm's choice writes, in the order of the kinds: each kind whose value changed, with its new
- * value or none (a kind left blank goes with no value); choosing no value takes off every value the firm had.
- * The first kind typed with something that is no amount stops it, named.
+ * What saving the firm's choice writes, in the order of the kinds (the kinds of problem of the firm's modules,
+ * lib/modules/registry.ts): each kind whose value changed, with its new value or none (a kind left blank goes with
+ * no value); choosing no value takes off every value the firm had. The first kind typed with something that is no
+ * amount stops it, named.
  */
 export function claimDefaultChanges(
   choice: ClaimChoice,
-  typed: Partial<Record<Incident, string>>,
+  typed: Partial<Record<string, string>>,
   saved: ClaimDefault[],
-): { ok: true; changes: { incident: Incident; cents: number | null }[] } | { ok: false; invalid: Incident } {
+  kinds: readonly string[],
+): { ok: true; changes: { incident: string; cents: number | null }[] } | { ok: false; invalid: string } {
   const before = new Map(saved.map((row) => [row.incident, row.cents]));
-  const changes: { incident: Incident; cents: number | null }[] = [];
-  for (const incident of INCIDENTS) {
+  const changes: { incident: string; cents: number | null }[] = [];
+  for (const incident of kinds) {
     const cents = choice === "judge" ? null : typedCents(typed[incident]);
     if (cents === "invalid") return { ok: false, invalid: incident };
     if (cents !== (before.get(incident) ?? null)) changes.push({ incident, cents });

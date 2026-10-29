@@ -1,4 +1,5 @@
-import { type CaseStatus, type Incident, isCaseStatus, isIncident, type StatusGroup } from "@/lib/cases/cases";
+import { type CaseStatus, isCaseStatus, type StatusGroup } from "@/lib/cases/cases";
+import { caseKindLabelKey } from "@/lib/modules/registry";
 
 /**
  * The firm's cases as its list reads them (migration 0033, `firm_cases`): a
@@ -41,7 +42,8 @@ export type CaseListRow = {
   seq: number;
   /** The first adult claimant, or the guardian when the claimants are minors. */
   client: string;
-  incident: Incident;
+  /** The kind of problem, one of the case's module's (lib/modules/registry.ts). */
+  incident: string;
   /** The airline's IATA designator: the screen has its name. */
   airline: string | null;
   flightDate: string | null;
@@ -119,7 +121,9 @@ export function caseListOf(raw: unknown): CaseListPage | null {
     if (typeof item !== "object" || item === null) return [];
     const row = item as Record<string, unknown>;
     if (typeof row.id !== "string" || typeof row.seq !== "number") return [];
-    if (!isIncident(row.incident) || !isCaseStatus(row.status)) return [];
+    if (typeof row.incident !== "string" || caseKindLabelKey(row.incident) === null || !isCaseStatus(row.status)) {
+      return [];
+    }
     return [
       {
         id: row.id,

@@ -22,6 +22,7 @@ import {
   Typography,
 } from "@mui/material";
 
+import { useViewer } from "@/components/layout/viewer-context";
 import CollapsibleCard, { CollapsibleGroup, CollapsibleGroupToggle } from "@/components/product/collapsible-card";
 import EmptyState from "@/components/product/empty-state";
 import PageHeader from "@/components/product/page-header";
@@ -30,7 +31,6 @@ import NiListCircle from "@/icons/nexture/ni-list-circle";
 import NiRobot from "@/icons/nexture/ni-robot";
 import NiUsers from "@/icons/nexture/ni-users";
 import type { SecondFactorState } from "@/lib/ai/approvals";
-import { type Incident, INCIDENT_KEY, INCIDENTS } from "@/lib/cases/cases";
 import {
   autonomyErrorKey,
   type AutonomyMode,
@@ -45,6 +45,7 @@ import {
   typedClaims,
 } from "@/lib/firm/autonomy";
 import { setFirmAutonomy, setFirmClaimDefault, setFirmSigner } from "@/lib/firm/autonomy-actions";
+import { caseKindLabelKey, firmCaseKinds } from "@/lib/modules/registry";
 
 export type AutonomyDecisionView = FirmAutonomy & { changedByName: string | null; changedLabel: string | null };
 
@@ -597,6 +598,7 @@ function ClaimValueCard({
 }) {
   const t = useTranslations("product");
   const [saved, setSaved] = useState(false);
+  const kinds = firmCaseKinds(useViewer()?.modules);
 
   return (
     <CollapsibleCard
@@ -607,7 +609,7 @@ function ClaimValueCard({
         defaults === null
           ? t("autonomy-claims-load-error")
           : defaults.length > 0
-            ? t("autonomy-claims-summary", { count: defaults.length, total: INCIDENTS.length })
+            ? t("autonomy-claims-summary", { count: defaults.length, total: kinds.length })
             : t("autonomy-claims-summary-none")
       }
       description={t("autonomy-claims-body")}
@@ -639,11 +641,11 @@ function ClaimValueCard({
         />
       ) : (
         <Box component="ul" className="m-0 flex list-none flex-col gap-3 p-0">
-          {INCIDENTS.map((incident) => {
-            const current = defaults.find((row) => row.incident === incident)?.cents ?? null;
+          {kinds.map((kind) => {
+            const current = defaults.find((row) => row.incident === kind.key)?.cents ?? null;
             return (
-              <Box component="li" key={incident} className="flex w-full flex-wrap items-center justify-between gap-2">
-                <Typography variant="body1">{t(INCIDENT_KEY[incident])}</Typography>
+              <Box component="li" key={kind.key} className="flex w-full flex-wrap items-center justify-between gap-2">
+                <Typography variant="body1">{t(kind.labelKey)}</Typography>
                 <Typography variant="body1" className={current === null ? "text-text-secondary" : undefined}>
                   {current === null ? t("autonomy-claims-none") : t("autonomy-claims-value", { value: reais(current) })}
                 </Typography>
@@ -672,12 +674,18 @@ function ClaimValueForm({
   onTouched: () => void;
 }) {
   const t = useTranslations("product");
+  const kinds = firmCaseKinds(useViewer()?.modules);
   const [choice, setChoice] = useState<ClaimChoice>(() => claimChoiceOf(defaults));
-  const [typed, setTyped] = useState<Partial<Record<Incident, string>>>(() => typedClaims(defaults));
+  const [typed, setTyped] = useState<Partial<Record<string, string>>>(() => typedClaims(defaults));
   const [busy, setBusy] = useState(false);
   // A refusal of the database by its code, or the kind typed with something that is no amount.
-  const [problem, setProblem] = useState<{ code: string } | { invalid: Incident } | null>(null);
-  const planned = claimDefaultChanges(choice, typed, defaults);
+  const [problem, setProblem] = useState<{ code: string } | { invalid: string } | null>(null);
+  const planned = claimDefaultChanges(
+    choice,
+    typed,
+    defaults,
+    kinds.map((kind) => kind.key),
+  );
   const changed = !planned.ok || planned.changes.length > 0;
 
   const save = async () => {
@@ -709,6 +717,7 @@ function ClaimValueForm({
         id="autonomy-claim"
         choice={choice}
         typed={typed}
+        kinds={kinds}
         disabled={busy}
         onChoice={(next) => {
           setChoice(next);
@@ -723,7 +732,7 @@ function ClaimValueForm({
       {problem && (
         <Alert severity="error" className="neutral bg-background-paper/60!" onClose={() => setProblem(null)}>
           {"invalid" in problem
-            ? t("claims-invalid", { kind: t(INCIDENT_KEY[problem.invalid]) })
+            ? t("claims-invalid", { kind: t(caseKindLabelKey(problem.invalid) ?? "case-incident-other") })
             : t(autonomyErrorKey(problem.code))}
         </Alert>
       )}

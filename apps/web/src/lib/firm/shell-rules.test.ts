@@ -20,6 +20,7 @@ const viewer = (changes: Partial<MenuViewer> = {}): MenuViewer => ({
   hasFirm: true,
   role: "member",
   firmFunction: "atendimento",
+  modules: ["direito-do-passageiro"],
   isSuperadmin: false,
   owesSecondFactor: false,
   ...changes,

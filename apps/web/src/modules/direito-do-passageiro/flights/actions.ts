@@ -2,9 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 
-import { queueFlightCheck } from "@/lib/flights/checks-work";
-import { flightStatusProvider } from "@/lib/flights/status";
 import { getMemberContext } from "@/lib/member/context";
+import { queueFlightCheck } from "@/modules/direito-do-passageiro/flights/checks-work";
+import { flightStatusProvider } from "@/modules/direito-do-passageiro/flights/status";
 import { createServiceClient } from "@flyee/auth/service";
 import { FLIGHT_CHECK_VERSION } from "@flyee/flights/check";
 import { FlightAwareAuthError, FlightAwareQueryError } from "@flyee/flights/providers/flightaware";

@@ -1,7 +1,12 @@
 import "server-only";
 
-import { followedLegsOf, type LegReading, legReadingOf, localDay } from "@/lib/flight-alerts/source";
-import { evaluateTrip, tellFlightAlerts } from "@/lib/flight-alerts/work";
+import {
+  followedLegsOf,
+  type LegReading,
+  legReadingOf,
+  localDay,
+} from "@/modules/direito-do-passageiro/flight-alerts/source";
+import { evaluateTrip, tellFlightAlerts } from "@/modules/direito-do-passageiro/flight-alerts/work";
 import { FlightAwareAuthError, FlightAwareQueryError } from "@flyee/flights/providers/flightaware";
 import type { FlightStatusProvider } from "@flyee/flights/types";
 import type { SupabaseClient } from "@supabase/supabase-js";

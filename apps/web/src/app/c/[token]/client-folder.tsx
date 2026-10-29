@@ -29,8 +29,6 @@ import {
   documentsFor,
   FILE_REFUSAL_KEY,
   formatLocalTime,
-  INCIDENT_KEY,
-  isIncident,
   missingItems,
   PERSON_FIELD_KEY,
 } from "@/lib/cases/cases";
@@ -59,6 +57,7 @@ import {
 } from "@/lib/cases/forms";
 import { beingRead, READ_ITEM_KEY, readFieldsOf, readItems } from "@/lib/cases/read-fields";
 import { mimeOf, uploadToSignedUrl } from "@/lib/files/browser-upload";
+import { caseKindLabelKey } from "@/lib/modules/registry";
 import { formatDayBr, isMinorOn } from "@flyee/rules/person";
 
 type OpenView = Extract<ClientLinkView, { state: "open" }>;
@@ -150,9 +149,10 @@ export default function ClientFolder({
       })
     : [];
 
+  const kindKey = caseKindLabelKey(view.case.incident);
   const facts = [
     caseLabel(view.case.seq),
-    isIncident(view.case.incident) ? t(INCIDENT_KEY[view.case.incident]) : null,
+    kindKey ? t(kindKey) : null,
     view.case.airline?.name ?? null,
     view.case.flight_date ? formatDayBr(view.case.flight_date) : null,
   ].filter(Boolean);

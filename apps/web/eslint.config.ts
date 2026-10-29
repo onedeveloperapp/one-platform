@@ -9,6 +9,23 @@ import tseslint from "typescript-eslint";
 import js from "@eslint/js";
 import nextPlugin from "@next/eslint-plugin-next";
 
+import { LEGACY_MODULE_IMPORTS } from "./src/lib/modules/boundary";
+
+/** MUI X's paid tiers, refused everywhere (the owner's decision of 2026-10-21). */
+const PAID_MUI = [
+  {
+    regex: "^@mui/x-[a-z-]+-(pro|premium)(/.*)?$",
+    message: "Pacote pago do MUI X: use o pacote comunitário (MIT) ou um componente próprio do projeto.",
+  },
+  {
+    regex: "^@mui/x-license(/.*)?$",
+    message: "O ONE não registra licença do MUI X: nenhum componente pago é usado.",
+  },
+];
+
+/** A path as a glob that matches it literally: the brackets of a dynamic route are not a class of characters. */
+const literalGlob = (file: string) => file.replace(/\[/g, "[[]");
+
 export default [
   // Base JS & environment settings
   {
@@ -105,17 +122,34 @@ export default [
       "@next/next/google-font-display": "error",
       // No component that needs a paid licence: MUI X's community packages (MIT) only. What only a paid tier
       // gives is built in the project's own code (the owner's decision of 2026-10-21).
+      "no-restricted-imports": ["error", { patterns: PAID_MUI }],
+    },
+  },
+  // A product module's code is its own (lib/modules/types.ts, migration 0068): the core reaches a module only
+  // through the registry (lib/modules/registry.ts) and the list of jobs (lib/modules/jobs.ts), and a module's
+  // routes live in a route group named after it. The files of LEGACY_MODULE_IMPORTS still reach into the passenger
+  // module directly, from before the module had a folder of its own: each is a seam to move into the module or
+  // behind the registry, and the list only shrinks.
+  {
+    files: ["src/**/*.{ts,tsx}"],
+    ignores: [
+      "src/modules/**",
+      "src/**/(direito-do-passageiro)/**",
+      "src/lib/modules/registry.ts",
+      "src/lib/modules/jobs.ts",
+      "src/**/*.test.ts",
+      ...LEGACY_MODULE_IMPORTS.map(literalGlob),
+    ],
+    rules: {
       "no-restricted-imports": [
         "error",
         {
           patterns: [
+            ...PAID_MUI,
             {
-              regex: "^@mui/x-[a-z-]+-(pro|premium)(/.*)?$",
-              message: "Pacote pago do MUI X: use o pacote comunitário (MIT) ou um componente próprio do projeto.",
-            },
-            {
-              regex: "^@mui/x-license(/.*)?$",
-              message: "O ONE não registra licença do MUI X: nenhum componente pago é usado.",
+              regex: "^@/modules/",
+              message:
+                "O core não importa um módulo: pergunte ao registro (lib/modules/registry.ts) ou ponha o código no módulo.",
             },
           ],
         },

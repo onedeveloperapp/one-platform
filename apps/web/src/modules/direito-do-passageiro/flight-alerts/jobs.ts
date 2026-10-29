@@ -1,8 +1,8 @@
 import "server-only";
 
-import { watchTrips } from "@/lib/flight-alerts/watch";
-import { tellFlightAlerts } from "@/lib/flight-alerts/work";
-import { flightStatusProvider } from "@/lib/flights/status";
+import { watchTrips } from "@/modules/direito-do-passageiro/flight-alerts/watch";
+import { tellFlightAlerts } from "@/modules/direito-do-passageiro/flight-alerts/work";
+import { flightStatusProvider } from "@/modules/direito-do-passageiro/flights/status";
 import { createServiceClient } from "@flyee/auth/service";
 import { inngest } from "@flyee/jobs";
 

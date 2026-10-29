@@ -1,5 +1,6 @@
-import type { DocumentKind, Incident } from "@/lib/cases/cases";
+import type { DocumentKind } from "@/lib/cases/cases";
 import type { DocumentQuality, PhotoProblem } from "@/lib/cases/document-quality";
+import { caseKindForModel } from "@/lib/modules/registry";
 
 /**
  * The AI's check of a document of a case (migration 0024): what the model is
@@ -46,18 +47,6 @@ const KIND_FOR_MODEL: Record<DocumentKind, string> = {
   other: "outro documento do caso",
 };
 
-const INCIDENT_FOR_MODEL: Record<Incident, string> = {
-  delay: "atraso de voo",
-  cancellation: "cancelamento de voo",
-  overbooking: "preterição de embarque",
-  missed_connection: "perda de conexão",
-  downgrade: "rebaixamento de classe",
-  baggage_lost: "extravio de bagagem",
-  baggage_damaged: "bagagem danificada",
-  baggage_delayed: "atraso na entrega da bagagem",
-  other: "outro problema com a viagem",
-};
-
 const brDate = (value: string | null): string | null => {
   const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value ?? "");
   return match ? `${match[3]}/${match[2]}/${match[1]}` : null;
@@ -91,7 +80,7 @@ export type CheckBriefingInput = {
 export function checkBriefing(input: CheckBriefingInput): string {
   const kind = KIND_FOR_MODEL[input.kind as DocumentKind] ?? KIND_FOR_MODEL.other;
   const trip = [
-    INCIDENT_FOR_MODEL[input.incident as Incident] ?? null,
+    caseKindForModel(input.incident),
     input.airline ? `companhia ${input.airline}` : null,
     brDate(input.flightDate) ? `voo em ${brDate(input.flightDate)}` : null,
   ].filter(Boolean);

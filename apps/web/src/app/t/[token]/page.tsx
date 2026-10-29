@@ -4,8 +4,8 @@ import { getTranslations } from "next-intl/server";
 
 import { Box, Paper, Typography } from "@mui/material";
 
-import { flightStatusProvider } from "@/lib/flights/status";
 import { readTestChat } from "@/lib/test-chat/actions";
+import { flightStatusProvider } from "@/modules/direito-do-passageiro/flights/status";
 
 /**
  * A firm's test chat (migration 0047): the page behind the link who manages

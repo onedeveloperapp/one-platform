@@ -20,7 +20,7 @@ import {
 import CollapsibleCard from "@/components/product/collapsible-card";
 import { CurrencyField } from "@/components/product/fields";
 import StatusChip, { type StatusTone } from "@/components/product/status-chip";
-import { caseErrorKey, INCIDENT_KEY } from "@/lib/cases/cases";
+import { caseErrorKey } from "@/lib/cases/cases";
 import { createPlannedProceedings, readCaseWeather, saveSuspension, setPartyClaim } from "@/lib/cases/rule-actions";
 import {
   caseDomicile,
@@ -33,6 +33,7 @@ import {
   STATED_CAUSE_KEY,
 } from "@/lib/cases/rules";
 import { opensOnArrival } from "@/lib/cases/sections";
+import { caseKindLabelKey } from "@/lib/modules/registry";
 import { planProceedings } from "@flyee/rules/proceedings";
 import { STATED_CAUSES, type StatedCause, type SuspensionRisk, triageSuspension } from "@flyee/rules/suspension";
 import type { WeatherSign } from "@flyee/rules/weather";
@@ -138,7 +139,7 @@ export default function RulesCard({
 
   // The triage for what is selected, on the weather already kept.
   const triage = triageSuspension({
-    incident: state.case.incident,
+    incident: state.case.incident ?? "other",
     statedCause: (STATED_CAUSES as readonly string[]).includes(cause) ? (cause as StatedCause) : null,
     weatherSigns: rules.weather.signs,
   });
@@ -297,7 +298,7 @@ export default function RulesCard({
                 <Typography variant="body2" className="text-text-secondary">
                   {claimDefault !== null
                     ? t("case-plan-claim-default", {
-                        kind: t(INCIDENT_KEY[state.case.incident]),
+                        kind: t(caseKindLabelKey(state.case.incident) ?? "case-incident-other"),
                         value: money(claimDefault),
                       })
                     : t("case-plan-claim-judge")}

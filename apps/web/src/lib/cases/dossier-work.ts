@@ -1,6 +1,6 @@
 import "server-only";
 
-import { caseLabel, DOCUMENT_KIND_KEY, INCIDENT_KEY, isIncident } from "@/lib/cases/cases";
+import { caseLabel, DOCUMENT_KIND_KEY } from "@/lib/cases/cases";
 import {
   DOSSIER_ZONE_NAME,
   dossierDay,
@@ -13,7 +13,8 @@ import {
   type RegistryResult,
 } from "@/lib/cases/dossier";
 import { CHANNEL_KEY, isComplaintChannel, isComplaintOutcome, OUTCOME_KEY } from "@/lib/cases/statements";
-import { loadFlightChecks, type SourceView } from "@/lib/flights/facts";
+import { caseKindLabelKey } from "@/lib/modules/registry";
+import { loadFlightChecks, type SourceView } from "@/modules/direito-do-passageiro/flights/facts";
 import catalog from "@flyee/content/messages/pt-BR.json";
 import { formatCnj } from "@flyee/rules";
 import { formatDayBr } from "@flyee/rules/person";
@@ -252,7 +253,7 @@ export async function loadDossierFacts(
     caseLabel: caseLabel(row.seq),
     issuedOn: moment(new Date().toISOString()) ?? "",
     zone: DOSSIER_ZONE_NAME,
-    incident: isIncident(row.incident) ? word(INCIDENT_KEY[row.incident], row.incident) : String(row.incident),
+    incident: word(caseKindLabelKey(row.incident) ?? undefined, String(row.incident ?? "")),
     airline: (airline.data as { name?: string } | null)?.name ?? null,
     flightDate: day(row.flight_date),
     segments: legs.map((segment) => ({

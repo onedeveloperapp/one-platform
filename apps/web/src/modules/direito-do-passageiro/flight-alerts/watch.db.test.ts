@@ -27,7 +27,7 @@ vi.mock("@flyee/jobs", () => ({ sendEvent: async () => ({ sent: false, hint: "no
 
 /** FlightAware, as a test declares what its flights do. */
 const flights = vi.hoisted(() => ({ data: null as unknown }));
-vi.mock("@/lib/flights/status", () => ({ flightStatusProvider: () => flights.data }));
+vi.mock("@/modules/direito-do-passageiro/flights/status", () => ({ flightStatusProvider: () => flights.data }));
 
 let sql: Sql;
 let clientAs: ReturnType<typeof standIn>;
@@ -149,7 +149,7 @@ describe.skipIf(!DB_URL)("ONE following flights at their source", () => {
   });
 
   it("keeps a real passenger's cancelled flight as an alert, untold until the platform releases it", async () => {
-    const { watchTrips } = await import("@/lib/flight-alerts/watch");
+    const { watchTrips } = await import("@/modules/direito-do-passageiro/flight-alerts/watch");
     fake.addFlight({
       flight: "G31702",
       date: dayOf(inMinutes(90)),
@@ -185,7 +185,7 @@ describe.skipIf(!DB_URL)("ONE following flights at their source", () => {
   });
 
   it("says a flight its source does not know, and tells nothing of it", async () => {
-    const { watchTrips } = await import("@/lib/flight-alerts/watch");
+    const { watchTrips } = await import("@/modules/direito-do-passageiro/flight-alerts/watch");
     const [unknown] = await sql.unsafe(
       `with trip as (
          insert into public.tracked_trips (org_id, passenger_name, phone, airline_iata, consent_wording, consent_at, consent_channel)

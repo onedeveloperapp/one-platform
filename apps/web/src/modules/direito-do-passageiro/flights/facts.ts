@@ -1,7 +1,7 @@
 import "server-only";
 
 import { momentLabel } from "@/lib/ai/approvals";
-import { flightStatusProvider } from "@/lib/flights/status";
+import { flightStatusProvider } from "@/modules/direito-do-passageiro/flights/status";
 import {
   compareLeg,
   factsOfRecord,

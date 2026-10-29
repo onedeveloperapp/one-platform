@@ -3,10 +3,10 @@ import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
-import { FLIGHT_REFUSALS, flightErrorKey } from "@/lib/flights/words";
+import { FLIGHT_REFUSALS, flightErrorKey } from "@/modules/direito-do-passageiro/flights/words";
 import messages from "@flyee/content/messages/pt-BR.json";
 
-const ROOT = path.resolve(__dirname, "../../../../..");
+const ROOT = path.resolve(__dirname, "../../../../../..");
 const MIGRATION = fs.readFileSync(path.join(ROOT, "packages/db/migrations/0030_flight_checks.sql"), "utf8");
 const product = messages.product as Record<string, string>;
 
