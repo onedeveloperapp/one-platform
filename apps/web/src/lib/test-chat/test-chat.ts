@@ -6,11 +6,26 @@
  * the reads and writes are `lib/test-chat/actions.ts`.
  */
 
-/** The trips, by the name of their scenario (`tracked_trips.label`): the four ready ones, and a real flight. */
-export const TEST_TRIPS = ["cancelamento", "familia", "conexao", "internacional", "voo_real"] as const;
+/**
+ * The trips, by the name of their scenario (`tracked_trips.label`): the four ready ones, a passenger an agency
+ * registered (migration 0071), and a real flight.
+ */
+export const TEST_TRIPS = ["cancelamento", "familia", "conexao", "internacional", "agencia", "voo_real"] as const;
 
 /** The trip of a real flight, followed at FlightAware: no tool makes it happen. */
 export const REAL_FLIGHT = "voo_real";
+
+/**
+ * The trip of a passenger an agency registered with the test chat's number for it: the firm's test chat follows it
+ * once the passenger agrees on the agency's link (0071), with the legs the agency wrote.
+ */
+export const AGENCY_TRIP = "agencia";
+
+/** The WhatsApp an agency gives its passenger for the test chat to follow them, as the database keeps it. */
+export const AGENCY_TEST_PHONE = "5500988880006";
+
+/** A tool's leg that is the trip's last, whichever it is: an agency's trip has the legs the agency wrote. */
+export const LAST_LEG = 0;
 export type TestTrip = (typeof TEST_TRIPS)[number];
 export const isTestTrip = (value: unknown): value is TestTrip => (TEST_TRIPS as readonly unknown[]).includes(value);
 
@@ -60,6 +75,14 @@ export const TEST_TOOLS: Record<TestTrip, TestTool[]> = {
     { key: "late_9h", label: "test-chat-tool-late-9", legs: [{ position: 1, status: "delayed", late_minutes: 540 }] },
     { key: "cancel", label: "test-chat-tool-cancel", legs: [{ position: 1, status: "cancelled" }] },
   ],
+  agencia: [
+    { key: "cancel", label: "test-chat-tool-cancel", legs: [{ position: 1, status: "cancelled" }] },
+    {
+      key: "late_6h",
+      label: "test-chat-tool-late-6-last",
+      legs: [{ position: LAST_LEG, status: "delayed", late_minutes: 360 }],
+    },
+  ],
   voo_real: [],
 };
 
@@ -90,6 +113,7 @@ export const TRIP_KEY: Record<TestTrip, string> = {
   familia: "test-chat-trip-familia",
   conexao: "test-chat-trip-conexao",
   internacional: "test-chat-trip-internacional",
+  agencia: "test-chat-trip-agencia",
   voo_real: "test-chat-trip-voo-real",
 };
 

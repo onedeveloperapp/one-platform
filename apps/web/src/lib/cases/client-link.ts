@@ -187,20 +187,29 @@ export type ClientTasks = {
   notices: ClientNotices | null;
   /** What the link asks about the civil court; none when it could not be read, and the section is left out. */
   civilCourt: ClientCivilCourtItem[] | null;
+  /**
+   * The travel agency whose record the case came from (migration 0071), while the client has not said they finished:
+   * the link asks them to confirm what came from it. Null for any other case.
+   */
+  agency: string | null;
 };
 
 /** What the link asks the client to sign, to accept and to confirm, and what it tells them. Read only: no visit is counted. */
 export async function readClientTasks(token: string): Promise<ClientTasks> {
   const supabase = isTokenShape(token) ? createAnonClient() : null;
-  if (!supabase) return { signatures: [], terms: [], statements: [], course: [], notices: null, civilCourt: null };
-  const [signatures, terms, statements, course, notices, civil] = await Promise.all([
+  if (!supabase) {
+    return { signatures: [], terms: [], statements: [], course: [], notices: null, civilCourt: null, agency: null };
+  }
+  const [signatures, terms, statements, course, notices, civil, agency] = await Promise.all([
     supabase.rpc("client_link_signatures", { target_token: token }),
     supabase.rpc("client_link_terms", { target_token: token }),
     supabase.rpc("client_link_statements", { target_token: token }),
     supabase.rpc("client_link_course", { target_token: token }),
     supabase.rpc("client_link_notices", { target_token: token }),
     supabase.rpc("client_link_civil_court", { target_token: token }),
+    supabase.rpc("client_link_agency", { target_token: token }),
   ]);
+  const handed = agency.data as { ok?: boolean; agency?: unknown; finished?: unknown } | null;
   const asked = civil.data as { ok?: boolean; items?: unknown } | null;
   const told = notices.data as (ClientNotices & { ok?: boolean }) | null;
   return {
@@ -225,5 +234,6 @@ export async function readClientTasks(token: string): Promise<ClientTasks> {
             (item) => typeof item?.party_id === "string" && typeof item?.name === "string",
           )
         : null,
+    agency: handed?.ok === true && typeof handed.agency === "string" && handed.finished !== true ? handed.agency : null,
   };
 }

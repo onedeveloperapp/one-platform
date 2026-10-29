@@ -243,6 +243,14 @@ async function openCase(service: SupabaseClient, held: Held, context: TurnContex
       minors: minorsOf(context, today()),
     }),
   });
+  // The documents an agency handed over to the case (0071) are checked now, as a client's are; the sweep takes
+  // what an event did not reach.
+  const handed = Array.isArray(answer.documents) ? answer.documents : [];
+  for (const documentId of handed) {
+    if (typeof documentId === "string") {
+      await sendEvent("one/case.document.received", { documentId }).catch(() => undefined);
+    }
+  }
   if (answer.code === "opened") {
     report.opened += 1;
     await send(service, answer.message_id);

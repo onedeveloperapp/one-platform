@@ -36,6 +36,7 @@ export const ADVANCE_WAITING = [
   "paper_incomplete",
   "paper_unwritable",
   "power_of_attorney_unsigned",
+  "client_confirmation",
   "unavailable",
   "step_failed",
   "stuck",
@@ -44,9 +45,10 @@ export type AdvanceWaiting = (typeof ADVANCE_WAITING)[number];
 
 /**
  * What ONE waits for that is the client's to do, not the firm's (0054): the firm is asked to act only once it
- * waited longer than the setting's days, to follow the client up.
+ * waited longer than the setting's days, to follow the client up. A case an agency handed over (0071) waits for
+ * its client to confirm on their link the data that came from the agency.
  */
-export const CLIENT_WAITS: readonly AdvanceWaiting[] = ["power_of_attorney_unsigned"];
+export const CLIENT_WAITS: readonly AdvanceWaiting[] = ["power_of_attorney_unsigned", "client_confirmation"];
 
 export const isClientWait = (code: string): boolean => (CLIENT_WAITS as readonly string[]).includes(code);
 
@@ -61,9 +63,16 @@ export const isAdvanceWaiting = (value: unknown): value is AdvanceWaiting =>
  * waited for (0064): with none, the lawsuit goes with no value and the
  * judge defines it.
  */
-export function lawsuitsWaiting(input: { missing: Missing[]; claims: (number | null)[] }): AdvanceWaiting | null {
+export function lawsuitsWaiting(input: {
+  missing: Missing[];
+  claims: (number | null)[];
+  /** A case an agency handed over (0071) whose client has not said on their link that they finished. */
+  unconfirmedHandoff?: boolean;
+}): AdvanceWaiting | null {
   if (input.missing.length > 0) return "case_incomplete";
   if (input.claims.length === 0) return "no_claimants";
+  // The data came from the agency, not from the client: ONE files nothing the client has not seen.
+  if (input.unconfirmedHandoff) return "client_confirmation";
   return null;
 }
 
@@ -89,6 +98,7 @@ const WAITING_KEY: Record<AdvanceWaiting, string> = {
   paper_incomplete: "advance-waiting-paper-incomplete",
   paper_unwritable: "advance-waiting-paper-unwritable",
   power_of_attorney_unsigned: "advance-waiting-power-of-attorney",
+  client_confirmation: "advance-waiting-client-confirmation",
   unavailable: "advance-waiting-unavailable",
   step_failed: "advance-waiting-step-failed",
   stuck: "advance-waiting-stuck",
@@ -117,6 +127,7 @@ const WAITING_TAG_KEY: Record<AdvanceWaiting, string> = {
   paper_incomplete: "advance-tag-paper",
   paper_unwritable: "advance-tag-paper",
   power_of_attorney_unsigned: "advance-tag-paper",
+  client_confirmation: "advance-tag-client-confirmation",
   unavailable: "advance-tag-error",
   step_failed: "advance-tag-error",
   stuck: "advance-tag-error",

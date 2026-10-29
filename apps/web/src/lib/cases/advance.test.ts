@@ -98,6 +98,14 @@ describe("what ONE waits for before it creates a case's lawsuits", () => {
     expect(lawsuitsWaiting({ missing: [], claims: [null] })).toBeNull();
     expect(lawsuitsWaiting({ missing: [], claims: [1000000, 500000] })).toBeNull();
   });
+
+  it("waits for the client to confirm the data an agency handed over (0071), after what is missing", () => {
+    expect(lawsuitsWaiting({ missing: [], claims: [null], unconfirmedHandoff: true })).toBe("client_confirmation");
+    expect(lawsuitsWaiting({ missing: [{ type: "flight" }], claims: [null], unconfirmedHandoff: true })).toBe(
+      "case_incomplete",
+    );
+    expect(lawsuitsWaiting({ missing: [], claims: [null], unconfirmedHandoff: false })).toBeNull();
+  });
 });
 
 describe("the lawsuits the rules plan, as the screen and ONE create them", () => {

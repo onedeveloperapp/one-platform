@@ -55,6 +55,7 @@ export default function SummaryCard({
     { label: t("cases-field-flight-date"), value: current.flightDate ? formatDayBr(current.flightDate) : null },
     { label: t("case-field-cause"), value: t(CAUSE_KEY[current.cause]) },
     { label: t("cases-field-origin"), value: current.origin ? t(ORIGIN_KEY[current.origin]) : null },
+    { label: t("case-field-agency"), value: current.agency },
     { label: t("case-field-responsible"), value: responsible },
   ];
 

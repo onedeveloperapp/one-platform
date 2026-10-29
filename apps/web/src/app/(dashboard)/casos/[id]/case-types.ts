@@ -174,6 +174,8 @@ export type CaseDetail = {
   cause: Cause;
   status: CaseStatus;
   origin: Origin | null;
+  /** The travel agency whose passenger the case came from (migration 0071), by its name; null for any other. */
+  agency: string | null;
   summary: string | null;
   responsibleId: string | null;
   closeReason: string | null;

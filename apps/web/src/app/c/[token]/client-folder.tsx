@@ -170,6 +170,11 @@ export default function ClientFolder({
           <Typography variant="body1" className="text-text-primary">
             {editable ? t("client-intro") : tasks.course.length > 0 ? t("client-locked-court") : t("client-locked")}
           </Typography>
+          {editable && tasks.agency && (
+            <Alert severity="info" className="neutral bg-background-paper/60!">
+              {t("client-agency-confirm", { agency: tasks.agency })}
+            </Alert>
+          )}
         </CardContent>
       </Card>
 

@@ -84,7 +84,7 @@ async function loadCase(id: string): Promise<CaseState> {
   const { data: row, error } = await supabase
     .from("cases")
     .select(
-      "id, seq, module, incident, airline_iata, flight_date, cause, status, origin, summary, responsible_id, close_reason, created_at",
+      "id, seq, module, incident, airline_iata, flight_date, cause, status, origin, partnership_id, summary, responsible_id, close_reason, created_at",
     )
     .eq("id", id)
     .eq("org_id", firm)
@@ -92,6 +92,14 @@ async function loadCase(id: string): Promise<CaseState> {
   if (error) return { kind: "error" };
   if (!row || !isCaseStatus(row.status)) return { kind: "not-found" };
   if (row.incident !== null && !isCaseKindOf(row.module, row.incident)) return { kind: "not-found" };
+  // The agency a case came from (0071), by the firm's own list of its partnerships.
+  let agency: string | null = null;
+  if (row.partnership_id) {
+    const { data: partners } = await supabase.rpc("firm_partners", { target_org: firm });
+    agency =
+      ((partners ?? []) as { link_id: string; partner: string }[]).find((link) => link.link_id === row.partnership_id)
+        ?.partner ?? null;
+  }
 
   const [
     parties,
@@ -317,6 +325,7 @@ async function loadCase(id: string): Promise<CaseState> {
       cause: (CAUSES as readonly string[]).includes(row.cause) ? row.cause : "undetermined",
       status: row.status,
       origin: (ORIGINS as readonly string[]).includes(row.origin ?? "") ? row.origin : null,
+      agency,
       summary: row.summary,
       responsibleId: row.responsible_id,
       closeReason: row.close_reason,

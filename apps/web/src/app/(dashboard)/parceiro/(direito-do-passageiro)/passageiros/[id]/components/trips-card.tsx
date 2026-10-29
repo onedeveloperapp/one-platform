@@ -130,7 +130,7 @@ export default function TripsCard({ detail, onChanged }: { detail: PaxDetail; on
                   {documents.length > 0 && (
                     <Box component="ul" className="m-0 flex list-none flex-col gap-2 p-0">
                       {documents.map((document) => (
-                        <DocumentLine key={document.id} document={document} />
+                        <DocumentLine key={document.id} document={document} canOpen={!locked} />
                       ))}
                     </Box>
                   )}

@@ -36,8 +36,11 @@ function readingSentence(t: ReturnType<typeof useTranslations>, document: PaxDoc
     .join(" ");
 }
 
-/** One document of the passenger: what it is, who sent it and when, what ONE read of it, and a way to open it. */
-export default function DocumentLine({ document }: { document: PaxDocument }) {
+/**
+ * One document of the passenger: what it is, who sent it and when, what ONE read of it, and a way to open it while
+ * the file is the agency's (`canOpen`: once the passenger is with the firm, the file is the firm's, migration 0071).
+ */
+export default function DocumentLine({ document, canOpen = true }: { document: PaxDocument; canOpen?: boolean }) {
   const t = useTranslations("product");
   const [opening, setOpening] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -92,7 +95,7 @@ export default function DocumentLine({ document }: { document: PaxDocument }) {
           </Typography>
         )}
       </Box>
-      {document.fileId && (
+      {document.fileId && canOpen && (
         <Button variant="outlined" color="grey" size="small" disabled={opening} onClick={() => void open()}>
           {t("pax-document-open")}
         </Button>

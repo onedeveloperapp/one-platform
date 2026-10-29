@@ -12,6 +12,7 @@ import {
   flightNumberOf,
   followableDay,
   isQuickReply,
+  LAST_LEG,
   type TestChatCard,
   testChatCardOf,
   type TestChatView,
@@ -401,10 +402,25 @@ export async function runTestTool(
 
   const tool = toolOf(opened.trip.label, String(toolKey ?? ""));
   if (!tool) return { ok: false, code: "invalid_tool" };
+  // A tool's "last leg" is the trip's own last one (an agency's trip has the legs the agency wrote).
+  let legsOfTool = tool.legs;
+  if (legsOfTool.some((leg) => leg.position === LAST_LEG)) {
+    const { data: last } = await service
+      .from("tracked_legs")
+      .select("position")
+      .eq("trip_id", tripId)
+      .order("position", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (!last) return { ok: false, code: "failed" };
+    legsOfTool = legsOfTool.map((leg) =>
+      leg.position === LAST_LEG ? { ...leg, position: Number(last.position) } : leg,
+    );
+  }
   const { data, error } = await service.rpc("test_chat_set_legs", {
     target_token: token,
     target_trip: tripId,
-    target_legs: tool.legs,
+    target_legs: legsOfTool,
     target_reset: false,
   });
   const legs = (data ?? {}) as { ok?: boolean; legs?: unknown; delay_minutes?: number };

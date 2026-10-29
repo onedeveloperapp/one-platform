@@ -168,6 +168,7 @@ export const EVENT_KEY: Record<string, string> = {
   client_segment_removed: "case-event-client-segment-removed",
   client_document_sent: "case-event-client-document-sent",
   client_finished: "case-event-client-finished",
+  agency_handoff: "case-event-agency-handoff",
   signature_requested: "case-event-signature-requested",
   paper_issued: "case-event-paper-issued",
   signature_opened: "case-event-signature-opened",

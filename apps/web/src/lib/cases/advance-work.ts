@@ -110,13 +110,30 @@ type LawsuitFacts = {
   familyChoice: "together" | "split";
   courts: { acronym: string; uf: string }[];
   systems: { court: string; proceeding_kind: string; system: string; confirmed: boolean }[];
+  /** A case an agency handed over (0071) whose client has not said on their link that they finished. */
+  unconfirmedHandoff: boolean;
 };
 
 /** What creating a case's lawsuits reads of it. Throws when a read failed; null for a case that is gone. */
 async function loadLawsuitFacts(service: SupabaseClient, caseId: string): Promise<LawsuitFacts | null> {
-  const { data: row, error } = await service.from("cases").select("id, family_choice").eq("id", caseId).maybeSingle();
+  const { data: row, error } = await service
+    .from("cases")
+    .select("id, family_choice, partnership_id")
+    .eq("id", caseId)
+    .maybeSingle();
   if (error) throw new Error("case unreadable");
   if (!row) return null;
+  // A case an agency handed over waits for its client to confirm the agency's data, by saying they finished.
+  let unconfirmedHandoff = false;
+  if (row.partnership_id) {
+    const finished = await service
+      .from("client_links")
+      .select("id", { count: "exact", head: true })
+      .eq("case_id", caseId)
+      .not("finished_at", "is", null);
+    if (finished.error) throw new Error("client links unreadable");
+    unconfirmedHandoff = (finished.count ?? 0) === 0;
+  }
   const [parties, documents, segments, settings, wages, courts, systems] = await Promise.all([
     service
       .from("case_parties")
@@ -201,6 +218,7 @@ async function loadLawsuitFacts(service: SupabaseClient, caseId: string): Promis
     familyChoice: row.family_choice === "split" ? "split" : "together",
     courts: (courts.data ?? []) as { acronym: string; uf: string }[],
     systems: (systems.data ?? []) as { court: string; proceeding_kind: string; system: string; confirmed: boolean }[],
+    unconfirmedHandoff,
   };
 }
 
@@ -253,6 +271,7 @@ async function createLawsuits(
   const waiting = lawsuitsWaiting({
     missing: missingOf(facts, day),
     claims: facts.parties.filter((party) => party.role === "claimant").map((party) => party.claimCents),
+    unconfirmedHandoff: facts.unconfirmedHandoff,
   });
   if (waiting) return { waiting, created: false, lost: false };
   const planned = lawsuitPlan({
