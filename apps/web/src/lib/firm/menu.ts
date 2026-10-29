@@ -19,8 +19,10 @@ export type MenuViewer = {
   role: OrgRole | null;
   /** What the person does in the firm. Null with no firm. */
   firmFunction: FirmFunction | null;
-  /** The product modules the firm uses (migration 0068). None with no firm. */
+  /** The product modules the person works in (migration 0068): the firm's, or the partner's. */
   modules: readonly string[];
+  /** The person works in a partner of a firm (0069), and sees the partner's area only. */
+  partner: boolean;
   isSuperadmin: boolean;
   /**
    * The person owes the second factor the rule asks of them (lib/firm/gate-rules.ts):
@@ -39,8 +41,10 @@ export type MenuAccess = {
   manager?: boolean;
   /** Only these functions of the firm. */
   functions?: readonly FirmFunction[];
-  /** Only a firm that uses this product module (lib/modules/registry.ts). */
+  /** Only a firm (or a partner) that works in this product module (lib/modules/registry.ts). */
   module?: string;
+  /** Only somebody of a partner (0069): the partner's area. */
+  partner?: boolean;
 };
 
 /**
@@ -50,7 +54,13 @@ export type MenuAccess = {
  */
 export function canAccess(access: MenuAccess | undefined, viewer: MenuViewer | null): boolean {
   if (access?.operator) return viewer?.isSuperadmin === true;
-  if (!viewer) return true;
+  if (!viewer) return access?.partner !== true;
+  if (viewer.partner) {
+    // Somebody of a partner: the partner's area, in the modules it works in, and their own account.
+    if (access?.partner) return !access.module || viewer.modules.includes(access.module);
+    return access?.withoutFirm === true;
+  }
+  if (access?.partner) return false;
   if (!viewer.hasFirm) return access?.withoutFirm === true;
   if (access?.manager && !isManager(viewer.role)) return false;
   if (access?.functions && !(viewer.firmFunction && access.functions.includes(viewer.firmFunction))) return false;

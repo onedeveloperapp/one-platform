@@ -272,7 +272,8 @@ select is(
   -- never deleted while something names it.
   -- The references to the reference tables (an airline, an airport, a court,
   -- a kind of notice, a product module) point at rows no firm deletes: a firm
-  -- that goes takes its cases, its notices and its modules with it.
+  -- that goes takes its cases, its notices, its modules and its partnerships
+  -- with it.
   array[
     'ai_runs.prompt_version_id',
     'ai_runs.task',
@@ -292,6 +293,8 @@ select is(
     'impersonation_sessions.actor_id',
     'issued_documents.file_id',
     'leads.consent_term_id',
+    'partner_invitations.module_key',
+    'partner_links.module_key',
     'proceedings.court',
     'prompt_versions.task',
     'subscription_modules.module_id',

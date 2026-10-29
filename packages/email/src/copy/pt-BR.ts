@@ -130,6 +130,24 @@ export const emailCopy = {
     },
   },
 
+  partnerInvitation: {
+    /** `firm` invites the agency `partner`; for a colleague, `firm` is null and `partner` invites. */
+    subject: (partner: string, firm: string | null) =>
+      firm ? `${firm} convidou ${partner} para ser parceira no ONE` : `Convite para a equipe de ${partner} no ONE`,
+    preview: (partner: string, firm: string | null) =>
+      firm ? `${firm} quer ${partner} como parceira` : `${partner} quer você na equipe`,
+    heading: "Você recebeu um convite",
+    body: (inviter: string | null, partner: string, firm: string | null) =>
+      firm
+        ? `${inviter ? `${inviter}, de ${firm},` : firm} convidou ${partner} para ser parceira do escritório no ONE. Na área da agência, vocês cadastram os passageiros da parceria, as viagens e os documentos, e o ONE acompanha os voos.`
+        : `${inviter ?? "A agência"} convidou você para a equipe de ${partner} no ONE, onde a agência cadastra os passageiros da parceria com o escritório.`,
+    account:
+      "O convite vale para este endereço de e-mail. Entre com ele, ou crie a sua conta com ele, e aceite na página do convite. Uma conta de agência não entra em nenhum escritório.",
+    button: "Ver o convite",
+    expiry: (date: string) => `O convite pode ser aceito até ${date}.`,
+    ignore: "Não esperava este convite? Ignore esta mensagem: nada acontece sem o seu aceite.",
+  },
+
   newsletter: {
     reason: "Você recebe este e-mail porque entrou na lista do ONE.",
     unsubscribe: "Sair da lista",

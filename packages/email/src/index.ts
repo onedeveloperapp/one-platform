@@ -10,6 +10,7 @@ import KitReceiptEmail, { type KitReceiptEmailProps } from "./templates/kit-rece
 import LeadConfirmEmail from "./templates/lead-confirm";
 import MemberWelcomeEmail, { type MemberWelcomeEmailProps } from "./templates/member-welcome";
 import NewsletterEmail from "./templates/newsletter";
+import PartnerInvitationEmail, { type PartnerInvitationEmailProps } from "./templates/partner-invitation";
 import SubscriptionActiveEmail, { type SubscriptionActiveEmailProps } from "./templates/subscription-active";
 import SubscriptionCanceledEmail, {
   type CancelCause,
@@ -26,6 +27,7 @@ export type {
   FirmInvitationEmailProps,
   KitReceiptEmailProps,
   MemberWelcomeEmailProps,
+  PartnerInvitationEmailProps,
   SubscriptionActiveEmailProps,
   SubscriptionCanceledEmailProps,
   TermEndingEmailProps,
@@ -101,6 +103,19 @@ export const sendFirmInvitationEmail = (
     ...(replyTo ? { replyTo } : {}),
     subject: emailCopyFor(props.locale).firmInvitation.subject(props.firmName),
     react: createElement(FirmInvitationEmail, props),
+  });
+
+/** An invitation to a partner of a firm (0069): a firm inviting an agency, or the agency a colleague. */
+export const sendPartnerInvitationEmail = (
+  to: string,
+  props: PartnerInvitationEmailProps,
+  replyTo?: string | null,
+): Promise<SendResult> =>
+  send({
+    to,
+    ...(replyTo ? { replyTo } : {}),
+    subject: emailCopyFor(props.locale).partnerInvitation.subject(props.partnerName, props.firmName),
+    react: createElement(PartnerInvitationEmail, props),
   });
 
 /** What a person does in a firm, in the words an e-mail uses. */

@@ -24,6 +24,7 @@ const product = messages.product as Record<string, string>;
 const healthModule: ModuleDefinition = {
   key: "plano-de-saude-teste",
   nameKey: "module-test",
+  partnerArea: [],
   caseKinds: [
     { key: "denied_procedure", labelKey: "test-kind-denied", forModel: "procedimento negado" },
     { key: "abusive_increase", labelKey: "test-kind-increase", forModel: "reajuste abusivo" },

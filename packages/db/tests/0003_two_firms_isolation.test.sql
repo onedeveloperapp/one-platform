@@ -236,6 +236,17 @@ insert into public.hearing_event_removals (hearing_id, org_id, calendar_id) valu
 insert into public.firm_notice_kinds (org_id, kind) values
   ('b1000000-0000-4000-8000-00000000000a', 'hearing_reminder'),
   ('b1000000-0000-4000-8000-00000000000b', 'hearing_reminder');
+-- A partner of each firm (0069): the firm reads that it has the partnership, and who manages it the invitations it
+-- sent; never the partner's people.
+insert into public.partners (id, name) values
+  ('f3000000-0000-4000-8000-00000000000a', 'Viagens Sol'),
+  ('f3000000-0000-4000-8000-00000000000b', 'Turismo Mar');
+insert into public.partner_links (id, partner_id, org_id, module_key) values
+  ('f4000000-0000-4000-8000-00000000000a', 'f3000000-0000-4000-8000-00000000000a', 'b1000000-0000-4000-8000-00000000000a', 'direito-do-passageiro'),
+  ('f4000000-0000-4000-8000-00000000000b', 'f3000000-0000-4000-8000-00000000000b', 'b1000000-0000-4000-8000-00000000000b', 'direito-do-passageiro');
+insert into public.partner_invitations (org_id, module_key, partner_name, email, role, token_hash, expires_at) values
+  ('b1000000-0000-4000-8000-00000000000a', 'direito-do-passageiro', 'Viagens Lua', 'lua@viagens.invalid', 'owner', repeat('e', 64), now() + interval '7 days'),
+  ('b1000000-0000-4000-8000-00000000000b', 'direito-do-passageiro', 'Turismo Rio', 'rio@turismo.invalid', 'owner', repeat('f', 64), now() + interval '7 days');
 insert into public.notice_optins (person_id, org_id, phone, source, wording) values
   ('a2000000-0000-4000-8000-00000000000a', 'b1000000-0000-4000-8000-00000000000a', '5562999990001', 'client',
    'Quero receber os avisos do meu processo.'),
@@ -431,7 +442,7 @@ select is(
     'filing_receipts', 'firm_autonomy', 'firm_calendars',
     'firm_claim_defaults', 'firm_invitations', 'firm_modules', 'firm_notice_kinds', 'firm_signers', 'flight_alerts', 'flight_checks', 'flight_segments', 'hearings', 'import_batches', 'import_rows', 'invoices',
     'issued_documents', 'lawyer_signature_uses', 'legal_sources', 'memberships',
-    'movements', 'notice_optins', 'onboarding_state',
+    'movements', 'notice_optins', 'onboarding_state', 'partner_invitations', 'partner_links',
     'people',
     'proceeding_lawyers', 'proceeding_parties', 'proceeding_tracking', 'proceedings', 'publication_readings', 'publications', 'record_versions',
     'signature_envelopes',
@@ -607,7 +618,7 @@ select is(
     'filing_package_items', 'filing_packages',
     'filing_receipts', 'firm_autonomy', 'firm_calendars', 'firm_claim_defaults', 'firm_modules', 'firm_notice_kinds', 'firm_signers', 'flight_alerts', 'flight_checks', 'flight_segments', 'hearings', 'import_batches',
     'import_rows', 'invoices', 'issued_documents', 'lawyer_signature_uses', 'legal_sources',
-    'memberships', 'movements', 'notice_optins', 'people', 'proceeding_lawyers', 'proceeding_parties', 'proceeding_tracking', 'proceedings',
+    'memberships', 'movements', 'notice_optins', 'partner_links', 'people', 'proceeding_lawyers', 'proceeding_parties', 'proceeding_tracking', 'proceedings',
     'publication_readings', 'publications',
     'signature_envelopes',
     'subscriptions', 'template_imports', 'test_chats', 'tracked_legs', 'tracked_trips',
@@ -650,7 +661,7 @@ select is(
     'filing_receipts', 'firm_autonomy', 'firm_calendars',
     'firm_claim_defaults', 'firm_invitations', 'firm_modules', 'firm_notice_kinds', 'firm_signers', 'flight_alerts', 'flight_checks', 'flight_segments', 'hearings', 'import_batches', 'import_rows', 'invoices',
     'issued_documents', 'lawyer_signature_uses', 'legal_sources', 'memberships',
-    'movements', 'notice_optins', 'onboarding_state',
+    'movements', 'notice_optins', 'onboarding_state', 'partner_invitations', 'partner_links',
     'people',
     'proceeding_lawyers', 'proceeding_parties', 'proceeding_tracking', 'proceedings', 'publication_readings', 'publications', 'record_versions',
     'signature_envelopes',

@@ -9,4 +9,5 @@ export const passengerModule: ModuleDefinition = {
   key: PASSENGER_MODULE,
   nameKey: "module-passenger",
   caseKinds: PASSENGER_CASE_KINDS,
+  partnerArea: [],
 };

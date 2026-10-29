@@ -8,6 +8,7 @@ import { COOKIE_KEYS, type LocaleOption } from "@/constants";
 import { resolveCurrency } from "@/lib/billing-currency";
 import { type Entitlements, type RpcEntitlements, toEntitlements } from "@/lib/entitlements";
 import type { FirmFunction, OrgRole } from "@/lib/firm/roles";
+import { type MemberPartner, memberPartnerOf, partnerModules } from "@/lib/partners/partner";
 import { isSupabaseConfigured } from "@flyee/auth";
 import { createClient } from "@flyee/auth/server";
 import type { BillingCurrency } from "@flyee/billing/currency";
@@ -48,8 +49,13 @@ export type MemberContext = {
   /** The firm's id, or null. Kept beside `firm` for the many callers that only need the id. */
   orgId: string | null;
   firm: MemberFirm | null;
-  /** The product modules the firm uses (`firm_modules`, migration 0068); none with no firm. */
+  /**
+   * The product modules the person works in: the firm's (`firm_modules`, migration 0068), or, for somebody of a
+   * partner, those of its active partnerships (0069); none otherwise.
+   */
   modules: string[];
+  /** The partner the person works in (0069), or null. Somebody of a partner is in no firm. */
+  partner: MemberPartner | null;
   isSuperadmin: boolean;
   locale: LocaleOption;
   currency: BillingCurrency;
@@ -90,6 +96,9 @@ export const getMemberContext = cache(async (): Promise<MemberContext | null> =>
     ? { id: row.org_id, name: organization?.name ?? "", role: row.role, firmFunction: row.firm_function }
     : null;
   const { data: raw } = firm ? await supabase.rpc("org_entitlements", { target_org: firm.id }) : { data: null };
+  // Somebody in no firm may be in a partner: asked only then, so a firm's request pays nothing for it.
+  const { data: partnerRaw } = firm ? { data: null } : await supabase.rpc("my_partner");
+  const partner = firm ? null : memberPartnerOf(partnerRaw);
   const locale = DEFAULTS.locale as LocaleOption;
 
   return {
@@ -98,7 +107,8 @@ export const getMemberContext = cache(async (): Promise<MemberContext | null> =>
     email: user.email ?? "",
     orgId: firm?.id ?? null,
     firm,
-    modules: firm ? (organization?.firm_modules ?? []).map((row) => row.module_key) : [],
+    modules: firm ? (organization?.firm_modules ?? []).map((row) => row.module_key) : partnerModules(partner),
+    partner,
     isSuperadmin: Boolean(profile?.is_superadmin),
     locale,
     currency: resolveCurrency({ cookie: cookieStore.get(COOKIE_KEYS.currency)?.value, locale }),

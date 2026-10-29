@@ -4,6 +4,7 @@ import { useTranslations } from "next-intl";
 import { Box, List, ListItem, ListItemButton, ListItemIcon, ListItemText } from "@mui/material";
 
 import { useViewer } from "@/components/layout/viewer-context";
+import NiBuilding from "@/icons/nexture/ni-building";
 import NiCheckSquare from "@/icons/nexture/ni-check-square";
 import NiPlug from "@/icons/nexture/ni-plug";
 import NiRobot from "@/icons/nexture/ni-robot";
@@ -12,7 +13,7 @@ import NiUsers from "@/icons/nexture/ni-users";
 import NiWallet from "@/icons/nexture/ni-wallet";
 import { canAccess } from "@/lib/firm/menu";
 
-export type SettingsMenuActive = "profile" | "billing" | "security" | "team" | "autonomy" | "connections";
+export type SettingsMenuActive = "profile" | "billing" | "security" | "team" | "autonomy" | "connections" | "partners";
 
 type GroupProps = { label: string };
 
@@ -86,6 +87,12 @@ export default function SettingsMenu({ active }: { active: SettingsMenuActive })
               label={t("settings-autonomy")}
               icon={<NiRobot size="medium" />}
               selected={active === "autonomy"}
+            />
+            <Item
+              href="/settings/parceiros"
+              label={t("settings-partners")}
+              icon={<NiBuilding size="medium" />}
+              selected={active === "partners"}
             />
             {managesFirm ? (
               <Item

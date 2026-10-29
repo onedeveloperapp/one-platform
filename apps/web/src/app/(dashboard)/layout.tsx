@@ -37,6 +37,7 @@ export default async function DashboardLayout({
         role: context.firm?.role ?? null,
         firmFunction: context.firm?.firmFunction ?? null,
         modules: context.modules,
+        partner: context.partner !== null,
         isSuperadmin: context.isSuperadmin,
         owesSecondFactor,
       }

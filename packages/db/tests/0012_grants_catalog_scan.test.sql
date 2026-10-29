@@ -80,14 +80,17 @@ select is(
     'client_link_reserve_upload',
     'client_link_save_person', 'client_link_save_segment', 'client_link_signature_original', 'client_link_signatures',
     'client_link_statements', 'client_link_terms', 'client_link_write_statement',
-    'current_consent_terms', 'firm_invitation_preview', 'supported_locales', 'verify_document'
+    'current_consent_terms', 'firm_invitation_preview', 'partner_invitation_preview', 'supported_locales',
+    'verify_document'
   ],
   'an anonymous visitor can call exactly the texts in force, what an invitation link shows, the languages, the check of a document''s public code and what a client''s link lets them do'
 );
 
 select ok(
   not has_column_privilege('anon', 'public.firm_invitations', 'token_hash', 'SELECT')
-  and not has_column_privilege('authenticated', 'public.firm_invitations', 'token_hash', 'SELECT'),
+  and not has_column_privilege('authenticated', 'public.firm_invitations', 'token_hash', 'SELECT')
+  and not has_column_privilege('anon', 'public.partner_invitations', 'token_hash', 'SELECT')
+  and not has_column_privilege('authenticated', 'public.partner_invitations', 'token_hash', 'SELECT'),
   'no session can read the hash of an invitation link'
 );
 

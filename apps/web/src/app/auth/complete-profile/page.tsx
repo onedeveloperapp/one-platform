@@ -35,13 +35,20 @@ import {
   FUNCTION_LABEL_KEY,
   isFirmFunction,
 } from "@/lib/firm/roles";
+import { acceptPartnerInvitation } from "@/lib/partners/actions";
+import { PARTNER_AREA, partnerErrorKey } from "@/lib/partners/partner";
 import { enterAfterSessionChange, sanitizeInternalNext } from "@/lib/safe-next";
 import { isSupabaseConfigured } from "@flyee/auth";
 import { createClient } from "@flyee/auth/client";
 
 type PendingInvitation = {
   id: string;
+  /** A firm's team, or a partner of a firm (migration 0069): an agency a firm invites, or the agency's team. */
+  kind: "firm" | "partner";
+  /** The firm, or the agency. */
   firm: string;
+  /** For a partner: the firm that invites the agency, when it is a firm's invitation. */
+  partnerOf: string | null;
   invitedBy: string | null;
   firmFunction: FirmFunction | null;
   expiresAt: string;
@@ -79,6 +86,8 @@ export default function Page() {
   const [invitations, setInvitations] = useState<PendingInvitation[]>([]);
   const [accepting, setAccepting] = useState<string | null>(null);
   const [errorCode, setErrorCode] = useState<string | null>(null);
+  // A refusal of the database on an invitation to a partner, in the words of the partners (product namespace).
+  const [partnerError, setPartnerError] = useState<string | null>(null);
 
   const destination = () => {
     const requestedNext = searchParams.get("next");
@@ -162,10 +171,23 @@ export default function Page() {
         );
         return;
       }
+      // In a partner of a firm: its area is where the person works.
+      const { data: partner } = await supabase
+        .from("partner_members")
+        .select("partner_id")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      if (partner) {
+        void enterAfterSessionChange(PARTNER_AREA);
+        return;
+      }
 
-      const { data: pending } = await supabase.rpc("my_firm_invitations");
-      setInvitations(
-        (
+      const [{ data: pending }, { data: partnerPending }] = await Promise.all([
+        supabase.rpc("my_firm_invitations"),
+        supabase.rpc("my_partner_invitations"),
+      ]);
+      setInvitations([
+        ...(
           (pending ?? []) as {
             id: string;
             firm: string;
@@ -173,14 +195,38 @@ export default function Page() {
             firm_function: string;
             expires_at: string;
           }[]
-        ).map((row) => ({
-          id: row.id,
-          firm: row.firm,
-          invitedBy: row.invited_by,
-          firmFunction: isFirmFunction(row.firm_function) ? row.firm_function : null,
-          expiresAt: row.expires_at,
-        })),
-      );
+        ).map(
+          (row): PendingInvitation => ({
+            id: row.id,
+            kind: "firm",
+            firm: row.firm,
+            partnerOf: null,
+            invitedBy: row.invited_by,
+            firmFunction: isFirmFunction(row.firm_function) ? row.firm_function : null,
+            expiresAt: row.expires_at,
+          }),
+        ),
+        ...(
+          (partnerPending ?? []) as {
+            id: string;
+            kind: string;
+            firm: string | null;
+            partner: string;
+            invited_by: string | null;
+            expires_at: string;
+          }[]
+        ).map(
+          (row): PendingInvitation => ({
+            id: row.id,
+            kind: "partner",
+            firm: row.partner,
+            partnerOf: row.kind === "firm" ? row.firm : null,
+            invitedBy: row.invited_by,
+            firmFunction: null,
+            expiresAt: row.expires_at,
+          }),
+        ),
+      ]);
 
       const meta = user.user_metadata ?? {};
       const suggestedName = meta.full_name ?? meta.name ?? meta.display_name ?? user.email?.split("@")[0] ?? "";
@@ -191,11 +237,22 @@ export default function Page() {
     check();
   }, [router, resetForm, searchParams]);
 
-  const accept = async (invitationId: string) => {
+  const accept = async (invitation: PendingInvitation) => {
     if (accepting) return;
     setErrorCode(null);
-    setAccepting(invitationId);
-    const result = await acceptInvitation(invitationId);
+    setPartnerError(null);
+    setAccepting(invitation.id);
+    if (invitation.kind === "partner") {
+      const joined = await acceptPartnerInvitation(invitation.id).catch(() => ({ ok: false as const, code: "failed" }));
+      if (!joined.ok) {
+        setPartnerError(joined.code);
+        setAccepting(null);
+        return;
+      }
+      await enterAfterSessionChange(PARTNER_AREA);
+      return;
+    }
+    const result = await acceptInvitation(invitation.id);
     if (!result.ok) {
       setErrorCode(result.code);
       setAccepting(null);
@@ -248,6 +305,13 @@ export default function Page() {
                 </AlertTitle>
               </Alert>
             )}
+            {partnerError && (
+              <Alert severity="error" icon={<NiCrossSquare />} className="neutral bg-background-paper/60!">
+                <AlertTitle variant="subtitle2" className="mb-0">
+                  {tp(partnerErrorKey(partnerError))}
+                </AlertTitle>
+              </Alert>
+            )}
 
             {hasInvitations && (
               <Box component="section" className="flex flex-col gap-3" aria-labelledby="firm-invitations">
@@ -265,6 +329,11 @@ export default function Page() {
                       </Typography>
                       <Typography variant="body2" className="text-text-secondary">
                         {[
+                          invitation.kind === "partner"
+                            ? invitation.partnerOf
+                              ? tp("partner-invitation-of-firm", { firm: invitation.partnerOf })
+                              : tp("partner-invitation-of-team")
+                            : null,
                           invitation.invitedBy
                             ? t("firm-invitation-from", { inviter: invitation.invitedBy })
                             : t("firm-invitation-from-unknown"),
@@ -277,7 +346,7 @@ export default function Page() {
                     </Box>
                     <Button
                       variant="contained"
-                      onClick={() => void accept(invitation.id)}
+                      onClick={() => void accept(invitation)}
                       disabled={accepting !== null || formik.isSubmitting}
                     >
                       {t("firm-invitation-accept")}

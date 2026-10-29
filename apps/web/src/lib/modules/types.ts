@@ -8,6 +8,21 @@
  * (`app/**\/(<key>)/...`); the lint keeps the rest of the code from importing it (eslint.config.ts).
  */
 
+import type { IconName } from "@/icons/icon-registry";
+
+/**
+ * A place of a module in the area of a partner of a firm (migration 0069): a page of the module's route group,
+ * which the partner's menu and home lead to.
+ */
+export type PartnerAreaEntry = {
+  id: string;
+  href: string;
+  icon: IconName;
+  /** The `dashboard` message keys of its name and of its one line. */
+  labelKey: string;
+  descriptionKey: string;
+};
+
 /** A kind of problem a case of the module is about (`cases.incident` for the passenger module). */
 export type CaseKind = {
   /** As stored. Unique across every module, so a kind names its module by itself. */
@@ -25,4 +40,6 @@ export type ModuleDefinition = {
   nameKey: string;
   /** The kinds of problem a case of the module is about, in the order the screens offer them. */
   caseKinds: readonly CaseKind[];
+  /** What the module gives a partner of a firm to do, in the partner's area (none for a module with no partner). */
+  partnerArea: readonly PartnerAreaEntry[];
 };

@@ -21,6 +21,7 @@ const viewer = (changes: Partial<MenuViewer> = {}): MenuViewer => ({
   role: "member",
   firmFunction: "atendimento",
   modules: ["direito-do-passageiro"],
+  partner: false,
   isSuperadmin: false,
   owesSecondFactor: false,
   ...changes,
@@ -65,6 +66,24 @@ describe("the menu by role", () => {
     expect(canAccess(undefined, null)).toBe(true);
     expect(canAccess({ manager: true }, null)).toBe(true);
     expect(canAccess({ operator: true }, null)).toBe(false);
+    expect(canAccess({ partner: true }, null)).toBe(false);
+  });
+
+  it("shows somebody of a partner its area, in the modules of its partnerships, and nothing of a firm", () => {
+    const agency = viewer({ hasFirm: false, role: null, firmFunction: null, partner: true });
+    expect(canAccess({ partner: true }, agency)).toBe(true);
+    expect(canAccess({ partner: true, module: "direito-do-passageiro" }, agency)).toBe(true);
+    expect(canAccess({ partner: true, module: "outro-modulo" }, agency)).toBe(false);
+    expect(canAccess({ withoutFirm: true }, agency)).toBe(true);
+    expect(canAccess(undefined, agency)).toBe(false);
+    expect(canAccess({ manager: true }, agency)).toBe(false);
+    // Nobody of a firm sees the partner's area.
+    expect(canAccess({ partner: true }, viewer({ role: "owner" }))).toBe(false);
+  });
+
+  it("shows an item of a module to a firm that uses it only", () => {
+    expect(canAccess({ module: "direito-do-passageiro" }, viewer())).toBe(true);
+    expect(canAccess({ module: "outro-modulo" }, viewer())).toBe(false);
   });
 
   it("gives each person the menu that is theirs", () => {

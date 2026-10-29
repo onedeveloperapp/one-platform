@@ -37,6 +37,9 @@ const PUBLIC_PREFIXES = [
   // An invitation to a firm is opened from an e-mail, before the person signs
   // in or even has an account: the page shows who invites and sends them on.
   "/convite/",
+  // An invitation to a partner of a firm (a travel agency, or a colleague of
+  // it): the same, before anybody signs in.
+  "/parceria/",
   // Anyone holding a document a firm issued checks its code here, with no
   // account: the page shows who issued it and nothing of its content.
   "/verificar",
@@ -152,7 +155,11 @@ export async function middleware(request: NextRequest) {
 
   // A page whose path carries a token keeps no visit cookie: a campaign
   // parameter on it would store the path, token included, as the landing page.
-  const tokenInPath = pathname.startsWith("/c/") || pathname.startsWith("/t/") || pathname.startsWith("/convite/");
+  const tokenInPath =
+    pathname.startsWith("/c/") ||
+    pathname.startsWith("/t/") ||
+    pathname.startsWith("/convite/") ||
+    pathname.startsWith("/parceria/");
 
   const withVisitCookies = <T extends NextResponse>(res: T): T => {
     if (tokenInPath) return res;

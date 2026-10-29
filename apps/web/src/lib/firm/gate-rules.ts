@@ -13,6 +13,11 @@ export const SECOND_FACTOR_REQUIRED_URL = `${SECOND_FACTOR_SETUP_PATH}?exigido=1
 /** What the platform operator, who works in no firm, may open in the logged area. */
 const OPERATOR_PREFIXES = ["/admin", "/settings"];
 
+/** Where somebody of a partner works (migration 0069), and their own account's settings. */
+export const PARTNER_HOME = "/parceiro";
+const PARTNER_PATHS = (path: string) =>
+  path === PARTNER_HOME || path.startsWith(`${PARTNER_HOME}/`) || path === "/settings" || isSecondFactorSetupPath(path);
+
 export type GateDecision = { redirectTo: string } | null;
 
 /**
@@ -34,12 +39,17 @@ export type GateDecision = { redirectTo: string } | null;
 export function decideGate(input: {
   path: string;
   hasFirm: boolean;
+  /** The person works in a partner of a firm (0069): never in a firm, never the platform's operator. */
+  isPartner?: boolean;
   isSuperadmin: boolean;
   impersonating: boolean;
   secondFactorRequired: boolean;
   hasSecondFactor: boolean;
 }): GateDecision {
-  if (!input.hasFirm) {
+  if (input.isPartner && !input.hasFirm) {
+    // Somebody of a partner reaches its own area and their own account; nothing of a firm.
+    if (input.path && !PARTNER_PATHS(input.path)) return { redirectTo: PARTNER_HOME };
+  } else if (!input.hasFirm) {
     if (!input.isSuperadmin) return { redirectTo: FIRM_SETUP_PATH };
     if (input.path && !OPERATOR_PREFIXES.some((prefix) => input.path.startsWith(prefix))) {
       return { redirectTo: "/admin" };
@@ -88,12 +98,13 @@ export function isSecondFactorSetupPath(path: string): boolean {
  * (lib/firm/gate.ts).
  */
 export function shellHold(
-  viewer: { hasFirm: boolean; isSuperadmin: boolean; owesSecondFactor: boolean },
+  viewer: { hasFirm: boolean; partner?: boolean; isSuperadmin: boolean; owesSecondFactor: boolean },
   path: string,
 ): string | null {
   const decision = decideGate({
     path,
     hasFirm: viewer.hasFirm,
+    isPartner: viewer.partner === true,
     isSuperadmin: viewer.isSuperadmin,
     impersonating: false,
     secondFactorRequired: viewer.owesSecondFactor,

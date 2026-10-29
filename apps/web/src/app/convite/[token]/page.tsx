@@ -2,9 +2,9 @@ import { AcceptInvitationButton, SwitchAccountButton } from "./accept-button";
 import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 
-import { Box, Button, Paper, Typography } from "@mui/material";
+import { Box, Button, Typography } from "@mui/material";
 
-import Logo from "@/components/logo/logo";
+import { TokenPageFrame as Frame, TokenPageMessage as Message } from "@/components/auth/token-page-frame";
 import { FUNCTION_LABEL_KEY, isFirmFunction } from "@/lib/firm/roles";
 import { isSupabaseConfigured } from "@flyee/auth";
 import { createClient } from "@flyee/auth/server";
@@ -38,37 +38,6 @@ type Preview = {
   status?: "open" | "accepted" | "revoked" | "expired";
   for_this_account?: boolean;
 };
-
-function Frame({ children }: { children: React.ReactNode }) {
-  return (
-    <Box className="bg-waves flex min-h-screen w-full items-center justify-center bg-cover bg-center p-4">
-      <Paper elevation={3} className="bg-background-paper shadow-darker-xs w-lg max-w-full rounded-4xl py-14">
-        <Box className="flex flex-col gap-10 px-8 sm:px-14">
-          <Box className="flex justify-center">
-            <Logo classNameFull="h-12 w-auto" classNameMobile="hidden" />
-          </Box>
-          {children}
-        </Box>
-      </Paper>
-    </Box>
-  );
-}
-
-function Message({ title, body, children }: { title: string; body: string; children?: React.ReactNode }) {
-  return (
-    <Box className="flex flex-col gap-6">
-      <Box className="flex flex-col">
-        <Typography variant="h1" component="h1" className="mb-2">
-          {title}
-        </Typography>
-        <Typography variant="body1" className="text-text-primary">
-          {body}
-        </Typography>
-      </Box>
-      {children}
-    </Box>
-  );
-}
 
 export default async function InvitationPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;

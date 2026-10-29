@@ -5,6 +5,7 @@ import {
   FIRM_SETUP_PATH,
   isSecondFactorSetupPath,
   owesSecondFactor,
+  PARTNER_HOME,
   SECOND_FACTOR_REQUIRED_URL,
   shellHold,
 } from "@/lib/firm/gate-rules";
@@ -34,6 +35,33 @@ const inFirm = {
 describe("the gate of the logged area", () => {
   it("lets a person of a firm through", () => {
     expect(decideGate(inFirm)).toBeNull();
+  });
+
+  it("keeps somebody of a partner in its area and their own account", () => {
+    const agency = { ...inFirm, hasFirm: false, isPartner: true, hasSecondFactor: true };
+    for (const path of [
+      "/parceiro",
+      "/parceiro/equipe",
+      "/parceiro/passageiros/abc",
+      "/settings",
+      "/settings/security",
+    ]) {
+      expect(decideGate({ ...agency, path })).toBeNull();
+    }
+    for (const path of ["/inicio", "/casos", "/settings/team", "/settings/parceiros", "/admin", "/parceirosx"]) {
+      expect(decideGate({ ...agency, path })).toEqual({ redirectTo: PARTNER_HOME });
+    }
+    // The second factor first, as for anybody the rule asks it of.
+    expect(decideGate({ ...agency, path: "/parceiro", secondFactorRequired: true, hasSecondFactor: false })).toEqual({
+      redirectTo: SECOND_FACTOR_REQUIRED_URL,
+    });
+    // Never sent to found a firm, and the shell holds the same answer.
+    expect(shellHold({ hasFirm: false, partner: true, isSuperadmin: false, owesSecondFactor: false }, "/casos")).toBe(
+      PARTNER_HOME,
+    );
+    expect(
+      shellHold({ hasFirm: false, partner: true, isSuperadmin: false, owesSecondFactor: false }, "/parceiro"),
+    ).toBeNull();
   });
 
   it("sends an account with no firm to found one or accept an invitation, whatever it asked for", () => {

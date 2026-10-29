@@ -50,6 +50,7 @@ export async function resolveGate(context: MemberContext): Promise<GateState> {
   const input = {
     path,
     hasFirm: context.firm !== null,
+    isPartner: context.partner !== null,
     isSuperadmin: context.isSuperadmin,
     impersonating,
     secondFactorRequired,

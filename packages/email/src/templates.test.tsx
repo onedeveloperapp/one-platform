@@ -7,6 +7,7 @@ import { type EmailLocale, toEmailLocale } from "./locale";
 import AccessEndedEmail from "./templates/access-ended";
 import ContactFormEmail from "./templates/contact-form";
 import FirmInvitationEmail from "./templates/firm-invitation";
+import PartnerInvitationEmail from "./templates/partner-invitation";
 import KitReceiptEmail from "./templates/kit-receipt";
 import LeadConfirmEmail from "./templates/lead-confirm";
 import MemberWelcomeEmail from "./templates/member-welcome";
@@ -40,6 +41,14 @@ function every(locale: EmailLocale): Record<string, ReactElement> {
       firmName: "Souza Advogados",
       inviterName: "Ana Souza",
       functionLabel: "Advocacia",
+      acceptUrl: INVITATION,
+      expiresLabel: "15 de outubro de 2026",
+    }),
+    "partner-invitation": createElement(PartnerInvitationEmail, {
+      locale,
+      partnerName: "Viagens Sol",
+      firmName: "Souza Advogados",
+      inviterName: "Ana Souza",
       acceptUrl: INVITATION,
       expiresLabel: "15 de outubro de 2026",
     }),

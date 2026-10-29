@@ -79,8 +79,17 @@ export async function GET(request: Request) {
           const safeNext = requestedNext ? sanitizeInternalNext(requestedNext) : null;
           // Somebody who came from an invitation link goes back to it: the page
           // shows the invitation and accepts it.
-          if (safeNext?.startsWith("/convite/")) {
+          if (safeNext?.startsWith("/convite/") || safeNext?.startsWith("/parceria/")) {
             return NextResponse.redirect(`${origin}${safeNext}`);
+          }
+          // Somebody of a partner of a firm (migration 0069) works in its area.
+          const { data: partner } = await supabase
+            .from("partner_members")
+            .select("partner_id")
+            .eq("user_id", data.user.id)
+            .maybeSingle();
+          if (partner) {
+            return NextResponse.redirect(`${origin}${safeNext?.startsWith("/parceiro") ? safeNext : "/parceiro"}`);
           }
           const firmSetup = new URL("/auth/complete-profile", origin);
           if (safeNext) firmSetup.searchParams.set("next", safeNext);

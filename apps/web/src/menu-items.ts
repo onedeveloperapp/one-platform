@@ -1,3 +1,4 @@
+import { MODULES } from "@/lib/modules/registry";
 import { MenuItem } from "@/types";
 
 /**
@@ -82,6 +83,39 @@ export const leftMenuItems: MenuItem[] = [
     description: "menu-biblioteca-description",
     color: "text-primary",
     href: "/biblioteca",
+  },
+  // The area of a partner of a firm (migration 0069): only somebody of a partner sees it, and nothing above.
+  {
+    id: "parceiro",
+    icon: "NiBuilding",
+    label: "menu-parceiro",
+    description: "menu-parceiro-description",
+    color: "text-primary",
+    href: "/parceiro",
+    canAccess: { partner: true },
+  },
+  // What each module gives a partner to do (lib/modules/registry.ts), in the modules of its partnerships.
+  ...MODULES.modules.flatMap((definition) =>
+    definition.partnerArea.map(
+      (area): MenuItem => ({
+        id: area.id,
+        icon: area.icon,
+        label: area.labelKey,
+        description: area.descriptionKey,
+        color: "text-primary",
+        href: area.href,
+        canAccess: { partner: true, module: definition.key },
+      }),
+    ),
+  ),
+  {
+    id: "parceiro-equipe",
+    icon: "NiUsers",
+    label: "menu-parceiro-equipe",
+    description: "menu-parceiro-equipe-description",
+    color: "text-primary",
+    href: "/parceiro/equipe",
+    canAccess: { partner: true },
   },
   {
     id: "admin",
