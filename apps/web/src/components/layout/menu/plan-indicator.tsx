@@ -55,6 +55,8 @@ export default function PlanIndicator({ menuType }: { menuType: MenuType }) {
   const planLabel = entitlements.active && entitlements.tier ? t(TIER_LABEL[entitlements.tier]) : t("menu-plan-free");
   const title = t("menu-plan-current", { plan: planLabel });
   const minimal = menuType === MenuType.Minimal;
+  // In the list the plan lines up with the items' icons and labels; on the icon rails it sits centred under them.
+  const list = menuType === MenuType.SingleLayer;
 
   return (
     <Box
@@ -68,6 +70,7 @@ export default function PlanIndicator({ menuType }: { menuType: MenuType }) {
       className={cn(
         "hover:bg-grey-25 flex w-full flex-col items-center gap-0.5 rounded-2xl px-2 py-2 transition-colors",
         minimal && "px-0",
+        list && "items-start px-4",
       )}
     >
       <Box className="text-text-secondary flex flex-row items-center gap-1.5">
@@ -81,7 +84,10 @@ export default function PlanIndicator({ menuType }: { menuType: MenuType }) {
       {!minimal && sellable && (
         <Typography
           variant="body2"
-          className="text-primary dark:text-primary-light text-center text-[0.6875rem] leading-4"
+          className={cn(
+            "text-primary dark:text-primary-light text-[0.6875rem] leading-4",
+            list ? "text-left" : "text-center",
+          )}
         >
           {t("menu-cta-button")}
         </Typography>

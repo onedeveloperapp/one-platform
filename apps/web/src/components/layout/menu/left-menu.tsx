@@ -150,7 +150,10 @@ export default function LeftMenu() {
           tabIndex={0}
           aria-label={t("menu-navigation")}
         >
-          <Box className={cn("flex flex-1 flex-col gap-0.5")}>
+          {/* In the list the items take the whole width, as the ones at the foot do: the column would otherwise shrink
+              to its widest label and sit centred (the template's demo menu hid it, its nested items widening it). The
+              icon rails keep their fixed tiles centred. */}
+          <Box className={cn("flex flex-1 flex-col gap-0.5", leftMenuType === MenuType.SingleLayer && "w-full")}>
             {visibleMenuItems.map((item) =>
               leftMenuType !== MenuType.SingleLayer ? (
                 <PrimaryItem
