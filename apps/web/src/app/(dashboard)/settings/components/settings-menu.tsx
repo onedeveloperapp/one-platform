@@ -7,13 +7,22 @@ import { useViewer } from "@/components/layout/viewer-context";
 import NiBuilding from "@/icons/nexture/ni-building";
 import NiCheckSquare from "@/icons/nexture/ni-check-square";
 import NiPlug from "@/icons/nexture/ni-plug";
+import NiPuzzle from "@/icons/nexture/ni-puzzle";
 import NiRobot from "@/icons/nexture/ni-robot";
 import NiUser from "@/icons/nexture/ni-user";
 import NiUsers from "@/icons/nexture/ni-users";
 import NiWallet from "@/icons/nexture/ni-wallet";
 import { canAccess } from "@/lib/firm/menu";
 
-export type SettingsMenuActive = "profile" | "billing" | "security" | "team" | "autonomy" | "connections" | "partners";
+export type SettingsMenuActive =
+  | "profile"
+  | "billing"
+  | "security"
+  | "team"
+  | "autonomy"
+  | "modules"
+  | "connections"
+  | "partners";
 
 type GroupProps = { label: string };
 
@@ -87,6 +96,12 @@ export default function SettingsMenu({ active }: { active: SettingsMenuActive })
               label={t("settings-autonomy")}
               icon={<NiRobot size="medium" />}
               selected={active === "autonomy"}
+            />
+            <Item
+              href="/settings/modulos"
+              label={t("settings-modules")}
+              icon={<NiPuzzle size="medium" />}
+              selected={active === "modules"}
             />
             <Item
               href="/settings/parceiros"

@@ -48,12 +48,31 @@ export function quickAnswer(text: string | null | undefined): QuickAnswer | null
 /**
  * The message after a yes: the case's number (marked `{caso}`, the database writes it), the link and the next
  * steps, the documents first: the firm reads each person's data in them (migration 0063), and the passenger
- * confirms what was read and completes the rest.
+ * confirms what was read and completes the rest. A passenger of a partner agency (0071) sent nothing yet but has
+ * it all: the agency's data and documents came with the case, so the steps are to check them, tell what happened
+ * and say they finished, which ONE waits for before it goes on.
  */
-export function caseStepsMessage(input: { passengerName: string; url: string; minors: string[] }): string {
+export function caseStepsMessage(input: {
+  passengerName: string;
+  url: string;
+  minors: string[];
+  /** The partner agency whose record came with the case; null for a passenger of the firm's own. */
+  agency?: string | null;
+}): string {
   const name = firstNameOf(input.passengerName) || input.passengerName;
   const others = input.minors.map((minor) => firstNameOf(minor) || minor).filter(Boolean);
   const list = new Intl.ListFormat("pt-BR", { style: "long", type: "conjunction" });
+  if (input.agency) {
+    const theirs = others.length === 0 ? "os seus dados" : `os seus dados e os de ${list.format(others)}`;
+    return [
+      `Pronto, ${name}. O escritório abriu o seu caso, número {caso}, com os dados e os documentos que vieram de ${input.agency}. Os próximos passos:`,
+      `1. Abra o seu link: ${input.url}`,
+      `2. Confira ${theirs} e os documentos que vieram da agência, e corrija o que estiver errado.`,
+      "3. Conte o que aconteceu, por texto ou por áudio.",
+      "4. Quando estiver tudo certo, avise no fim da página que terminou: o escritório só segue com o seu caso depois disso.",
+      "O link é só seu. Se alguém mais viajou com você, me diga aqui.",
+    ].join("\n");
+  }
   const identities =
     others.length === 0
       ? "a foto do seu documento de identidade"

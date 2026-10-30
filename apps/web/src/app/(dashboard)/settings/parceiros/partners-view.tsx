@@ -1,6 +1,7 @@
 "use client";
 
 import SettingsMenu from "../components/settings-menu";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
@@ -10,15 +11,17 @@ import { Alert, Box, Button, Card, CardContent, Drawer, Grid, Tooltip, Typograph
 import PartnerInviteDialog from "@/components/partners/partner-invite-dialog";
 import ConfirmActionDialog from "@/components/product/confirm-action-dialog";
 import EmptyState from "@/components/product/empty-state";
+import MetricBars from "@/components/product/metric-bars";
 import PageHeader from "@/components/product/page-header";
 import StatusChip from "@/components/product/status-chip";
+import UsageMeter from "@/components/product/usage-meter";
 import NiBuilding from "@/icons/nexture/ni-building";
 import NiListCircle from "@/icons/nexture/ni-list-circle";
 import NiUserPlus from "@/icons/nexture/ni-user-plus";
 import { moduleOf } from "@/lib/modules/registry";
 import { endPartnership, revokePartnerInvitation } from "@/lib/partners/actions";
 import type { FirmPartnership, FirmPartnersState } from "@/lib/partners/facts";
-import { partnerErrorKey } from "@/lib/partners/partner";
+import { partnerErrorKey, type PartnershipCosts } from "@/lib/partners/partner";
 
 const day = (value: string | null) =>
   value
@@ -27,8 +30,10 @@ const day = (value: string | null) =>
 
 /**
  * The firm's travel agencies (migration 0069). Who manages the firm comes here to set a partnership up: invite the
- * agency, see that it accepted, end it when it ends. Everybody else finds which agencies send the firm passengers.
- * A handful of partnerships, so a list of cards, never a table.
+ * agency, see that it accepted, follow what it brings, end it when it ends. Everybody else finds which agencies send
+ * the firm passengers. Each partnership says what the firm has of it (0075): its cases, and, to who manages the
+ * firm, what it costs today; nothing of a passenger who did not say yes. A handful of partnerships, so a list of
+ * cards, never a table.
  */
 export default function PartnersView({ state, modules }: { state: FirmPartnersState; modules: readonly string[] }) {
   const t = useTranslations("product");
@@ -149,44 +154,142 @@ export default function PartnersView({ state, modules }: { state: FirmPartnersSt
                 <Typography id="partners-list" variant="h5" component="h2" className="mb-0">
                   {t("partners-list-title")}
                 </Typography>
+                {ready.factsFailed && (
+                  <Alert
+                    severity="error"
+                    className="neutral bg-background-paper/60!"
+                    action={
+                      <Button color="inherit" size="small" onClick={refresh}>
+                        {t("partners-retry")}
+                      </Button>
+                    }
+                  >
+                    {t("partners-facts-error")}
+                  </Alert>
+                )}
+                {ready.costs && (
+                  <UsageMeter
+                    headline={t("partners-flights-headline", {
+                      used: ready.costs.flightReadsToday,
+                      share: ready.costs.flightReadsShare,
+                    })}
+                    caption={t("partners-flights-caption")}
+                    ariaLabel={t("partners-flights-aria")}
+                    segments={flightSegments(ready.costs, ready.partnerships, t)}
+                  />
+                )}
                 <Box component="ul" className="m-0 flex list-none flex-col gap-3 p-0">
                   {ready.partnerships.map((partnership) => (
                     <Box
                       component="li"
                       key={partnership.linkId}
-                      className="border-grey-100 flex flex-col gap-3 rounded-2xl border p-4 sm:flex-row sm:items-center"
+                      className="border-grey-100 flex flex-col gap-4 rounded-2xl border p-4"
                     >
-                      <Box className="flex min-w-0 flex-1 flex-col gap-1">
-                        <Box className="flex flex-wrap items-center gap-2">
-                          <Typography variant="subtitle2" component="p" className="break-words">
-                            {partnership.partner}
+                      <Box className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                        <Box className="flex min-w-0 flex-1 flex-col gap-1">
+                          <Box className="flex flex-wrap items-center gap-2">
+                            <Typography variant="subtitle2" component="p" className="break-words">
+                              {partnership.partner}
+                            </Typography>
+                            <StatusChip
+                              tone={partnership.status === "active" ? "positive" : "neutral"}
+                              label={
+                                partnership.status === "active"
+                                  ? t("partners-status-active")
+                                  : t("partners-status-ended")
+                              }
+                            />
+                          </Box>
+                          <Typography variant="body2" className="text-text-secondary">
+                            {[
+                              moduleName(partnership.module),
+                              t("partners-since", { date: day(partnership.startedAt) }),
+                              partnership.endedAt ? t("partners-ended-on", { date: day(partnership.endedAt) }) : null,
+                            ]
+                              .filter(Boolean)
+                              .join(" · ")}
                           </Typography>
-                          <StatusChip
-                            tone={partnership.status === "active" ? "positive" : "neutral"}
-                            label={
-                              partnership.status === "active" ? t("partners-status-active") : t("partners-status-ended")
-                            }
-                          />
+                          {partnership.endReason && (
+                            <Typography variant="body2" className="text-text-secondary break-words">
+                              {t("partners-ended-reason", { reason: partnership.endReason })}
+                            </Typography>
+                          )}
                         </Box>
-                        <Typography variant="body2" className="text-text-secondary">
-                          {[
-                            moduleName(partnership.module),
-                            t("partners-since", { date: day(partnership.startedAt) }),
-                            partnership.endedAt ? t("partners-ended-on", { date: day(partnership.endedAt) }) : null,
-                          ]
-                            .filter(Boolean)
-                            .join(" · ")}
-                        </Typography>
-                        {partnership.endReason && (
-                          <Typography variant="body2" className="text-text-secondary break-words">
-                            {t("partners-ended-reason", { reason: partnership.endReason })}
-                          </Typography>
+                        {ready.manager && partnership.status === "active" && (
+                          <Button variant="outlined" color="grey" size="small" onClick={() => setEnding(partnership)}>
+                            {t("partners-end")}
+                          </Button>
                         )}
                       </Box>
-                      {ready.manager && partnership.status === "active" && (
-                        <Button variant="outlined" color="grey" size="small" onClick={() => setEnding(partnership)}>
-                          {t("partners-end")}
-                        </Button>
+                      {partnership.facts && (
+                        <Grid container spacing={3}>
+                          <Grid size={{ xs: 12, md: ready.costs ? 6 : 12 }}>
+                            <MetricBars
+                              whole={false}
+                              spacing="dense"
+                              items={[
+                                {
+                                  key: "going",
+                                  label: t("partners-cases-going"),
+                                  value: partnership.facts.casesGoing,
+                                },
+                                {
+                                  key: "awaiting",
+                                  label: t("partners-cases-awaiting"),
+                                  hint: t("partners-cases-awaiting-hint"),
+                                  value: partnership.facts.awaitingClient,
+                                },
+                                {
+                                  key: "total",
+                                  label: t("partners-cases-total"),
+                                  value: partnership.facts.casesTotal,
+                                },
+                              ]}
+                            />
+                            {partnership.facts.casesTotal > 0 && (
+                              <Button
+                                className="mt-3"
+                                variant="text"
+                                color="primary"
+                                size="small"
+                                href="/casos?ver=agencia"
+                                LinkComponent={Link}
+                              >
+                                {t("partners-cases-open")}
+                              </Button>
+                            )}
+                          </Grid>
+                          {ready.costs && partnership.facts.readingsToday !== null && (
+                            <Grid size={{ xs: 12, md: 6 }}>
+                              <UsageMeter
+                                headline={t("partners-readings-headline", {
+                                  used: partnership.facts.readingsToday,
+                                  limit: ready.costs.readingsDaily,
+                                })}
+                                caption={t("partners-readings-caption")}
+                                ariaLabel={t("partners-readings-aria", { partner: partnership.partner })}
+                                segments={[
+                                  {
+                                    key: "used",
+                                    label: t("partners-readings-used"),
+                                    value: partnership.facts.readingsToday,
+                                    display: String(partnership.facts.readingsToday),
+                                    tone: "primary",
+                                  },
+                                  {
+                                    key: "left",
+                                    label: t("partners-readings-left"),
+                                    value: Math.max(0, ready.costs.readingsDaily - partnership.facts.readingsToday),
+                                    display: String(
+                                      Math.max(0, ready.costs.readingsDaily - partnership.facts.readingsToday),
+                                    ),
+                                    tone: "empty",
+                                  },
+                                ]}
+                              />
+                            </Grid>
+                          )}
+                        </Grid>
                       )}
                     </Box>
                   ))}
@@ -270,4 +373,27 @@ export default function PartnersView({ state, modules }: { state: FirmPartnersSt
       )}
     </Grid>
   );
+}
+
+type Words = (key: string, values?: Record<string, string | number>) => string;
+
+/**
+ * The firm's flight reads of the day against its share: what its partnerships' trips read, what its own trips read,
+ * and what is left. Each pool named, so the agencies' part of the firm's share is read at a glance.
+ */
+function flightSegments(costs: PartnershipCosts, partnerships: FirmPartnership[], t: Words) {
+  const ofPartners = partnerships.reduce((sum, link) => sum + (link.facts?.flightReadsToday ?? 0), 0);
+  const own = Math.max(0, costs.flightReadsToday - ofPartners);
+  const left = Math.max(0, costs.flightReadsShare - costs.flightReadsToday);
+  return [
+    {
+      key: "partners",
+      label: t("partners-flights-partners"),
+      value: ofPartners,
+      display: String(ofPartners),
+      tone: "primary" as const,
+    },
+    { key: "own", label: t("partners-flights-own"), value: own, display: String(own), tone: "secondary" as const },
+    { key: "left", label: t("partners-flights-left"), value: left, display: String(left), tone: "empty" as const },
+  ];
 }

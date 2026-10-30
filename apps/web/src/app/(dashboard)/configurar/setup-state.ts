@@ -9,6 +9,9 @@ import { isManager, OAB_STATES, type OabRegistration } from "@/lib/firm/roles";
 import type { SetupStepKey } from "@/lib/firm/setup-steps";
 import { loadSetupPapers } from "@/lib/library/facts";
 import type { MemberContext } from "@/lib/member/context";
+import { readModuleOffer } from "@/lib/modules/offer-read";
+import { moduleOf } from "@/lib/modules/registry";
+import { readFirmPartners } from "@/lib/partners/facts";
 import type { ConnectionsState } from "@/lib/whatsapp/connections";
 import { loadConnections } from "@/lib/whatsapp/connections-read";
 import { IMPERSONATION_MARKER_COOKIE } from "@flyee/auth";
@@ -19,7 +22,8 @@ import { IMPERSONATION_MARKER_COOKIE } from "@flyee/auth";
  * sign what ONE prepares, the Valor da Causa Pedido of each kind of problem
  * the firm gives one for, what the firm answered, which paper ONE sends clients to sign of
  * each kind, and the firm's connections as their own screen reads them (the
- * signature account, the test chat, the number), so every step acts where it
+ * signature account, the test chat, the number), the modules the firm
+ * contracted (0075) and its partner agencies (0069), so every step acts where it
  * is. Read by `/configurar` and by the home, which asks the questions itself
  * while they were never answered: a redirect between the two would go
  * through the client router, and nothing is gained by it.
@@ -32,19 +36,32 @@ export async function loadSetupState(
   const firm = context.firm;
   if (!firm || !isManager(firm.role)) return { kind: "not-manager" };
 
-  const [registrations, signers, organization, numbers, assurance, cookieStore, defaults, papers, connections] =
-    await Promise.all([
-      context.supabase.from("oab_registrations").select("id, uf, number, kind").eq("user_id", context.userId),
-      context.supabase.from("firm_signers").select("user_id").eq("org_id", firm.id),
-      context.supabase.from("organizations").select("works_alone, setup_answered_at").eq("id", firm.id).maybeSingle(),
-      context.supabase.from("wa_numbers").select("id").eq("org_id", firm.id).eq("status", "active").limit(1),
-      context.supabase.auth.mfa.getAuthenticatorAssuranceLevel(),
-      cookies(),
-      context.supabase.from("firm_claim_defaults").select("incident, cents").eq("org_id", firm.id),
-      // Each of these is its step's: one that could not be read says so there, and the other steps stand.
-      loadSetupPapers(context.supabase, firm.id, context.profile.timezone).catch(() => null),
-      loadConnections(null).catch((): ConnectionsState => ({ kind: "error" })),
-    ]);
+  const [
+    registrations,
+    signers,
+    organization,
+    numbers,
+    assurance,
+    cookieStore,
+    defaults,
+    papers,
+    connections,
+    modules,
+    partners,
+  ] = await Promise.all([
+    context.supabase.from("oab_registrations").select("id, uf, number, kind").eq("user_id", context.userId),
+    context.supabase.from("firm_signers").select("user_id").eq("org_id", firm.id),
+    context.supabase.from("organizations").select("works_alone, setup_answered_at").eq("id", firm.id).maybeSingle(),
+    context.supabase.from("wa_numbers").select("id").eq("org_id", firm.id).eq("status", "active").limit(1),
+    context.supabase.auth.mfa.getAuthenticatorAssuranceLevel(),
+    cookies(),
+    context.supabase.from("firm_claim_defaults").select("incident, cents").eq("org_id", firm.id),
+    // Each of these is its step's: one that could not be read says so there, and the other steps stand.
+    loadSetupPapers(context.supabase, firm.id, context.profile.timezone).catch(() => null),
+    loadConnections(null).catch((): ConnectionsState => ({ kind: "error" })),
+    readModuleOffer(context).catch(() => null),
+    readFirmPartners(context).catch(() => null),
+  ]);
   if (registrations.error || signers.error || organization.error || !organization.data) return { kind: "error" };
 
   const signing = ((signers.data ?? []) as { user_id: string }[]).map((row) => row.user_id);
@@ -70,6 +87,10 @@ export async function loadSetupState(
     claimDefaults: defaults.error ? null : claimDefaultsOf(defaults.data),
     papers,
     connections,
+    modules,
+    // The firm's module whose partner it invites here: the passenger module's travel agency.
+    agencyModule: context.modules.find((key) => (moduleOf(key)?.partnerArea.length ?? 0) > 0) ?? null,
+    partners: partners?.kind === "ready" ? partners : null,
     step,
   };
 }

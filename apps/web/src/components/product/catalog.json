@@ -79,6 +79,12 @@
       "use": "A lifecycle state as a NAMED badge: a module version (rascunho, publicada, retirada), a meeting, a roadmap item, a subscription, a lead. The template's tiny pastel button rendered as a span (no focus, reads as text). The tone tints the badge and the word is always text-primary, because the pastel label in the tone itself fails contrast on this palette. Never colour alone, never an outlined Chip for a state."
     },
     {
+      "name": "ModulesStrip",
+      "from": "@/components/product/modules-strip",
+      "props": "offer (ModuleOffer of lib/modules/offer.ts)",
+      "use": "The modules a firm contracted and the ones to come, in one line under a page's title: each module's name with its state as a StatusChip (Contratado, Em breve) and the way to /settings/modulos. Made of StatusChips; on the home and the setup. Renders nothing for an empty offer."
+    },
+    {
       "name": "AttentionList",
       "from": "@/components/product/attention-list",
       "props": "id, title, description?, total, groups[{key,title,tone: danger | attention,items[{id,href,tag,title,detail?,count?}]}]",

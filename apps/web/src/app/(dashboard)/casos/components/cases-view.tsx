@@ -17,6 +17,7 @@ import PageHeader from "@/components/product/page-header";
 import StatusChip from "@/components/product/status-chip";
 import type { TileTone } from "@/components/product/tile-tone";
 import NiArchive from "@/icons/nexture/ni-archive";
+import NiBuilding from "@/icons/nexture/ni-building";
 import NiDocumentFull from "@/icons/nexture/ni-document-full";
 import NiFlag from "@/icons/nexture/ni-flag";
 import NiFolder from "@/icons/nexture/ni-folder";
@@ -108,11 +109,24 @@ const FILTER_TILE: Record<CaseFilter, { label: string; hint: string; tone: TileT
     tone: "accent-4",
     icon: <NiScale size="large" />,
   },
+  agencia: {
+    label: "cases-filter-agency",
+    hint: "cases-filter-agency-hint",
+    tone: "accent-1",
+    icon: <NiBuilding size="large" />,
+  },
 };
 
 /** The tiles every day shows, and the ones that appear only when something of theirs waits. */
 const STANDING_TILES: readonly CaseFilter[] = ["open", "preparing", "filed", "ended", "documentos", "cliente-terminou"];
-const EXCEPTION_TILES: readonly CaseFilter[] = ["cronologia", "reclamacao", "pecas", "andamento", "vara-civel"];
+const EXCEPTION_TILES: readonly CaseFilter[] = [
+  "cronologia",
+  "reclamacao",
+  "pecas",
+  "andamento",
+  "vara-civel",
+  "agencia",
+];
 
 type Ready = Extract<CasesState, { kind: "ready" }>;
 
@@ -255,7 +269,12 @@ function CasesList({ ready }: { ready: Ready }) {
               {params.row.client || t("cases-no-client")}
             </Typography>
             <Typography variant="body2" className="text-text-secondary truncate">
-              {t(caseKindLabelKey(params.row.incident) ?? "case-incident-other")}
+              {params.row.agency
+                ? t("cases-from-agency", {
+                    kind: t(caseKindLabelKey(params.row.incident) ?? "case-incident-other"),
+                    agency: params.row.agency,
+                  })
+                : t(caseKindLabelKey(params.row.incident) ?? "case-incident-other")}
             </Typography>
           </Box>
         ),

@@ -64,7 +64,8 @@ export type CaseDocument = {
   partyId: string | null;
   status: "received" | "accepted" | "rejected";
   rejectedReason: string | null;
-  source: "client" | "firm" | "whatsapp" | "signature";
+  /** Who sent it: the client, the firm, WhatsApp, the signature provider, or the partner agency (0071). */
+  source: "client" | "firm" | "whatsapp" | "signature" | "partner";
   fileId: string;
   name: string;
   createdAt: string;

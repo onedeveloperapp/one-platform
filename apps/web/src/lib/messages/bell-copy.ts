@@ -77,6 +77,24 @@ const ptBR = {
     body: `O período pago de ${plan} vai até ${date}. Para continuar depois dessa data, faça uma nova compra em Cobrança.`,
   }),
 
+  /** A travel agency accepted the firm's invitation (migration 0069): told to who manages the firm. */
+  partnerJoined: (partner: string): BellText => ({
+    title: "Agência parceira conectada",
+    body: `${partner} aceitou o convite e já pode cadastrar os passageiros da parceria.`,
+  }),
+
+  /** The agency ended its partnership with the firm: told to who manages the firm. */
+  partnerEndedByPartner: (partner: string): BellText => ({
+    title: "Parceria encerrada pela agência",
+    body: `${partner} encerrou a parceria. Os casos que já existem continuam no escritório.`,
+  }),
+
+  /** The firm ended its partnership with the agency: told to who manages the agency. */
+  partnerEndedByFirm: (firm: string): BellText => ({
+    title: "Parceria encerrada pelo escritório",
+    body: `${firm} encerrou a parceria. A agência não cadastra mais passageiros para o escritório, e o que não virou caso é apagado no prazo de guarda.`,
+  }),
+
   /** Support opened the account. `operator` is the name of who did, when known. */
   supportAccess: (operator: string | null, reason: string, minutes: number): BellText => ({
     title: "Acesso de suporte à sua conta",

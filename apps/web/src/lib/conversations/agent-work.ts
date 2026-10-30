@@ -227,10 +227,33 @@ async function workStatement(statementId: string): Promise<void> {
   }
 }
 
+/**
+ * The partner agency a trip of an alert came from (0070), by its name: the case it opens comes with the agency's
+ * record (0071), and the next steps say so. Null for a trip of the firm's own, or when it could not be read (the
+ * steps of a passenger of the firm's own then go, which still lead to the link).
+ */
+async function agencyOfAlert(service: SupabaseClient, alertId: string): Promise<string | null> {
+  const { data, error } = await service
+    .from("flight_alerts")
+    .select("tracked_trips(pax_trips(partner_links(partners(name))))")
+    .eq("id", alertId)
+    .maybeSingle();
+  if (error || !data) return null;
+  const one = (value: unknown): Record<string, unknown> | null => {
+    const row = Array.isArray(value) ? value[0] : value;
+    return row && typeof row === "object" ? (row as Record<string, unknown>) : null;
+  };
+  const name = one(
+    one(one(one((data as Record<string, unknown>).tracked_trips)?.pax_trips)?.partner_links)?.partners,
+  )?.name;
+  return typeof name === "string" && name.trim() !== "" ? name : null;
+}
+
 /** A yes: the case opened with the trip, and the link with the next steps; or the yes kept for a person. */
 async function openCase(service: SupabaseClient, held: Held, context: TurnContext, report: TurnReport): Promise<void> {
   const alert = context.alert;
   if (!alert) return;
+  const agency = await agencyOfAlert(service, alert.alertId);
   const token = randomBytes(32).toString("base64url");
   const answer = await rpc(service, "one_open_case_from_alert", {
     target_conversation: held.conversationId,
@@ -241,6 +264,7 @@ async function openCase(service: SupabaseClient, held: Held, context: TurnContex
       passengerName: alert.passengerName,
       url: `${BRAND.siteUrl}/c/${token}`,
       minors: minorsOf(context, today()),
+      agency,
     }),
   });
   // The documents an agency handed over to the case (0071) are checked now, as a client's are; the sweep takes

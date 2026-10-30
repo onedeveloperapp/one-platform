@@ -24,6 +24,13 @@ export const AGENCY_TRIP = "agencia";
 /** The WhatsApp an agency gives its passenger for the test chat to follow them, as the database keeps it. */
 export const AGENCY_TEST_PHONE = "5500988880006";
 
+/**
+ * Whether a phone is one of the test chat's (0047, 0071): "(00) 98888-000N", an area code no real number has, so
+ * nothing written to it could reach a person. The forms take it as a phone (an agency writes it for its passenger,
+ * a person of a test case carries it), though a real Brazilian number is never one.
+ */
+export const isTestChatPhone = (value: string): boolean => /^(?:55)?0098888000[0-9]$/.test(value.replace(/\D/g, ""));
+
 /** A tool's leg that is the trip's last, whichever it is: an agency's trip has the legs the agency wrote. */
 export const LAST_LEG = 0;
 export type TestTrip = (typeof TEST_TRIPS)[number];

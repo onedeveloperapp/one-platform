@@ -5,6 +5,7 @@ import { createHash, randomBytes } from "node:crypto";
 
 import { getMemberContext } from "@/lib/member/context";
 import { dateLabel, memberUrl } from "@/lib/messages/format";
+import { tellPartnerJoined, tellPartnershipEnded } from "@/lib/partners/notices";
 import { isPartnerManager } from "@/lib/partners/partner";
 import { sendPartnerInvitationEmail } from "@flyee/email";
 
@@ -13,8 +14,8 @@ import { sendPartnerInvitationEmail } from "@flyee/email";
  *
  * No rule is decided here: each action calls the function of the database that checks who asks, the second
  * factor and the support visit, and records the audit event. What this file adds is what the database cannot do:
- * mint the token of an invitation link (only its hash is kept), send the e-mail, and fold an answer into a code the
- * screens have words for. A server action is a public endpoint: the firm and the partner always come from the
+ * mint the token of an invitation link (only its hash is kept), send the e-mail, ring the bell of the other side
+ * of a partnership that began or ended (`notices.ts`), and fold an answer into a code the screens have words for. A server action is a public endpoint: the firm and the partner always come from the
  * caller's own session.
  */
 
@@ -148,7 +149,11 @@ export async function endPartnership(linkId: string, reason: string): Promise<Pa
     target_reason: reason,
   });
   const result = fold(data, error);
-  if (result.ok) refresh();
+  if (result.ok) {
+    // The other side of the partnership is told: the agency when the firm ended it, the firm when the agency did.
+    if (result.code === "ended") await tellPartnershipEnded(linkId, context.partner ? "partner" : "firm");
+    refresh();
+  }
   return result.ok ? { ok: true, code: result.code } : result;
 }
 
@@ -163,7 +168,12 @@ export async function acceptPartnerInvitation(invitationId: string): Promise<Par
     target_invitation: invitationId,
   });
   const result = fold(data, error);
-  if (result.ok) refresh();
+  if (result.ok) {
+    // An agency that accepted a firm's invitation is its partner now: who manages the firm hears it.
+    const linkId = typeof result.data.link_id === "string" ? result.data.link_id : null;
+    if (result.code === "partnered" && linkId) await tellPartnerJoined(linkId);
+    refresh();
+  }
   return result.ok ? { ok: true, code: result.code } : result;
 }
 

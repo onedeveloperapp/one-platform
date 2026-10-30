@@ -17,7 +17,8 @@ export type CaseFilter =
   | "reclamacao"
   | "pecas"
   | "andamento"
-  | "vara-civel";
+  | "vara-civel"
+  | "agencia";
 
 export const CASE_FILTERS: readonly CaseFilter[] = [
   "open",
@@ -31,6 +32,7 @@ export const CASE_FILTERS: readonly CaseFilter[] = [
   "pecas",
   "andamento",
   "vara-civel",
+  "agencia",
 ];
 
 export const isCaseFilter = (value: unknown): value is CaseFilter =>
@@ -63,6 +65,8 @@ export type CaseListRow = {
   courtMoved: boolean;
   /** A claimant of a lawsuit planned in the civil court said no to it (0025): the filing waits on the firm. */
   civilRefused: boolean;
+  /** The partner agency the case came from (0071, 0075); null for a case of the firm's own. */
+  agency: string | null;
 };
 
 /** How many cases the firm has under each filter, in all, and still going. */
@@ -141,6 +145,7 @@ export function caseListOf(raw: unknown): CaseListPage | null {
         pieceWaiting: row.piece_waiting === true,
         courtMoved: row.court_moved === true,
         civilRefused: row.civil_refused === true,
+        agency: typeof row.agency === "string" && row.agency !== "" ? row.agency : null,
       },
     ];
   });

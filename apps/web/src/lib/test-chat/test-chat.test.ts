@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { messagePartsOf } from "@/lib/test-chat/test-chat";
+import { AGENCY_TEST_PHONE, isTestChatPhone, messagePartsOf } from "@/lib/test-chat/test-chat";
+import { isValidPhoneBr } from "@flyee/fields";
 
 // The addresses here are invented.
 
@@ -28,5 +29,17 @@ describe("the firm's words in the test chat", () => {
       { text: "Recebi tudo o que o seu caso precisa." },
     ]);
     expect(messagePartsOf("Veja https://.")).toEqual([{ text: "Veja https://." }]);
+  });
+});
+
+describe("the test chat's numbers", () => {
+  it("are phones to the forms however they are written, and no real number is one", () => {
+    expect(isTestChatPhone(AGENCY_TEST_PHONE)).toBe(true);
+    expect(isTestChatPhone("(00) 98888-0006")).toBe(true);
+    expect(isTestChatPhone("00988880001")).toBe(true);
+    // A real Brazilian mobile is never one, and a test number is never a real one.
+    expect(isTestChatPhone("(62) 99999-0001")).toBe(false);
+    expect(isTestChatPhone("00988880016")).toBe(false);
+    expect(isValidPhoneBr("(00) 98888-0006")).toBe(false);
   });
 });

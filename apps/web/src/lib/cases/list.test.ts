@@ -15,7 +15,8 @@ import {
 } from "@/lib/cases/list";
 
 const ROOT = path.resolve(__dirname, "../../../../..");
-const MIGRATION = fs.readFileSync(path.join(ROOT, "packages/db/migrations/0033_case_list.sql"), "utf8");
+// The latest definition of `firm_cases` (0033, redefined with the cases from an agency in 0075).
+const MIGRATION = fs.readFileSync(path.join(ROOT, "packages/db/migrations/0075_module_offer.sql"), "utf8");
 
 /** The quoted names of a list of the migration, from the text that opens it to the parenthesis that closes it. */
 function listed(opening: string, from = 0): string[] {
@@ -111,6 +112,7 @@ describe("the database's answer, as the list reads it", () => {
         pieceWaiting: true,
         courtMoved: true,
         civilRefused: false,
+        agency: null,
       },
     ]);
     expect(page?.total).toBe(41);
@@ -129,7 +131,13 @@ describe("the database's answer, as the list reads it", () => {
       pecas: 0,
       andamento: 1,
       "vara-civel": 0,
+      agencia: 0,
     });
+  });
+
+  it("names the agency a case came from", () => {
+    const page = caseListOf({ rows: [{ ...row, agency: "Viagens Teste" }], total: 1, counts });
+    expect(page?.rows[0]?.agency).toBe("Viagens Teste");
   });
 
   it("leaves out a case it cannot read, and is nothing when the answer is no list", () => {

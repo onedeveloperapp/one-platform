@@ -127,13 +127,17 @@ function MessageText({ body, firm }: { body: string; firm: boolean }) {
 }
 
 /**
- * The test chat, where a passenger's phone stands: the four ready passengers,
- * each with their trip and the tools that make its problem happen, and the
- * conversation each has with the firm, read again every two seconds. What
- * the tester writes, or a photo, a PDF or an audio they send, goes to the firm
- * as the passenger's message, through the same path a real one takes; nothing
- * leaves ONE. A fifth tab follows a real flight the tester names (0051), read
- * at FlightAware as a real passenger's would be.
+ * The test chat, where a passenger's phone stands. The test starts from the
+ * partner agency (0071): its first tab is the passenger an agency registered
+ * with the test chat's number, with their data, documents and agreement, or,
+ * before there is one, how to have them; then the four ready passengers, each
+ * with their trip, for the scenarios of a passenger with no agency. Each trip
+ * has the tools that make its problem happen, and the conversation each has
+ * with the firm is read again every two seconds. What the tester writes, or a
+ * photo, a PDF or an audio they send, goes to the firm as the passenger's
+ * message, through the same path a real one takes; nothing leaves ONE. The
+ * last tab follows a real flight the tester names (0051), read at
+ * FlightAware as a real passenger's would be.
  */
 export default function TestChat({
   token,
@@ -147,7 +151,10 @@ export default function TestChat({
 }) {
   const t = useTranslations("product");
   const [view, setView] = useState(initial);
-  const [tripId, setTripId] = useState(initial.trips[0]?.id ?? "");
+  // The agency's passenger first: the test starts from what the agency registered.
+  const [tripId, setTripId] = useState(
+    () => initial.trips.find((item) => item.label === AGENCY_TRIP)?.id ?? NEW_AGENCY,
+  );
   const [threads, setThreads] = useState<Record<string, TestMessage[]>>({});
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
@@ -158,10 +165,17 @@ export default function TestChat({
   const [sendingFile, setSendingFile] = useState(false);
 
   const placeholder = tripId === NEW_REAL || tripId === NEW_AGENCY;
-  const trip = placeholder ? null : (view.trips.find((item) => item.id === tripId) ?? view.trips[0] ?? null);
+  // The tabs in the order of the test: the agency's passenger, the ready ones, then a real flight.
+  const trips = [...view.trips].sort((a, b) => tabRank(a.label) - tabRank(b.label));
+  const trip = placeholder ? null : (trips.find((item) => item.id === tripId) ?? trips[0] ?? null);
   const messages = (trip && threads[trip.id]) ?? [];
   const hasReal = view.trips.some((item) => item.label === REAL_FLIGHT);
   const hasAgency = view.trips.some((item) => item.label === AGENCY_TRIP);
+  // The agency's passenger agreed while their tab was still the one that says how: open their trip.
+  const agencyTripId = view.trips.find((item) => item.label === AGENCY_TRIP)?.id ?? null;
+  useEffect(() => {
+    if (tripId === NEW_AGENCY && agencyTripId) setTripId(agencyTripId);
+  }, [tripId, agencyTripId]);
   // What the page already has, read by the pull without starting it again at every message.
   const threadsRef = useRef(threads);
   threadsRef.current = threads;
@@ -342,7 +356,8 @@ export default function TestChat({
             allowScrollButtonsMobile
             aria-label={t("test-chat-passengers")}
           >
-            {view.trips.map((item) => (
+            {hasAgency ? null : <Tab value={NEW_AGENCY} label={t("test-chat-agency-tab")} className="normal-case" />}
+            {trips.map((item) => (
               <Tab
                 key={item.id}
                 value={item.id}
@@ -350,7 +365,6 @@ export default function TestChat({
                 className="normal-case"
               />
             ))}
-            {hasAgency ? null : <Tab value={NEW_AGENCY} label={t("test-chat-agency-tab")} className="normal-case" />}
             {hasReal ? null : <Tab value={NEW_REAL} label={t("test-chat-real-tab")} className="normal-case" />}
           </Tabs>
         </Box>
@@ -606,10 +620,16 @@ function RealFlightCard({
   );
 }
 
+/** Where a tab of each kind of trip stands: the agency's passenger first, a real flight last. */
+function tabRank(label: string): number {
+  return label === AGENCY_TRIP ? 0 : label === REAL_FLIGHT ? 2 : 1;
+}
+
 /**
- * How to have a passenger an agency registered in the test chat (migration 0071): the agency writes the test chat's
- * number as the passenger's WhatsApp, and the passenger agrees on the agency's link. No form here: the agency's area
- * is where the passenger, the trip and the documents are.
+ * How the test starts (migration 0071): the agency registers the passenger with the test chat's number as their
+ * WhatsApp, their data and documents and the trip, and the passenger agrees on the agency's link to be told of a
+ * problem with the flight. No form here: the agency's area is where the passenger, the trip and the documents are.
+ * Then the trip shows in this tab, and the tools make its problem happen.
  */
 function AgencyCard() {
   const t = useTranslations("product");
@@ -627,15 +647,24 @@ function AgencyCard() {
             {t("test-chat-agency-step-1")}
           </Typography>
           <Typography component="li" variant="body2">
-            {t("test-chat-agency-step-2", { phone: formatPhoneBr(AGENCY_TEST_PHONE.slice(2)) })}
+            {t("test-chat-agency-step-2")}
           </Typography>
           <Typography component="li" variant="body2">
-            {t("test-chat-agency-step-3")}
+            {t("test-chat-agency-step-3", { phone: formatPhoneBr(AGENCY_TEST_PHONE.slice(2)) })}
           </Typography>
           <Typography component="li" variant="body2">
             {t("test-chat-agency-step-4")}
           </Typography>
+          <Typography component="li" variant="body2">
+            {t("test-chat-agency-step-5")}
+          </Typography>
+          <Typography component="li" variant="body2">
+            {t("test-chat-agency-step-6")}
+          </Typography>
         </Box>
+        <Typography variant="body2" className="text-text-secondary">
+          {t("test-chat-agency-others")}
+        </Typography>
       </CardContent>
     </Card>
   );

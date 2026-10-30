@@ -51,6 +51,69 @@ export function memberPartnerOf(raw: unknown): MemberPartner | null {
 export const partnerModules = (partner: MemberPartner | null): string[] =>
   partner ? [...new Set(partner.links.map((link) => link.module))] : [];
 
+/**
+ * What the firm has of one partnership (migration 0075): its own cases from it, and, to who manages the firm, what
+ * it costs the firm today. Nothing of a passenger who did not say yes.
+ */
+export type PartnershipFacts = {
+  /** The cases the partnership brought that still go on. */
+  casesGoing: number;
+  casesTotal: number;
+  /** The cases where ONE waits for the client to confirm what the agency sent. */
+  awaitingClient: number;
+  /** The documents the AI read for the partnership today; null to who does not manage the firm. */
+  readingsToday: number | null;
+  /** The reads of the partnership's flights today; null to who does not manage the firm. */
+  flightReadsToday: number | null;
+};
+
+/** What the partnerships cost the firm today, to who manages it. */
+export type PartnershipCosts = {
+  /** The documents the AI reads for one partnership in a day, at most. */
+  readingsDaily: number;
+  /** The firm's reads of every flight it follows today, and its share of the day. */
+  flightReadsToday: number;
+  flightReadsShare: number;
+};
+
+export type FirmPartnershipFacts = {
+  byLink: Map<string, PartnershipFacts>;
+  costs: PartnershipCosts | null;
+};
+
+const whole = (value: unknown): number | null =>
+  typeof value === "number" && Number.isFinite(value) && value >= 0 ? Math.floor(value) : null;
+
+/** The answer of `firm_partnership_facts`, read; null for one that is not. */
+export function partnershipFactsOf(raw: unknown): FirmPartnershipFacts | null {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return null;
+  const answer = raw as Record<string, unknown>;
+  if (!Array.isArray(answer.partnerships)) return null;
+  const byLink = new Map<string, PartnershipFacts>();
+  for (const item of answer.partnerships) {
+    const row = (item ?? {}) as Record<string, unknown>;
+    const linkId = text(row.link_id);
+    if (!linkId) continue;
+    byLink.set(linkId, {
+      casesGoing: whole(row.cases_going) ?? 0,
+      casesTotal: whole(row.cases_total) ?? 0,
+      awaitingClient: whole(row.awaiting_client) ?? 0,
+      readingsToday: whole(row.readings_today),
+      flightReadsToday: whole(row.flight_reads_today),
+    });
+  }
+  const readingsDaily = whole(answer.readings_daily);
+  const flightReadsToday = whole(answer.flight_reads_today);
+  const flightReadsShare = whole(answer.flight_reads_share);
+  return {
+    byLink,
+    costs:
+      answer.manager === true && readingsDaily !== null && flightReadsToday !== null && flightReadsShare !== null
+        ? { readingsDaily, flightReadsToday, flightReadsShare }
+        : null,
+  };
+}
+
 // The `product` message key of each role, spelled out so the catalog check sees each one.
 export const PARTNER_ROLE_KEY: Record<PartnerRole, string> = {
   owner: "partner-role-owner",

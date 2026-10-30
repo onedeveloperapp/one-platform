@@ -7,6 +7,7 @@ import {
   PARTNER_ROLES,
   partnerErrorKey,
   partnerModules,
+  partnershipFactsOf,
 } from "@/lib/partners/partner";
 import messages from "@flyee/content/messages/pt-BR.json";
 
@@ -76,5 +77,48 @@ describe("the partner of the person looking", () => {
       "whatever",
     ];
     for (const code of codes) expect(product[partnerErrorKey(code)]).toBeTruthy();
+  });
+});
+
+describe("what the firm has of its partnerships", () => {
+  const answer = {
+    manager: true,
+    readings_daily: 300,
+    flight_reads_today: 6,
+    flight_reads_share: 150,
+    partnerships: [
+      {
+        link_id: "link-sol",
+        cases_going: 2,
+        cases_total: 3,
+        awaiting_client: 1,
+        readings_today: 7,
+        flight_reads_today: 4,
+      },
+      { link_id: "link-lua", cases_going: 0, cases_total: 0, awaiting_client: 0, readings_today: 0 },
+      { cases_going: 9 },
+    ],
+  };
+
+  it("reads each partnership's cases and costs, and the firm's costs of the day", () => {
+    const facts = partnershipFactsOf(answer);
+    expect(facts?.byLink.get("link-sol")).toEqual({
+      casesGoing: 2,
+      casesTotal: 3,
+      awaitingClient: 1,
+      readingsToday: 7,
+      flightReadsToday: 4,
+    });
+    expect(facts?.byLink.get("link-lua")?.flightReadsToday).toBeNull();
+    expect(facts?.byLink.size).toBe(2);
+    expect(facts?.costs).toEqual({ readingsDaily: 300, flightReadsToday: 6, flightReadsShare: 150 });
+  });
+
+  it("has no costs for who does not manage the firm, and is null for what is not an answer", () => {
+    const member = partnershipFactsOf({ ...answer, manager: false, readings_daily: null });
+    expect(member?.costs).toBeNull();
+    expect(member?.byLink.get("link-sol")?.casesGoing).toBe(2);
+    expect(partnershipFactsOf(null)).toBeNull();
+    expect(partnershipFactsOf({ partnerships: "x" })).toBeNull();
   });
 });

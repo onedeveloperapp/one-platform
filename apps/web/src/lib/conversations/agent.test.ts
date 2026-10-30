@@ -78,6 +78,18 @@ describe("ONE in a conversation", () => {
     expect(
       caseStepsMessage({ passengerName: "Rafael Teste", url: "u", minors: ["Laura Teste", "Pedro Teste"] }),
     ).toContain("(o seu, o de Laura e o de Pedro)");
+    // A passenger of a partner agency checks what came with the case, and says they finished.
+    const agency = caseStepsMessage({
+      passengerName: "Mariana Teste",
+      url: "u",
+      minors: ["Lia Teste"],
+      agency: "Viagens Teste",
+    });
+    expect(agency).toContain("com os dados e os documentos que vieram de Viagens Teste.");
+    expect(agency).toContain("2. Confira os seus dados e os de Lia e os documentos que vieram da agência");
+    expect(agency).toContain("4. Quando estiver tudo certo, avise no fim da página que terminou");
+    expect(agency).not.toContain("Envie");
+    expect(agency).not.toMatch(/[–—!]/);
     expect(declinedMessage("Pedro Teste")).toBe(
       "Tudo bem, Pedro. O escritório não vai seguir com este caso. Se mudar de ideia, é só escrever aqui.",
     );

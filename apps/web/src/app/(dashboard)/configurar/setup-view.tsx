@@ -30,9 +30,12 @@ import {
 } from "@mui/material";
 
 import { useViewer } from "@/components/layout/viewer-context";
+import PartnerInviteDialog from "@/components/partners/partner-invite-dialog";
+import ModulesStrip from "@/components/product/modules-strip";
 import PageHeader from "@/components/product/page-header";
 import SecondFactorPrompt from "@/components/product/second-factor-prompt";
 import SetupWizard, { type WizardStep } from "@/components/product/setup-wizard";
+import StatusChip from "@/components/product/status-chip";
 import type { SecondFactorState } from "@/lib/ai/approvals";
 import { addOabRegistration, answerFirmSetup, inviteToFirm } from "@/lib/firm/actions";
 import {
@@ -47,7 +50,9 @@ import { setFirmClaimDefault, setFirmSigner } from "@/lib/firm/autonomy-actions"
 import { FIRM_FUNCTIONS, type FirmFunction, formatOab, OAB_STATES, type OabRegistration } from "@/lib/firm/roles";
 import { SETUP_STEPS, type SetupStepKey } from "@/lib/firm/setup-steps";
 import type { LibraryTemplate, SetupPaper } from "@/lib/library/facts";
+import type { ModuleOffer } from "@/lib/modules/offer";
 import { caseKindLabelKey, firmCaseKinds } from "@/lib/modules/registry";
+import type { FirmPartnersState } from "@/lib/partners/facts";
 import type { ConnectionsState } from "@/lib/whatsapp/connections";
 
 export type SetupState =
@@ -77,6 +82,12 @@ export type SetupState =
       papers: { procuracao: SetupPaper; contrato: SetupPaper } | null;
       /** The firm's connections as their own screen reads them: the signature account, the test chat, the number. */
       connections: ConnectionsState;
+      /** The modules the firm contracted and the ones to come (0075); null when they could not be read. */
+      modules: ModuleOffer | null;
+      /** The firm's module whose partner it invites in the last step; null hides that step. */
+      agencyModule: string | null;
+      /** The firm's partnerships and open invitations (0069); null when they could not be read. */
+      partners: Extract<FirmPartnersState, { kind: "ready" }> | null;
       /** The step the address asked for (`?passo=`): the list on the home leads to the one something is missing in. */
       step: SetupStepKey | null;
     };
@@ -109,7 +120,9 @@ const PAPER_WORDS: Record<Paper, { title: string; firm: string; one: string; mak
  * answers and whether they sign what ONE prepares, the Valor da Causa Pedido
  * (a value for each kind of problem, or none for the judge to define),
  * whether it works alone, the papers its
- * clients sign, and the channel to them. Each step does its own work where it
+ * clients sign, the channel to them and, for a module with a partner, the
+ * partner agency (optional, never missing). The modules the firm contracted
+ * are said under the title. Each step does its own work where it
  * is: the second factor a decision asks for is set up in the step, the
  * models are written in a dialog over it, the signature account, the test
  * chat and the number are connected in it, so nobody leaves the setup for a
@@ -219,6 +232,9 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
     template: LibraryTemplate | null;
     copyOf: LibraryTemplate | null;
   } | null>(null);
+
+  // ---------- The partner agency ----------
+  const [invitingAgency, setInvitingAgency] = useState(false);
 
   // ---------- The end ----------
   const [finishError, setFinishError] = useState<string | null>(null);
@@ -353,6 +369,19 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
       {t("connections-load-error")}
     </Alert>
   );
+
+  // The last step finishes the setup: the partner agency where the firm's module has one, else the channel.
+  const agencyStep = state.agencyModule !== null;
+  const finishing = { primaryLabel: t("setup-finish"), onPrimary: () => finish("/inicio"), busy: leaving };
+  const finishProblem = finishError ? (
+    <Alert severity="error" className="neutral bg-background-paper/60!" role="alert">
+      {finishError}
+    </Alert>
+  ) : null;
+  const partners = state.partners;
+  const activePartners = partners?.partnerships.filter((partnership) => partnership.status === "active") ?? [];
+  const day = (value: string) =>
+    new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeZone: "America/Sao_Paulo" }).format(new Date(value));
 
   const steps: WizardStep[] = [
     {
@@ -720,9 +749,7 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
       title: t("setup-channel-title"),
       hint: t("setup-channel-hint"),
       canAdvance: !blocked,
-      primaryLabel: t("setup-finish"),
-      onPrimary: () => finish("/inicio"),
-      busy: leaving,
+      ...(agencyStep ? {} : finishing),
       content: (
         <Box className="flex flex-col gap-6">
           {!connections ? (
@@ -762,14 +789,95 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
               )}
             </>
           )}
-          {finishError ? (
-            <Alert severity="error" className="neutral bg-background-paper/60!" role="alert">
-              {finishError}
-            </Alert>
-          ) : null}
+          {agencyStep ? null : finishProblem}
         </Box>
       ),
     },
+    ...(agencyStep
+      ? [
+          {
+            title: t("setup-agency-title"),
+            hint: t("setup-agency-hint"),
+            canAdvance: !blocked,
+            ...finishing,
+            content: (
+              <Box className="flex flex-col gap-5">
+                {partners === null ? (
+                  <Alert
+                    severity="error"
+                    className="neutral bg-background-paper/60!"
+                    action={
+                      <Button color="inherit" size="small" onClick={refresh}>
+                        {t("today-retry")}
+                      </Button>
+                    }
+                  >
+                    {t("partners-load-error")}
+                  </Alert>
+                ) : (
+                  <>
+                    {activePartners.length > 0 || partners.invitations.length > 0 ? (
+                      <Box component="ul" className="m-0 flex list-none flex-col gap-2 p-0">
+                        {activePartners.map((partnership) => (
+                          <Box component="li" key={partnership.linkId} className="flex flex-wrap items-center gap-2">
+                            <Typography variant="subtitle2" component="span" className="break-words">
+                              {partnership.partner}
+                            </Typography>
+                            <StatusChip tone="positive" label={t("partners-status-active")} />
+                          </Box>
+                        ))}
+                        {partners.invitations.map((invitation) => (
+                          <Box component="li" key={invitation.id} className="flex flex-wrap items-center gap-2">
+                            <Typography variant="subtitle2" component="span" className="break-words">
+                              {invitation.partnerName ?? invitation.email}
+                            </Typography>
+                            <StatusChip tone="attention" label={t("setup-agency-invited")} />
+                            <Typography variant="body2" className="text-text-secondary">
+                              {t("setup-agency-invited-until", { date: day(invitation.expiresAt) })}
+                            </Typography>
+                          </Box>
+                        ))}
+                      </Box>
+                    ) : (
+                      <Typography variant="body2" className="text-text-secondary">
+                        {t("setup-agency-none")}
+                      </Typography>
+                    )}
+                    {factorPrompt("setup-agency-factor", t("setup-agency-factor"))}
+                    <Box className="flex flex-wrap gap-2">
+                      <Button
+                        variant="outlined"
+                        color="grey"
+                        onClick={() => setInvitingAgency(true)}
+                        disabled={blocked || locked}
+                      >
+                        {t("setup-agency-invite")}
+                      </Button>
+                    </Box>
+                  </>
+                )}
+                <Box component="section" aria-labelledby="setup-agency-needs" className="flex flex-col gap-2">
+                  <Typography id="setup-agency-needs" variant="subtitle2" component="h3" className="mb-0">
+                    {t("setup-agency-needs-title")}
+                  </Typography>
+                  <Box component="ul" className="m-0 flex list-disc flex-col gap-1 pl-5">
+                    <Typography component="li" variant="body2" className="text-text-secondary">
+                      {t("setup-agency-needs-channel")}
+                    </Typography>
+                    <Typography component="li" variant="body2" className="text-text-secondary">
+                      {t("setup-agency-needs-release")}
+                    </Typography>
+                    <Typography component="li" variant="body2" className="text-text-secondary">
+                      {t("setup-agency-needs-test")}
+                    </Typography>
+                  </Box>
+                </Box>
+                {finishProblem}
+              </Box>
+            ),
+          } satisfies WizardStep,
+        ]
+      : []),
   ];
 
   return (
@@ -784,6 +892,7 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
           </Button>
         }
       />
+      {state.modules ? <ModulesStrip offer={state.modules} /> : null}
       {blocked ? (
         <Alert severity="info" className="neutral bg-background-paper/60!">
           {t("setup-support-visit")}
@@ -796,6 +905,15 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
         onComplete={() => undefined}
         completeLabel={t("setup-finish")}
       />
+      {invitingAgency && state.agencyModule ? (
+        <PartnerInviteDialog
+          mode="agency"
+          module={state.agencyModule}
+          title={t("partners-invite-title")}
+          onClose={() => setInvitingAgency(false)}
+          onInvited={refresh}
+        />
+      ) : null}
       {paperForm ? (
         <TemplateDialog
           template={paperForm.template}

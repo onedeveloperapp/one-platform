@@ -24,6 +24,9 @@ const notices = (copy: BellCopy): Record<keyof BellCopy, BellText> => ({
   paymentFailed: copy.paymentFailed(7),
   subscriptionEnded: copy.subscriptionEnded("Plano Escritório", false),
   termEnding: copy.termEnding("Plano Escritório", "17 de outubro de 2026"),
+  partnerJoined: copy.partnerJoined("Viagens Teste"),
+  partnerEndedByPartner: copy.partnerEndedByPartner("Viagens Teste"),
+  partnerEndedByFirm: copy.partnerEndedByFirm("Souza Advogados"),
   supportAccess: copy.supportAccess("Ana", "pagamento duplicado", 30),
 });
 

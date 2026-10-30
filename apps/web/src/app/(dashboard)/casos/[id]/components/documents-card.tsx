@@ -54,6 +54,7 @@ const SOURCE_KEY: Record<CaseDocument["source"], string> = {
   firm: "case-document-source-firm",
   whatsapp: "case-document-source-whatsapp",
   signature: "case-document-source-signature",
+  partner: "case-document-source-partner",
 };
 
 /**

@@ -10,7 +10,9 @@ import { useState } from "react";
 
 import { Alert, AlertTitle, Box, Breadcrumbs, Button, Drawer, Grid, Tooltip, Typography } from "@mui/material";
 
+import { useViewer } from "@/components/layout/viewer-context";
 import NiListCircle from "@/icons/nexture/ni-list-circle";
+import { PARTNER_HOME } from "@/lib/firm/gate-rules";
 import { enterAfterSessionChange } from "@/lib/safe-next";
 import { isSupabaseConfigured } from "@flyee/auth";
 
@@ -18,11 +20,13 @@ import { isSupabaseConfigured } from "@flyee/auth";
  * The account's sign-in protection. It is also where somebody whose role asks
  * for a second factor is sent to set it up (`?exigido=1`, lib/firm/gate.ts):
  * the page then says why they are here and, once the factor is on, sends them
- * back to work.
+ * back to work: to the firm's home, or, for somebody of a partner agency (who
+ * always owes one, migration 0069), to the agency's area.
  */
 export default function SecuritySettings() {
   const t = useTranslations("product");
   const required = useSearchParams().get("exigido") === "1";
+  const partner = useViewer()?.partner === true;
   const [verified, setVerified] = useState(false);
   const [openDrawer, setOpenDrawer] = useState(false);
 
@@ -78,7 +82,7 @@ export default function SecuritySettings() {
           <Grid size={12}>
             <Alert severity="warning" className="neutral bg-background-paper/60!">
               <AlertTitle variant="subtitle2">{t("security-required-title")}</AlertTitle>
-              {t("security-required-body")}
+              {partner ? t("security-required-body-partner") : t("security-required-body")}
             </Alert>
           </Grid>
         )}
@@ -89,12 +93,16 @@ export default function SecuritySettings() {
               severity="success"
               className="neutral bg-background-paper/60!"
               action={
-                <Button color="inherit" size="small" onClick={() => void enterAfterSessionChange("/inicio")}>
-                  {t("security-required-continue")}
+                <Button
+                  color="inherit"
+                  size="small"
+                  onClick={() => void enterAfterSessionChange(partner ? PARTNER_HOME : "/inicio")}
+                >
+                  {partner ? t("security-required-continue-partner") : t("security-required-continue")}
                 </Button>
               }
             >
-              {t("security-required-done")}
+              {partner ? t("security-required-done-partner") : t("security-required-done")}
             </Alert>
           </Grid>
         )}

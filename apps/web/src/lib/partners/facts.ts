@@ -1,7 +1,13 @@
 import "server-only";
 
 import type { MemberContext } from "@/lib/member/context";
-import { isPartnerRole, type PartnerRole } from "@/lib/partners/partner";
+import {
+  isPartnerRole,
+  type PartnerRole,
+  type PartnershipCosts,
+  type PartnershipFacts,
+  partnershipFactsOf,
+} from "@/lib/partners/partner";
 
 /**
  * What the screens of the partners read (migration 0069), under the person's own session: the database decides
@@ -18,6 +24,8 @@ export type FirmPartnership = {
   endedAt: string | null;
   /** Why it ended, to who manages the firm. */
   endReason: string | null;
+  /** What the firm has of it (0075); null when that could not be read. */
+  facts: PartnershipFacts | null;
 };
 
 export type OpenPartnerInvitation = {
@@ -37,17 +45,24 @@ export type FirmPartnersState =
       manager: boolean;
       partnerships: FirmPartnership[];
       invitations: OpenPartnerInvitation[];
+      /** What the partnerships cost the firm today, to who manages it; null otherwise or when unread. */
+      costs: PartnershipCosts | null;
+      /** The firm's numbers of its partnerships could not be read: the screens say so, never zero. */
+      factsFailed: boolean;
     }
   | { kind: "error" }
   | { kind: "unavailable" };
 
 const text = (value: unknown): string | null => (typeof value === "string" ? value : null);
 
-/** The partnerships of the person's firm, and, to who manages it, the invitations still open. */
+/**
+ * The partnerships of the person's firm with what the firm has of each (its cases, and, to who manages it, what
+ * each costs today), and, to who manages it, the invitations still open.
+ */
 export async function readFirmPartners(context: MemberContext | null): Promise<FirmPartnersState> {
   if (!context?.firm) return { kind: "unavailable" };
   const manager = context.firm.role === "owner" || context.firm.role === "admin";
-  const [links, invitations] = await Promise.all([
+  const [links, invitations, numbers] = await Promise.all([
     context.supabase.rpc("firm_partners", { target_org: context.firm.id }),
     manager
       ? context.supabase
@@ -59,12 +74,16 @@ export async function readFirmPartners(context: MemberContext | null): Promise<F
           .gt("expires_at", new Date().toISOString())
           .order("created_at", { ascending: false })
       : Promise.resolve({ data: [], error: null }),
+    context.supabase.rpc("firm_partnership_facts", { target_org: context.firm.id }),
   ]);
   if (links.error || invitations.error) return { kind: "error" };
+  const facts = numbers.error ? null : partnershipFactsOf(numbers.data);
   return {
     kind: "ready",
     firm: context.firm.name,
     manager,
+    costs: facts?.costs ?? null,
+    factsFailed: facts === null,
     partnerships: ((links.data ?? []) as Record<string, unknown>[]).flatMap((row): FirmPartnership[] => {
       const linkId = text(row.link_id);
       const partnerId = text(row.partner_id);
@@ -79,6 +98,7 @@ export async function readFirmPartners(context: MemberContext | null): Promise<F
           startedAt: text(row.started_at) ?? "",
           endedAt: text(row.ended_at),
           endReason: text(row.end_reason),
+          facts: facts?.byLink.get(linkId) ?? null,
         },
       ];
     }),

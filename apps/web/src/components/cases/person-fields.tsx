@@ -7,6 +7,8 @@ import { Grid, MenuItem, TextField } from "@mui/material";
 import { CepField, CpfField, PhoneField } from "@/components/product/fields";
 import { MARITAL_KEY, MARITAL_STATUSES, PERSON_FIELD_KEY, UFS } from "@/lib/cases/cases";
 import type { PersonField, PersonValues } from "@/lib/cases/forms";
+import { isTestChatPhone } from "@/lib/test-chat/test-chat";
+import { isValidPhoneBr } from "@flyee/fields";
 
 /**
  * The fields of a person of a case, as the firm and the client fill them
@@ -133,6 +135,8 @@ export default function PersonFields({
           <PhoneField
             {...common("phone")}
             invalidMessage={t("case-error-phone")}
+            // The test chat's numbers are phones here too: the agency writes one for the passenger it tests with.
+            isValid={(value) => isValidPhoneBr(value) || isTestChatPhone(value)}
             onChange={(event) => set("phone", event.target.value)}
           />
         </Grid>
