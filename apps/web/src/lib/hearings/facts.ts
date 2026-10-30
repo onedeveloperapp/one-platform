@@ -218,6 +218,7 @@ async function firmHearings(
   limit: number,
   offset: number,
   caseId: string | null,
+  module: string | null = null,
 ): Promise<Answer> {
   const { data, error } = await supabase.rpc("firm_hearings", {
     target_org: firmId,
@@ -225,6 +226,7 @@ async function firmHearings(
     target_limit: limit,
     target_offset: offset,
     target_case: caseId,
+    target_module: module,
   });
   if (error || typeof data !== "object" || data === null) throw new Error("the hearings could not be read");
   return data as Answer;
@@ -237,9 +239,10 @@ export async function loadHearings(
   view: HearingView,
   page: number,
   timeZone: string | null | undefined,
+  module: string | null = null,
 ): Promise<HearingsData> {
   const [answer, names] = await Promise.all([
-    firmHearings(supabase, firmId, view, HEARINGS_SHOWN, page * HEARINGS_SHOWN, null),
+    firmHearings(supabase, firmId, view, HEARINGS_SHOWN, page * HEARINGS_SHOWN, null, module),
     teamNames(supabase, firmId),
   ]);
   const counts = Object.fromEntries(HEARING_VIEWS.map((name) => [name, countOf(answer.counts?.[name])])) as Record<

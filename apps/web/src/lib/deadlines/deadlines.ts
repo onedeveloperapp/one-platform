@@ -34,10 +34,12 @@ export const isDeadlineView = (value: unknown): value is DeadlineView =>
 export const DEADLINES_SHOWN = 25;
 
 /** The address of a list and its page: the first list and the first page say nothing. */
-export function deadlinesAddress(view: DeadlineView, page: number): string {
+export function deadlinesAddress(view: DeadlineView, page: number, module: string | null = null): string {
   const query = new URLSearchParams();
   if (view !== "confirmar") query.set("ver", view);
   if (page > 0) query.set("pagina", String(page + 1));
+  // Under a module (0078), every list and page of it stays under the module.
+  if (module) query.set("modulo", module);
   const text = query.toString();
   return text ? `/prazos?${text}` : "/prazos";
 }

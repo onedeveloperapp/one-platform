@@ -44,8 +44,10 @@ export type CaseListRow = {
   seq: number;
   /** The first adult claimant, or the guardian when the claimants are minors. */
   client: string;
-  /** The kind of problem, one of the case's module's (lib/modules/registry.ts). */
-  incident: string;
+  /** The module the case is of (0068, named on each row since 0078). */
+  module: string;
+  /** The kind of problem, one of the case's module's (lib/modules/registry.ts); null for a module with none. */
+  incident: string | null;
   /** The airline's IATA designator: the screen has its name. */
   airline: string | null;
   flightDate: string | null;
@@ -89,6 +91,8 @@ export const MOST_SEARCH = 120;
 export type CaseListQuery = {
   filter: CaseFilter | null;
   search: string;
+  /** Only the cases of this module (migration 0078), or of every module of the firm. */
+  module: string | null;
   /** The page, from zero. */
   page: number;
   pageSize: number;
@@ -101,6 +105,8 @@ export function caseListQuery(input: unknown): CaseListQuery {
   return {
     filter: isCaseFilter(value.filter) ? value.filter : null,
     search: typeof value.search === "string" ? value.search.trim().slice(0, MOST_SEARCH) : "",
+    // A module's key as the catalog writes it; the database answers only the firm's cases of it either way.
+    module: typeof value.module === "string" && /^[a-z][a-z0-9-]{2,40}$/.test(value.module) ? value.module : null,
     page: Math.min(whole(value.page), 100_000),
     pageSize: PAGE_SIZES.includes(whole(value.pageSize)) ? whole(value.pageSize) : DEFAULT_PAGE_SIZE,
   };
@@ -125,15 +131,16 @@ export function caseListOf(raw: unknown): CaseListPage | null {
     if (typeof item !== "object" || item === null) return [];
     const row = item as Record<string, unknown>;
     if (typeof row.id !== "string" || typeof row.seq !== "number") return [];
-    if (typeof row.incident !== "string" || caseKindLabelKey(row.incident) === null || !isCaseStatus(row.status)) {
-      return [];
-    }
+    if (!isCaseStatus(row.status)) return [];
+    // A kind no module has is a newer database's: the row stays, said by its module.
+    const incident = typeof row.incident === "string" && caseKindLabelKey(row.incident) !== null ? row.incident : null;
     return [
       {
         id: row.id,
         seq: row.seq,
         client: typeof row.client === "string" ? row.client : "",
-        incident: row.incident,
+        module: typeof row.module === "string" && row.module !== "" ? row.module : "",
+        incident,
         airline: typeof row.airline_iata === "string" ? row.airline_iata : null,
         flightDate: typeof row.flight_date === "string" ? row.flight_date : null,
         status: row.status,

@@ -231,6 +231,7 @@ async function firmDeadlines(
   limit: number,
   offset: number,
   caseId: string | null,
+  module: string | null = null,
 ): Promise<Answer> {
   const { data, error } = await supabase.rpc("firm_deadlines", {
     target_org: firmId,
@@ -238,6 +239,7 @@ async function firmDeadlines(
     target_limit: limit,
     target_offset: offset,
     target_case: caseId,
+    target_module: module,
   });
   if (error || typeof data !== "object" || data === null) throw new Error("the deadlines could not be read");
   return data as Answer;
@@ -250,9 +252,10 @@ export async function loadDeadlines(
   view: DeadlineView,
   page: number,
   timeZone: string | null | undefined,
+  module: string | null = null,
 ): Promise<DeadlinesData> {
   const [answer, names] = await Promise.all([
-    firmDeadlines(supabase, firmId, view, DEADLINES_SHOWN, page * DEADLINES_SHOWN, null),
+    firmDeadlines(supabase, firmId, view, DEADLINES_SHOWN, page * DEADLINES_SHOWN, null, module),
     teamNames(supabase, firmId),
   ]);
   const counts = Object.fromEntries(DEADLINE_VIEWS.map((name) => [name, countOf(answer.counts?.[name])])) as Record<

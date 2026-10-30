@@ -1,4 +1,5 @@
 import { type FirmFunction, isManager, type OrgRole } from "@/lib/firm/roles";
+import type { ModuleMenuEntry } from "@/lib/modules/offer";
 
 /**
  * Who sees what in the menus of the logged area, as a pure decision.
@@ -21,6 +22,12 @@ export type MenuViewer = {
   firmFunction: FirmFunction | null;
   /** The product modules the person works in (migration 0068): the firm's, or the partner's. */
   modules: readonly string[];
+  /**
+   * ONE's modules as the menu lists them for a firm (0075, 0078): each with where it stands for the firm
+   * (contracted, to come, or out and not contracted). Empty for somebody of no firm, and when the catalog could
+   * not be read.
+   */
+  moduleMenu: readonly ModuleMenuEntry[];
   /** The person works in a partner of a firm (0069), and sees the partner's area only. */
   partner: boolean;
   isSuperadmin: boolean;
@@ -68,12 +75,19 @@ export function canAccess(access: MenuAccess | undefined, viewer: MenuViewer | n
   return true;
 }
 
-type AccessNode = { canAccess?: MenuAccess; children?: AccessNode[] };
+type AccessNode = {
+  canAccess?: MenuAccess;
+  children?: AccessNode[];
+  childrenFor?: (viewer: MenuViewer | null) => AccessNode[];
+};
 
 /**
  * The items a viewer sees, with the children of each filtered the same way. A
  * child that says nothing is for whoever its group is for: the consoles under
- * the operator's group are the operator's without each one repeating it.
+ * the operator's group are the operator's without each one repeating it. A
+ * group whose children depend on who is looking (`childrenFor`: the firm's
+ * modules) has them made for the viewer first; one left with no child at all
+ * is not shown.
  */
 export function visibleItems<Item extends AccessNode>(
   items: readonly Item[],
@@ -82,9 +96,11 @@ export function visibleItems<Item extends AccessNode>(
 ): Item[] {
   return items
     .filter((item) => canAccess(item.canAccess ?? inherited, viewer))
-    .map((item) =>
-      item.children
-        ? ({ ...item, children: visibleItems(item.children, viewer, item.canAccess ?? inherited) } as Item)
-        : item,
-    );
+    .flatMap((item): Item[] => {
+      const children = item.childrenFor ? (item.childrenFor(viewer) as Item[]) : (item.children as Item[] | undefined);
+      if (!children) return [item];
+      const shown = visibleItems(children, viewer, item.canAccess ?? inherited);
+      if (item.childrenFor && shown.length === 0) return [];
+      return [{ ...item, children: shown, childrenFor: undefined } as Item];
+    });
 }

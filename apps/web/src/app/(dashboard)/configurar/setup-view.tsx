@@ -31,11 +31,11 @@ import {
 
 import { useViewer } from "@/components/layout/viewer-context";
 import PartnerInviteDialog from "@/components/partners/partner-invite-dialog";
-import ModulesStrip from "@/components/product/modules-strip";
 import PageHeader from "@/components/product/page-header";
 import SecondFactorPrompt from "@/components/product/second-factor-prompt";
 import SetupWizard, { type WizardStep } from "@/components/product/setup-wizard";
 import StatusChip from "@/components/product/status-chip";
+import { useEmailReady } from "@/components/product/use-email-ready";
 import type { SecondFactorState } from "@/lib/ai/approvals";
 import { addOabRegistration, answerFirmSetup, inviteToFirm } from "@/lib/firm/actions";
 import {
@@ -50,7 +50,6 @@ import { setFirmClaimDefault, setFirmSigner } from "@/lib/firm/autonomy-actions"
 import { FIRM_FUNCTIONS, type FirmFunction, formatOab, OAB_STATES, type OabRegistration } from "@/lib/firm/roles";
 import { SETUP_STEPS, type SetupStepKey } from "@/lib/firm/setup-steps";
 import type { LibraryTemplate, SetupPaper } from "@/lib/library/facts";
-import type { ModuleOffer } from "@/lib/modules/offer";
 import { caseKindLabelKey, firmCaseKinds } from "@/lib/modules/registry";
 import type { FirmPartnersState } from "@/lib/partners/facts";
 import type { ConnectionsState } from "@/lib/whatsapp/connections";
@@ -65,6 +64,8 @@ export type SetupState =
       userId: string;
       firmName: string;
       firmFunction: FirmFunction;
+      /** Who answers decides for the firm what a partner decides (0078): a partner, or, with none, who manages it. */
+      decidesForFirm: boolean;
       /** The registrations at the bar of who answers. */
       registrations: OabRegistration[];
       /** Who answers already signs what ONE prepares. */
@@ -82,8 +83,6 @@ export type SetupState =
       papers: { procuracao: SetupPaper; contrato: SetupPaper } | null;
       /** The firm's connections as their own screen reads them: the signature account, the test chat, the number. */
       connections: ConnectionsState;
-      /** The modules the firm contracted and the ones to come (0075); null when they could not be read. */
-      modules: ModuleOffer | null;
       /** The firm's module whose partner it invites in the last step; null hides that step. */
       agencyModule: string | null;
       /** The firm's partnerships and open invitations (0069); null when they could not be read. */
@@ -121,8 +120,10 @@ const PAPER_WORDS: Record<Paper, { title: string; firm: string; one: string; mak
  * (a value for each kind of problem, or none for the judge to define),
  * whether it works alone, the papers its
  * clients sign, the channel to them and, for a module with a partner, the
- * partner agency (optional, never missing). The modules the firm contracted
- * are said under the title. Each step does its own work where it
+ * partner agency (optional, never missing). Nothing on it leads away from the
+ * setup: the modules the firm contracted are said on the home, never here,
+ * where a link to them took the owner out of a setup half done (2026-10-30;
+ * the rule is in apps/web/CLAUDE.md). Each step does its own work where it
  * is: the second factor a decision asks for is set up in the step, the
  * models are written in a dialog over it, the signature account, the test
  * chat and the number are connected in it, so nobody leaves the setup for a
@@ -176,7 +177,9 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
   const refresh = () => router.refresh();
 
   const lawyer = state.firmFunction === "socio" || state.firmFunction === "advogado";
-  const partner = state.firmFunction === "socio";
+  // Who signs and the Valor da Causa Pedido are a partner's to say, or, in a firm with no partner, who manages it
+  // (0078): a firm founded by a lawyer alone is never left with nobody to answer them.
+  const decides = state.decidesForFirm;
   const registered = state.registrations.length > 0;
   const blocked = state.supportVisit;
 
@@ -186,7 +189,7 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
   const factor: SecondFactorState = confirmedHere ? "ok" : state.secondFactor;
   // What the database asks the factor for (who signs, the claims, an invitation, a connection) waits for it.
   const locked = factor !== "ok";
-  const choosesSigner = partner && !locked;
+  const choosesSigner = decides && !locked;
 
   // ---------- Who answers, at the bar ----------
   const [uf, setUf] = useState("");
@@ -200,7 +203,7 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
   const onFactor = () => {
     setConfirmedHere(true);
     // Who signs is chosen with the factor: a partner who did not sign yet is offered it, as on a first visit.
-    if (partner && !state.signs) setSigns(true);
+    if (decides && !state.signs) setSigns(true);
   };
 
   /** The step's way to the second factor, saying what it is for; nothing in a support visit or once confirmed. */
@@ -215,7 +218,7 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
   const claimKinds = firmCaseKinds(useViewer()?.modules);
   const [claims, setClaims] = useState<Partial<Record<string, string>>>(() => typedClaims(state.claimDefaults ?? []));
   const [claimsError, setClaimsError] = useState<string | null>(null);
-  const claimsEditable = partner && !locked && !blocked && state.claimDefaults !== null;
+  const claimsEditable = decides && !locked && !blocked && state.claimDefaults !== null;
 
   // ---------- Alone or with a team ----------
   const [worksAlone, setWorksAlone] = useState<boolean | null>(state.worksAlone);
@@ -223,7 +226,11 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
   const [email, setEmail] = useState("");
   const [inviteFunction, setInviteFunction] = useState<FirmFunction>("advogado");
   const [inviting, setInviting] = useState(false);
-  const [invited, setInvited] = useState<{ email: string; link: string | null }[]>([]);
+  const [invited, setInvited] = useState<{ email: string; link: string | null; chosen: boolean; copied: boolean }[]>(
+    [],
+  );
+  // The invitation is offered as a link always, and by e-mail where ONE can send one.
+  const emailOk = useEmailReady();
   const [inviteError, setInviteError] = useState<string | null>(null);
 
   // ---------- The papers a client signs ----------
@@ -243,7 +250,7 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
   // A flow left half way opens where something is missing; one answered before opens at its start, and the list
   // on the home opens the step it names. The Valor da Causa Pedido is never missing: with none, the judge defines it.
   const missing: [boolean, SetupStepKey][] = [
-    [(lawyer && !registered) || (partner && !state.signs), "oab"],
+    [(lawyer && !registered) || (decides && lawyer && !state.signs), "oab"],
     [state.worksAlone === null, "equipe"],
     [!state.whatsapp, "canal"],
   ];
@@ -313,7 +320,8 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
     return true;
   };
 
-  const invite = async () => {
+  /** Invites by e-mail, or makes the link and copies it for the manager to send by their own channel. */
+  const invite = async (way: "email" | "link") => {
     setInviteError(null);
     const address = email.trim().toLowerCase();
     if (!EMAIL_PATTERN.test(address)) {
@@ -321,13 +329,28 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
       return;
     }
     setInviting(true);
-    const result = await inviteToFirm({ email: address, role: "member", firmFunction: inviteFunction });
+    const chosen = way === "link" || !emailOk;
+    const result = await inviteToFirm({
+      email: address,
+      role: "member",
+      firmFunction: inviteFunction,
+      deliver: chosen ? "link" : "email",
+    });
     setInviting(false);
     if (!result.ok) {
       setInviteError(t(teamErrorKey(result.code)));
       return;
     }
-    setInvited((current) => [...current, { email: address, link: result.link ?? null }]);
+    let copied = false;
+    if (chosen && result.link) {
+      try {
+        await navigator.clipboard.writeText(result.link);
+        copied = true;
+      } catch {
+        copied = false;
+      }
+    }
+    setInvited((current) => [...current, { email: address, link: result.link ?? null, chosen, copied }]);
     setEmail("");
   };
 
@@ -462,7 +485,7 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
             </Grid>
           )}
 
-          {lawyer && partner ? (
+          {lawyer && decides ? (
             <Box className="flex flex-col gap-1">
               <FormControlLabel
                 control={
@@ -500,7 +523,7 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
       onPrimary: saveClaims,
       content: (
         <Box className="flex flex-col gap-4">
-          {!partner ? (
+          {!decides ? (
             <Alert severity="info" className="neutral bg-background-paper/60!">
               {t("setup-claims-not-partner")}
             </Alert>
@@ -635,21 +658,41 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
                   </FormControl>
                 </Grid>
               </Grid>
-              <Box>
+              <Box className="flex flex-wrap gap-2">
                 <Button
                   variant="outlined"
                   color="grey"
-                  onClick={() => void invite()}
+                  onClick={() => void invite("link")}
                   disabled={blocked || locked || inviting}
                 >
-                  {inviting ? t("saving") : t("setup-team-invite-send")}
+                  {inviting ? t("saving") : t("setup-team-invite-copy-link")}
                 </Button>
+                {emailOk ? (
+                  <Button
+                    variant="outlined"
+                    color="grey"
+                    onClick={() => void invite("email")}
+                    disabled={blocked || locked || inviting}
+                  >
+                    {t("setup-team-invite-send")}
+                  </Button>
+                ) : null}
               </Box>
+              {emailOk === false ? (
+                <Typography variant="body2" className="text-text-secondary">
+                  {t("setup-team-invite-email-off")}
+                </Typography>
+              ) : null}
               {invited.map((entry) => (
                 <Alert key={entry.email} severity="success" className="neutral bg-background-paper/60!" role="status">
-                  {entry.link
-                    ? t("setup-team-invite-link", { email: entry.email, link: entry.link })
-                    : t("setup-team-invite-sent", { email: entry.email })}
+                  {entry.chosen && entry.link
+                    ? t(entry.copied ? "setup-team-invite-link-copied" : "setup-team-invite-link-made", {
+                        email: entry.email,
+                        link: entry.link,
+                      })
+                    : entry.link
+                      ? t("setup-team-invite-link", { email: entry.email, link: entry.link })
+                      : t("setup-team-invite-sent", { email: entry.email })}
                 </Alert>
               ))}
             </Box>
@@ -892,7 +935,6 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
           </Button>
         }
       />
-      {state.modules ? <ModulesStrip offer={state.modules} /> : null}
       {blocked ? (
         <Alert severity="info" className="neutral bg-background-paper/60!">
           {t("setup-support-visit")}

@@ -55,6 +55,7 @@ export type AutonomySigner = { userId: string; name: string; states: string[]; s
 export type AutonomyState =
   | {
       kind: "ready";
+      /** Decides for the firm what a partner decides: a partner, or, in a firm with no partner, who manages it (0078). */
       partner: boolean;
       /** Whether this session may change a choice now: the database asks the second factor. */
       secondFactor: SecondFactorState;

@@ -21,6 +21,10 @@ const viewer = (changes: Partial<MenuViewer> = {}): MenuViewer => ({
   role: "member",
   firmFunction: "atendimento",
   modules: ["direito-do-passageiro"],
+  moduleMenu: [
+    { key: "direito-do-passageiro", name: "Direito do Passageiro", icon: "NiPlane", state: "contracted" },
+    { key: "direito-previdenciario", name: "Direito Previdenciário", icon: "NiUmbrella", state: "soon" },
+  ],
   partner: false,
   isSuperadmin: false,
   owesSecondFactor: false,
@@ -89,6 +93,7 @@ describe("the menu by role", () => {
   it("gives each person the menu that is theirs", () => {
     expect(ids(visibleItems(leftMenuItems, viewer()))).toEqual([
       "inicio",
+      "modulos",
       "casos",
       "atendimento",
       "aprovacoes",
@@ -100,6 +105,7 @@ describe("the menu by role", () => {
     ]);
     expect(ids(visibleItems(leftMenuItems, viewer({ role: "owner", firmFunction: "socio" })))).toEqual([
       "inicio",
+      "modulos",
       "casos",
       "atendimento",
       "aprovacoes",
@@ -114,6 +120,31 @@ describe("the menu by role", () => {
     expect(ids(visibleItems(leftMenuBottomItems, viewer()))).toEqual(["settings"]);
     // The children of a group are kept with it.
     expect(visibleItems(leftMenuItems, operator)[0].children?.length).toBeGreaterThan(5);
+  });
+
+  it("lists ONE's modules under Módulos, each where it stands for the firm", () => {
+    const group = visibleItems(leftMenuItems, viewer()).find((item) => item.id === "modulos");
+    expect(group?.children?.map((child) => [child.id, child.href, child.tag ?? null, child.text ?? null])).toEqual([
+      ["modulos-todos", "/modulos", null, null],
+      ["modulo-direito-do-passageiro", "/modulos/direito-do-passageiro", null, "Direito do Passageiro"],
+      ["modulo-direito-previdenciario", "/modulos#direito-previdenciario", "soon", "Direito Previdenciário"],
+    ]);
+    // Each module with its own icon; one the firm did not contract carries the lock.
+    expect(group?.children?.[1].icon).toBe("NiPlane");
+    const locked = visibleItems(
+      leftMenuItems,
+      viewer({
+        moduleMenu: [{ key: "direito-trabalhista", name: "Direito Trabalhista", icon: null, state: "locked" }],
+      }),
+    ).find((item) => item.id === "modulos");
+    expect(locked?.children?.[1]).toMatchObject({
+      tag: "locked",
+      href: "/modulos#direito-trabalhista",
+      icon: "NiPuzzle",
+    });
+    // Nobody of no firm, and nobody of a partner, has the firm's modules in the menu.
+    expect(ids(visibleItems(leftMenuItems, operator))).not.toContain("modulos");
+    expect(ids(visibleItems(leftMenuItems, viewer({ hasFirm: false, partner: true })))).not.toContain("modulos");
   });
 
   it("has a label for every item it can show", () => {

@@ -9,7 +9,6 @@ import { isManager, OAB_STATES, type OabRegistration } from "@/lib/firm/roles";
 import type { SetupStepKey } from "@/lib/firm/setup-steps";
 import { loadSetupPapers } from "@/lib/library/facts";
 import type { MemberContext } from "@/lib/member/context";
-import { readModuleOffer } from "@/lib/modules/offer-read";
 import { moduleOf } from "@/lib/modules/registry";
 import { readFirmPartners } from "@/lib/partners/facts";
 import type { ConnectionsState } from "@/lib/whatsapp/connections";
@@ -46,8 +45,8 @@ export async function loadSetupState(
     defaults,
     papers,
     connections,
-    modules,
     partners,
+    decides,
   ] = await Promise.all([
     context.supabase.from("oab_registrations").select("id, uf, number, kind").eq("user_id", context.userId),
     context.supabase.from("firm_signers").select("user_id").eq("org_id", firm.id),
@@ -59,8 +58,9 @@ export async function loadSetupState(
     // Each of these is its step's: one that could not be read says so there, and the other steps stand.
     loadSetupPapers(context.supabase, firm.id, context.profile.timezone).catch(() => null),
     loadConnections(null).catch((): ConnectionsState => ({ kind: "error" })),
-    readModuleOffer(context).catch(() => null),
     readFirmPartners(context).catch(() => null),
+    // Who decides for the firm what a partner decides (0078): a partner, or, with no partner, who manages it.
+    context.supabase.rpc("decides_for_firm", { target_org: firm.id }),
   ]);
   if (registrations.error || signers.error || organization.error || !organization.data) return { kind: "error" };
 
@@ -74,6 +74,7 @@ export async function loadSetupState(
     userId: context.userId,
     firmName: firm.name,
     firmFunction: firm.firmFunction,
+    decidesForFirm: decides.error ? false : decides.data === true,
     registrations: ((registrations.data ?? []) as OabRegistration[]).filter((registration) =>
       (OAB_STATES as readonly string[]).includes(registration.uf),
     ),
@@ -87,7 +88,6 @@ export async function loadSetupState(
     claimDefaults: defaults.error ? null : claimDefaultsOf(defaults.data),
     papers,
     connections,
-    modules,
     // The firm's module whose partner it invites here: the passenger module's travel agency.
     agencyModule: context.modules.find((key) => (moduleOf(key)?.partnerArea.length ?? 0) > 0) ?? null,
     partners: partners?.kind === "ready" ? partners : null,

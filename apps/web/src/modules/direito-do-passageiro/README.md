@@ -6,8 +6,10 @@ partners with.
 
 ## What is the module's
 
-- `definition.ts`: what the core asks of the module (`lib/modules/types.ts`): its key and name, and its kinds of
-  problem (`incidents.ts`, stored in `cases.incident`).
+- `definition.ts`: what the core asks of the module (`lib/modules/types.ts`): its key and name, its kinds of
+  problem (`incidents.ts`, stored in `cases.incident`), what it gives a partner to do (`partnerArea`) and what only it
+  has in its area of the firm's app (`firmArea`: its partner agencies, the portfolio import, the Valor da Causa
+  Pedido; `testChat`, the test chat while it is on). Its icon, the plane, is its row of `product_modules` (0078).
 - `jobs.ts`: the module's jobs, which the core's list of jobs takes through `lib/modules/jobs.ts`.
 - `flights/`: each leg of a case checked against ANAC's official record, the weather and the status of a flight at
   FlightAware (`packages/flights` holds the vendors' adapters).

@@ -11,11 +11,13 @@ import { useEffect, useState } from "react";
 import { Alert, Box, Button } from "@mui/material";
 
 import EmptyState from "@/components/product/empty-state";
+import ModuleScope from "@/components/product/module-scope";
 import PageHeader from "@/components/product/page-header";
 import NiMessages from "@/icons/nexture/ni-messages";
 import NiPlug from "@/icons/nexture/ni-plug";
 import NiUsers from "@/icons/nexture/ni-users";
 import { isManager } from "@/lib/firm/roles";
+import { scopeCrumbs } from "@/lib/modules/offer";
 import { cn } from "@/lib/utils";
 import type { InboxState } from "@/lib/whatsapp/conversations";
 
@@ -54,9 +56,12 @@ export default function InboxView({ state }: { state: InboxState }) {
     <Box className="flex flex-col gap-6">
       <PageHeader
         title={t("inbox-title")}
-        crumbs={[{ label: t("inbox-home"), href: "/inicio" }, { label: t("inbox-title") }]}
+        crumbs={scopeCrumbs(t("inbox-home"), t("inbox-title"), ready?.scope.current ?? null)}
         description={ready ? t("inbox-description", { firm: ready.firm.name }) : undefined}
       />
+      {ready ? (
+        <ModuleScope path="/atendimento" modules={ready.scope.modules} current={ready.scope.current?.key ?? null} />
+      ) : null}
 
       {state.kind === "unavailable" ? (
         <Alert severity="info" className="neutral bg-background-paper/60!">
@@ -128,7 +133,11 @@ export default function InboxView({ state }: { state: InboxState }) {
           ) : (
             <Box className="flex flex-col gap-5 lg:flex-row lg:items-start">
               <Box className={cn("w-full flex-none lg:block lg:w-96", selected ? "hidden" : "block")}>
-                <ConversationList conversations={ready.conversations} selectedId={selected?.conversation.id ?? null} />
+                <ConversationList
+                  conversations={ready.conversations}
+                  selectedId={selected?.conversation.id ?? null}
+                  module={ready.scope.current?.key ?? null}
+                />
               </Box>
               <Box className={cn("min-w-0 flex-1 lg:block", selected ? "block" : "hidden")}>
                 {selected ? (
@@ -145,6 +154,7 @@ export default function InboxView({ state }: { state: InboxState }) {
                     firmName={ready.firm.name}
                     supportVisit={ready.supportVisit}
                     manager={manager}
+                    module={ready.scope.current?.key ?? null}
                     onChanged={refresh}
                   />
                 ) : (

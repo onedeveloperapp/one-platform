@@ -12,6 +12,7 @@ import HearingDialog from "@/components/hearings/hearing-dialog";
 import ConfirmActionDialog from "@/components/product/confirm-action-dialog";
 import EmptyState from "@/components/product/empty-state";
 import { StatTile } from "@/components/product/home-tiles";
+import ModuleScope from "@/components/product/module-scope";
 import PageHeader from "@/components/product/page-header";
 import type { TileTone } from "@/components/product/tile-tone";
 import NiCalendar from "@/icons/nexture/ni-calendar";
@@ -31,6 +32,7 @@ import type {
   PublicationWithoutHearing,
 } from "@/lib/hearings/facts";
 import { agendaAddress, type CourtZones, HEARING_VIEWS, type HearingView, VIEW_KEY } from "@/lib/hearings/hearings";
+import { type PageScope, scopeCrumbs } from "@/lib/modules/offer";
 import { settlePublicationHearing } from "@/lib/publications/actions";
 import { readingAdviceKey, readingReasonKey, readingStatusKey, settleErrorKey } from "@/lib/publications/reading-words";
 import { formatDayBr } from "@flyee/rules/person";
@@ -54,6 +56,8 @@ export type AgendaState =
       managesFirm: boolean;
       /** A calendar can be connected in this environment (Google's client, or the fake). */
       calendarAvailable: boolean;
+      /** The modules of the firm, and the one the page is under (0078). */
+      scope: PageScope;
     }
   | { kind: "no-firm" }
   | { kind: "unavailable" }
@@ -90,6 +94,8 @@ export default function AgendaView({ state }: { state: AgendaState }) {
   const [retryFailed, setRetryFailed] = useState(false);
   const ready = state.kind === "ready" ? state : null;
   const data = ready?.data ?? null;
+  // Under a module (0078), every list and page of the screen stays under it.
+  const module = ready?.scope.current?.key ?? null;
   const total = data ? HEARING_VIEWS.reduce((sum, view) => sum + data.counts[view], 0) : 0;
   // In any list and page: what the calendar refused is offered again wherever the person is.
   const failing = (data?.calendarFailed ?? 0) > 0;
@@ -114,9 +120,17 @@ export default function AgendaView({ state }: { state: AgendaState }) {
     <Box className="flex flex-col gap-6">
       <PageHeader
         title={t("agenda-title")}
-        crumbs={[{ label: t("approvals-home"), href: "/inicio" }, { label: t("agenda-title") }]}
+        crumbs={scopeCrumbs(t("approvals-home"), t("agenda-title"), ready?.scope.current ?? null)}
         description={ready ? t("agenda-description") : undefined}
       />
+      {ready ? (
+        <ModuleScope
+          path="/agenda"
+          modules={ready.scope.modules}
+          current={module}
+          keep={{ ver: ready.view === "proximas" ? null : ready.view }}
+        />
+      ) : null}
 
       {state.kind === "unavailable" ? (
         <Alert severity="info" className="neutral bg-background-paper/60!">
@@ -218,7 +232,7 @@ export default function AgendaView({ state }: { state: AgendaState }) {
             {HEARING_VIEWS.map((view) => (
               <Grid key={view} size={{ xs: 12, sm: 6, lg: "grow" }}>
                 <StatTile
-                  onClick={() => router.push(agendaAddress(view, 0))}
+                  onClick={() => router.push(agendaAddress(view, 0, module))}
                   pressed={ready.view === view}
                   icon={VIEW_LOOK[view].icon}
                   tone={VIEW_LOOK[view].tone}
@@ -259,7 +273,7 @@ export default function AgendaView({ state }: { state: AgendaState }) {
               icon={<NiInbox size="large" />}
               title={t(VIEW_KEY[ready.view].emptyTitle)}
               description={t(VIEW_KEY[ready.view].emptyBody)}
-              action={{ label: t(otherKey), href: agendaAddress(otherView, 0) }}
+              action={{ label: t(otherKey), href: agendaAddress(otherView, 0, module) }}
             />
           ) : (
             <Box component="ul" className="m-0 flex list-none flex-col gap-4 p-0">
@@ -287,7 +301,7 @@ export default function AgendaView({ state }: { state: AgendaState }) {
                 <Button
                   variant="outlined"
                   color="grey"
-                  href={agendaAddress(ready.view, data.page - 1)}
+                  href={agendaAddress(ready.view, data.page - 1, module)}
                   LinkComponent={Link}
                 >
                   {t("agenda-page-previous")}
@@ -297,7 +311,7 @@ export default function AgendaView({ state }: { state: AgendaState }) {
                 <Button
                   variant="outlined"
                   color="grey"
-                  href={agendaAddress(ready.view, data.page + 1)}
+                  href={agendaAddress(ready.view, data.page + 1, module)}
                   LinkComponent={Link}
                 >
                   {t("agenda-page-next")}

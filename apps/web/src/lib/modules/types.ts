@@ -23,6 +23,21 @@ export type PartnerAreaEntry = {
   descriptionKey: string;
 };
 
+/**
+ * A place of a module for the firm (migration 0078): what only that module has, which its area lists beside the
+ * module's share of the firm's work. A page of the core or of the module's route group.
+ */
+export type FirmAreaEntry = {
+  id: string;
+  href: string;
+  icon: IconName;
+  /** The `product` message keys of its name and of its one line. */
+  labelKey: string;
+  descriptionKey: string;
+  /** Shown only to who brings the firm's portfolio from a spreadsheet (`lib/import/who.ts`). */
+  importers?: boolean;
+};
+
 /** A kind of problem a case of the module is about (`cases.incident` for the passenger module). */
 export type CaseKind = {
   /** As stored. Unique across every module, so a kind names its module by itself. */
@@ -42,4 +57,8 @@ export type ModuleDefinition = {
   caseKinds: readonly CaseKind[];
   /** What the module gives a partner of a firm to do, in the partner's area (none for a module with no partner). */
   partnerArea: readonly PartnerAreaEntry[];
+  /** What only the module has, which its area in the firm's app lists (0078). */
+  firmArea: readonly FirmAreaEntry[];
+  /** The test chat stands for this module's passenger: its area offers the chat while the firm has it on (0047). */
+  testChat?: boolean;
 };

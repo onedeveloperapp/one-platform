@@ -51,8 +51,8 @@
     {
       "name": "QuickActionTile",
       "from": "@/components/product/home-tiles",
-      "props": "href, icon, tone, title, description",
-      "use": "A shortcut: full-height tinted icon column (w-16) + title + one-line description. Four across, never two columns."
+      "props": "href?, icon, tone, title, description, badge?, label?",
+      "use": "A shortcut: full-height tinted icon column (w-16) + title + one-line description. Four across, never two columns. A badge (StatusChip) beside the title names a state; no href is a readout."
     },
     {
       "name": "TILE_TONE",
@@ -79,10 +79,22 @@
       "use": "A lifecycle state as a NAMED badge: a module version (rascunho, publicada, retirada), a meeting, a roadmap item, a subscription, a lead. The template's tiny pastel button rendered as a span (no focus, reads as text). The tone tints the badge and the word is always text-primary, because the pastel label in the tone itself fails contrast on this palette. Never colour alone, never an outlined Chip for a state."
     },
     {
-      "name": "ModulesStrip",
-      "from": "@/components/product/modules-strip",
+      "name": "ModulesQuickAccess",
+      "from": "@/components/product/modules-quick-access",
       "props": "offer (ModuleOffer of lib/modules/offer.ts)",
-      "use": "The modules a firm contracted and the ones to come, in one line under a page's title: each module's name with its state as a StatusChip (Contratado, Em breve) and the way to /settings/modulos. Made of StatusChips; on the home and the setup. Renders nothing for an empty offer."
+      "use": "ONE's modules as the home's quick access: one QuickActionTile per module with its own icon (ModuleIcon), three across so a module's name and its state share a line, a contracted one opening its area (/modulos/<key>), one to come badged Em breve and one not contracted with a lock, both to the overview (/modulos#<key>). Never in the setup: nothing there leads away from it. Renders nothing for an empty offer."
+    },
+    {
+      "name": "ModuleIcon",
+      "from": "@/components/product/module-icon",
+      "props": "name (product_modules.icon), size?, className?, variant?",
+      "use": "The icon that says what a module is, by the name the catalog stores, through the icon registry; a name the set does not have shows the generic module icon."
+    },
+    {
+      "name": "ModuleScope",
+      "from": "@/components/product/module-scope",
+      "props": "path, modules (ModuleCard[]), current (key | null), keep?",
+      "use": "Above a page of the firm's work (cases, conversations, approvals, filing, publications, deadlines, hearings): links for every module or one (?modulo=), the chosen one contained and aria-current. The page reads only what is of a case of that module."
     },
     {
       "name": "AttentionList",

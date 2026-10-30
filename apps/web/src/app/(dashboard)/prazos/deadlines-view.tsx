@@ -11,6 +11,7 @@ import DeadlineCard from "@/components/deadlines/deadline-card";
 import DeadlineDialog from "@/components/deadlines/deadline-dialog";
 import EmptyState from "@/components/product/empty-state";
 import { StatTile } from "@/components/product/home-tiles";
+import ModuleScope from "@/components/product/module-scope";
 import PageHeader from "@/components/product/page-header";
 import type { TileTone } from "@/components/product/tile-tone";
 import NiCalendarClock from "@/icons/nexture/ni-calendar-clock";
@@ -36,6 +37,7 @@ import type {
   PublicationsWithoutDeadline,
   PublicationWithoutDeadline,
 } from "@/lib/deadlines/facts";
+import { type PageScope, scopeCrumbs } from "@/lib/modules/offer";
 import { readingAdviceKey, readingReasonKey, readingStatusKey } from "@/lib/publications/reading-words";
 import { formatDayBr } from "@flyee/rules/person";
 
@@ -51,6 +53,8 @@ export type DeadlinesState =
       mayConfirm: boolean;
       /** The person proposes, corrects, completes and dismisses them. */
       mayWork: boolean;
+      /** The modules of the firm, and the one the page is under (0078). */
+      scope: PageScope;
     }
   | { kind: "no-firm" }
   | { kind: "unavailable" }
@@ -82,15 +86,25 @@ export default function DeadlinesView({ state }: { state: DeadlinesState }) {
   const refresh = useCallback(() => router.refresh(), [router]);
   const ready = state.kind === "ready" ? state : null;
   const data = ready?.data ?? null;
+  // Under a module (0078), every list and page of the screen stays under it.
+  const module = ready?.scope.current?.key ?? null;
   const total = data ? data.counts.confirmar + data.counts.proximos + data.counts.vencidos + data.counts.concluidos : 0;
 
   return (
     <Box className="flex flex-col gap-6">
       <PageHeader
         title={t("deadlines-title")}
-        crumbs={[{ label: t("approvals-home"), href: "/inicio" }, { label: t("deadlines-title") }]}
+        crumbs={scopeCrumbs(t("approvals-home"), t("deadlines-title"), ready?.scope.current ?? null)}
         description={ready ? t("deadlines-description") : undefined}
       />
+      {ready ? (
+        <ModuleScope
+          path="/prazos"
+          modules={ready.scope.modules}
+          current={module}
+          keep={{ ver: ready.view === "confirmar" ? null : ready.view }}
+        />
+      ) : null}
 
       {state.kind === "unavailable" ? (
         <Alert severity="info" className="neutral bg-background-paper/60!">
@@ -141,7 +155,7 @@ export default function DeadlinesView({ state }: { state: DeadlinesState }) {
             {DEADLINE_VIEWS.map((view) => (
               <Grid key={view} size={{ xs: 12, sm: 6, lg: "grow" }}>
                 <StatTile
-                  onClick={() => router.push(deadlinesAddress(view, 0))}
+                  onClick={() => router.push(deadlinesAddress(view, 0, module))}
                   pressed={ready.view === view}
                   icon={VIEW_LOOK[view].icon}
                   tone={VIEW_LOOK[view].tone}
@@ -174,8 +188,8 @@ export default function DeadlinesView({ state }: { state: DeadlinesState }) {
               description={t(VIEW_KEY[ready.view].emptyBody)}
               action={
                 ready.view === "confirmar"
-                  ? { label: t("deadlines-empty-see-next"), href: deadlinesAddress("proximos", 0) }
-                  : { label: t("deadlines-empty-see-confirm"), href: deadlinesAddress("confirmar", 0) }
+                  ? { label: t("deadlines-empty-see-next"), href: deadlinesAddress("proximos", 0, module) }
+                  : { label: t("deadlines-empty-see-confirm"), href: deadlinesAddress("confirmar", 0, module) }
               }
             />
           ) : (
@@ -205,7 +219,7 @@ export default function DeadlinesView({ state }: { state: DeadlinesState }) {
                 <Button
                   variant="outlined"
                   color="grey"
-                  href={deadlinesAddress(ready.view, data.page - 1)}
+                  href={deadlinesAddress(ready.view, data.page - 1, module)}
                   LinkComponent={Link}
                 >
                   {t("deadlines-page-previous")}
@@ -215,7 +229,7 @@ export default function DeadlinesView({ state }: { state: DeadlinesState }) {
                 <Button
                   variant="outlined"
                   color="grey"
-                  href={deadlinesAddress(ready.view, data.page + 1)}
+                  href={deadlinesAddress(ready.view, data.page + 1, module)}
                   LinkComponent={Link}
                 >
                   {t("deadlines-page-next")}

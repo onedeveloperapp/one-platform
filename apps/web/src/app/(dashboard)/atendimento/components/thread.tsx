@@ -15,6 +15,7 @@ import NiArrowLeft from "@/icons/nexture/ni-arrow-left";
 import { caseLabel } from "@/lib/cases/cases";
 import { notSentKey, type ReplyBlock, replyBlock, type WaitingReply } from "@/lib/conversations/reply";
 import type { FirmFunction, OrgRole } from "@/lib/firm/roles";
+import { scopedHref } from "@/lib/modules/offer";
 import { markConversationRead, openMedia, setConversationAgent } from "@/lib/whatsapp/actions";
 import {
   composerMode,
@@ -51,6 +52,7 @@ export default function Thread({
   firmName,
   supportVisit,
   manager,
+  module = null,
   onChanged,
 }: {
   conversation: ConversationSummary;
@@ -67,6 +69,8 @@ export default function Thread({
   firmName: string;
   supportVisit: boolean;
   manager: boolean;
+  /** The module the inbox is under (0078): the way back and a new case stay under it. */
+  module?: string | null;
   onChanged: () => void;
 }) {
   const t = useTranslations("product");
@@ -148,7 +152,7 @@ export default function Thread({
       <CardContent className="flex flex-col gap-4">
         <Box className="flex flex-col gap-2">
           <Button
-            href="/atendimento"
+            href={scopedHref("/atendimento", module)}
             LinkComponent={Link}
             variant="text"
             color="grey"
@@ -232,7 +236,12 @@ export default function Thread({
               </Button>
             ))}
             {!supportVisit && (
-              <Button href={`/casos?conversa=${conversation.id}`} LinkComponent={Link} variant="text" size="small">
+              <Button
+                href={scopedHref("/casos", module, { conversa: conversation.id })}
+                LinkComponent={Link}
+                variant="text"
+                size="small"
+              >
                 {t("inbox-case-new")}
               </Button>
             )}

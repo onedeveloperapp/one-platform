@@ -7,6 +7,7 @@ import { CONVERSATION_TASK } from "@/lib/conversations/agent";
 import { type WaitingReply, waitingReplyOf } from "@/lib/conversations/reply";
 import { isFirmFunction } from "@/lib/firm/roles";
 import { getMemberContext } from "@/lib/member/context";
+import { pageScopeOf } from "@/lib/modules/offer";
 import { isSimulatorOn } from "@/lib/whatsapp/config";
 import {
   contactName,
@@ -106,25 +107,41 @@ const STATUSES: readonly MessageStatus[] = ["received", "queued", "sending", "se
  * (`reserve_wa_send`, migration 0019); the page only tells the screen what it
  * will answer, so the composer never offers what would be refused.
  */
-async function loadInbox(selectedId: string | null): Promise<InboxState> {
+async function loadInbox(selectedId: string | null, modulo: string | undefined): Promise<InboxState> {
   const context = await getMemberContext();
   if (!context) return { kind: "unavailable" };
   if (!context.firm) return { kind: "no-firm" };
 
   const firm = context.firm;
   const { supabase } = context;
+  // `?modulo=` keeps the inbox to the conversations of one module (0078): the ones whose contact is somebody of a
+  // case of it, named first by the database. A conversation of nobody's case yet is in the firm's inbox only.
+  const scope = pageScopeOf(context.catalog, context.modules, modulo);
+  const module = scope.current?.key ?? null;
+  const ofModule = module
+    ? await supabase.rpc("firm_module_conversations", {
+        target_org: firm.id,
+        target_module: module,
+        target_limit: CONVERSATIONS_SHOWN,
+      })
+    : null;
+  if (ofModule?.error) return { kind: "error" };
+  const moduleIds = ofModule
+    ? (Array.isArray(ofModule.data) ? ofModule.data : []).filter((id): id is string => typeof id === "string")
+    : null;
+  const conversationsQuery = supabase
+    .from("wa_conversations")
+    .select(CONVERSATION_COLUMNS)
+    .eq("org_id", firm.id)
+    .order("last_message_at", { ascending: false, nullsFirst: false })
+    .limit(CONVERSATIONS_SHOWN);
   // The hours are written here, on the person's own clock, and handed over as text.
   const timeZone = context.profile.timezone;
   const reference = new Date();
 
   const [numbers, conversations, optouts, windowEnd, waitingAnswers, cookieStore] = await Promise.all([
     supabase.from("wa_numbers").select("id, provider, status, waba_id").eq("org_id", firm.id),
-    supabase
-      .from("wa_conversations")
-      .select(CONVERSATION_COLUMNS)
-      .eq("org_id", firm.id)
-      .order("last_message_at", { ascending: false, nullsFirst: false })
-      .limit(CONVERSATIONS_SHOWN),
+    moduleIds ? conversationsQuery.in("id", moduleIds) : conversationsQuery,
     supabase.from("wa_optouts").select("contact_wa_id").eq("org_id", firm.id),
     // How long the window is belongs to the database's settings, which a
     // person does not read: asking when a window opened now would close gives its length.
@@ -351,10 +368,19 @@ async function loadInbox(selectedId: string | null): Promise<InboxState> {
     templates,
     supportVisit: cookieStore.has(IMPERSONATION_MARKER_COOKIE),
     simulatorNumberId: simulatorOn ? (active.find((row) => row.provider === "simulator")?.id ?? null) : null,
+    scope,
   };
 }
 
-export default async function InboxPage({ searchParams }: { searchParams: Promise<{ c?: string | string[] }> }) {
-  const { c } = await searchParams;
-  return <InboxView state={await loadInbox(typeof c === "string" ? c : null)} />;
+export default async function InboxPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ c?: string | string[]; modulo?: string | string[] }>;
+}) {
+  const { c, modulo } = await searchParams;
+  return (
+    <InboxView
+      state={await loadInbox(typeof c === "string" ? c : null, typeof modulo === "string" ? modulo : undefined)}
+    />
+  );
 }

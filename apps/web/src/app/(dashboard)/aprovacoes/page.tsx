@@ -21,6 +21,7 @@ import { CHRONOLOGY_TASK, TRANSCRIPTION_TASK } from "@/lib/cases/statements";
 import { CONVERSATION_TASK } from "@/lib/conversations/agent";
 import { type FirmFunction, isFirmFunction } from "@/lib/firm/roles";
 import { getMemberContext } from "@/lib/member/context";
+import { pageScopeOf } from "@/lib/modules/offer";
 import { IMPERSONATION_MARKER_COOKIE } from "@flyee/auth";
 import { isWindowOpen } from "@flyee/whatsapp/rules";
 
@@ -127,37 +128,69 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
  * Everything is read under the person's own session: row-level security shows
  * the queue of their firm only, and the decision itself is the database's
  * (`decide_approval`, migration 0016), which asks for the function the task
- * names and for the second factor.
+ * names and for the second factor. `?modulo=` keeps the queue to the answers
+ * about the cases of one module (`firm_module_approvals`, migration 0078).
  */
-async function loadApprovals(): Promise<ApprovalsState> {
+async function loadApprovals(modulo: string | undefined): Promise<ApprovalsState> {
   const context = await getMemberContext();
   if (!context) return { kind: "unavailable" };
   if (!context.firm) return { kind: "no-firm" };
 
   const firm = context.firm;
   const { supabase } = context;
+  const scope = pageScopeOf(context.catalog, context.modules, modulo);
+  const module = scope.current?.key ?? null;
+  // Under a module, the database names the answers of it first: the ones that wait, with how many, and the latest
+  // decided. The queue then reads them as it reads every one.
+  const [ofModuleWaiting, ofModuleDecided] = module
+    ? await Promise.all([
+        supabase.rpc("firm_module_approvals", {
+          target_org: firm.id,
+          target_module: module,
+          target_decided: false,
+          target_limit: PENDING_PAGE,
+        }),
+        supabase.rpc("firm_module_approvals", {
+          target_org: firm.id,
+          target_module: module,
+          target_decided: true,
+          target_limit: DECIDED_SHOWN,
+        }),
+      ])
+    : [null, null];
+  if (ofModuleWaiting?.error || ofModuleDecided?.error) return { kind: "error" };
+  const idsOf = (answer: { data: unknown } | null): string[] | null => {
+    if (!answer) return null;
+    const ids = (answer.data as { ids?: unknown } | null)?.ids;
+    return Array.isArray(ids) ? ids.filter((id): id is string => typeof id === "string") : [];
+  };
+  const waitingIds = idsOf(ofModuleWaiting);
+  const decidedIds = idsOf(ofModuleDecided);
+  const moduleTotal = (ofModuleWaiting?.data as { total?: unknown } | null)?.total;
   // The hours are written here, on the person's own clock, and handed over as
   // text: the browser never formats a date the server formatted differently.
   const timeZone = context.profile.timezone;
 
+  const waitingQuery = supabase
+    .from("approvals")
+    .select(
+      "id, run_id, task, approver_functions, created_at, ai_runs(output, subject_type, subject_id), ai_tasks(name, description, revisable)",
+      {
+        count: "exact",
+      },
+    )
+    .eq("org_id", firm.id)
+    .eq("status", "pending");
+  const decidedQuery = supabase
+    .from("approvals")
+    .select("id, task, status, edited, decided_auto, decided_by, decided_at, decision_note, ai_tasks(name)")
+    .eq("org_id", firm.id)
+    .in("status", ["approved", "rejected", "returned"]);
   const [pending, decided, team, assurance, cookieStore] = await Promise.all([
-    supabase
-      .from("approvals")
-      .select(
-        "id, run_id, task, approver_functions, created_at, ai_runs(output, subject_type, subject_id), ai_tasks(name, description, revisable)",
-        {
-          count: "exact",
-        },
-      )
-      .eq("org_id", firm.id)
-      .eq("status", "pending")
+    (waitingIds ? waitingQuery.in("id", waitingIds) : waitingQuery)
       .order("created_at", { ascending: true })
       .limit(PENDING_PAGE),
-    supabase
-      .from("approvals")
-      .select("id, task, status, edited, decided_auto, decided_by, decided_at, decision_note, ai_tasks(name)")
-      .eq("org_id", firm.id)
-      .in("status", ["approved", "rejected", "returned"])
+    (decidedIds ? decidedQuery.in("id", decidedIds) : decidedQuery)
       .order("decided_at", { ascending: false })
       .limit(DECIDED_SHOWN),
     supabase.rpc("firm_team", { target_org: firm.id }),
@@ -428,13 +461,25 @@ async function loadApprovals(): Promise<ApprovalsState> {
     firm: { id: firm.id, name: firm.name },
     me: { firmFunction: firm.firmFunction },
     pending: waiting,
-    pendingTotal: pending.count ?? waiting.length,
+    // Under a module, how many of it wait, as the database counted them.
+    pendingTotal: module
+      ? typeof moduleTotal === "number"
+        ? moduleTotal
+        : waiting.length
+      : (pending.count ?? waiting.length),
     decided: recent,
     secondFactor,
     supportVisit: cookieStore.has(IMPERSONATION_MARKER_COOKIE),
+    scope,
   };
 }
 
-export default async function ApprovalsPage() {
-  return <ApprovalsView state={await loadApprovals()} />;
+export default async function ApprovalsPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const query = await searchParams;
+  const modulo = Array.isArray(query.modulo) ? query.modulo[0] : query.modulo;
+  return <ApprovalsView state={await loadApprovals(modulo)} />;
 }

@@ -13,6 +13,8 @@ import type { GridColDef, GridRenderCellParams } from "@mui/x-data-grid";
 import DataTable from "@/components/data-grid/data-table";
 import EmptyState from "@/components/product/empty-state";
 import { StatTile } from "@/components/product/home-tiles";
+import ModuleIcon from "@/components/product/module-icon";
+import ModuleScope from "@/components/product/module-scope";
 import PageHeader from "@/components/product/page-header";
 import StatusChip from "@/components/product/status-chip";
 import type { TileTone } from "@/components/product/tile-tone";
@@ -140,19 +142,28 @@ type Ready = Extract<CasesState, { kind: "ready" }>;
  * page at a time: the database counts, filters and searches (`firm_cases`),
  * so the numbers are right for a firm of any size.
  */
-export default function CasesView({ state }: { state: CasesState }) {
+export default function CasesView({ state, embedded = false }: { state: CasesState; embedded?: boolean }) {
   const t = useTranslations("product");
   const router = useRouter();
 
   // Arriving by another address (`?ver=`, from a count of the home) starts the list again under its filter.
-  if (state.kind === "ready") return <CasesList key={state.filter ?? "going"} ready={state} />;
+  if (state.kind === "ready")
+    return (
+      <CasesList
+        key={`${state.scope?.module.key ?? "all"}:${state.filter ?? "going"}`}
+        ready={state}
+        embedded={embedded}
+      />
+    );
   return (
     <Box className="flex flex-col gap-6">
-      <PageHeader
-        title={t("cases-title")}
-        crumbs={[{ label: t("cases-home"), href: "/inicio" }, { label: t("cases-title") }]}
-        description={t("cases-description")}
-      />
+      {embedded ? null : (
+        <PageHeader
+          title={t("cases-title")}
+          crumbs={[{ label: t("cases-home"), href: "/inicio" }, { label: t("cases-title") }]}
+          description={t("cases-description")}
+        />
+      )}
       {state.kind === "unavailable" && (
         <Alert severity="info" className="neutral bg-background-paper/60!">
           {t("settings-unavailable")}
@@ -183,14 +194,22 @@ export default function CasesView({ state }: { state: CasesState }) {
   );
 }
 
-function CasesList({ ready }: { ready: Ready }) {
+/**
+ * The list itself. In a module's area (`embedded`) it is the area's list of its lawsuits, under the area's own
+ * title; on `/casos` it is the page, with the choice of every module or one above it. Under a module it offers
+ * what only that module has (its partner's filter, its portfolio from a spreadsheet, its kinds of problem); for
+ * every module of a firm that has more than one, each row names its module.
+ */
+function CasesList({ ready, embedded }: { ready: Ready; embedded: boolean }) {
   const t = useTranslations("product");
   const router = useRouter();
+  const scope = ready.scope;
   const [creating, setCreating] = useState(Boolean(ready.prefill));
   const [list, setList] = useState<CaseListPage>(ready.list);
   const [query, setQuery] = useState<CaseListQuery>({
     filter: ready.filter,
     search: "",
+    module: scope?.module.key ?? null,
     page: 0,
     pageSize: DEFAULT_PAGE_SIZE,
   });
@@ -242,6 +261,9 @@ function CasesList({ ready }: { ready: Ready }) {
     () => new Map(ready.airlines.map((airline) => [airline.iata, airline.name])),
     [ready.airlines],
   );
+  const moduleOfRow = useMemo(() => new Map(ready.modules.map((module) => [module.key, module])), [ready.modules]);
+  // Every module of a firm that has more than one: each row says which.
+  const namesModule = !scope && ready.modules.length > 1;
 
   const columns = useMemo<GridColDef<CaseListRow>[]>(
     () => [
@@ -269,16 +291,39 @@ function CasesList({ ready }: { ready: Ready }) {
               {params.row.client || t("cases-no-client")}
             </Typography>
             <Typography variant="body2" className="text-text-secondary truncate">
-              {params.row.agency
-                ? t("cases-from-agency", {
-                    kind: t(caseKindLabelKey(params.row.incident) ?? "case-incident-other"),
-                    agency: params.row.agency,
-                  })
-                : t(caseKindLabelKey(params.row.incident) ?? "case-incident-other")}
+              {params.row.incident === null
+                ? (moduleOfRow.get(params.row.module)?.name ?? "")
+                : params.row.agency
+                  ? t("cases-from-agency", {
+                      kind: t(caseKindLabelKey(params.row.incident) ?? "case-incident-other"),
+                      agency: params.row.agency,
+                    })
+                  : t(caseKindLabelKey(params.row.incident) ?? "case-incident-other")}
             </Typography>
           </Box>
         ),
       },
+      ...(namesModule
+        ? [
+            {
+              field: "module",
+              headerName: t("cases-column-module"),
+              minWidth: 170,
+              flex: 0.9,
+              renderCell: (params: GridRenderCellParams<CaseListRow, string>) => {
+                const module = moduleOfRow.get(params.row.module);
+                return (
+                  <Box className="flex h-full min-w-0 items-center gap-2">
+                    <ModuleIcon name={module?.icon} size="small" className="text-text-secondary flex-none" />
+                    <Typography variant="body2" className="truncate">
+                      {module?.name ?? ""}
+                    </Typography>
+                  </Box>
+                );
+              },
+            } satisfies GridColDef<CaseListRow>,
+          ]
+        : []),
       {
         field: "airline",
         headerName: t("cases-column-flight"),
@@ -328,7 +373,7 @@ function CasesList({ ready }: { ready: Ready }) {
         ),
       },
     ],
-    [t, airlineName],
+    [t, airlineName, moduleOfRow, namesModule],
   );
 
   const { filter } = query;
@@ -340,8 +385,16 @@ function CasesList({ ready }: { ready: Ready }) {
       {t("cases-new")}
     </Button>
   );
-  // A firm that arrives with lawsuits already in court brings them from a spreadsheet, never one by one.
-  const mayImport = ready.canImport && !ready.supportVisit;
+  // A firm that arrives with lawsuits already in court brings them from a spreadsheet, never one by one: a module's
+  // portfolio, so offered under the module whose lawsuits the spreadsheet holds.
+  const mayImport = ready.canImport && !ready.supportVisit && Boolean(scope?.importable);
+  // A filter of what only a module has (the cases its partner sent) is offered under that module.
+  const tiles = [
+    ...STANDING_TILES,
+    ...EXCEPTION_TILES.filter(
+      (key) => (key !== "agencia" || scope?.partner) && (list.counts[key] > 0 || filter === key),
+    ),
+  ];
   const hasCases = list.counts.all > 0;
 
   // Why the table is empty says what to do next: another search, another filter, or the cases that ended.
@@ -370,12 +423,36 @@ function CasesList({ ready }: { ready: Ready }) {
 
   return (
     <Box className="flex flex-col gap-6">
-      <PageHeader
-        title={t("cases-title")}
-        crumbs={[{ label: t("cases-home"), href: "/inicio" }, { label: t("cases-title") }]}
-        description={t("cases-description")}
-        action={hasCases ? newCase : undefined}
-      />
+      {embedded ? (
+        <Box className="flex flex-wrap items-end justify-between gap-3">
+          <Box className="flex flex-col gap-1">
+            <Typography id="module-cases" variant="h5" component="h2" className="mb-0">
+              {t("module-area-cases-title")}
+            </Typography>
+            <Typography variant="body2" className="text-text-secondary">
+              {t("module-area-cases-body", { module: scope?.module.name ?? "" })}
+            </Typography>
+          </Box>
+        </Box>
+      ) : (
+        <>
+          <PageHeader
+            title={t("cases-title")}
+            crumbs={
+              scope
+                ? [
+                    { label: t("cases-home"), href: "/inicio" },
+                    { label: scope.module.name, href: `/modulos/${scope.module.key}` },
+                    { label: t("cases-title") },
+                  ]
+                : [{ label: t("cases-home"), href: "/inicio" }, { label: t("cases-title") }]
+            }
+            description={scope ? t("cases-description-module", { module: scope.module.name }) : t("cases-description")}
+            action={hasCases ? newCase : undefined}
+          />
+          <ModuleScope path="/casos" modules={ready.modules} current={scope?.module.key ?? null} />
+        </>
+      )}
 
       {ready.supportVisit && (
         <Alert severity="info" className="neutral bg-background-paper/60!">
@@ -400,21 +477,19 @@ function CasesList({ ready }: { ready: Ready }) {
       {hasCases && (
         <>
           <Grid container spacing={2.5}>
-            {[...STANDING_TILES, ...EXCEPTION_TILES.filter((key) => list.counts[key] > 0 || filter === key)].map(
-              (key) => (
-                <Grid key={key} size={{ xs: 12, sm: 6, lg: 2 }}>
-                  <StatTile
-                    onClick={() => setFilter(filter === key ? null : key)}
-                    pressed={filter === key}
-                    icon={FILTER_TILE[key].icon}
-                    tone={FILTER_TILE[key].tone}
-                    label={t(FILTER_TILE[key].label)}
-                    hint={t(FILTER_TILE[key].hint)}
-                    value={list.counts[key]}
-                  />
-                </Grid>
-              ),
-            )}
+            {tiles.map((key) => (
+              <Grid key={key} size={{ xs: 12, sm: 6, lg: 2 }}>
+                <StatTile
+                  onClick={() => setFilter(filter === key ? null : key)}
+                  pressed={filter === key}
+                  icon={FILTER_TILE[key].icon}
+                  tone={FILTER_TILE[key].tone}
+                  label={t(FILTER_TILE[key].label)}
+                  hint={t(FILTER_TILE[key].hint)}
+                  value={list.counts[key]}
+                />
+              </Grid>
+            ))}
           </Grid>
 
           {failed && (
@@ -491,6 +566,7 @@ function CasesList({ ready }: { ready: Ready }) {
       {creating && (
         <NewCaseDialog
           airlines={ready.airlines}
+          module={scope?.module.key ?? null}
           prefill={ready.prefill}
           onClose={() => setCreating(false)}
           onCreated={(caseId) => router.push(`/casos/${caseId}`)}

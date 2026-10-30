@@ -8,6 +8,7 @@ import { COOKIE_KEYS, type LocaleOption } from "@/constants";
 import { resolveCurrency } from "@/lib/billing-currency";
 import { type Entitlements, type RpcEntitlements, toEntitlements } from "@/lib/entitlements";
 import type { FirmFunction, OrgRole } from "@/lib/firm/roles";
+import { type ModuleCatalogEntry, moduleCatalogOf } from "@/lib/modules/offer";
 import { type MemberPartner, memberPartnerOf, partnerModules } from "@/lib/partners/partner";
 import { isSupabaseConfigured } from "@flyee/auth";
 import { createClient } from "@flyee/auth/server";
@@ -54,6 +55,12 @@ export type MemberContext = {
    * partner, those of its active partnerships (0069); none otherwise.
    */
   modules: string[];
+  /**
+   * ONE's modules (`product_modules`, migrations 0075 and 0078): the ones out and the ones to come, in the
+   * catalog's order, with their names and icons. Read with the membership, for the menu every page draws; null when
+   * the read failed.
+   */
+  catalog: ModuleCatalogEntry[] | null;
   /** The partner the person works in (0069), or null. Somebody of a partner is in no firm. */
   partner: MemberPartner | null;
   isSuperadmin: boolean;
@@ -80,7 +87,7 @@ export const getMemberContext = cache(async (): Promise<MemberContext | null> =>
   } = await supabase.auth.getUser();
   if (!user) return null;
 
-  const [{ data: membership }, { data: profile }, cookieStore] = await Promise.all([
+  const [{ data: membership }, { data: profile }, catalog, cookieStore] = await Promise.all([
     // Filtered by the person: a member reads every membership of their firm.
     supabase
       .from("memberships")
@@ -88,6 +95,10 @@ export const getMemberContext = cache(async (): Promise<MemberContext | null> =>
       .eq("user_id", user.id)
       .maybeSingle(),
     supabase.from("profiles").select("display_name, timezone, is_superadmin").eq("id", user.id).maybeSingle(),
+    supabase
+      .from("product_modules")
+      .select("key, name, status, sold_as, description, sort, icon, retired_at")
+      .then(({ data, error }) => (error ? null : moduleCatalogOf(data))),
     cookies(),
   ]);
   const row = (membership as MembershipRow | null) ?? null;
@@ -108,6 +119,7 @@ export const getMemberContext = cache(async (): Promise<MemberContext | null> =>
     orgId: firm?.id ?? null,
     firm,
     modules: firm ? (organization?.firm_modules ?? []).map((row) => row.module_key) : partnerModules(partner),
+    catalog,
     partner,
     isSuperadmin: Boolean(profile?.is_superadmin),
     locale,

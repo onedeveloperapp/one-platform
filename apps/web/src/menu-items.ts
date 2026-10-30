@@ -1,11 +1,43 @@
+import type { IconName } from "@/icons/icon-registry";
+import type { MenuViewer } from "@/lib/firm/menu";
+import { GENERIC_MODULE_ICON, type ModuleMenuEntry } from "@/lib/modules/offer";
 import { MODULES } from "@/lib/modules/registry";
 import { MenuItem } from "@/types";
 
 /**
+ * The modules of ONE as the firm's menu lists them (0075, 0078): the overview of all of them, then each module in
+ * the catalog's order. One the firm contracted opens its area; one still to come says "Em breve", and one out that
+ * the firm did not contract carries a lock, both leading to where the overview says what each is.
+ */
+export function moduleMenuItems(entries: readonly ModuleMenuEntry[]): MenuItem[] {
+  return [
+    {
+      id: "modulos-todos",
+      icon: "NiPuzzle",
+      label: "menu-modulos-all",
+      href: "/modulos",
+      exact: true,
+    },
+    ...entries.map(
+      (entry): MenuItem => ({
+        id: `modulo-${entry.key}`,
+        // The catalog's name (a name the set does not have is drawn as the generic module icon, by the item).
+        icon: (entry.icon ?? GENERIC_MODULE_ICON) as IconName,
+        label: "menu-modulos",
+        text: entry.name,
+        href: entry.state === "contracted" ? `/modulos/${entry.key}` : `/modulos#${entry.key}`,
+        tag: entry.state === "contracted" ? undefined : entry.state,
+      }),
+    ),
+  ];
+}
+
+/**
  * Production navigation: only destinations that exist. The firm's area is
- * what needs somebody today, the cases, the conversations, the approval
- * queue, the filing queue, what the courts published, the deadlines and the
- * hearings, and the team is under Settings. The admin group holds the operator consoles.
+ * what needs somebody today, its modules (each with an area of its own),
+ * the cases, the conversations, the approval queue, the filing queue, what
+ * the courts published, the deadlines and the hearings, and the team is
+ * under Settings. The admin group holds the operator consoles.
  *
  * Each item says who it is for (`canAccess`, decided in `lib/firm/menu.ts`):
  * one that says nothing is for anybody of a firm, so the platform operator,
@@ -19,6 +51,16 @@ export const leftMenuItems: MenuItem[] = [
     description: "menu-inicio-description",
     color: "text-primary",
     href: "/inicio",
+  },
+  // The firm's modules, each opening its own area: read for the viewer, so a module still to come shows as such.
+  {
+    id: "modulos",
+    icon: "NiPuzzle",
+    label: "menu-modulos",
+    description: "menu-modulos-description",
+    color: "text-primary",
+    href: "/modulos",
+    childrenFor: (viewer: MenuViewer | null) => moduleMenuItems(viewer?.moduleMenu ?? []),
   },
   {
     id: "casos",

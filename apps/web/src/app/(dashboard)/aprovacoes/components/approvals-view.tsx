@@ -12,11 +12,13 @@ import { useEffect, useRef, useState } from "react";
 import { Alert, Box, Button, Card, CardContent, Typography } from "@mui/material";
 
 import EmptyState from "@/components/product/empty-state";
+import ModuleScope from "@/components/product/module-scope";
 import PageHeader from "@/components/product/page-header";
 import StatusChip, { type StatusTone } from "@/components/product/status-chip";
 import NiListCheck from "@/icons/nexture/ni-list-check";
 import NiUsers from "@/icons/nexture/ni-users";
 import { type ApprovalsState, type DecidedApproval, mayDecide } from "@/lib/ai/approvals";
+import { scopeCrumbs } from "@/lib/modules/offer";
 
 /** The words said once a decision is recorded (`product` namespace). */
 const DONE_KEY: Record<DecisionKind, string> = {
@@ -74,9 +76,12 @@ export default function ApprovalsView({ state }: { state: ApprovalsState }) {
     <Box className="flex flex-col gap-6">
       <PageHeader
         title={t("approvals-title")}
-        crumbs={[{ label: t("approvals-home"), href: "/inicio" }, { label: t("approvals-title") }]}
+        crumbs={scopeCrumbs(t("approvals-home"), t("approvals-title"), ready?.scope.current ?? null)}
         description={ready ? t("approvals-description", { firm: ready.firm.name }) : undefined}
       />
+      {ready ? (
+        <ModuleScope path="/aprovacoes" modules={ready.scope.modules} current={ready.scope.current?.key ?? null} />
+      ) : null}
 
       {state.kind === "unavailable" ? (
         <Alert severity="info" className="neutral bg-background-paper/60!">

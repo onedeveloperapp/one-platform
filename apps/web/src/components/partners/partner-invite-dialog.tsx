@@ -2,7 +2,7 @@
 
 import { useFormik } from "formik";
 import { useTranslations } from "next-intl";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import * as yup from "yup";
 
 import {
@@ -23,16 +23,20 @@ import {
 } from "@mui/material";
 
 import DialogHeader from "@/components/product/dialog-header";
+import { useEmailReady } from "@/components/product/use-email-ready";
 import { inviteAgency, invitePartnerColleague, type PartnerInviteResult } from "@/lib/partners/actions";
 import { partnerErrorKey } from "@/lib/partners/partner";
 
-type Sent = { email: string; link: string | null };
+/** What came of an invitation: by e-mail, or as a link the inviter sends (chosen, or because the e-mail could not leave). */
+type Sent = { email: string; link: string | null; chosen: boolean };
 
 /**
  * An invitation to a partner of a firm (migration 0069), in the two ways one is sent: a firm inviting a travel
  * agency, by its name and the e-mail of its first person (`mode: "agency"`), or who manages the agency inviting a
- * colleague (`mode: "colleague"`, the owner choosing whether the colleague also manages it). The link goes by
- * e-mail; when the e-mail cannot leave, it is shown here to be sent by hand, and the invitation exists either way.
+ * colleague (`mode: "colleague"`, the owner choosing whether the colleague also manages it). The first screen offers
+ * both ways at once (2026-10-30): copy the link, to send it by the inviter's own channel, or send it by e-mail,
+ * offered only where ONE can send one. When the e-mail could not leave, the link is shown to be sent by hand, and the
+ * invitation exists either way.
  * Kept beside the closest shape of the app, the invitation to a firm's team (`settings/team/invite-dialog.tsx`).
  */
 export default function PartnerInviteDialog({
@@ -56,6 +60,9 @@ export default function PartnerInviteDialog({
   const [errorCode, setErrorCode] = useState<string | null>(null);
   const [sent, setSent] = useState<Sent | null>(null);
   const [copied, setCopied] = useState(false);
+  const emailOk = useEmailReady();
+  // How the invitation goes: the button pressed says it; Enter in the form sends it the way the first button would.
+  const deliver = useRef<"email" | "link">("email");
 
   const formik = useFormik({
     initialValues: { name: "", email: "", admin: "member" as "admin" | "member" },
@@ -75,12 +82,14 @@ export default function PartnerInviteDialog({
       setErrorCode(null);
       let result: PartnerInviteResult;
       try {
+        const way = emailOk ? deliver.current : "link";
         result =
           mode === "agency"
-            ? await inviteAgency({ module: module ?? "", partnerName: values.name, email: values.email })
+            ? await inviteAgency({ module: module ?? "", partnerName: values.name, email: values.email, deliver: way })
             : await invitePartnerColleague({
                 email: values.email,
                 role: mayInviteAdmin && values.admin === "admin" ? "admin" : "member",
+                deliver: way,
               });
       } catch {
         result = { ok: false, code: "failed" };
@@ -89,19 +98,26 @@ export default function PartnerInviteDialog({
         setErrorCode(result.code);
         return;
       }
-      setSent({ email: values.email.trim().toLowerCase(), link: result.link });
+      const chosen = !emailOk || deliver.current === "link";
+      setSent({ email: values.email.trim().toLowerCase(), link: result.link, chosen });
+      // The link asked for is copied at once: the next thing the inviter does is paste it.
+      if (chosen && result.link) await copy(result.link);
       onInvited();
     },
   });
 
-  const copy = async () => {
-    if (!sent?.link) return;
+  const copy = async (link: string | null | undefined = sent?.link) => {
+    if (!link) return;
     try {
-      await navigator.clipboard.writeText(sent.link);
+      await navigator.clipboard.writeText(link);
       setCopied(true);
     } catch {
       setCopied(false);
     }
+  };
+  const send = (way: "email" | "link") => {
+    deliver.current = way;
+    void formik.submitForm();
   };
 
   const busy = formik.isSubmitting;
@@ -116,10 +132,17 @@ export default function PartnerInviteDialog({
         <>
           <DialogContent>
             <Box className="flex flex-col gap-4">
-              <Alert severity={sent.link ? "warning" : "success"} className="neutral bg-background-paper/60!">
-                {sent.link
-                  ? t("partners-invite-not-emailed", { email: sent.email })
-                  : t("partners-invite-sent", { email: sent.email })}
+              <Alert
+                severity={sent.link && !sent.chosen ? "warning" : "success"}
+                className="neutral bg-background-paper/60!"
+              >
+                {sent.chosen
+                  ? t(copied ? "partners-invite-link-ready-copied" : "partners-invite-link-ready", {
+                      email: sent.email,
+                    })
+                  : sent.link
+                    ? t("partners-invite-not-emailed", { email: sent.email })
+                    : t("partners-invite-sent", { email: sent.email })}
               </Alert>
               {sent.link && (
                 <FormControl className="outlined" variant="standard">
@@ -140,7 +163,7 @@ export default function PartnerInviteDialog({
           <DialogActions>
             {sent.link && (
               <Button variant="outlined" color="grey" onClick={() => void copy()}>
-                {t("partners-invite-copy")}
+                {t(copied ? "partners-invite-copy-again" : "partners-invite-copy")}
               </Button>
             )}
             <Button variant="contained" onClick={onClose}>
@@ -223,6 +246,11 @@ export default function PartnerInviteDialog({
                   </RadioGroup>
                 </FormControl>
               )}
+              {emailOk === false && (
+                <Typography variant="body2" className="text-text-secondary">
+                  {t("partners-invite-email-off")}
+                </Typography>
+              )}
               {errorCode && (
                 <Alert severity="error" className="neutral bg-background-paper/60!">
                   {t(partnerErrorKey(errorCode))}
@@ -230,13 +258,34 @@ export default function PartnerInviteDialog({
               )}
             </Box>
           </DialogContent>
-          <DialogActions>
-            <Button variant="outlined" color="grey" onClick={onClose} disabled={busy}>
+          <DialogActions className="flex-wrap gap-2">
+            <Button variant="text" color="grey" onClick={onClose} disabled={busy}>
               {t("partners-cancel")}
             </Button>
-            <Button type="submit" variant="contained" disabled={busy}>
-              {busy ? t("partners-sending") : t("partners-invite-submit")}
+            <Button
+              type={emailOk ? "button" : "submit"}
+              variant={emailOk ? "outlined" : "contained"}
+              color={emailOk ? "grey" : "primary"}
+              onClick={() => {
+                if (emailOk) send("link");
+                else deliver.current = "link";
+              }}
+              disabled={busy}
+            >
+              {busy && deliver.current === "link" ? t("partners-sending") : t("partners-invite-copy-link")}
             </Button>
+            {emailOk ? (
+              <Button
+                type="submit"
+                variant="contained"
+                onClick={() => {
+                  deliver.current = "email";
+                }}
+                disabled={busy}
+              >
+                {busy && deliver.current === "email" ? t("partners-sending") : t("partners-invite-email-send")}
+              </Button>
+            ) : null}
           </DialogActions>
         </Box>
       )}

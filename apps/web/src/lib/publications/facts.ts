@@ -402,16 +402,27 @@ function leftOutItems(kept: unknown): LeftOutItem[] {
   });
 }
 
-/** A page of one of the three lists, with the counts of each and how the firm's reading is doing. */
+/**
+ * A page of one of the three lists, with the counts of each and how the firm's reading is doing. Under a module
+ * (0078), the lists and their counts are of the publications of that module's cases: one of a lawsuit the firm has
+ * no case of is read with every module only.
+ */
 export async function loadPublications(
   supabase: SupabaseClient,
   firmId: string,
   view: PublicationView,
   page: number,
   timeZone: string | null | undefined,
+  module: string | null = null,
 ): Promise<PublicationsData> {
   const from = Math.max(Math.floor(page), 0) * PUBLICATIONS_SHOWN;
-  const list = supabase.from("publications").select(COLUMNS).eq("org_id", firmId);
+  const list = module
+    ? supabase
+        .from("publications")
+        .select(`${COLUMNS}, cases!inner(module)`)
+        .eq("org_id", firmId)
+        .eq("cases.module", module)
+    : supabase.from("publications").select(COLUMNS).eq("org_id", firmId);
   const shown =
     view === "por-triar"
       ? // The oldest first: its time has been running the longest.
@@ -426,7 +437,14 @@ export async function loadPublications(
               .eq("active", false)
               .order("cancel_pending", { ascending: false })
               .order("cancelled_at", { ascending: false });
-  const count = () => supabase.from("publications").select("id", { count: "exact", head: true }).eq("org_id", firmId);
+  const count = () =>
+    module
+      ? supabase
+          .from("publications")
+          .select("id, cases!inner(module)", { count: "exact", head: true })
+          .eq("org_id", firmId)
+          .eq("cases.module", module)
+      : supabase.from("publications").select("id", { count: "exact", head: true }).eq("org_id", firmId);
 
   const [rows, untriaged, review, triaged, cancelled, captures, registrations, team, settings, policies, firm] =
     await Promise.all([

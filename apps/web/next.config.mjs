@@ -55,6 +55,14 @@ const nextConfig = {
     formats: ["image/webp", "image/avif"],
     qualities: [90],
   },
+  // Pages of the logged area that moved keep their old address, answered before any page renders (a page's own
+  // redirect inside the shell is the client router's, which broke the screen in the production build).
+  async redirects() {
+    return [
+      // ONE's modules left the settings for the main menu on 2026-10-30.
+      { source: "/settings/modulos", destination: "/modulos", permanent: false },
+    ];
+  },
 };
 
 export default withNextIntl(nextConfig);

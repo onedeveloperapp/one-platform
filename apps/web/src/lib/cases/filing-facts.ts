@@ -342,16 +342,18 @@ export async function loadFilingQueue(
   supabase: SupabaseClient,
   firmId: string,
   timeZone: string | null | undefined,
+  module: string | null = null,
 ): Promise<{ rows: QueuedFiling[]; truncated: boolean; cloudSigning: boolean }> {
-  const { data, error } = await supabase
+  // Every package is of a case; under a module (0078), only the packages of that module's cases.
+  let query = supabase
     .from("filing_packages")
     .select(
-      "id, case_id, proceeding_id, court, system, status, requested_at, signature_status, filing_package_items(id), proceedings(kind, comarca), cases(seq, case_parties(role, guardian_id, people(full_name)))",
+      "id, case_id, proceeding_id, court, system, status, requested_at, signature_status, filing_package_items(id), proceedings(kind, comarca), cases!inner(seq, module, case_parties(role, guardian_id, people(full_name)))",
     )
     .eq("org_id", firmId)
-    .in("status", ["requested", "ready", "failed"])
-    .order("requested_at", { ascending: true })
-    .limit(QUEUE_SHOWN + 1);
+    .in("status", ["requested", "ready", "failed"]);
+  if (module) query = query.eq("cases.module", module);
+  const { data, error } = await query.order("requested_at", { ascending: true }).limit(QUEUE_SHOWN + 1);
   if (error) throw new Error("the filing queue could not be read");
   const raw = (data ?? []) as QueueRow[];
   const blockers = await blockersOf(

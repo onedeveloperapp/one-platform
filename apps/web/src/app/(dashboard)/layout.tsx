@@ -7,6 +7,7 @@ import { resolveGate } from "@/lib/firm/gate";
 import { FIRM_SETUP_PATH } from "@/lib/firm/gate-rules";
 import type { MenuViewer } from "@/lib/firm/menu";
 import { getMemberContext } from "@/lib/member/context";
+import { moduleMenuOf } from "@/lib/modules/offer";
 
 /**
  * The logged area. Before drawing anything it decides whether this person may
@@ -37,6 +38,8 @@ export default async function DashboardLayout({
         role: context.firm?.role ?? null,
         firmFunction: context.firm?.firmFunction ?? null,
         modules: context.modules,
+        // The firm's menu lists ONE's modules with where each stands for the firm; nobody else's lists them.
+        moduleMenu: context.firm ? moduleMenuOf(context.catalog, context.modules) : [],
         partner: context.partner !== null,
         isSuperadmin: context.isSuperadmin,
         owesSecondFactor,

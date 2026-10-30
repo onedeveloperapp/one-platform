@@ -1,6 +1,7 @@
 import { DOCUMENT_KIND_KEY, type DocumentKind } from "@/lib/cases/cases";
 import type { WaitingReply } from "@/lib/conversations/reply";
 import type { FirmFunction, OrgRole } from "@/lib/firm/roles";
+import type { PageScope } from "@/lib/modules/offer";
 
 /**
  * The firm's conversations as the screens read them (migration 0019): types
@@ -161,6 +162,8 @@ export type InboxData = {
   supportVisit: boolean;
   /** The simulated number of the firm, when the simulator is on: the screen can start a conversation on it. */
   simulatorNumberId: string | null;
+  /** The modules of the firm, and the one the inbox is under (0078): its conversations, by its cases' clients. */
+  scope: PageScope;
 };
 
 /**

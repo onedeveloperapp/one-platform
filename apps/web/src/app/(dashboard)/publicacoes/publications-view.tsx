@@ -24,6 +24,7 @@ import HearingDialog from "@/components/hearings/hearing-dialog";
 import DialogHeader from "@/components/product/dialog-header";
 import EmptyState from "@/components/product/empty-state";
 import { StatTile } from "@/components/product/home-tiles";
+import ModuleScope from "@/components/product/module-scope";
 import PageHeader from "@/components/product/page-header";
 import StatusChip, { type StatusTone } from "@/components/product/status-chip";
 import type { TileTone } from "@/components/product/tile-tone";
@@ -43,6 +44,7 @@ import {
   STATUS_KEY as HEARING_STATUS_KEY,
   ZONE_KEY,
 } from "@/lib/hearings/hearings";
+import { type PageScope, scopeCrumbs } from "@/lib/modules/offer";
 import {
   acknowledgePublicationCancel,
   readPublication,
@@ -97,7 +99,7 @@ export type PublicationsState =
       mayTriage: boolean;
       /** This environment reads the DJEN. */
       captureOn: boolean;
-      /** The person decides whether the AI's word may be the firm's triage: a partner. */
+      /** The person decides whether the AI's word may be the firm's triage: a partner, or, with none, who manages it. */
       mayDecideAi: boolean;
       /** The acts a term is usually set for, for a deadline counted from a publication. */
       acts: DeadlineAct[];
@@ -105,6 +107,8 @@ export type PublicationsState =
       colleagues: Colleague[];
       /** The zones of each court, for the zone a hearing written from a publication is said in. */
       courtZones: Record<string, CourtZones>;
+      /** The modules of the firm, and the one the page is under (0078). */
+      scope: PageScope;
     }
   | { kind: "no-firm" }
   | { kind: "unavailable" }
@@ -215,6 +219,8 @@ function PublicationsScreen({ state, onReadAgain }: { state: PublicationsState; 
   const [searchError, setSearchError] = useState<string | null>(null);
   const ready = state.kind === "ready" ? state : null;
   const data = ready?.data ?? null;
+  // Under a module (0078), every list and page of the screen stays under it.
+  const module = ready?.scope.current?.key ?? null;
   /** The list as the server read it last. */
   const fresh = useMemo(
     () => holdList(data?.rows ?? [], data?.counts ?? { untriaged: 0, review: 0, triaged: 0, cancelled: 0 }),
@@ -360,10 +366,18 @@ function PublicationsScreen({ state, onReadAgain }: { state: PublicationsState; 
     <Box className="flex flex-col gap-6">
       <PageHeader
         title={t("publications-title")}
-        crumbs={[{ label: t("approvals-home"), href: "/inicio" }, { label: t("publications-title") }]}
+        crumbs={scopeCrumbs(t("approvals-home"), t("publications-title"), ready?.scope.current ?? null)}
         description={ready ? t("publications-description") : undefined}
         action={total > 0 ? readNow : undefined}
       />
+      {ready ? (
+        <ModuleScope
+          path="/publicacoes"
+          modules={ready.scope.modules}
+          current={module}
+          keep={{ ver: ready.view === "por-triar" ? null : ready.view }}
+        />
+      ) : null}
 
       {state.kind === "unavailable" ? (
         <Alert severity="info" className="neutral bg-background-paper/60!">
@@ -506,7 +520,7 @@ function PublicationsScreen({ state, onReadAgain }: { state: PublicationsState; 
                       const searching = Boolean(found);
                       clearSearch();
                       // The list already on the screen, asked for again, is read again from its start.
-                      if (view !== ready.view || data.page > 0) router.push(publicationsAddress(view, 0));
+                      if (view !== ready.view || data.page > 0) router.push(publicationsAddress(view, 0, module));
                       else if (!searching) onReadAgain();
                     }}
                     pressed={!found && ready.view === view}
@@ -593,9 +607,9 @@ function PublicationsScreen({ state, onReadAgain }: { state: PublicationsState; 
               action={
                 ready.view === "por-triar"
                   ? data.counts.triaged > 0
-                    ? { label: t("publications-empty-see-triaged"), href: publicationsAddress("triadas", 0) }
+                    ? { label: t("publications-empty-see-triaged"), href: publicationsAddress("triadas", 0, module) }
                     : undefined
-                  : { label: t("publications-empty-see-untriaged"), href: publicationsAddress("por-triar", 0) }
+                  : { label: t("publications-empty-see-untriaged"), href: publicationsAddress("por-triar", 0, module) }
               }
             />
           ) : null}
@@ -643,7 +657,7 @@ function PublicationsScreen({ state, onReadAgain }: { state: PublicationsState; 
                     <Button
                       variant="outlined"
                       color="grey"
-                      href={publicationsAddress(ready.view, data.page - 1)}
+                      href={publicationsAddress(ready.view, data.page - 1, module)}
                       LinkComponent={Link}
                     >
                       {t("publications-page-previous")}
@@ -653,7 +667,7 @@ function PublicationsScreen({ state, onReadAgain }: { state: PublicationsState; 
                     <Button
                       variant="outlined"
                       color="grey"
-                      href={publicationsAddress(ready.view, data.page + 1)}
+                      href={publicationsAddress(ready.view, data.page + 1, module)}
                       LinkComponent={Link}
                     >
                       {t("publications-page-next")}

@@ -23,13 +23,15 @@ async function loadAutonomy(): Promise<AutonomyState> {
   if (!context) return { kind: "unavailable" };
   if (!context.firm) return { kind: "no-firm" };
   const firm = context.firm;
-  const [autonomy, team, signers, defaults, assurance, cookieStore] = await Promise.all([
+  const [autonomy, team, signers, defaults, assurance, cookieStore, decides] = await Promise.all([
     context.supabase.rpc("firm_autonomy", { target_org: firm.id }),
     context.supabase.rpc("firm_team", { target_org: firm.id }),
     context.supabase.from("firm_signers").select("user_id").eq("org_id", firm.id),
     context.supabase.from("firm_claim_defaults").select("incident, cents").eq("org_id", firm.id),
     context.supabase.auth.mfa.getAuthenticatorAssuranceLevel(),
     cookies(),
+    // Who decides for the firm what a partner decides (0078): a partner, or, with no partner, who manages it.
+    context.supabase.rpc("decides_for_firm", { target_org: firm.id }),
   ]);
   const decisions = autonomy.error ? null : firmAutonomyOf(autonomy.data);
   if (!decisions) return { kind: "error" };
@@ -50,7 +52,7 @@ async function loadAutonomy(): Promise<AutonomyState> {
     assurance.data?.currentLevel === "aal2" ? "ok" : assurance.data?.nextLevel === "aal2" ? "challenge" : "missing";
   return {
     kind: "ready",
-    partner: firm.firmFunction === "socio",
+    partner: !decides.error && decides.data === true,
     secondFactor,
     supportVisit: cookieStore.has(IMPERSONATION_MARKER_COOKIE),
     signers:

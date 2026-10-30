@@ -59,10 +59,12 @@ export const VIEW_COUNT: Record<PublicationView, "untriaged" | "review" | "triag
 export const PUBLICATIONS_SHOWN = 40;
 
 /** The address of a page of one of the lists. The list of what is to triage, at its first page, is the screen itself. */
-export function publicationsAddress(view: PublicationView, page: number): string {
+export function publicationsAddress(view: PublicationView, page: number, module: string | null = null): string {
   const query = new URLSearchParams();
   if (view !== "por-triar") query.set("ver", view);
   if (page > 0) query.set("pagina", String(page + 1));
+  // Under a module (0078), every list and page of it stays under the module.
+  if (module) query.set("modulo", module);
   const text = query.toString();
   return text ? `/publicacoes?${text}` : "/publicacoes";
 }

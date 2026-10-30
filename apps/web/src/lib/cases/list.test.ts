@@ -31,16 +31,20 @@ describe("what the list asks of the database", () => {
     expect(caseListQuery({ filter: "filed", search: "  maria  ", page: 3, pageSize: 50 })).toEqual({
       filter: "filed",
       search: "maria",
+      module: null,
       page: 3,
       pageSize: 50,
     });
-    const nothing = { filter: null, search: "", page: 0, pageSize: DEFAULT_PAGE_SIZE };
+    const nothing = { filter: null, search: "", module: null, page: 0, pageSize: DEFAULT_PAGE_SIZE };
     for (const input of [null, undefined, "x", 7, [], {}, { filter: "tudo", search: 9, page: -1, pageSize: 7 }]) {
       expect(caseListQuery(input), JSON.stringify(input)).toEqual(nothing);
     }
     expect(caseListQuery({ page: 1.5, pageSize: 5000 })).toEqual(nothing);
     expect(caseListQuery({ search: "a".repeat(500) }).search).toHaveLength(MOST_SEARCH);
     expect(caseListQuery({ page: 10 ** 9 }).page).toBe(100_000);
+    // A module's area asks its own cases; what is not a module's key asks every module's.
+    expect(caseListQuery({ module: "direito-do-passageiro" }).module).toBe("direito-do-passageiro");
+    for (const module of ["../x", "X", 7, "", "a"]) expect(caseListQuery({ module }).module).toBeNull();
   });
 
   it("names the filters, the stages of each and the sizes of a page as the database has them", () => {
@@ -79,6 +83,7 @@ describe("the database's answer, as the list reads it", () => {
     id: "d0300000-0000-4000-8000-000000000001",
     seq: 12,
     client: "Maria Teste",
+    module: "direito-do-passageiro",
     incident: "delay",
     airline_iata: "G3",
     flight_date: "2026-07-20",
@@ -100,6 +105,7 @@ describe("the database's answer, as the list reads it", () => {
         id: row.id,
         seq: 12,
         client: "Maria Teste",
+        module: "direito-do-passageiro",
         incident: "delay",
         airline: "G3",
         flightDate: "2026-07-20",
@@ -135,6 +141,18 @@ describe("the database's answer, as the list reads it", () => {
     });
   });
 
+  it("keeps a case of a module with no kinds of problem, said by its module", () => {
+    const page = caseListOf({
+      rows: [{ ...row, id: "y", module: "modulo-de-teste", incident: null, airline_iata: null }],
+      total: 1,
+      counts,
+    });
+    expect(page?.rows[0]).toMatchObject({ id: "y", module: "modulo-de-teste", incident: null });
+    expect(
+      caseListOf({ rows: [{ ...row, incident: "something else" }], total: 1, counts })?.rows[0]?.incident,
+    ).toBeNull();
+  });
+
   it("names the agency a case came from", () => {
     const page = caseListOf({ rows: [{ ...row, agency: "Viagens Teste" }], total: 1, counts });
     expect(page?.rows[0]?.agency).toBe("Viagens Teste");
@@ -142,14 +160,7 @@ describe("the database's answer, as the list reads it", () => {
 
   it("leaves out a case it cannot read, and is nothing when the answer is no list", () => {
     const page = caseListOf({
-      rows: [
-        row,
-        { ...row, id: "x", status: "a stage of tomorrow" },
-        { ...row, id: "y", incident: "something else" },
-        { ...row, id: 7 },
-        null,
-        "a row",
-      ],
+      rows: [row, { ...row, id: "x", status: "a stage of tomorrow" }, { ...row, id: 7 }, null, "a row"],
       total: 6,
       counts,
     });

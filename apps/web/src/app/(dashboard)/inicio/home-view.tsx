@@ -8,12 +8,11 @@ import { Alert, Box, Button, Grid, Typography } from "@mui/material";
 
 import AttentionList, { type AttentionGroup } from "@/components/product/attention-list";
 import EmptyState from "@/components/product/empty-state";
-import { QuickActionTile, StatTile } from "@/components/product/home-tiles";
-import ModulesStrip from "@/components/product/modules-strip";
+import { StatTile } from "@/components/product/home-tiles";
+import ModulesQuickAccess from "@/components/product/modules-quick-access";
 import OnboardingChecklistCard from "@/components/product/onboarding-checklist-card";
 import PageHeader from "@/components/product/page-header";
 import type { TileTone } from "@/components/product/tile-tone";
-import NiBuilding from "@/icons/nexture/ni-building";
 import NiCalendar from "@/icons/nexture/ni-calendar";
 import NiCalendarClock from "@/icons/nexture/ni-calendar-clock";
 import NiClock from "@/icons/nexture/ni-clock";
@@ -21,7 +20,6 @@ import NiDocumentCross from "@/icons/nexture/ni-document-cross";
 import NiDocumentFull from "@/icons/nexture/ni-document-full";
 import NiExclamationSquare from "@/icons/nexture/ni-exclamation-square";
 import NiFlag from "@/icons/nexture/ni-flag";
-import NiFolder from "@/icons/nexture/ni-folder";
 import NiFolderCheck from "@/icons/nexture/ni-folder-check";
 import NiInbox from "@/icons/nexture/ni-inbox";
 import NiListCheck from "@/icons/nexture/ni-list-check";
@@ -29,7 +27,6 @@ import NiMessageCross from "@/icons/nexture/ni-message-cross";
 import NiMessages from "@/icons/nexture/ni-messages";
 import NiMicrophone from "@/icons/nexture/ni-microphone";
 import NiPaperclip from "@/icons/nexture/ni-paperclip";
-import NiPuzzle from "@/icons/nexture/ni-puzzle";
 import NiRefresh from "@/icons/nexture/ni-refresh";
 import NiScale from "@/icons/nexture/ni-scale";
 import NiShieldCheck from "@/icons/nexture/ni-shield-check";
@@ -37,10 +34,8 @@ import NiTimeline from "@/icons/nexture/ni-timeline";
 import NiUsers from "@/icons/nexture/ni-users";
 import { type PendingGroup, sayPending } from "@/lib/firm/pending";
 import { type FirmToday, somethingForMe, type TodayNeed, todayNeeds } from "@/lib/firm/today";
-import type { ContractedModule, ModuleOffer } from "@/lib/modules/offer";
-import { moduleOf } from "@/lib/modules/registry";
+import type { ModuleOffer } from "@/lib/modules/offer";
 import type { ActivationFacts } from "@/lib/onboarding";
-import type { FirmPartnersState } from "@/lib/partners/facts";
 import type { FlowKey, OnboardingStateRow } from "@flyee/onboarding";
 
 /**
@@ -66,12 +61,8 @@ export type HomeState =
       confirmsDeadlines: boolean;
       /** The firm's setup, for who manages it. Null for everybody else, and when it could not be read. */
       setup: { flowKey: FlowKey; state: OnboardingStateRow; facts: ActivationFacts } | null;
-      /** The modules the firm contracted and the ones to come (0075); null when they could not be read. */
+      /** ONE's modules for the firm (0075, 0078); null when they could not be read. */
       modules: ModuleOffer | null;
-      /** The firm's partnerships with what it has of each (0069, 0075); null when they could not be read. */
-      partners: Extract<FirmPartnersState, { kind: "ready" }> | null;
-      /** The test chat's page, to who manages the firm while it is on; null otherwise. */
-      testChat: string | null;
     }
   | { kind: "no-firm" }
   | { kind: "unavailable" }
@@ -273,7 +264,6 @@ export default function HomeView({ state }: { state: HomeState }) {
     };
   });
   const attentionTotal = (ready?.attention ?? []).reduce((sum, group) => sum + group.total, 0);
-  const moduleSections = ready ? moduleShortcuts(ready, t) : [];
   const needs = ready
     ? todayNeeds(ready.today, {
         triagesPublications: ready.triagesPublications,
@@ -290,7 +280,7 @@ export default function HomeView({ state }: { state: HomeState }) {
         crumbs={[{ label: t("today-title") }]}
         description={ready ? t("today-description", { firm: ready.firm.name }) : undefined}
       />
-      {ready?.modules ? <ModulesStrip offer={ready.modules} /> : null}
+      {ready?.modules ? <ModulesQuickAccess offer={ready.modules} /> : null}
 
       {state.kind === "unavailable" ? (
         <Alert severity="info" className="neutral bg-background-paper/60!">
@@ -416,119 +406,8 @@ export default function HomeView({ state }: { state: HomeState }) {
               )
             ) : null}
           </Box>
-
-          {moduleSections.map((section) => (
-            <Box
-              key={section.module.key}
-              component="section"
-              aria-labelledby={`today-module-${section.module.key}`}
-              className="flex flex-col gap-4"
-            >
-              <Box className="flex flex-col gap-1">
-                <Typography id={`today-module-${section.module.key}`} variant="h5" component="h2" className="mb-0">
-                  {section.module.name}
-                </Typography>
-                <Typography variant="body2" className="text-text-secondary">
-                  {t("today-module-hint")}
-                </Typography>
-              </Box>
-              <Grid container spacing={2.5}>
-                {section.tiles.map((tile) => (
-                  <Grid key={tile.key} size={{ xs: 12, sm: 6, lg: 3 }}>
-                    <QuickActionTile
-                      href={tile.href}
-                      icon={tile.icon}
-                      tone={tile.tone}
-                      title={tile.title}
-                      description={tile.description}
-                    />
-                  </Grid>
-                ))}
-              </Grid>
-            </Box>
-          ))}
         </>
       ) : null}
     </Box>
   );
-}
-
-type Ready = Extract<HomeState, { kind: "ready" }>;
-type Shortcut = {
-  key: string;
-  href: string;
-  icon: React.ReactNode;
-  tone: TileTone;
-  title: string;
-  description: string;
-};
-type Words = (key: string, values?: Record<string, string | number>) => string;
-
-/**
- * The quick ways into each module the firm contracted: for a module with a partner (the passenger module's travel
- * agency), the partner agencies and the cases that came from them, with what the firm has of them; and, once, the
- * test chat while it is on and the firm's modules. A module with nothing to go to has no section.
- */
-function moduleShortcuts(ready: Ready, t: Words): { module: ContractedModule; tiles: Shortcut[] }[] {
-  return (ready.modules?.contracted ?? []).flatMap((module, index) => {
-    const tiles: Shortcut[] = [];
-    if ((moduleOf(module.key)?.partnerArea.length ?? 0) > 0) {
-      const links = (ready.partners?.partnerships ?? []).filter((link) => link.module === module.key);
-      const active = links.filter((link) => link.status === "active").length;
-      const invited = (ready.partners?.invitations ?? []).some((invitation) => invitation.module === module.key);
-      const going = links.reduce((sum, link) => sum + (link.facts?.casesGoing ?? 0), 0);
-      const total = links.reduce((sum, link) => sum + (link.facts?.casesTotal ?? 0), 0);
-      const awaiting = links.reduce((sum, link) => sum + (link.facts?.awaitingClient ?? 0), 0);
-      tiles.push({
-        key: "partners",
-        href: "/settings/parceiros",
-        icon: <NiBuilding size="large" />,
-        tone: "primary",
-        title: t("today-module-partners"),
-        description: !ready.partners
-          ? t("today-module-partners-unread")
-          : active > 0
-            ? t("today-module-partners-active", { count: active })
-            : invited
-              ? t("today-module-partners-invited")
-              : ready.manager
-                ? t("today-module-partners-invite")
-                : t("today-module-partners-none"),
-      });
-      if (total > 0) {
-        tiles.push({
-          key: "agency-cases",
-          href: "/casos?ver=agencia",
-          icon: <NiFolder size="large" />,
-          tone: "secondary",
-          title: t("today-module-agency-cases"),
-          description:
-            awaiting > 0
-              ? t("today-module-agency-cases-awaiting", { count: awaiting })
-              : t("today-module-agency-cases-going", { count: going }),
-        });
-      }
-    }
-    if (index === 0) {
-      if (ready.testChat) {
-        tiles.push({
-          key: "test-chat",
-          href: ready.testChat,
-          icon: <NiMessages size="large" />,
-          tone: "accent-1",
-          title: t("today-module-test-chat"),
-          description: t("today-module-test-chat-hint"),
-        });
-      }
-      tiles.push({
-        key: "modules",
-        href: "/settings/modulos",
-        icon: <NiPuzzle size="large" />,
-        tone: "accent-2",
-        title: t("today-module-modules"),
-        description: t("today-module-modules-hint"),
-      });
-    }
-    return tiles.length > 0 ? [{ module, tiles }] : [];
-  });
 }

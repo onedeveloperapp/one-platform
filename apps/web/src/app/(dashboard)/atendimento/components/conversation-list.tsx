@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl";
 import { Box, Card, CardContent, List, ListItem, ListItemButton, Typography } from "@mui/material";
 
 import StatusChip from "@/components/product/status-chip";
+import { scopedHref } from "@/lib/modules/offer";
 import type { ConversationSummary } from "@/lib/whatsapp/conversations";
 
 /**
@@ -16,9 +17,12 @@ import type { ConversationSummary } from "@/lib/whatsapp/conversations";
 export default function ConversationList({
   conversations,
   selectedId,
+  module = null,
 }: {
   conversations: ConversationSummary[];
   selectedId: string | null;
+  /** The module the inbox is under (0078): a conversation opened from it stays under it. */
+  module?: string | null;
 }) {
   const t = useTranslations("product");
 
@@ -37,7 +41,7 @@ export default function ConversationList({
             return (
               <ListItem key={conversation.id} disablePadding>
                 <ListItemButton
-                  href={`/atendimento?c=${conversation.id}`}
+                  href={scopedHref("/atendimento", module, { c: conversation.id })}
                   LinkComponent={Link}
                   selected={conversation.id === selectedId}
                   aria-current={conversation.id === selectedId ? "true" : undefined}

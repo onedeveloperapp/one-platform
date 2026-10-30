@@ -93,6 +93,8 @@ export async function inviteAgency(input: {
   module: string;
   partnerName: string;
   email: string;
+  /** The link comes back to be sent by hand, with no e-mail (the inviter's choice). */
+  deliver?: "email" | "link";
 }): Promise<PartnerInviteResult> {
   const context = await getMemberContext();
   if (!context?.firm) return { ok: false, code: "not_authorized" };
@@ -109,6 +111,10 @@ export async function inviteAgency(input: {
   if (!result.ok) return result;
 
   const link = memberUrl(`/parceria/${token}`);
+  if (input.deliver === "link") {
+    refresh();
+    return { ok: true, code: result.code, emailed: false, link };
+  }
   const expiresAt = typeof result.data.expires_at === "string" ? result.data.expires_at : null;
   const sent = await sendPartnerInvitationEmail(
     email,
@@ -183,6 +189,8 @@ export async function acceptPartnerInvitation(invitationId: string): Promise<Par
 export async function invitePartnerColleague(input: {
   email: string;
   role: "admin" | "member";
+  /** The link comes back to be sent by hand, with no e-mail (the inviter's choice). */
+  deliver?: "email" | "link";
 }): Promise<PartnerInviteResult> {
   const context = await getMemberContext();
   if (!context?.partner || !isPartnerManager(context.partner.role)) return { ok: false, code: "not_authorized" };
@@ -199,6 +207,10 @@ export async function invitePartnerColleague(input: {
   if (!result.ok) return result;
 
   const link = memberUrl(`/parceria/${token}`);
+  if (input.deliver === "link") {
+    refresh();
+    return { ok: true, code: result.code, emailed: false, link };
+  }
   const expiresAt = typeof result.data.expires_at === "string" ? result.data.expires_at : null;
   const sent = await sendPartnerInvitationEmail(
     email,

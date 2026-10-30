@@ -21,6 +21,7 @@ The best products bring the user to VALUE fast (the "aha moment") — they sell 
 - **Personalize when it earns its keep**, and then *show what the answer unlocked* — a home already populated with the user's relevant content beats an empty one.
 - **Onboarding checklist** (`OnboardingChecklist` + `@flyee/onboarding`): a persistent, dismissible-but-reopenable list of the few steps to first result. Replacing pop-ups/banners with a checklist lifted one-week retention +10% (Mural). It doubles as the honest gamification below.
 - **Progressive disclosure** (`SetupWizard`): one decision per screen with a visible progress rail; a long setup that never feels long. Splitting a form across steps can *raise* conversion (House +15%).
+- **Never divert attention from a setup**: a setup or onboarding flow holds no exit before it ends, no link to another screen, no "see more", no showcase of features to explore. Everything a step needs happens in the step (a dialog, an inline form, the second factor), and information for later belongs on the home or its own page. Every link out of a setup is a setup left half done (ONE, 2026-10-30: a modules line with "Ver módulos" on the first step took the owner away before the firm was configured).
 - **Reassure along the way**: inline validation (a password field that ticks requirements as you type), microcopy that explains the impact of a step, tooltips on dry concepts. None of it is flashy; it makes the flow feel effortless.
 
 ## Empty states (non-negotiable)

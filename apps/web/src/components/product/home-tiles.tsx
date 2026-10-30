@@ -11,6 +11,11 @@ import { cn } from "@/lib/utils";
  * The template's quick-action card, verbatim: a full-height tinted icon
  * column (w-16, rounded-2xl, `-light/10` tint), a semibold title and a
  * one-line description in body size. Four of these share a row on desktop.
+ *
+ * A badge beside the title says a state the card stands in (a module still to
+ * come, one the firm did not contract), named in words. With no `href` the
+ * card is a plain readout: a link that goes nowhere would be a control that
+ * does nothing.
  */
 export function QuickActionTile({
   href,
@@ -18,17 +23,28 @@ export function QuickActionTile({
   tone,
   title,
   description,
+  badge,
+  label,
 }: {
-  href: string;
+  href?: string;
   /** Pass the icon at `size="large"` — 24px inside the 64px column. */
   icon: React.ReactNode;
   tone: TileTone;
   title: string;
   description: string;
+  /** A state beside the title, in words (a `StatusChip`). */
+  badge?: React.ReactNode;
+  /** What the card says to a screen reader when the badge alone is not words (a lock). */
+  label?: string;
 }) {
   const style = TILE_TONE[tone];
+  const shell = href ? { component: Link, href } : { component: "div" as const };
   return (
-    <Card component={Link} href={href} className="flex h-full flex-row p-1 transition-transform hover:scale-[1.02]">
+    <Card
+      {...shell}
+      aria-label={label}
+      className={cn("flex h-full flex-row p-1", href && "transition-transform hover:scale-[1.02]")}
+    >
       <Box
         aria-hidden
         className={cn("flex w-16 flex-none items-center justify-center rounded-2xl", style.bg, style.text)}
@@ -36,9 +52,12 @@ export function QuickActionTile({
         {icon}
       </Box>
       <CardContent className="min-w-0">
-        <Typography variant="subtitle2" component="p" className="leading-5">
-          {title}
-        </Typography>
+        <Box className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+          <Typography variant="subtitle2" component="p" className="leading-5">
+            {title}
+          </Typography>
+          {badge}
+        </Box>
         <Typography variant="body1" className="text-text-secondary line-clamp-1 leading-5">
           {description}
         </Typography>

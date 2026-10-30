@@ -6,8 +6,10 @@ import { Dispatch, useCallback, useEffect, useMemo } from "react";
 
 import { Accordion, AccordionDetails, AccordionSummary, Button } from "@mui/material";
 
-import NextureIcons from "@/icons/icon-registry";
+import StatusChip from "@/components/product/status-chip";
+import NextureIcons, { IconMap, type IconName } from "@/icons/icon-registry";
 import NiChevronRightSmall from "@/icons/nexture/ni-chevron-right-small";
+import NiLock from "@/icons/nexture/ni-lock";
 import { cn, isPathMatch } from "@/lib/utils";
 import { MenuItem } from "@/types";
 
@@ -24,6 +26,7 @@ export function SecondaryItem({ item, indent = 0, openedAccordions, setOpenedAcc
   const pathname = usePathname();
 
   const isActive = useMemo(() => {
+    if (item.exact) return Boolean(item.href) && pathname.replace(/\/$/, "") === item.href;
     if (item.href && isPathMatch(pathname, item.href)) return true;
     if (item.children) return item.children.some((child) => child.href && isPathMatch(pathname, child.href));
     return false;
@@ -82,6 +85,20 @@ export function SecondaryItem({ item, indent = 0, openedAccordions, setOpenedAcc
     );
   }
 
+  // An icon named by data (a module's, from the catalog) that the set does not have is drawn as the generic one.
+  const icon: IconName | undefined =
+    item.icon && !Object.prototype.hasOwnProperty.call(IconMap, item.icon) ? "NiPuzzle" : item.icon;
+  // What the item is called: a module's name is data, every other item's words are the catalog's. Beside it, a
+  // module still to come says so, and one the firm did not contract carries a lock (said to a screen reader too).
+  const label = item.text ?? t(item.label);
+  const tagWords = item.tag === "soon" ? t("menu-tag-soon") : item.tag === "locked" ? t("menu-tag-locked") : null;
+  const tag =
+    item.tag === "soon" ? (
+      <StatusChip tone="attention" label={t("menu-tag-soon")} />
+    ) : item.tag === "locked" ? (
+      <NiLock size="small" className="text-text-secondary" />
+    ) : undefined;
+
   // the item is a link without children
   if ((!item.children || item.children.length === 0) && item.href) {
     return (
@@ -95,21 +112,22 @@ export function SecondaryItem({ item, indent = 0, openedAccordions, setOpenedAcc
           className,
         )}
         startIcon={
-          item.icon && (
+          icon && (
             <NextureIcons
               variant={isActive ? "contained" : "outlined"}
-              icon={item.icon}
+              icon={icon}
               size={indent === 0 ? "large" : "medium"}
               className={cn("transition-transform group-hover:scale-[0.85]", isActive && "scale-[0.85]")}
             />
           )
         }
-        aria-label={t(item.label)}
+        endIcon={tag}
+        aria-label={tagWords ? `${label}, ${tagWords}` : label}
         aria-current={isActive ? "page" : undefined}
         component={NextLink}
         href={item.href}
       >
-        {t(item.label)}
+        {label}
       </Button>
     );
   }

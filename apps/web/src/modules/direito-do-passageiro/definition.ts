@@ -12,6 +12,33 @@ export const passengerModule: ModuleDefinition = {
   key: PASSENGER_MODULE,
   nameKey: "module-passenger",
   caseKinds: PASSENGER_CASE_KINDS,
+  // What only this module has, in its area of the firm's app: its partner agencies, the portfolio a firm brings
+  // from the system it used before (a spreadsheet of air-passenger lawsuits) and the value each kind of problem asks.
+  firmArea: [
+    {
+      id: "parceiros",
+      href: "/settings/parceiros",
+      icon: "NiBuilding",
+      labelKey: "module-area-partners",
+      descriptionKey: "module-area-partners-hint",
+    },
+    {
+      id: "importar",
+      href: "/casos/importar",
+      icon: "NiUploadCloud",
+      labelKey: "module-area-import",
+      descriptionKey: "module-area-import-hint",
+      importers: true,
+    },
+    {
+      id: "valor-da-causa",
+      href: "/settings/autonomia#valor-da-causa-pedido",
+      icon: "NiMoney",
+      labelKey: "module-area-claim-value",
+      descriptionKey: "module-area-claim-value-hint",
+    },
+  ],
+  testChat: true,
   partnerArea: [
     {
       id: "parceiro-passageiros",

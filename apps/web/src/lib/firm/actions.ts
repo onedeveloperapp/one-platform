@@ -178,14 +178,16 @@ export type InviteResult = FirmActionResult<{
 
 /**
  * Invites an address to the caller's firm. The token of the link is minted
- * here and only its SHA-256 goes to the database; the link itself goes to the
- * invited address by e-mail. Without an e-mail provider (a development
- * machine) the link comes back to the manager, who sends it by hand.
+ * here and only its SHA-256 goes to the database; the link goes to the
+ * invited address by e-mail, or, when the manager chose to send it themself
+ * (`deliver: "link"`) or the e-mail could not leave (no provider where ONE
+ * runs), comes back to the manager, who sends it by hand.
  */
 export async function inviteToFirm(input: {
   email: string;
   role: InvitableRole;
   firmFunction: FirmFunction;
+  deliver?: "email" | "link";
 }): Promise<InviteResult> {
   const context = await getMemberContext();
   if (!context?.firm) return { ok: false, code: "not_authorized" };
@@ -207,6 +209,10 @@ export async function inviteToFirm(input: {
   if (!result.ok) return result;
 
   const link = memberUrl(`/convite/${token}`);
+  if (input.deliver === "link") {
+    refreshTeam();
+    return { ok: true, code: result.code, emailed: false, link };
+  }
   const expiresAt = typeof result.data.expires_at === "string" ? result.data.expires_at : null;
   const sent = await sendFirmInvitationEmail(
     email,

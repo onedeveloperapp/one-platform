@@ -23,7 +23,7 @@ import DialogHeader from "@/components/product/dialog-header";
 import { createCase } from "@/lib/cases/actions";
 import { caseErrorKey, ORIGIN_KEY, ORIGINS } from "@/lib/cases/cases";
 import { personFields, type PersonValues, personValues } from "@/lib/cases/forms";
-import { firmCaseKinds } from "@/lib/modules/registry";
+import { caseKindsOf, firmCaseKinds } from "@/lib/modules/registry";
 
 /** Who the client is, at the start: the rest they fill on their link. */
 const FIRST_FIELDS = ["full_name", "cpf", "phone", "email"] as const;
@@ -36,18 +36,22 @@ const FIRST_FIELDS = ["full_name", "cpf", "phone", "email"] as const;
  */
 export default function NewCaseDialog({
   airlines,
+  module = null,
   prefill,
   onClose,
   onCreated,
 }: {
   airlines: AirlineOption[];
+  /** Opened in a module's list (0078): its kinds of problem only; with none, those of every module of the firm. */
+  module?: string | null;
   /** From a conversation: the client's name and number as WhatsApp gave them. */
   prefill: NewCasePrefill;
   onClose: () => void;
   onCreated: (caseId: string) => void;
 }) {
   const t = useTranslations("product");
-  const kinds = firmCaseKinds(useViewer()?.modules);
+  const firmModules = useViewer()?.modules;
+  const kinds = module ? caseKindsOf(module) : firmCaseKinds(firmModules);
   const [client, setClient] = useState<PersonValues>(() =>
     personValues(prefill ? { full_name: prefill.name, phone: prefill.phone } : null),
   );

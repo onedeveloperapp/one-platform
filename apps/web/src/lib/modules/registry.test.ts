@@ -25,6 +25,7 @@ const healthModule: ModuleDefinition = {
   key: "plano-de-saude-teste",
   nameKey: "module-test",
   partnerArea: [],
+  firmArea: [],
   caseKinds: [
     { key: "denied_procedure", labelKey: "test-kind-denied", forModel: "procedimento negado" },
     { key: "abusive_increase", labelKey: "test-kind-increase", forModel: "reajuste abusivo" },
@@ -41,6 +42,16 @@ describe("the modules installed", () => {
       expect(product[INCIDENT_KEY[incident]]).toBeTruthy();
     }
     expect(product[MODULES.modules[0].nameKey]).toBeTruthy();
+  });
+
+  it("names in words each place a module has of its own in the firm's area", () => {
+    for (const definition of MODULES.modules) {
+      for (const entry of definition.firmArea) {
+        expect(product[entry.labelKey], entry.labelKey).toBeTruthy();
+        expect(product[entry.descriptionKey], entry.descriptionKey).toBeTruthy();
+        expect(entry.href.startsWith("/"), entry.href).toBe(true);
+      }
+    }
   });
 
   it("answers nothing for what no module has", () => {

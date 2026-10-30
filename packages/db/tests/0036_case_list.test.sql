@@ -165,10 +165,10 @@ select ok(
 select is(
   (select jsonb_agg(row.value - 'id' - 'updated_at' order by row.ordinality)
    from jsonb_array_elements(pg_temp.ana() -> 'rows') with ordinality as row where row.ordinality in (1, 4)),
-  '[{"seq": 1, "client": "João da Silva", "incident": "delay", "airline_iata": "G3", "flight_date": "2026-07-20", "status": "intake",
+  '[{"seq": 1, "client": "João da Silva", "module": "direito-do-passageiro", "incident": "delay", "airline_iata": "G3", "flight_date": "2026-07-20", "status": "intake",
      "to_review": 1, "client_finished": true, "chronology_contested": false, "complaint_overdue": false,
      "piece_waiting": false, "court_moved": false, "civil_refused": false, "agency": null},
-    {"seq": 5, "client": "Carla Responsável", "incident": "overbooking", "airline_iata": null, "flight_date": null, "status": "documents",
+    {"seq": 5, "client": "Carla Responsável", "module": "direito-do-passageiro", "incident": "overbooking", "airline_iata": null, "flight_date": null, "status": "documents",
      "to_review": 0, "client_finished": false, "chronology_contested": false, "complaint_overdue": false,
      "piece_waiting": false, "court_moved": false, "civil_refused": false, "agency": null}]'::jsonb,
   'each case says who it is of and what waits in it; a case of a minor alone is named by who answers for her'

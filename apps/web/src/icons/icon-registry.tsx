@@ -215,6 +215,7 @@ import NiForwardRightSmall from "@/icons/nexture/ni-forward-right-small";
 import NiForwardUpSmall from "@/icons/nexture/ni-forward-up-small";
 import NiGay from "@/icons/nexture/ni-gay";
 import NiGroup from "@/icons/nexture/ni-group";
+import NiHardHat from "@/icons/nexture/ni-hard-hat";
 import NiHeadphones from "@/icons/nexture/ni-headphones";
 import NiHeadset from "@/icons/nexture/ni-headset";
 import NiHealth from "@/icons/nexture/ni-health";
@@ -410,6 +411,7 @@ import NiTriangleRight from "@/icons/nexture/ni-triangle-right";
 import NiTriangleUp from "@/icons/nexture/ni-triangle-up";
 import NiTrophy from "@/icons/nexture/ni-trophy";
 import NiTruck from "@/icons/nexture/ni-truck";
+import NiUmbrella from "@/icons/nexture/ni-umbrella";
 import NiUngroup from "@/icons/nexture/ni-ungroup";
 import NiUnlike from "@/icons/nexture/ni-unlike";
 import NiUnlock from "@/icons/nexture/ni-unlock";
@@ -647,6 +649,7 @@ export const IconMap = {
   NiForwardUpSmall,
   NiGay,
   NiGroup,
+  NiHardHat,
   NiHeadphones,
   NiHeadset,
   NiHealth,
@@ -842,6 +845,7 @@ export const IconMap = {
   NiTriangleUp,
   NiTrophy,
   NiTruck,
+  NiUmbrella,
   NiUngroup,
   NiUnlike,
   NiUnlock,

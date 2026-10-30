@@ -8,6 +8,7 @@ import { Alert, Box, Button, Card, CardContent, Typography } from "@mui/material
 
 import EmptyState from "@/components/product/empty-state";
 import MetricBars from "@/components/product/metric-bars";
+import ModuleScope from "@/components/product/module-scope";
 import PageHeader from "@/components/product/page-header";
 import StatusChip, { type StatusTone } from "@/components/product/status-chip";
 import NiScale from "@/icons/nexture/ni-scale";
@@ -15,6 +16,7 @@ import NiUsers from "@/icons/nexture/ni-users";
 import { caseLabel } from "@/lib/cases/cases";
 import { PACKAGE_STATUS_KEY, QUEUE_SHOWN } from "@/lib/cases/filing";
 import type { QueuedFiling } from "@/lib/cases/filing-facts";
+import { type PageScope, scopeCrumbs } from "@/lib/modules/offer";
 
 export type FilingQueueState =
   | {
@@ -27,6 +29,8 @@ export type FilingQueueState =
       cloudSigning: boolean;
       /** The person reading is a partner or a lawyer: who files. */
       lawyer: boolean;
+      /** The modules of the firm, and the one the page is under (0078). */
+      scope: PageScope;
     }
   | { kind: "no-firm" }
   | { kind: "unavailable" }
@@ -81,9 +85,12 @@ export default function FilingQueueView({ state }: { state: FilingQueueState }) 
     <Box className="flex flex-col gap-6">
       <PageHeader
         title={t("filing-queue-title")}
-        crumbs={[{ label: t("approvals-home"), href: "/inicio" }, { label: t("filing-queue-title") }]}
+        crumbs={scopeCrumbs(t("approvals-home"), t("filing-queue-title"), ready?.scope.current ?? null)}
         description={ready ? t("filing-queue-description") : undefined}
       />
+      {ready ? (
+        <ModuleScope path="/protocolo" modules={ready.scope.modules} current={ready.scope.current?.key ?? null} />
+      ) : null}
 
       {state.kind === "unavailable" ? (
         <Alert severity="info" className="neutral bg-background-paper/60!">

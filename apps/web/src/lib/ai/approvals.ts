@@ -1,6 +1,7 @@
 import type { DocumentQuality } from "@/lib/cases/document-quality";
 import type { FirmFunction } from "@/lib/firm/roles";
 import { DEFAULT_TIME_ZONE } from "@/lib/messages/format";
+import type { PageScope } from "@/lib/modules/offer";
 
 /**
  * The approval queue of a firm, as the screen reads it: what the AI suggested
@@ -131,6 +132,8 @@ export type ApprovalsData = {
   secondFactor: SecondFactorState;
   /** A support visit reads the queue and decides nothing. */
   supportVisit: boolean;
+  /** The modules of the firm, and the one the queue is under (0078). */
+  scope: PageScope;
 };
 
 /**
