@@ -7,7 +7,7 @@ import { isManager } from "@/lib/firm/roles";
 import { readFirmToday, todayViewerOf } from "@/lib/firm/today";
 import { getMemberContext } from "@/lib/member/context";
 import { readModuleOffer } from "@/lib/modules/offer-read";
-import { getActivationFacts, isSetupAnswered, onboardingFlowKey } from "@/lib/onboarding";
+import { getActivationFacts, isSetupAnswered, onboardingFlowKey, waitsFirstCase } from "@/lib/onboarding";
 import { getOnboardingState } from "@flyee/onboarding";
 
 /**
@@ -31,6 +31,10 @@ import { getOnboardingState } from "@flyee/onboarding";
  * shell, so a redirect would be the client router's, a path that broke the
  * screen in the production build.
  *
+ * While no case ever reached the firm, the home says ONE waits for the
+ * first one, which a module brings and ONE opens: never a step of the
+ * firm's list, which would say the work is manual (the owner, 2026-11-03).
+ *
  * Under the title, the quick access to ONE's modules (`product_modules`,
  * migrations 0075 and 0078): each module the firm contracted opens its own
  * area, where everything only that module has lives (its partner agencies,
@@ -49,13 +53,14 @@ async function loadHome(): Promise<HomeState | { kind: "setup"; setup: SetupStat
   const [today, pending, facts, checklist, modules] = await Promise.all([
     context.supabase.rpc("firm_today", { target_org: firm.id }),
     context.supabase.rpc("firm_pending", { target_org: firm.id }),
-    // The setup is for who can do something about it: who manages the firm.
-    manager ? getActivationFacts(context.supabase, firm.id) : Promise.resolve(null),
+    // The firm's facts: its setup, for who can do something about it (who manages the firm), and, for everybody,
+    // whether a case ever reached it.
+    getActivationFacts(context.supabase, firm.id),
     manager ? getOnboardingState(context.supabase, flowKey) : Promise.resolve(null),
     // What the firm contracted: a read that fails hides the quick access, and the home stands.
     readModuleOffer(context).catch(() => null),
   ]);
-  if (facts && !isSetupAnswered(facts)) return { kind: "setup", setup: await loadSetupState(context) };
+  if (manager && facts && !isSetupAnswered(facts)) return { kind: "setup", setup: await loadSetupState(context) };
   const read = today.error ? null : readFirmToday(today.data);
   if (!read) return { kind: "error" };
   const waiting = pending.error ? null : readFirmPending(pending.data);
@@ -73,7 +78,8 @@ async function loadHome(): Promise<HomeState | { kind: "setup"; setup: SetupStat
     worksDeadlines: viewer.worksDeadlines,
     confirmsDeadlines: viewer.confirmsDeadlines,
     // Facts that could not be read show no checklist, never one that calls a finished step missing.
-    setup: facts && checklist ? { flowKey, state: checklist, facts } : null,
+    setup: manager && facts && checklist ? { flowKey, state: checklist, facts } : null,
+    waitsFirstCase: waitsFirstCase(facts),
     modules,
   };
 }

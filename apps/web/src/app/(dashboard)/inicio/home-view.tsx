@@ -28,6 +28,7 @@ import NiMessages from "@/icons/nexture/ni-messages";
 import NiMicrophone from "@/icons/nexture/ni-microphone";
 import NiPaperclip from "@/icons/nexture/ni-paperclip";
 import NiRefresh from "@/icons/nexture/ni-refresh";
+import NiRobot from "@/icons/nexture/ni-robot";
 import NiScale from "@/icons/nexture/ni-scale";
 import NiShieldCheck from "@/icons/nexture/ni-shield-check";
 import NiTimeline from "@/icons/nexture/ni-timeline";
@@ -61,6 +62,11 @@ export type HomeState =
       confirmsDeadlines: boolean;
       /** The firm's setup, for who manages it. Null for everybody else, and when it could not be read. */
       setup: { flowKey: FlowKey; state: OnboardingStateRow; facts: ActivationFacts } | null;
+      /**
+       * No case ever reached the firm: ONE waits for the first, which a module brings and ONE opens. Said as ONE's,
+       * never as a step the firm owes (the owner, 2026-11-03). False when the facts could not be read.
+       */
+      waitsFirstCase: boolean;
       /** ONE's modules for the firm (0075, 0078); null when they could not be read. */
       modules: ModuleOffer | null;
     }
@@ -389,6 +395,14 @@ export default function HomeView({ state }: { state: HomeState }) {
                   title={t("today-empty-title")}
                   description={t("today-empty-body-connect")}
                   action={{ label: t("today-empty-action-connect"), href: "/settings/connections" }}
+                />
+              ) : ready.waitsFirstCase && ready.today.whatsapp !== "none" ? (
+                // The firm gave ONE what it needs: the first case is ONE's to receive and carry, never the firm's step.
+                <EmptyState
+                  icon={<NiRobot size="large" />}
+                  title={t("today-one-waits-title")}
+                  description={t("today-one-waits-body")}
+                  action={{ label: t("today-one-waits-action"), href: "/settings/autonomia" }}
                 />
               ) : (
                 <EmptyState

@@ -14,9 +14,14 @@ import type { SupabaseClient } from "@supabase/supabase-js";
  * What each person keeps for themselves is only whether they dismissed the
  * card (`onboarding_state`, one row per person and firm).
  *
- * The list holds only what keeps ONE from working for the firm: a lawyer at
- * the bar chosen to sign what ONE prepares, the team where there is one, a
- * way to the clients and the first case. The Valor da Causa Pedido is the
+ * The list holds only what the firm gives ONE for it to work: a lawyer at
+ * the bar chosen to sign what ONE prepares, the team where there is one and
+ * a way to the clients. Nothing ONE does by itself is on it: the first case
+ * arrives through a module the firm contracted and ONE opens it (a
+ * passenger's yes to ONE's word about a flight, an agency's passenger), so
+ * a step "open the first case" would tell the firm the work is manual (the
+ * owner, 2026-11-03); the home says ONE waits for it instead (`first_case`
+ * of the same facts). The Valor da Causa Pedido is the
  * firm's to give or not (0064: with none, a lawsuit goes with no value and
  * the judge defines it), so it is chosen in the setup and never listed as
  * missing. The CNPJ is asked when the firm subscribes, and a firm that said
@@ -42,8 +47,12 @@ const STEP_DEFINITIONS: (Omit<OnboardingStep, "done"> & { fact: string; hiddenWh
   { key: "oab", title: "setup-step-oab", href: setupHref("oab"), fact: "oab_signer" },
   { key: "team", title: "setup-step-team", href: setupHref("equipe"), fact: "team", hiddenWhen: "works_alone" },
   { key: "channel", title: "setup-step-channel", href: setupHref("canal"), fact: "channel" },
-  { key: "first-case", title: "setup-step-first-case", href: "/casos", fact: "first_case" },
 ];
+
+/** No case ever reached the firm: ONE waits for the first, which a module brings and ONE opens (never a step). */
+export function waitsFirstCase(facts: ActivationFacts | null): boolean {
+  return facts?.first_case === false;
+}
 
 /**
  * Reads what the firm has in place, under the person's own session. Any

@@ -460,16 +460,23 @@ function CasesList({ ready, embedded }: { ready: Ready; embedded: boolean }) {
         </Alert>
       )}
 
+      {/*
+        No case yet is ONE's wait, never the firm's task: a module brings the case and ONE opens it and carries it
+        (the owner, 2026-11-03). What the firm may do meanwhile is bring the lawsuits it already has, or see what ONE
+        does by itself; opening a case by hand stays, as the exception it is.
+      */}
       {!hasCases && (
         <EmptyState
           icon={<NiFolder size="large" />}
           title={t("cases-empty-title")}
           description={t("cases-empty-body")}
-          action={ready.supportVisit ? undefined : { label: t("cases-new"), onClick: () => setCreating(true) }}
-          secondaryAction={
+          action={
             mayImport
               ? { label: t("cases-empty-import"), href: "/casos/importar" }
-              : { label: t("cases-empty-inbox"), href: "/atendimento" }
+              : { label: t("cases-empty-what-one-does"), href: "/settings/autonomia" }
+          }
+          secondaryAction={
+            ready.supportVisit ? undefined : { label: t("cases-empty-by-hand"), onClick: () => setCreating(true) }
           }
         />
       )}

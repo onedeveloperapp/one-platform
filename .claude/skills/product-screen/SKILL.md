@@ -23,6 +23,8 @@ ONE's premise (the owner, 2026-11-03): what needs no person, ONE's own AI does, 
 
 A screen where a person does by hand what ONE could do is the exception, and its reason is written beside it. The first build: the firm's own model made from the document it already uses (migration 0079), sent in the setup's step, refused with why, its blanks asked in place, saved by ONE when nothing is left to look at.
 
+**Never list ONE's work as the person's step.** A checklist, a count, a pending line, an empty state or a message names as the person's only what a person does or decides. What ONE does alone (a case opened from a module, a link sent, the lawsuits created, a piece written) is said as ONE's: done, being done, or waited for ("O ONE espera o primeiro caso"), with a manual way, where one exists, offered as the exception and never as the primary action. The failure this prevents (ONE, 2026-11-03): "Abrir o primeiro caso" on the firm's setup list told a firm that had just finished its setup that the work was manual, while ONE opens the case itself when a module brings it.
+
 ## The activation principle (from onboarding research)
 
 The best products bring the user to VALUE fast (the "aha moment") — they sell the outcome, not the feature list.

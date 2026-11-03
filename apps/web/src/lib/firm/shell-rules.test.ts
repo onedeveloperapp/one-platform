@@ -9,6 +9,7 @@ import {
   isOnboardingEnabled,
   isSetupAnswered,
   ONBOARDING_ORG_SCOPED,
+  waitsFirstCase,
 } from "@/lib/onboarding";
 import { leftMenuBottomItems, leftMenuItems } from "@/menu-items";
 import messages from "@flyee/content/messages/pt-BR.json";
@@ -568,15 +569,15 @@ describe("what needs somebody today", () => {
 });
 
 describe("the firm's setup, from facts", () => {
-  it("is the firm's, and lists only what keeps ONE from working for it", () => {
+  it("is the firm's, and lists only what the firm gives ONE, never ONE's own work", () => {
     expect(isOnboardingEnabled).toBe(true);
     expect(ONBOARDING_ORG_SCOPED).toBe(true);
-    // Each step of the setup leads back to its own step of /configurar, never to another screen.
+    // Each step of the setup leads back to its own step of /configurar, never to another screen. The first case is
+    // not one: a module brings it and ONE opens it (the owner, 2026-11-03).
     expect(buildOnboardingSteps().map((step) => [step.key, step.href])).toEqual([
       ["oab", "/configurar?passo=oab"],
       ["team", "/configurar?passo=equipe"],
       ["channel", "/configurar?passo=canal"],
-      ["first-case", "/casos"],
     ]);
     for (const step of buildOnboardingSteps()) expect(product[step.title], step.title).toBeTruthy();
   });
@@ -607,15 +608,24 @@ describe("the firm's setup, from facts", () => {
 
   it("marks a step done when the thing exists, and never by a click", () => {
     const facts = { oab_signer: true, team: false, channel: true, first_case: false };
-    expect(buildOnboardingSteps(facts).map((step) => step.done)).toEqual([true, false, true, false]);
+    expect(buildOnboardingSteps(facts).map((step) => step.done)).toEqual([true, false, true]);
     expect(isActivated(facts)).toBe(false);
-    expect(isActivated({ oab_signer: true, team: true, channel: true, first_case: true })).toBe(true);
+    // A firm with no case yet is ready: the first case is ONE's to receive.
+    expect(isActivated({ oab_signer: true, team: true, channel: true, first_case: false })).toBe(true);
     // The Valor da Causa Pedido is the firm's to give or not (0064): a firm that gives none lacks nothing.
     expect(isActivated({ oab_signer: true, claim_defaults: false, team: true, channel: true, first_case: true })).toBe(
       true,
     );
     // A fact the database did not answer is a step not done, never one assumed done.
-    expect(isActivated({ oab_signer: true, team: true, channel: true })).toBe(false);
+    expect(isActivated({ oab_signer: true, team: true })).toBe(false);
+  });
+
+  it("says ONE waits for the first case, and only when the facts say no case came", () => {
+    expect(waitsFirstCase({ first_case: false })).toBe(true);
+    expect(waitsFirstCase({ first_case: true })).toBe(false);
+    // Facts that could not be read, or that do not say, never claim the firm has no case.
+    expect(waitsFirstCase(null)).toBe(false);
+    expect(waitsFirstCase({})).toBe(false);
   });
 
   it("asks no team of a firm that works alone", () => {
@@ -626,7 +636,7 @@ describe("the firm's setup, from facts", () => {
       channel: true,
       first_case: true,
     };
-    expect(buildOnboardingSteps(alone).map((step) => step.key)).toEqual(["oab", "channel", "first-case"]);
+    expect(buildOnboardingSteps(alone).map((step) => step.key)).toEqual(["oab", "channel"]);
     expect(isActivated(alone)).toBe(true);
   });
 
