@@ -119,6 +119,8 @@ describe("the database's answer, as the list reads it", () => {
         courtMoved: true,
         civilRefused: false,
         agency: null,
+        // What the case's lawsuits show in court is read beside the list (`withCourtMarks`), never from its answer.
+        court: null,
       },
     ]);
     expect(page?.total).toBe(41);

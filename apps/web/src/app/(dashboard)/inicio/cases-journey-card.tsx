@@ -66,7 +66,12 @@ export default function CasesJourneyCard({ overview }: { overview: JourneyOvervi
           <Link href="/casos?ver=ended" className="link-primary link-underline-hover">
             {t("journey-overview-closed", { count: overview.closed })}
           </Link>
-          {overview.declined > 0 ? ` · ${t("journey-overview-declined", { count: overview.declined })}` : null}
+          {overview.declined > 0 ? (
+            <>
+              {" · "}
+              {t("journey-overview-declined", { count: overview.declined })}
+            </>
+          ) : null}
         </Typography>
       </CardContent>
     </Card>
