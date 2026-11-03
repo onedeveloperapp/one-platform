@@ -1190,6 +1190,8 @@
     "setup-agency-invited": "Convite enviado",
     "setup-agency-invited-until": "vale até {date}",
     "setup-agency-invite": "Convidar agência",
+    "setup-agency-no-channel": "Nenhum canal está ligado, e o ONE não tem por onde avisar o passageiro de um problema no voo. Para testar pela agência, ligue o chat de teste antes de o passageiro concordar no link da agência: quem concorda com o chat desligado é acompanhado no voo real, fora do chat de teste.",
+    "setup-agency-no-channel-action": "Ligar o canal",
     "setup-agency-needs-title": "Para a parceria funcionar",
     "setup-agency-needs-channel": "O aviso de problema no voo sai pelo WhatsApp do escritório, com o modelo desse aviso aprovado e ligado.",
     "setup-agency-needs-release": "O primeiro aviso a um passageiro real espera a liberação do ONE, que depende do parecer sobre captação de clientes.",

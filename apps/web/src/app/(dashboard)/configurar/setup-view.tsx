@@ -400,6 +400,10 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
 
   // The last step finishes the setup: the partner agency where the firm's module has one, else the channel.
   const agencyStep = state.agencyModule !== null;
+  // The partnership needs the channel before the agency's passenger agrees: with no test chat on, an agreement is
+  // followed as a real flight and never reaches the test chat (0071), and with no number nobody is told. Said in
+  // the agency's step, with the way back to the channel's (unknown while the connections could not be read).
+  const noChannel = connections !== null && !realNumber && connections.testChat?.state.on !== true;
   const finishing = { primaryLabel: t("setup-finish"), onPrimary: () => finish("/inicio"), busy: leaving };
   const finishProblem = finishError ? (
     <Alert severity="error" className="neutral bg-background-paper/60!" role="alert">
@@ -862,6 +866,24 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
             ...finishing,
             content: (
               <Box className="flex flex-col gap-5">
+                {noChannel && !blocked ? (
+                  // The way back under the words, as the factor's prompt has it, so a phone never squeezes them.
+                  <Alert severity="warning" className="neutral bg-background-paper/60!">
+                    <Box className="flex flex-col gap-3">
+                      <Typography variant="body1">{t("setup-agency-no-channel")}</Typography>
+                      <Box>
+                        <Button
+                          variant="outlined"
+                          color="grey"
+                          size="small"
+                          onClick={() => setStepIndex(SETUP_STEPS.indexOf("canal"))}
+                        >
+                          {t("setup-agency-no-channel-action")}
+                        </Button>
+                      </Box>
+                    </Box>
+                  </Alert>
+                ) : null}
                 {partners === null ? (
                   <Alert
                     severity="error"
