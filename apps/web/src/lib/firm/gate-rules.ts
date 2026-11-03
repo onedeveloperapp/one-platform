@@ -6,6 +6,12 @@
 /** Where an account that belongs to no firm founds one or accepts an invitation. */
 export const FIRM_SETUP_PATH = "/auth/complete-profile";
 
+/**
+ * Where somebody of a firm sets their factor up when the rule asks it of them: their own setup, whose first step
+ * it is (the firm's for who manages it, the person's for anybody else; 2026-11-03), never a page of settings.
+ */
+export const OWN_SETUP_PATH = "/configurar";
+
 /** Where a second factor is set up, with the note that it is required. */
 export const SECOND_FACTOR_SETUP_PATH = "/settings/security";
 export const SECOND_FACTOR_REQUIRED_URL = `${SECOND_FACTOR_SETUP_PATH}?exigido=1`;
@@ -77,6 +83,7 @@ export function decideGate(input: {
 
   if (owesSecondFactor(input)) {
     if (!input.path || isSecondFactorSetupPath(input.path)) return null;
+    if (input.hasFirm) return input.path === OWN_SETUP_PATH ? null : { redirectTo: OWN_SETUP_PATH };
     return { redirectTo: SECOND_FACTOR_REQUIRED_URL };
   }
   return null;

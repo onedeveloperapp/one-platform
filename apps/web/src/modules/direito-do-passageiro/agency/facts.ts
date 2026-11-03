@@ -90,14 +90,28 @@ export async function readClause(
   return { ok: true, value: data ? { version: Number(data.version), body: String(data.body) } : null };
 }
 
+/** The words an agency's setup offers it for its clause, and whose they are. */
+export type ClauseOffer = { text: string; source: "firm" | "one"; firm: string | null };
+
 /**
- * The clause ONE proposes to the agency (migration 0080): the platform's words with the agency's and the firm's
- * names, for somebody of the agency to read, change and register. Null when the platform has none.
+ * The words the agency is offered for its clause (migrations 0080 and 0081): the words its firm gave, in force,
+ * when the firm gave any, else ONE's proposal with the agency's and the firm's names, for somebody of the agency to
+ * read, change and register. Null when there are none.
  */
-export async function readClauseProposal(context: MemberContext, agencyId: string): Promise<Read<string | null>> {
-  const { data, error } = await context.supabase.rpc("pax_clause_proposal", { target_partner: agencyId });
+export async function readClauseOffer(context: MemberContext, agencyId: string): Promise<Read<ClauseOffer | null>> {
+  const { data, error } = await context.supabase.rpc("pax_clause_offer", { target_partner: agencyId });
   if (error) return { ok: false };
-  return { ok: true, value: typeof data === "string" && data.trim().length > 0 ? data : null };
+  const answer = (data ?? {}) as { text?: unknown; source?: unknown; firm?: unknown };
+  const text = typeof answer.text === "string" && answer.text.trim().length > 0 ? answer.text : null;
+  if (!text) return { ok: true, value: null };
+  return {
+    ok: true,
+    value: {
+      text,
+      source: answer.source === "firm" ? "firm" : "one",
+      firm: typeof answer.firm === "string" ? answer.firm : null,
+    },
+  };
 }
 
 /** A key of the partnership for the agency's system (migration 0073), as the agency reads it: never the key. */

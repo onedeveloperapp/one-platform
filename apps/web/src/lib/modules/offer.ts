@@ -14,7 +14,17 @@ export type ModuleSoldAs = "package" | "included";
  */
 export type ModuleState = "contracted" | "soon" | "locked";
 
-/** A module of the catalog as every screen names it: its key, its name and its icon. */
+/**
+ * A module's colour among the tones of the design system (0081: `product_modules.tone`), so each module is told
+ * apart at a glance wherever it shows; the primary is the core's, and a module that names none takes it.
+ */
+export const MODULE_TONES = ["primary", "secondary", "accent-1", "accent-2", "accent-3", "accent-4"] as const;
+export type ModuleTone = (typeof MODULE_TONES)[number];
+
+const isModuleTone = (value: unknown): value is ModuleTone =>
+  typeof value === "string" && (MODULE_TONES as readonly string[]).includes(value);
+
+/** A module of the catalog as every screen names it: its key, its name, its icon and its colour. */
 export type ModuleCard = {
   key: string;
   name: string;
@@ -22,6 +32,8 @@ export type ModuleCard = {
   description: string | null;
   /** The icon that says what it is, by its name in the app's set (`IconMap`); null for the generic one. */
   icon: string | null;
+  /** Its colour (0081). */
+  tone: ModuleTone;
 };
 
 export type ContractedModule = ModuleCard & {
@@ -84,6 +96,7 @@ export function moduleCatalogOf(rows: unknown): ModuleCatalogEntry[] | null {
           soldAs: row.sold_as === "included" ? "included" : "package",
           description: text(row.description),
           icon: icon && ICON.test(icon) ? icon : null,
+          tone: isModuleTone(row.tone) ? row.tone : "primary",
           sort: typeof row.sort === "number" && Number.isFinite(row.sort) ? row.sort : 0,
         },
       ];
@@ -96,6 +109,7 @@ const card = (module: ModuleCatalogEntry): ModuleCard => ({
   name: module.name,
   description: module.description,
   icon: module.icon,
+  tone: module.tone,
 });
 
 /**

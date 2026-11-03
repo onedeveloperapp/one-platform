@@ -16,6 +16,7 @@ export const {
   caseKindLabelKey,
   caseKindForModel,
   partnerSetupOf,
+  firmSetupOf,
 } = MODULES;
 
 /**

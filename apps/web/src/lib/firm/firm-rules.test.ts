@@ -5,6 +5,7 @@ import {
   FIRM_SETUP_PATH,
   isSecondFactorSetupPath,
   owesSecondFactor,
+  OWN_SETUP_PATH,
   PARTNER_HOME,
   SECOND_FACTOR_REQUIRED_URL,
   shellHold,
@@ -134,11 +135,13 @@ describe("the gate of the logged area", () => {
     expect(decideGate({ ...operator, path: "/inicio" })).toEqual({ redirectTo: "/admin" });
   });
 
-  it("sends who must have a second factor, and has none, to set it up before anything else", () => {
+  it("sends who must have a second factor, and has none, to set it up in their own setup before anything else", () => {
     const manager = { ...inFirm, secondFactorRequired: true };
-    expect(decideGate(manager)).toEqual({ redirectTo: SECOND_FACTOR_REQUIRED_URL });
-    expect(decideGate({ ...manager, path: "/settings/team" })).toEqual({ redirectTo: SECOND_FACTOR_REQUIRED_URL });
-    // The page where it is set up is the one place still open, or the redirect would loop.
+    // Their own setup, whose first step is the factor: never a page of settings with nothing said (2026-11-03).
+    expect(decideGate(manager)).toEqual({ redirectTo: OWN_SETUP_PATH });
+    expect(decideGate({ ...manager, path: "/settings/team" })).toEqual({ redirectTo: OWN_SETUP_PATH });
+    // The setup and the security screen are the places still open, or the redirect would loop.
+    expect(decideGate({ ...manager, path: OWN_SETUP_PATH })).toBeNull();
     expect(decideGate({ ...manager, path: "/settings/security" })).toBeNull();
     expect(decideGate({ ...manager, hasSecondFactor: true })).toBeNull();
   });
@@ -170,8 +173,9 @@ describe("the gate of the logged area", () => {
   it("keeps a person where the gate would send them, on the pages opened after the first one", () => {
     const owes = { hasFirm: true, isSuperadmin: false, owesSecondFactor: true };
     for (const path of ["/inicio", "/casos", "/casos/abc", "/settings", "/settings/team", "/admin"]) {
-      expect(shellHold(owes, path)).toBe(SECOND_FACTOR_REQUIRED_URL);
+      expect(shellHold(owes, path)).toBe(OWN_SETUP_PATH);
     }
+    expect(shellHold(owes, OWN_SETUP_PATH)).toBeNull();
     expect(shellHold(owes, "/settings/security")).toBeNull();
     // Nobody who owes nothing is held.
     expect(shellHold({ ...owes, owesSecondFactor: false }, "/casos")).toBeNull();

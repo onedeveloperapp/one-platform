@@ -318,6 +318,9 @@ insert into public.flight_alerts (org_id, trip_id, kind, rule_version) values
 insert into public.firm_claim_defaults (org_id, incident, cents) values
   ('b1000000-0000-4000-8000-00000000000a', 'delay', 800000),
   ('b1000000-0000-4000-8000-00000000000b', 'cancellation', 1000000);
+insert into public.pax_firm_clauses (org_id, version, body) values
+  ('b1000000-0000-4000-8000-00000000000a', 1, 'O cliente autoriza que a agência compartilhe com o escritório os seus dados desta viagem.'),
+  ('b1000000-0000-4000-8000-00000000000b', 1, 'O cliente autoriza que a agência compartilhe com o escritório os seus dados desta viagem.');
 insert into public.case_papers (org_id, case_id, person_id, kind, document_id) values
   ('b1000000-0000-4000-8000-00000000000a', 'a3000000-0000-4000-8000-00000000000a', 'a2000000-0000-4000-8000-00000000000a',
    'procuracao', 'a7000000-0000-4000-8000-00000000000a'),
@@ -468,7 +471,7 @@ select is(
     'filing_receipts', 'firm_autonomy', 'firm_calendars',
     'firm_claim_defaults', 'firm_invitations', 'firm_modules', 'firm_notice_kinds', 'firm_signers', 'flight_alerts', 'flight_checks', 'flight_segments', 'hearings', 'import_batches', 'import_rows', 'invoices',
     'issued_documents', 'lawyer_signature_uses', 'legal_sources', 'memberships',
-    'movements', 'notice_optins', 'onboarding_state', 'partner_invitations', 'partner_links',
+    'movements', 'notice_optins', 'onboarding_state', 'partner_invitations', 'partner_links', 'pax_firm_clauses',
     'people',
     'proceeding_lawyers', 'proceeding_parties', 'proceeding_tracking', 'proceedings', 'publication_readings', 'publications', 'record_versions',
     'signature_envelopes',
@@ -644,7 +647,7 @@ select is(
     'filing_package_items', 'filing_packages',
     'filing_receipts', 'firm_autonomy', 'firm_calendars', 'firm_claim_defaults', 'firm_modules', 'firm_notice_kinds', 'firm_signers', 'flight_alerts', 'flight_checks', 'flight_segments', 'hearings', 'import_batches',
     'import_rows', 'invoices', 'issued_documents', 'lawyer_signature_uses', 'legal_sources',
-    'memberships', 'movements', 'notice_optins', 'partner_links', 'people', 'proceeding_lawyers', 'proceeding_parties', 'proceeding_tracking', 'proceedings',
+    'memberships', 'movements', 'notice_optins', 'partner_links', 'pax_firm_clauses', 'people', 'proceeding_lawyers', 'proceeding_parties', 'proceeding_tracking', 'proceedings',
     'publication_readings', 'publications',
     'signature_envelopes',
     'subscriptions', 'template_imports', 'test_chats', 'tracked_legs', 'tracked_trips',
@@ -687,7 +690,7 @@ select is(
     'filing_receipts', 'firm_autonomy', 'firm_calendars',
     'firm_claim_defaults', 'firm_invitations', 'firm_modules', 'firm_notice_kinds', 'firm_signers', 'flight_alerts', 'flight_checks', 'flight_segments', 'hearings', 'import_batches', 'import_rows', 'invoices',
     'issued_documents', 'lawyer_signature_uses', 'legal_sources', 'memberships',
-    'movements', 'notice_optins', 'onboarding_state', 'partner_invitations', 'partner_links',
+    'movements', 'notice_optins', 'onboarding_state', 'partner_invitations', 'partner_links', 'pax_firm_clauses',
     'people',
     'proceeding_lawyers', 'proceeding_parties', 'proceeding_tracking', 'proceedings', 'publication_readings', 'publications', 'record_versions',
     'signature_envelopes',

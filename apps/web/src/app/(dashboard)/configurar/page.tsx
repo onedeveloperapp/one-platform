@@ -1,8 +1,12 @@
+import { loadPersonSetupState } from "./person-setup-state";
+import PersonSetupView from "./person-setup-view";
 import { loadSetupState } from "./setup-state";
 import SetupView from "./setup-view";
 import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 
+import { isPersonSetupStep } from "@/lib/firm/person-setup";
+import { isManager } from "@/lib/firm/roles";
 import { isSetupStep } from "@/lib/firm/setup-steps";
 import { getMemberContext } from "@/lib/member/context";
 
@@ -21,6 +25,9 @@ export async function generateMetadata(): Promise<Metadata> {
  * connections included. The home asks them itself while they were never
  * answered; this address opens them again from the list on the home, at the
  * step something is missing in (`?passo=`), showing what is already in place.
+ *
+ * For anybody else of the firm it is their own setup (2026-11-03): the second
+ * factor and, for a partner or a lawyer, the registration at the bar.
  */
 export default async function SetupPage({
   searchParams,
@@ -28,6 +35,11 @@ export default async function SetupPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const query = await searchParams;
+  const context = await getMemberContext();
+  if (context?.firm && !isManager(context.firm.role)) {
+    const step = isPersonSetupStep(query.passo) ? query.passo : null;
+    return <PersonSetupView state={await loadPersonSetupState(context, step)} />;
+  }
   const step = isSetupStep(query.passo) ? query.passo : null;
-  return <SetupView state={await loadSetupState(await getMemberContext(), step)} />;
+  return <SetupView state={await loadSetupState(context, step)} />;
 }

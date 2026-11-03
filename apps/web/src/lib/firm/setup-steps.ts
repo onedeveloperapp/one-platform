@@ -5,11 +5,12 @@
  * to another screen. The first is the second factor, which the database asks
  * for in every step after it (who signs, the claims, an invitation, a
  * connection): what a later step cannot do without is done before it, never
- * found half way (the owner, 2026-11-03). The last, the partner agency, is
- * shown only to a firm whose module has a partner (the passenger module's
- * travel agency), and is never missing: a firm with no agency lacks nothing.
+ * found half way (the owner, 2026-11-03). These are the core's, what every
+ * firm needs: what one module needs (the passenger module's Valor da Causa
+ * Pedido and its partner agency) is the module's own setup, opened after this
+ * one for each module the firm contracted (0081).
  */
-export const SETUP_STEPS = ["seguranca", "oab", "valores", "equipe", "papeis", "canal", "agencia"] as const;
+export const SETUP_STEPS = ["seguranca", "oab", "equipe", "papeis", "canal"] as const;
 
 export type SetupStepKey = (typeof SETUP_STEPS)[number];
 

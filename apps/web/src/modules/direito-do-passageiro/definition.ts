@@ -31,6 +31,13 @@ export const passengerModule: ModuleDefinition = {
       importers: true,
     },
     {
+      id: "configurar",
+      href: "/configurar/direito-do-passageiro",
+      icon: "NiSettings",
+      labelKey: "module-area-setup",
+      descriptionKey: "module-area-setup-hint",
+    },
+    {
       id: "valor-da-causa",
       href: "/settings/autonomia#valor-da-causa-pedido",
       icon: "NiMoney",
@@ -42,6 +49,9 @@ export const passengerModule: ModuleDefinition = {
   // The travel agency is this module's partner (0069): its setup is this module's page (0080), the second factor
   // first, then its name, the clause of its contract, its team and how its passengers reach ONE.
   partnerSetup: { kind: "agency", href: "/parceiro/configurar" },
+  // What a firm sets up of this module, after the core and before the home (0081): the Valor da Causa Pedido of the
+  // air-passenger problems, the words of the clause its agencies register, and the partner agency.
+  firmSetup: "/configurar/direito-do-passageiro",
   partnerArea: [
     {
       id: "parceiro-passageiros",

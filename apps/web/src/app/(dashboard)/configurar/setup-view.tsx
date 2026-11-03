@@ -2,7 +2,6 @@
 
 import { refusalWords } from "../biblioteca/import-panel";
 import TemplateDialog from "../biblioteca/template-dialog";
-import ClaimValueChoice from "../settings/autonomia/claim-value-choice";
 import ConnectCard from "../settings/connections/components/connect-card";
 import NoticesCard from "../settings/connections/components/notices-card";
 import SignatureAccountCard from "../settings/connections/components/signature-account-card";
@@ -30,8 +29,6 @@ import {
   Typography,
 } from "@mui/material";
 
-import { useViewer } from "@/components/layout/viewer-context";
-import PartnerInviteDialog from "@/components/partners/partner-invite-dialog";
 import PageHeader from "@/components/product/page-header";
 import SecondFactorPrompt from "@/components/product/second-factor-prompt";
 import SetupWizard, { type WizardStep } from "@/components/product/setup-wizard";
@@ -41,15 +38,9 @@ import WordDownloadButton from "@/components/product/word-download-button";
 import NiUploadCloud from "@/icons/nexture/ni-upload-cloud";
 import type { SecondFactorState } from "@/lib/ai/approvals";
 import { addOabRegistration, answerFirmSetup, inviteToFirm } from "@/lib/firm/actions";
-import {
-  autonomyErrorKey,
-  type ClaimChoice,
-  claimChoiceOf,
-  type ClaimDefault,
-  claimDefaultChanges,
-  typedClaims,
-} from "@/lib/firm/autonomy";
-import { setFirmClaimDefault, setFirmSigner } from "@/lib/firm/autonomy-actions";
+import { autonomyErrorKey } from "@/lib/firm/autonomy";
+import { setFirmSigner } from "@/lib/firm/autonomy-actions";
+import { personFlowKey } from "@/lib/firm/person-setup";
 import { FIRM_FUNCTIONS, type FirmFunction, formatOab, OAB_STATES, type OabRegistration } from "@/lib/firm/roles";
 import { SETUP_STEPS, setupOpening, type SetupStepKey } from "@/lib/firm/setup-steps";
 import { readDraftTemplate } from "@/lib/library/actions";
@@ -57,9 +48,9 @@ import type { LibraryTemplate, SetupPaper } from "@/lib/library/facts";
 import { watchModelImports } from "@/lib/library/import-actions";
 import type { PaperImport } from "@/lib/library/import-read";
 import { IMPORT_ACCEPT, IMPORT_STATUS_KEY, IMPORT_WORKING, importFailureKey } from "@/lib/library/imports";
-import { caseKindLabelKey, firmCaseKinds } from "@/lib/modules/registry";
-import type { FirmPartnersState } from "@/lib/partners/facts";
 import type { ConnectionsState } from "@/lib/whatsapp/connections";
+import { createClient } from "@flyee/auth/client";
+import { completeFlow } from "@flyee/onboarding";
 
 export type SetupState =
   | { kind: "unavailable" }
@@ -69,6 +60,7 @@ export type SetupState =
   | {
       kind: "ready";
       userId: string;
+      orgId: string;
       firmName: string;
       firmFunction: FirmFunction;
       /** Who answers decides for the firm what a partner decides (0078): a partner, or, with none, who manages it. */
@@ -84,18 +76,17 @@ export type SetupState =
       secondFactor: SecondFactorState;
       supportVisit: boolean;
       isOwner: boolean;
-      /** The claim the firm asks by default for each kind of problem; null when it could not be read. */
-      claimDefaults: ClaimDefault[] | null;
       /** Which model ONE sends clients to sign of each paper; null when it could not be read. */
       papers: { procuracao: SetupPaper; contrato: SetupPaper } | null;
       /** What ONE does with the document the firm sent as each paper (0079), until it saved the firm's model. */
       paperImports: { procuracao: PaperImport | null; contrato: PaperImport | null };
       /** The firm's connections as their own screen reads them: the signature account, the test chat, the number. */
       connections: ConnectionsState;
-      /** The firm's module whose partner it invites in the last step; null hides that step. */
-      agencyModule: string | null;
-      /** The firm's partnerships and open invitations (0069); null when they could not be read. */
-      partners: Extract<FirmPartnersState, { kind: "ready" }> | null;
+      /**
+       * The setup of the first module the firm contracted that it never answered (0081), which the core's finish
+       * opens, in the module's colour; null when there is none, and the finish opens the home.
+       */
+      nextSetup: { href: string; name: string } | null;
       /** The step the address asked for (`?passo=`): the list on the home leads to the one something is missing in. */
       step: SetupStepKey | null;
     };
@@ -138,11 +129,14 @@ const PAPER_WATCH_MS = 6_000;
  * signer's switch, 2026-11-03: what a later step cannot do without is its own
  * step before it, and the flow does not go past it until it is done; the rule
  * is in apps/web/CLAUDE.md), then who
- * answers and whether they sign what ONE prepares, the Valor da Causa Pedido
- * (a value for each kind of problem, or none for the judge to define),
- * whether it works alone, the papers its
- * clients sign, the channel to them and, for a module with a partner, the
- * partner agency (optional, never missing). Nothing on it leads away from the
+ * answers and whether they sign what ONE prepares, whether it works alone,
+ * the papers its clients sign and the channel to them. This is the core,
+ * what every firm needs whatever it contracted: what one module needs (the
+ * passenger module's Valor da Causa Pedido, the words of its agencies'
+ * clause, its partner agency) is that module's own setup, in its colour,
+ * which the core's finish opens for each module the firm contracted and
+ * never answered, before the home (the owner, 2026-11-03; migration 0081,
+ * `firmSetup` of the module's definition). Nothing on it leads away from the
  * setup: the modules the firm contracted are said on the home, never here,
  * where a link to them took the owner out of a setup half done (2026-10-30;
  * the rule is in apps/web/CLAUDE.md). Each step does its own work where it
@@ -223,14 +217,6 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
   const numberOk = NUMBER_PATTERN.test(cleanNumber(number));
   const oabReady = !lawyer || registered || (Boolean(uf) && numberOk);
 
-  // ---------- The Valor da Causa Pedido ----------
-  // What was chosen and typed, as the fields hold it, until the page reads it back.
-  const [claimChoice, setClaimChoice] = useState<ClaimChoice>(() => claimChoiceOf(state.claimDefaults ?? []));
-  const claimKinds = firmCaseKinds(useViewer()?.modules);
-  const [claims, setClaims] = useState<Partial<Record<string, string>>>(() => typedClaims(state.claimDefaults ?? []));
-  const [claimsError, setClaimsError] = useState<string | null>(null);
-  const claimsEditable = decides && !locked && !blocked && state.claimDefaults !== null;
-
   // ---------- Alone or with a team ----------
   const [worksAlone, setWorksAlone] = useState<boolean | null>(state.worksAlone);
   const [teamError, setTeamError] = useState<string | null>(null);
@@ -290,9 +276,6 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
     };
   }, [paperWorking, router]);
 
-  // ---------- The partner agency ----------
-  const [invitingAgency, setInvitingAgency] = useState(false);
-
   // ---------- The end ----------
   const [finishError, setFinishError] = useState<string | null>(null);
   const [leaving, setLeaving] = useState(false);
@@ -341,33 +324,6 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
       }
     }
     refresh();
-    return true;
-  };
-
-  // Each kind whose value changed is said or taken back (all of them, for no value); one that is no amount keeps
-  // the step, saying which.
-  const saveClaims = async (): Promise<boolean> => {
-    setClaimsError(null);
-    if (!claimsEditable) return true;
-    const planned = claimDefaultChanges(
-      claimChoice,
-      claims,
-      state.claimDefaults ?? [],
-      claimKinds.map((kind) => kind.key),
-    );
-    if (!planned.ok) {
-      setClaimsError(t("claims-invalid", { kind: t(caseKindLabelKey(planned.invalid) ?? "case-incident-other") }));
-      return false;
-    }
-    for (const change of planned.changes) {
-      const result = await setFirmClaimDefault(change.incident, change.cents);
-      if (!result.ok) {
-        setClaimsError(t(autonomyErrorKey(result.code)));
-        refresh();
-        return false;
-      }
-    }
-    if (planned.changes.length > 0) refresh();
     return true;
   };
 
@@ -426,6 +382,9 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
       setFinishError(t(teamErrorKey(answered.code)));
       return false;
     }
+    // The firm's setup asked the person's own steps (the factor, the registration): their own setup is answered too,
+    // and the home does not ask them again what they just set aside here.
+    await completeFlow(createClient(), personFlowKey(state.userId, state.orgId)).catch(() => undefined);
     router.push(destination);
     router.refresh();
     return true;
@@ -454,22 +413,19 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
     </Alert>
   );
 
-  // The last step finishes the setup: the partner agency where the firm's module has one, else the channel.
-  const agencyStep = state.agencyModule !== null;
-  // The partnership needs the channel before the agency's passenger agrees: with no test chat on, an agreement is
-  // followed as a real flight and never reaches the test chat (0071), and with no number nobody is told. Said in
-  // the agency's step, with the way back to the channel's (unknown while the connections could not be read).
-  const noChannel = connections !== null && !realNumber && connections.testChat?.state.on !== true;
-  const finishing = { primaryLabel: t("setup-finish"), onPrimary: () => finish("/inicio"), busy: leaving };
+  // The channel finishes the core: the setup of each module the firm contracted follows it, in the module's colour
+  // (0081), else the home.
+  const next = state.nextSetup;
+  const finishing = {
+    primaryLabel: next ? t("setup-finish-next", { module: next.name }) : t("setup-finish"),
+    onPrimary: () => finish(next?.href ?? "/inicio"),
+    busy: leaving,
+  };
   const finishProblem = finishError ? (
     <Alert severity="error" className="neutral bg-background-paper/60!" role="alert">
       {finishError}
     </Alert>
   ) : null;
-  const partners = state.partners;
-  const activePartners = partners?.partnerships.filter((partnership) => partnership.status === "active") ?? [];
-  const day = (value: string) =>
-    new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeZone: "America/Sao_Paulo" }).format(new Date(value));
 
   const steps: WizardStep[] = [
     {
@@ -497,7 +453,7 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
       onPrimary: saveOab,
       secondary:
         lawyer && !registered
-          ? { label: t("setup-not-now"), onClick: () => setStepIndex(SETUP_STEPS.indexOf("valores")) }
+          ? { label: t("setup-not-now"), onClick: () => setStepIndex(SETUP_STEPS.indexOf("equipe")) }
           : undefined,
       content: (
         <Box className="flex flex-col gap-4">
@@ -596,52 +552,6 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
           {oabError ? (
             <Alert severity="error" className="neutral bg-background-paper/60!" role="alert">
               {oabError}
-            </Alert>
-          ) : null}
-        </Box>
-      ),
-    },
-    {
-      title: t("setup-claims-title"),
-      hint: t("setup-claims-hint"),
-      canAdvance: !blocked,
-      onPrimary: saveClaims,
-      content: (
-        <Box className="flex flex-col gap-4">
-          {!decides ? (
-            <Alert severity="info" className="neutral bg-background-paper/60!">
-              {t("setup-claims-not-partner")}
-            </Alert>
-          ) : null}
-          {state.claimDefaults === null ? (
-            <Alert
-              severity="error"
-              className="neutral bg-background-paper/60!"
-              action={
-                <Button color="inherit" size="small" onClick={refresh}>
-                  {t("today-retry")}
-                </Button>
-              }
-            >
-              {t("autonomy-claims-load-error")}
-            </Alert>
-          ) : (
-            <ClaimValueChoice
-              id="setup-claim"
-              choice={claimChoice}
-              typed={claims}
-              kinds={claimKinds}
-              disabled={!claimsEditable}
-              onChoice={(choice) => {
-                setClaimChoice(choice);
-                setClaimsError(null);
-              }}
-              onTyped={(incident, value) => setClaims((before) => ({ ...before, [incident]: value }))}
-            />
-          )}
-          {claimsError ? (
-            <Alert severity="error" className="neutral bg-background-paper/60!" role="alert">
-              {claimsError}
             </Alert>
           ) : null}
         </Box>
@@ -924,7 +834,7 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
       title: t("setup-channel-title"),
       hint: t("setup-channel-hint"),
       canAdvance: !blocked,
-      ...(agencyStep ? {} : finishing),
+      ...finishing,
       content: (
         <Box className="flex flex-col gap-6">
           {!connections ? (
@@ -963,112 +873,15 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
               )}
             </>
           )}
-          {agencyStep ? null : finishProblem}
+          {next ? (
+            <Typography variant="body2" className="text-text-secondary">
+              {t("setup-next-module", { module: next.name })}
+            </Typography>
+          ) : null}
+          {finishProblem}
         </Box>
       ),
     },
-    ...(agencyStep
-      ? [
-          {
-            title: t("setup-agency-title"),
-            hint: t("setup-agency-hint"),
-            canAdvance: !blocked,
-            ...finishing,
-            content: (
-              <Box className="flex flex-col gap-5">
-                {noChannel && !blocked ? (
-                  // The way back under the words, as the factor's prompt has it, so a phone never squeezes them.
-                  <Alert severity="warning" className="neutral bg-background-paper/60!">
-                    <Box className="flex flex-col gap-3">
-                      <Typography variant="body1">{t("setup-agency-no-channel")}</Typography>
-                      <Box>
-                        <Button
-                          variant="outlined"
-                          color="grey"
-                          size="small"
-                          onClick={() => setStepIndex(SETUP_STEPS.indexOf("canal"))}
-                        >
-                          {t("setup-agency-no-channel-action")}
-                        </Button>
-                      </Box>
-                    </Box>
-                  </Alert>
-                ) : null}
-                {partners === null ? (
-                  <Alert
-                    severity="error"
-                    className="neutral bg-background-paper/60!"
-                    action={
-                      <Button color="inherit" size="small" onClick={refresh}>
-                        {t("today-retry")}
-                      </Button>
-                    }
-                  >
-                    {t("partners-load-error")}
-                  </Alert>
-                ) : (
-                  <>
-                    {activePartners.length > 0 || partners.invitations.length > 0 ? (
-                      <Box component="ul" className="m-0 flex list-none flex-col gap-2 p-0">
-                        {activePartners.map((partnership) => (
-                          <Box component="li" key={partnership.linkId} className="flex flex-wrap items-center gap-2">
-                            <Typography variant="subtitle2" component="span" className="break-words">
-                              {partnership.partner}
-                            </Typography>
-                            <StatusChip tone="positive" label={t("partners-status-active")} />
-                          </Box>
-                        ))}
-                        {partners.invitations.map((invitation) => (
-                          <Box component="li" key={invitation.id} className="flex flex-wrap items-center gap-2">
-                            <Typography variant="subtitle2" component="span" className="break-words">
-                              {invitation.partnerName ?? invitation.email}
-                            </Typography>
-                            <StatusChip tone="attention" label={t("setup-agency-invited")} />
-                            <Typography variant="body2" className="text-text-secondary">
-                              {t("setup-agency-invited-until", { date: day(invitation.expiresAt) })}
-                            </Typography>
-                          </Box>
-                        ))}
-                      </Box>
-                    ) : (
-                      <Typography variant="body2" className="text-text-secondary">
-                        {t("setup-agency-none")}
-                      </Typography>
-                    )}
-                    <Box className="flex flex-wrap gap-2">
-                      <Button
-                        variant="outlined"
-                        color="grey"
-                        onClick={() => setInvitingAgency(true)}
-                        disabled={blocked || locked}
-                      >
-                        {t("setup-agency-invite")}
-                      </Button>
-                    </Box>
-                  </>
-                )}
-                <Box component="section" aria-labelledby="setup-agency-needs" className="flex flex-col gap-2">
-                  <Typography id="setup-agency-needs" variant="subtitle2" component="h3" className="mb-0">
-                    {t("setup-agency-needs-title")}
-                  </Typography>
-                  <Box component="ul" className="m-0 flex list-disc flex-col gap-1 pl-5">
-                    <Typography component="li" variant="body2" className="text-text-secondary">
-                      {t("setup-agency-needs-channel")}
-                    </Typography>
-                    <Typography component="li" variant="body2" className="text-text-secondary">
-                      {t("setup-agency-needs-release")}
-                    </Typography>
-                    <Typography component="li" variant="body2" className="text-text-secondary">
-                      {t("setup-agency-needs-test")}
-                    </Typography>
-                  </Box>
-                </Box>
-                {finishProblem}
-              </Box>
-            ),
-          } satisfies WizardStep,
-        ]
-      : []),
   ];
 
   return (
@@ -1095,15 +908,6 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
         onComplete={() => undefined}
         completeLabel={t("setup-finish")}
       />
-      {invitingAgency && state.agencyModule ? (
-        <PartnerInviteDialog
-          mode="agency"
-          module={state.agencyModule}
-          title={t("partners-invite-title")}
-          onClose={() => setInvitingAgency(false)}
-          onInvited={refresh}
-        />
-      ) : null}
       {paperForm ? (
         <TemplateDialog
           template={paperForm.template}

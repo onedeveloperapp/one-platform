@@ -60,7 +60,11 @@ export type AgencySetupState =
       /** Whether the clause could be read: one that could not is never said to be missing. */
       clauseRead: boolean;
       /** The clause ONE proposes, with the agency's and the firm's names; null when there is none to read. */
-      proposal: string | null;
+      /**
+       * The words offered for the clause (0081): the firm's, when it gave them, else ONE's proposal; with whose
+       * they are. Null when there are none to read.
+       */
+      proposal: { text: string; source: "firm" | "one"; firm: string | null } | null;
       /** The agency's team and its open invitations, for who manages it; null when it could not be read. */
       team: Extract<PartnerTeamState, { kind: "ready" }> | null;
       /** The step the address asked for (`?passo=`). */
@@ -143,13 +147,15 @@ function AgencySetupFlow({ state }: { state: Extract<AgencySetupState, { kind: "
   // What the person typed; untouched (null), the field shows the clause in force or ONE's proposal as the page
   // reads it now, so a name corrected in the step before is already in ONE's words.
   const [clauseDraft, setClauseDraft] = useState<string | null>(null);
-  const clause = clauseDraft ?? inForce ?? state.proposal ?? "";
+  const offered = state.proposal?.text ?? null;
+  const clause = clauseDraft ?? inForce ?? offered ?? "";
   const setClause = (value: string) => setClauseDraft(value);
   const [clauseError, setClauseError] = useState<string | null>(null);
   // Registered here, before the page reads it again: the last step stops asking for it at once.
   const [registeredHere, setRegisteredHere] = useState(false);
   const change = clauseChange(clause, inForce);
-  const fromOne = state.proposal !== null && clauseText(clause) === clauseText(state.proposal);
+  // The field holds the words offered, untouched: said as the firm's, or as ONE's.
+  const fromOffer = offered !== null && clauseText(clause) === clauseText(offered);
   const length = clauseText(clause).length;
   const saveClauseStep = async (): Promise<boolean> => {
     setClauseError(null);
@@ -279,10 +285,12 @@ function AgencySetupFlow({ state }: { state: Extract<AgencySetupState, { kind: "
             <StatusChip tone="positive" label={t("pax-clause-version", { version: state.clause.version })} />
           </Box>
         ) : null}
-        {fromOne && !inForce ? (
-          // What ONE proposes is said as ONE's, with what to check: the clause is the agency's to register.
+        {fromOffer && !inForce ? (
+          // Whose the words are, with what to check: the clause is the agency's to register, in its contract.
           <Alert severity="info" className="neutral bg-background-paper/60!">
-            {t("partner-setup-clause-from-one")}
+            {state.proposal?.source === "firm"
+              ? t("partner-setup-clause-from-firm", { firm: state.proposal.firm ?? "" })
+              : t("partner-setup-clause-from-one")}
           </Alert>
         ) : null}
         {!state.clauseRead ? (
@@ -308,9 +316,11 @@ function AgencySetupFlow({ state }: { state: Extract<AgencySetupState, { kind: "
         <Box className="flex flex-wrap items-center gap-2">
           {/* The clause goes into the agency's contract with the passenger: taken in Word as it is written here. */}
           <WordDownloadButton name={t("partner-setup-clause-file")} text={clauseText(clause)} />
-          {state.proposal !== null && !fromOne ? (
-            <Button variant="text" color="grey" size="small" onClick={() => setClause(state.proposal ?? "")}>
-              {t("partner-setup-clause-restore")}
+          {offered !== null && !fromOffer ? (
+            <Button variant="text" color="grey" size="small" onClick={() => setClause(offered)}>
+              {state.proposal?.source === "firm"
+                ? t("partner-setup-clause-restore-firm")
+                : t("partner-setup-clause-restore")}
             </Button>
           ) : null}
         </Box>

@@ -37,7 +37,7 @@ import { type PendingGroup, sayPending } from "@/lib/firm/pending";
 import { type FirmToday, somethingForMe, type TodayNeed, todayNeeds } from "@/lib/firm/today";
 import type { ModuleOffer } from "@/lib/modules/offer";
 import type { ActivationFacts } from "@/lib/onboarding";
-import type { FlowKey, OnboardingStateRow } from "@flyee/onboarding";
+import type { FlowKey, OnboardingStateRow, OnboardingStep } from "@flyee/onboarding";
 
 /**
  * What the home renders from. `no-firm` is the platform operator, who works
@@ -61,12 +61,20 @@ export type HomeState =
       /** The person confirms deadlines: a partner or the controladoria. */
       confirmsDeadlines: boolean;
       /** The firm's setup, for who manages it. Null for everybody else, and when it could not be read. */
-      setup: { flowKey: FlowKey; state: OnboardingStateRow; facts: ActivationFacts } | null;
+      setup: {
+        flowKey: FlowKey;
+        state: OnboardingStateRow;
+        facts: ActivationFacts;
+        /** The setup of each module the firm contracted (0081), its title in words. */
+        moduleSteps: OnboardingStep[];
+      } | null;
       /**
        * No case ever reached the firm: ONE waits for the first, which a module brings and ONE opens. Said as ONE's,
        * never as a step the firm owes (the owner, 2026-11-03). False when the facts could not be read.
        */
       waitsFirstCase: boolean;
+      /** A partner or a lawyer with no registration at the bar: ONE reads none of their publications. */
+      ownRegistrationMissing: boolean;
       /** ONE's modules for the firm (0075, 0078); null when they could not be read. */
       modules: ModuleOffer | null;
     }
@@ -357,11 +365,27 @@ export default function HomeView({ state }: { state: HomeState }) {
             />
           ) : null}
 
+          {ready.ownRegistrationMissing ? (
+            // Set aside in their own setup: the DJEN is read by the registrations of the firm's people.
+            <Alert
+              severity="warning"
+              className="neutral bg-background-paper/60!"
+              action={
+                <Button color="inherit" size="small" href="/configurar?passo=oab" LinkComponent={Link}>
+                  {t("today-own-oab-action")}
+                </Button>
+              }
+            >
+              {t("today-own-oab-missing")}
+            </Alert>
+          ) : null}
+
           {ready.setup ? (
             <OnboardingChecklistCard
               flowKey={ready.setup.flowKey}
               state={ready.setup.state}
               facts={ready.setup.facts}
+              moduleSteps={ready.setup.moduleSteps}
               title={t("setup-title")}
             />
           ) : null}

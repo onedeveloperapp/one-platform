@@ -6,6 +6,7 @@ import {
   caseKindLabelKey,
   caseKindsOf,
   firmCaseKinds,
+  firmSetupOf,
   isCaseKindOf,
   MODULES,
   partnerSetupOf,
@@ -59,6 +60,12 @@ describe("the modules installed", () => {
     expect(partnerSetupOf("agency")).toBe("/parceiro/configurar");
     expect(partnerSetupOf("contabilidade")).toBeNull();
     expect(partnerSetupOf(null)).toBeNull();
+  });
+
+  it("says where a firm sets up the passenger module, and nothing for a module with nothing to set up", () => {
+    expect(firmSetupOf(PASSENGER_MODULE)).toBe("/configurar/direito-do-passageiro");
+    expect(firmSetupOf("direito-trabalhista")).toBeNull();
+    expect(firmSetupOf(null)).toBeNull();
   });
 
   it("answers nothing for what no module has", () => {

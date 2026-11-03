@@ -97,7 +97,7 @@ export const getMemberContext = cache(async (): Promise<MemberContext | null> =>
     supabase.from("profiles").select("display_name, timezone, is_superadmin").eq("id", user.id).maybeSingle(),
     supabase
       .from("product_modules")
-      .select("key, name, status, sold_as, description, sort, icon, retired_at")
+      .select("key, name, status, sold_as, description, sort, icon, tone, retired_at")
       .then(({ data, error }) => (error ? null : moduleCatalogOf(data))),
     cookies(),
   ]);

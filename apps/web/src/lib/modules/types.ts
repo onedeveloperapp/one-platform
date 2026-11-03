@@ -63,6 +63,11 @@ export type ModuleDefinition = {
    * partner's home opens on it while who manages the partner never answered it. None for a module with no partner.
    */
   partnerSetup?: { kind: string; href: string };
+  /**
+   * The page of the module's route group where a firm that contracted it sets it up (0081): its own steps, in the
+   * module's colour, after the firm's core setup and before the home. None for a module with nothing to set up.
+   */
+  firmSetup?: string;
   /** What only the module has, which its area in the firm's app lists (0078). */
   firmArea: readonly FirmAreaEntry[];
   /** The test chat stands for this module's passenger: its area offers the chat while the firm has it on (0047). */

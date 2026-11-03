@@ -14,7 +14,8 @@ import type { ModuleOffer } from "@/lib/modules/offer";
  * ONE's modules as the home's quick access (migrations 0075, 0078): one card per module, the template's quick
  * action, its column holding the icon that says what the module is. A module the firm contracted opens its own
  * area, where everything of it lives and nothing of another module; one still to come says "Em breve", and one out
- * that the firm did not contract carries a lock, both leading to the overview that says what each is.
+ * that the firm did not contract carries a lock, both leading to the overview that says what each is. Each card
+ * takes its module's colour (0081), whatever its state, so a module is told apart at a glance.
  *
  * Closest catalog entry: `QuickActionTile`, used as it is, with its badge for the state. It replaced the line of
  * chips under the title (`ModulesStrip`), which named the modules and opened none of them.
@@ -39,7 +40,7 @@ export default function ModulesQuickAccess({ offer }: { offer: ModuleOffer }) {
             <QuickActionTile
               href={state === "contracted" ? `/modulos/${module.key}` : `/modulos#${module.key}`}
               icon={<ModuleIcon name={module.icon} />}
-              tone={state === "contracted" ? "primary" : state === "soon" ? "accent-3" : "secondary"}
+              tone={module.tone}
               title={module.name}
               description={
                 module.description ??

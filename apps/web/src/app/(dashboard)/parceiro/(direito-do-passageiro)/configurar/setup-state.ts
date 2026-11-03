@@ -7,7 +7,7 @@ import type { SecondFactorState } from "@/lib/ai/approvals";
 import type { MemberContext } from "@/lib/member/context";
 import { type PartnerTeamState, readPartnerTeam } from "@/lib/partners/facts";
 import { isPartnerManager } from "@/lib/partners/partner";
-import { readClause, readClauseProposal } from "@/modules/direito-do-passageiro/agency/facts";
+import { readClause, readClauseOffer } from "@/modules/direito-do-passageiro/agency/facts";
 import type { AgencySetupStep } from "@/modules/direito-do-passageiro/agency/setup";
 import { PASSENGER_MODULE } from "@/modules/direito-do-passageiro/incidents";
 import { IMPERSONATION_MARKER_COOKIE } from "@flyee/auth";
@@ -32,7 +32,7 @@ export async function loadAgencySetupState(
     readClause(context, partner.id).catch(() => ({ ok: false as const })),
     // What ONE proposes and the team are who manages the agency's to act on.
     manager
-      ? readClauseProposal(context, partner.id).catch(() => ({ ok: false as const }))
+      ? readClauseOffer(context, partner.id).catch(() => ({ ok: false as const }))
       : Promise.resolve({ ok: false as const }),
     manager ? readPartnerTeam(context).catch((): PartnerTeamState => ({ kind: "error" })) : Promise.resolve(null),
   ]);

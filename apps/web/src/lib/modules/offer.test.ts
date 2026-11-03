@@ -11,6 +11,7 @@ const rows = [
     description: "Reclamações trabalhistas em volume.",
     sort: 3,
     icon: "NiHardHat",
+    tone: "accent-4",
     retired_at: null,
   },
   {
@@ -21,6 +22,7 @@ const rows = [
     description: "Ações de passageiros aéreos.",
     sort: 1,
     icon: "NiPlane",
+    tone: "secondary",
     retired_at: null,
   },
   {
@@ -51,6 +53,7 @@ const rows = [
     description: null,
     sort: 4,
     icon: "aviao.svg",
+    tone: "vermelho-vivo",
     retired_at: null,
   },
 ];
@@ -72,6 +75,13 @@ describe("moduleCatalogOf", () => {
     expect(catalog?.find((module) => module.key === "modulo-novo")?.icon).toBeNull();
   });
 
+  it("gives each module its colour of the design system, and the core's to one that names none or another", () => {
+    expect(catalog?.find((module) => module.key === "direito-do-passageiro")?.tone).toBe("secondary");
+    expect(catalog?.find((module) => module.key === "direito-trabalhista")?.tone).toBe("accent-4");
+    expect(catalog?.find((module) => module.key === "direito-previdenciario")?.tone).toBe("primary");
+    expect(catalog?.find((module) => module.key === "modulo-novo")?.tone).toBe("primary");
+  });
+
   it("leaves out a module whose state it does not know, and is null for what is not a list", () => {
     expect(moduleCatalogOf([...rows, { key: "beta", name: "Beta", status: "beta" }])?.map((m) => m.key)).not.toContain(
       "beta",
@@ -89,6 +99,7 @@ describe("moduleOfferOf", () => {
         name: "Direito do Passageiro",
         description: "Ações de passageiros aéreos.",
         icon: "NiPlane",
+        tone: "secondary",
         soldAs: "package",
         since: "2026-10-29T12:00:00Z",
       },

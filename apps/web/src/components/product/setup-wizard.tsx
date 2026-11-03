@@ -5,6 +5,7 @@ import { useState } from "react";
 
 import { Box, Button, Card, CardContent, Typography } from "@mui/material";
 
+import type { TileTone } from "@/components/product/tile-tone";
 import NiArrowRight from "@/icons/nexture/ni-arrow-right";
 import NiCheck from "@/icons/nexture/ni-check";
 import { cn } from "@/lib/utils";
@@ -48,6 +49,16 @@ export type WizardStep = {
   noBack?: boolean;
 };
 
+// The rail in a tone, the done steps full and the current one lighter: whole class names, for Tailwind to see them.
+const RAIL: Record<TileTone, { done: string; current: string }> = {
+  primary: { done: "bg-primary", current: "bg-primary/60" },
+  secondary: { done: "bg-secondary", current: "bg-secondary/60" },
+  "accent-1": { done: "bg-accent-1", current: "bg-accent-1/60" },
+  "accent-2": { done: "bg-accent-2", current: "bg-accent-2/60" },
+  "accent-3": { done: "bg-accent-3", current: "bg-accent-3/60" },
+  "accent-4": { done: "bg-accent-4", current: "bg-accent-4/60" },
+};
+
 /**
  * Multi-step setup shell (progressive disclosure): one decision per screen
  * with a visible progress rail, so a long setup never feels long. Splitting
@@ -63,6 +74,7 @@ export default function SetupWizard({
   initialIndex = 0,
   index: controlledIndex,
   onIndexChange,
+  tone = "primary",
 }: {
   steps: WizardStep[];
   onComplete: () => void;
@@ -93,6 +105,11 @@ export default function SetupWizard({
    */
   index?: number;
   onIndexChange?: (next: number) => void;
+  /**
+   * The colour of the progress rail: the primary for the core's setups, a module's own colour for its setup (0081),
+   * so a module is told apart at a glance. The buttons keep the app's action colour.
+   */
+  tone?: TileTone;
 }) {
   const t = useTranslations("product");
   const [ownIndex, setOwnIndex] = useState(() => Math.max(0, Math.min(steps.length - 1, initialIndex)));
@@ -135,7 +152,7 @@ export default function SetupWizard({
               key={i}
               className={cn(
                 "h-1.5 flex-1 rounded-full transition-colors",
-                i < index ? "bg-primary" : i === index ? "bg-primary/60" : "bg-grey-100",
+                i < index ? RAIL[tone].done : i === index ? RAIL[tone].current : "bg-grey-100",
               )}
             />
           ))}

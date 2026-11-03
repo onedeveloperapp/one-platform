@@ -7,7 +7,7 @@ import OnboardingChecklist from "@/components/product/onboarding-checklist";
 import { type ActivationFacts, buildOnboardingSteps, isActivated } from "@/lib/onboarding";
 import { isSupabaseConfigured } from "@flyee/auth";
 import { createClient } from "@flyee/auth/client";
-import { dismissFlow, type FlowKey, type OnboardingStateRow } from "@flyee/onboarding";
+import { dismissFlow, type FlowKey, type OnboardingStateRow, type OnboardingStep } from "@flyee/onboarding";
 
 /**
  * The firm's setup checklist on the home. The page reads, under the person's
@@ -21,26 +21,35 @@ export default function OnboardingChecklistCard({
   flowKey,
   state,
   facts,
+  moduleSteps = [],
   title,
   className,
 }: {
   flowKey: FlowKey;
   state: OnboardingStateRow;
   facts: ActivationFacts;
+  /**
+   * The setup of each module the firm contracted (0081), after the core's steps, its title already in words (the
+   * module's name is data): done once who manages the firm answered it.
+   */
+  moduleSteps?: OnboardingStep[];
   title?: string;
   className?: string;
 }) {
   const t = useTranslations("product");
   const [dismissed, setDismissed] = useState(state.dismissed);
 
-  if (dismissed || state.completedAt || isActivated(facts)) return null;
+  if (dismissed || state.completedAt || (isActivated(facts) && moduleSteps.every((step) => step.done))) return null;
 
   // Step titles are message keys declared with the steps (lib/onboarding.ts).
-  const steps = buildOnboardingSteps(facts).map((step) => ({
-    ...step,
-    title: t(step.title),
-    description: step.description ? t(step.description) : undefined,
-  }));
+  const steps = [
+    ...buildOnboardingSteps(facts).map((step) => ({
+      ...step,
+      title: t(step.title),
+      description: step.description ? t(step.description) : undefined,
+    })),
+    ...moduleSteps,
+  ];
 
   const handleDismiss = () => {
     setDismissed(true);

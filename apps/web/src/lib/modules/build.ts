@@ -21,6 +21,8 @@ export type ModuleRegistry = {
   caseKindForModel: (kind: string | null | undefined) => string | null;
   /** Where somebody of a partner of this kind sets it up (0080); null for a kind no module has. */
   partnerSetupOf: (kind: string | null | undefined) => string | null;
+  /** Where a firm sets up a module it contracted (0081); null for a module with nothing to set up, or none. */
+  firmSetupOf: (moduleKey: string | null | undefined) => string | null;
 };
 
 /**
@@ -59,5 +61,6 @@ export function buildRegistry(definitions: readonly ModuleDefinition[]): ModuleR
     caseKindLabelKey: (kind) => (kind ? (kinds.get(kind)?.labelKey ?? null) : null),
     caseKindForModel: (kind) => (kind ? (kinds.get(kind)?.forModel ?? null) : null),
     partnerSetupOf: (kind) => (kind ? (setups.get(kind) ?? null) : null),
+    firmSetupOf: (moduleKey) => moduleOf(moduleKey)?.firmSetup ?? null,
   };
 }
