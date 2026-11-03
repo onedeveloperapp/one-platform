@@ -1,9 +1,13 @@
-import { strFromU8, unzipSync } from "fflate";
+import { strFromU8, strToU8, unzipSync, zipSync } from "fflate";
+
+import { draftBlocks } from "@/lib/cases/drafts";
 
 /**
  * The text of a Word document (.docx), paragraph by paragraph, as the page
  * shows it: what the library makes a model of (migration 0067). Pure but for
- * the unzipping: no I/O, no clock.
+ * the unzipping: no I/O, no clock. The other way, `writeDocx` writes a text
+ * as a Word document the firm downloads (a model of the library, the paper a
+ * client signs), which this reader reads back as it was written.
  *
  * A .docx is a zip of XML parts. Only the parts that hold the text are
  * unpacked (the body, the lists' numbering, the footnotes and the endnotes),
@@ -423,4 +427,114 @@ export function readDocx(bytes: Uint8Array, mostUnpacked = MOST_UNPACKED): DocxT
     });
   }
   return { ok: true, paragraphs };
+}
+
+// ---------- Writing ----------
+
+/** A block of a Word document ONE writes: a heading, or a paragraph whose lines stay apart, as `draftBlocks` reads a text. */
+export type DocxBlock = { kind: "heading"; text: string } | { kind: "paragraph"; text: string; indent?: boolean };
+
+/** The type a browser is told a Word document is. */
+export const DOCX_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+
+const WORD_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+const PACKAGE_NS = "http://schemas.openxmlformats.org/package/2006/relationships";
+const OFFICE_NS = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+const XML_HEAD = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>';
+
+/** Every part of a package is dated the same: the same text is the same file. */
+const PACKAGE_DATE = "2026-01-01T00:00:00";
+
+/** A character XML 1.0 carries: the tab, the line feed, the carriage return and every other from the space on, never a lone half of a pair nor U+FFFE and U+FFFF. */
+const carried = (char: string): boolean => {
+  const code = char.codePointAt(0) ?? 0;
+  if (code === 0x09 || code === 0x0a || code === 0x0d) return true;
+  return code >= 0x20 && code !== 0xfffe && code !== 0xffff && (code < 0xd800 || code > 0xdfff);
+};
+
+const escapeXml = (text: string): string =>
+  Array.from(text).filter(carried).join("").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+/** The run of a block's text: each line apart by a line break, each tab as Word's own. */
+function runOf(text: string): string {
+  const parts: string[] = [];
+  text
+    .replace(/\r\n?/g, "\n")
+    .split("\n")
+    .forEach((line, index) => {
+      if (index > 0) parts.push("<w:br/>");
+      line.split("\t").forEach((piece, at) => {
+        if (at > 0) parts.push("<w:tab/>");
+        const written = escapeXml(piece);
+        if (written !== "") parts.push(`<w:t xml:space="preserve">${written}</w:t>`);
+      });
+    });
+  return parts.length > 0 ? `<w:r>${parts.join("")}</w:r>` : "";
+}
+
+function paragraphXml(block: DocxBlock): string {
+  const properties =
+    block.kind === "heading"
+      ? '<w:pPr><w:pStyle w:val="Heading1"/></w:pPr>'
+      : block.indent
+        ? '<w:pPr><w:ind w:firstLine="709"/></w:pPr>'
+        : "";
+  return `<w:p>${properties}${runOf(block.text)}</w:p>`;
+}
+
+/**
+ * The styles of the document: Arial 12 in Portuguese, justified, with a line and a half, as a petition is
+ * usually written; a heading in bold, kept with what follows it.
+ */
+const STYLES = `${XML_HEAD}<w:styles xmlns:w="${WORD_NS}"><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:eastAsia="Arial" w:cs="Arial"/><w:sz w:val="24"/><w:szCs w:val="24"/><w:lang w:val="pt-BR" w:eastAsia="pt-BR" w:bidi="ar-SA"/></w:rPr></w:rPrDefault><w:pPrDefault><w:pPr><w:spacing w:after="120" w:line="360" w:lineRule="auto"/><w:jc w:val="both"/></w:pPr></w:pPrDefault></w:docDefaults><w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:qFormat/></w:style><w:style w:type="paragraph" w:styleId="Heading1"><w:name w:val="heading 1"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/><w:qFormat/><w:pPr><w:keepNext/><w:keepLines/><w:spacing w:before="240" w:after="120"/><w:jc w:val="left"/><w:outlineLvl w:val="0"/></w:pPr><w:rPr><w:b/><w:bCs/></w:rPr></w:style></w:styles>`;
+
+/**
+ * A Word document (.docx) of blocks of text, on A4 pages with the margins of a petition (3 cm at the top and the
+ * left, 2 cm at the right and the bottom): the parts Word needs and nothing else, so the file names nobody but what
+ * its text says. Pure: the same blocks give the same bytes.
+ */
+export function writeDocx(blocks: readonly DocxBlock[]): Uint8Array {
+  // Word wants a paragraph in a body, an empty one included.
+  const body = blocks.length > 0 ? blocks.map(paragraphXml).join("") : "<w:p/>";
+  const document = `${XML_HEAD}<w:document xmlns:w="${WORD_NS}"><w:body>${body}<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1701" w:right="1134" w:bottom="1134" w:left="1701" w:header="709" w:footer="709" w:gutter="0"/></w:sectPr></w:body></w:document>`;
+  const files: Record<string, Uint8Array> = {
+    // The list of the package's types comes first, as Word writes it.
+    "[Content_Types].xml": strToU8(
+      `${XML_HEAD}<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/></Types>`,
+    ),
+    "_rels/.rels": strToU8(
+      `${XML_HEAD}<Relationships xmlns="${PACKAGE_NS}"><Relationship Id="rId1" Type="${OFFICE_NS}/officeDocument" Target="word/document.xml"/></Relationships>`,
+    ),
+    "word/document.xml": strToU8(document),
+    "word/_rels/document.xml.rels": strToU8(
+      `${XML_HEAD}<Relationships xmlns="${PACKAGE_NS}"><Relationship Id="rId1" Type="${OFFICE_NS}/styles" Target="styles.xml"/></Relationships>`,
+    ),
+    "word/styles.xml": strToU8(STYLES),
+  };
+  return zipSync(files, { level: 6, mtime: PACKAGE_DATE });
+}
+
+/** A mark the platform fills with the facts of a lawsuit or a client (`[[OUTORGANTE]]`). */
+const MARK = /\[\[[A-Z_]+\]\]/g;
+
+/**
+ * A text of the library (a model, the paper a client signs, a clause) as a Word document, block by block as the
+ * PDF of what it is filled into prints it (`draftBlocks`): a line all in capitals a heading, every other a
+ * paragraph with its lines as they were written. A mark is filled with names and facts written in lower case, so
+ * a line is told a heading as if its marks were ("OUTORGANTE: [[OUTORGANTE]]." is a paragraph of the document,
+ * and here). The marks stay as they are: the file is the model, to be read, printed or changed in Word and sent
+ * back as a model of the firm.
+ */
+export function textDocx(text: string): Uint8Array {
+  const blocks = draftBlocks(text);
+  // The same blocks, in the same order: only the case of the marks differs, never a line or a blank one.
+  const filled = draftBlocks(text.replace(MARK, (mark) => mark.toLowerCase()));
+  return writeDocx(
+    blocks.flatMap((block, index): DocxBlock[] => {
+      if (block.kind !== "heading" && block.kind !== "paragraph") return [];
+      const shape = filled[index];
+      if (shape?.kind === "heading") return [{ kind: "heading", text: block.text }];
+      return [{ kind: "paragraph", text: block.text, indent: shape?.kind === "paragraph" && shape.indent === true }];
+    }),
+  );
 }

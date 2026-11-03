@@ -36,6 +36,7 @@ import SecondFactorPrompt from "@/components/product/second-factor-prompt";
 import SetupWizard, { type WizardStep } from "@/components/product/setup-wizard";
 import StatusChip from "@/components/product/status-chip";
 import { useEmailReady } from "@/components/product/use-email-ready";
+import WordDownloadButton from "@/components/product/word-download-button";
 import type { SecondFactorState } from "@/lib/ai/approvals";
 import { addOabRegistration, answerFirmSetup, inviteToFirm } from "@/lib/firm/actions";
 import {
@@ -49,6 +50,7 @@ import {
 import { setFirmClaimDefault, setFirmSigner } from "@/lib/firm/autonomy-actions";
 import { FIRM_FUNCTIONS, type FirmFunction, formatOab, OAB_STATES, type OabRegistration } from "@/lib/firm/roles";
 import { SETUP_STEPS, setupOpening, type SetupStepKey } from "@/lib/firm/setup-steps";
+import { readDraftTemplate } from "@/lib/library/actions";
 import type { LibraryTemplate, SetupPaper } from "@/lib/library/facts";
 import { caseKindLabelKey, firmCaseKinds } from "@/lib/modules/registry";
 import type { FirmPartnersState } from "@/lib/partners/facts";
@@ -754,7 +756,8 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
           ) : (
             (["procuracao", "contrato"] as const).map((paper) => {
               const choice = papers[paper];
-              const own = choice.used && !choice.used.platform ? choice.used : null;
+              const used = choice.used;
+              const own = used && !used.platform ? used : null;
               const words = PAPER_WORDS[paper];
               // A paper of the firm is changed; the platform's power of attorney is a start; a contract is new.
               const can = lawyer && !blocked && (own !== null || choice.platform !== null || paper === "contrato");
@@ -771,11 +774,20 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
                   <Typography variant="body2" className="text-text-secondary">
                     {own ? t(words.firm, { name: own.name }) : t(words.one)}
                   </Typography>
-                  {can ? (
-                    <Box>
-                      <Button variant="outlined" color="grey" size="small" onClick={() => openPaper(paper, choice)}>
-                        {own ? t("setup-papers-open") : t(words.make)}
-                      </Button>
+                  {can || used ? (
+                    <Box className="flex flex-wrap gap-2">
+                      {can ? (
+                        <Button variant="outlined" color="grey" size="small" onClick={() => openPaper(paper, choice)}>
+                          {own ? t("setup-papers-open") : t(words.make)}
+                        </Button>
+                      ) : null}
+                      {/* The paper ONE sends, the firm's or the platform's, taken in Word by whoever sets the firm up. */}
+                      {used ? (
+                        <WordDownloadButton
+                          name={used.name}
+                          read={() => readDraftTemplate(used.id).then((read) => (read.ok ? read.body : null))}
+                        />
+                      ) : null}
                     </Box>
                   ) : null}
                 </Box>

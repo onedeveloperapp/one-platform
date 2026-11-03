@@ -30,6 +30,7 @@ import DialogHeader from "@/components/product/dialog-header";
 import EmptyState from "@/components/product/empty-state";
 import PageHeader from "@/components/product/page-header";
 import StatusChip from "@/components/product/status-chip";
+import WordDownloadButton from "@/components/product/word-download-button";
 import NiBook from "@/icons/nexture/ni-book";
 import NiDocumentFull from "@/icons/nexture/ni-document-full";
 import type { PlatformContent, PlatformSource, PlatformTemplate } from "@/lib/admin/platform-content";
@@ -169,6 +170,12 @@ export default function ContentConsoleView({ state }: { state: ConsoleState<{ co
                     >
                       Editar
                     </Button>
+                    <WordDownloadButton
+                      name={template.name}
+                      text={template.body}
+                      label="Baixar em Word"
+                      ariaLabel={`Baixar o modelo ${template.name} em Word`}
+                    />
                     <Button
                       variant="text"
                       color="grey"

@@ -6,6 +6,7 @@ import { useState } from "react";
 import { Alert, Box, Button, Dialog, DialogActions, DialogContent, TextField, Typography } from "@mui/material";
 
 import DialogHeader from "@/components/product/dialog-header";
+import WordDownloadButton from "@/components/product/word-download-button";
 import { saveClause } from "@/modules/direito-do-passageiro/agency/actions";
 import { paxErrorKey } from "@/modules/direito-do-passageiro/agency/passengers";
 
@@ -101,6 +102,12 @@ export default function ClauseDialog({
         </Box>
       </DialogContent>
       <DialogActions>
+        {/* The clause in force, which the agency's contract with the passenger carries, taken in Word. */}
+        {clause ? (
+          <Box className="mr-auto">
+            <WordDownloadButton name={t("pax-clause-file", { version: clause.version })} text={clause.body} />
+          </Box>
+        ) : null}
         <Button variant="text" color="grey" onClick={onClose} disabled={busy}>
           {t("pax-close")}
         </Button>

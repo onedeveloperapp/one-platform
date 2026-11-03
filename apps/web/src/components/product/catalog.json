@@ -145,6 +145,12 @@
       "use": "What the AI read in a document of a case and suggests (accept or refuse, the reason the client would read, what the file is, the name on it, the legs of a ticket), shown where a person decides it: the case and the approval queue. It decides nothing; the card around it offers the decision. TILE_TONE icon box + StatusChip, the dedicated view of one task's answer that AnswerFields allows."
     },
     {
+      "name": "WordDownloadButton",
+      "from": "@/components/product/word-download-button",
+      "props": "name, text? | read?: () => Promise<string | null>, label?, ariaLabel?, disabled?, variant?",
+      "use": "'Baixar em Word' on every text a firm gives ONE to work with (a model of the library, the paper its clients sign, an agency's clause): wherever it is listed and wherever it is written, the platform's too. The .docx is written in the browser (downloadWord over textDocx, read back by the library's own reader), with the marks as they are, so the file is the model; the text is in hand or read on press, and a failure is a snackbar. The small grey text button of a row's actions, never a link to another screen."
+    },
+    {
       "name": "SecondFactorPrompt",
       "from": "@/components/product/second-factor-prompt",
       "props": "id, state: missing | challenge, reason, onConfirmed",

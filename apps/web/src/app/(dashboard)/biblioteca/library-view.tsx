@@ -24,12 +24,13 @@ import EmptyState from "@/components/product/empty-state";
 import { StatTile } from "@/components/product/home-tiles";
 import PageHeader from "@/components/product/page-header";
 import StatusChip from "@/components/product/status-chip";
+import WordDownloadButton from "@/components/product/word-download-button";
 import NiBook from "@/icons/nexture/ni-book";
 import NiDocumentFull from "@/icons/nexture/ni-document-full";
 import NiShieldCheck from "@/icons/nexture/ni-shield-check";
 import NiUploadCloud from "@/icons/nexture/ni-upload-cloud";
 import NiUsers from "@/icons/nexture/ni-users";
-import { removeDraftTemplate, retireLegalSource, saveLegalSource } from "@/lib/library/actions";
+import { readDraftTemplate, removeDraftTemplate, retireLegalSource, saveLegalSource } from "@/lib/library/actions";
 import type { LibraryData, LibrarySource, LibraryTemplate, MissingSource } from "@/lib/library/facts";
 import { dismissModelFromDocument, watchModelImports } from "@/lib/library/import-actions";
 import type { LibraryImport } from "@/lib/library/import-read";
@@ -435,19 +436,19 @@ export default function LibraryView({ state, citation }: { state: LibraryState; 
                       ) : template.cited > 0 ? (
                         <StatusChip tone="positive" label={t("library-template-covered")} />
                       ) : null}
-                      {mayWrite && template.platform ? (
-                        <Button
-                          variant="text"
-                          color="grey"
-                          size="small"
-                          disabled={full}
-                          onClick={() => setTemplateForm({ template: null, copyOf: template })}
-                          aria-label={t("library-template-copy-label", { name: template.name })}
-                        >
-                          {t("library-template-copy")}
-                        </Button>
-                      ) : mayWrite ? (
-                        <Box className="flex flex-wrap gap-1">
+                      <Box className="flex flex-wrap gap-1">
+                        {mayWrite && template.platform ? (
+                          <Button
+                            variant="text"
+                            color="grey"
+                            size="small"
+                            disabled={full}
+                            onClick={() => setTemplateForm({ template: null, copyOf: template })}
+                            aria-label={t("library-template-copy-label", { name: template.name })}
+                          >
+                            {t("library-template-copy")}
+                          </Button>
+                        ) : mayWrite ? (
                           <Button
                             variant="text"
                             color="grey"
@@ -457,6 +458,13 @@ export default function LibraryView({ state, citation }: { state: LibraryState; 
                           >
                             {t("library-template-edit")}
                           </Button>
+                        ) : null}
+                        {/* Anybody who reads the library takes a model in Word, the platform's too. */}
+                        <WordDownloadButton
+                          name={template.name}
+                          read={() => readDraftTemplate(template.id).then((read) => (read.ok ? read.body : null))}
+                        />
+                        {mayWrite && !template.platform ? (
                           <Button
                             variant="text"
                             color="grey"
@@ -466,8 +474,8 @@ export default function LibraryView({ state, citation }: { state: LibraryState; 
                           >
                             {t("library-template-remove")}
                           </Button>
-                        </Box>
-                      ) : null}
+                        ) : null}
+                      </Box>
                     </Box>
                   ))}
                 </Box>

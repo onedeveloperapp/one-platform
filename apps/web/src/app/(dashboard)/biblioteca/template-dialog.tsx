@@ -20,6 +20,7 @@ import {
 
 import ConfirmActionDialog from "@/components/product/confirm-action-dialog";
 import DialogHeader from "@/components/product/dialog-header";
+import WordDownloadButton from "@/components/product/word-download-button";
 import {
   DRAFT_MARK_KEY,
   DRAFT_MARKS,
@@ -412,6 +413,12 @@ export default function TemplateDialog({
           <Button variant="text" color="grey" disabled={pending} onClick={close}>
             {t("library-cancel")}
           </Button>
+          {/* The text as it is on the screen, saved or not: what ONE prepared included, to be read in Word. */}
+          <WordDownloadButton
+            name={name.trim() || t("word-download-fallback")}
+            text={body ?? ""}
+            disabled={locked || !(body ?? "").trim()}
+          />
         </Box>
       </DialogContent>
 

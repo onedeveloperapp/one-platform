@@ -1,7 +1,7 @@
-import { strToU8, zipSync } from "fflate";
+import { strFromU8, strToU8, unzipSync, zipSync } from "fflate";
 import { describe, expect, it } from "vitest";
 
-import { readDocx } from "@/lib/library/docx";
+import { readDocx, textDocx, writeDocx } from "@/lib/library/docx";
 
 /**
  * The text of a Word document as the library reads it (migration 0067). The
@@ -180,5 +180,84 @@ describe("the text of a Word document", () => {
     const long = docx(paragraph(run("a".repeat(5000))));
     expect(readDocx(long, 4096)).toEqual({ ok: false, code: "too_large" });
     expect(readDocx(long).ok).toBe(true);
+  });
+});
+
+describe("a Word document ONE writes", () => {
+  it("is read back as the blocks it was written with, a line break, a tab and the signs of XML included", () => {
+    const written = writeDocx([
+      { kind: "heading", text: "PROCURAÇÃO AD JUDICIA" },
+      { kind: "paragraph", text: "OUTORGANTE: [[OUTORGANTE]]" },
+      { kind: "paragraph", text: "Fulano de Tal\nOAB/XX 00.000" },
+      { kind: "paragraph", text: "Valor:\tR$ 1.000,00 & juros <sobre> o principal", indent: true },
+    ]);
+    expect(read(written)).toEqual([
+      "PROCURAÇÃO AD JUDICIA",
+      "OUTORGANTE: [[OUTORGANTE]]",
+      "Fulano de Tal\nOAB/XX 00.000",
+      "Valor: R$ 1.000,00 & juros <sobre> o principal",
+    ]);
+  });
+
+  it("writes a text block by block as its PDF prints it: a line in capitals a heading in bold, the rest paragraphs", () => {
+    const text =
+      "PROCURAÇÃO\n\nOutorgante: [[OUTORGANTE]].\n\nPODERES\n\nPara o foro em geral,\ncom a cláusula ad judicia.";
+    const bytes = textDocx(text);
+    expect(read(bytes)).toEqual([
+      "PROCURAÇÃO",
+      "Outorgante: [[OUTORGANTE]].",
+      "PODERES",
+      "Para o foro em geral,\ncom a cláusula ad judicia.",
+    ]);
+    const document = strFromU8(unzipSync(bytes)["word/document.xml"]);
+    expect(document.match(/<w:pStyle w:val="Heading1"\/>/g)).toHaveLength(2);
+  });
+
+  it("tells a heading as if its marks were filled: a line of marks in capitals is a paragraph of the document", () => {
+    const text = "PROCURAÇÃO\n\nOUTORGANTE: [[OUTORGANTE]].\n\n[[LOCAL_DATA]]\n\nAÇÃO CONTRA [[RE]]\n\nDOS PEDIDOS";
+    const document = strFromU8(unzipSync(textDocx(text))["word/document.xml"]);
+    const headings = [
+      ...document.matchAll(/<w:p><w:pPr><w:pStyle w:val="Heading1"\/><\/w:pPr><w:r><w:t[^>]*>([^<]*)</g),
+    ];
+    expect(headings.map((match) => match[1])).toEqual(["PROCURAÇÃO", "DOS PEDIDOS"]);
+    expect(read(textDocx(text))).toEqual([
+      "PROCURAÇÃO",
+      "OUTORGANTE: [[OUTORGANTE]].",
+      "[[LOCAL_DATA]]",
+      "AÇÃO CONTRA [[RE]]",
+      "DOS PEDIDOS",
+    ]);
+  });
+
+  it("has the parts Word opens a document by, on A4 pages, in Portuguese, naming nobody", () => {
+    const parts = unzipSync(textDocx("Texto do modelo."));
+    expect(Object.keys(parts)).toEqual([
+      "[Content_Types].xml",
+      "_rels/.rels",
+      "word/document.xml",
+      "word/_rels/document.xml.rels",
+      "word/styles.xml",
+    ]);
+    const types = strFromU8(parts["[Content_Types].xml"]);
+    expect(types).toContain('PartName="/word/document.xml"');
+    expect(types).toContain("wordprocessingml.document.main+xml");
+    expect(strFromU8(parts["_rels/.rels"])).toContain('Target="word/document.xml"');
+    expect(strFromU8(parts["word/_rels/document.xml.rels"])).toContain('Target="styles.xml"');
+    expect(strFromU8(parts["word/document.xml"])).toContain('<w:pgSz w:w="11906" w:h="16838"/>');
+    expect(strFromU8(parts["word/styles.xml"])).toContain('<w:lang w:val="pt-BR"');
+    expect(Object.keys(parts).some((name) => name.startsWith("docProps/"))).toBe(false);
+  });
+
+  it("leaves out what XML cannot carry, and writes an empty text as one empty paragraph", () => {
+    const control = String.fromCharCode(1, 8, 11, 31);
+    const lone = String.fromCharCode(0xd800);
+    expect(read(writeDocx([{ kind: "paragraph", text: `antes${control}${lone}depois` }]))).toEqual(["antesdepois"]);
+    const empty = textDocx("");
+    expect(read(empty)).toEqual([]);
+    expect(strFromU8(unzipSync(empty)["word/document.xml"])).toContain("<w:body><w:p/><w:sectPr>");
+  });
+
+  it("writes the same bytes for the same text", () => {
+    expect(textDocx("DOS FATOS\n\nO voo atrasou.")).toEqual(textDocx("DOS FATOS\n\nO voo atrasou."));
   });
 });
