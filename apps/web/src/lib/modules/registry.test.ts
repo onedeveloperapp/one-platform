@@ -8,6 +8,7 @@ import {
   firmCaseKinds,
   isCaseKindOf,
   MODULES,
+  partnerSetupOf,
 } from "@/lib/modules/registry";
 import type { ModuleDefinition } from "@/lib/modules/types";
 import {
@@ -52,6 +53,12 @@ describe("the modules installed", () => {
         expect(entry.href.startsWith("/"), entry.href).toBe(true);
       }
     }
+  });
+
+  it("says where a travel agency sets itself up: a page of the passenger module's area of the partner", () => {
+    expect(partnerSetupOf("agency")).toBe("/parceiro/configurar");
+    expect(partnerSetupOf("contabilidade")).toBeNull();
+    expect(partnerSetupOf(null)).toBeNull();
   });
 
   it("answers nothing for what no module has", () => {
@@ -99,5 +106,8 @@ describe("a module that exists only in the test", () => {
         { ...healthModule, caseKinds: [{ key: "delay", labelKey: "x", forModel: "x" }] },
       ]),
     ).toThrow("case_kind_twice:delay");
+    expect(() =>
+      buildRegistry([MODULES.modules[0], { ...healthModule, partnerSetup: { kind: "agency", href: "/outro" } }]),
+    ).toThrow("partner_kind_twice:agency");
   });
 });

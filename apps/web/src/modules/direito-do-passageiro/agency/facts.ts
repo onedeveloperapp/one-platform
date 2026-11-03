@@ -90,6 +90,16 @@ export async function readClause(
   return { ok: true, value: data ? { version: Number(data.version), body: String(data.body) } : null };
 }
 
+/**
+ * The clause ONE proposes to the agency (migration 0080): the platform's words with the agency's and the firm's
+ * names, for somebody of the agency to read, change and register. Null when the platform has none.
+ */
+export async function readClauseProposal(context: MemberContext, agencyId: string): Promise<Read<string | null>> {
+  const { data, error } = await context.supabase.rpc("pax_clause_proposal", { target_partner: agencyId });
+  if (error) return { ok: false };
+  return { ok: true, value: typeof data === "string" && data.trim().length > 0 ? data : null };
+}
+
 /** A key of the partnership for the agency's system (migration 0073), as the agency reads it: never the key. */
 export type ApiKeyRow = {
   id: string;

@@ -23,6 +23,8 @@ export default async function DashboardLayout({
 }>) {
   const context = await getMemberContext();
   let owesSecondFactor = false;
+  let partnerSetup: string | null = null;
+  let partnerSetupPending = false;
   if (context) {
     const gate = await resolveGate(context);
     // A send to another page of the logged area is the shell's on a request of the client router, where a
@@ -30,6 +32,8 @@ export default async function DashboardLayout({
     const heldByShell = gate.clientRouter && gate.decision?.redirectTo !== FIRM_SETUP_PATH;
     if (gate.decision && !heldByShell) redirect(gate.decision.redirectTo);
     owesSecondFactor = gate.owesSecondFactor;
+    partnerSetup = gate.partnerSetup;
+    partnerSetupPending = gate.partnerSetupPending;
   }
   // Who is looking, for the menus: read here once, so no item appears and then leaves.
   const viewer: MenuViewer | null = context
@@ -41,6 +45,8 @@ export default async function DashboardLayout({
         // The firm's menu lists ONE's modules with where each stands for the firm; nobody else's lists them.
         moduleMenu: context.firm ? moduleMenuOf(context.catalog, context.modules) : [],
         partner: context.partner !== null,
+        partnerSetup,
+        partnerSetupPending,
         isSuperadmin: context.isSuperadmin,
         owesSecondFactor,
       }

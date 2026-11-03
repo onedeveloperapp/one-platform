@@ -29,7 +29,13 @@ export type GateDecision = { redirectTo: string } | null;
  *     own-account settings;
  *   * a person the rule asks a second factor of (second_factor_required(),
  *     migration 0003) and who has none goes to set it up, and reaches nothing
- *     else until it is done.
+ *     else until it is done;
+ *   * somebody of a partner of a firm (0069) is kept in the partner's area,
+ *     and its own setup (0080) is where they set the factor up, its first
+ *     step, told what it is for; who manages a partner that never answered
+ *     its setup finds it in place of the partner's home. A partner sent to a
+ *     page of settings with nothing of the partner's said got lost there
+ *     (the owner, 2026-11-03).
  *
  * It is guidance, not the fence: the functions that change who has access ask
  * for the factor themselves, and row-level security never depends on this.
@@ -41,6 +47,10 @@ export function decideGate(input: {
   hasFirm: boolean;
   /** The person works in a partner of a firm (0069): never in a firm, never the platform's operator. */
   isPartner?: boolean;
+  /** Where the person's partner is set up (0080, a page of its module, by the registry), or null. */
+  partnerSetup?: string | null;
+  /** Who manages the partner never answered its setup (0080): its home opens on the setup. */
+  partnerSetupPending?: boolean;
   isSuperadmin: boolean;
   impersonating: boolean;
   secondFactorRequired: boolean;
@@ -49,6 +59,15 @@ export function decideGate(input: {
   if (input.isPartner && !input.hasFirm) {
     // Somebody of a partner reaches its own area and their own account; nothing of a firm.
     if (input.path && !PARTNER_PATHS(input.path)) return { redirectTo: PARTNER_HOME };
+    const setup = input.partnerSetup ?? null;
+    if (setup) {
+      // The partner's own setup opens on the second factor: its every write asks for it.
+      if (owesSecondFactor(input)) {
+        if (!input.path || input.path === setup || isSecondFactorSetupPath(input.path)) return null;
+        return { redirectTo: setup };
+      }
+      if (input.partnerSetupPending && input.path === PARTNER_HOME) return { redirectTo: setup };
+    }
   } else if (!input.hasFirm) {
     if (!input.isSuperadmin) return { redirectTo: FIRM_SETUP_PATH };
     if (input.path && !OPERATOR_PREFIXES.some((prefix) => input.path.startsWith(prefix))) {
@@ -98,13 +117,22 @@ export function isSecondFactorSetupPath(path: string): boolean {
  * (lib/firm/gate.ts).
  */
 export function shellHold(
-  viewer: { hasFirm: boolean; partner?: boolean; isSuperadmin: boolean; owesSecondFactor: boolean },
+  viewer: {
+    hasFirm: boolean;
+    partner?: boolean;
+    partnerSetup?: string | null;
+    partnerSetupPending?: boolean;
+    isSuperadmin: boolean;
+    owesSecondFactor: boolean;
+  },
   path: string,
 ): string | null {
   const decision = decideGate({
     path,
     hasFirm: viewer.hasFirm,
     isPartner: viewer.partner === true,
+    partnerSetup: viewer.partnerSetup ?? null,
+    partnerSetupPending: viewer.partnerSetupPending === true,
     isSuperadmin: viewer.isSuperadmin,
     impersonating: false,
     secondFactorRequired: viewer.owesSecondFactor,

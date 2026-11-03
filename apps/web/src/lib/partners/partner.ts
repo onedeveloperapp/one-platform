@@ -23,7 +23,11 @@ export type PartnerLink = { id: string; orgId: string; firm: string; module: str
 export type MemberPartner = {
   id: string;
   name: string;
+  /** What kind of partner it is (`partners.kind`): a travel agency, the passenger module's partner. */
+  kind: string;
   role: PartnerRole;
+  /** Who manages the partner finished its setup or set it aside (0080). */
+  setupAnswered: boolean;
   links: PartnerLink[];
 };
 
@@ -44,8 +48,22 @@ export function memberPartnerOf(raw: unknown): MemberPartner | null {
     if (!linkId || !orgId || !module) return [];
     return [{ id: linkId, orgId, firm: text(link.firm) ?? "", module, startedAt: text(link.started_at) ?? "" }];
   });
-  return { id, name, role: row.role, links };
+  return {
+    id,
+    name,
+    kind: text(row.kind) ?? "agency",
+    role: row.role,
+    setupAnswered: row.setup_answered === true,
+    links,
+  };
 }
+
+/**
+ * Who manages the partner never answered its setup (0080): the partner's home opens on the setup for them. False
+ * for somebody else of the partner, who has nothing of it to answer.
+ */
+export const partnerSetupPending = (partner: MemberPartner | null): boolean =>
+  partner !== null && isPartnerManager(partner.role) && !partner.setupAnswered;
 
 /** The modules a partner works in now: those of its active partnerships. */
 export const partnerModules = (partner: MemberPartner | null): string[] =>

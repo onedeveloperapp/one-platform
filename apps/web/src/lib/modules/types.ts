@@ -57,6 +57,12 @@ export type ModuleDefinition = {
   caseKinds: readonly CaseKind[];
   /** What the module gives a partner of a firm to do, in the partner's area (none for a module with no partner). */
   partnerArea: readonly PartnerAreaEntry[];
+  /**
+   * The kind of partner of a firm the module has (`partners.kind`, 0069) and the page of the module's route group
+   * where somebody of such a partner sets it up (0080): the gate opens it for who owes the second factor, and the
+   * partner's home opens on it while who manages the partner never answered it. None for a module with no partner.
+   */
+  partnerSetup?: { kind: string; href: string };
   /** What only the module has, which its area in the firm's app lists (0078). */
   firmArea: readonly FirmAreaEntry[];
   /** The test chat stands for this module's passenger: its area offers the chat while the firm has it on (0047). */

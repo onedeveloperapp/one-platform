@@ -64,6 +64,63 @@ describe("the gate of the logged area", () => {
     ).toBeNull();
   });
 
+  it("opens the partner's own setup for who owes the second factor, never a page of settings with nothing said", () => {
+    const setup = "/parceiro/configurar";
+    const owing = {
+      ...inFirm,
+      hasFirm: false,
+      isPartner: true,
+      partnerSetup: setup,
+      secondFactorRequired: true,
+      hasSecondFactor: false,
+    };
+    // Every page of the partner's area, and its own settings, send them to the setup, whose first step is the factor.
+    for (const path of ["/parceiro", "/parceiro/passageiros", "/parceiro/equipe", "/settings"]) {
+      expect(decideGate({ ...owing, path }), path).toEqual({ redirectTo: setup });
+    }
+    // The setup itself and the security screen stay open, or the send would loop; an unknown path never sends.
+    expect(decideGate({ ...owing, path: setup })).toBeNull();
+    expect(decideGate({ ...owing, path: "/settings/security" })).toBeNull();
+    expect(decideGate({ ...owing, path: "" })).toBeNull();
+    // Outside the partner's area, the area first.
+    expect(decideGate({ ...owing, path: "/casos" })).toEqual({ redirectTo: PARTNER_HOME });
+    // The shell holds the same answer on the pages opened after the first.
+    const viewer = { hasFirm: false, partner: true, partnerSetup: setup, isSuperadmin: false, owesSecondFactor: true };
+    expect(shellHold(viewer, "/parceiro/passageiros")).toBe(setup);
+    expect(shellHold(viewer, setup)).toBeNull();
+  });
+
+  it("opens the setup in place of the partner's home while who manages it never answered it", () => {
+    const setup = "/parceiro/configurar";
+    const manager = {
+      ...inFirm,
+      hasFirm: false,
+      isPartner: true,
+      partnerSetup: setup,
+      partnerSetupPending: true,
+      hasSecondFactor: true,
+    };
+    expect(decideGate({ ...manager, path: "/parceiro" })).toEqual({ redirectTo: setup });
+    // Only the home: every other page of the area stays reachable, as a firm's pages do before its setup.
+    expect(decideGate({ ...manager, path: "/parceiro/passageiros" })).toBeNull();
+    expect(decideGate({ ...manager, path: setup })).toBeNull();
+    // Answered, the home is the home.
+    expect(decideGate({ ...manager, path: "/parceiro", partnerSetupPending: false })).toBeNull();
+    expect(
+      shellHold(
+        {
+          hasFirm: false,
+          partner: true,
+          partnerSetup: setup,
+          partnerSetupPending: true,
+          isSuperadmin: false,
+          owesSecondFactor: false,
+        },
+        "/parceiro",
+      ),
+    ).toBe(setup);
+  });
+
   it("sends an account with no firm to found one or accept an invitation, whatever it asked for", () => {
     for (const path of ["/inicio", "/settings", "/settings/team", "/admin", ""]) {
       expect(decideGate({ ...inFirm, path, hasFirm: false })).toEqual({ redirectTo: FIRM_SETUP_PATH });

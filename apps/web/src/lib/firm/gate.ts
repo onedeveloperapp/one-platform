@@ -5,6 +5,8 @@ import { cookies, headers } from "next/headers";
 import { REQUEST_PATH_HEADER } from "@/constants";
 import { decideGate, type GateDecision, owesSecondFactor } from "@/lib/firm/gate-rules";
 import type { MemberContext } from "@/lib/member/context";
+import { partnerSetupOf } from "@/lib/modules/registry";
+import { partnerSetupPending } from "@/lib/partners/partner";
 import { IMPERSONATION_MARKER_COOKIE } from "@flyee/auth";
 
 /**
@@ -20,7 +22,14 @@ import { IMPERSONATION_MARKER_COOKIE } from "@flyee/auth";
  * a blank screen that kept asking for the security page). The layout leaves
  * those sends to the shell then (`shellHold`, lib/firm/gate-rules.ts).
  */
-export type GateState = { decision: GateDecision; owesSecondFactor: boolean; clientRouter: boolean };
+export type GateState = {
+  decision: GateDecision;
+  owesSecondFactor: boolean;
+  clientRouter: boolean;
+  /** Where the person's partner is set up (0080), or null; and whether who manages it never answered it. */
+  partnerSetup: string | null;
+  partnerSetupPending: boolean;
+};
 
 /** Reads what the gate needs from the request and the session, then decides. */
 export async function resolveGate(context: MemberContext): Promise<GateState> {
@@ -47,14 +56,24 @@ export async function resolveGate(context: MemberContext): Promise<GateState> {
     }
   }
 
+  const partnerSetup = context.partner ? partnerSetupOf(context.partner.kind) : null;
+  const pending = partnerSetupPending(context.partner);
   const input = {
     path,
     hasFirm: context.firm !== null,
     isPartner: context.partner !== null,
+    partnerSetup,
+    partnerSetupPending: pending,
     isSuperadmin: context.isSuperadmin,
     impersonating,
     secondFactorRequired,
     hasSecondFactor,
   };
-  return { decision: decideGate(input), owesSecondFactor: owesSecondFactor(input), clientRouter };
+  return {
+    decision: decideGate(input),
+    owesSecondFactor: owesSecondFactor(input),
+    clientRouter,
+    partnerSetup,
+    partnerSetupPending: pending,
+  };
 }

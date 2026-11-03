@@ -30,6 +30,10 @@ export type MenuViewer = {
   moduleMenu: readonly ModuleMenuEntry[];
   /** The person works in a partner of a firm (0069), and sees the partner's area only. */
   partner: boolean;
+  /** Where the person's partner is set up (0080), which the shell keeps who owes the second factor on; or null. */
+  partnerSetup?: string | null;
+  /** Who manages the partner never answered its setup (0080): the partner's home opens on it. */
+  partnerSetupPending?: boolean;
   isSuperadmin: boolean;
   /**
    * The person owes the second factor the rule asks of them (lib/firm/gate-rules.ts):

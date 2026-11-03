@@ -39,6 +39,9 @@ export const passengerModule: ModuleDefinition = {
     },
   ],
   testChat: true,
+  // The travel agency is this module's partner (0069): its setup is this module's page (0080), the second factor
+  // first, then its name, the clause of its contract, its team and how its passengers reach ONE.
+  partnerSetup: { kind: "agency", href: "/parceiro/configurar" },
   partnerArea: [
     {
       id: "parceiro-passageiros",
@@ -46,6 +49,14 @@ export const passengerModule: ModuleDefinition = {
       icon: "NiLuggage",
       labelKey: "menu-parceiro-passageiros",
       descriptionKey: "menu-parceiro-passageiros-description",
+    },
+    // The agency's setup, reopened from its home and its menu at any time (0080).
+    {
+      id: "parceiro-configurar",
+      href: "/parceiro/configurar",
+      icon: "NiSettings",
+      labelKey: "menu-parceiro-configurar",
+      descriptionKey: "menu-parceiro-configurar-description",
     },
   ],
 };

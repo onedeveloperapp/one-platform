@@ -8,7 +8,15 @@ import { passengerModule } from "@/modules/direito-do-passageiro/definition";
  */
 export const MODULES = buildRegistry([passengerModule]);
 
-export const { moduleOf, caseKindsOf, caseKindsOfFirm, isCaseKindOf, caseKindLabelKey, caseKindForModel } = MODULES;
+export const {
+  moduleOf,
+  caseKindsOf,
+  caseKindsOfFirm,
+  isCaseKindOf,
+  caseKindLabelKey,
+  caseKindForModel,
+  partnerSetupOf,
+} = MODULES;
 
 /**
  * The kinds of problem a firm's screens offer: those of the modules it uses (the viewer's, or the member

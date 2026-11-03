@@ -19,15 +19,26 @@ export type ModuleRegistry = {
   caseKindLabelKey: (kind: string | null | undefined) => string | null;
   /** The words a model reads for a kind of problem; null for one no module has. */
   caseKindForModel: (kind: string | null | undefined) => string | null;
+  /** Where somebody of a partner of this kind sets it up (0080); null for a kind no module has. */
+  partnerSetupOf: (kind: string | null | undefined) => string | null;
 };
 
-/** Refuses two modules of one key, and a kind of problem two modules name: a kind names its module by itself. */
+/**
+ * Refuses two modules of one key, a kind of problem two modules name (a kind names its module by itself), and a
+ * kind of partner two modules set up.
+ */
 export function buildRegistry(definitions: readonly ModuleDefinition[]): ModuleRegistry {
   const byKey = new Map<string, ModuleDefinition>();
   const kinds = new Map<string, CaseKind>();
+  const setups = new Map<string, string>();
   for (const definition of definitions) {
     if (byKey.has(definition.key)) throw new Error(`module_twice:${definition.key}`);
     byKey.set(definition.key, definition);
+    if (definition.partnerSetup) {
+      if (setups.has(definition.partnerSetup.kind))
+        throw new Error(`partner_kind_twice:${definition.partnerSetup.kind}`);
+      setups.set(definition.partnerSetup.kind, definition.partnerSetup.href);
+    }
     for (const kind of definition.caseKinds) {
       if (kinds.has(kind.key)) throw new Error(`case_kind_twice:${kind.key}`);
       kinds.set(kind.key, kind);
@@ -47,5 +58,6 @@ export function buildRegistry(definitions: readonly ModuleDefinition[]): ModuleR
       typeof kind === "string" && caseKindsOf(moduleKey).some((item) => item.key === kind),
     caseKindLabelKey: (kind) => (kind ? (kinds.get(kind)?.labelKey ?? null) : null),
     caseKindForModel: (kind) => (kind ? (kinds.get(kind)?.forModel ?? null) : null),
+    partnerSetupOf: (kind) => (kind ? (setups.get(kind) ?? null) : null),
   };
 }

@@ -7,6 +7,7 @@ import {
   PARTNER_ROLES,
   partnerErrorKey,
   partnerModules,
+  partnerSetupPending,
   partnershipFactsOf,
 } from "@/lib/partners/partner";
 import messages from "@flyee/content/messages/pt-BR.json";
@@ -28,7 +29,10 @@ describe("the partner of the person looking", () => {
     expect(partner).toEqual({
       id: "p1",
       name: "Viagens Sol",
+      kind: "agency",
       role: "admin",
+      // An answer of before 0080, which does not say, is a setup never answered.
+      setupAnswered: false,
       links: [
         { id: "l1", orgId: "o1", firm: "Souza Advogados", module: "direito-do-passageiro", startedAt: "2026-10-29" },
       ],
@@ -41,6 +45,16 @@ describe("the partner of the person looking", () => {
     expect(memberPartnerOf([])).toBeNull();
     expect(memberPartnerOf({ id: "p1", name: "X", role: "chefe" })).toBeNull();
     expect(partnerModules(null)).toEqual([]);
+  });
+
+  it("opens the setup for who manages a partner that never answered it, and for nobody else", () => {
+    const answer = { id: "p1", name: "Viagens Sol", kind: "agency", links: [] };
+    expect(partnerSetupPending(memberPartnerOf({ ...answer, role: "owner", setup_answered: false }))).toBe(true);
+    expect(partnerSetupPending(memberPartnerOf({ ...answer, role: "admin", setup_answered: false }))).toBe(true);
+    expect(partnerSetupPending(memberPartnerOf({ ...answer, role: "owner", setup_answered: true }))).toBe(false);
+    // A member has nothing of the agency's setup to answer.
+    expect(partnerSetupPending(memberPartnerOf({ ...answer, role: "member", setup_answered: false }))).toBe(false);
+    expect(partnerSetupPending(null)).toBe(false);
   });
 
   it("knows who manages the partner", () => {
