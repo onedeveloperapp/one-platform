@@ -3,25 +3,74 @@ import { isValidCnpj, isValidCpf } from "@flyee/fields";
 
 /**
  * A model of the library made from a document the firm already uses
- * (migration 0067): the pure rules. Pure: no I/O, no clock.
+ * (migrations 0067 and 0079): the pure rules. Pure: no I/O, no clock.
  *
  * The backend reads the document's text paragraph by paragraph, and the
- * marking (the task `biblioteca.modelo.marcacao`) answers which paragraphs
- * change: the database keeps that answer only when every change names
- * paragraphs that exist, in order and apart. The model is then written here,
+ * marking (the task `biblioteca.modelo.marcacao`) first says what the
+ * document is, what it lacks and what only the firm knows, then which
+ * paragraphs change: the database refuses a document that cannot be a model,
+ * asks the firm its questions, and keeps the changes only when every change
+ * names paragraphs that exist, in order and apart. The model is then written
  * from the paragraphs and the changes, so every paragraph the marking did not
  * name is the firm's own word for word; what changed is shown against what
  * was there; and what still looks like the original case (a name the marking
- * listed, a CPF, a registration at the bar) is pointed out to the lawyer, who
- * saves the model or not. Nothing here decides anything.
+ * listed, a CPF, a registration at the bar) is pointed out. Where nothing is
+ * left to look at, ONE saves the model by itself (`saveGate`), as the firm
+ * lets it; otherwise a lawyer saves it or not.
  */
 
 export const TRANSCRIBE_TASK = "biblioteca.modelo.transcricao";
 export const MARK_TASK = "biblioteca.modelo.marcacao";
 
-export const IMPORT_STATUSES = ["reading", "marking", "ready", "failed"] as const;
+export const IMPORT_STATUSES = [
+  "reading",
+  "marking",
+  "asking",
+  "saving",
+  "ready",
+  "saved",
+  "refused",
+  "failed",
+] as const;
 export type ImportStatus = (typeof IMPORT_STATUSES)[number];
 export type ImportSource = "docx" | "pdf";
+
+/** The states ONE works in by itself: the screens look again while a request is in one. */
+export const IMPORT_WORKING: readonly ImportStatus[] = ["reading", "marking", "saving"];
+
+/** What ONE asks the firm of a document: the question, and why the model needs its answer. */
+export type ImportQuestion = { question: string; why: string };
+
+/** A round asked and answered, as the marking reads it again. */
+export type ImportExchange = { questions: ImportQuestion[]; answers: string[] };
+
+/** What a document of its kind must hold and did not (`template_import_essentials`). */
+export const MISSING_CODES = [
+  "outorgante",
+  "outorgados",
+  "poderes",
+  "contratante",
+  "contratado",
+  "objeto",
+  "honorarios",
+  "pedidos",
+  "fundamentos",
+] as const;
+export type MissingCode = (typeof MISSING_CODES)[number];
+
+/** Why ONE refused a document, as the database kept it. */
+export type ImportRefusal = {
+  code: "other_document" | "wrong_kind" | "missing";
+  /** What the document is: a model ONE uses, or another thing. */
+  found: ModelDocument | "outro" | null;
+  /** What the marking said the document is, in a few words. */
+  what: string | null;
+  missing: MissingCode[];
+};
+
+/** Why what ONE prepared waits for a person instead of being saved by ONE. */
+export const HELD_REASONS = ["checks", "notes", "autonomy", "name_in_use", "library_full", "not_saved"] as const;
+export type HeldReason = (typeof HELD_REASONS)[number];
 
 /** A change of the marking: the paragraphs it takes the place of (counted from one) and what goes there. */
 export type ModelChange = { from: number; to: number; text: string; reason: string };
@@ -69,15 +118,87 @@ export function proposalOf(value: unknown): ImportProposal | null {
   };
 }
 
+const isMissingCode = (value: unknown): value is MissingCode => (MISSING_CODES as readonly unknown[]).includes(value);
+
+/** The questions as the database kept them, or none. */
+export function questionsOf(value: unknown): ImportQuestion[] {
+  return (Array.isArray(value) ? value : []).flatMap((item): ImportQuestion[] => {
+    const row = (item ?? {}) as Record<string, unknown>;
+    const question = text(row.question).trim();
+    return question ? [{ question, why: text(row.why).trim() }] : [];
+  });
+}
+
+/** The rounds asked and answered as the database hands them to the marking, or none. */
+export function exchangesOf(value: unknown): ImportExchange[] {
+  return (Array.isArray(value) ? value : []).flatMap((item): ImportExchange[] => {
+    const row = (item ?? {}) as Record<string, unknown>;
+    const questions = questionsOf(row.questions);
+    return questions.length > 0 ? [{ questions, answers: strings(row.answers) }] : [];
+  });
+}
+
+/** Why ONE refused a document, as the database kept it, or null. */
+export function refusalOf(value: unknown): ImportRefusal | null {
+  if (typeof value !== "object" || value === null) return null;
+  const row = value as Record<string, unknown>;
+  if (row.code !== "other_document" && row.code !== "wrong_kind" && row.code !== "missing") return null;
+  const found = row.found === "outro" || isModelDocument(row.found) ? row.found : null;
+  const what = text(row.what).trim();
+  return {
+    code: row.code,
+    found,
+    what: what || null,
+    missing: (Array.isArray(row.missing) ? row.missing : []).filter(isMissingCode),
+  };
+}
+
+export const heldReasonOf = (value: unknown): HeldReason | null =>
+  (HELD_REASONS as readonly unknown[]).includes(value) ? (value as HeldReason) : null;
+
+/** What the firm sent a document as, in the words the marking reads. */
+const SENT_AS: Record<ModelDocument, string> = {
+  piece: "a petição inicial que o escritório usa",
+  procuracao: "a procuração que o escritório usa",
+  contrato: "o contrato de honorários que o escritório usa",
+};
+
+/** What the marking is told of a request besides its text. */
+export type MarkingContext = {
+  /** What the firm sent the document as; null when it did not say. */
+  expected?: ModelDocument | null;
+  /** The rounds asked and answered before this one. */
+  exchanges?: readonly ImportExchange[];
+  /** No question may be asked any more. */
+  lastRound?: boolean;
+};
+
 /**
- * What the marking reads: each paragraph after its number, what is written as
- * an e-mail, a CPF, a CEP or a telephone taken out. The name of the file is
- * never in it: a lawyer names a petition after its client.
+ * What the marking reads: what the firm sent the document as, each paragraph
+ * after its number, and the questions asked before with the firm's answers,
+ * what is written as an e-mail, a CPF, a CEP or a telephone taken out of all
+ * of it. The name of the file is never in it: a lawyer names a petition after
+ * its client.
  */
-export function markingBriefing(paragraphs: readonly string[]): string {
+export function markingBriefing(paragraphs: readonly string[], context: MarkingContext = {}): string {
+  const purpose = context.expected
+    ? `O escritório mandou este documento como ${SENT_AS[context.expected]}.`
+    : "O escritório mandou este documento para virar um modelo, sem dizer qual.";
+  const rounds = (context.exchanges ?? []).map((round, index) =>
+    [
+      `Rodada ${index + 1}:`,
+      ...round.questions.map((asked, at) => {
+        const answer = (round.answers[at] ?? "").trim();
+        return `Pergunta: ${maskIdentifiers(asked.question)}\nResposta: ${answer ? maskIdentifiers(answer) : "(sem resposta)"}`;
+      }),
+    ].join("\n"),
+  );
   return [
+    purpose,
     `Documento com ${paragraphs.length} parágrafos, cada um depois do seu número.`,
     ...paragraphs.map((paragraph, index) => `§${index + 1}\n${maskIdentifiers(paragraph)}`),
+    ...(rounds.length > 0 ? ["Perguntas que você já fez e o que o escritório respondeu.", ...rounds] : []),
+    ...(context.lastRound ? ["Esta é a última rodada: não faça perguntas."] : []),
   ].join("\n\n");
 }
 
@@ -204,6 +325,27 @@ export function modelChecks(body: string, people: readonly string[], document: M
   ];
 }
 
+/**
+ * Whether ONE saves a model it prepared by itself (0079): only a text with
+ * nothing a lawyer should look at, neither what still looks like the original
+ * case (`modelChecks`), nor a character the PDF of a piece cannot write
+ * (`unwritable`, which the caller reads where the writer of the PDF is), nor
+ * anything the marking itself asked a lawyer to check (`notes`, a question
+ * left open among them). Otherwise the model waits for a person, with why.
+ */
+export function saveGate(input: {
+  body: string;
+  people: readonly string[];
+  document: ModelDocument;
+  notes: readonly string[];
+  unwritable: readonly string[];
+}): { save: true } | { save: false; reason: "checks" | "notes" } {
+  if (modelChecks(input.body, input.people, input.document).length > 0) return { save: false, reason: "checks" };
+  if (input.document === "piece" && input.unwritable.length > 0) return { save: false, reason: "checks" };
+  if (input.notes.some((note) => note.trim() !== "")) return { save: false, reason: "notes" };
+  return { save: true };
+}
+
 // ---------- The screen's words ----------
 
 /** The failures the database records, each with the words the screen says it in. */
@@ -250,8 +392,49 @@ export const importRefusalKey = (code: string): string => REFUSAL_KEY[code] ?? "
 export const IMPORT_STATUS_KEY: Record<ImportStatus, string> = {
   reading: "library-import-status-reading",
   marking: "library-import-status-marking",
+  asking: "library-import-status-asking",
+  saving: "library-import-status-saving",
   ready: "library-import-status-ready",
+  saved: "library-import-status-saved",
+  refused: "library-import-status-refused",
   failed: "library-import-status-failed",
+};
+
+/** What ONE's refusal of a document says, by why ONE refused it. */
+export const REFUSED_KEY: Record<ImportRefusal["code"], string> = {
+  other_document: "library-import-refusal-other",
+  wrong_kind: "library-import-refusal-wrong-kind",
+  missing: "library-import-refusal-missing",
+};
+
+/** Each thing a document lacked, as the refusal names it. */
+export const MISSING_KEY: Record<MissingCode, string> = {
+  outorgante: "library-import-missing-outorgante",
+  outorgados: "library-import-missing-outorgados",
+  poderes: "library-import-missing-poderes",
+  contratante: "library-import-missing-contratante",
+  contratado: "library-import-missing-contratado",
+  objeto: "library-import-missing-objeto",
+  honorarios: "library-import-missing-honorarios",
+  pedidos: "library-import-missing-pedidos",
+  fundamentos: "library-import-missing-fundamentos",
+};
+
+/** A model ONE uses, as a refusal names it inside a sentence ("é ... e não ..."). */
+export const DOCUMENT_NAMED_KEY: Record<ModelDocument, string> = {
+  piece: "library-import-named-piece",
+  procuracao: "library-import-named-procuracao",
+  contrato: "library-import-named-contrato",
+};
+
+/** Why what ONE prepared waits for a person, said over the model. */
+export const HELD_KEY: Record<HeldReason, string> = {
+  checks: "library-import-held-checks",
+  notes: "library-import-held-notes",
+  autonomy: "library-import-held-autonomy",
+  name_in_use: "library-import-held-name",
+  library_full: "library-import-held-full",
+  not_saved: "library-import-held-not-saved",
 };
 
 /** What each kind of identifier is called on the screen. */

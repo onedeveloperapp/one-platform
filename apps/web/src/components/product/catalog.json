@@ -148,7 +148,7 @@
       "name": "WordDownloadButton",
       "from": "@/components/product/word-download-button",
       "props": "name, text? | read?: () => Promise<string | null>, label?, ariaLabel?, disabled?, variant?",
-      "use": "'Baixar em Word' on every text a firm gives ONE to work with (a model of the library, the paper its clients sign, an agency's clause): wherever it is listed and wherever it is written, the platform's too. The .docx is written in the browser (downloadWord over textDocx, read back by the library's own reader), with the marks as they are, so the file is the model; the text is in hand or read on press, and a failure is a snackbar. The small grey text button of a row's actions, never a link to another screen."
+      "use": "'Baixar em Word' on a text a firm gives ONE to work with (a model of the library, the paper its clients sign, an agency's clause), where it is listed and where it is written, the platform's too: a convenience, never a step a flow needs. The .docx is written in the browser (downloadWord over textDocx, read back by the library's own reader), with the marks as they are, so the file is the model; the text is in hand or read on press, and a failure is a snackbar. The small grey text button of a row's actions, never a link to another screen."
     },
     {
       "name": "SecondFactorPrompt",

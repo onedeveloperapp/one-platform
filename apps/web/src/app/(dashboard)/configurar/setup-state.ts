@@ -8,6 +8,7 @@ import { claimDefaultsOf } from "@/lib/firm/autonomy";
 import { isManager, OAB_STATES, type OabRegistration } from "@/lib/firm/roles";
 import type { SetupStepKey } from "@/lib/firm/setup-steps";
 import { loadSetupPapers } from "@/lib/library/facts";
+import { readPaperImports } from "@/lib/library/import-read";
 import type { MemberContext } from "@/lib/member/context";
 import { moduleOf } from "@/lib/modules/registry";
 import { readFirmPartners } from "@/lib/partners/facts";
@@ -47,6 +48,7 @@ export async function loadSetupState(
     connections,
     partners,
     decides,
+    paperImports,
   ] = await Promise.all([
     context.supabase.from("oab_registrations").select("id, uf, number, kind").eq("user_id", context.userId),
     context.supabase.from("firm_signers").select("user_id").eq("org_id", firm.id),
@@ -61,6 +63,8 @@ export async function loadSetupState(
     readFirmPartners(context).catch(() => null),
     // Who decides for the firm what a partner decides (0078): a partner, or, with no partner, who manages it.
     context.supabase.rpc("decides_for_firm", { target_org: firm.id }),
+    // What ONE does with the document the firm sent as each paper (0079): read by who writes the models only.
+    readPaperImports(context.supabase, firm.id).catch(() => ({ procuracao: null, contrato: null })),
   ]);
   if (registrations.error || signers.error || organization.error || !organization.data) return { kind: "error" };
 
@@ -87,6 +91,7 @@ export async function loadSetupState(
     isOwner: firm.role === "owner",
     claimDefaults: defaults.error ? null : claimDefaultsOf(defaults.data),
     papers,
+    paperImports,
     connections,
     // The firm's module whose partner it invites here: the passenger module's travel agency.
     agencyModule: context.modules.find((key) => (moduleOf(key)?.partnerArea.length ?? 0) > 0) ?? null,

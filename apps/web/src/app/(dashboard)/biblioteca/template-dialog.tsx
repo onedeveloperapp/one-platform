@@ -33,7 +33,7 @@ import {
 } from "@/lib/cases/drafts";
 import { readDraftTemplate, saveDraftTemplate } from "@/lib/library/actions";
 import type { LibraryTemplate } from "@/lib/library/facts";
-import type { ImportLimits, PreparedModel } from "@/lib/library/import-read";
+import type { ImportLimits, PreparedModel, SavedModel } from "@/lib/library/import-read";
 
 export type Kind = "juizado" | "comum" | null;
 export const KIND_KEY: Record<"juizado" | "comum", string> = {
@@ -91,13 +91,16 @@ function defaultKey(writes: ModelDocument, kind: Kind): string {
  * for a paper by name (a fee contract, the firm's own power of attorney) and
  * makes it the default the firm sends.
  *
- * A new model may start from a document the firm already uses (0067): the
- * person sends it from the top of the dialog (or chose it before the dialog
- * opened, `initialFile`), ONE prepares the model while the fields wait, and
- * the dialog fills itself with it to be read, changed and saved; saving
- * closes the request. `importId` opens the dialog on a request made before.
- * What ONE prepared, untouched, is no work to lose: the dialog closes over it
- * without asking, and it waits in the library.
+ * A new model may start from a document the firm already uses (0067,
+ * 0079): the person sends it from the top of the dialog (or chose it before
+ * the dialog opened, `initialFile`; the setup's step sends it as a paper,
+ * `expected`), and ONE checks it, asks what only the firm knows and, where
+ * the firm lets it, saves the firm's model by itself: the dialog then edits
+ * that model, already saved, so the person reads it and changes it or not.
+ * What ONE prepared for a person fills the dialog to be read, changed and
+ * saved; saving closes the request. `importId` opens the dialog on a request
+ * made before. What ONE prepared, untouched, is no work to lose: the dialog
+ * closes over it without asking, and it waits in the library.
  */
 export default function TemplateDialog({
   template,
@@ -108,6 +111,8 @@ export default function TemplateDialog({
   importId = null,
   initialFile = null,
   importLimits = null,
+  expected = null,
+  makeDefault = false,
   onImportRequested,
   onClose,
   onSaved,
@@ -127,6 +132,10 @@ export default function TemplateDialog({
   initialFile?: File | null;
   /** What may be sent for a model, as the setting says. */
   importLimits?: ImportLimits | null;
+  /** What a document sent here is sent as (the setup's step of a paper): ONE refuses another thing. */
+  expected?: ModelDocument | null;
+  /** The model ONE saves from it takes the place of the firm's default of it. */
+  makeDefault?: boolean;
   /** ONE was asked for a model of a document: the screen behind the dialog lists the request. */
   onImportRequested?: () => void;
   onClose: () => void;
@@ -134,6 +143,10 @@ export default function TemplateDialog({
 }) {
   const t = useTranslations("product");
   const [pending, startTransition] = useTransition();
+  // The model being edited: the one the dialog opened on, or the one ONE saved from a document sent here.
+  const [own, setOwn] = useState<{ id: string; name: string; kind: Kind } | null>(
+    template ? { id: template.id, name: template.name, kind: template.proceedingKind } : null,
+  );
   const [name, setName] = useState(template?.name ?? (copyOf ? copyName(copyOf.name) : ""));
   const [writes, setWrites] = useState<ModelDocument>(
     template?.documentKind ?? copyOf?.documentKind ?? initialDocument ?? "piece",
@@ -156,13 +169,15 @@ export default function TemplateDialog({
     body: string;
   } | null>(null);
   const [importBusy, setImportBusy] = useState(false);
-  const templateId = template?.id ?? null;
+  const templateId = own?.id ?? null;
   // What is read when the dialog opens: the model being edited, or the platform's one a copy starts from.
   const readId = templateId ?? copyOf?.id ?? null;
   const copying = templateId === null && copyOf !== null;
   // What the dialog opened as: the model read, or a new one of the paper and default it was asked for.
-  const startDocument = template?.documentKind ?? initialDocument ?? "piece";
-  const startDefault = template ? savedDefault : initialDefault;
+  const [startDocument, setStartDocument] = useState<ModelDocument>(
+    template?.documentKind ?? initialDocument ?? "piece",
+  );
+  const startDefault = own ? savedDefault : initialDefault;
 
   useEffect(() => {
     if (!readId) return;
@@ -199,9 +214,9 @@ export default function TemplateDialog({
   const complete = name.trim().length >= 2 && (body ?? "").trim().length >= 20;
   // What "changed" is measured against: the model read, a new one, or what ONE prepared from a document.
   const base = imported ?? {
-    name: template?.name ?? "",
+    name: own?.name ?? "",
     writes: startDocument,
-    kind: template?.proceedingKind ?? null,
+    kind: own?.kind ?? null,
     body: saved ?? "",
   };
   const changed =
@@ -211,7 +226,8 @@ export default function TemplateDialog({
     isDefault !== startDefault ||
     (body ?? "") !== base.body;
   // A new model that may start from a document: neither a model being edited nor a copy of the platform's.
-  const mayImport = templateId === null && !copying;
+  // Once open on a document, the panel stays: what ONE saved from it is said there while the model is edited.
+  const [mayImport] = useState(templateId === null && !copying);
   // While ONE is sent the document or works on it, the fields wait: what it prepares fills them.
   const locked = pending || importBusy;
 
@@ -229,10 +245,24 @@ export default function TemplateDialog({
     setBody(model.body);
     setImported({ id, name: named, writes: model.documentKind, kind: model.proceedingKind, body: model.body });
   }, []);
+
+  /** The model ONE saved from the document: the dialog edits it from now on, as it is saved. */
+  const savedByOne = useCallback((model: SavedModel) => {
+    setOwn({ id: model.templateId, name: model.name, kind: model.proceedingKind });
+    setName(model.name);
+    setWrites(model.documentKind);
+    setStartDocument(model.documentKind);
+    setKind(model.proceedingKind);
+    setBody(model.body);
+    setSaved(model.body);
+    setSavedDefault(model.isDefault);
+    setIsDefault(model.isDefault);
+    setImported(null);
+  }, []);
   // The default of one document or kind is not the default of another: said again for a new one, by the person;
   // back to its own, the model is what it was.
   const defaultFor = (nextDocument: ModelDocument, nextKind: Kind) =>
-    nextDocument === startDocument && nextKind === (template?.proceedingKind ?? null) ? startDefault : false;
+    nextDocument === startDocument && nextKind === (own?.kind ?? null) ? startDefault : false;
   // Nothing closes the dialog while a save is on its way (a refusal must find it open), nor over unsaved text.
   const close = () => {
     if (pending) return;
@@ -292,7 +322,10 @@ export default function TemplateDialog({
             limits={importLimits}
             disabled={pending}
             onBusy={setImportBusy}
+            expected={expected}
+            makeDefault={makeDefault}
             onPrepared={prepared}
+            onSavedByOne={savedByOne}
             onCleared={() => setImported(null)}
             onRequested={onImportRequested}
           />

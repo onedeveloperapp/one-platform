@@ -35,6 +35,9 @@ insert into public.memberships (org_id, user_id, role, firm_function) values
   ('b7100000-0000-4000-8000-00000000000a', 'a7100000-0000-4000-8000-000000000002', 'member', 'advogado'),
   ('b7100000-0000-4000-8000-00000000000a', 'a7100000-0000-4000-8000-000000000003', 'member', 'atendimento'),
   ('b7100000-0000-4000-8000-00000000000b', 'a7100000-0000-4000-8000-000000000004', 'owner', 'socio');
+-- This file walks a person's way to the model (0067); ONE saving it by itself is 0082's.
+insert into public.firm_autonomy (org_id, decision, mode) values
+  ('b7100000-0000-4000-8000-00000000000a', 'model_from_document', 'approval');
 
 create temporary table res (name text primary key, payload jsonb);
 grant select, insert on res to anon, authenticated, service_role;
@@ -301,10 +304,10 @@ select ok(
   'the text of a PDF is what its transcription answered, read from the run and never from the worker'
 );
 select ok(
-  pg_temp.got('pdf_marked', 'failure') = 'not_a_model'
-  and (select status = 'failed' and paragraphs is null and proposal is null from public.template_imports
-       where id = pg_temp.got('asked_pdf', 'import_id')::uuid),
-  'a document that is no model ONE uses is said so, and what was read of it goes'
+  pg_temp.got('pdf_marked', 'code') = 'refused'
+  and (select status = 'refused' and refusal ->> 'code' = 'other_document' and paragraphs is null and proposal is null
+       from public.template_imports where id = pg_temp.got('asked_pdf', 'import_id')::uuid),
+  'a document that is no model ONE uses is refused with why (0079), and what was read of it goes'
 );
 
 -- ---------- Saving ----------

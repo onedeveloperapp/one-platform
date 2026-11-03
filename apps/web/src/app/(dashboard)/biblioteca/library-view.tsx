@@ -1,5 +1,6 @@
 "use client";
 
+import { refusalWords } from "./import-panel";
 import TemplateDialog, { defaultSlot, DOCUMENT_KEY, KIND_KEY, Refusal } from "./template-dialog";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -34,7 +35,7 @@ import { readDraftTemplate, removeDraftTemplate, retireLegalSource, saveLegalSou
 import type { LibraryData, LibrarySource, LibraryTemplate, MissingSource } from "@/lib/library/facts";
 import { dismissModelFromDocument, watchModelImports } from "@/lib/library/import-actions";
 import type { LibraryImport } from "@/lib/library/import-read";
-import { IMPORT_ACCEPT, IMPORT_STATUS_KEY, importFailureKey } from "@/lib/library/imports";
+import { IMPORT_ACCEPT, IMPORT_STATUS_KEY, IMPORT_WORKING, importFailureKey } from "@/lib/library/imports";
 
 export type LibraryState =
   | {
@@ -60,10 +61,14 @@ type SourceForm = { source: LibrarySource | null; citation: string };
 const WATCH_MS = 6_000;
 
 /** The tone each state of a request is said in: the word is always there, the tint only adds to it. */
-const IMPORT_TONE: Record<LibraryImport["status"], "info" | "positive" | "danger"> = {
+const IMPORT_TONE: Record<LibraryImport["status"], "info" | "positive" | "attention" | "danger"> = {
   reading: "info",
   marking: "info",
+  asking: "attention",
+  saving: "info",
   ready: "positive",
+  saved: "positive",
+  refused: "attention",
   failed: "danger",
 };
 
@@ -126,7 +131,7 @@ export default function LibraryView({ state, citation }: { state: LibraryState; 
 
   // While ONE prepares a model, the library looks again by itself and reads anew when a state changed.
   const pendingKey = imports
-    .filter((item) => item.status === "reading" || item.status === "marking")
+    .filter((item) => IMPORT_WORKING.includes(item.status))
     .map((item) => `${item.id}:${item.status}`)
     .sort()
     .join(",");
@@ -397,6 +402,11 @@ export default function LibraryView({ state, citation }: { state: LibraryState; 
                         <Typography variant="body1" className="font-semibold break-words">
                           {template.name}
                         </Typography>
+                        {template.preparedByOne ? (
+                          <Typography variant="body2" className="text-text-secondary">
+                            {t("library-template-prepared-by-one")}
+                          </Typography>
+                        ) : null}
                         <Typography variant="body2" className="text-text-secondary">
                           {[
                             template.documentKind !== "piece"
@@ -419,6 +429,9 @@ export default function LibraryView({ state, citation }: { state: LibraryState; 
                       </Box>
                       {template.platform ? (
                         <StatusChip tone="neutral" label={t("library-template-platform-chip")} />
+                      ) : null}
+                      {template.preparedByOne ? (
+                        <StatusChip tone="info" label={t("library-template-prepared-chip")} />
                       ) : null}
                       {template.provisional ? (
                         <StatusChip tone="attention" label={t("library-template-provisional-chip")} />
@@ -654,10 +667,17 @@ function ImportRow({
   onDismiss: () => void;
 }) {
   const t = useTranslations("product");
-  const working = item.status === "reading" || item.status === "marking";
+  const working = IMPORT_WORKING.includes(item.status) || item.status === "asking";
   const ready = item.status === "ready";
-  // What opening it is for: checking and saving a model that is ready, or following ONE while it prepares one.
-  const openKey = ready ? "library-import-review" : "library-import-follow";
+  const asking = item.status === "asking";
+  // What opening it is for: answering what ONE asks, checking and saving a model that is ready, or following ONE.
+  const openKey = asking ? "library-import-answer" : ready ? "library-import-review" : "library-import-follow";
+  const openLabel = asking
+    ? t("library-import-answer-label", { file: item.fileName })
+    : ready
+      ? t("library-import-review-label", { file: item.fileName })
+      : undefined;
+  const closed = item.status === "failed" || item.status === "refused";
   return (
     <Box component="li" className="border-grey-100 flex flex-wrap items-center gap-3 border-b py-3 last:border-b-0">
       <Box className="flex min-w-0 flex-1 basis-60 flex-col">
@@ -670,6 +690,7 @@ function ImportRow({
               ? t("library-import-sent-by", { name: item.requestedBy, when: item.sentLabel })
               : t("library-import-sent-at", { when: item.sentLabel }),
             item.status === "failed" ? t(importFailureKey(item.failure)) : null,
+            item.status === "refused" ? refusalWords(t, item.refusal, item.expected) : null,
           ]
             .filter(Boolean)
             .join(" · ")}
@@ -677,13 +698,13 @@ function ImportRow({
       </Box>
       <StatusChip tone={IMPORT_TONE[item.status]} label={t(IMPORT_STATUS_KEY[item.status])} />
       <Box className="flex flex-wrap gap-1">
-        {item.status !== "failed" ? (
+        {!closed ? (
           <Button
-            variant={ready ? "contained" : "text"}
-            color={ready ? "primary" : "grey"}
+            variant={ready || asking ? "contained" : "text"}
+            color={ready || asking ? "primary" : "grey"}
             size="small"
             onClick={onOpen}
-            aria-label={ready ? t("library-import-review-label", { file: item.fileName }) : undefined}
+            aria-label={openLabel}
           >
             {t(openKey)}
           </Button>

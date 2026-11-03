@@ -2,25 +2,30 @@
 
 import { revalidatePath } from "next/cache";
 
+import { isModelDocument, type ModelDocument } from "@/lib/cases/drafts";
 import { discardUpload, finishUpload, startUpload } from "@/lib/files/uploads";
 import {
+  IMPORT_VIEW_COLUMNS,
   type ImportRow,
   importView,
   owesWork,
+  type SavedModel,
   type TemplateImportView,
   workingMinutesOf,
 } from "@/lib/library/import-read";
 import { queueTemplateImport } from "@/lib/library/import-work";
-import { type ImportStatus, isOtherTextFormat } from "@/lib/library/imports";
+import { IMPORT_WORKING, type ImportStatus, isOtherTextFormat } from "@/lib/library/imports";
 import { getMemberContext } from "@/lib/member/context";
 import { isSupportVisit } from "@/lib/whatsapp/session";
 
 /**
- * What a partner or a lawyer does to have a model of the library made from a
- * document the firm already uses (migration 0067): send the file (straight
- * from the browser to storage, as every file of a firm), ask ONE for the
- * model, read what ONE prepares while it prepares it, and give it up. The
- * model itself is saved through the library's own action
+ * What a partner or a lawyer does to have the firm's own model made from a
+ * document the firm already uses (migrations 0067 and 0079): send the file
+ * (straight from the browser to storage, as every file of a firm), say what
+ * it is sent as (the setup's step of a paper sends its power of attorney or
+ * its contract), read what ONE does with it while it does it, answer what ONE
+ * asks, and give it up. ONE saves the model by itself where the firm lets
+ * it; otherwise a person saves it through the library's own action
  * (`saveDraftTemplate` with the request), which closes the request. Every
  * write is a function of the database, which decides who may.
  */
@@ -32,7 +37,10 @@ const RAISED = ["not_allowed_in_support_session", "not_authorized"] as const;
 const raised = (message: string | null | undefined): string =>
   RAISED.find((code) => (message ?? "").includes(code)) ?? "failed";
 
-const refresh = () => revalidatePath("/biblioteca");
+const refresh = () => {
+  revalidatePath("/biblioteca");
+  revalidatePath("/configurar");
+};
 
 export type ModelSourceStart =
   | { ok: true; fileId: string; storagePath: string; uploadToken: string }
@@ -61,15 +69,24 @@ export async function startModelSource(input: {
 
 export type ModelRequest = { ok: true; importId: string } | { ok: false; code: string; most?: number };
 
-/** The second half: the backend measures what arrived, and ONE is asked for the model. */
-export async function requestModelFromDocument(fileId: string): Promise<ModelRequest> {
+/**
+ * The second half: the backend measures what arrived, and ONE is asked for the model, of what the document was
+ * sent as (`expected`; ONE refuses another thing) and, for a paper, to take the place of the firm's default of it.
+ */
+export async function requestModelFromDocument(
+  fileId: string,
+  options: { expected?: ModelDocument | null; makeDefault?: boolean } = {},
+): Promise<ModelRequest> {
   const context = await getMemberContext();
   if (!context?.firm || !isId(fileId)) return { ok: false, code: "not_found" };
+  const expected = isModelDocument(options?.expected) ? options.expected : null;
   const finished = await finishUpload(context, fileId);
   if (!finished.ok) return { ok: false, code: finished.code };
   const { data, error } = await context.supabase.rpc("request_template_import", {
     target_org: context.firm.id,
     target_file: fileId,
+    target_expected: expected,
+    target_default: expected !== null && options?.makeDefault === true,
   });
   const answer = (data ?? {}) as { ok?: boolean; code?: string; import_id?: unknown; most?: unknown };
   if (!error && answer.ok && isId(answer.import_id)) {
@@ -101,7 +118,7 @@ export async function readModelFromDocument(
   const [row, setting] = await Promise.all([
     context.supabase
       .from("template_imports")
-      .select("id, file_name, source, status, failure, paragraphs, proposal, claimed_at, requested_by, created_at")
+      .select(IMPORT_VIEW_COLUMNS)
       .eq("id", importId)
       .eq("org_id", context.firm.id)
       .maybeSingle(),
@@ -111,7 +128,62 @@ export async function readModelFromDocument(
   if (!row.data) return { ok: false, code: "not_found" };
   const found = row.data as ImportRow;
   if (owesWork(found, workingMinutesOf(setting.data?.value))) await queueTemplateImport(found.id);
-  return { ok: true, view: importView(found) };
+  // The model ONE saved, read beside the request: the dialog edits it from then on.
+  let saved: SavedModel | null = null;
+  if (found.status === "saved" && found.saved_template_id && isId(found.saved_template_id)) {
+    const { data: template } = await context.supabase
+      .from("draft_templates")
+      .select("id, name, document_kind, proceeding_kind, is_default, body")
+      .eq("id", found.saved_template_id)
+      .eq("org_id", context.firm.id)
+      .maybeSingle();
+    if (template && isModelDocument(template.document_kind)) {
+      saved = {
+        templateId: String(template.id),
+        name: String(template.name ?? ""),
+        documentKind: template.document_kind,
+        proceedingKind:
+          template.proceeding_kind === "juizado" || template.proceeding_kind === "comum"
+            ? template.proceeding_kind
+            : null,
+        isDefault: template.is_default === true,
+        body: String(template.body ?? ""),
+      };
+    }
+  }
+  return { ok: true, view: importView(found, saved) };
+}
+
+/** The longest answer, as the setting says it: the dialog counts it before anything is sent. */
+const MOST_ANSWER = 1000;
+
+/**
+ * A partner or a lawyer answers what ONE asked of a document, one answer per question in their order (a blank one
+ * keeps the document as it is): ONE goes on with the model at once.
+ */
+export async function answerModelQuestions(
+  importId: string,
+  answers: string[],
+): Promise<{ ok: true } | { ok: false; code: string; most?: number }> {
+  const context = await getMemberContext();
+  if (!context?.firm || !isId(importId)) return { ok: false, code: "not_found" };
+  const given = (Array.isArray(answers) ? answers : []).map((answer) => String(answer ?? "").slice(0, MOST_ANSWER + 1));
+  const { data, error } = await context.supabase.rpc("answer_template_import", {
+    target_import: importId,
+    target_answers: given,
+  });
+  if (error) return { ok: false, code: raised(error.message) };
+  const answer = (data ?? {}) as { ok?: boolean; code?: string; most?: unknown };
+  if (!answer.ok) {
+    return {
+      ok: false,
+      code: String(answer.code ?? "failed"),
+      ...(typeof answer.most === "number" ? { most: answer.most } : {}),
+    };
+  }
+  await queueTemplateImport(importId);
+  refresh();
+  return { ok: true };
 }
 
 /**
@@ -128,7 +200,7 @@ export async function watchModelImports(): Promise<
       .from("template_imports")
       .select("id, status, claimed_at")
       .eq("org_id", context.firm.id)
-      .in("status", ["reading", "marking"]),
+      .in("status", [...IMPORT_WORKING]),
     context.supabase.from("platform_settings").select("value").eq("key", "template_imports").maybeSingle(),
   ]);
   if (rows.error) return { ok: false };

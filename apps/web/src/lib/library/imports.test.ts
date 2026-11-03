@@ -3,20 +3,37 @@ import { describe, expect, it } from "vitest";
 import {
   changesShown,
   composeModel,
+  exchangesOf,
+  HELD_KEY,
+  HELD_REASONS,
+  heldReasonOf,
+  IMPORT_STATUS_KEY,
+  IMPORT_STATUSES,
   importFailureKey,
   importRefusalKey,
   isOtherTextFormat,
   markingBriefing,
+  MISSING_CODES,
+  MISSING_KEY,
   modelChecks,
   proposalOf,
+  questionsOf,
+  refusalOf,
+  REFUSED_KEY,
+  saveGate,
 } from "@/lib/library/imports";
+import product from "@flyee/content/messages/pt-BR.json";
 
 /**
- * A model of the library made from a document (migration 0067): what the
- * marking reads, the model written from the paragraphs and the changes, and
- * what still looks like the original case. Every name, number and fact here
- * is invented; the CPF and the CNPJ are the ones manuals use as examples.
+ * A model of the library made from a document (migrations 0067 and 0079):
+ * what the marking reads, the model written from the paragraphs and the
+ * changes, what still looks like the original case, what ONE asks and why it
+ * refuses, and when ONE saves the model by itself. Every name, number and
+ * fact here is invented; the CPF and the CNPJ are the ones manuals use as
+ * examples.
  */
+
+const words = (product as { product: Record<string, string> }).product;
 
 const PARAGRAPHS = [
   "EXCELENTÍSSIMO SENHOR JUIZ DE DIREITO DO JUIZADO ESPECIAL CÍVEL DA COMARCA DE GOIÂNIA",
@@ -30,12 +47,89 @@ const PARAGRAPHS = [
 describe("what the marking reads", () => {
   it("is each paragraph after its number, with what identifies a person taken out, and never the file's name", () => {
     const briefing = markingBriefing(PARAGRAPHS);
-    expect(briefing.startsWith("Documento com 6 parágrafos")).toBe(true);
+    expect(briefing.startsWith("O escritório mandou este documento para virar um modelo, sem dizer qual.")).toBe(true);
+    expect(briefing).toContain("Documento com 6 parágrafos");
     expect(briefing).toContain("§1\nEXCELENTÍSSIMO SENHOR JUIZ");
     expect(briefing).toContain("§6\nFulano de Tal\nOAB/GO 12.345");
     expect(briefing).toContain("CPF [CPF]");
     expect(briefing).toContain("CEP [CEP]");
     expect(briefing).not.toContain("529.982.247-25");
+  });
+});
+
+describe("what the marking reads of a round answered", () => {
+  it("says what the document was sent as, every question with its answer masked, and the last round", () => {
+    const briefing = markingBriefing(["CONTRATO DE HONORÁRIOS", "HONORÁRIOS: ____%."], {
+      expected: "contrato",
+      exchanges: [
+        {
+          questions: [
+            { question: "Qual é o percentual dos honorários?", why: "Em branco." },
+            { question: "A quem o cliente escreve?", why: "Em branco." },
+          ],
+          answers: ["30% do proveito econômico", ""],
+        },
+        {
+          questions: [{ question: "Qual é o e-mail do escritório?", why: "Em branco." }],
+          answers: ["contato@souza-exemplo.invalid, telefone (62) 99999-1234"],
+        },
+      ],
+      lastRound: true,
+    });
+    expect(
+      briefing.startsWith("O escritório mandou este documento como o contrato de honorários que o escritório usa."),
+    ).toBe(true);
+    expect(briefing).toContain(
+      "Rodada 1:\nPergunta: Qual é o percentual dos honorários?\nResposta: 30% do proveito econômico",
+    );
+    expect(briefing).toContain("Pergunta: A quem o cliente escreve?\nResposta: (sem resposta)");
+    expect(briefing).toContain("Rodada 2:");
+    expect(briefing).not.toContain("contato@souza-exemplo.invalid");
+    expect(briefing).not.toContain("99999-1234");
+    expect(briefing.endsWith("Esta é a última rodada: não faça perguntas.")).toBe(true);
+  });
+
+  it("reads the rounds, the questions and the refusal the database kept, leaving out what is not one", () => {
+    expect(questionsOf([{ question: " Qual o prazo? ", why: "Em branco." }, { question: "" }, 7])).toEqual([
+      { question: "Qual o prazo?", why: "Em branco." },
+    ]);
+    expect(exchangesOf([{ questions: [{ question: "Qual o prazo?", why: "" }], answers: ["10 dias"] }, {}])).toEqual([
+      { questions: [{ question: "Qual o prazo?", why: "" }], answers: ["10 dias"] },
+    ]);
+    expect(refusalOf({ code: "missing", found: "procuracao", missing: ["poderes", "nada"] })).toEqual({
+      code: "missing",
+      found: "procuracao",
+      what: null,
+      missing: ["poderes"],
+    });
+    expect(refusalOf({ code: "wrong_kind", found: "contrato", what: "um contrato" })?.found).toBe("contrato");
+    expect(refusalOf({ code: "something" })).toBeNull();
+    expect(heldReasonOf("notes")).toBe("notes");
+    expect(heldReasonOf("other")).toBeNull();
+  });
+});
+
+describe("when ONE saves the model by itself", () => {
+  const clean = "PROCURAÇÃO\n\nOUTORGANTE: [[OUTORGANTE]].\n\n[[LOCAL_DATA]].";
+  const gate = (overrides: Partial<Parameters<typeof saveGate>[0]> = {}) =>
+    saveGate({ body: clean, people: ["MARIA TESTE"], document: "procuracao", notes: [], unwritable: [], ...overrides });
+
+  it("saves a text with nothing a lawyer should look at", () => {
+    expect(gate()).toEqual({ save: true });
+  });
+
+  it("leaves to a person a text that still looks like the original case, or that the PDF of a piece cannot write", () => {
+    expect(gate({ body: `${clean} Assinado por MARIA TESTE.` })).toEqual({ save: false, reason: "checks" });
+    expect(gate({ body: `${clean} CPF 529.982.247-25.` })).toEqual({ save: false, reason: "checks" });
+    expect(gate({ body: `${clean} [COMPLETAR: o objeto]` })).toEqual({ save: false, reason: "checks" });
+    expect(gate({ document: "piece", unwritable: ["ş"] })).toEqual({ save: false, reason: "checks" });
+    // A paper is written in no PDF of a piece: what that writer cannot write is no reason there.
+    expect(gate({ unwritable: ["ş"] })).toEqual({ save: true });
+  });
+
+  it("leaves to a person what the marking asked a lawyer to check, a question still open among it", () => {
+    expect(gate({ notes: ["Qual é a cidade do foro do contrato?"] })).toEqual({ save: false, reason: "notes" });
+    expect(gate({ notes: ["  "] })).toEqual({ save: true });
   });
 });
 
@@ -150,6 +244,16 @@ describe("the screen's words", () => {
     expect(importFailureKey("something")).toBe("library-import-failed-gave-up");
     expect(importRefusalKey("too_many_pages")).toBe("library-import-refused-pages");
     expect(importRefusalKey("anything")).toBe("library-import-refused-failed");
+  });
+
+  it("says every state, refusal, lack and reason to wait with a key the catalog has", () => {
+    const keys = [
+      ...IMPORT_STATUSES.map((status) => IMPORT_STATUS_KEY[status]),
+      ...Object.values(REFUSED_KEY),
+      ...MISSING_CODES.map((code) => MISSING_KEY[code]),
+      ...HELD_REASONS.map((reason) => HELD_KEY[reason]),
+    ];
+    expect(keys.filter((key) => !(key in words))).toEqual([]);
   });
 
   it("tells a text in another format before it is sent", () => {

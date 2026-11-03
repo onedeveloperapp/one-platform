@@ -24,6 +24,7 @@ export const AUTONOMY_DECISIONS = [
   "sign_package",
   "publication_deadline",
   "publication_hearing",
+  "model_from_document",
 ] as const;
 export type AutonomyDecision = (typeof AUTONOMY_DECISIONS)[number];
 
@@ -95,6 +96,7 @@ export const DECISION_KEY: Record<AutonomyDecision, { title: string; body: strin
   sign_package: { title: "autonomy-sign-package", body: "autonomy-sign-package-body" },
   publication_deadline: { title: "autonomy-publication-deadline", body: "autonomy-publication-deadline-body" },
   publication_hearing: { title: "autonomy-publication-hearing", body: "autonomy-publication-hearing-body" },
+  model_from_document: { title: "autonomy-model-from-document", body: "autonomy-model-from-document-body" },
 };
 
 export const MODE_KEY: Record<AutonomyMode, string> = {

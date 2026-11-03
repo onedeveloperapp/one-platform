@@ -13,6 +13,16 @@ Scope: every screen under `apps/web/src/app/(dashboard)/**` (the authenticated a
 
 Before any layout, write down: **who** is on this screen, **what job** they came to do, and **what "success" looks like** for them here. Design backward from that. Ask: if this screen were not a table, what would it be? A table is a valid answer only when the job is genuinely "scan/compare/manage many rows" — otherwise it is the lazy default. Prefer: a focused summary + the one primary action; a guided flow; a single object view with its context; a dashboard that answers a question.
 
+## Pass 0b: who does the work, ONE or the person
+
+ONE's premise (the owner, 2026-11-03): what needs no person, ONE's own AI does, sparing the firm time, people and cost. Before designing a screen where a person does a task by hand (writes, fills in, marks, copies, checks a document against a rule), ask whether ONE's AI can do it from what the firm already has, and design that instead:
+
+- **ONE does the task**, recorded as every AI run is, under the firm's autonomy (`autonomy_decisions`, ONE by default; a firm may keep it to a person).
+- **The person only answers** what only they know or decide: a question ONE asks in place (a blank of the firm's, a choice left open), a decision of the firm's, a document to send again after a refusal said with why.
+- **The screen shows what ONE did**, says that ONE may err and what to check, and lets the person change it; what ONE could not do alone waits for a person with the reason.
+
+A screen where a person does by hand what ONE could do is the exception, and its reason is written beside it. The first build: the firm's own model made from the document it already uses (migration 0079), sent in the setup's step, refused with why, its blanks asked in place, saved by ONE when nothing is left to look at.
+
 ## The activation principle (from onboarding research)
 
 The best products bring the user to VALUE fast (the "aha moment") — they sell the outcome, not the feature list.

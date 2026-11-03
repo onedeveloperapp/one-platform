@@ -7,14 +7,17 @@ import { connect, DB_URL, type Row, type Sql, standIn } from "@/lib/testing/embe
 import type { AiProviderName, ChatAttachment } from "@flyee/ai/types";
 
 /**
- * A model of the library made from a document the firm already uses, with
- * the app's own code against a real database (migration 0067): a lawyer
- * sends a Word file, the backend reads it word for word and forgets the
- * file, the marking says which paragraphs were of the original case, and the
- * screen writes the model from the paragraphs and the changes, with what
- * still looks like the original case; the lawyer saves it and the request
- * goes. A PDF is transcribed by the model first. A document that is no model
- * ONE uses is said so, and another firm reads nothing of it.
+ * The firm's own model made from a document it already uses, with the app's
+ * own code against a real database (migrations 0067 and 0079): a lawyer sends
+ * a Word file, the backend reads it word for word and forgets the file, the
+ * marking checks it and says which paragraphs were of the original case, and
+ * the screen writes the model from the paragraphs and the changes, with what
+ * still looks like the original case. A firm that keeps the models to a
+ * person has the lawyer save it; otherwise ONE saves it by itself when there
+ * is nothing to look at. A PDF is transcribed by the model first. A document
+ * that is no model ONE uses, or that is not what it was sent as, is refused
+ * with why; what only the firm knows is asked, and the answer is in the
+ * model ONE saves. Another firm reads nothing of it.
  *
  * It runs only when a migrated database is at hand
  * (`npm run test:db:roundtrip`); otherwise it is skipped. What stands in is
@@ -33,6 +36,20 @@ vi.mock("@flyee/jobs", () => ({ sendEvent: async () => ({ sent: false, hint: "no
 const model = vi.hoisted(() => ({
   asked: [] as { task: string; text: string; attachments: ChatAttachment[] }[],
 }));
+
+/** An answer of the marking, the parts a scenario does not say filled in. */
+const marking = (fields: Record<string, unknown>) => ({
+  documento: "peca",
+  o_que_e: "",
+  faltas: [],
+  perguntas: [],
+  tipo_de_processo: "ambos",
+  nome: "",
+  trocas: [],
+  pessoas: [],
+  observacoes: [],
+  ...fields,
+});
 
 vi.mock("@flyee/ai/fake", async (original) => {
   const real = await original<typeof import("@flyee/ai/fake")>();
@@ -55,23 +72,49 @@ vi.mock("@flyee/ai/fake", async (original) => {
         }
         model.asked.push({ task: "marcacao", text, attachments });
         if (text.includes("CONTESTAÇÃO")) {
-          return { documento: "outro", tipo_de_processo: "ambos", nome: "", trocas: [], pessoas: [], observacoes: [] };
+          return marking({ documento: "outro", o_que_e: "uma contestação" });
+        }
+        if (text.includes("CONTRATO DE HONORÁRIOS")) {
+          // The contract leaves its fee blank: asked first, and written with the firm's answer.
+          if (!text.includes("Resposta: 30% do proveito econômico")) {
+            return marking({
+              documento: "contrato",
+              o_que_e: "um contrato de honorários",
+              perguntas: [{ pergunta: "Qual é o percentual dos honorários?", motivo: "O contrato o deixa em branco." }],
+            });
+          }
+          return marking({
+            documento: "contrato",
+            o_que_e: "um contrato de honorários",
+            nome: "Contrato de honorários do escritório",
+            trocas: [
+              { de: 2, ate: 2, motivo: "o cliente", texto: "CONTRATANTE: [[CONTRATANTE]]." },
+              {
+                de: 3,
+                ate: 3,
+                motivo: "o percentual dos honorários, como o escritório respondeu",
+                texto: "HONORÁRIOS: 30% do proveito econômico.",
+              },
+              { de: 4, ate: 4, motivo: "o local e a data", texto: "[[LOCAL_DATA]]." },
+            ],
+            pessoas: ["MARIA TESTE DE SOUZA"],
+          });
         }
         if (text.includes("PROCURAÇÃO")) {
-          return {
+          return marking({
             documento: "procuracao",
-            tipo_de_processo: "ambos",
+            o_que_e: "uma procuração",
             nome: "Procuração do escritório",
             trocas: [
               { de: 2, ate: 2, motivo: "o cliente", texto: "OUTORGANTE: [[OUTORGANTE]]." },
               { de: 3, ate: 3, motivo: "o local e a data", texto: "[[LOCAL_DATA]]." },
             ],
             pessoas: ["MARIA TESTE DE SOUZA"],
-            observacoes: [],
-          };
+          });
         }
-        return {
+        return marking({
           documento: "peca",
+          o_que_e: "uma petição inicial",
           tipo_de_processo: "juizado",
           nome: "Inicial do juizado: cancelamento",
           trocas: [
@@ -88,7 +131,7 @@ vi.mock("@flyee/ai/fake", async (original) => {
           ],
           pessoas: ["MARIA TESTE DE SOUZA", "Maria"],
           observacoes: ["Confira o pedido de danos morais."],
-        };
+        });
       });
     }
   }
@@ -156,9 +199,24 @@ const PETITION = [
   "Fulano de Tal\nOAB/XX 00.000",
 ];
 
-describe.skipIf(!DB_URL)("a model of the library made from a document", () => {
-  /** A lawyer sends a document and asks for its model, as the library's own actions do: reserved, the bytes, kept. */
-  async function send(name: string, mime: string, bytes: Uint8Array): Promise<{ importId: string; path: string }> {
+const CONTRACT = [
+  "CONTRATO DE HONORÁRIOS",
+  "CONTRATANTE: MARIA TESTE DE SOUZA.",
+  "HONORÁRIOS: ____% do proveito econômico.",
+  "Goiânia, 10 de maio de 2099.",
+];
+
+describe.skipIf(!DB_URL)("the firm's own model made from a document it already uses", () => {
+  /**
+   * A lawyer sends a document and asks for its model, as the library's own actions do: reserved, the bytes, kept;
+   * sent as a paper when the setup's step sends it.
+   */
+  async function send(
+    name: string,
+    mime: string,
+    bytes: Uint8Array,
+    expected: string | null = null,
+  ): Promise<{ importId: string; path: string }> {
     const reserved = await call(asAna(), "reserve_file_upload", {
       target_org: FIRM,
       target_purpose: "model_source",
@@ -176,21 +234,36 @@ describe.skipIf(!DB_URL)("a model of the library made from a document", () => {
       await measureFile(bytes),
     );
     expect(kept.ok).toBe(true);
-    const asked = await call(asAna(), "request_template_import", { target_org: FIRM, target_file: reserved.file_id });
+    const asked = await call(asAna(), "request_template_import", {
+      target_org: FIRM,
+      target_file: reserved.file_id,
+      target_expected: expected,
+      target_default: expected !== null,
+    });
     expect(asked.code).toBe("requested");
     return { importId: String(asked.import_id), path };
   }
 
   /** What the dialog reads of a request, under the lawyer's own session. */
   async function view(importId: string) {
-    const { importView } = await import("@/lib/library/import-read");
+    const { importView, IMPORT_VIEW_COLUMNS } = await import("@/lib/library/import-read");
     const { data } = await asAna()
       .from("template_imports")
-      .select("id, file_name, source, status, failure, paragraphs, proposal, claimed_at, requested_by, created_at")
+      .select(IMPORT_VIEW_COLUMNS)
       .eq("id", importId)
       .maybeSingle();
     expect(data).not.toBeNull();
     return importView(data as never);
+  }
+
+  /** The firm keeps the models ONE prepares to a person, or lets ONE save them (its default). */
+  async function keepToPerson(kept: boolean) {
+    await sql.unsafe(`delete from public.firm_autonomy where org_id = '${FIRM}' and decision = 'model_from_document'`);
+    if (kept) {
+      await sql.unsafe(
+        `insert into public.firm_autonomy (org_id, decision, mode) values ('${FIRM}', 'model_from_document', 'approval')`,
+      );
+    }
   }
 
   beforeAll(async () => {
@@ -220,6 +293,7 @@ describe.skipIf(!DB_URL)("a model of the library made from a document", () => {
   });
 
   it("reads a Word file word for word, marks what was of the original case, and the lawyer saves the model", async () => {
+    await keepToPerson(true);
     const { importNext } = await import("@/lib/library/import-work");
     const sent = await send("Inicial Maria Teste.docx", DOCX, wordFile(PETITION));
 
@@ -230,14 +304,16 @@ describe.skipIf(!DB_URL)("a model of the library made from a document", () => {
 
     // The marking reads the paragraphs by their numbers, the CPF taken out, and never the file's name.
     expect(await importNext(backend() as never, sent.importId)).toBe("ready");
-    const marking = model.asked.at(-1);
-    expect(marking?.task).toBe("marcacao");
-    expect(marking?.text).toContain("§2\nMARIA TESTE DE SOUZA, brasileira, solteira, CPF [CPF]");
-    expect(marking?.text).not.toContain("529.982.247-25");
-    expect(marking?.text).not.toContain("Inicial Maria Teste");
+    const marked = model.asked.at(-1);
+    expect(marked?.task).toBe("marcacao");
+    expect(marked?.text).toContain("O escritório mandou este documento para virar um modelo, sem dizer qual.");
+    expect(marked?.text).toContain("§2\nMARIA TESTE DE SOUZA, brasileira, solteira, CPF [CPF]");
+    expect(marked?.text).not.toContain("529.982.247-25");
+    expect(marked?.text).not.toContain("Inicial Maria Teste");
 
     const read = await view(sent.importId);
     expect(read.status).toBe("ready");
+    expect(read.heldReason).toBe("autonomy");
     expect(read.prepared?.documentKind).toBe("piece");
     expect(read.prepared?.proceedingKind).toBe("juizado");
     expect(read.prepared?.body).toBe(
@@ -275,18 +351,26 @@ describe.skipIf(!DB_URL)("a model of the library made from a document", () => {
       },
     });
     expect(saved.code).toBe("saved");
-    const [template] = await sql.unsafe(`select body, org_id from public.draft_templates where id = $1`, [
-      String(saved.template_id),
-    ]);
+    const [template] = await sql.unsafe(
+      `select body, org_id, prepared_by_one from public.draft_templates where id = $1`,
+      [String(saved.template_id)],
+    );
     expect(template?.org_id).toBe(FIRM);
     expect(template?.body).toBe(read.prepared?.body);
+    expect(template?.prepared_by_one).toBe(false);
     const left = await sql.unsafe(`select id from public.template_imports where id = $1`, [sent.importId]);
     expect(left).toHaveLength(0);
+    await keepToPerson(false);
   });
 
-  it("has a PDF transcribed by the model first, and prepares a power of attorney under its marks", async () => {
+  it("has a PDF transcribed first, and ONE saves the power of attorney by itself as the firm's, the one it sends", async () => {
     const { importNext } = await import("@/lib/library/import-work");
-    const sent = await send("Procuracao.pdf", "application/pdf", await onePagePdf("PROCURACAO de exemplo"));
+    const sent = await send(
+      "Procuracao.pdf",
+      "application/pdf",
+      await onePagePdf("PROCURACAO de exemplo"),
+      "procuracao",
+    );
 
     expect(await importNext(backend() as never, sent.importId)).toBe("read");
     const transcription = model.asked.at(-1);
@@ -296,22 +380,107 @@ describe.skipIf(!DB_URL)("a model of the library made from a document", () => {
     ]);
     expect(bucket.has(sent.path)).toBe(false);
 
-    expect(await importNext(backend() as never, sent.importId)).toBe("ready");
+    // Nothing to look at, and the firm lets ONE: the marking owes the save, and the save is ONE's.
+    expect(await importNext(backend() as never, sent.importId)).toBe("saving");
+    expect(model.asked.at(-1)?.text).toContain(
+      "O escritório mandou este documento como a procuração que o escritório usa.",
+    );
+    expect(await importNext(backend() as never, sent.importId)).toBe("saved");
+
     const read = await view(sent.importId);
+    expect(read.status).toBe("saved");
     expect(read.source).toBe("pdf");
     expect(read.prepared?.documentKind).toBe("procuracao");
-    expect(read.prepared?.proceedingKind).toBeNull();
-    expect(read.prepared?.body).toBe(["PROCURAÇÃO", "OUTORGANTE: [[OUTORGANTE]].", "[[LOCAL_DATA]]."].join("\n\n"));
     expect(read.prepared?.checks).toEqual([]);
+    const [request] = await sql.unsafe(`select saved_template_id from public.template_imports where id = $1`, [
+      sent.importId,
+    ]);
+    const [template] = await sql.unsafe(
+      `select name, body, document_kind, is_default, prepared_by_one, created_by from public.draft_templates where id = $1`,
+      [String(request?.saved_template_id)],
+    );
+    expect(template).toEqual({
+      name: "Procuração do escritório",
+      body: ["PROCURAÇÃO", "OUTORGANTE: [[OUTORGANTE]].", "[[LOCAL_DATA]]."].join("\n\n"),
+      document_kind: "procuracao",
+      is_default: true,
+      prepared_by_one: true,
+      created_by: ANA,
+    });
+    // It is the paper ONE sends now, as `paper_template_for` decides it among the firm's and the platform's models.
+    const { paperModelFor } = await import("@/lib/library/facts");
+    const rows = await sql.unsafe(
+      `select id, org_id, document_kind, proceeding_kind, is_default from public.draft_templates
+       where org_id = $1 or org_id is null`,
+      [FIRM],
+    );
+    expect(paperModelFor(rows as never, FIRM, "procuracao")).toBe(String(request?.saved_template_id));
   });
 
-  it("says when a document is no model ONE uses, and another firm reads nothing of what ONE prepares", async () => {
+  it("refuses a contract sent as the power of attorney, saying what it is", async () => {
+    const { importNext } = await import("@/lib/library/import-work");
+    const sent = await send("Contrato.docx", DOCX, wordFile(CONTRACT), "procuracao");
+    expect(await importNext(backend() as never, sent.importId)).toBe("read");
+    expect(await importNext(backend() as never, sent.importId)).toBe("refused");
+    const read = await view(sent.importId);
+    expect([read.status, read.refusal, read.prepared]).toEqual([
+      "refused",
+      { code: "wrong_kind", found: "contrato", what: "um contrato de honorários", missing: [] },
+      null,
+    ]);
+    const { readPaperImports } = await import("@/lib/library/import-read");
+    const papers = await readPaperImports(asAna() as never, FIRM);
+    expect(papers.procuracao).toMatchObject({ id: sent.importId, status: "refused" });
+  });
+
+  it("asks the firm what only it knows, and saves the contract with the answer in it", async () => {
+    const { importNext } = await import("@/lib/library/import-work");
+    const sent = await send("Contrato do escritorio.docx", DOCX, wordFile(CONTRACT), "contrato");
+    expect(await importNext(backend() as never, sent.importId)).toBe("read");
+    expect(await importNext(backend() as never, sent.importId)).toBe("asking");
+    const asking = await view(sent.importId);
+    expect([asking.status, asking.round, asking.questions]).toEqual([
+      "asking",
+      1,
+      [{ question: "Qual é o percentual dos honorários?", why: "O contrato o deixa em branco." }],
+    ]);
+    // Nothing is owed while the firm has not answered.
+    expect(await importNext(backend() as never, sent.importId)).toBe("none");
+
+    expect(
+      (
+        await call(asAna(), "answer_template_import", {
+          target_import: sent.importId,
+          target_answers: ["30% do proveito econômico"],
+        })
+      ).code,
+    ).toBe("answered");
+    expect(await importNext(backend() as never, sent.importId)).toBe("saving");
+    expect(model.asked.at(-1)?.text).toContain(
+      "Pergunta: Qual é o percentual dos honorários?\nResposta: 30% do proveito econômico",
+    );
+    expect(await importNext(backend() as never, sent.importId)).toBe("saved");
+    const [template] = await sql.unsafe(
+      `select t.body, t.is_default from public.draft_templates t
+       join public.template_imports i on i.saved_template_id = t.id where i.id = $1`,
+      [sent.importId],
+    );
+    expect(template?.body).toContain("HONORÁRIOS: 30% do proveito econômico.");
+    expect(template?.is_default).toBe(true);
+  });
+
+  it("refuses a document that is no model ONE uses, and another firm reads nothing of what ONE does", async () => {
     const { importNext } = await import("@/lib/library/import-work");
     const sent = await send("Contestacao.docx", DOCX, wordFile(["CONTESTAÇÃO", "A ré contesta o pedido."]));
     expect(await importNext(backend() as never, sent.importId)).toBe("read");
-    expect(await importNext(backend() as never, sent.importId)).toBe("failed");
+    expect(await importNext(backend() as never, sent.importId)).toBe("refused");
     const read = await view(sent.importId);
-    expect([read.status, read.failure, read.prepared]).toEqual(["failed", "not_a_model", null]);
+    expect([read.status, read.refusal?.code, read.refusal?.what, read.prepared]).toEqual([
+      "refused",
+      "other_document",
+      "uma contestação",
+      null,
+    ]);
 
     const { data } = await asDavi().from("template_imports").select("id").eq("org_id", FIRM);
     expect(data ?? []).toEqual([]);

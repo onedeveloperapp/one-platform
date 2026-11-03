@@ -72,6 +72,8 @@ export type LibraryTemplate = {
   provisional: boolean;
   /** ONE writes the pieces of some kind from it now (`draft_template_for`), or sends it to clients to sign (`paper_template_for`). */
   usedByOne: boolean;
+  /** ONE saved it from a document the firm sent, and no person of the firm saved it since (0079): ONE may err. */
+  preparedByOne: boolean;
   updatedLabel: string;
   updatedBy: string | null;
   /** How many distinct sources its text cites, and how many of them the library does not answer for: a paper's none, since no gate reads it. */
@@ -112,6 +114,7 @@ type TemplateRow = {
   id: string;
   org_id: string | null;
   provisional: boolean | null;
+  prepared_by_one: boolean | null;
   name: string;
   document_kind: string | null;
   proceeding_kind: string | null;
@@ -215,7 +218,12 @@ export type SetupPaper = {
   firmDefault: string | null;
 };
 
-type PaperRow = ModelRow & { provisional: boolean | null; name: string; updated_at: string };
+type PaperRow = ModelRow & {
+  provisional: boolean | null;
+  prepared_by_one: boolean | null;
+  name: string;
+  updated_at: string;
+};
 
 /**
  * The papers a client signs as the firm's setup offers them: which model ONE
@@ -231,7 +239,7 @@ export async function loadSetupPapers(
 ): Promise<{ procuracao: SetupPaper; contrato: SetupPaper } | null> {
   const { data, error } = await supabase
     .from("draft_templates")
-    .select("id, org_id, provisional, name, document_kind, proceeding_kind, is_default, updated_at")
+    .select("id, org_id, provisional, prepared_by_one, name, document_kind, proceeding_kind, is_default, updated_at")
     .or(`org_id.eq.${firmId},org_id.is.null`)
     .in("document_kind", ["procuracao", "contrato"])
     .order("name");
@@ -246,6 +254,7 @@ export async function loadSetupPapers(
     platform: row.org_id === null,
     provisional: row.org_id === null && row.provisional === true,
     usedByOne: used,
+    preparedByOne: row.org_id !== null && row.prepared_by_one === true,
     updatedLabel: momentLabel(row.updated_at, timeZone),
     updatedBy: null,
     cited: 0,
@@ -276,7 +285,9 @@ export async function loadLibrary(
     readSources(supabase, firmId),
     supabase
       .from("draft_templates")
-      .select("id, org_id, provisional, name, document_kind, proceeding_kind, is_default, body, updated_by, updated_at")
+      .select(
+        "id, org_id, provisional, prepared_by_one, name, document_kind, proceeding_kind, is_default, body, updated_by, updated_at",
+      )
       .or(`org_id.eq.${firmId},org_id.is.null`)
       .order("name"),
     supabase.rpc("firm_team", { target_org: firmId }),
@@ -338,6 +349,7 @@ export async function loadLibrary(
       platform: template.org_id === null,
       provisional: template.org_id === null && template.provisional === true,
       usedByOne: used.has(template.id),
+      preparedByOne: template.org_id !== null && template.prepared_by_one === true,
       updatedLabel: momentLabel(template.updated_at, timeZone),
       // Who of the platform wrote a model of the platform is the operator's, never the firm's to read.
       updatedBy: template.org_id !== null && template.updated_by ? names.get(template.updated_by) || null : null,

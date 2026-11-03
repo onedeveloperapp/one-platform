@@ -10,13 +10,14 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-
 const IMPORTS_PER_RUN = 4;
 
 /**
- * The models the library makes from documents (migration 0067), recomputed
- * from the data on every pass: each request owes its text, then its marking,
- * one work at a time, each claimed and done in the same step (a step has the
- * time of the jobs route, which the transcription of a long PDF needs). A
- * request named in the event (a person just asked) is worked on at once,
- * both works in turn; the cron takes what waits, and its upkeep forgets what
- * waited longer than the setting's days.
+ * The models the library makes from documents (migrations 0067 and 0079),
+ * recomputed from the data on every pass: each request owes its text, then its
+ * marking, then, where the firm lets ONE, the save of the firm's model, one
+ * work at a time, each claimed and done in the same step (a step has the time
+ * of the jobs route, which the transcription of a long PDF needs). A request
+ * named in the event (a person just asked, or answered what ONE asked) is
+ * worked on at once, its works in turn; the cron takes what waits, and its
+ * upkeep forgets what waited longer than the setting's days.
  *
  * The steps carry ids and outcomes only: the text of a document never enters
  * a job's recorded state.
@@ -32,12 +33,12 @@ export const templateImportsFunction = inngest.createFunction(
       const expired = await step.run("expire", () => expireTemplateImports(createServiceClient()));
       if (expired > 0) outcomes.expired = expired;
     }
-    for (let turn = 0; turn < (target ? 2 : IMPORTS_PER_RUN); turn += 1) {
+    for (let turn = 0; turn < (target ? 3 : IMPORTS_PER_RUN); turn += 1) {
       const outcome = await step.run(`import-${turn}`, () => importNext(createServiceClient(), target));
       if (outcome === "none") break;
       outcomes[outcome] = (outcomes[outcome] ?? 0) + 1;
-      // A request named goes on to its marking once its text is kept, and stops there.
-      if (target && outcome !== "read") break;
+      // A request named goes on to its marking once its text is kept, and to its save once ONE owes it.
+      if (target && outcome !== "read" && outcome !== "saving") break;
     }
     return outcomes;
   },
