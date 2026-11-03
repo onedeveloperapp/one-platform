@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { canAccess, type MenuViewer, visibleItems } from "@/lib/firm/menu";
-import { isSetupStep } from "@/lib/firm/setup-steps";
+import { isSetupStep, SETUP_STEPS, setupOpening } from "@/lib/firm/setup-steps";
 import { type FirmToday, readFirmToday, somethingForMe, todayNeeds } from "@/lib/firm/today";
 import {
   buildOnboardingSteps,
@@ -579,6 +579,23 @@ describe("the firm's setup, from facts", () => {
       ["first-case", "/casos"],
     ]);
     for (const step of buildOnboardingSteps()) expect(product[step.title], step.title).toBeTruthy();
+  });
+
+  it("opens on the second factor while the session has none, whatever was asked", () => {
+    // Every step after it writes what the database asks the factor for: nothing past it can be met half way.
+    expect(SETUP_STEPS[0]).toBe("seguranca");
+    const fresh = { factorOk: false, asked: null, answered: false, firstMissing: "oab" as const };
+    expect(setupOpening(fresh)).toEqual({ open: "seguranca", afterFactor: "oab" });
+    expect(setupOpening({ ...fresh, asked: "canal" })).toEqual({ open: "seguranca", afterFactor: "canal" });
+    expect(setupOpening({ ...fresh, asked: "seguranca" })).toEqual({ open: "seguranca", afterFactor: "oab" });
+    expect(setupOpening({ ...fresh, firstMissing: "equipe" })).toEqual({ open: "seguranca", afterFactor: "equipe" });
+    // With the factor, the step asked, else the first one past it for a setup answered before, else what is missing.
+    const confirmed = { ...fresh, factorOk: true };
+    expect(setupOpening({ ...confirmed, asked: "canal" }).open).toBe("canal");
+    expect(setupOpening({ ...confirmed, answered: true, firstMissing: "canal" }).open).toBe("oab");
+    expect(setupOpening({ ...confirmed, firstMissing: "canal" }).open).toBe("canal");
+    expect(setupOpening({ ...confirmed, firstMissing: null }).open).toBe("oab");
+    expect(setupOpening({ ...confirmed, asked: "seguranca" }).open).toBe("seguranca");
   });
 
   it("names steps of the setup the setup has", () => {

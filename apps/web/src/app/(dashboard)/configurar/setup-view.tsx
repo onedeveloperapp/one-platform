@@ -48,7 +48,7 @@ import {
 } from "@/lib/firm/autonomy";
 import { setFirmClaimDefault, setFirmSigner } from "@/lib/firm/autonomy-actions";
 import { FIRM_FUNCTIONS, type FirmFunction, formatOab, OAB_STATES, type OabRegistration } from "@/lib/firm/roles";
-import { SETUP_STEPS, type SetupStepKey } from "@/lib/firm/setup-steps";
+import { SETUP_STEPS, setupOpening, type SetupStepKey } from "@/lib/firm/setup-steps";
 import type { LibraryTemplate, SetupPaper } from "@/lib/library/facts";
 import { caseKindLabelKey, firmCaseKinds } from "@/lib/modules/registry";
 import type { FirmPartnersState } from "@/lib/partners/facts";
@@ -115,7 +115,12 @@ const PAPER_WORDS: Record<Paper, { title: string; firm: string; one: string; mak
 };
 
 /**
- * What a firm sets up for ONE to work for it, one decision per screen: who
+ * What a firm sets up for ONE to work for it, one decision per screen: the
+ * second factor first, since every step after it writes what the database asks
+ * the factor for (a setup that met it half way stopped the owner at the
+ * signer's switch, 2026-11-03: what a later step cannot do without is its own
+ * step before it, and the flow does not go past it until it is done; the rule
+ * is in apps/web/CLAUDE.md), then who
  * answers and whether they sign what ONE prepares, the Valor da Causa Pedido
  * (a value for each kind of problem, or none for the judge to define),
  * whether it works alone, the papers its
@@ -124,7 +129,7 @@ const PAPER_WORDS: Record<Paper, { title: string; firm: string; one: string; mak
  * setup: the modules the firm contracted are said on the home, never here,
  * where a link to them took the owner out of a setup half done (2026-10-30;
  * the rule is in apps/web/CLAUDE.md). Each step does its own work where it
- * is: the second factor a decision asks for is set up in the step, the
+ * is: the second factor is set up in its step, the
  * models are written in a dialog over it, the signature account, the test
  * chat and the number are connected in it, so nobody leaves the setup for a
  * screen they would not come back from. Each step saves what it asks before
@@ -187,7 +192,8 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
   // Confirmed here, before the page reads the session again: every step goes on from the same moment.
   const [confirmedHere, setConfirmedHere] = useState(false);
   const factor: SecondFactorState = confirmedHere ? "ok" : state.secondFactor;
-  // What the database asks the factor for (who signs, the claims, an invitation, a connection) waits for it.
+  // What the database asks the factor for (who signs, the claims, an invitation, a connection) is past its step,
+  // so nothing here waits for it; the guard stays for a session that lost it.
   const locked = factor !== "ok";
   const choosesSigner = decides && !locked;
 
@@ -199,18 +205,6 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
   const [oabError, setOabError] = useState<string | null>(null);
   const numberOk = NUMBER_PATTERN.test(cleanNumber(number));
   const oabReady = !lawyer || registered || (Boolean(uf) && numberOk);
-
-  const onFactor = () => {
-    setConfirmedHere(true);
-    // Who signs is chosen with the factor: a partner who did not sign yet is offered it, as on a first visit.
-    if (decides && !state.signs) setSigns(true);
-  };
-
-  /** The step's way to the second factor, saying what it is for; nothing in a support visit or once confirmed. */
-  const factorPrompt = (id: string, reason: string) =>
-    !blocked && factor !== "ok" ? (
-      <SecondFactorPrompt id={id} state={factor} reason={reason} onConfirmed={onFactor} />
-    ) : null;
 
   // ---------- The Valor da Causa Pedido ----------
   // What was chosen and typed, as the fields hold it, until the page reads it back.
@@ -247,17 +241,29 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
   const [finishError, setFinishError] = useState<string | null>(null);
   const [leaving, setLeaving] = useState(false);
 
-  // A flow left half way opens where something is missing; one answered before opens at its start, and the list
-  // on the home opens the step it names. The Valor da Causa Pedido is never missing: with none, the judge defines it.
+  // A flow left half way opens where something is missing; one answered before opens at its first step past the
+  // factor, and the list on the home opens the step it names. Whatever was asked, a session without the factor
+  // opens on it, and once confirmed goes on to where it was going. The Valor da Causa Pedido is never missing:
+  // with none, the judge defines it.
   const missing: [boolean, SetupStepKey][] = [
     [(lawyer && !registered) || (decides && lawyer && !state.signs), "oab"],
     [state.worksAlone === null, "equipe"],
     [!state.whatsapp, "canal"],
   ];
-  const firstOpen = SETUP_STEPS.indexOf(missing.find(([open]) => open)?.[1] ?? "oab");
-  const [stepIndex, setStepIndex] = useState(
-    state.step ? SETUP_STEPS.indexOf(state.step) : state.answered ? 0 : firstOpen,
-  );
+  const opening = setupOpening({
+    factorOk: state.secondFactor === "ok",
+    asked: state.step,
+    answered: state.answered,
+    firstMissing: missing.find(([open]) => open)?.[1] ?? null,
+  });
+  const [stepIndex, setStepIndex] = useState(SETUP_STEPS.indexOf(opening.open));
+
+  const onFactor = () => {
+    setConfirmedHere(true);
+    // Who signs is chosen with the factor: a partner who did not sign yet is offered it, as on a first visit.
+    if (decides && !state.signs) setSigns(true);
+    setStepIndex(SETUP_STEPS.indexOf(opening.afterFactor));
+  };
 
   const saveOab = async (): Promise<boolean> => {
     setOabError(null);
@@ -376,7 +382,6 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
   };
 
   const papers = state.papers;
-  const signerPrompt = factorPrompt("setup-oab-factor", t("setup-oab-signs-factor"));
   const connections = state.connections.kind === "ready" ? state.connections : null;
   const realNumber = connections?.numbers.find((item) => item.status === "active" && item.provider !== "test") ?? null;
   const connectionsError = (
@@ -408,11 +413,33 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
 
   const steps: WizardStep[] = [
     {
+      title: t("setup-factor-title"),
+      hint: t("setup-factor-hint"),
+      // The steps after it write what the database asks the factor for: the flow does not go past it without one.
+      canAdvance: factor === "ok" && !blocked,
+      content:
+        factor === "ok" ? (
+          <Alert severity="success" className="neutral bg-background-paper/60!">
+            {t("setup-factor-done")}
+          </Alert>
+        ) : blocked ? null : (
+          <SecondFactorPrompt
+            id="setup-factor"
+            state={factor}
+            reason={factor === "challenge" ? t("setup-factor-challenge") : t("setup-factor-missing")}
+            onConfirmed={onFactor}
+          />
+        ),
+    },
+    {
       title: t("setup-oab-title"),
       hint: lawyer ? t("setup-oab-hint") : undefined,
       canAdvance: oabReady && !blocked,
       onPrimary: saveOab,
-      secondary: lawyer && !registered ? { label: t("setup-not-now"), onClick: () => setStepIndex(1) } : undefined,
+      secondary:
+        lawyer && !registered
+          ? { label: t("setup-not-now"), onClick: () => setStepIndex(SETUP_STEPS.indexOf("valores")) }
+          : undefined,
       content: (
         <Box className="flex flex-col gap-4">
           {!lawyer ? (
@@ -500,7 +527,6 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
               <Typography variant="body2" className="text-text-secondary">
                 {t("setup-oab-signs-help")}
               </Typography>
-              {signerPrompt ? <Box className="mt-2">{signerPrompt}</Box> : null}
             </Box>
           ) : lawyer ? (
             <Typography variant="body2" className="text-text-secondary">
@@ -527,9 +553,7 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
             <Alert severity="info" className="neutral bg-background-paper/60!">
               {t("setup-claims-not-partner")}
             </Alert>
-          ) : (
-            factorPrompt("setup-claims-factor", t("setup-claims-factor"))
-          )}
+          ) : null}
           {state.claimDefaults === null ? (
             <Alert
               severity="error"
@@ -615,7 +639,6 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
               <Typography variant="subtitle2" component="h3">
                 {t("setup-team-invite-title")}
               </Typography>
-              {factorPrompt("setup-team-factor", t("setup-team-factor"))}
               <Grid container spacing={3}>
                 <Grid size={{ xs: 12, sm: 7 }}>
                   <FormControl fullWidth className="outlined" variant="standard" error={Boolean(inviteError)}>
@@ -770,18 +793,13 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
             </Typography>
           </Box>
           {connections ? (
-            <>
-              {connections.signature?.status === "connected"
-                ? null
-                : factorPrompt("setup-papers-factor", t("setup-papers-factor"))}
-              <SignatureAccountCard
-                embedded
-                account={connections.signature}
-                blocked={blocked || locked}
-                vault={connections.environment.vault}
-                onChanged={refresh}
-              />
-            </>
+            <SignatureAccountCard
+              embedded
+              account={connections.signature}
+              blocked={blocked || locked}
+              vault={connections.environment.vault}
+              onChanged={refresh}
+            />
           ) : (
             connectionsError
           )}
@@ -799,7 +817,6 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
             connectionsError
           ) : (
             <>
-              {factorPrompt("setup-channel-factor", t("setup-channel-factor"))}
               {realNumber ? (
                 <>
                   <Alert severity="success" className="neutral bg-background-paper/60!">
@@ -886,7 +903,6 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
                         {t("setup-agency-none")}
                       </Typography>
                     )}
-                    {factorPrompt("setup-agency-factor", t("setup-agency-factor"))}
                     <Box className="flex flex-wrap gap-2">
                       <Button
                         variant="outlined"
