@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -17,6 +18,11 @@ import NiUsers from "@/icons/nexture/ni-users";
 import { moduleOf, MODULES } from "@/lib/modules/registry";
 import { endPartnership } from "@/lib/partners/actions";
 import { isPartnerManager, type MemberPartner, partnerErrorKey, type PartnerLink } from "@/lib/partners/partner";
+
+/** Each module's section of a partner's home, loaded when it is shown (`partnerHome` of its definition). */
+const HOME_SECTIONS = MODULES.modules.flatMap((definition) =>
+  definition.partnerHome ? [{ key: definition.key, Section: dynamic(definition.partnerHome, { ssr: false }) }] : [],
+);
 
 const day = (value: string) =>
   value
@@ -51,6 +57,9 @@ export default function PartnerHome({ partner }: { partner: MemberPartner | null
   const areas = MODULES.modules
     .filter((definition) => partner.links.some((link) => link.module === definition.key))
     .flatMap((definition) => definition.partnerArea);
+  // What each module of the partnerships shows on the home (the passenger module: the passengers' flights as they
+  // happen, the owner, 2026-11-03).
+  const sections = HOME_SECTIONS.filter((section) => partner.links.some((link) => link.module === section.key));
 
   return (
     <Grid container spacing={5}>
@@ -88,6 +97,12 @@ export default function PartnerHome({ partner }: { partner: MemberPartner | null
           ))}
         </Grid>
       )}
+
+      {sections.map(({ key, Section }) => (
+        <Grid key={key} size={12}>
+          <Section />
+        </Grid>
+      ))}
 
       {partner.links.length > 0 && (
         <Grid size={12}>

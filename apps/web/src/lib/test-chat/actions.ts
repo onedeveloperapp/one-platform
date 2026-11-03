@@ -12,7 +12,7 @@ import {
   flightNumberOf,
   followableDay,
   isQuickReply,
-  LAST_LEG,
+  legForTool,
   type TestChatCard,
   testChatCardOf,
   type TestChatView,
@@ -402,20 +402,26 @@ export async function runTestTool(
 
   const tool = toolOf(opened.trip.label, String(toolKey ?? ""));
   if (!tool) return { ok: false, code: "invalid_tool" };
-  // A tool's "last leg" is the trip's own last one (an agency's trip has the legs the agency wrote).
+  // A tool's special legs are the trip's own: its last one (an agency's trip has the legs the agency wrote), the
+  // next to leave and the one in the air (0084).
   let legsOfTool = tool.legs;
-  if (legsOfTool.some((leg) => leg.position === LAST_LEG)) {
-    const { data: last } = await service
+  if (legsOfTool.some((leg) => leg.position <= 0)) {
+    const { data: rows, error: legsError } = await service
       .from("tracked_legs")
-      .select("position")
-      .eq("trip_id", tripId)
-      .order("position", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    if (!last) return { ok: false, code: "failed" };
-    legsOfTool = legsOfTool.map((leg) =>
-      leg.position === LAST_LEG ? { ...leg, position: Number(last.position) } : leg,
-    );
+      .select("position, scheduled_departure_local, status, departed_local, arrived_local")
+      .eq("trip_id", tripId);
+    if (legsError || !rows) return { ok: false, code: "failed" };
+    const legsNow = rows.map((row) => ({
+      position: Number(row.position),
+      departure: String(row.scheduled_departure_local ?? ""),
+      status: String(row.status ?? ""),
+      departed: row.departed_local !== null,
+      arrived: row.arrived_local !== null,
+    }));
+    const resolved = legsOfTool.map((leg) => ({ ...leg, position: legForTool(leg.position, legsNow) }));
+    // Every leg left already, or none is in the air: there is nothing for the tool to move.
+    if (resolved.some((leg) => leg.position === null)) return { ok: true, code: "nothing" };
+    legsOfTool = resolved.map((leg) => ({ ...leg, position: leg.position as number }));
   }
   const { data, error } = await service.rpc("test_chat_set_legs", {
     target_token: token,
@@ -432,7 +438,8 @@ export async function runTestTool(
       legs: legs.legs,
       delayMinutes: typeof legs.delay_minutes === "number" ? legs.delay_minutes : 240,
     });
-    if (!found.problem) return { ok: true, code: "quiet" };
+    // The flight went on as it should: nothing to tell, and the agency sees it step by step.
+    if (!found.problem) return { ok: true, code: tool.legs.every((leg) => "event" in leg) ? "moved" : "quiet" };
     if (!found.alertId) return { ok: true, code: "already" };
     const told = await tellFlightAlerts(service, { alertId: found.alertId });
     if (told.queued > 0) return { ok: true, code: "told" };

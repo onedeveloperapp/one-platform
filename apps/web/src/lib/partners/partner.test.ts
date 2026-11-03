@@ -108,6 +108,23 @@ describe("what the firm has of its partnerships", () => {
         awaiting_client: 1,
         readings_today: 7,
         flight_reads_today: 4,
+        forecast: {
+          agreed: 5,
+          agreed_since: "2099-10-02",
+          agreed_weeks: [
+            { week: "2099-10-19", agreed: 1 },
+            { week: "2099-10-26", agreed: 4 },
+            { week: "not a week", agreed: 9 },
+          ],
+          followed: 3,
+          alerted: 1,
+          days: [
+            { day: "2099-11-01", trips: 2 },
+            { day: "2099-11-02", trips: 0 },
+          ],
+          in_air: 1,
+          arrived_today: 2,
+        },
       },
       { link_id: "link-lua", cases_going: 0, cases_total: 0, awaiting_client: 0, readings_today: 0 },
       { cases_going: 9 },
@@ -122,7 +139,25 @@ describe("what the firm has of its partnerships", () => {
       awaitingClient: 1,
       readingsToday: 7,
       flightReadsToday: 4,
+      forecast: {
+        agreed: 5,
+        agreedSince: "2099-10-02",
+        agreedWeeks: [
+          { week: "2099-10-19", agreed: 1 },
+          { week: "2099-10-26", agreed: 4 },
+        ],
+        followed: 3,
+        alerted: 1,
+        days: [
+          { day: "2099-11-01", trips: 2 },
+          { day: "2099-11-02", trips: 0 },
+        ],
+        inAir: 1,
+        arrivedToday: 2,
+      },
     });
+    // A partnership whose answer carries no forecast has none, never zeros said as numbers.
+    expect(facts?.byLink.get("link-lua")?.forecast).toBeNull();
     expect(facts?.byLink.get("link-lua")?.flightReadsToday).toBeNull();
     expect(facts?.byLink.size).toBe(2);
     expect(facts?.costs).toEqual({ readingsDaily: 300, flightReadsToday: 6, flightReadsShare: 150 });

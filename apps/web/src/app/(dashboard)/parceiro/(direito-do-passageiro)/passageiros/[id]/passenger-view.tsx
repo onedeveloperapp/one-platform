@@ -13,12 +13,21 @@ import { Alert, Button, Grid } from "@mui/material";
 import EmptyState from "@/components/product/empty-state";
 import PageHeader from "@/components/product/page-header";
 import NiUserCross from "@/icons/nexture/ni-user-cross";
+import type { FlightsRead } from "@/modules/direito-do-passageiro/agency/flight-progress-actions";
 import { CONSENT_KEY, type PaxDetail } from "@/modules/direito-do-passageiro/agency/passengers";
 
 export type PassengerState =
   | { kind: "missing" }
   | { kind: "failed" }
-  | { kind: "ready"; detail: PaxDetail; firm: string; hasClause: boolean; today: string; manager: boolean };
+  | {
+      kind: "ready";
+      detail: PaxDetail;
+      firm: string;
+      hasClause: boolean;
+      today: string;
+      manager: boolean;
+      flights: FlightsRead;
+    };
 
 /**
  * One passenger, as the agency works on them. Who comes here wants the passenger ready for a problem with a
@@ -100,7 +109,7 @@ export default function PassengerView({ state }: { state: PassengerState }) {
         <DocumentsCard detail={detail} onChanged={refresh} />
       </Grid>
       <Grid size={12}>
-        <TripsCard detail={detail} onChanged={refresh} />
+        <TripsCard detail={detail} flights={state.flights} onChanged={refresh} />
       </Grid>
       <Grid size={12}>
         <PrivacyCard detail={detail} manager={state.manager} />

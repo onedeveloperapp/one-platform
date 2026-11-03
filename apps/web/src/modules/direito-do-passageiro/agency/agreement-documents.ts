@@ -1,5 +1,5 @@
 import type { AgreementDocument, AgreementPerson } from "@/modules/direito-do-passageiro/agency/agreement";
-import type { PaxDocumentKind } from "@/modules/direito-do-passageiro/agency/passengers";
+import type { PaxDocumentKind, ReadingState } from "@/modules/direito-do-passageiro/agency/passengers";
 
 /**
  * Where the passenger's documents stand on their link (the owner, 2026-11-03): what the firm needs of each person
@@ -12,7 +12,10 @@ import type { PaxDocumentKind } from "@/modules/direito-do-passageiro/agency/pas
 /** How one document stands: it serves, it is being read, or it does not serve as it is. */
 export type DocumentStanding = "fine" | "reading" | "problem";
 
-export function documentStanding(document: AgreementDocument): DocumentStanding {
+/** What the standing of a document is read from: its reading, and what the reading said of it. */
+export type StandingInput = { reading: ReadingState; legible: boolean | null; matches: boolean | null };
+
+export function documentStanding(document: StandingInput): DocumentStanding {
   if (document.reading === "pending" || document.reading === "working") return "reading";
   // ONE could not read it: it arrived, and a person of the firm looks at it.
   if (document.reading === "failed") return "fine";
@@ -22,6 +25,15 @@ export function documentStanding(document: AgreementDocument): DocumentStanding 
 
 /** What the firm needs of a person: an identity of everybody, a proof of address of the adult the link is for. */
 export type NeededKind = Extract<PaxDocumentKind, "identity" | "address_proof">;
+
+/** How a kind of document stands from what was sent of it: one that serves is enough, whatever else came. */
+export function kindStanding(documents: readonly StandingInput[]): DocumentStanding | "missing" {
+  const standings = new Set(documents.map(documentStanding));
+  if (standings.has("fine")) return "fine";
+  if (standings.has("reading")) return "reading";
+  if (standings.has("problem")) return "problem";
+  return "missing";
+}
 
 export type NeededDocument = {
   kind: NeededKind;
@@ -35,15 +47,7 @@ export function neededDocuments(person: AgreementPerson): NeededDocument[] {
   const kinds: NeededKind[] = person.isHolder ? ["identity", "address_proof"] : ["identity"];
   return kinds.map((kind) => {
     const documents = person.documents.filter((document) => document.kind === kind);
-    const standings = new Set(documents.map(documentStanding));
-    const standing = standings.has("fine")
-      ? "fine"
-      : standings.has("reading")
-        ? "reading"
-        : standings.has("problem")
-          ? "problem"
-          : "missing";
-    return { kind, documents, standing };
+    return { kind, documents, standing: kindStanding(documents) };
   });
 }
 

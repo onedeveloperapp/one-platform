@@ -3,7 +3,7 @@
 import DocumentLine from "./document-line";
 import TripDialog from "./trip-dialog";
 import { useTranslations } from "next-intl";
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useCallback, useState } from "react";
 
 import { Alert, Box, Button, Card, CardContent, Typography } from "@mui/material";
 
@@ -15,6 +15,7 @@ import NiBriefcase from "@/icons/nexture/ni-briefcase";
 import NiPlane from "@/icons/nexture/ni-plane";
 import NiUserCheck from "@/icons/nexture/ni-user-check";
 import FileButton from "@/modules/direito-do-passageiro/agency/file-button";
+import { type FlightsRead, readTravelerFlights } from "@/modules/direito-do-passageiro/agency/flight-progress-actions";
 import {
   TRIP_HOLDER_KEY,
   TRIP_NOW_KEY,
@@ -33,6 +34,7 @@ import {
   TRIP_STATE_TONE,
 } from "@/modules/direito-do-passageiro/agency/passengers";
 import { sendAgencyFile } from "@/modules/direito-do-passageiro/agency/send-files";
+import TripFlight, { anyMoving, useFlightsRead } from "@/modules/direito-do-passageiro/agency/trip-flight";
 
 const STEP_ICON: Record<TripJourneyStep, ReactNode> = {
   agreement: <NiUserCheck size="small" />,
@@ -55,12 +57,27 @@ const changeable = (trip: PaxTrip) => trip.state === "waiting_consent" || trip.s
 /**
  * The trips the passenger is on: each with where it stands along its way (the agreement, the flights ONE follows,
  * a problem told, the passenger with the firm; the owner, 2026-11-03) and what happens now, who travels, every leg,
- * and the passenger's ticket and boarding pass of it. An adult holds a trip (the alerts go to their WhatsApp); a
- * child travels along on the trip of the adult who holds it.
+ * and the passenger's ticket and boarding pass of it; once the passenger agreed, its flight step by step as it
+ * happens (0084), read again every minute while one is under way. An adult holds a trip (the alerts go to their
+ * WhatsApp); a child travels along on the trip of the adult who holds it.
  */
-export default function TripsCard({ detail, onChanged }: { detail: PaxDetail; onChanged: () => void }) {
+export default function TripsCard({
+  detail,
+  flights,
+  onChanged,
+}: {
+  detail: PaxDetail;
+  flights: FlightsRead;
+  onChanged: () => void;
+}) {
   const t = useTranslations("product");
   const traveler = detail.traveler;
+  const readFlights = useCallback(() => readTravelerFlights(traveler.id), [traveler.id]);
+  const flightRead = useFlightsRead(flights, readFlights, anyMoving);
+  const flightOf = (trip: PaxTrip) =>
+    flightRead.ok
+      ? (flightRead.trips.find((flight) => flight.tripId === trip.id && flight.legs.length > 0) ?? null)
+      : null;
   const [editing, setEditing] = useState<PaxTrip | "new" | null>(null);
   const [sending, setSending] = useState<string | null>(null);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
@@ -125,6 +142,7 @@ export default function TripsCard({ detail, onChanged }: { detail: PaxDetail; on
             {detail.trips.map((trip) => {
               const holder = holderOf(trip);
               const documents = detail.documents.filter((document) => document.tripId === trip.id);
+              const flight = flightOf(trip);
               return (
                 <Box
                   component="li"
@@ -158,6 +176,7 @@ export default function TripsCard({ detail, onChanged }: { detail: PaxDetail; on
                     agreedAt={agreed?.createdAt ?? null}
                     linkUntil={linkUntil}
                   />
+                  {flight && flightRead.ok && <TripFlight trip={flight} today={flightRead.today} />}
                   <Box component="ol" className="m-0 flex list-none flex-col gap-1 p-0">
                     {trip.legs.map((leg) => (
                       <Typography component="li" variant="body2" key={leg.position}>

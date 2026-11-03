@@ -307,6 +307,8 @@ export default function TestChat({
     else if (result.code === "quiet")
       setNotice({ tone: "info", text: t("test-chat-quiet", { hours: Math.round(view.delayMinutes / 60) }) });
     else if (result.code === "already") setNotice({ tone: "info", text: t("test-chat-already") });
+    else if (result.code === "moved") setNotice({ tone: "success", text: t("test-chat-moved") });
+    else if (result.code === "nothing") setNotice({ tone: "info", text: t("test-chat-nothing-to-move") });
     else if (result.code === "reset") setNotice({ tone: "info", text: t("test-chat-reset-done") });
     else if (result.code === "not_told") {
       const reason = "reason" in result ? (result.reason ?? null) : null;

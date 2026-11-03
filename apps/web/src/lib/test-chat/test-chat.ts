@@ -33,15 +33,24 @@ export const isTestChatPhone = (value: string): boolean => /^(?:55)?0098888000[0
 
 /** A tool's leg that is the trip's last, whichever it is: an agency's trip has the legs the agency wrote. */
 export const LAST_LEG = 0;
+/** A tool's "next leg to leave": the first leg, in the order they fly, that no source said left (0084). */
+export const NEXT_TO_LEAVE = -1;
+/** A tool's "leg in the air": the first leg that left and has not arrived (0084). */
+export const IN_THE_AIR = -2;
 export type TestTrip = (typeof TEST_TRIPS)[number];
 export const isTestTrip = (value: unknown): value is TestTrip => (TEST_TRIPS as readonly unknown[]).includes(value);
 
-/** What a tool does to a trip's legs, as a source would say it. */
-export type ToolLeg = {
-  position: number;
-  status: "scheduled" | "delayed" | "cancelled" | "changed" | "landed";
-  late_minutes?: number;
-};
+/**
+ * What a tool does to a trip's legs, as a source would say it: a problem (a status), or the flight going as a
+ * flight with no problem goes (an event: the leg leaves, or arrives; 0084).
+ */
+export type ToolLeg =
+  | {
+      position: number;
+      status: "scheduled" | "delayed" | "cancelled" | "changed" | "landed";
+      late_minutes?: number;
+    }
+  | { position: number; event: "depart" | "land" };
 
 export type TestTool = { key: string; label: string; legs: ToolLeg[] };
 
@@ -89,6 +98,9 @@ export const TEST_TOOLS: Record<TestTrip, TestTool[]> = {
       label: "test-chat-tool-late-6-last",
       legs: [{ position: LAST_LEG, status: "delayed", late_minutes: 360 }],
     },
+    // The flight going as it should, step by step, for the agency to see it happen (0084).
+    { key: "depart", label: "test-chat-tool-depart", legs: [{ position: NEXT_TO_LEAVE, event: "depart" }] },
+    { key: "land", label: "test-chat-tool-land", legs: [{ position: IN_THE_AIR, event: "land" }] },
   ],
   voo_real: [],
 };
@@ -106,6 +118,37 @@ export function followableDay(day: string, today: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || !/^\d{4}-\d{2}-\d{2}$/.test(today)) return false;
   const days = Math.round((Date.parse(`${day}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86_400_000);
   return days >= -1 && days <= 2;
+}
+
+/** A leg as a tool finds the one it acts on: its position, the order it flies in and what its source said. */
+export type LegNow = {
+  position: number;
+  departure: string;
+  status: string;
+  departed: boolean;
+  arrived: boolean;
+};
+
+/**
+ * The position a tool's special leg stands for, among the trip's legs: the last one, the next to leave or the one in
+ * the air; null when there is none (every leg left, or none is flying).
+ */
+export function legForTool(position: number, legs: readonly LegNow[]): number | null {
+  const ordered = [...legs].sort((a, b) => a.departure.localeCompare(b.departure) || a.position - b.position);
+  if (position === LAST_LEG) return ordered.at(-1)?.position ?? null;
+  if (position === NEXT_TO_LEAVE) {
+    return (
+      ordered.find((leg) => leg.status !== "cancelled" && !leg.departed && !leg.arrived && leg.status !== "landed")
+        ?.position ?? null
+    );
+  }
+  if (position === IN_THE_AIR) {
+    return (
+      ordered.find((leg) => leg.status !== "cancelled" && leg.departed && !leg.arrived && leg.status !== "landed")
+        ?.position ?? null
+    );
+  }
+  return position;
 }
 
 /** The tool of a trip by its key; null for one it does not have. */

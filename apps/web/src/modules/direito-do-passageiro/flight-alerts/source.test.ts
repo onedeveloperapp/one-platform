@@ -46,7 +46,13 @@ describe("what a flight source says of a leg ONE follows", () => {
           estimatedArrival: "2099-10-22T17:40:00Z",
         }),
       ),
-    ).toEqual({ position: 1, status: "delayed", estimated_arrival: "2099-10-22T14:40" });
+    ).toEqual({
+      position: 1,
+      status: "delayed",
+      estimated_arrival: "2099-10-22T14:40",
+      departed: "2099-10-22T12:00",
+      arrived: null,
+    });
   });
 
   it("calls a few minutes late on time, and keeps the minutes", () => {
@@ -54,11 +60,15 @@ describe("what a flight source says of a leg ONE follows", () => {
       position: 1,
       status: "scheduled",
       estimated_arrival: "2099-10-22T09:50",
+      departed: null,
+      arrived: null,
     });
     expect(legReadingOf(LEG, status({ estimatedArrival: "2099-10-22T12:30:00Z" }))).toEqual({
       position: 1,
       status: "scheduled",
       estimated_arrival: null,
+      departed: null,
+      arrived: null,
     });
   });
 
@@ -68,17 +78,53 @@ describe("what a flight source says of a leg ONE follows", () => {
         LEG,
         status({ state: "landed", actualArrival: "2099-10-22T18:10:00Z", estimatedArrival: "2099-10-22T18:10:00Z" }),
       ),
-    ).toEqual({ position: 1, status: "landed", estimated_arrival: "2099-10-22T15:10" });
-    expect(legReadingOf(LEG, status({ state: "cancelled" }))).toEqual({
+    ).toEqual({
+      position: 1,
+      status: "landed",
+      estimated_arrival: "2099-10-22T15:10",
+      departed: null,
+      arrived: "2099-10-22T15:10",
+    });
+    expect(legReadingOf(LEG, status({ state: "cancelled", actualDeparture: "2099-10-22T11:05:00Z" }))).toEqual({
       position: 1,
       status: "cancelled",
       estimated_arrival: null,
+      departed: null,
+      arrived: null,
     });
-    expect(legReadingOf(LEG, status({ state: "diverted" }))).toEqual({
+    expect(legReadingOf(LEG, status({ state: "diverted", actualDeparture: "2099-10-22T11:05:00Z" }))).toEqual({
       position: 1,
       status: "changed",
       estimated_arrival: null,
+      departed: "2099-10-22T08:05",
+      arrived: null,
     });
+  });
+
+  it("keeps when a leg left and arrived, in the local times of its airports", () => {
+    // Left five minutes late from GRU and landed two minutes early at BSB: the ticket's local times, moved.
+    expect(
+      legReadingOf(
+        LEG,
+        status({
+          state: "landed",
+          actualDeparture: "2099-10-22T11:05:00Z",
+          actualArrival: "2099-10-22T12:38:00Z",
+          estimatedArrival: "2099-10-22T12:38:00Z",
+        }),
+      ),
+    ).toMatchObject({ status: "landed", departed: "2099-10-22T08:05", arrived: "2099-10-22T09:38" });
+    // In the air: it left, and has not arrived.
+    expect(
+      legReadingOf(
+        LEG,
+        status({
+          state: "departed",
+          actualDeparture: "2099-10-22T11:02:00Z",
+          estimatedArrival: "2099-10-22T12:45:00Z",
+        }),
+      ),
+    ).toMatchObject({ status: "scheduled", departed: "2099-10-22T08:02", arrived: null });
   });
 
   it("says nothing of a flight the source does not know", () => {

@@ -89,11 +89,12 @@ for (const file of fs
     }
     tables.set(match[1], columns);
   }
-  for (const match of sql.matchAll(
-    /alter table (?:only )?public\.([a-z0-9_]+)\s+add column (?:if not exists )?"?([a-z0-9_]+)"?/g,
-  )) {
+  // Every column an alter statement adds, however many it adds before its semicolon.
+  for (const match of sql.matchAll(/alter table (?:only )?public\.([a-z0-9_]+)\s+([^;]*)/g)) {
     const columns = tables.get(match[1]) ?? new Set();
-    columns.add(match[2]);
+    for (const added of match[2].matchAll(/(?:^|,)\s*add column (?:if not exists )?"?([a-z0-9_]+)"?/g)) {
+      columns.add(added[1]);
+    }
     tables.set(match[1], columns);
   }
 

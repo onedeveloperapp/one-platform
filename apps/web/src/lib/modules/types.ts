@@ -8,6 +8,8 @@
  * (`app/**\/(<key>)/...`); the lint keeps the rest of the code from importing it (eslint.config.ts).
  */
 
+import type { ComponentType } from "react";
+
 import type { IconName } from "@/icons/icon-registry";
 
 /**
@@ -72,4 +74,10 @@ export type ModuleDefinition = {
   firmArea: readonly FirmAreaEntry[];
   /** The test chat stands for this module's passenger: its area offers the chat while the firm has it on (0047). */
   testChat?: boolean;
+  /**
+   * The module's section of a partner's home, loaded only when it is shown (the passenger module's: the agency's
+   * passengers' flights as they happen, 0084): a client component that reads its own data, which the core opens
+   * for a partner with a partnership of the module and never names. None for a module with nothing to show there.
+   */
+  partnerHome?: () => Promise<{ default: ComponentType }>;
 };

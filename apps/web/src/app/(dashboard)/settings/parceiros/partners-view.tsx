@@ -1,6 +1,7 @@
 "use client";
 
 import SettingsMenu from "../components/settings-menu";
+import PartnershipForecast from "./partnership-forecast";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -290,6 +291,9 @@ export default function PartnersView({ state, modules }: { state: FirmPartnersSt
                             </Grid>
                           )}
                         </Grid>
+                      )}
+                      {partnership.status === "active" && partnership.facts?.forecast && (
+                        <PartnershipForecast forecast={partnership.facts.forecast} days={ready.forecastDays} />
                       )}
                     </Box>
                   ))}

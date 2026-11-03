@@ -1,6 +1,15 @@
 import { describe, expect, it } from "vitest";
 
-import { AGENCY_TEST_PHONE, isTestChatPhone, messagePartsOf } from "@/lib/test-chat/test-chat";
+import {
+  AGENCY_TEST_PHONE,
+  IN_THE_AIR,
+  isTestChatPhone,
+  LAST_LEG,
+  legForTool,
+  messagePartsOf,
+  NEXT_TO_LEAVE,
+  TEST_TOOLS,
+} from "@/lib/test-chat/test-chat";
 import { isValidPhoneBr } from "@flyee/fields";
 
 // The addresses here are invented.
@@ -41,5 +50,41 @@ describe("the test chat's numbers", () => {
     expect(isTestChatPhone("(62) 99999-0001")).toBe(false);
     expect(isTestChatPhone("00988880016")).toBe(false);
     expect(isValidPhoneBr("(00) 98888-0006")).toBe(false);
+  });
+});
+
+describe("the tools that make a flight go as it should (0084)", () => {
+  // The legs of a trip with a connection, given out of order: the tools take them in the order they fly.
+  const legs = [
+    { position: 2, departure: "2099-11-20T09:00", status: "scheduled", departed: false, arrived: false },
+    { position: 1, departure: "2099-11-20T06:10", status: "scheduled", departed: false, arrived: false },
+  ];
+
+  it("make the next leg leave, and the leg in the air land", () => {
+    expect(legForTool(NEXT_TO_LEAVE, legs)).toBe(1);
+    expect(legForTool(IN_THE_AIR, legs)).toBeNull();
+    const first = legs.map((leg) => (leg.position === 1 ? { ...leg, departed: true } : leg));
+    expect(legForTool(IN_THE_AIR, first)).toBe(1);
+    expect(legForTool(NEXT_TO_LEAVE, first)).toBe(2);
+    const landed = first.map((leg) => (leg.position === 1 ? { ...leg, arrived: true, status: "landed" } : leg));
+    expect(legForTool(IN_THE_AIR, landed)).toBeNull();
+    expect(legForTool(NEXT_TO_LEAVE, landed)).toBe(2);
+  });
+
+  it("never move a cancelled leg, and say when there is nothing to move", () => {
+    const cancelled = legs.map((leg) => (leg.position === 1 ? { ...leg, status: "cancelled" } : leg));
+    expect(legForTool(NEXT_TO_LEAVE, cancelled)).toBe(2);
+    const done = legs.map((leg) => ({ ...leg, departed: true, arrived: true, status: "landed" }));
+    expect(legForTool(NEXT_TO_LEAVE, done)).toBeNull();
+    expect(legForTool(IN_THE_AIR, done)).toBeNull();
+  });
+
+  it("keep the last leg the trip's own, and a leg named by its position as it is", () => {
+    expect(legForTool(LAST_LEG, legs)).toBe(2);
+    expect(legForTool(1, legs)).toBe(1);
+  });
+
+  it("are the agency's trip's, after the problems it was made for", () => {
+    expect(TEST_TOOLS.agencia.map((tool) => tool.key)).toEqual(["cancel", "late_6h", "depart", "land"]);
   });
 });

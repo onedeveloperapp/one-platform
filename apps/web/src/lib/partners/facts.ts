@@ -49,6 +49,8 @@ export type FirmPartnersState =
       costs: PartnershipCosts | null;
       /** The firm's numbers of its partnerships could not be read: the screens say so, never zero. */
       factsFailed: boolean;
+      /** How many days ahead each partnership's forecast counts the flights. */
+      forecastDays: number;
     }
   | { kind: "error" }
   | { kind: "unavailable" };
@@ -84,6 +86,7 @@ export async function readFirmPartners(context: MemberContext | null): Promise<F
     manager,
     costs: facts?.costs ?? null,
     factsFailed: facts === null,
+    forecastDays: facts?.forecastDays ?? 7,
     partnerships: ((links.data ?? []) as Record<string, unknown>[]).flatMap((row): FirmPartnership[] => {
       const linkId = text(row.link_id);
       const partnerId = text(row.partner_id);

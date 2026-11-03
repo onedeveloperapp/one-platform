@@ -21,9 +21,11 @@ import NiTriangleUp from "@/icons/nexture/ni-triangle-up";
  *
  * The text is the accessible reading: the value, then the change spelled out
  * for screen readers ("Queda de 8,3% sobre o ponto anterior") while the eye
- * gets the triangle. The drawing is a pointer aid, hidden from assistive
- * technology with the chart's keyboard layer turned off, because that layer
- * announces an unnamed image until a point is focused.
+ * gets the triangle. The drawing is a pointer aid, kept out of assistive
+ * technology and of the tab order (`inert`), because the chart's keyboard
+ * layer announces an unnamed image until a point is focused. MUI X 9.7's
+ * SparkLineChart does not hand its own `disableKeyboardNavigation` to the
+ * chart: it reached the svg as an unknown attribute and turned nothing off.
  *
  * Only the triangle carries the hue; the change figure stays in the secondary
  * text colour, because the accent tones are icon and fill colours and fall
@@ -92,8 +94,8 @@ export default function TrendSparkline({
           )}
         </Box>
       </Box>
-      <Box aria-hidden="true">
-        <SparkLineChart {...sparkline.props} disableKeyboardNavigation />
+      <Box aria-hidden="true" inert>
+        <SparkLineChart {...sparkline.props} />
       </Box>
       {caption && (
         <Typography variant="body2" className="text-text-secondary">

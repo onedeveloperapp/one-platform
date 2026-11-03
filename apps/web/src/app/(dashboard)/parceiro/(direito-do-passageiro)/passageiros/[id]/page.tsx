@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 
 import { agencyAccess, readClause, readTraveler } from "@/modules/direito-do-passageiro/agency/facts";
+import { readTravelerFlights } from "@/modules/direito-do-passageiro/agency/flight-progress-actions";
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations("product");
@@ -25,9 +26,10 @@ export default async function PassengerPage({ params }: { params: Promise<{ id: 
   const { id } = await params;
   const access = await agencyAccess();
   if (!access.ok || !UUID.test(id)) return <PassengerView state={{ kind: "missing" }} />;
-  const [read, clause] = await Promise.all([
+  const [read, clause, flights] = await Promise.all([
     readTraveler(access.context, id),
     readClause(access.context, access.agency.id),
+    readTravelerFlights(id),
   ]);
   if (read === null) return <PassengerView state={{ kind: "missing" }} />;
   if (!read.ok) return <PassengerView state={{ kind: "failed" }} />;
@@ -42,6 +44,8 @@ export default async function PassengerPage({ params }: { params: Promise<{ id: 
         hasClause: clause.ok ? clause.value !== null : true,
         today: todayInBrazil(),
         manager: access.agency.manager,
+        // The flights of the passenger's trips as they happen; a read that failed shows none of them.
+        flights,
       }}
     />
   );

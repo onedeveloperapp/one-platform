@@ -2,8 +2,9 @@ import type { FlightStatus } from "@flyee/flights/types";
 
 /**
  * What a flight source said of a leg ONE follows, as the leg keeps it
- * (migration 0051): its state and when it is now expected at its
- * destination, in that airport's local time. Pure.
+ * (migration 0051): its state, when it is now expected at its destination
+ * and, since 0084, when it left and when it arrived, each in its airport's
+ * local time (the steps of the flight the agency follows). Pure.
  *
  * The local time is reached without any zone table: the source's own
  * scheduled arrival and its estimate are instants of the same flight, so
@@ -29,6 +30,10 @@ export type LegReading = {
   status: "scheduled" | "delayed" | "cancelled" | "changed" | "landed";
   /** Local time at the destination, "YYYY-MM-DDTHH:MM"; null when nothing is expected. */
   estimated_arrival: string | null;
+  /** When it left its origin, in that airport's local time; null while the source does not say it left. */
+  departed: string | null;
+  /** When it arrived at its destination, in that airport's local time; null while it has not. */
+  arrived: string | null;
 };
 
 /** A late arrival under this many minutes is still on time, as an airline says it. */
@@ -50,24 +55,45 @@ export function shiftLocal(local: string, minutes: number): string | null {
 /** The day of a local time, "YYYY-MM-DD". */
 export const localDay = (local: string): string => local.trim().slice(0, 10);
 
+/**
+ * When something the source says happened did, in the local time of its airport: the leg's scheduled local time
+ * moved by the minutes between the source's scheduled and actual instants, as the expected arrival is reached.
+ */
+function happenedLocal(actual: string | null, scheduledInstant: string, scheduledLocal: string): string | null {
+  const at = Date.parse(actual ?? "");
+  const scheduled = Date.parse(scheduledInstant);
+  if (!Number.isFinite(at) || !Number.isFinite(scheduled)) return null;
+  return shiftLocal(scheduledLocal, (at - scheduled) / 60_000);
+}
+
 /** The leg as the source says it now; null when the source does not know the flight. */
 export function legReadingOf(leg: FollowedLeg, status: FlightStatus | null): LegReading | null {
   if (!status) return null;
-  if (status.state === "cancelled") return { position: leg.position, status: "cancelled", estimated_arrival: null };
-  if (status.state === "diverted") return { position: leg.position, status: "changed", estimated_arrival: null };
+  if (status.state === "cancelled") {
+    return { position: leg.position, status: "cancelled", estimated_arrival: null, departed: null, arrived: null };
+  }
+  const departed = happenedLocal(status.actualDeparture, status.scheduledDeparture, leg.departure);
+  if (status.state === "diverted") {
+    return { position: leg.position, status: "changed", estimated_arrival: null, departed, arrived: null };
+  }
   const scheduled = Date.parse(status.scheduledArrival);
   const expected = Date.parse(status.estimatedArrival ?? status.actualArrival ?? "");
   const late =
     Number.isFinite(scheduled) && Number.isFinite(expected) ? Math.round((expected - scheduled) / 60_000) : null;
   const estimated = late === null ? null : shiftLocal(leg.arrival, late);
-  if (status.state === "landed") return { position: leg.position, status: "landed", estimated_arrival: estimated };
+  if (status.state === "landed") {
+    const arrived = happenedLocal(status.actualArrival, status.scheduledArrival, leg.arrival) ?? estimated;
+    return { position: leg.position, status: "landed", estimated_arrival: estimated, departed, arrived };
+  }
   if (late !== null && late >= ON_TIME_MINUTES && estimated) {
-    return { position: leg.position, status: "delayed", estimated_arrival: estimated };
+    return { position: leg.position, status: "delayed", estimated_arrival: estimated, departed, arrived: null };
   }
   return {
     position: leg.position,
     status: "scheduled",
     estimated_arrival: late !== null && late > 0 ? estimated : null,
+    departed,
+    arrived: null,
   };
 }
 

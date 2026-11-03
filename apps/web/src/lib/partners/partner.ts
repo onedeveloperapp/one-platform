@@ -83,7 +83,58 @@ export type PartnershipFacts = {
   readingsToday: number | null;
   /** The reads of the partnership's flights today; null to who does not manage the firm. */
   flightReadsToday: number | null;
+  /** What the firm foresees of the partnership, in numbers (0084); null when the answer has none. */
+  forecast: PartnershipForecast | null;
 };
+
+/**
+ * What a firm foresees of a partnership, to foresee the cases that may come (the owner, 2026-11-03), in numbers and
+ * nobody named: a passenger's data reach the firm only with the passenger's yes to its help (0071).
+ */
+export type PartnershipForecast = {
+  /** The partnership's passengers whose answer in force is a yes, and the first day of such an answer. */
+  agreed: number;
+  agreedSince: string | null;
+  /** The agreements in force given in each of the last weeks, the current one last ("YYYY-MM-DD", its Monday). */
+  agreedWeeks: { week: string; agreed: number }[];
+  /** The trips ONE follows now, and how many of them were told of a problem and wait for the passenger's answer. */
+  followed: number;
+  alerted: number;
+  /** How many of those trips fly on each of the next days, today first. */
+  days: { day: string; trips: number }[];
+  /** The legs in the air now, and the legs that arrived today. */
+  inAir: number;
+  arrivedToday: number;
+};
+
+const DAY = /^\d{4}-\d{2}-\d{2}$/;
+
+/** The forecast of a partnership as the database answers it; null for one that is not. */
+export function partnershipForecastOf(raw: unknown): PartnershipForecast | null {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return null;
+  const row = raw as Record<string, unknown>;
+  const agreed = whole(row.agreed);
+  const followed = whole(row.followed);
+  if (agreed === null || followed === null) return null;
+  const list = (value: unknown) =>
+    (Array.isArray(value) ? value : []).map((item) => (item ?? {}) as Record<string, unknown>);
+  return {
+    agreed,
+    agreedSince: typeof row.agreed_since === "string" && DAY.test(row.agreed_since) ? row.agreed_since : null,
+    agreedWeeks: list(row.agreed_weeks).flatMap((week) =>
+      typeof week.week === "string" && DAY.test(week.week)
+        ? [{ week: week.week, agreed: whole(week.agreed) ?? 0 }]
+        : [],
+    ),
+    followed,
+    alerted: whole(row.alerted) ?? 0,
+    days: list(row.days).flatMap((day) =>
+      typeof day.day === "string" && DAY.test(day.day) ? [{ day: day.day, trips: whole(day.trips) ?? 0 }] : [],
+    ),
+    inAir: whole(row.in_air) ?? 0,
+    arrivedToday: whole(row.arrived_today) ?? 0,
+  };
+}
 
 /** What the partnerships cost the firm today, to who manages it. */
 export type PartnershipCosts = {
@@ -97,6 +148,8 @@ export type PartnershipCosts = {
 export type FirmPartnershipFacts = {
   byLink: Map<string, PartnershipFacts>;
   costs: PartnershipCosts | null;
+  /** How many days ahead each forecast counts the flights (the setting `flight_progress_days`). */
+  forecastDays: number;
 };
 
 const whole = (value: unknown): number | null =>
@@ -118,6 +171,7 @@ export function partnershipFactsOf(raw: unknown): FirmPartnershipFacts | null {
       awaitingClient: whole(row.awaiting_client) ?? 0,
       readingsToday: whole(row.readings_today),
       flightReadsToday: whole(row.flight_reads_today),
+      forecast: partnershipForecastOf(row.forecast),
     });
   }
   const readingsDaily = whole(answer.readings_daily);
@@ -125,6 +179,7 @@ export function partnershipFactsOf(raw: unknown): FirmPartnershipFacts | null {
   const flightReadsShare = whole(answer.flight_reads_share);
   return {
     byLink,
+    forecastDays: whole(answer.forecast_days) || 7,
     costs:
       answer.manager === true && readingsDaily !== null && flightReadsToday !== null && flightReadsShare !== null
         ? { readingsDaily, flightReadsToday, flightReadsShare }
