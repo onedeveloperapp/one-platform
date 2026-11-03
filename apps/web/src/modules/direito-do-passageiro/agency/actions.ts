@@ -9,10 +9,14 @@ import { mintApiKey } from "@/modules/direito-do-passageiro/agency/api";
 import { agencyAccess } from "@/modules/direito-do-passageiro/agency/facts";
 import type { PaxImportRow } from "@/modules/direito-do-passageiro/agency/import";
 import {
+  type DocumentLegs,
+  documentLegsOf,
   PAX_DOCUMENT_KINDS,
   PAX_FIELDS,
   PAX_FILTERS,
   PAX_PAGE_SIZE,
+  type PaxDetail,
+  paxDetailOf,
   type PaxFilter,
   type PaxPage,
   paxPageOf,
@@ -154,6 +158,99 @@ export async function savePassenger(input: {
   return { ok: true, code: result.code, travelerId: String(result.data.traveler_id ?? "") };
 }
 
+/**
+ * A passenger started from documents (migration 0083): a draft, in no list, that ONE's reading of the documents the
+ * agency sends to it names and fills; the agency confirms it with what it checked.
+ */
+export async function startPassengerDraft(): Promise<PaxResult<{ travelerId: string }>> {
+  const access = await agencyAccess();
+  if (!access.ok) return notAllowed;
+  const { data, error } = await access.context.supabase.rpc("pax_start_traveler", {
+    target_partnership: access.partnership.id,
+  });
+  const result = fold(data, error);
+  if (!result.ok) return result;
+  return { ok: true, code: result.code, travelerId: String(result.data.traveler_id ?? "") };
+}
+
+/** What a draft has now, while ONE reads its documents: its fields with their marks, and each document's state. */
+export async function readPassengerDraft(
+  travelerId: string,
+): Promise<PaxResult<{ detail: PaxDetail; duplicate: { id: string; fullName: string } | null }>> {
+  const access = await agencyAccess();
+  if (!access.ok || !isId(travelerId)) return notAllowed;
+  const { data, error } = await access.context.supabase.rpc("pax_traveler_detail", { target_traveler: travelerId });
+  if (error) return { ok: false, code: codeOf(error.message) };
+  const detail = paxDetailOf(data);
+  if (!detail) return { ok: false, code: "not_found" };
+  let duplicate: { id: string; fullName: string } | null = null;
+  if (detail.traveler.duplicateOf) {
+    const { data: other } = await access.context.supabase.rpc("pax_traveler_detail", {
+      target_traveler: detail.traveler.duplicateOf,
+    });
+    const known = paxDetailOf(other);
+    if (known && !known.traveler.draft) duplicate = { id: known.traveler.id, fullName: known.traveler.fullName };
+  }
+  return { ok: true, code: "read", detail, duplicate };
+}
+
+/**
+ * The agency confirms a draft with the fields it checked (only the ones it wrote, besides the name: what ONE read
+ * and nobody touched stays as read, also what a reading still on its way writes) and, for a child, who answers for
+ * them. From then on, a passenger as any other. A CPF another passenger has is refused naming them (`holderId`).
+ */
+export async function confirmPassenger(input: {
+  travelerId: string;
+  fields: Record<string, string | null>;
+  guardianId: string | null;
+}): Promise<PaxResult<{ travelerId: string }> & { holderId?: string | null }> {
+  const access = await agencyAccess();
+  if (!access.ok || !isId(input?.travelerId)) return notAllowed;
+  if (input.guardianId !== null && !isId(input.guardianId)) return notAllowed;
+  const fields: Record<string, string | null> = {};
+  for (const field of PAX_FIELDS) {
+    if (!input?.fields || !(field in input.fields)) continue;
+    const value = input.fields[field];
+    fields[field] = typeof value === "string" ? value.slice(0, 300) : null;
+  }
+  const { data, error } = await access.context.supabase.rpc("pax_confirm_traveler", {
+    target_traveler: input.travelerId,
+    target_fields: fields,
+    target_guardian: input.guardianId,
+  });
+  const result = fold(data, error);
+  if (!result.ok) {
+    const holder = result.code === "cpf_in_use" ? (data as { traveler_id?: unknown } | null)?.traveler_id : null;
+    return { ...result, holderId: typeof holder === "string" && isId(holder) ? holder : null };
+  }
+  refresh();
+  return { ok: true, code: result.code, travelerId: String(result.data.traveler_id ?? "") };
+}
+
+/** The legs and the locator ONE read of a trip's document that waits for its trip (0083), for the trip's form. */
+export async function readDocumentLegs(documentId: string): Promise<PaxResult<{ legs: DocumentLegs }>> {
+  const access = await agencyAccess();
+  if (!access.ok || !isId(documentId)) return notAllowed;
+  const { data, error } = await access.context.supabase.rpc("pax_document_legs", { target_document: documentId });
+  if (error) return { ok: false, code: codeOf(error.message) };
+  return { ok: true, code: "read", legs: documentLegsOf(data) };
+}
+
+/** The trip's documents that waited for it join it, once the agency saved the trip. */
+export async function attachTripDocuments(tripId: string, documentIds: string[]): Promise<PaxResult> {
+  const access = await agencyAccess();
+  if (!access.ok || !isId(tripId)) return notAllowed;
+  const ids = (documentIds ?? []).filter(isId).slice(0, 10);
+  if (ids.length === 0) return { ok: true, code: "attached" };
+  const { data, error } = await access.context.supabase.rpc("pax_attach_trip_documents", {
+    target_trip: tripId,
+    target_documents: ids,
+  });
+  const result = fold(data, error);
+  if (result.ok) refresh();
+  return result.ok ? { ok: true, code: result.code } : result;
+}
+
 /** Adds a trip, or changes one: its holder (an adult), who goes along, its locator and its legs. */
 export async function saveTrip(input: {
   tripId: string | null;
@@ -194,7 +291,7 @@ export async function startPassengerUpload(input: {
   name: string;
   mime: string;
   bytes: number;
-}): Promise<PaxResult<{ fileId: string; storagePath: string; uploadToken: string }>> {
+}): Promise<PaxResult<{ fileId: string; documentId: string; storagePath: string; uploadToken: string }>> {
   const access = await agencyAccess();
   if (!access.ok) return notAllowed;
   const backend = service();
@@ -222,6 +319,7 @@ export async function startPassengerUpload(input: {
     ok: true,
     code: "reserved",
     fileId: String(reserved.data.file_id ?? ""),
+    documentId: String(reserved.data.document_id ?? ""),
     storagePath,
     uploadToken: signed.token,
   };

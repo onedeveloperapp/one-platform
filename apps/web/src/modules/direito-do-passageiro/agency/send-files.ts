@@ -9,7 +9,7 @@ import type { PaxDocumentKind } from "@/modules/direito-do-passageiro/agency/pas
  * it. The agency sends with its session; the passenger with the token of their link.
  */
 
-export type Sent = { ok: true } | { ok: false; code: string };
+export type Sent = { ok: true; documentId?: string } | { ok: false; code: string };
 
 type Target = { travelerId: string; kind: PaxDocumentKind; tripId: string | null };
 
@@ -25,7 +25,7 @@ export async function sendAgencyFile(file: File, target: Target): Promise<Sent> 
   });
   if (!uploaded) return { ok: false, code: "not_uploaded" };
   const finished = await finishPassengerUpload(started.fileId);
-  return finished.ok ? { ok: true } : finished;
+  return finished.ok ? { ok: true, documentId: started.documentId } : finished;
 }
 
 export async function sendLinkFile(token: string, file: File, target: Target): Promise<Sent> {

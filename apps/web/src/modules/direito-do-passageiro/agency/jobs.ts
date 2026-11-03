@@ -33,8 +33,8 @@ export const paxReadingsFunction = inngest.createFunction(
 
 /**
  * How long an agency's passengers are kept (migration 0072): once a day, who the setting keeps no longer is
- * forgotten, and then the bytes of every file forgotten since (by the sweep, the agency or the passenger) are
- * removed. The steps carry counts only.
+ * forgotten, and so is a passenger started from documents and never confirmed (0083); then the bytes of every file
+ * forgotten since (by the sweep, the agency or the passenger) are removed. The steps carry counts only.
  */
 export const paxRetentionFunction = inngest.createFunction(
   { id: "one-pax-retention", retries: 2, concurrency: { limit: 1 } },

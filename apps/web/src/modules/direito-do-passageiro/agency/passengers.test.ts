@@ -4,7 +4,9 @@ import { personFields, personValues } from "@/lib/cases/forms";
 import {
   CONSENT_KEY,
   DOCUMENT_KIND_KEY,
+  documentLegsOf,
   FILTER_KEY,
+  legFormsOf,
   legsForSave,
   localTimeLabel,
   PAX_ADULT_FORM,
@@ -127,7 +129,26 @@ describe("what the agency's screens read", () => {
     expect(detail?.documents[0].read).toEqual({ matches: true, legible: true, identified: "RG", note: "" });
     expect(detail?.trips[0].legs.map((leg) => leg.flightNumber)).toEqual(["LA3456", "LA3457"]);
     expect(detail?.confirmLink?.open).toBe(true);
+    expect(detail?.traveler.draft).toBe(false);
     expect(paxDetailOf({})).toBeNull();
+  });
+
+  it("reads a passenger started from documents: a draft, its CPF kept apart, whose CPF it already is", () => {
+    const traveler = paxDetailOf({
+      traveler: {
+        id: "t9",
+        full_name: "Passageiro em cadastro",
+        cpf: null,
+        draft_cpf: "52998224725",
+        draft: true,
+        duplicate_of: "t1",
+        read_fields: { cpf: { document: "d9" } },
+      },
+    })?.traveler;
+    expect(traveler?.draft).toBe(true);
+    expect(traveler?.cpf).toBe("52998224725");
+    expect(traveler?.duplicateOf).toBe("t1");
+    expect(traveler?.readFields).toEqual(["cpf"]);
   });
 });
 
@@ -166,6 +187,55 @@ describe("the forms", () => {
     ]);
   });
 
+  it("takes the legs ONE read of a trip's document into the trip's form", () => {
+    const clean = documentLegsOf({
+      ok: true,
+      legs: [
+        {
+          position: 1,
+          flight_number: "LA3456",
+          origin_iata: "GRU",
+          destination_iata: "REC",
+          departure: "2099-05-10T08:10",
+          arrival: "2099-05-10T11:25",
+        },
+      ],
+      read: [],
+      locator: "TSTM4R",
+    });
+    expect(clean).toEqual({
+      state: "read",
+      clean: true,
+      locator: "TSTM4R",
+      legs: [
+        {
+          flightNumber: "LA3456",
+          originIata: "GRU",
+          destinationIata: "REC",
+          departure: "2099-05-10T08:10",
+          arrival: "2099-05-10T11:25",
+        },
+      ],
+    });
+    // A leg the checks refused comes as it was read, for the agency to correct, in the form's local time.
+    const refused = documentLegsOf({
+      ok: false,
+      code: "invalid_airport",
+      position: 1,
+      read: [{ flight_number: "LA 3456", origin_iata: "Guarulhos", departure: "2099-05-10 08:10:00" }],
+      locator: null,
+    });
+    expect(refused.state === "read" && refused.clean).toBe(false);
+    expect(refused.state === "read" ? refused.legs[0].departure : null).toBe("2099-05-10T08:10");
+    expect(documentLegsOf({ ok: false, code: "reading" })).toEqual({ state: "reading" });
+    expect(documentLegsOf({ ok: false, code: "no_legs", note: "Foto escura." })).toEqual({
+      state: "none",
+      note: "Foto escura.",
+    });
+    expect(documentLegsOf({ ok: false, code: "read_failed" })).toEqual({ state: "none", note: null });
+    expect(legFormsOf([{}, null, "x"])).toEqual([]);
+  });
+
   it("says a ticket's local time as a person reads it", () => {
     expect(localTimeLabel("2026-11-03T14:30")).toBe("03/11/2026 14:30");
     expect(localTimeLabel("2026-11-03")).toBe("03/11/2026");
@@ -198,6 +268,8 @@ describe("the words", () => {
       "no_consent_term",
       "wording_changed",
       "upload_limit",
+      "draft",
+      "not_draft",
       "whatever",
     ]) {
       expect(product[paxErrorKey(code)], code).toBeTruthy();

@@ -141,6 +141,10 @@ export type PaxTraveler = {
   /** The fields written from what the AI read in a document, until a person writes them. */
   readFields: PaxField[];
   handedOver: boolean;
+  /** Started from documents and never confirmed (0083): in no list until the agency confirms it. */
+  draft: boolean;
+  /** The registered passenger whose CPF the draft's identity carries (0083). */
+  duplicateOf: string | null;
 };
 
 export type PaxConfirmLink = { createdAt: string; expiresAt: string; open: boolean };
@@ -295,7 +299,8 @@ export function paxTravelerOf(raw: unknown): PaxTraveler | null {
   return {
     id,
     fullName: text(row.full_name) ?? "",
-    cpf: text(row.cpf),
+    // A draft's CPF is kept apart until the agency confirms it (0083: `draft_cpf`).
+    cpf: text(row.cpf) ?? text(row.draft_cpf),
     birthDate: text(row.birth_date),
     phone: text(row.phone),
     email: text(row.email),
@@ -311,6 +316,8 @@ export function paxTravelerOf(raw: unknown): PaxTraveler | null {
     minor: row.minor === true,
     readFields: Object.keys(read).flatMap((field) => oneOf(PAX_FIELDS, field) ?? []),
     handedOver: text(row.handed_over_at) !== null,
+    draft: row.draft === true,
+    duplicateOf: text(row.duplicate_of),
   };
 }
 
@@ -383,6 +390,42 @@ export const emptyLeg = (): PaxLegForm => ({
   departure: "",
   arrival: "",
 });
+
+/**
+ * The legs ONE read of a trip's document, as the trip's form holds them (0083: `pax_document_legs`), from the legs
+ * the database cleaned, or, when a leg did not pass its checks, from what was read as it was read, for the agency
+ * to correct.
+ */
+export function legFormsOf(raw: unknown): PaxLegForm[] {
+  return list(raw).flatMap((item) => {
+    const leg = record(item);
+    const flightNumber = text(leg.flight_number) ?? "";
+    const originIata = text(leg.origin_iata) ?? "";
+    const destinationIata = text(leg.destination_iata) ?? "";
+    // As the form's local time takes it (`YYYY-MM-DDTHH:MM`), whatever separator or seconds the reading wrote.
+    const departure = (text(leg.departure) ?? "").replace(" ", "T").slice(0, 16);
+    const arrival = (text(leg.arrival) ?? "").replace(" ", "T").slice(0, 16);
+    return flightNumber || originIata || destinationIata || departure || arrival
+      ? [{ flightNumber, originIata, destinationIata, departure, arrival }]
+      : [];
+  });
+}
+
+/** What a trip's document gave for the trip's form: its legs, its locator, or why there are none yet. */
+export type DocumentLegs =
+  | { state: "reading" }
+  | { state: "read"; legs: PaxLegForm[]; locator: string; clean: boolean }
+  | { state: "none"; note: string | null };
+
+/** The answer of `pax_document_legs`, read. */
+export function documentLegsOf(raw: unknown): DocumentLegs {
+  const answer = record(raw);
+  if (answer.code === "reading") return { state: "reading" };
+  const clean = answer.ok === true;
+  const legs = legFormsOf(clean ? answer.legs : answer.read);
+  if (legs.length === 0) return { state: "none", note: text(answer.note) };
+  return { state: "read", legs, locator: (text(answer.locator) ?? "").slice(0, 8), clean };
+}
 
 /** The legs of the form as the database takes them, in order. */
 export const legsForSave = (legs: readonly PaxLegForm[]) =>
@@ -551,6 +594,10 @@ export function paxErrorKey(code: string): string {
       return "pax-error-too-many";
     case "invalid_rows":
       return "pax-error-rows";
+    case "draft":
+      return "pax-error-draft";
+    case "not_draft":
+      return "pax-error-not-draft";
     default:
       return "pax-error-failed";
   }

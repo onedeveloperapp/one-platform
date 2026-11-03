@@ -27,8 +27,9 @@ export const PAX_READING_TASK = "parceiro.documento.leitura";
 const KIND_FOR_MODEL: Record<PaxDocumentKind, string> = {
   identity: "documento de identidade com foto (RG, CNH, passaporte ou outro documento oficial)",
   address_proof: "comprovante de endereço (conta de água, luz, telefone, internet, banco ou contrato de aluguel)",
-  ticket: "bilhete ou confirmação de reserva da passagem aérea",
-  boarding_pass: "cartão de embarque",
+  ticket:
+    "bilhete ou confirmação de reserva da passagem aérea, que pode vir como print de tela do aplicativo, do site ou do e-mail, ou como foto do documento impresso",
+  boarding_pass: "cartão de embarque, que pode vir como print de tela ou como foto do cartão impresso",
 };
 
 const IMAGE_MIMES = ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"];
