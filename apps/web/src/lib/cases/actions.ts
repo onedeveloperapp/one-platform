@@ -140,7 +140,7 @@ export async function createCase(input: {
   client: Record<string, unknown>;
   origin?: string | null;
   summary?: string | null;
-}): Promise<CaseResult<{ caseId: string; seq: number }>> {
+}): Promise<CaseResult<{ caseId: string; seq: number; partyId: string | null }>> {
   const context = await getMemberContext();
   if (!context?.firm) return { ok: false, code: "not_authorized" };
   const { data, error } = await context.supabase.rpc("create_case", {
@@ -152,7 +152,11 @@ export async function createCase(input: {
     target_origin: input?.origin ? String(input.origin) : null,
     target_summary: input?.summary ? String(input.summary) : null,
   });
-  const result = fold(data, error, (answer) => ({ caseId: String(answer.case_id), seq: Number(answer.seq) }));
+  const result = fold(data, error, (answer) => ({
+    caseId: String(answer.case_id),
+    seq: Number(answer.seq),
+    partyId: answer.party_id ? String(answer.party_id) : null,
+  }));
   if (result.ok) refresh();
   return result;
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import type { CaseSegment, CaseState } from "../case-types";
+import TicketDialog from "./ticket-dialog";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 
@@ -73,6 +74,8 @@ export default function TripCard({
 }) {
   const t = useTranslations("product");
   const [editing, setEditing] = useState<CaseSegment | "new" | null>(null);
+  // New legs start from the trip's document, which ONE reads (0085); typing one is the contingency, in that dialog.
+  const [fromTicket, setFromTicket] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
 
@@ -119,8 +122,8 @@ export default function TripCard({
       description={t("case-trip-body")}
       action={
         writable && state.segments.length > 0 ? (
-          <Button variant="outlined" color="grey" size="small" onClick={() => setEditing("new")}>
-            {t("client-trip-add")}
+          <Button variant="outlined" color="grey" size="small" onClick={() => setFromTicket(true)}>
+            {t("case-trip-add-legs")}
           </Button>
         ) : null
       }
@@ -137,8 +140,9 @@ export default function TripCard({
           titleAs="h3"
           icon={<NiPlane />}
           title={t("case-trip-empty-title")}
-          description={t("case-trip-empty-body")}
-          action={writable ? { label: t("client-trip-add"), onClick: () => setEditing("new") } : undefined}
+          description={t("case-trip-empty-docs")}
+          action={writable ? { label: t("case-trip-send-ticket"), onClick: () => setFromTicket(true) } : undefined}
+          secondaryAction={writable ? { label: t("prefill-manual"), onClick: () => setEditing("new") } : undefined}
         />
       )}
 
@@ -215,6 +219,20 @@ export default function TripCard({
         );
       })}
 
+      {fromTicket && (
+        <TicketDialog
+          state={state}
+          onManual={() => {
+            setFromTicket(false);
+            setEditing("new");
+          }}
+          onClose={() => setFromTicket(false)}
+          onSaved={() => {
+            setFromTicket(false);
+            onChanged();
+          }}
+        />
+      )}
       {editing && (
         <SegmentDialog
           caseId={state.case.id}

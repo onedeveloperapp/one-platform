@@ -19,20 +19,28 @@ import {
   Typography,
 } from "@mui/material";
 
+import DocumentSlot, { type SlotState } from "@/components/cases/document-slot";
 import PersonFields from "@/components/cases/person-fields";
 import CollapsibleCard from "@/components/product/collapsible-card";
 import DialogHeader from "@/components/product/dialog-header";
 import StatusChip, { type StatusTone } from "@/components/product/status-chip";
-import { checkCpf, removeCaseParty, saveCasePerson } from "@/lib/cases/actions";
+import { TILE_TONE } from "@/components/product/tile-tone";
+import NiDocumentFull from "@/icons/nexture/ni-document-full";
+import NiHome from "@/icons/nexture/ni-home";
+import NiKeyboard from "@/icons/nexture/ni-keyboard";
+import { checkCpf, finishCaseUpload, removeCaseParty, saveCasePerson } from "@/lib/cases/actions";
 import { caseErrorKey, missingFields, PERSON_FIELD_KEY } from "@/lib/cases/cases";
+import { documentReadingOf, prefillErrorKey } from "@/lib/cases/document-prefill";
 import {
   ADULT_FORM,
   MINOR_FORM,
+  PERSON_FIELDS,
   type PersonField,
   personFields,
   type PersonValues,
   personValues,
 } from "@/lib/cases/forms";
+import { dropUnsaved, sendForReading } from "@/lib/cases/prefill-browser";
 import { READ_ITEM_KEY, readItems } from "@/lib/cases/read-fields";
 import { opensOnArrival } from "@/lib/cases/sections";
 import { formatCpf, formatPhoneBr } from "@flyee/fields";
@@ -306,6 +314,22 @@ export default function PeopleCard({
 
 type NewRole = "adult" | "minor" | "guardian";
 
+/** The documents a new person of the case starts from (migration 0085). */
+type DocSlot = "identity" | "address";
+type SentDoc = { fileId: string | null; name: string; state: SlotState };
+const DOC_WORDS: Record<DocSlot, { title: string; hint: string; kind: string }> = {
+  identity: {
+    title: "case-person-docs-identity",
+    hint: "case-person-docs-identity-hint",
+    kind: "case-person-docs-kind-identity",
+  },
+  address: {
+    title: "case-person-docs-address",
+    hint: "case-person-docs-address-hint",
+    kind: "case-person-docs-kind-address",
+  },
+};
+
 function PersonDialog({
   state,
   member,
@@ -321,6 +345,13 @@ function PersonDialog({
   const start = personValues(member?.person ?? null);
   const [values, setValues] = useState<PersonValues>(start);
   const [role, setRole] = useState<NewRole>("adult");
+  // A new person starts from their documents: ONE reads them into the form, which the person confirms; typing is
+  // the contingency. The fields ONE read say so under them until somebody writes over them.
+  const [stage, setStage] = useState<"documents" | "form">(member ? "form" : "documents");
+  const [docs, setDocs] = useState<Partial<Record<DocSlot, SentDoc>>>({});
+  const [readFrom, setReadFrom] = useState<ReadonlySet<PersonField>>(
+    () => new Set(Object.keys(member?.person.readFields ?? {}) as PersonField[]),
+  );
   const minorParty = member?.parties.find((party) => party.role === "claimant" && party.guardianPartyId) ?? null;
   // Who may answer for a minor: any adult already in the case.
   const adults = membersOf(state.parties).filter(
@@ -357,6 +388,61 @@ function PersonDialog({
     return result.partyId;
   };
 
+  const change = (next: PersonValues) => {
+    setReadFrom((current) => {
+      const out = new Set(current);
+      for (const field of PERSON_FIELDS) if (next[field] !== values[field]) out.delete(field);
+      return out;
+    });
+    setValues(next);
+  };
+
+  const sendDocument = async (slot: DocSlot, file: File) => {
+    const before = docs[slot]?.fileId;
+    setDocs((current) => ({ ...current, [slot]: { fileId: null, name: file.name, state: { kind: "reading" } } }));
+    const sent = await sendForReading(file, slot === "identity" ? "identity" : "address_proof");
+    if (before) dropUnsaved([before]);
+    if (!sent.ok) {
+      const sentence = t(prefillErrorKey(sent.code));
+      setDocs((current) => ({
+        ...current,
+        [slot]: { fileId: sent.fileId, name: file.name, state: { kind: "failed", sentence } },
+      }));
+      return;
+    }
+    const reading = documentReadingOf(sent.output, state.today);
+    const kind = t(DOC_WORDS[slot].kind);
+    const filled = reading.person.read.filter((field) => !values[field] || readFrom.has(field));
+    setValues((current) => {
+      const next = { ...current };
+      for (const field of filled) next[field] = reading.person.values[field] ?? next[field];
+      return next;
+    });
+    setReadFrom((current) => new Set([...current, ...filled]));
+    const sentence = !reading.matches
+      ? t("prefill-read-other", { kind, identified: reading.identified || t("prefill-read-unknown") })
+      : !reading.legible
+        ? [t("prefill-read-illegible"), reading.note].filter(Boolean).join(" ")
+        : reading.person.read.length === 0
+          ? [t("prefill-read-nothing"), reading.note].filter(Boolean).join(" ")
+          : [t("prefill-read-ok", { identified: reading.identified || kind }), reading.note].filter(Boolean).join(" ");
+    const good = reading.matches && reading.legible && reading.person.read.length > 0;
+    setDocs((current) => ({
+      ...current,
+      [slot]: {
+        fileId: sent.fileId,
+        name: file.name,
+        state: { kind: "read", tone: good ? "positive" : "attention", sentence },
+      },
+    }));
+  };
+
+  // A document sent and never saved with the person goes with the dialog.
+  const close = () => {
+    dropUnsaved(Object.values(docs).map((doc) => doc?.fileId));
+    onClose();
+  };
+
   const submit = async () => {
     setBusy(true);
     setProblem(null);
@@ -381,33 +467,58 @@ function PersonDialog({
       role: member ? null : role === "guardian" ? "guardian" : "claimant",
       guardianPartyId: guardianParty,
     });
-    setBusy(false);
     if (!result.ok) {
+      setBusy(false);
       setProblem({ code: result.code, field: result.field });
       return;
     }
+    // The documents the person came from join the case as theirs, where the check of each runs as on any other.
+    for (const slot of ["identity", "address"] as const) {
+      const doc = docs[slot];
+      if (!doc?.fileId) continue;
+      const joined = await finishCaseUpload({
+        caseId: state.case.id,
+        fileId: doc.fileId,
+        kind: slot === "identity" ? "identity" : "address_proof",
+        partyId: result.partyId,
+      });
+      if (!joined.ok) dropUnsaved([doc.fileId]);
+    }
+    setBusy(false);
     onSaved();
   };
 
+  const slotLabels = {
+    send: t("prefill-send"),
+    again: t("prefill-again"),
+    sending: t("prefill-sending"),
+    reading: t("prefill-reading"),
+    read: t("prefill-read"),
+    failed: t("prefill-failed"),
+  };
+  const slots: DocSlot[] = role === "minor" ? ["identity"] : ["identity", "address"];
+  const reading = Object.values(docs).some((doc) => doc?.state.kind === "reading");
+  const anyDone = Object.values(docs).some((doc) => doc?.state.kind === "read" || doc?.state.kind === "failed");
+  const fromDocuments = Object.values(docs).some((doc) => doc?.state.kind === "read");
+
   return (
-    <Dialog open onClose={busy ? undefined : onClose} maxWidth="md" fullWidth aria-labelledby="case-person-dialog">
+    <Dialog
+      open
+      onClose={busy || reading ? undefined : close}
+      maxWidth="md"
+      fullWidth
+      aria-labelledby="case-person-dialog"
+    >
       <DialogHeader
         id="case-person-dialog"
         title={member ? member.person.full_name : t("case-people-add")}
-        onClose={onClose}
+        onClose={close}
         closeLabel={t("cases-close")}
       />
-      <Box
-        component="form"
-        noValidate
-        onSubmit={(event) => {
-          event.preventDefault();
-          void submit();
-        }}
-      >
-        <DialogContent>
-          <Box className="flex flex-col gap-4">
-            {!member && (
+      {stage === "documents" && (
+        <>
+          <DialogContent>
+            <Box className="flex flex-col gap-4">
               <RadioGroup
                 aria-label={t("case-people-role")}
                 value={role}
@@ -426,61 +537,160 @@ function PersonDialog({
                   label={t("case-people-role-guardian")}
                 />
               </RadioGroup>
-            )}
-            {needsGuardian && !guardianRequired && (
               <Typography variant="body2" className="text-text-secondary">
-                {t("case-people-guardian-none")}
+                {t("case-person-docs-intro")}
               </Typography>
-            )}
-            {guardianRequired && (
-              <TextField
-                select
-                size="small"
-                fullWidth
-                id="case-person-guardian"
-                label={t("case-people-guardian")}
-                helperText={t("case-people-guardian-help")}
-                value={guardian}
-                disabled={busy}
-                onChange={(event) => setGuardian(event.target.value)}
-              >
-                {adults.map((adult) => (
-                  <MenuItem key={adult.person.person_id} value={adult.person.person_id}>
-                    {adult.person.full_name}
-                  </MenuItem>
+              <Box component="ul" className="m-0 flex list-none flex-col gap-3 p-0">
+                {slots.map((slot) => (
+                  <DocumentSlot
+                    key={slot}
+                    id={`case-person-doc-${slot}`}
+                    icon={
+                      slot === "identity" ? (
+                        <NiDocumentFull size="medium" className={TILE_TONE.primary.text} />
+                      ) : (
+                        <NiHome size="medium" className={TILE_TONE.primary.text} />
+                      )
+                    }
+                    title={t(DOC_WORDS[slot].title)}
+                    hint={t(DOC_WORDS[slot].hint)}
+                    state={docs[slot]?.state ?? { kind: "empty" }}
+                    fileName={docs[slot]?.name}
+                    primary={slot === "identity"}
+                    disabled={busy}
+                    labels={slotLabels}
+                    onFile={(file) => void sendDocument(slot, file)}
+                  />
                 ))}
-              </TextField>
+              </Box>
+            </Box>
+          </DialogContent>
+          <DialogActions className="flex-wrap justify-between gap-2">
+            <Button
+              variant="text"
+              color="grey"
+              startIcon={<NiKeyboard size="small" />}
+              disabled={reading}
+              onClick={() => setStage("form")}
+            >
+              {t("prefill-manual")}
+            </Button>
+            <Box className="flex gap-2">
+              <Button variant="text" color="grey" onClick={close} disabled={reading}>
+                {t("cases-cancel")}
+              </Button>
+              <Button variant="contained" disabled={reading || !anyDone} onClick={() => setStage("form")}>
+                {t("prefill-continue")}
+              </Button>
+            </Box>
+          </DialogActions>
+        </>
+      )}
+      {stage === "form" && (
+        <Box
+          component="form"
+          noValidate
+          onSubmit={(event) => {
+            event.preventDefault();
+            void submit();
+          }}
+        >
+          <DialogContent>
+            <Box className="flex flex-col gap-4">
+              {fromDocuments && (
+                <Alert severity="info" className="neutral">
+                  {t("prefill-confirm-intro")}
+                </Alert>
+              )}
+              {!member && (
+                <RadioGroup
+                  aria-label={t("case-people-role")}
+                  value={role}
+                  onChange={(event) => setRole(event.target.value as NewRole)}
+                >
+                  <FormControlLabel
+                    value="adult"
+                    control={<Radio size="small" />}
+                    label={t("case-people-role-adult")}
+                  />
+                  <FormControlLabel
+                    value="minor"
+                    control={<Radio size="small" />}
+                    label={t("case-people-role-minor")}
+                    disabled={adults.length === 0}
+                  />
+                  <FormControlLabel
+                    value="guardian"
+                    control={<Radio size="small" />}
+                    label={t("case-people-role-guardian")}
+                  />
+                </RadioGroup>
+              )}
+              {needsGuardian && !guardianRequired && (
+                <Typography variant="body2" className="text-text-secondary">
+                  {t("case-people-guardian-none")}
+                </Typography>
+              )}
+              {guardianRequired && (
+                <TextField
+                  select
+                  size="small"
+                  fullWidth
+                  id="case-person-guardian"
+                  label={t("case-people-guardian")}
+                  helperText={t("case-people-guardian-help")}
+                  value={guardian}
+                  disabled={busy}
+                  onChange={(event) => setGuardian(event.target.value)}
+                >
+                  {adults.map((adult) => (
+                    <MenuItem key={adult.person.person_id} value={adult.person.person_id}>
+                      {adult.person.full_name}
+                    </MenuItem>
+                  ))}
+                </TextField>
+              )}
+              <PersonFields
+                idPrefix={`case-person-${member?.person.person_id ?? "new"}`}
+                values={values}
+                shown={shown}
+                onChange={change}
+                errorField={problem?.field}
+                errorText={problem ? t(caseErrorKey(problem.code)) : null}
+                disabled={busy}
+                read={readFrom}
+              />
+              {member?.person.registry && (
+                <Typography variant="body2" className="text-text-secondary">
+                  {t("case-cpf-change-clears")}
+                </Typography>
+              )}
+              {problem && !problem.field && (
+                <Alert severity="error" className="neutral bg-background-paper/60!">
+                  {t(caseErrorKey(problem.code))}
+                </Alert>
+              )}
+            </Box>
+          </DialogContent>
+          <DialogActions className="flex-wrap justify-between gap-2">
+            {member ? (
+              <span />
+            ) : (
+              <Button variant="text" color="grey" disabled={busy} onClick={() => setStage("documents")}>
+                {t("prefill-back")}
+              </Button>
             )}
-            <PersonFields
-              idPrefix={`case-person-${member?.person.person_id ?? "new"}`}
-              values={values}
-              shown={shown}
-              onChange={setValues}
-              errorField={problem?.field}
-              errorText={problem ? t(caseErrorKey(problem.code)) : null}
-              disabled={busy}
-            />
-            {member?.person.registry && (
-              <Typography variant="body2" className="text-text-secondary">
-                {t("case-cpf-change-clears")}
-              </Typography>
-            )}
-            {problem && !problem.field && (
-              <Alert severity="error" className="neutral bg-background-paper/60!">
-                {t(caseErrorKey(problem.code))}
-              </Alert>
-            )}
-          </Box>
-        </DialogContent>
-        <DialogActions>
-          <Button variant="text" color="grey" onClick={onClose} disabled={busy}>
-            {t("cases-cancel")}
-          </Button>
-          <Button type="submit" variant="contained" disabled={busy}>
-            {busy ? t("cases-working") : t("cases-save")}
-          </Button>
-        </DialogActions>
-      </Box>
+            <Box className="flex gap-2">
+              <Button variant="text" color="grey" onClick={close} disabled={busy}>
+                {t("cases-cancel")}
+              </Button>
+              <Button type="submit" variant="contained" disabled={busy}>
+                {busy ? t("cases-working") : t("cases-save")}
+              </Button>
+            </Box>
+          </DialogActions>
+        </Box>
+      )}
     </Dialog>
   );
 }

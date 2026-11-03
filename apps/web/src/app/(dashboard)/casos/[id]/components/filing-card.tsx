@@ -4,17 +4,20 @@ import type { CaseFiling, CaseProceeding, CaseState } from "../case-types";
 import CourtSystem from "./court-system";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { Alert, Box, Button, Checkbox, FormControlLabel, Grid, MenuItem, TextField, Typography } from "@mui/material";
 
+import DocumentSlot, { type SlotState } from "@/components/cases/document-slot";
 import CollapsibleCard from "@/components/product/collapsible-card";
 import ConfirmActionDialog from "@/components/product/confirm-action-dialog";
 import EmptyState from "@/components/product/empty-state";
 import StatusChip, { type StatusTone } from "@/components/product/status-chip";
+import { TILE_TONE } from "@/components/product/tile-tone";
+import NiDocumentCheck from "@/icons/nexture/ni-document-check";
 import NiScale from "@/icons/nexture/ni-scale";
-import { startCaseUpload } from "@/lib/cases/actions";
 import { caseErrorKey, DOCUMENT_KIND_KEY, isDocumentKind } from "@/lib/cases/cases";
+import { prefillErrorKey, type ReceiptReading, receiptReadingOf } from "@/lib/cases/document-prefill";
 import {
   currentFiling,
   defaultFilingDocuments,
@@ -38,8 +41,8 @@ import {
   requestFilingPackage,
   requestPackageSignature,
 } from "@/lib/cases/filing-actions";
+import { dropUnsaved, sendForReading } from "@/lib/cases/prefill-browser";
 import { opensOnArrival } from "@/lib/cases/sections";
-import { mimeOf, uploadToSignedUrl } from "@/lib/files/browser-upload";
 import { signatureErrorKey, signatureErrorSaid } from "@/lib/psc/signature";
 import { filingKindOf } from "@flyee/courts/filing";
 import { formatCnj, isValidCnj } from "@flyee/rules/cnj";
@@ -225,8 +228,11 @@ function Lawsuit({
 
   const [cnj, setCnj] = useState("");
   const [filedOn, setFiledOn] = useState(state.today);
-  const [receipt, setReceipt] = useState<File | null>(null);
-  const input = useRef<HTMLInputElement>(null);
+  // The receipt is sent first and ONE reads the lawsuit's number and the day into the fields (0085); the lawyer
+  // confirms them. The file is kept also when ONE could not read it: the lawyer then types what it says.
+  const [receipt, setReceipt] = useState<{ fileId: string | null; name: string } | null>(null);
+  const [receiptSlot, setReceiptSlot] = useState<SlotState>({ kind: "empty" });
+  const [receiptRead, setReceiptRead] = useState<ReceiptReading | null>(null);
 
   // What a court's system asks of each file, beyond its name: the type the lawyer picks there, and in a
   // system that asks for one, its description (0036).
@@ -333,31 +339,56 @@ function Lawsuit({
       },
     );
 
+  const readReceipt = async (file: File) => {
+    const before = receipt?.fileId ?? null;
+    setReceipt({ fileId: null, name: file.name });
+    setReceiptRead(null);
+    setReceiptSlot({ kind: "reading" });
+    const sent = await sendForReading(file, "filing_receipt");
+    if (before) dropUnsaved([before]);
+    setReceipt({ fileId: sent.fileId, name: file.name });
+    if (!sent.ok) {
+      setReceiptSlot({ kind: "failed", sentence: t(prefillErrorKey(sent.code)) });
+      return;
+    }
+    const read = receiptReadingOf(sent.output, state.today);
+    setReceiptRead(read);
+    if (read.cnj) setCnj(read.cnj);
+    if (read.filedOn) setFiledOn(read.filedOn);
+    const sentence = !read.matches
+      ? [t("filing-receipt-read-other"), read.note].filter(Boolean).join(" ")
+      : read.cnj
+        ? [
+            read.filedOn
+              ? t("filing-receipt-read-ok", { cnj: read.cnj, day: formatDayBr(read.filedOn) ?? read.filedOn })
+              : t("filing-receipt-read-ok-no-day", { cnj: read.cnj }),
+            read.note,
+          ]
+            .filter(Boolean)
+            .join(" ")
+        : read.cnjRead
+          ? t("filing-receipt-read-bad-number", { number: read.cnjRead })
+          : [t("filing-receipt-read-no-number"), read.note].filter(Boolean).join(" ");
+    setReceiptSlot({ kind: "read", tone: read.matches && read.cnj ? "positive" : "attention", sentence });
+  };
+
   const attach = () =>
     run(
       "receipt",
       async () => {
-        if (!filing || !receipt) return { ok: false, code: "file_not_found" };
-        const mime = mimeOf(receipt);
-        const started = await startCaseUpload({ name: receipt.name, mime, bytes: receipt.size });
-        if (!started.ok) return started;
-        const uploaded = await uploadToSignedUrl({
-          storagePath: started.storagePath,
-          uploadToken: started.uploadToken,
-          file: receipt,
-          contentType: mime,
-        });
-        if (!uploaded) return { ok: false, code: "not_uploaded" };
+        if (!filing || !receipt?.fileId) return { ok: false, code: "file_not_found" };
         return attachFilingReceipt({
           caseId: state.case.id,
           packageId: filing.id,
-          fileId: started.fileId,
+          fileId: receipt.fileId,
           cnj,
           filedOn,
         });
       },
       () => {
         setReceipt(null);
+        setReceiptRead(null);
+        setReceiptSlot({ kind: "empty" });
         setCnj("");
       },
     );
@@ -627,72 +658,88 @@ function Lawsuit({
               <Typography variant="body1" className="font-semibold">
                 {t("filing-receipt-title")}
               </Typography>
-              <Grid container spacing={2}>
-                <Grid size={{ xs: 12, sm: 7 }}>
-                  <TextField
-                    fullWidth
-                    size="small"
-                    id={`filing-cnj-${proceeding.id}`}
-                    label={t("filing-receipt-cnj")}
-                    value={cnj}
-                    disabled={busy !== null}
-                    error={cnj.trim() !== "" && !cnjOk}
-                    helperText={cnj.trim() !== "" && !cnjOk ? t("case-error-cnj") : t("filing-receipt-cnj-help")}
-                    slotProps={{ htmlInput: { maxLength: 30, inputMode: "numeric" } }}
-                    onChange={(event) => setCnj(event.target.value)}
-                    onBlur={() => setCnj((current) => formatCnj(current) ?? current)}
-                  />
-                </Grid>
-                <Grid size={{ xs: 12, sm: 5 }}>
-                  <TextField
-                    fullWidth
-                    size="small"
-                    type="date"
-                    id={`filing-day-${proceeding.id}`}
-                    label={t("filing-receipt-day")}
-                    value={filedOn}
-                    disabled={busy !== null}
-                    slotProps={{ inputLabel: { shrink: true }, htmlInput: { max: state.today } }}
-                    onChange={(event) => setFiledOn(event.target.value)}
-                  />
-                </Grid>
-              </Grid>
-              <input
-                ref={input}
-                type="file"
-                hidden
-                accept="application/pdf,image/jpeg,image/png,image/webp,.pdf,.jpg,.jpeg,.png,.webp"
-                onChange={(event) => {
-                  setReceipt(event.target.files?.[0] ?? null);
-                  event.target.value = "";
-                }}
-              />
-              <Box className="flex flex-row flex-wrap items-center gap-2">
-                <Button
-                  variant="outlined"
-                  color="grey"
-                  size="small"
+              <Typography variant="body2" className="text-text-secondary">
+                {t("filing-receipt-read-intro")}
+              </Typography>
+              <Box component="ul" className="m-0 flex list-none flex-col gap-3 p-0">
+                <DocumentSlot
+                  id={`filing-receipt-${proceeding.id}`}
+                  icon={<NiDocumentCheck size="medium" className={TILE_TONE.primary.text} />}
+                  title={t("filing-receipt-slot")}
+                  hint={t("filing-receipt-slot-hint")}
+                  state={receiptSlot}
+                  fileName={receipt?.name}
+                  primary
                   disabled={busy !== null}
-                  onClick={() => input.current?.click()}
-                >
-                  {receipt ? t("filing-receipt-change") : t("filing-receipt-choose")}
-                </Button>
-                {receipt ? (
-                  <Typography variant="body2" className="text-text-secondary min-w-0 break-all">
-                    {receipt.name}
+                  labels={{
+                    send: t("prefill-send"),
+                    again: t("prefill-again"),
+                    sending: t("prefill-sending"),
+                    reading: t("prefill-reading"),
+                    read: t("prefill-read"),
+                    failed: t("prefill-failed"),
+                  }}
+                  onFile={(file) => void readReceipt(file)}
+                />
+              </Box>
+              {receipt?.fileId && receiptSlot.kind !== "reading" && (
+                <>
+                  <Grid container spacing={2}>
+                    <Grid size={{ xs: 12, sm: 7 }}>
+                      <TextField
+                        fullWidth
+                        size="small"
+                        id={`filing-cnj-${proceeding.id}`}
+                        label={t("filing-receipt-cnj")}
+                        value={cnj}
+                        disabled={busy !== null}
+                        error={cnj.trim() !== "" && !cnjOk}
+                        helperText={
+                          cnj.trim() !== "" && !cnjOk
+                            ? t("case-error-cnj")
+                            : receiptRead?.cnj && cnj === receiptRead.cnj
+                              ? t("filing-receipt-cnj-read")
+                              : t("filing-receipt-cnj-help")
+                        }
+                        slotProps={{ htmlInput: { maxLength: 30, inputMode: "numeric" } }}
+                        onChange={(event) => setCnj(event.target.value)}
+                        onBlur={() => setCnj((current) => formatCnj(current) ?? current)}
+                      />
+                    </Grid>
+                    <Grid size={{ xs: 12, sm: 5 }}>
+                      <TextField
+                        fullWidth
+                        size="small"
+                        type="date"
+                        id={`filing-day-${proceeding.id}`}
+                        label={t("filing-receipt-day")}
+                        value={filedOn}
+                        disabled={busy !== null}
+                        slotProps={{ inputLabel: { shrink: true }, htmlInput: { max: state.today } }}
+                        onChange={(event) => setFiledOn(event.target.value)}
+                      />
+                    </Grid>
+                  </Grid>
+                  {receiptRead?.court && proceeding.court && receiptRead.court !== proceeding.court && (
+                    <Alert severity="warning">
+                      {t("filing-receipt-read-court", { read: receiptRead.court, court: proceeding.court })}
+                    </Alert>
+                  )}
+                  <Typography variant="body2" className="text-text-secondary">
+                    {t("filing-receipt-read-check")}
                   </Typography>
-                ) : null}
-              </Box>
-              <Box>
-                <Button
-                  variant="contained"
-                  size="small"
-                  disabled={busy !== null || !receipt || !cnjOk || !filedOn}
-                  onClick={() => void attach()}
-                >
-                  {busy === "receipt" ? t("cases-working") : t("filing-receipt-attach")}
-                </Button>
-              </Box>
+                  <Box>
+                    <Button
+                      variant="contained"
+                      size="small"
+                      disabled={busy !== null || !cnjOk || !filedOn}
+                      onClick={() => void attach()}
+                    >
+                      {busy === "receipt" ? t("cases-working") : t("filing-receipt-attach")}
+                    </Button>
+                  </Box>
+                </>
+              )}
             </Box>
           ) : (
             <Typography variant="body2" className="text-text-secondary">

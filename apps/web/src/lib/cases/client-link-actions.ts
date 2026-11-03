@@ -6,6 +6,7 @@ import { createHash } from "node:crypto";
 import { queueCaseAdvance } from "@/lib/cases/advance-work";
 import { isTokenShape } from "@/lib/cases/client-link";
 import { finishLinkUpload, takeBackClientUpload } from "@/lib/cases/client-uploads";
+import { readLinkUpload } from "@/lib/cases/document-prefill-work";
 import { queueDocumentProcessing } from "@/lib/cases/documents-work";
 import { queueStatementWork } from "@/lib/cases/statements-work";
 import { FIRM_FILES_BUCKET, supabaseFileStore } from "@/lib/files/store";
@@ -132,7 +133,10 @@ export async function saveClientPerson(
   );
 }
 
-export async function addClientDependent(token: string, fields: Record<string, unknown>): Promise<ClientResult> {
+export async function addClientDependent(
+  token: string,
+  fields: Record<string, unknown>,
+): Promise<ClientResult<{ partyId: string | null }>> {
   const closed = await refusal(token);
   if (closed) return closed;
   const supabase = createAnonClient();
@@ -141,6 +145,54 @@ export async function addClientDependent(token: string, fields: Record<string, u
     await supabase.rpc("client_link_add_dependent", {
       target_token: token,
       target_fields: plainFields(fields, PERSON_FIELDS),
+    }),
+    (answer) => ({ partyId: isId(answer.party_id) ? answer.party_id : null }),
+  );
+}
+
+/**
+ * ONE reads the document of a child the client sends before the child is in the case (migration 0085): an
+ * identity this link reserved for nobody yet and is still sending, within the link's reads of the day. The answer
+ * comes back for the client to confirm the child's data; nothing is written here.
+ */
+export async function readClientChildDocument(
+  token: string,
+  documentId: string,
+): Promise<ClientResult<{ output: Record<string, unknown> }>> {
+  const closed = await refusal(token);
+  if (closed) return closed;
+  if (!isId(documentId)) return { ok: false, code: "not_found" };
+  const backend = service();
+  if (!backend) return unavailable;
+  const { data, error } = await backend.rpc("client_link_prefill_to_read", {
+    target_token: token,
+    target_document: documentId,
+  });
+  if (error) return { ok: false, code: "failed" };
+  const answer = (data ?? {}) as RpcAnswer;
+  if (!answer.ok || typeof answer.org_id !== "string" || typeof answer.storage_path !== "string") {
+    return { ok: false, code: String(answer.code ?? "failed") };
+  }
+  const read = await readLinkUpload(backend, {
+    orgId: answer.org_id,
+    documentId,
+    storagePath: answer.storage_path,
+  });
+  return read.ok ? { ok: true, code: "read", output: read.output } : { ok: false, code: read.code };
+}
+
+/** The child's document, read before the child was in the case, becomes the child's, to be sent as any upload. */
+export async function assignClientUpload(token: string, documentId: string, partyId: string): Promise<ClientResult> {
+  const closed = await refusal(token);
+  if (closed) return closed;
+  if (!isId(documentId) || !isId(partyId)) return { ok: false, code: "not_found" };
+  const supabase = createAnonClient();
+  if (!supabase) return unavailable;
+  return fold(
+    await supabase.rpc("client_link_assign_upload", {
+      target_token: token,
+      target_document: documentId,
+      target_party: partyId,
     }),
     nothing,
   );

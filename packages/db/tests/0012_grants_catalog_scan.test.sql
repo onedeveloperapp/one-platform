@@ -70,10 +70,12 @@ select is(
       -- in every new table of public, is one): it is no way in.
       and p.prorettype <> 'event_trigger'::regtype
   ),
-  -- The client_link_* functions are a client's way in, by the token of their link (0022, 0023, 0025, 0026, 0038);
+  -- The client_link_* functions are a client's way in, by the token of their link (0022, 0023, 0025, 0026, 0038,
+  -- 0085);
   -- the pax_link_* ones a passenger's, by the link of the agency's partnership (0070).
   array[
-    'client_link_add_dependent', 'client_link_agency', 'client_link_answer_chronology', 'client_link_civil_court',
+    'client_link_add_dependent', 'client_link_agency', 'client_link_answer_chronology', 'client_link_assign_upload',
+    'client_link_civil_court',
     'client_link_course',
     'client_link_discard_upload',
     'client_link_finish',

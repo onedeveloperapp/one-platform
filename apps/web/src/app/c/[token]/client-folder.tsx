@@ -11,11 +11,13 @@ import { useEffect, useRef, useState } from "react";
 
 import { Alert, Box, Button, Card, CardContent, MenuItem, TextField, Typography } from "@mui/material";
 
+import DocumentSlot, { type SlotState } from "@/components/cases/document-slot";
 import PersonFields from "@/components/cases/person-fields";
 import SegmentFields from "@/components/cases/segment-fields";
 import EmptyState from "@/components/product/empty-state";
 import StatusChip, { type StatusTone } from "@/components/product/status-chip";
 import NiCheck from "@/icons/nexture/ni-check";
+import NiDocumentFull from "@/icons/nexture/ni-document-full";
 import NiPlane from "@/icons/nexture/ni-plane";
 import {
   caseErrorKey,
@@ -35,14 +37,17 @@ import {
 import type { ClientLinkView, ClientPerson, ClientTasks } from "@/lib/cases/client-link";
 import {
   addClientDependent,
+  assignClientUpload,
   discardClientUpload,
   finishClientLink,
   finishClientUpload,
+  readClientChildDocument,
   removeClientSegment,
   saveClientPerson,
   saveClientSegment,
   startClientUpload,
 } from "@/lib/cases/client-link-actions";
+import { documentReadingOf } from "@/lib/cases/document-prefill";
 import { CLIENT_PHOTO_PROBLEM_KEY, isPhotoProblem, PHOTO_POOR, type PhotoProblem } from "@/lib/cases/document-quality";
 import {
   ADULT_FORM,
@@ -286,13 +291,97 @@ function People({
   const [problem, setProblem] = useState<Problem>(null);
   const [busy, setBusy] = useState(false);
   const list = new Intl.ListFormat("pt-BR", { style: "long", type: "conjunction" });
+  // A child starts from their document (0085): ONE reads it into the form, the client confirms, and the document
+  // is then the child's. Typing is the contingency.
+  const [childDoc, setChildDoc] = useState<{ documentId: string | null; name: string; state: SlotState } | null>(null);
+  const [childRead, setChildRead] = useState<ReadonlySet<PersonField>>(new Set());
+  const [childManual, setChildManual] = useState(false);
+  const [childPoor, setChildPoor] = useState<{ documentId: string; problems: PhotoProblem[] } | null>(null);
+  const [childNote, setChildNote] = useState<string | null>(null);
+
+  const sendChildDocument = async (file: File) => {
+    const before = childDoc?.documentId ?? null;
+    setChildDoc({ documentId: null, name: file.name, state: { kind: "reading" } });
+    const fail = (documentId: string | null, key: string) =>
+      setChildDoc({ documentId, name: file.name, state: { kind: "failed", sentence: t(key) } });
+    const mime = mimeOf(file);
+    const started = await startClientUpload(token, {
+      kind: "identity",
+      partyId: null,
+      name: file.name,
+      mime,
+      bytes: file.size,
+    });
+    if (!started.ok) return fail(null, caseErrorKey(started.code));
+    const uploaded = await uploadToSignedUrl({
+      storagePath: started.storagePath,
+      uploadToken: started.uploadToken,
+      file,
+      contentType: mime,
+    });
+    if (!uploaded) {
+      void discardClientUpload(token, started.documentId).catch(() => undefined);
+      return fail(null, "client-child-read-failed");
+    }
+    if (before) void discardClientUpload(token, before).catch(() => undefined);
+    const read = await readClientChildDocument(token, started.documentId);
+    if (!read.ok) {
+      return fail(
+        started.documentId,
+        read.code === "prefill_limit" ? "client-child-read-limit" : "client-child-read-failed",
+      );
+    }
+    const reading = documentReadingOf(read.output, today);
+    const fields = (["full_name", "cpf", "birth_date"] as const).filter((field) => reading.person.values[field]);
+    setValues((current) => {
+      const next = { ...current };
+      for (const field of fields) next[field] = reading.person.values[field] ?? next[field];
+      return next;
+    });
+    setChildRead(new Set(fields));
+    setChildDoc({
+      documentId: started.documentId,
+      name: file.name,
+      state:
+        fields.length > 0
+          ? {
+              kind: "read",
+              tone: "positive",
+              sentence: t("client-child-read-ok", { identified: reading.identified || t("prefill-read-unknown") }),
+            }
+          : { kind: "read", tone: "attention", sentence: t("client-child-read-nothing") },
+    });
+  };
+
+  // The child's document sent and never given to a child goes when the client leaves the form.
+  const cancelChild = () => {
+    if (childDoc?.documentId) void discardClientUpload(token, childDoc.documentId).catch(() => undefined);
+    setChildDoc(null);
+    setChildRead(new Set());
+    setChildManual(false);
+    setOpen(null);
+  };
+
+  /** The child's document, read before the child was in the case, is theirs now and goes to the firm. */
+  const sendToChild = async (documentId: string, partyId: string, insist = false): Promise<void> => {
+    if (!insist) {
+      const assigned = await assignClientUpload(token, documentId, partyId);
+      if (!assigned.ok) return;
+    }
+    const finished = await finishClientUpload(token, documentId, insist ? { insist: true } : undefined);
+    if (!finished.ok && finished.code === PHOTO_POOR) {
+      setChildPoor({ documentId, problems: (finished.problems ?? []).filter(isPhotoProblem) });
+      return;
+    }
+    setChildPoor(null);
+  };
 
   const formOf = (person: ClientPerson | null): readonly PersonField[] =>
     !person || isMinorOn(person.birth_date, today) === true ? MINOR_FORM : ADULT_FORM;
   // What ONE read from a document of the person and nobody changed since: said under each field while the
   // value in the form is still the one the document gave.
   const readOf = (person: ClientPerson | null): ReadonlySet<PersonField> => {
-    if (!person) return new Set();
+    if (!person) return childRead;
     // Compared as the form sends them: a CEP the mask wrote with its dash is the same CEP.
     const changed = new Set(Object.keys(personFields(values, formOf(person), initial)));
     const marks = readFieldsOf(person.read_fields);
@@ -310,14 +399,26 @@ function People({
   const save = async (person: ClientPerson | null) => {
     setBusy(true);
     setProblem(null);
-    const result = person
-      ? await saveClientPerson(token, person.person_id, personFields(values, formOf(person), initial))
-      : await addClientDependent(token, personFields(values, MINOR_FORM));
-    setBusy(false);
+    let partyId: string | null = null;
+    let result: { ok: boolean; code: string; field?: string | null };
+    if (person) {
+      result = await saveClientPerson(token, person.person_id, personFields(values, formOf(person), initial));
+    } else {
+      const added = await addClientDependent(token, personFields(values, MINOR_FORM));
+      if (added.ok) partyId = added.partyId;
+      result = added;
+    }
     if (!result.ok) {
+      setBusy(false);
       setProblem({ code: result.code, field: result.field });
       return;
     }
+    // The document the child came from is theirs now, and goes to the firm as any other.
+    if (!person && childDoc?.documentId && partyId) await sendToChild(childDoc.documentId, partyId);
+    setBusy(false);
+    setChildDoc(null);
+    setChildRead(new Set());
+    setChildManual(false);
     setOpen(null);
     onSaved();
   };
@@ -336,7 +437,12 @@ function People({
         idPrefix={`client-person-${person?.person_id ?? "new"}`}
         values={values}
         shown={formOf(person)}
-        onChange={setValues}
+        onChange={(next) => {
+          if (!person) {
+            setChildRead((current) => new Set([...current].filter((field) => next[field] === values[field])));
+          }
+          setValues(next);
+        }}
         errorField={problem?.field}
         errorText={problem ? t(caseErrorKey(problem.code)) : null}
         disabled={busy}
@@ -347,7 +453,7 @@ function People({
         <Button type="submit" variant="contained" disabled={busy}>
           {busy ? t("client-working") : person ? t("client-save") : t("client-add-child-submit")}
         </Button>
-        <Button variant="text" color="grey" onClick={() => setOpen(null)} disabled={busy}>
+        <Button variant="text" color="grey" onClick={() => (person ? setOpen(null) : cancelChild())} disabled={busy}>
           {t("client-cancel")}
         </Button>
       </Box>
@@ -423,6 +529,59 @@ function People({
           );
         })}
 
+        {childPoor && (
+          <Alert severity="warning" className="neutral bg-background-paper/60!" role="status">
+            <Typography variant="body2" component="p" className="mb-1 font-semibold">
+              {t("client-photo-poor-title")}
+            </Typography>
+            {childPoor.problems.length > 0 && (
+              <Box component="ul" className="m-0 flex list-disc flex-col gap-1 pl-5">
+                {childPoor.problems.map((item) => (
+                  <Typography key={item} component="li" variant="body2">
+                    {t(CLIENT_PHOTO_PROBLEM_KEY[item])}
+                  </Typography>
+                ))}
+              </Box>
+            )}
+            <Typography variant="body2" component="p" className="mt-2">
+              {t("client-photo-poor-choice")}
+            </Typography>
+            <Box className="flex flex-wrap gap-2 pt-2">
+              <Button
+                variant="contained"
+                size="small"
+                disabled={busy}
+                onClick={() => {
+                  void discardClientUpload(token, childPoor.documentId).catch(() => undefined);
+                  setChildPoor(null);
+                  setChildNote(t("client-child-retake-where"));
+                  onSaved();
+                }}
+              >
+                {t("client-photo-retake")}
+              </Button>
+              <Button
+                variant="outlined"
+                color="grey"
+                size="small"
+                disabled={busy}
+                onClick={async () => {
+                  setBusy(true);
+                  await sendToChild(childPoor.documentId, "", true);
+                  setBusy(false);
+                  onSaved();
+                }}
+              >
+                {t("client-photo-insist")}
+              </Button>
+            </Box>
+          </Alert>
+        )}
+        {childNote && (
+          <Alert severity="info" className="neutral bg-background-paper/60!" onClose={() => setChildNote(null)}>
+            {childNote}
+          </Alert>
+        )}
         {editable &&
           (open === "new" ? (
             <Box className="border-grey-100 flex flex-col gap-3 rounded-2xl border p-4">
@@ -432,7 +591,60 @@ function People({
               <Typography variant="body2" className="text-text-secondary">
                 {t("client-add-child-body")}
               </Typography>
-              {form(null)}
+              <Box component="ul" className="m-0 flex list-none flex-col gap-3 p-0">
+                <DocumentSlot
+                  id="client-child-doc"
+                  icon={<NiDocumentFull size="medium" />}
+                  title={t("client-child-docs-title")}
+                  hint={t("client-child-docs-hint")}
+                  state={childDoc?.state ?? { kind: "empty" }}
+                  fileName={childDoc?.name}
+                  primary
+                  disabled={busy}
+                  labels={{
+                    send: t("prefill-send"),
+                    again: t("prefill-again"),
+                    sending: t("prefill-sending"),
+                    reading: t("prefill-reading"),
+                    read: t("prefill-read"),
+                    failed: t("prefill-failed"),
+                  }}
+                  onFile={(file) => void sendChildDocument(file)}
+                />
+              </Box>
+              {childDoc && (childDoc.state.kind === "read" || childDoc.state.kind === "failed") ? (
+                <>
+                  {childDoc.state.kind === "read" && childRead.size > 0 && (
+                    <Typography variant="body2" className="text-text-secondary">
+                      {t("client-child-confirm")}
+                    </Typography>
+                  )}
+                  {form(null)}
+                </>
+              ) : childManual ? (
+                form(null)
+              ) : (
+                <Box className="flex flex-wrap gap-2">
+                  <Button
+                    variant="text"
+                    color="grey"
+                    size="small"
+                    disabled={busy || childDoc?.state.kind === "reading"}
+                    onClick={() => setChildManual(true)}
+                  >
+                    {t("client-child-manual")}
+                  </Button>
+                  <Button
+                    variant="text"
+                    color="grey"
+                    size="small"
+                    disabled={childDoc?.state.kind === "reading"}
+                    onClick={cancelChild}
+                  >
+                    {t("client-cancel")}
+                  </Button>
+                </Box>
+              )}
             </Box>
           ) : (
             <Box>
@@ -462,6 +674,10 @@ function Trip({
   const t = useTranslations("product");
   const [open, setOpen] = useState<string | null>(null);
   const [values, setValues] = useState<SegmentValues>(segmentValues(null));
+  // A ticket or a boarding pass the client sent that is still being checked: its flights are on their way here.
+  const ticketOnItsWay = view.documents.some(
+    (document) => (document.kind === "ticket" || document.kind === "boarding_pass") && document.status === "received",
+  );
   const [problem, setProblem] = useState<Problem>(null);
   const [busy, setBusy] = useState(false);
 
@@ -539,11 +755,24 @@ function Trip({
         </Box>
 
         {view.segments.length === 0 && open !== "new" && (
+          // The flights come from the trip's document, which ONE reads (0085): sent in the documents above, its legs
+          // enter here once it is checked. Typing a leg is the contingency.
           <EmptyState
             icon={<NiPlane />}
             title={t("client-trip-empty-title")}
-            description={t("client-trip-empty-body")}
-            action={editable ? { label: t("client-trip-add"), onClick: () => edit(null) } : undefined}
+            description={ticketOnItsWay ? t("client-trip-reading") : t("client-trip-empty-docs")}
+            action={
+              editable && !ticketOnItsWay
+                ? {
+                    label: t("client-trip-send-ticket"),
+                    onClick: () =>
+                      document
+                        .getElementById("client-documents")
+                        ?.scrollIntoView({ behavior: "smooth", block: "start" }),
+                  }
+                : undefined
+            }
+            secondaryAction={editable ? { label: t("client-trip-manual"), onClick: () => edit(null) } : undefined}
           />
         )}
 
