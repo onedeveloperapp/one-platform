@@ -10,6 +10,7 @@ import DossierCard from "./dossier-card";
 import DraftsCard from "./drafts-card";
 import FilingCard from "./filing-card";
 import HearingsCard from "./hearings-card";
+import JourneyCard from "./journey-card";
 import NoticesCard from "./notices-card";
 import PeopleCard from "./people-card";
 import ProceedingsCard from "./proceedings-card";
@@ -20,7 +21,6 @@ import StatementsCard from "./statements-card";
 import SummaryCard from "./summary-card";
 import TimelineCard from "./timeline-card";
 import TripCard from "./trip-card";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useCallback, useState } from "react";
@@ -33,7 +33,6 @@ import PageHeader from "@/components/product/page-header";
 import StatusChip from "@/components/product/status-chip";
 import NiFolder from "@/icons/nexture/ni-folder";
 import NiUsers from "@/icons/nexture/ni-users";
-import { waitingFix, waitingKey } from "@/lib/cases/advance";
 import {
   caseHolder,
   caseLabel,
@@ -196,15 +195,9 @@ export default function CaseView({ state: read }: { state: CaseState }) {
           {t("case-closed-reason", { reason: current.closeReason })}
         </Alert>
       )}
-      {/* What the case lacks is said in its own card below: then the note says what else ONE waits for. */}
-      {state.advance?.waiting && (state.advance.waiting !== "case_incomplete" || !showMissing) ? (
-        <AdvanceNote
-          waiting={state.advance.waiting}
-          when={state.advance.checkedLabel}
-          // The way to put it right is offered to who may take it: a partner names who signs, a lawyer the model.
-          fixable={state.advance.waiting === "no_signer" ? state.partner : state.lawyer}
-        />
-      ) : null}
+      {/* Where the case stands along its way, what happens now and who it is with; what ONE waits for is said
+          there too. What the case lacks is listed in its own card below. */}
+      <JourneyCard state={state} missing={showMissing ? missing.length + civilMissing.length : 0} />
 
       {/* Each card opens by itself when the case's stage is about it or something in it waits for a person; the
           person may open or close every one at once to read the whole case. */}
@@ -295,32 +288,5 @@ export default function CaseView({ state: read }: { state: CaseState }) {
         />
       )}
     </Box>
-  );
-}
-
-/**
- * What ONE waits for to carry the case on by itself (0039): said where the
- * firm reads the case, with the way to put it right when that is not on the
- * case itself (who signs, the default model).
- */
-function AdvanceNote({ waiting, when, fixable }: { waiting: string; when: string | null; fixable: boolean }) {
-  const t = useTranslations("product");
-  const fix = fixable ? waitingFix(waiting) : null;
-  return (
-    <Alert
-      severity="info"
-      className="neutral bg-background-paper/60!"
-      action={
-        fix ? (
-          <Button color="inherit" size="small" href={fix.href} LinkComponent={Link}>
-            {t(fix.key)}
-          </Button>
-        ) : undefined
-      }
-    >
-      {[t("advance-note", { reason: t(waitingKey(waiting)) }), when ? t("advance-checked", { when }) : null]
-        .filter(Boolean)
-        .join(" · ")}
-    </Alert>
   );
 }

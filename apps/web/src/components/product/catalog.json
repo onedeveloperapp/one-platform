@@ -155,6 +155,18 @@
       "from": "@/components/product/second-factor-prompt",
       "props": "state: missing | challenge, reason?, onConfirmed",
       "use": "The one setup of a second factor in the app, on the screen that asks for it (the first step of the firm's setup, and the security card of /settings/security): for an account with none, one button to start, then two numbered steps, the QR on white with its key in groups of four and a copy button, and the code in the six boxes of the sign-in (VerificationCodeInput, confirmed by itself at the sixth digit, a paste taken); for a session that has not confirmed it, the code alone; once confirmed the screen goes on at the second level. A bordered neutral panel, as the Pix code at checkout, never a warning: setting it up is the step's work. In a SetupWizard the step hides its own primary until the factor is confirmed (hidePrimary), so no disabled 'Continuar' sits beside 'Confirmar'. Never a link to the security page from a flow the person would not come back from."
+    },
+    {
+      "name": "InvitationLink",
+      "from": "@/components/product/invitation-link",
+      "props": "id, label, link, copied, onCopy, copyLabel, copyAgainLabel, copiedHelp, help",
+      "use": "The link of an invitation in the very dialog that made it (the team's, the agency's, an agency's colleague's): read-only and whole, its copy button beside it, what became of the copy under it. An invitation dialog is ONE screen (the owner, 2026-11-03): the fields, then 'Copiar link' or 'Enviar por e-mail'; once the invitation exists the fields lock, and this field shows under them with the e-mail's result, so the link is always at hand. Never a second screen of the dialog with the link alone."
+    },
+    {
+      "name": "ProgressSteps / ProgressNow / ProgressBar",
+      "from": "@/components/product/progress-steps",
+      "props": "ProgressSteps(steps[{key,label,state: done|current|next|stopped,when?,icon}], label, stateWords) · ProgressNow(tone: progress|done|stopped, lead, text, extra?, action?) · ProgressBar(steps, reached, state: progress|done|stopped, label)",
+      "use": "Where something stands along its way (the owner, 2026-11-03, after the e-mail provider's domain events): ProgressSteps draws its steps in order, each with its icon, done (primary tint), under way (the palette's amber, never its red) or still to come (outline), with the day each began, across from md and one under the other on a phone; ProgressNow says under it, in a sentence, what happens now and who it is with, tinted by how the way stands, with the one action the reader may take; ProgressBar is the same way in small for a row of a list. Used by the case (casos/[id] journey-card, lib/cases/journey), the case list's stage column and the agency's trips and passenger list (modules/direito-do-passageiro/agency/journey). The timeline tells every event; this tells the few that mark the way."
     }
   ],
   "template": [

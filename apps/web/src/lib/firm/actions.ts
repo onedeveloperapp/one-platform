@@ -174,6 +174,8 @@ export type InviteResult = FirmActionResult<{
   /** Whether the e-mail left. When it did not, `link` is what the manager sends by hand. */
   emailed: boolean;
   link: string | null;
+  /** The invitation's address, always: shown beside the e-mail's result, so the manager may also send it by hand. */
+  url: string;
 }>;
 
 /**
@@ -211,7 +213,7 @@ export async function inviteToFirm(input: {
   const link = memberUrl(`/convite/${token}`);
   if (input.deliver === "link") {
     refreshTeam();
-    return { ok: true, code: result.code, emailed: false, link };
+    return { ok: true, code: result.code, emailed: false, link, url: link };
   }
   const expiresAt = typeof result.data.expires_at === "string" ? result.data.expires_at : null;
   const sent = await sendFirmInvitationEmail(
@@ -227,7 +229,7 @@ export async function inviteToFirm(input: {
     context.email || null,
   );
   refreshTeam();
-  return { ok: true, code: result.code, emailed: sent.sent, link: sent.sent ? null : link };
+  return { ok: true, code: result.code, emailed: sent.sent, link: sent.sent ? null : link, url: link };
 }
 
 export async function revokeInvitation(invitationId: string): Promise<FirmActionResult> {

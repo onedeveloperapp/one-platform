@@ -12,6 +12,7 @@ import { Alert, Box, Button, Card, CardContent, Grid, TextField, Typography } fr
 import EmptyState from "@/components/product/empty-state";
 import { StatTile } from "@/components/product/home-tiles";
 import PageHeader from "@/components/product/page-header";
+import { ProgressBar } from "@/components/product/progress-steps";
 import StatusChip from "@/components/product/status-chip";
 import NiDocumentCross from "@/icons/nexture/ni-document-cross";
 import NiLuggage from "@/icons/nexture/ni-luggage";
@@ -19,6 +20,7 @@ import NiPlane from "@/icons/nexture/ni-plane";
 import NiUserCross from "@/icons/nexture/ni-user-cross";
 import NiUsers from "@/icons/nexture/ni-users";
 import { listPassengers } from "@/modules/direito-do-passageiro/agency/actions";
+import { PASSENGER_JOURNEY, passengerReached, TRIP_STEP_KEY } from "@/modules/direito-do-passageiro/agency/journey";
 import {
   CONSENT_KEY,
   CONSENT_TONE,
@@ -361,6 +363,8 @@ export default function PassengersView({ data }: { data: PassengersData | null }
 function PassengerRow({ row }: { row: PaxRow }) {
   const t = useTranslations("product");
   const consent = row.consent ?? "none";
+  // Where the passenger is along the way, in small: the agreement, a trip ONE follows, the firm.
+  const progress = passengerReached({ consent: row.consent, handedOver: row.handedOver });
   const details = [
     row.cpf ? t("pax-row-cpf", { cpf: formatCpf(row.cpf) }) : null,
     row.nextDeparture ? t("pax-row-next", { date: localTimeLabel(row.nextDeparture) }) : null,
@@ -379,6 +383,18 @@ function PassengerRow({ row }: { row: PaxRow }) {
           <Typography variant="body2" className="text-text-secondary break-words">
             {details.join(" · ")}
           </Typography>
+          <Box className="mt-1.5">
+            <ProgressBar
+              steps={PASSENGER_JOURNEY.length}
+              reached={progress.reached}
+              state={progress.state}
+              label={t("journey-bar-label", {
+                label: t(TRIP_STEP_KEY[PASSENGER_JOURNEY[progress.reached]]),
+                position: progress.reached + 1,
+                total: PASSENGER_JOURNEY.length,
+              })}
+            />
+          </Box>
         </Box>
         <Box className="flex flex-wrap gap-1.5">
           {row.minor && <StatusChip label={t("pax-row-minor")} tone="info" />}

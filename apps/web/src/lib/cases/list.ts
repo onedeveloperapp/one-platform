@@ -1,4 +1,5 @@
 import { type CaseStatus, isCaseStatus, type StatusGroup } from "@/lib/cases/cases";
+import type { CourtMarks } from "@/lib/cases/journey";
 import { caseKindLabelKey } from "@/lib/modules/registry";
 
 /**
@@ -69,6 +70,11 @@ export type CaseListRow = {
   civilRefused: boolean;
   /** The partner agency the case came from (0071, 0075); null for a case of the firm's own. */
   agency: string | null;
+  /**
+   * For a case in court, what its lawsuits show (a hearing held, a decision and a payment published): the step of
+   * its way the list shows. Null before the court, or when it could not be read.
+   */
+  court: CourtMarks | null;
 };
 
 /** How many cases the firm has under each filter, in all, and still going. */
@@ -153,6 +159,7 @@ export function caseListOf(raw: unknown): CaseListPage | null {
         courtMoved: row.court_moved === true,
         civilRefused: row.civil_refused === true,
         agency: typeof row.agency === "string" && row.agency !== "" ? row.agency : null,
+        court: null,
       },
     ];
   });

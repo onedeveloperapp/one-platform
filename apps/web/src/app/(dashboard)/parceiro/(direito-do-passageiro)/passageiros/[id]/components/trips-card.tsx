@@ -3,14 +3,25 @@
 import DocumentLine from "./document-line";
 import TripDialog from "./trip-dialog";
 import { useTranslations } from "next-intl";
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 
 import { Alert, Box, Button, Card, CardContent, Typography } from "@mui/material";
 
 import EmptyState from "@/components/product/empty-state";
+import ProgressSteps, { ProgressNow } from "@/components/product/progress-steps";
 import StatusChip from "@/components/product/status-chip";
+import NiBell from "@/icons/nexture/ni-bell";
+import NiBriefcase from "@/icons/nexture/ni-briefcase";
 import NiPlane from "@/icons/nexture/ni-plane";
+import NiUserCheck from "@/icons/nexture/ni-user-check";
 import FileButton from "@/modules/direito-do-passageiro/agency/file-button";
+import {
+  TRIP_HOLDER_KEY,
+  TRIP_NOW_KEY,
+  TRIP_STEP_KEY,
+  tripJourney,
+  type TripJourneyStep,
+} from "@/modules/direito-do-passageiro/agency/journey";
 import {
   localTimeLabel,
   type PaxDetail,
@@ -23,13 +34,29 @@ import {
 } from "@/modules/direito-do-passageiro/agency/passengers";
 import { sendAgencyFile } from "@/modules/direito-do-passageiro/agency/send-files";
 
+const STEP_ICON: Record<TripJourneyStep, ReactNode> = {
+  agreement: <NiUserCheck size="small" />,
+  watching: <NiPlane size="small" />,
+  alerted: <NiBell size="small" />,
+  firm: <NiBriefcase size="small" />,
+};
+
+/** A day as the steps say it, from a moment ("3 de nov.") or a local time of a ticket (`YYYY-MM-DDTHH:MM`). */
+const dayOf = (value: string, local = false) =>
+  new Intl.DateTimeFormat("pt-BR", {
+    day: "numeric",
+    month: "short",
+    timeZone: local ? "UTC" : "America/Sao_Paulo",
+  }).format(new Date(local ? `${value.slice(0, 16)}:00Z` : value));
+
 /** A trip whose flights ONE has not told anything of yet: the agency may still change it. */
 const changeable = (trip: PaxTrip) => trip.state === "waiting_consent" || trip.state === "watching";
 
 /**
- * The trips the passenger is on: each with what ONE does of it now, who travels, every leg, and the passenger's
- * ticket and boarding pass of it. An adult holds a trip (the alerts go to their WhatsApp); a child travels along
- * on the trip of the adult who holds it.
+ * The trips the passenger is on: each with where it stands along its way (the agreement, the flights ONE follows,
+ * a problem told, the passenger with the firm; the owner, 2026-11-03) and what happens now, who travels, every leg,
+ * and the passenger's ticket and boarding pass of it. An adult holds a trip (the alerts go to their WhatsApp); a
+ * child travels along on the trip of the adult who holds it.
  */
 export default function TripsCard({ detail, onChanged }: { detail: PaxDetail; onChanged: () => void }) {
   const t = useTranslations("product");
@@ -52,6 +79,17 @@ export default function TripsCard({ detail, onChanged }: { detail: PaxDetail; on
   };
 
   const holderOf = (trip: PaxTrip) => trip.travelers.find((person) => person.id === trip.holderId) ?? null;
+  // The passenger's latest "yes": when the way of their trips began.
+  const agreed = detail.consents.filter((consent) => consent.answer === "agreed").at(-1) ?? null;
+  const everAgreed = agreed !== null || detail.consent === "agreed";
+  const linkUntil =
+    detail.confirmLink?.open && detail.confirmLink.expiresAt
+      ? new Intl.DateTimeFormat("pt-BR", {
+          dateStyle: "short",
+          timeStyle: "short",
+          timeZone: "America/Sao_Paulo",
+        }).format(new Date(detail.confirmLink.expiresAt))
+      : null;
 
   return (
     <Card component="section" aria-labelledby="pax-trips-title">
@@ -114,6 +152,12 @@ export default function TripsCard({ detail, onChanged }: { detail: PaxDetail; on
                       .filter(Boolean)
                       .join(" · ")}
                   </Typography>
+                  <TripProgress
+                    trip={trip}
+                    everAgreed={everAgreed}
+                    agreedAt={agreed?.createdAt ?? null}
+                    linkUntil={linkUntil}
+                  />
                   <Box component="ol" className="m-0 flex list-none flex-col gap-1 p-0">
                     {trip.legs.map((leg) => (
                       <Typography component="li" variant="body2" key={leg.position}>
@@ -183,5 +227,66 @@ export default function TripsCard({ detail, onChanged }: { detail: PaxDetail; on
         />
       )}
     </Card>
+  );
+}
+
+/** Where one trip stands along its way, and in a sentence what happens now and who it is with. */
+function TripProgress({
+  trip,
+  everAgreed,
+  agreedAt,
+  linkUntil,
+}: {
+  trip: PaxTrip;
+  everAgreed: boolean;
+  agreedAt: string | null;
+  linkUntil: string | null;
+}) {
+  const t = useTranslations("product");
+  const journey = tripJourney({ state: trip.state, everAgreed });
+  const firstLeg = trip.legs[0] ?? null;
+  const steps = journey.steps.map(({ step, state }) => ({
+    key: step,
+    label: t(TRIP_STEP_KEY[step]),
+    state,
+    icon: STEP_ICON[step],
+    when:
+      step === "agreement" && state === "done" && agreedAt
+        ? dayOf(agreedAt)
+        : step === "watching" && firstLeg
+          ? t("pax-journey-flight-on", { day: dayOf(firstLeg.departure, true) })
+          : null,
+  }));
+  const extra =
+    trip.state === "waiting_consent"
+      ? linkUntil
+        ? t("pax-journey-link-until", { date: linkUntil })
+        : t("pax-journey-link-none")
+      : null;
+  return (
+    <Box className="flex flex-col gap-4 py-1">
+      <ProgressSteps
+        steps={steps}
+        label={t("pax-journey-title")}
+        stateWords={{
+          done: t("journey-state-done"),
+          current: t("journey-state-current"),
+          next: t("journey-state-next"),
+          stopped: t("pax-journey-state-stopped"),
+        }}
+      />
+      <ProgressNow
+        tone={journey.ended === "firm" ? "done" : journey.ended ? "stopped" : "progress"}
+        lead={t(TRIP_HOLDER_KEY[journey.holder])}
+        text={t(TRIP_NOW_KEY[trip.state])}
+        extra={
+          extra ? (
+            <Typography variant="body2" className="text-text-secondary">
+              {extra}
+            </Typography>
+          ) : undefined
+        }
+      />
+    </Box>
   );
 }

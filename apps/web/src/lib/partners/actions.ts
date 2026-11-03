@@ -27,6 +27,8 @@ export type PartnerInviteResult = PartnerActionResult<{
   /** Whether the e-mail left. When it did not, `link` is what the inviter sends by hand. */
   emailed: boolean;
   link: string | null;
+  /** The invitation's address, always: shown beside the e-mail's result, so the inviter may also send it by hand. */
+  url: string;
 }>;
 
 const KNOWN_CODES = [
@@ -113,7 +115,7 @@ export async function inviteAgency(input: {
   const link = memberUrl(`/parceria/${token}`);
   if (input.deliver === "link") {
     refresh();
-    return { ok: true, code: result.code, emailed: false, link };
+    return { ok: true, code: result.code, emailed: false, link, url: link };
   }
   const expiresAt = typeof result.data.expires_at === "string" ? result.data.expires_at : null;
   const sent = await sendPartnerInvitationEmail(
@@ -129,7 +131,7 @@ export async function inviteAgency(input: {
     context.email || null,
   );
   refresh();
-  return { ok: true, code: result.code, emailed: sent.sent, link: sent.sent ? null : link };
+  return { ok: true, code: result.code, emailed: sent.sent, link: sent.sent ? null : link, url: link };
 }
 
 /** Takes back an invitation the caller's firm, or the caller's partner, sent and nobody accepted. */
@@ -209,7 +211,7 @@ export async function invitePartnerColleague(input: {
   const link = memberUrl(`/parceria/${token}`);
   if (input.deliver === "link") {
     refresh();
-    return { ok: true, code: result.code, emailed: false, link };
+    return { ok: true, code: result.code, emailed: false, link, url: link };
   }
   const expiresAt = typeof result.data.expires_at === "string" ? result.data.expires_at : null;
   const sent = await sendPartnerInvitationEmail(
@@ -225,7 +227,7 @@ export async function invitePartnerColleague(input: {
     context.email || null,
   );
   refresh();
-  return { ok: true, code: result.code, emailed: sent.sent, link: sent.sent ? null : link };
+  return { ok: true, code: result.code, emailed: sent.sent, link: sent.sent ? null : link, url: link };
 }
 
 /** Takes a person out of the caller's partner, or the caller out of it (`leave`). */

@@ -22,6 +22,7 @@ import { readQuality } from "@/lib/cases/document-quality";
 import { loadCasePieces } from "@/lib/cases/draft-facts";
 import { loadCaseFilings } from "@/lib/cases/filing-facts";
 import { cpfLookup } from "@/lib/cases/identity";
+import { courtPublicationsOf, stageMomentsOf } from "@/lib/cases/journey";
 import { readFieldsOf } from "@/lib/cases/read-fields";
 import { loadCivilCourt, loadRuleFacts } from "@/lib/cases/rule-facts";
 import { assessWeather, caseDomicile, smallClaimsCeiling, tripPlaces } from "@/lib/cases/rules";
@@ -242,28 +243,60 @@ async function loadCase(id: string): Promise<CaseState> {
   const course = await loadCourseFacts(supabase, firm, id, context.profile.timezone).catch(() => undefined);
   if (!course) return { kind: "error" };
   // The case's deadlines, and the acts of the list for a new one. A read that failed is an error of the page too.
-  const [deadlines, acts, hearings, people, zones, notices, civilCourt, advanced, linksOwed] = await Promise.all([
-    caseDeadlines(supabase, firm, id, context.profile.timezone).catch(() => undefined),
-    deadlineActs(supabase).catch(() => undefined),
-    caseHearings(supabase, firm, id, context.profile.timezone).catch(() => undefined),
-    colleagues(supabase, firm).catch(() => undefined),
-    courtZones(supabase).catch(() => undefined),
-    caseNotices(supabase, id, context.profile.timezone).catch(() => undefined),
-    loadCivilCourt(supabase, id).catch(() => undefined),
-    // What ONE waits for to carry the case on (0039). A read that failed is an error of the page too.
-    supabase
-      .from("case_advances")
-      .select("waiting, checked_at")
-      .eq("case_id", id)
-      .eq("org_id", firm)
-      .maybeSingle()
-      .then(({ data, error }) => (error ? undefined : { advance: caseAdvanceOf(data) })),
-    // Who of the case is owed a link and why ONE has not sent it (0046). A read that failed is an error of the page.
-    supabase
-      .rpc("case_links_owed", { target_case: id })
-      .then(({ data, error }) => (error ? undefined : (linksOwedOf(data) ?? undefined))),
-  ]);
-  if (!deadlines || !acts || !hearings || !people || !zones || !notices || !civilCourt || !advanced || !linksOwed) {
+  const [deadlines, acts, hearings, people, zones, notices, civilCourt, advanced, linksOwed, stages, published] =
+    await Promise.all([
+      caseDeadlines(supabase, firm, id, context.profile.timezone).catch(() => undefined),
+      deadlineActs(supabase).catch(() => undefined),
+      caseHearings(supabase, firm, id, context.profile.timezone).catch(() => undefined),
+      colleagues(supabase, firm).catch(() => undefined),
+      courtZones(supabase).catch(() => undefined),
+      caseNotices(supabase, id, context.profile.timezone).catch(() => undefined),
+      loadCivilCourt(supabase, id).catch(() => undefined),
+      // What ONE waits for to carry the case on (0039). A read that failed is an error of the page too.
+      supabase
+        .from("case_advances")
+        .select("waiting, checked_at")
+        .eq("case_id", id)
+        .eq("org_id", firm)
+        .maybeSingle()
+        .then(({ data, error }) => (error ? undefined : { advance: caseAdvanceOf(data) })),
+      // Who of the case is owed a link and why ONE has not sent it (0046). A read that failed is an error of the page.
+      supabase
+        .rpc("case_links_owed", { target_case: id })
+        .then(({ data, error }) => (error ? undefined : (linksOwedOf(data) ?? undefined))),
+      // When the case entered each stage, for its progress: every change, however old (the timeline reads the latest
+      // events only). A read that failed is an error of the page too.
+      supabase
+        .from("case_events")
+        .select("at, data")
+        .eq("case_id", id)
+        .eq("org_id", firm)
+        .eq("kind", "status_changed")
+        .order("at")
+        .then(({ data, error }) => (error ? undefined : stageMomentsOf(data ?? []))),
+      // The decisions and payments published in the case's lawsuits, for its steps in court. One that could not be
+      // read leaves those steps unknown (the hearings still say theirs), never the page.
+      supabase
+        .from("publications")
+        .select("category, available_on")
+        .eq("case_id", id)
+        .eq("org_id", firm)
+        .eq("active", true)
+        .in("category", ["decisao", "pagamento"])
+        .then(({ data, error }) => courtPublicationsOf(error ? [] : (data ?? []))),
+    ]);
+  if (
+    !deadlines ||
+    !acts ||
+    !hearings ||
+    !people ||
+    !zones ||
+    !notices ||
+    !civilCourt ||
+    !advanced ||
+    !linksOwed ||
+    !stages
+  ) {
     return { kind: "error" };
   }
 
@@ -446,6 +479,8 @@ async function loadCase(id: string): Promise<CaseState> {
       finishedAt: link.finished_at,
     })),
     linksOwed,
+    stageMoments: stages,
+    courtPublications: published,
     events: (
       (events.data ?? []) as {
         id: string;

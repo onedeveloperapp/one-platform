@@ -22,5 +22,43 @@ export async function readCaseList(
     target_offset: query.page * query.pageSize,
     target_module: query.module,
   });
-  return error ? null : caseListOf(data);
+  if (error) return null;
+  const page = caseListOf(data);
+  return page ? withCourtMarks(supabase, orgId, page) : null;
+}
+
+/**
+ * What the lawsuits of the page's cases in court show (a hearing held, a decision and a payment published), for
+ * the step of their way the list shows: two reads for the whole page, never one per case. A read that failed
+ * leaves the rows as they came, the list showing them at the court's first step.
+ */
+async function withCourtMarks(supabase: SupabaseClient, orgId: string, page: CaseListPage): Promise<CaseListPage> {
+  const filed = page.rows.filter((row) => row.status === "filed").map((row) => row.id);
+  if (filed.length === 0) return page;
+  const [held, published] = await Promise.all([
+    supabase.from("hearings").select("case_id").eq("org_id", orgId).eq("status", "held").in("case_id", filed),
+    supabase
+      .from("publications")
+      .select("case_id, category")
+      .eq("org_id", orgId)
+      .eq("active", true)
+      .in("category", ["decisao", "pagamento"])
+      .in("case_id", filed),
+  ]);
+  if (held.error || published.error) return page;
+  const heldCases = new Set((held.data ?? []).map((row) => row.case_id as string));
+  const decided = new Set(
+    (published.data ?? []).filter((row) => row.category === "decisao").map((row) => row.case_id as string),
+  );
+  const paid = new Set(
+    (published.data ?? []).filter((row) => row.category === "pagamento").map((row) => row.case_id as string),
+  );
+  return {
+    ...page,
+    rows: page.rows.map((row) =>
+      row.status === "filed"
+        ? { ...row, court: { held: heldCases.has(row.id), decided: decided.has(row.id), paid: paid.has(row.id) } }
+        : row,
+    ),
+  };
 }

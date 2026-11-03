@@ -6,6 +6,7 @@ import type { DocumentQuality } from "@/lib/cases/document-quality";
 import type { CaseDossier, CaseDraft, CasePieces } from "@/lib/cases/draft-facts";
 import type { CivilCourtNeed, CourtNote, FamilyState } from "@/lib/cases/family";
 import type { CaseFiling } from "@/lib/cases/filing-facts";
+import type { StageMoment } from "@/lib/cases/journey";
 import type { ReadFields } from "@/lib/cases/read-fields";
 import type { Ceiling, LawyerCauses, WeatherAssessment } from "@/lib/cases/rules";
 import type { CaseAudio, CaseComplaint, CaseStatement } from "@/lib/cases/statement-facts";
@@ -236,6 +237,10 @@ export type CaseState =
       consents: CaseConsent[];
       /** The firm has its ZapSign account connected. */
       zapsign: boolean;
+      /** Every time the case entered a stage, the oldest first: the dates of its progress. */
+      stageMoments: StageMoment[];
+      /** The day the case's first decision and first payment were published (its steps in court besides the hearings). */
+      courtPublications: { decidedAt: string | null; paidAt: string | null };
       events: CaseEvent[];
       team: TeamMember[];
       airlines: AirlineOption[];

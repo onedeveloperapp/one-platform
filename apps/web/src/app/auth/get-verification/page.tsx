@@ -11,6 +11,7 @@ import {
   Button,
   Divider,
   FormControl,
+  FormHelperText,
   FormLabel,
   Input,
   Paper,
@@ -20,6 +21,8 @@ import {
 import Logo from "@/components/logo/logo";
 import { SESSION_STORAGE_KEYS } from "@/constants";
 import NiEmailOpen from "@/icons/nexture/ni-email-open";
+import { invitationSignUpHint, resendInvitationConfirmation } from "@/lib/auth/invitation-sign-up";
+import { invitationOfNext } from "@/lib/auth/sign-up-rules";
 import { sanitizeInternalNext } from "@/lib/safe-next";
 import { isSupabaseConfigured } from "@flyee/auth";
 import { createClient } from "@flyee/auth/client";
@@ -54,6 +57,22 @@ export default function Page() {
   const [email, setEmail] = useState("");
   const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
   const [cooldown, setCooldown] = useState(0);
+  // An account made from an invitation was made with its address, which the browser never had: the field shows it
+  // masked, as the sign-up did, and the link is sent again from the invitation, on the server.
+  const invitation = invitationOfNext(next);
+  const [invitedHint, setInvitedHint] = useState<string | null | undefined>(invitation ? undefined : null);
+  const byInvitation = typeof invitedHint === "string";
+  useEffect(() => {
+    if (!next || !invitationOfNext(next)) return;
+    let live = true;
+    invitationSignUpHint(next).then(
+      (answer) => live && setInvitedHint(answer.ok ? answer.hint : null),
+      () => live && setInvitedHint(null),
+    );
+    return () => {
+      live = false;
+    };
+  }, [next]);
 
   // Handed over by the sign-up screen so she does not retype what she just
   // typed; still editable, because a typo in the address is exactly the case
@@ -74,6 +93,14 @@ export default function Page() {
   }, [cooldown]);
 
   const resend = async () => {
+    if (byInvitation && next) {
+      if (cooldown > 0) return;
+      setStatus("sending");
+      const sent = await resendInvitationConfirmation(next).catch(() => ({ ok: false }));
+      setStatus(sent.ok ? "sent" : "error");
+      setCooldown(RESEND_COOLDOWN_SECONDS);
+      return;
+    }
     if (!email.trim() || cooldown > 0 || !isSupabaseConfigured) return;
     setStatus("sending");
     try {
@@ -123,21 +150,37 @@ export default function Page() {
             <Box className="flex flex-col gap-3">
               <FormControl>
                 <FormLabel htmlFor="resend-email">{t("get-verification-email-label")}</FormLabel>
-                <Input
-                  id="resend-email"
-                  type="email"
-                  autoComplete="email"
-                  value={email}
-                  onChange={(event) => {
-                    setEmail(event.target.value);
-                    if (status !== "idle") setStatus("idle");
-                  }}
-                />
+                {invitation && invitedHint !== null ? (
+                  <>
+                    <Input
+                      id="resend-email"
+                      type="text"
+                      autoComplete="off"
+                      readOnly
+                      value={invitedHint ?? ""}
+                      aria-describedby="resend-email-invited-help"
+                    />
+                    <FormHelperText id="resend-email-invited-help">{t("get-verification-invite-help")}</FormHelperText>
+                  </>
+                ) : (
+                  <Input
+                    id="resend-email"
+                    type="email"
+                    autoComplete="email"
+                    value={email}
+                    onChange={(event) => {
+                      setEmail(event.target.value);
+                      if (status !== "idle") setStatus("idle");
+                    }}
+                  />
+                )}
               </FormControl>
               <Button
                 variant="outlined"
                 onClick={() => void resend()}
-                disabled={!email.trim() || cooldown > 0 || status === "sending"}
+                disabled={
+                  (!byInvitation && !email.trim()) || cooldown > 0 || status === "sending" || invitedHint === undefined
+                }
               >
                 {cooldown > 0 ? t("get-verification-resend-wait", { seconds: cooldown }) : t("get-verification-resend")}
               </Button>

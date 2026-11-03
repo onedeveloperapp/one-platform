@@ -6,6 +6,7 @@ import HomeView, { type HomeState } from "./home-view";
 import { cookies } from "next/headers";
 import { getTranslations } from "next-intl/server";
 
+import { readCaseJourney } from "@/lib/cases/journey-read";
 import { attentionGroups, pendingGroups, readFirmPending } from "@/lib/firm/pending";
 import { personFlowKey, personSetupOwed, signsAtTheBar } from "@/lib/firm/person-setup";
 import { isManager } from "@/lib/firm/roles";
@@ -47,6 +48,10 @@ import { getOnboardingState } from "@flyee/onboarding";
  * first one, which a module brings and ONE opens: never a step of the
  * firm's list, which would say the work is manual (the owner, 2026-11-03).
  *
+ * After what needs somebody today, where the firm's cases are along their
+ * way (`firm_case_journey`, 0082): how many at each step, from the first
+ * conversation to the payment, each a way to its list.
+ *
  * Under the title, the quick access to ONE's modules (`product_modules`,
  * migrations 0075 and 0078): each module the firm contracted opens its own
  * area, where everything only that module has lives (its partner agencies,
@@ -65,24 +70,37 @@ async function loadHome(): Promise<
   const viewer = todayViewerOf(firm);
   const flowKey = onboardingFlowKey(context.userId, firm.id);
 
-  const [today, pending, facts, checklist, modules, personFlow, ownRegistration, assurance, cookieStore, moduleSetups] =
-    await Promise.all([
-      context.supabase.rpc("firm_today", { target_org: firm.id }),
-      context.supabase.rpc("firm_pending", { target_org: firm.id }),
-      // The firm's facts: its setup, for who can do something about it (who manages the firm), and, for everybody,
-      // whether a case ever reached it.
-      getActivationFacts(context.supabase, firm.id),
-      manager ? getOnboardingState(context.supabase, flowKey) : Promise.resolve(null),
-      // What the firm contracted: a read that fails hides the quick access, and the home stands.
-      readModuleOffer(context).catch(() => null),
-      // The person's own setup: whether they answered it, their registration at the bar and their factor.
-      getOnboardingState(context.supabase, personFlowKey(context.userId, firm.id)),
-      context.supabase.from("oab_registrations").select("id").eq("user_id", context.userId).limit(1),
-      context.supabase.auth.mfa.getAuthenticatorAssuranceLevel(),
-      cookies(),
-      // Each module the firm contracted that has a setup of its own (0081), for who manages the firm's list.
-      manager ? readModuleSetups(context).catch(() => null) : Promise.resolve(null),
-    ]);
+  const [
+    today,
+    pending,
+    facts,
+    checklist,
+    modules,
+    personFlow,
+    ownRegistration,
+    assurance,
+    cookieStore,
+    moduleSetups,
+    journey,
+  ] = await Promise.all([
+    context.supabase.rpc("firm_today", { target_org: firm.id }),
+    context.supabase.rpc("firm_pending", { target_org: firm.id }),
+    // The firm's facts: its setup, for who can do something about it (who manages the firm), and, for everybody,
+    // whether a case ever reached it.
+    getActivationFacts(context.supabase, firm.id),
+    manager ? getOnboardingState(context.supabase, flowKey) : Promise.resolve(null),
+    // What the firm contracted: a read that fails hides the quick access, and the home stands.
+    readModuleOffer(context).catch(() => null),
+    // The person's own setup: whether they answered it, their registration at the bar and their factor.
+    getOnboardingState(context.supabase, personFlowKey(context.userId, firm.id)),
+    context.supabase.from("oab_registrations").select("id").eq("user_id", context.userId).limit(1),
+    context.supabase.auth.mfa.getAuthenticatorAssuranceLevel(),
+    cookies(),
+    // Each module the firm contracted that has a setup of its own (0081), for who manages the firm's list.
+    manager ? readModuleSetups(context).catch(() => null) : Promise.resolve(null),
+    // Where the firm's cases are along their way (0082): a read that fails hides the card, and the home stands.
+    readCaseJourney(context.supabase, firm.id).catch(() => null),
+  ]);
   if (manager && facts && !isSetupAnswered(facts)) return { kind: "setup", setup: await loadSetupState(context) };
   // Read failures owe nothing: a registration that could not be read is never said to be missing.
   const registered = ownRegistration.error ? true : (ownRegistration.data ?? []).length > 0;
@@ -128,6 +146,7 @@ async function loadHome(): Promise<
     waitsFirstCase: waitsFirstCase(facts),
     ownRegistrationMissing: signsAtTheBar(firm.firmFunction) && !registered,
     modules,
+    journey,
   };
 }
 

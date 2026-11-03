@@ -19,7 +19,7 @@ import SubscriptionCanceledEmail, {
 import TermEndingEmail, { type TermEndingEmailProps } from "./templates/term-ending";
 
 export { toEmailLocale, type EmailLocale } from "./locale";
-export { BATCH_LIMIT, isEmailConfigured, type SendResult } from "./send";
+export { BATCH_LIMIT, emailEnv, isEmailConfigured, type SendResult } from "./send";
 export type {
   AccessEndedEmailProps,
   CancelCause,

@@ -3,7 +3,7 @@ import { useFormik } from "formik";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import * as yup from "yup";
 
 import {
@@ -13,6 +13,7 @@ import {
   Button,
   Divider,
   FormControl,
+  FormHelperText,
   FormLabel,
   Input,
   Paper,
@@ -28,6 +29,8 @@ import { useHydrated } from "@/hooks/use-hydrated";
 import NiCheck from "@/icons/nexture/ni-check";
 import NiCross from "@/icons/nexture/ni-cross";
 import NiCrossSquare from "@/icons/nexture/ni-cross-square";
+import { invitationSignUpHint, signUpByInvitation } from "@/lib/auth/invitation-sign-up";
+import { invitationOfNext } from "@/lib/auth/sign-up-rules";
 import { resolvePostAuthDestination } from "@/lib/onboarding";
 import { enterAfterSessionChange, sanitizeInternalNext } from "@/lib/safe-next";
 import { cn } from "@/lib/utils";
@@ -55,6 +58,11 @@ const InputErrorTooltip = ({ title }: { title: string }) => (
  * the display name — nothing here asks for an organization. The language the
  * visitor signed up in travels as metadata and becomes the profile locale,
  * which the transactional e-mails follow.
+ *
+ * Arriving from an invitation's page (`?next=/convite/<token>` or
+ * `/parceria/<token>`), the address is the invitation's: shown masked, as the
+ * invitation's page shows it, never typed, and read on the server when the
+ * account is made (`lib/auth/invitation-sign-up.ts`; the owner, 2026-11-03).
  */
 export default function Page() {
   const router = useRouter();
@@ -74,13 +82,29 @@ export default function Page() {
    */
   const buyingPlan = Boolean(next?.startsWith("/assinatura") || next?.startsWith("/settings/billing"));
   const [serverError, setServerError] = useState<string | null>(null);
+  // The invitation this sign-up began at: its address, masked, while it is asked (undefined) and once known (a
+  // string); null when there is none or it is no longer open, and the address is typed as on any sign-up.
+  const invitation = invitationOfNext(next);
+  const [invitedHint, setInvitedHint] = useState<string | null | undefined>(invitation ? undefined : null);
+  const byInvitation = typeof invitedHint === "string";
+  useEffect(() => {
+    if (!next || !invitationOfNext(next)) return;
+    let live = true;
+    invitationSignUpHint(next).then(
+      (answer) => live && setInvitedHint(answer.ok ? answer.hint : null),
+      () => live && setInvitedHint(null),
+    );
+    return () => {
+      live = false;
+    };
+  }, [next]);
 
   const validationSchema = yup.object({
     name: yup
       .string()
       .required(t("field-required"))
       .min(3, t("field-min", { count: 3 })),
-    email: yup.string().required(t("field-required")).email(t("field-email")),
+    email: byInvitation ? yup.string() : yup.string().required(t("field-required")).email(t("field-email")),
     password: yup
       .string()
       .required(t("field-required"))
@@ -96,6 +120,27 @@ export default function Page() {
       setServerError(null);
       if (!isSupabaseConfigured) {
         setServerError(t("not-configured"));
+        return;
+      }
+      if (byInvitation && next) {
+        const made = await signUpByInvitation({ next, name: values.name, password: values.password, locale }).catch(
+          () => ({ ok: false as const, code: "failed" as const }),
+        );
+        if (!made.ok) {
+          const refused: Record<string, string> = {
+            registered: "signup-invite-registered",
+            closed: "signup-invite-closed",
+          };
+          setServerError(t(refused[made.code] ?? "request-failed"));
+          return;
+        }
+        if (made.session) {
+          await welcomeNewMember();
+          await enterAfterSessionChange(next);
+        } else {
+          // The link to confirm went to the invited address; the next screen sends it again from the invitation.
+          router.push(`/auth/get-verification?next=${encodeURIComponent(next)}`);
+        }
         return;
       }
       const supabase = createClient();
@@ -216,7 +261,7 @@ export default function Page() {
                 {t(buyingPlan ? "signup-offer-title" : "signup-title")}
               </Typography>
               <Typography variant="body1" className="text-text-primary">
-                {t(buyingPlan ? "signup-offer-subtitle" : "signup-subtitle")}
+                {t(buyingPlan ? "signup-offer-subtitle" : invitation ? "signup-invite-subtitle" : "signup-subtitle")}
               </Typography>
             </Box>
 
@@ -273,15 +318,32 @@ export default function Page() {
                     {t("email")}
                     {formik.touched.email && formik.errors.email && <InputErrorTooltip title={formik.errors.email} />}
                   </FormLabel>
-                  <Input
-                    id="email"
-                    name="email"
-                    type="email"
-                    autoComplete="email"
-                    value={formik.values.email}
-                    onChange={formik.handleChange}
-                    onBlur={formik.handleBlur}
-                  />
+                  {invitation && invitedHint !== null ? (
+                    // The invitation's address, masked as its page shows it: the account is made with it, on the
+                    // server, and nothing here is typed.
+                    <>
+                      <Input
+                        id="email"
+                        name="email"
+                        type="text"
+                        autoComplete="off"
+                        readOnly
+                        value={invitedHint ?? ""}
+                        aria-describedby="email-invited-help"
+                      />
+                      <FormHelperText id="email-invited-help">{t("signup-invite-email-help")}</FormHelperText>
+                    </>
+                  ) : (
+                    <Input
+                      id="email"
+                      name="email"
+                      type="email"
+                      autoComplete="email"
+                      value={formik.values.email}
+                      onChange={formik.handleChange}
+                      onBlur={formik.handleBlur}
+                    />
+                  )}
                 </FormControl>
 
                 <FormControl className="outlined" variant="standard" size="small">
@@ -335,7 +397,7 @@ export default function Page() {
                   type="submit"
                   variant="contained"
                   className="mt-2 mb-4"
-                  disabled={formik.isSubmitting || !hydrated}
+                  disabled={formik.isSubmitting || !hydrated || (Boolean(invitation) && invitedHint === undefined)}
                 >
                   {t(buyingPlan ? "signup-offer-continue" : "continue")}
                 </Button>

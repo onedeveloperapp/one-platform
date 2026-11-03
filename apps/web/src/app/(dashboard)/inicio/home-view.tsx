@@ -1,5 +1,6 @@
 "use client";
 
+import CasesJourneyCard from "./cases-journey-card";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -33,6 +34,7 @@ import NiScale from "@/icons/nexture/ni-scale";
 import NiShieldCheck from "@/icons/nexture/ni-shield-check";
 import NiTimeline from "@/icons/nexture/ni-timeline";
 import NiUsers from "@/icons/nexture/ni-users";
+import type { JourneyOverview } from "@/lib/cases/journey-read";
 import { type PendingGroup, sayPending } from "@/lib/firm/pending";
 import { type FirmToday, somethingForMe, type TodayNeed, todayNeeds } from "@/lib/firm/today";
 import type { ModuleOffer } from "@/lib/modules/offer";
@@ -77,6 +79,8 @@ export type HomeState =
       ownRegistrationMissing: boolean;
       /** ONE's modules for the firm (0075, 0078); null when they could not be read. */
       modules: ModuleOffer | null;
+      /** How many of the firm's cases are at each step of their way (0082); null when it could not be read. */
+      journey: JourneyOverview | null;
     }
   | { kind: "no-firm" }
   | { kind: "unavailable" }
@@ -444,6 +448,15 @@ export default function HomeView({ state }: { state: HomeState }) {
               )
             ) : null}
           </Box>
+
+          {/* The whole portfolio after the day's work: shown once the firm has a case, of any stage. */}
+          {ready.journey &&
+          ready.journey.closed +
+            ready.journey.declined +
+            Object.values(ready.journey.steps).reduce((a, b) => a + b, 0) >
+            0 ? (
+            <CasesJourneyCard overview={ready.journey} />
+          ) : null}
         </>
       ) : null}
     </Box>

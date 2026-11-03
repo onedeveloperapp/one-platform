@@ -16,6 +16,7 @@ import { StatTile } from "@/components/product/home-tiles";
 import ModuleIcon from "@/components/product/module-icon";
 import ModuleScope from "@/components/product/module-scope";
 import PageHeader from "@/components/product/page-header";
+import { ProgressBar } from "@/components/product/progress-steps";
 import StatusChip from "@/components/product/status-chip";
 import type { TileTone } from "@/components/product/tile-tone";
 import NiArchive from "@/icons/nexture/ni-archive";
@@ -31,6 +32,7 @@ import NiScale from "@/icons/nexture/ni-scale";
 import NiTimeline from "@/icons/nexture/ni-timeline";
 import NiUsers from "@/icons/nexture/ni-users";
 import { caseLabel, groupOf, STATUS_KEY } from "@/lib/cases/cases";
+import { JOURNEY_STEP_KEY, JOURNEY_STEPS, stepOf } from "@/lib/cases/journey";
 import {
   type CaseFilter,
   type CaseListPage,
@@ -347,11 +349,30 @@ function CasesList({ ready, embedded }: { ready: Ready; embedded: boolean }) {
         headerName: t("cases-column-status"),
         minWidth: 170,
         flex: 0.9,
-        renderCell: (params: GridRenderCellParams<CaseListRow, CaseListRow["status"]>) => (
-          <Box className="flex h-full items-center">
-            <StatusChip tone={GROUP_TONE[groupOf(params.row.status)]} label={t(STATUS_KEY[params.row.status])} />
-          </Box>
-        ),
+        renderCell: (params: GridRenderCellParams<CaseListRow, CaseListRow["status"]>) => {
+          // Where the case is along its way, in small under its stage (the case's own screen shows it whole): in
+          // court, the step its lawsuits show.
+          const status = params.row.status;
+          const step = stepOf(status, params.row.court ?? { held: false, decided: false, paid: false });
+          const at = step ? JOURNEY_STEPS.indexOf(step) : -1;
+          return (
+            <Box className="flex h-full flex-col items-start justify-center gap-1.5">
+              <StatusChip tone={GROUP_TONE[groupOf(status)]} label={t(STATUS_KEY[status])} />
+              {step && at >= 0 ? (
+                <ProgressBar
+                  steps={JOURNEY_STEPS.length}
+                  reached={at}
+                  state={status === "closed" ? "done" : "progress"}
+                  label={t("journey-bar-label", {
+                    label: t(JOURNEY_STEP_KEY[step]),
+                    position: at + 1,
+                    total: JOURNEY_STEPS.length,
+                  })}
+                />
+              ) : null}
+            </Box>
+          );
+        },
       },
       {
         field: "toReview",
