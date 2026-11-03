@@ -474,21 +474,20 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
   const steps: WizardStep[] = [
     {
       title: t("setup-factor-title"),
-      hint: t("setup-factor-hint"),
+      // An account with a factor only confirms it in this session; one with none sets it up, and is told why.
+      hint: factor === "challenge" ? t("setup-factor-challenge") : t("setup-factor-hint"),
       // The steps after it write what the database asks the factor for: the flow does not go past it without one.
       canAdvance: factor === "ok" && !blocked,
+      // Until it is confirmed the step's action is the prompt's own (start, confirm), and confirming goes on by
+      // itself: a "Continuar" beside it would be a second button for the same decision, pressed to no effect.
+      hidePrimary: factor !== "ok" && !blocked,
       content:
         factor === "ok" ? (
           <Alert severity="success" className="neutral bg-background-paper/60!">
             {t("setup-factor-done")}
           </Alert>
         ) : blocked ? null : (
-          <SecondFactorPrompt
-            id="setup-factor"
-            state={factor}
-            reason={factor === "challenge" ? t("setup-factor-challenge") : t("setup-factor-missing")}
-            onConfirmed={onFactor}
-          />
+          <SecondFactorPrompt state={factor} onConfirmed={onFactor} />
         ),
     },
     {

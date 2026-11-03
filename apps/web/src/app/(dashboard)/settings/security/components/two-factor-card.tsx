@@ -4,33 +4,28 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useState } from "react";
 
-import {
-  Alert,
-  Box,
-  Button,
-  Card,
-  CardContent,
-  Chip,
-  FormControl,
-  FormLabel,
-  Grid,
-  Input,
-  Typography,
-} from "@mui/material";
+import { Box, Button, Card, CardContent, Grid, Typography } from "@mui/material";
 
-import { confirmTotp, qrSrc, startTotpEnrollment, type TotpEnrollment } from "@/lib/security/second-factor";
+import ConfirmActionDialog from "@/components/product/confirm-action-dialog";
+import SecondFactorPrompt from "@/components/product/second-factor-prompt";
+import StatusChip from "@/components/product/status-chip";
+import { TILE_TONE } from "@/components/product/tile-tone";
+import NiShieldCheck from "@/icons/nexture/ni-shield-check";
+import { cn } from "@/lib/utils";
 import { createClient } from "@flyee/auth/client";
 
 type Factor = { id: string; friendly_name?: string | null; status: string };
 
+/**
+ * Where the account's second factor is kept: the factor in use, with the way to take it off, or its setup. The
+ * setup is the firm's setup's own (`SecondFactorPrompt`: the QR with its key, the code in six boxes), so the two
+ * places a person sets a factor up never differ; the factor in use sits in the same bordered panel, and is taken
+ * off only after a confirmation that says what changes (`ConfirmActionDialog`, red: it takes protection away).
+ */
 export default function TwoFactorCard({ onVerified }: { onVerified?: () => void } = {}) {
   const t = useTranslations("product");
   const router = useRouter();
-  const [factors, setFactors] = useState<Factor[]>([]);
-  const [enrollment, setEnrollment] = useState<TotpEnrollment | null>(null);
-  const [code, setCode] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [factors, setFactors] = useState<Factor[] | null>(null);
 
   const refresh = useCallback(async () => {
     const supabase = createClient();
@@ -42,54 +37,23 @@ export default function TwoFactorCard({ onVerified }: { onVerified?: () => void 
     refresh();
   }, [refresh]);
 
-  const startEnrollment = async () => {
-    setError(null);
-    const started = await startTotpEnrollment(t("security-authenticator"));
-    if (!started) {
-      setError(t("security-action-error"));
-      return;
-    }
-    setEnrollment(started);
-    setCode("");
-  };
+  // Taking the factor off is asked first: it leaves the account on its password alone. The answer is the
+  // dialog's, so a failure keeps it open with what went wrong.
+  const [removing, setRemoving] = useState<Factor | null>(null);
 
-  const confirmEnrollment = async () => {
-    if (!enrollment || code.trim().length < 6 || busy) return;
-    setError(null);
-    setBusy(true);
-    try {
-      const confirmed = await confirmTotp(enrollment.factorId, code);
-      if (confirmed !== "ok") {
-        const refused = confirmed === "code" ? "security-code-error" : "security-action-error";
-        setError(t(refused));
-        return;
-      }
-      setEnrollment(null);
-      setCode("");
-      refresh();
-      // The session changed: the layout reads again whether the person still owes a factor.
-      router.refresh();
-      onVerified?.();
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const removeFactor = async (factorId: string) => {
-    setError(null);
+  const removeFactor = async (factorId: string): Promise<string | null> => {
     const supabase = createClient();
     const { error: unenrollError } = await supabase.auth.mfa.unenroll({ factorId });
-    if (unenrollError) setError(t("security-action-error"));
-    refresh();
-    if (!unenrollError) {
-      // The session's token still says a factor was verified until it is refreshed, and the layout reads the
-      // token: refreshed first, the layout sees the factor gone.
-      await supabase.auth.refreshSession();
-      router.refresh();
-    }
+    void refresh();
+    if (unenrollError) return t("security-action-error");
+    // The session's token still says a factor was verified until it is refreshed, and the layout reads the
+    // token: refreshed first, the layout sees the factor gone.
+    await supabase.auth.refreshSession();
+    router.refresh();
+    return null;
   };
 
-  const verifiedFactors = factors.filter((factor) => factor.status === "verified");
+  const verifiedFactors = (factors ?? []).filter((factor) => factor.status === "verified");
 
   return (
     <Grid size={12}>
@@ -103,69 +67,61 @@ export default function TwoFactorCard({ onVerified }: { onVerified?: () => void 
           </Typography>
 
           {verifiedFactors.map((factor) => (
-            <Box key={factor.id} className="flex flex-row items-center gap-2">
-              <Chip label={t("security-active")} size="small" color="success" variant="outlined" />
-              <Typography variant="body1" className="flex-1">
-                {factor.friendly_name ?? t("security-authenticator")}
-              </Typography>
-              <Button size="small" color="error" variant="text" onClick={() => removeFactor(factor.id)}>
+            <Box
+              key={factor.id}
+              className="border-grey-200 flex flex-row flex-wrap items-center gap-4 rounded-2xl border p-5"
+            >
+              <span
+                className={cn(
+                  "flex h-12 w-12 flex-none items-center justify-center rounded-2xl",
+                  TILE_TONE.primary.bg,
+                  TILE_TONE.primary.text,
+                )}
+              >
+                <NiShieldCheck size="medium" />
+              </span>
+              <Box className="flex min-w-0 flex-1 flex-row flex-wrap items-center gap-2">
+                <Typography variant="body1">{factor.friendly_name ?? t("security-authenticator")}</Typography>
+                <StatusChip label={t("security-active")} tone="positive" />
+              </Box>
+              <Button size="small" color="error" variant="text" onClick={() => setRemoving(factor)}>
                 {t("security-remove")}
               </Button>
             </Box>
           ))}
 
-          {!enrollment && verifiedFactors.length === 0 && (
-            <Box>
-              <Button variant="outlined" color="grey" onClick={startEnrollment}>
-                {t("security-enable")}
-              </Button>
-            </Box>
-          )}
-
-          {enrollment && (
-            <Box className="flex flex-col gap-3">
-              <Typography variant="body1">{t("security-scan")}</Typography>
-              <img src={qrSrc(enrollment.qrCode)} alt={t("security-qr-alt")} className="h-44 w-44 self-start" />
-              <Typography variant="body2" className="text-text-secondary break-all">
-                {t("security-secret")}: {enrollment.secret}
-              </Typography>
-              <Box className="flex flex-row items-end gap-2">
-                <FormControl className="outlined mb-0" variant="standard" size="small">
-                  <FormLabel component="label" htmlFor="two-factor-enroll-code">
-                    {t("security-code")}
-                  </FormLabel>
-                  <Input
-                    id="two-factor-enroll-code"
-                    value={code}
-                    autoComplete="one-time-code"
-                    inputProps={{ inputMode: "numeric", maxLength: 6 }}
-                    onChange={(event) => setCode(event.target.value.replace(/\D/g, ""))}
-                  />
-                </FormControl>
-                <Button variant="contained" onClick={confirmEnrollment} disabled={code.length < 6 || busy}>
-                  {busy ? t("security-verifying") : t("security-confirm")}
-                </Button>
-                <Button
-                  color="grey"
-                  variant="text"
-                  onClick={() => {
-                    removeFactor(enrollment.factorId);
-                    setEnrollment(null);
-                  }}
-                >
-                  {t("cancel")}
-                </Button>
-              </Box>
-            </Box>
-          )}
-
-          {error && (
-            <Alert severity="error" className="neutral bg-background-paper/60!">
-              {error}
-            </Alert>
-          )}
+          {/* Read before the setup is offered: an account whose factor is on never sees it for a moment. */}
+          {factors !== null && verifiedFactors.length === 0 ? (
+            <SecondFactorPrompt
+              state="missing"
+              onConfirmed={() => {
+                void refresh();
+                onVerified?.();
+              }}
+            />
+          ) : null}
         </CardContent>
       </Card>
+      {removing ? (
+        <ConfirmActionDialog
+          title={t("security-remove-title")}
+          intro={t("security-remove-intro")}
+          consequences={[
+            t("security-remove-consequence-1"),
+            t("security-remove-consequence-2"),
+            t("security-remove-consequence-3"),
+          ]}
+          staysTitle={t("security-remove-stays-title")}
+          stays={[t("security-remove-stays-1"), t("security-remove-stays-2")]}
+          requireReason={false}
+          confirmLabel={t("security-remove-confirm")}
+          cancelLabel={t("cancel")}
+          busyLabel={t("security-remove-busy")}
+          tone="danger"
+          onConfirm={() => removeFactor(removing.id)}
+          onClose={() => setRemoving(null)}
+        />
+      ) : null}
     </Grid>
   );
 }

@@ -153,8 +153,8 @@
     {
       "name": "SecondFactorPrompt",
       "from": "@/components/product/second-factor-prompt",
-      "props": "id, state: missing | challenge, reason, onConfirmed",
-      "use": "The second factor where an action asks for it, on the same screen: what the action needs it for, then the setup of an authenticator (its QR on white, its key, a code back) for an account with none, or the code alone for a session that has not confirmed it; once confirmed the screen goes on at the second level. Never a link to the security page from a flow the person would not come back from (the firm's setup first). A neutral warning Alert with its actions under the words, so a phone never squeezes them."
+      "props": "state: missing | challenge, reason?, onConfirmed",
+      "use": "The one setup of a second factor in the app, on the screen that asks for it (the first step of the firm's setup, and the security card of /settings/security): for an account with none, one button to start, then two numbered steps, the QR on white with its key in groups of four and a copy button, and the code in the six boxes of the sign-in (VerificationCodeInput, confirmed by itself at the sixth digit, a paste taken); for a session that has not confirmed it, the code alone; once confirmed the screen goes on at the second level. A bordered neutral panel, as the Pix code at checkout, never a warning: setting it up is the step's work. In a SetupWizard the step hides its own primary until the factor is confirmed (hidePrimary), so no disabled 'Continuar' sits beside 'Confirmar'. Never a link to the security page from a flow the person would not come back from."
     }
   ],
   "template": [
