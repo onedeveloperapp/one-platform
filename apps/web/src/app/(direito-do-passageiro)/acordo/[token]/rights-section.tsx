@@ -15,6 +15,11 @@ import {
   Typography,
 } from "@mui/material";
 
+import CardTitle from "@/components/product/card-title";
+import NiBinEmpty from "@/icons/nexture/ni-bin-empty";
+import NiCheck from "@/icons/nexture/ni-check";
+import NiDownloadCloud from "@/icons/nexture/ni-download-cloud";
+import NiLock from "@/icons/nexture/ni-lock";
 import { downloadJson } from "@/modules/direito-do-passageiro/agency/download-json";
 import { exportAgreement, forgetAgreement } from "@/modules/direito-do-passageiro/agency/link-actions";
 import { paxErrorKey } from "@/modules/direito-do-passageiro/agency/passengers";
@@ -23,7 +28,8 @@ import { paxErrorKey } from "@/modules/direito-do-passageiro/agency/passengers";
  * The passenger's rights over what the agency keeps of them (migrations 0072 and 0074): a file with all of it, or
  * its deletion, theirs and the children's they answer for. On the open link, after their data went to the firm
  * (the agency's copy, kept a few days) and after the partnership ended, while the agency still keeps them. The
- * deletion names what it ends before it runs, and once it ran the page shows nothing of the passenger again.
+ * deletion names what it ends before it runs, and once it ran the page shows nothing of the passenger again. The
+ * card leads with its lock; the download is the quiet way, the deletion the one in red, since it cannot be undone.
  */
 export default function RightsSection({
   token,
@@ -73,6 +79,12 @@ export default function RightsSection({
   if (gone) {
     return (
       <Paper elevation={0} className="bg-background-paper flex flex-col gap-3 rounded-4xl px-6 py-8 sm:px-12">
+        <span
+          aria-hidden
+          className="bg-success/15 text-success flex h-12 w-12 items-center justify-center rounded-full"
+        >
+          <NiCheck size="medium" />
+        </span>
         <Typography variant="h4" component="h2" className="mb-0">
           {t("pax-link-gone-title")}
         </Typography>
@@ -101,20 +113,33 @@ export default function RightsSection({
       elevation={0}
       className="bg-background-paper flex flex-col gap-3 rounded-4xl px-6 py-8 sm:px-12"
     >
-      <Typography id="pax-link-rights" variant="h4" component="h2" className="mb-0">
-        {t("pax-link-rights-title")}
-      </Typography>
-      <Typography variant="body2" className="text-text-secondary">
-        {body}
-      </Typography>
+      <CardTitle
+        id="pax-link-rights"
+        icon={<NiLock size="medium" />}
+        tone="accent-1"
+        title={t("pax-link-rights-title")}
+        description={body}
+      />
       <Box ref={status} tabIndex={-1} role="status" aria-live="polite" className="outline-none">
         {problem && <Alert severity="error">{problem}</Alert>}
       </Box>
       <Box className="flex flex-wrap gap-2">
-        <Button variant="outlined" color="grey" disabled={busy !== null} onClick={() => void download()}>
+        <Button
+          variant="outlined"
+          color="grey"
+          disabled={busy !== null}
+          startIcon={<NiDownloadCloud size="small" />}
+          onClick={() => void download()}
+        >
           {busy === "download" ? t("pax-privacy-downloading") : t("pax-link-rights-download")}
         </Button>
-        <Button variant="text" color="error" disabled={busy !== null} onClick={() => setConfirming(true)}>
+        <Button
+          variant="text"
+          color="error"
+          disabled={busy !== null}
+          startIcon={<NiBinEmpty size="small" />}
+          onClick={() => setConfirming(true)}
+        >
           {t("pax-link-rights-forget")}
         </Button>
       </Box>

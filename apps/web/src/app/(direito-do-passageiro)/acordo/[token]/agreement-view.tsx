@@ -1,5 +1,6 @@
 "use client";
 
+import DocumentsSection from "./documents-section";
 import RightsSection from "./rights-section";
 import { useTranslations } from "next-intl";
 import { useEffect, useRef, useState } from "react";
@@ -8,6 +9,7 @@ import {
   Alert,
   Box,
   Button,
+  Collapse,
   Dialog,
   DialogActions,
   DialogContent,
@@ -16,28 +18,32 @@ import {
   Typography,
 } from "@mui/material";
 
+import CardTitle from "@/components/product/card-title";
 import { PhoneField } from "@/components/product/fields";
+import OutcomeDialog, { type OutcomeLine } from "@/components/product/outcome-dialog";
+import StateLine from "@/components/product/state-line";
 import StatusChip from "@/components/product/status-chip";
+import { TILE_TONE } from "@/components/product/tile-tone";
+import NiArrowHistory from "@/icons/nexture/ni-arrow-history";
+import NiCheck from "@/icons/nexture/ni-check";
+import NiChevronDown from "@/icons/nexture/ni-chevron-down";
+import NiCrossSquare from "@/icons/nexture/ni-cross-square";
+import NiPhone from "@/icons/nexture/ni-phone";
+import NiPlane from "@/icons/nexture/ni-plane";
+import NiShieldCheck from "@/icons/nexture/ni-shield-check";
+import NiUserCheck from "@/icons/nexture/ni-user-check";
+import { cn } from "@/lib/utils";
 import {
-  agreementDocumentKey,
-  type AgreementPerson,
   type AgreementTrip,
   type AgreementView as View,
   LINK_TRIP_STATE_KEY,
 } from "@/modules/direito-do-passageiro/agency/agreement";
-import FileButton from "@/modules/direito-do-passageiro/agency/file-button";
 import { answerAgreement, readAgreement } from "@/modules/direito-do-passageiro/agency/link-actions";
-import {
-  DOCUMENT_KIND_KEY,
-  localTimeLabel,
-  type PaxDocumentKind,
-  paxErrorKey,
-  TRIP_STATE_TONE,
-} from "@/modules/direito-do-passageiro/agency/passengers";
-import { sendLinkFile } from "@/modules/direito-do-passageiro/agency/send-files";
+import { localTimeLabel, paxErrorKey, TRIP_STATE_TONE } from "@/modules/direito-do-passageiro/agency/passengers";
 import { onlyDigits } from "@flyee/fields";
 
 type OpenView = Extract<View, { state: "open" | "handed_over" }>;
+type Answer = "agreed" | "declined" | "withdrawn";
 
 /** How long the page reads itself again after a document was sent, while the AI reads it. */
 const WATCH_MS = 5 * 60 * 1000;
@@ -46,20 +52,24 @@ const EVERY_MS = 10 * 1000;
 /**
  * What the passenger does on the agency's link. They came to say whether ONE may follow their flights and the
  * firm tell them of a problem; success is an answer given in the words they read, at a WhatsApp they recognise,
- * and, if they wish, their documents sent. The words are shown whole, as they are kept with the answer; a trip
- * the agency added after the answer waits for them to agree again; a change of mind is one click, and leaving
- * the agreement says what stops.
+ * understood, and, if they wish, their documents sent. Each card leads with its icon and says where it stands in
+ * colour and words (the owner, 2026-11-03): the agreement waiting for an answer, or registered, with the WhatsApp
+ * the alerts go to; the trips and whether ONE follows each; the documents, asking only for what has not arrived.
+ * An answer is confirmed in a dialog that says what it changed, never in a line at the top the passenger reads
+ * past; a trip the agency added after the answer waits for them to agree again; leaving the agreement says what
+ * stops before it runs.
  */
 export default function AgreementView({ token, initial }: { token: string; initial: OpenView }) {
   const t = useTranslations("product");
   const [view, setView] = useState<OpenView>(initial);
   const [phone, setPhone] = useState("");
   const [changingPhone, setChangingPhone] = useState(false);
-  const [busy, setBusy] = useState<"agreed" | "declined" | "withdrawn" | null>(null);
-  const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
+  const [busy, setBusy] = useState<Answer | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
   const [phoneProblem, setPhoneProblem] = useState<string | null>(null);
   const [leaving, setLeaving] = useState(false);
-  const [sending, setSending] = useState<string | null>(null);
+  const [outcome, setOutcome] = useState<{ answer: Answer; followed: number } | null>(null);
+  const [showWording, setShowWording] = useState(false);
   const [watchUntil, setWatchUntil] = useState(0);
   const [gone, setGone] = useState(false);
   const status = useRef<HTMLDivElement>(null);
@@ -73,6 +83,8 @@ export default function AgreementView({ token, initial }: { token: string; initi
   const reading = view.people.some((person) =>
     person.documents.some((document) => document.reading === "pending" || document.reading === "working"),
   );
+  // Agreed, the words stay one click away; they are in view whenever the passenger is about to agree to them.
+  const wordingOpen = !agreed || newTrips || changingPhone || showWording;
 
   const reload = async () => {
     const result = await readAgreement(token);
@@ -90,13 +102,14 @@ export default function AgreementView({ token, initial }: { token: string; initi
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reading, watchUntil]);
 
-  const say = (next: { ok: boolean; text: string }) => {
-    setMessage(next);
+  const fail = (text: string) => {
+    setProblem(text);
     setTimeout(() => status.current?.focus(), 0);
   };
 
-  const answer = async (choice: "agreed" | "declined" | "withdrawn") => {
+  const answer = async (choice: Answer) => {
     if (!view.wording) return;
+    setProblem(null);
     setPhoneProblem(null);
     if (choice === "agreed" && writingPhone && onlyDigits(phone).length < 10) {
       setPhoneProblem(t("pax-error-phone"));
@@ -113,59 +126,70 @@ export default function AgreementView({ token, initial }: { token: string; initi
     setLeaving(false);
     if (!result.ok) {
       if (result.code === "no_phone" || result.code === "invalid_phone") setPhoneProblem(t("pax-error-phone"));
-      else say({ ok: false, text: t(paxErrorKey(result.code)) });
+      else fail(t(paxErrorKey(result.code)));
       if (result.code === "wording_changed") await reload();
       return;
     }
     setChangingPhone(false);
     setPhone("");
+    setShowWording(false);
     await reload();
-    say({
-      ok: true,
-      text:
-        choice === "agreed"
-          ? t("pax-link-agreed", { count: result.followed })
-          : choice === "declined"
-            ? t("pax-link-declined")
-            : t("pax-link-withdrawn"),
-    });
+    setOutcome({ answer: choice, followed: result.followed });
   };
 
-  const send = async (person: AgreementPerson, kind: PaxDocumentKind, tripId: string | null, file: File) => {
-    const key = `${person.id}:${kind}:${tripId ?? ""}`;
-    setSending(key);
-    setMessage(null);
-    const result = await sendLinkFile(token, file, { travelerId: person.id, kind, tripId });
-    setSending(null);
-    if (!result.ok) {
-      say({ ok: false, text: t(paxErrorKey(result.code)) });
-      return;
-    }
-    setWatchUntil(Date.now() + WATCH_MS);
-    await reload();
-    say({ ok: true, text: t("pax-link-document-sent") });
-  };
+  // Once deleted, nothing of the passenger is shown again: the page says so and stops.
+  if (gone) {
+    return (
+      <Paper elevation={0} className="bg-background-paper flex flex-col gap-4 rounded-4xl px-6 py-10 sm:px-12">
+        <span
+          aria-hidden
+          className="bg-success/15 text-success flex h-14 w-14 items-center justify-center rounded-full"
+        >
+          <NiCheck size="large" />
+        </span>
+        <Typography variant="h1" component="h1" className="mb-0">
+          {t("pax-link-gone-title")}
+        </Typography>
+        <Typography variant="body1">{t("pax-link-gone-body", { agency: view.agency })}</Typography>
+      </Paper>
+    );
+  }
 
-  // The WhatsApp the alerts go to, by its end, or the field to write it in.
+  const chip = !view.wording ? null : agreed ? (
+    <StatusChip label={t("pax-consent-agreed")} tone="positive" />
+  ) : view.consent === "declined" ? (
+    <StatusChip label={t("pax-consent-declined")} tone="neutral" />
+  ) : view.consent === "withdrawn" ? (
+    <StatusChip label={t("pax-consent-withdrawn")} tone="neutral" />
+  ) : (
+    <StatusChip label={t("pax-link-answer-missing")} tone="attention" />
+  );
+
+  // The WhatsApp the alerts go to, by its end, with the way to say it is not theirs; or the field to write it in.
   const phoneLine = holder && (
-    <Box className="flex flex-col gap-2">
+    <Box className="flex flex-col gap-3">
       {holder.phoneEnd && (
-        <Box className="flex flex-wrap items-center gap-2">
-          <Typography variant="body2">{t("pax-link-phone-on-record", { end: holder.phoneEnd })}</Typography>
-          <Button
-            variant="text"
-            color="grey"
-            size="small"
-            disabled={busy !== null}
-            onClick={() => {
-              setChangingPhone(!changingPhone);
-              setPhone("");
-              setPhoneProblem(null);
-            }}
-          >
-            {changingPhone ? t("pax-link-phone-keep") : t("pax-link-phone-change")}
-          </Button>
-        </Box>
+        <StateLine
+          tone={agreed && !changingPhone ? "done" : "info"}
+          icon={<NiPhone size="medium" />}
+          action={
+            <Button
+              variant="text"
+              color="grey"
+              size="small"
+              disabled={busy !== null}
+              onClick={() => {
+                setChangingPhone(!changingPhone);
+                setPhone("");
+                setPhoneProblem(null);
+              }}
+            >
+              {changingPhone ? t("pax-link-phone-keep") : t("pax-link-phone-change")}
+            </Button>
+          }
+        >
+          {t("pax-link-phone-on-record", { end: holder.phoneEnd })}
+        </StateLine>
       )}
       {writingPhone && (
         <PhoneField
@@ -184,21 +208,57 @@ export default function AgreementView({ token, initial }: { token: string; initi
     </Box>
   );
 
-  // Once deleted, nothing of the passenger is shown again: the page says so and stops.
-  if (gone) {
-    return (
-      <Paper elevation={0} className="bg-background-paper flex flex-col gap-3 rounded-4xl px-6 py-10 sm:px-12">
-        <Typography variant="h1" component="h1" className="mb-0">
-          {t("pax-link-gone-title")}
-        </Typography>
-        <Typography variant="body1">{t("pax-link-gone-body", { agency: view.agency })}</Typography>
-      </Paper>
-    );
-  }
+  const agreeButton = (
+    <Button
+      variant="contained"
+      disabled={busy !== null}
+      startIcon={<NiCheck size="small" />}
+      onClick={() => void answer("agreed")}
+    >
+      {busy === "agreed" ? t("pax-link-answering") : t("pax-link-agree")}
+    </Button>
+  );
+
+  const outcomeLines = (): OutcomeLine[] => {
+    if (!outcome) return [];
+    const mind = { key: "mind", icon: <NiArrowHistory size="medium" />, text: t("pax-link-outcome-change-mind") };
+    if (outcome.answer === "declined") {
+      return [{ key: "none", icon: <NiPlane size="medium" />, text: t("pax-link-outcome-declined") }, mind];
+    }
+    if (outcome.answer === "withdrawn") {
+      return [{ key: "stop", icon: <NiPlane size="medium" />, text: t("pax-link-outcome-withdrawn") }, mind];
+    }
+    return [
+      {
+        key: "trips",
+        icon: <NiPlane size="medium" />,
+        text: t("pax-link-outcome-trips", { count: outcome.followed }),
+      },
+      {
+        key: "alerts",
+        icon: <NiPhone size="medium" />,
+        text: holder?.phoneEnd
+          ? t("pax-link-outcome-alerts", { firm: view.firm, end: holder.phoneEnd })
+          : t("pax-link-outcome-alerts-plain", { firm: view.firm }),
+      },
+      { key: "decide", icon: <NiUserCheck size="medium" />, text: t("pax-link-outcome-decide") },
+      { key: "leave", icon: <NiShieldCheck size="medium" />, text: t("pax-link-outcome-leave") },
+    ];
+  };
 
   return (
     <>
       <Paper elevation={0} className="bg-background-paper flex flex-col gap-3 rounded-4xl px-6 py-8 sm:px-12">
+        <span
+          aria-hidden
+          className={cn(
+            "flex h-12 w-12 items-center justify-center rounded-2xl",
+            TILE_TONE.primary.bg,
+            TILE_TONE.primary.text,
+          )}
+        >
+          <NiPlane size="large" />
+        </span>
         <Typography variant="overline" component="p" className="text-text-secondary">
           {view.agency}
         </Typography>
@@ -208,63 +268,88 @@ export default function AgreementView({ token, initial }: { token: string; initi
         <Typography variant="body1">{t("pax-link-intro", { agency: view.agency, firm: view.firm })}</Typography>
       </Paper>
 
-      <Box ref={status} tabIndex={-1} role="status" aria-live="polite" className="outline-none">
-        {message && (
-          <Alert
-            severity={message.ok ? "success" : "error"}
-            className={message.ok ? "neutral bg-background-paper/60!" : undefined}
-          >
-            {message.text}
-          </Alert>
-        )}
-      </Box>
-
       <Paper
         component="section"
         aria-labelledby="pax-link-agreement"
         elevation={0}
         className="bg-background-paper flex flex-col gap-4 rounded-4xl px-6 py-8 sm:px-12"
       >
-        <Box className="flex flex-wrap items-center justify-between gap-2">
-          <Typography id="pax-link-agreement" variant="h4" component="h2" className="mb-0">
-            {t("pax-link-agreement-title")}
-          </Typography>
-          {agreed && <StatusChip label={t("pax-consent-agreed")} tone="positive" />}
+        <CardTitle
+          id="pax-link-agreement"
+          icon={<NiShieldCheck size="medium" />}
+          tone="primary"
+          title={t("pax-link-agreement-title")}
+          chip={chip}
+        />
+        <Box ref={status} tabIndex={-1} role="status" aria-live="polite" className="outline-none">
+          {problem && <Alert severity="error">{problem}</Alert>}
         </Box>
-        {view.wording ? (
+        {!view.wording ? (
+          <StateLine tone="waiting">{t("pax-link-no-clause")}</StateLine>
+        ) : (
           <>
-            <Box className="bg-grey-25 rounded-2xl p-4">
-              <Typography variant="body1" className="whitespace-pre-line">
-                {view.wording}
-              </Typography>
-            </Box>
             {agreed ? (
-              <Box className="flex flex-col gap-3">
-                <Typography variant="body2">{t("pax-link-agreed-state")}</Typography>
-                {newTrips && <Typography variant="body2">{t("pax-link-agree-new")}</Typography>}
-                {phoneLine}
-                <Box className="flex flex-wrap gap-2">
-                  {(newTrips || changingPhone) && (
-                    <Button variant="contained" disabled={busy !== null} onClick={() => void answer("agreed")}>
-                      {busy === "agreed" ? t("pax-link-answering") : t("pax-link-agree")}
-                    </Button>
-                  )}
-                  <Button variant="text" color="grey" disabled={busy !== null} onClick={() => setLeaving(true)}>
+              <StateLine tone="done" emphasis>
+                <strong>{t("pax-link-agreed-lead")}</strong> {t("pax-link-agreed-state")}
+              </StateLine>
+            ) : view.consent === "declined" ? (
+              <StateLine tone="info">{t("pax-link-declined-state")}</StateLine>
+            ) : view.consent === "withdrawn" ? (
+              <StateLine tone="info">{t("pax-link-withdrawn-state")}</StateLine>
+            ) : null}
+            {agreed && phoneLine}
+            {agreed && !newTrips && !changingPhone && (
+              <Box>
+                <Button
+                  variant="text"
+                  color="grey"
+                  size="small"
+                  aria-expanded={wordingOpen}
+                  aria-controls="pax-link-wording"
+                  endIcon={
+                    <NiChevronDown
+                      size="small"
+                      className={cn("transition-transform motion-reduce:transition-none", wordingOpen && "rotate-180")}
+                    />
+                  }
+                  onClick={() => setShowWording(!showWording)}
+                >
+                  {wordingOpen ? t("pax-link-wording-hide") : t("pax-link-wording-show")}
+                </Button>
+              </Box>
+            )}
+            <Collapse in={wordingOpen} unmountOnExit={false}>
+              <Box id="pax-link-wording" className="bg-grey-25 rounded-2xl p-4">
+                <Typography variant="body1" className="whitespace-pre-line">
+                  {view.wording}
+                </Typography>
+              </Box>
+            </Collapse>
+            {agreed ? (
+              <>
+                {newTrips && (
+                  <StateLine tone="attention" icon={<NiPlane size="medium" />}>
+                    {t("pax-link-agree-new")}
+                  </StateLine>
+                )}
+                <Box className="flex flex-wrap items-center gap-2">
+                  {(newTrips || changingPhone) && agreeButton}
+                  <Button
+                    variant="text"
+                    color="grey"
+                    disabled={busy !== null}
+                    startIcon={<NiCrossSquare size="small" />}
+                    onClick={() => setLeaving(true)}
+                  >
                     {t("pax-link-withdraw")}
                   </Button>
                 </Box>
-              </Box>
+              </>
             ) : (
-              <Box className="flex flex-col gap-3">
-                {view.consent === "declined" && <Typography variant="body2">{t("pax-link-declined-state")}</Typography>}
-                {view.consent === "withdrawn" && (
-                  <Typography variant="body2">{t("pax-link-withdrawn-state")}</Typography>
-                )}
+              <>
                 {phoneLine}
                 <Box className="flex flex-wrap gap-2">
-                  <Button variant="contained" disabled={busy !== null} onClick={() => void answer("agreed")}>
-                    {busy === "agreed" ? t("pax-link-answering") : t("pax-link-agree")}
-                  </Button>
+                  {agreeButton}
                   {view.consent !== "declined" && (
                     <Button
                       variant="text"
@@ -276,89 +361,24 @@ export default function AgreementView({ token, initial }: { token: string; initi
                     </Button>
                   )}
                 </Box>
-              </Box>
+              </>
             )}
           </>
-        ) : (
-          <Alert severity="info" className="neutral bg-background-paper/60!">
-            {t("pax-link-no-clause")}
-          </Alert>
         )}
       </Paper>
 
       <TripsSection trips={view.trips} />
 
-      <Paper
-        component="section"
-        aria-labelledby="pax-link-documents"
-        elevation={0}
-        className="bg-background-paper flex flex-col gap-4 rounded-4xl px-6 py-8 sm:px-12"
-      >
-        <Typography id="pax-link-documents" variant="h4" component="h2" className="mb-0">
-          {t("pax-link-documents-title")}
-        </Typography>
-        <Typography variant="body2" className="text-text-secondary">
-          {view.uploadsLeft > 0 ? t("pax-link-documents-help") : t("pax-error-upload-limit")}
-        </Typography>
-        <Box component="ul" className="m-0 flex list-none flex-col gap-4 p-0">
-          {view.people.map((person) => {
-            const kinds: { kind: PaxDocumentKind; tripId: string | null; label: string }[] = [
-              { kind: "identity", tripId: null, label: t("pax-document-send-identity") },
-              ...(person.isHolder
-                ? [{ kind: "address_proof" as const, tripId: null, label: t("pax-document-send-address") }]
-                : []),
-              ...view.trips.map((trip) => ({
-                kind: "boarding_pass" as const,
-                tripId: trip.id,
-                label: trip.locator
-                  ? t("pax-link-send-boarding-of", { locator: trip.locator })
-                  : t("pax-document-send-boarding"),
-              })),
-            ];
-            return (
-              <Box
-                component="li"
-                key={person.id}
-                className="border-grey-100 flex flex-col gap-3 rounded-2xl border p-4"
-              >
-                <Typography variant="subtitle2" component="h3">
-                  {person.minor ? t("pax-link-person-minor", { name: person.fullName }) : person.fullName}
-                </Typography>
-                {person.documents.length > 0 && (
-                  <Box component="ul" className="m-0 flex list-none flex-col gap-1 p-0">
-                    {person.documents.map((document) => (
-                      <Typography component="li" variant="body2" key={document.id}>
-                        {t("pax-link-document-line", {
-                          kind: t(DOCUMENT_KIND_KEY[document.kind]),
-                          state: t(agreementDocumentKey(document)),
-                        })}
-                      </Typography>
-                    ))}
-                  </Box>
-                )}
-                {view.uploadsLeft > 0 && (
-                  <Box className="flex flex-wrap gap-2">
-                    {kinds.map((item) => {
-                      const key = `${person.id}:${item.kind}:${item.tripId ?? ""}`;
-                      return (
-                        <FileButton
-                          key={key}
-                          variant="outlined"
-                          color="grey"
-                          size="small"
-                          disabled={sending !== null}
-                          label={sending === key ? t("pax-document-sending") : item.label}
-                          onFile={(file) => void send(person, item.kind, item.tripId, file)}
-                        />
-                      );
-                    })}
-                  </Box>
-                )}
-              </Box>
-            );
-          })}
-        </Box>
-      </Paper>
+      <DocumentsSection
+        token={token}
+        people={view.people}
+        trips={view.trips}
+        uploadsLeft={view.uploadsLeft}
+        onSent={async () => {
+          setWatchUntil(Date.now() + WATCH_MS);
+          await reload();
+        }}
+      />
 
       <RightsSection token={token} agency={view.agency} firm={view.firm} variant="open" onGone={() => setGone(true)} />
 
@@ -382,13 +402,31 @@ export default function AgreementView({ token, initial }: { token: string; initi
           </DialogActions>
         </Dialog>
       )}
+
+      {outcome && (
+        <OutcomeDialog
+          open
+          tone={outcome.answer === "agreed" ? "done" : "info"}
+          title={
+            outcome.answer === "agreed"
+              ? t("pax-link-outcome-agreed-title")
+              : outcome.answer === "declined"
+                ? t("pax-link-outcome-declined-title")
+                : t("pax-link-outcome-withdrawn-title")
+          }
+          lines={outcomeLines()}
+          closeLabel={t("pax-link-outcome-ok")}
+          onClose={() => setOutcome(null)}
+        />
+      )}
     </>
   );
 }
 
-/** The trips of the link: each leg, and whether ONE follows it now. */
+/** The trips of the link: each leg, and whether ONE follows the trip now, in colour and words. */
 function TripsSection({ trips }: { trips: AgreementTrip[] }) {
   const t = useTranslations("product");
+  const followed = trips.filter((trip) => trip.state === "watching").length;
   return (
     <Paper
       component="section"
@@ -396,34 +434,45 @@ function TripsSection({ trips }: { trips: AgreementTrip[] }) {
       elevation={0}
       className="bg-background-paper flex flex-col gap-4 rounded-4xl px-6 py-8 sm:px-12"
     >
-      <Typography id="pax-link-trips" variant="h4" component="h2" className="mb-0">
-        {t("pax-link-trips-title")}
-      </Typography>
+      <CardTitle
+        id="pax-link-trips"
+        icon={<NiPlane size="medium" />}
+        tone="accent-2"
+        title={t("pax-link-trips-title")}
+        chip={
+          followed > 0 ? (
+            <StatusChip label={t("pax-link-trips-followed", { count: followed })} tone="positive" />
+          ) : undefined
+        }
+      />
       {trips.length === 0 ? (
-        <Typography variant="body2" className="text-text-secondary">
-          {t("pax-link-no-trips")}
-        </Typography>
+        <StateLine tone="waiting">{t("pax-link-no-trips")}</StateLine>
       ) : (
         <Box component="ul" className="m-0 flex list-none flex-col gap-3 p-0">
           {trips.map((trip) => (
-            <Box component="li" key={trip.id} className="border-grey-100 flex flex-col gap-2 rounded-2xl border p-4">
+            <Box component="li" key={trip.id} className="border-grey-100 flex flex-col gap-3 rounded-2xl border p-4">
               <Box className="flex flex-wrap items-center justify-between gap-2">
-                <Typography variant="subtitle2" component="h3">
+                <Typography variant="subtitle1" component="h3" className="mb-0">
                   {trip.locator ? t("pax-trip-locator-is", { locator: trip.locator }) : t("pax-trip-no-locator")}
                 </Typography>
                 <StatusChip label={t(LINK_TRIP_STATE_KEY[trip.state])} tone={TRIP_STATE_TONE[trip.state]} />
               </Box>
-              <Box component="ol" className="m-0 flex list-none flex-col gap-1 p-0">
+              <Box component="ol" className="m-0 flex list-none flex-col gap-2 p-0">
                 {trip.legs.map((leg) => (
-                  <Typography component="li" variant="body2" key={leg.position}>
-                    {t("pax-trip-leg-line", {
-                      flight: leg.flightNumber,
-                      origin: leg.originIata,
-                      destination: leg.destinationIata,
-                      departure: localTimeLabel(leg.departure),
-                      arrival: localTimeLabel(leg.arrival),
-                    })}
-                  </Typography>
+                  <Box component="li" key={leg.position} className="flex flex-row items-start gap-2">
+                    <span aria-hidden className="text-text-secondary flex-none pt-0.5">
+                      <NiPlane size="small" />
+                    </span>
+                    <Typography variant="body2" className="min-w-0 flex-1">
+                      {t("pax-trip-leg-line", {
+                        flight: leg.flightNumber,
+                        origin: leg.originIata,
+                        destination: leg.destinationIata,
+                        departure: localTimeLabel(leg.departure),
+                        arrival: localTimeLabel(leg.arrival),
+                      })}
+                    </Typography>
+                  </Box>
                 ))}
               </Box>
             </Box>

@@ -1,5 +1,5 @@
 import { type FirmFunction, isManager, type OrgRole } from "@/lib/firm/roles";
-import type { ModuleMenuEntry } from "@/lib/modules/offer";
+import type { ModuleCard, ModuleMenuEntry } from "@/lib/modules/offer";
 
 /**
  * Who sees what in the menus of the logged area, as a pure decision.
@@ -30,6 +30,11 @@ export type MenuViewer = {
   moduleMenu: readonly ModuleMenuEntry[];
   /** The person works in a partner of a firm (0069), and sees the partner's area only. */
   partner: boolean;
+  /**
+   * For somebody of a partner, the module (or modules) the partner works in with its firm, as the header names it
+   * (its name, icon and tone, 0075 and 0081): the agency's area is a module's. Absent or empty for anybody else.
+   */
+  partnerModules?: readonly Pick<ModuleCard, "key" | "name" | "icon" | "tone">[];
   /** Where the person's partner is set up (0080), which the shell keeps who owes the second factor on; or null. */
   partnerSetup?: string | null;
   /** Who manages the partner never answered its setup (0080): the partner's home opens on it. */

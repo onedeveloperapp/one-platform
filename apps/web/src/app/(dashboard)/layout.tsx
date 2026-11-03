@@ -1,6 +1,7 @@
 import "@/style/global.css";
 
 import { redirect } from "next/navigation";
+import { getTranslations } from "next-intl/server";
 
 import DashboardShell from "@/components/layout/dashboard-shell";
 import { resolveGate } from "@/lib/firm/gate";
@@ -8,6 +9,7 @@ import { FIRM_SETUP_PATH } from "@/lib/firm/gate-rules";
 import type { MenuViewer } from "@/lib/firm/menu";
 import { getMemberContext } from "@/lib/member/context";
 import { moduleMenuOf } from "@/lib/modules/offer";
+import { moduleOf } from "@/lib/modules/registry";
 
 /**
  * The logged area. Before drawing anything it decides whether this person may
@@ -35,6 +37,22 @@ export default async function DashboardLayout({
     partnerSetup = gate.partnerSetup;
     partnerSetupPending = gate.partnerSetupPending;
   }
+  // The modules somebody of a partner works in, as the header names them: from ONE's catalog, or, when it could not
+  // be read, by the name the module's own definition gives it, so the header still says which area this is.
+  const tProduct = context?.partner ? await getTranslations("product") : null;
+  const partnerModules =
+    context?.partner && tProduct
+      ? context.modules.map((key) => {
+          const entry = context.catalog?.find((module) => module.key === key);
+          const nameKey = moduleOf(key)?.nameKey;
+          return {
+            key,
+            name: entry?.name ?? (nameKey ? tProduct(nameKey) : key),
+            icon: entry?.icon ?? null,
+            tone: entry?.tone ?? ("primary" as const),
+          };
+        })
+      : [];
   // Who is looking, for the menus: read here once, so no item appears and then leaves.
   const viewer: MenuViewer | null = context
     ? {
@@ -45,6 +63,8 @@ export default async function DashboardLayout({
         // The firm's menu lists ONE's modules with where each stands for the firm; nobody else's lists them.
         moduleMenu: context.firm ? moduleMenuOf(context.catalog, context.modules) : [],
         partner: context.partner !== null,
+        // Somebody of a partner reads in the header which module the partner works in (its name, icon and colour).
+        partnerModules,
         partnerSetup,
         partnerSetupPending,
         isSuperadmin: context.isSuperadmin,

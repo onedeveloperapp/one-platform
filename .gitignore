@@ -18,8 +18,9 @@ yarn-error.log*
 # Dependency directories
 node_modules/
 
-# Next.js build output
+# Next.js build output (and a dev build kept in a folder of its own, as a verification run beside another session's)
 .next/
+.next-*/
 out/
 
 # Production files
