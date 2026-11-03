@@ -76,15 +76,16 @@ export default function AgreementView({ token, initial }: { token: string; initi
 
   const holder = view.people.find((person) => person.isHolder) ?? null;
   const agreed = view.consent === "agreed";
-  // A trip the agency added after the answer is followed only once the passenger agrees again.
-  const newTrips = view.trips.some((trip) => trip.state === "waiting_consent" && trip.legs.length > 0);
+  // A yes that no longer covers the passenger's trips (0086): their WhatsApp changed since they agreed, or a trip was
+  // added or completed after it. Either way ONE follows those trips only once they agree again.
+  const owed = agreed ? view.reagree : null;
   // The WhatsApp is written here when none is on record, or when the passenger says the one on record is not theirs.
   const writingPhone = Boolean(holder) && (!holder?.hasPhone || changingPhone);
   const reading = view.people.some((person) =>
     person.documents.some((document) => document.reading === "pending" || document.reading === "working"),
   );
   // Agreed, the words stay one click away; they are in view whenever the passenger is about to agree to them.
-  const wordingOpen = !agreed || newTrips || changingPhone || showWording;
+  const wordingOpen = !agreed || owed !== null || changingPhone || showWording;
 
   const reload = async () => {
     const result = await readAgreement(token);
@@ -155,7 +156,9 @@ export default function AgreementView({ token, initial }: { token: string; initi
     );
   }
 
-  const chip = !view.wording ? null : agreed ? (
+  const chip = !view.wording ? null : owed ? (
+    <StatusChip label={t("pax-reagree-chip")} tone="attention" />
+  ) : agreed ? (
     <StatusChip label={t("pax-consent-agreed")} tone="positive" />
   ) : view.consent === "declined" ? (
     <StatusChip label={t("pax-consent-declined")} tone="neutral" />
@@ -170,7 +173,7 @@ export default function AgreementView({ token, initial }: { token: string; initi
     <Box className="flex flex-col gap-3">
       {holder.phoneEnd && (
         <StateLine
-          tone={agreed && !changingPhone ? "done" : "info"}
+          tone={agreed && !owed && !changingPhone ? "done" : "info"}
           icon={<NiPhone size="medium" />}
           action={
             <Button
@@ -288,7 +291,16 @@ export default function AgreementView({ token, initial }: { token: string; initi
           <StateLine tone="waiting">{t("pax-link-no-clause")}</StateLine>
         ) : (
           <>
-            {agreed ? (
+            {owed ? (
+              <StateLine tone="attention" emphasis>
+                <strong>{t("pax-link-reagree-lead")}</strong>{" "}
+                {owed === "trip_waiting"
+                  ? t("pax-link-reagree-trip")
+                  : holder?.phoneEnd
+                    ? t("pax-link-reagree-phone", { end: holder.phoneEnd })
+                    : t("pax-link-reagree-phone-plain")}
+              </StateLine>
+            ) : agreed ? (
               <StateLine tone="done" emphasis>
                 <strong>{t("pax-link-agreed-lead")}</strong> {t("pax-link-agreed-state")}
               </StateLine>
@@ -298,7 +310,7 @@ export default function AgreementView({ token, initial }: { token: string; initi
               <StateLine tone="info">{t("pax-link-withdrawn-state")}</StateLine>
             ) : null}
             {agreed && phoneLine}
-            {agreed && !newTrips && !changingPhone && (
+            {agreed && !owed && !changingPhone && (
               <Box>
                 <Button
                   variant="text"
@@ -327,13 +339,8 @@ export default function AgreementView({ token, initial }: { token: string; initi
             </Collapse>
             {agreed ? (
               <>
-                {newTrips && (
-                  <StateLine tone="attention" icon={<NiPlane size="medium" />}>
-                    {t("pax-link-agree-new")}
-                  </StateLine>
-                )}
                 <Box className="flex flex-wrap items-center gap-2">
-                  {(newTrips || changingPhone) && agreeButton}
+                  {(owed || changingPhone) && agreeButton}
                   <Button
                     variant="text"
                     color="grey"

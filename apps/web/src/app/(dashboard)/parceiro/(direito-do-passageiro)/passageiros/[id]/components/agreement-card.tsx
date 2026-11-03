@@ -5,6 +5,7 @@ import { useState } from "react";
 
 import { Alert, Box, Button, Card, CardContent, TextField, Typography } from "@mui/material";
 
+import StateLine from "@/components/product/state-line";
 import StatusChip from "@/components/product/status-chip";
 import { issueAgreementLink } from "@/modules/direito-do-passageiro/agency/actions";
 import {
@@ -12,6 +13,8 @@ import {
   CONSENT_TONE,
   type PaxDetail,
   paxErrorKey,
+  REAGREE_CHIP_KEY,
+  REAGREE_KEY,
 } from "@/modules/direito-do-passageiro/agency/passengers";
 
 const when = (value: string) =>
@@ -44,6 +47,8 @@ export default function AgreementCard({
   const [copied, setCopied] = useState(false);
   const [busy, setBusy] = useState(false);
   const consent = detail.consent ?? "none";
+  // A yes that no longer covers the passenger's trips (0086): said as owed again, with why and the way back.
+  const reagree = !traveler.handedOver && detail.consent === "agreed" ? detail.reagree : null;
 
   const issue = async () => {
     setBusy(true);
@@ -76,7 +81,12 @@ export default function AgreementCard({
           <Typography id="pax-agreement-title" variant="h5" component="h2" className="mb-0">
             {t("pax-agreement-title")}
           </Typography>
-          {!traveler.minor && <StatusChip label={t(CONSENT_KEY[consent])} tone={CONSENT_TONE[consent]} />}
+          {!traveler.minor &&
+            (reagree ? (
+              <StatusChip label={t(REAGREE_CHIP_KEY)} tone="attention" />
+            ) : (
+              <StatusChip label={t(CONSENT_KEY[consent])} tone={CONSENT_TONE[consent]} />
+            ))}
         </Box>
 
         {traveler.minor ? (
@@ -92,6 +102,12 @@ export default function AgreementCard({
                 ? t("pax-agreement-help-children", { names: detail.children.map((child) => child.fullName).join(", ") })
                 : t("pax-agreement-help")}
             </Typography>
+
+            {reagree && (
+              <StateLine tone="attention" emphasis>
+                {t(REAGREE_KEY[reagree], { name: traveler.fullName })}
+              </StateLine>
+            )}
 
             {detail.confirmLink && !issued && (
               <Typography variant="body2">

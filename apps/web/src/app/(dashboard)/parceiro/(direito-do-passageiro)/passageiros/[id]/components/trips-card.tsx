@@ -17,6 +17,7 @@ import NiUserCheck from "@/icons/nexture/ni-user-check";
 import FileButton from "@/modules/direito-do-passageiro/agency/file-button";
 import { type FlightsRead, readTravelerFlights } from "@/modules/direito-do-passageiro/agency/flight-progress-actions";
 import {
+  REAGREE_NOW_KEY,
   TRIP_HOLDER_KEY,
   TRIP_NOW_KEY,
   TRIP_STEP_KEY,
@@ -29,6 +30,7 @@ import {
   type PaxDocumentKind,
   paxErrorKey,
   type PaxTrip,
+  type Reagree,
   SEND_DOCUMENT_KEY,
   TRIP_STATE_KEY,
   TRIP_STATE_TONE,
@@ -74,6 +76,9 @@ export default function TripsCard({
   const traveler = detail.traveler;
   const readFlights = useCallback(() => readTravelerFlights(traveler.id), [traveler.id]);
   const flightRead = useFlightsRead(flights, readFlights, anyMoving);
+  // Whose yes the trips wait for again when it no longer covers them (0086): the passenger's, or a child's adult's.
+  const reagreeHolder = detail.guardian?.id ?? traveler.id;
+  const reagree = detail.consent === "agreed" && !traveler.handedOver ? detail.reagree : null;
   const flightOf = (trip: PaxTrip) =>
     flightRead.ok
       ? (flightRead.trips.find((flight) => flight.tripId === trip.id && flight.legs.length > 0) ?? null)
@@ -175,6 +180,7 @@ export default function TripsCard({
                     everAgreed={everAgreed}
                     agreedAt={agreed?.createdAt ?? null}
                     linkUntil={linkUntil}
+                    reagree={trip.holderId === reagreeHolder ? reagree : null}
                   />
                   {flight && flightRead.ok && <TripFlight trip={flight} today={flightRead.today} />}
                   <Box component="ol" className="m-0 flex list-none flex-col gap-1 p-0">
@@ -255,11 +261,14 @@ function TripProgress({
   everAgreed,
   agreedAt,
   linkUntil,
+  reagree,
 }: {
   trip: PaxTrip;
   everAgreed: boolean;
   agreedAt: string | null;
   linkUntil: string | null;
+  /** Why the holder's yes no longer covers this trip, while it waits for them (0086). */
+  reagree: Reagree | null;
 }) {
   const t = useTranslations("product");
   const journey = tripJourney({ state: trip.state, everAgreed });
@@ -297,7 +306,7 @@ function TripProgress({
       <ProgressNow
         tone={journey.ended === "firm" ? "done" : journey.ended ? "stopped" : "progress"}
         lead={t(TRIP_HOLDER_KEY[journey.holder])}
-        text={t(TRIP_NOW_KEY[trip.state])}
+        text={trip.state === "waiting_consent" && reagree ? t(REAGREE_NOW_KEY[reagree]) : t(TRIP_NOW_KEY[trip.state])}
         extra={
           extra ? (
             <Typography variant="body2" className="text-text-secondary">

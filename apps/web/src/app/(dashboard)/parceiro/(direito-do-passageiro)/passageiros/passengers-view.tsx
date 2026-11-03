@@ -32,6 +32,7 @@ import {
   type PaxOverview,
   type PaxPage,
   type PaxRow,
+  REAGREE_CHIP_KEY,
 } from "@/modules/direito-do-passageiro/agency/passengers";
 import { formatCpf } from "@flyee/fields";
 
@@ -363,8 +364,10 @@ export default function PassengersView({ data }: { data: PassengersData | null }
 function PassengerRow({ row }: { row: PaxRow }) {
   const t = useTranslations("product");
   const consent = row.consent ?? "none";
+  // A yes that no longer covers their trips (their WhatsApp changed, or a trip waits, 0086) is an agreement owed again.
+  const reagree = !row.handedOver && row.consent === "agreed" && row.reagree !== null;
   // Where the passenger is along the way, in small: the agreement, a trip ONE follows, the firm.
-  const progress = passengerReached({ consent: row.consent, handedOver: row.handedOver });
+  const progress = passengerReached({ consent: row.consent, handedOver: row.handedOver, reagree });
   const details = [
     row.cpf ? t("pax-row-cpf", { cpf: formatCpf(row.cpf) }) : null,
     row.nextDeparture ? t("pax-row-next", { date: localTimeLabel(row.nextDeparture) }) : null,
@@ -401,6 +404,8 @@ function PassengerRow({ row }: { row: PaxRow }) {
           {row.reading && <StatusChip label={t("pax-row-reading")} tone="neutral" />}
           {row.handedOver ? (
             <StatusChip label={t("pax-row-handed-over")} tone="primary" />
+          ) : reagree ? (
+            <StatusChip label={t(REAGREE_CHIP_KEY)} tone="attention" />
           ) : (
             <StatusChip label={t(CONSENT_KEY[consent])} tone={CONSENT_TONE[consent]} />
           )}

@@ -50,6 +50,7 @@ describe("what the agency's screens read", () => {
           cpf: "11144477735",
           minor: false,
           consent: "agreed",
+          reagree: "phone_changed",
           kinds: ["identity", "passport"],
           reading: true,
           next_departure: "2026-11-03T14:30:00",
@@ -63,6 +64,7 @@ describe("what the agency's screens read", () => {
     expect(page.rows[0]).toMatchObject({
       id: "t1",
       consent: "agreed",
+      reagree: "phone_changed",
       kinds: ["identity"],
       reading: true,
       handedOver: false,
@@ -121,6 +123,7 @@ describe("what the agency's screens read", () => {
         },
       ],
       consent: "agreed",
+      reagree: "a reason of tomorrow",
       consents: [{ answer: "agreed", created_at: "2026-10-29T10:00:00Z" }],
       confirm_link: { created_at: "2026-10-29", expires_at: "2026-11-28", open: true },
     });
@@ -129,6 +132,11 @@ describe("what the agency's screens read", () => {
     expect(detail?.documents[0].read).toEqual({ matches: true, legible: true, identified: "RG", note: "" });
     expect(detail?.trips[0].legs.map((leg) => leg.flightNumber)).toEqual(["LA3456", "LA3457"]);
     expect(detail?.confirmLink?.open).toBe(true);
+    // A reason the screen does not know is no reason: the yes is taken as covering the trips.
+    expect(detail?.reagree).toBeNull();
+    expect(paxDetailOf({ traveler: { id: "t1", full_name: "Mariana Teste" }, reagree: "trip_waiting" })?.reagree).toBe(
+      "trip_waiting",
+    );
     expect(detail?.traveler.draft).toBe(false);
     expect(paxDetailOf({})).toBeNull();
   });

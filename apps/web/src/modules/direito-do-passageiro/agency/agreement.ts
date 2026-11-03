@@ -6,6 +6,8 @@ import {
   paxLegsOf,
   READING_STATES,
   type ReadingState,
+  type Reagree,
+  REAGREE_REASONS,
   TRIP_STATES,
   type TripState,
 } from "@/modules/direito-do-passageiro/agency/passengers";
@@ -57,6 +59,8 @@ export type AgreementView =
       /** Null while the agency has no clause: nothing can be agreed to then. */
       wording: string | null;
       consent: ConsentAnswer | null;
+      /** Why the yes in force no longer covers the passenger's trips: their WhatsApp changed, or a trip waits. */
+      reagree: Reagree | null;
       people: AgreementPerson[];
       trips: AgreementTrip[];
     };
@@ -88,6 +92,7 @@ export function agreementViewOf(raw: unknown): AgreementView {
     uploadsLeft: Math.max(0, Math.trunc(Number(answer.uploads_left ?? 0)) || 0),
     wording: text(answer.wording),
     consent: oneOf(CONSENT_ANSWERS, answer.consent),
+    reagree: oneOf(REAGREE_REASONS, answer.reagree),
     people: list(answer.people).flatMap((item): AgreementPerson[] => {
       const person = record(item);
       const id = text(person.id);

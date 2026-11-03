@@ -52,6 +52,14 @@ export const PAX_FIELDS = [
 ] as const;
 export type PaxField = (typeof PAX_FIELDS)[number];
 
+/**
+ * Why a passenger's agreement in force no longer covers their trips (migration 0086, `pax_reagree`): their WhatsApp
+ * changed since the yes (an agreement covers the WhatsApp it was given at, 0074), or a trip of theirs ONE does not
+ * follow (added or completed after the agreement). Null when it covers them, or there is no agreement to speak of.
+ */
+export const REAGREE_REASONS = ["phone_changed", "trip_waiting"] as const;
+export type Reagree = (typeof REAGREE_REASONS)[number];
+
 export type PaxOverview = {
   travelers: number;
   adultsWaiting: number;
@@ -72,6 +80,8 @@ export type PaxRow = {
   minor: boolean;
   /** The answer that counts for them: theirs, or for a child the adult's who answers for them. */
   consent: ConsentAnswer | null;
+  /** Why that answer, a yes, no longer covers their trips; null when it does. */
+  reagree: Reagree | null;
   nextDeparture: string | null;
   handedOver: boolean;
   kinds: PaxDocumentKind[];
@@ -156,6 +166,8 @@ export type PaxDetail = {
   documents: PaxDocument[];
   trips: PaxTrip[];
   consent: ConsentAnswer | null;
+  /** Why the answer in force, a yes, no longer covers the passenger's trips; null when it does. */
+  reagree: Reagree | null;
   consents: { answer: ConsentAnswer; createdAt: string }[];
   confirmLink: PaxConfirmLink | null;
 };
@@ -206,6 +218,7 @@ export function paxPageOf(raw: unknown): PaxPage {
         guardianId: text(row.guardian_id),
         minor: row.minor === true,
         consent: oneOf(CONSENT_ANSWERS, row.consent),
+        reagree: oneOf(REAGREE_REASONS, row.reagree),
         nextDeparture: text(row.next_departure),
         handedOver: text(row.handed_over_at) !== null,
         kinds: list(row.kinds).flatMap((kind) => oneOf(PAX_DOCUMENT_KINDS, kind) ?? []),
@@ -333,6 +346,7 @@ export function paxDetailOf(raw: unknown): PaxDetail | null {
     documents: paxDocumentsOf(answer.documents),
     trips: list(answer.trips).flatMap((trip) => paxTripOf(trip) ?? []),
     consent: oneOf(CONSENT_ANSWERS, answer.consent),
+    reagree: oneOf(REAGREE_REASONS, answer.reagree),
     consents: list(answer.consents).flatMap((item) => {
       const row = record(item);
       const consent = oneOf(CONSENT_ANSWERS, row.answer);
@@ -470,6 +484,13 @@ export const CONSENT_KEY: Record<ConsentAnswer | "none", string> = {
   declined: "pax-consent-declined",
   withdrawn: "pax-consent-withdrawn",
   none: "pax-consent-none",
+};
+
+/** What the agency is told of a yes that no longer covers the passenger's trips, and why (`product` namespace). */
+export const REAGREE_CHIP_KEY = "pax-reagree-chip";
+export const REAGREE_KEY: Record<Reagree, string> = {
+  phone_changed: "pax-reagree-phone-changed",
+  trip_waiting: "pax-reagree-trip-waiting",
 };
 
 export const CONSENT_TONE: Record<ConsentAnswer | "none", "positive" | "attention" | "neutral"> = {

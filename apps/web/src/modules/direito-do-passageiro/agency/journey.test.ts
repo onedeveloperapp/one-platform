@@ -42,6 +42,11 @@ describe("passengerReached", () => {
     expect(passengerReached({ consent: null, handedOver: false })).toEqual({ reached: 0, state: "progress" });
     expect(passengerReached({ consent: "withdrawn", handedOver: false })).toEqual({ reached: 0, state: "stopped" });
     expect(passengerReached({ consent: "agreed", handedOver: false })).toEqual({ reached: 1, state: "progress" });
+    // A yes that no longer covers the trips (another WhatsApp, a trip waiting) is back at the agreement.
+    expect(passengerReached({ consent: "agreed", handedOver: false, reagree: true })).toEqual({
+      reached: 0,
+      state: "progress",
+    });
     expect(passengerReached({ consent: "agreed", handedOver: true })).toEqual({ reached: 2, state: "done" });
   });
 });

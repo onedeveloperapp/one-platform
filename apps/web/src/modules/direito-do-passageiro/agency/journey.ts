@@ -6,7 +6,7 @@
  * the firm's case past the hand-over.
  */
 
-import { type ConsentAnswer, type TripState } from "./passengers";
+import { type ConsentAnswer, type Reagree, type TripState } from "./passengers";
 
 /** The way of a trip, in the order it goes. */
 export const TRIP_JOURNEY = ["agreement", "watching", "alerted", "firm"] as const;
@@ -53,11 +53,17 @@ export function tripJourney(input: {
 /** The step a passenger of the list is at, from what their row says: the agreement, a trip, the firm. */
 export const PASSENGER_JOURNEY = ["agreement", "watching", "firm"] as const;
 
-export function passengerReached(input: { consent: ConsentAnswer | null; handedOver: boolean }): {
+export function passengerReached(input: {
+  consent: ConsentAnswer | null;
+  handedOver: boolean;
+  /** The yes no longer covers their trips (their WhatsApp changed, or a trip waits, 0086): back at the agreement. */
+  reagree?: boolean;
+}): {
   reached: number;
   state: "progress" | "done" | "stopped";
 } {
   if (input.handedOver) return { reached: 2, state: "done" };
+  if (input.consent === "agreed" && input.reagree) return { reached: 0, state: "progress" };
   if (input.consent === "agreed") return { reached: 1, state: "progress" };
   if (input.consent === "declined" || input.consent === "withdrawn") return { reached: 0, state: "stopped" };
   return { reached: 0, state: "progress" };
@@ -79,6 +85,12 @@ export const TRIP_NOW_KEY: Record<TripState, string> = {
   case_opened: "pax-journey-now-case-opened",
   declined: "pax-journey-now-declined",
   stopped: "pax-journey-now-stopped",
+};
+
+/** What happens now to a trip whose holder's yes no longer covers it (0086), by why. */
+export const REAGREE_NOW_KEY: Record<Reagree, string> = {
+  phone_changed: "pax-journey-now-reagree-phone",
+  trip_waiting: "pax-journey-now-reagree-trip",
 };
 
 export const TRIP_HOLDER_KEY: Record<TripJourney["holder"], string> = {
