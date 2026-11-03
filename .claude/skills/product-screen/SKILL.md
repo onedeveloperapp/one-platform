@@ -25,6 +25,8 @@ A screen where a person does by hand what ONE could do is the exception, and its
 
 **Never list ONE's work as the person's step.** A checklist, a count, a pending line, an empty state or a message names as the person's only what a person does or decides. What ONE does alone (a case opened from a module, a link sent, the lawsuits created, a piece written) is said as ONE's: done, being done, or waited for ("O ONE espera o primeiro caso"), with a manual way, where one exists, offered as the exception and never as the primary action. The failure this prevents (ONE, 2026-11-03): "Abrir o primeiro caso" on the firm's setup list told a firm that had just finished its setup that the work was manual, while ONE opens the case itself when a module brings it.
 
+**A registration starts from documents.** Where a record is already written on a document the person has (an identity, a proof of address, a ticket, a booking's screenshot, a photo of a printed page), the form opens on sending it: ONE reads it, fills the fields and marks each as read ("Lido do documento"), and the person confirms or corrects; a field no document gives is asked beside them. Typing every field is the contingency, offered as "Preencher à mão" and never as the first screen. The failure this prevents (ONE, 2026-11-03): the agency's new passenger was a form of typed fields while ONE already read the identity, the proof of address and the ticket on the passenger's page.
+
 ## The activation principle (from onboarding research)
 
 The best products bring the user to VALUE fast (the "aha moment") — they sell the outcome, not the feature list.
