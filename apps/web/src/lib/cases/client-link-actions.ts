@@ -431,16 +431,16 @@ export async function acceptClientTerms(token: string, termIds: string[]): Promi
 // ---------- The notices on WhatsApp (migration 0038) ----------
 
 /**
- * The client agrees to be told of their lawsuit on WhatsApp, at the number
- * the firm has for them, in the very words the link showed (`wording`: when
- * they changed since, nothing is recorded and the page reads again); or
- * stops. The backend records it (the database takes it from the service role
- * only), with what the server saw of the request as the evidence.
+ * The client stops the notices of their lawsuit on WhatsApp (`receive`
+ * false), or asks to be told again (true). Nobody is asked to agree (0088):
+ * the notices go unless the client stopped them. The backend records it (the
+ * database takes it from the service role only), with what the server saw of
+ * the request as the evidence.
  */
-export async function setClientNotices(token: string, agree: boolean, wording: string | null): Promise<ClientResult> {
+export async function setClientNotices(token: string, receive: boolean): Promise<ClientResult> {
   const closed = await refusal(token);
   if (closed) return closed;
-  if (typeof agree !== "boolean" || (agree && typeof wording !== "string")) return { ok: false, code: "failed" };
+  if (typeof receive !== "boolean") return { ok: false, code: "failed" };
   const backend = service();
   if (!backend) return unavailable;
   const seen = await headers();
@@ -451,14 +451,14 @@ export async function setClientNotices(token: string, agree: boolean, wording: s
   const result = fold(
     await backend.rpc("client_link_set_notices", {
       target_token: token,
-      target_agree: agree,
-      target_wording: agree ? String(wording).slice(0, 1000) : null,
+      target_agree: receive,
+      target_wording: null,
       target_evidence: evidence,
     }),
     nothing,
   );
-  // Only a new agreement may make something due: an answer that changed nothing asks for nothing.
-  if (result.ok && result.code === "agreed") await settleNotices();
+  // Only being told again may make something due: an answer that changed nothing asks for nothing.
+  if (result.ok && result.code === "resumed") await settleNotices();
   return result;
 }
 

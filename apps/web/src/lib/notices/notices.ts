@@ -113,11 +113,14 @@ export const KIND_STATE_KEY: Record<KindState, string> = {
   on: "notice-state-on",
 };
 
-/** Why a notice cannot go now. */
+/**
+ * Why a notice cannot go now. Nobody is asked to agree (0088): a person is told unless they have no WhatsApp, wrote
+ * SAIR to the firm's number, or asked to stop the notices (on their link, or to a person of the firm).
+ */
 const BLOCKER_KEY: Record<string, string> = {
   no_phone: "notice-blocker-no-phone",
-  no_optin: "notice-blocker-no-optin",
   opted_out: "notice-blocker-opted-out",
+  stopped: "notice-blocker-stopped",
   kind_off: "notice-blocker-kind-off",
   template_unusable: "notice-blocker-template",
   no_number: "notice-blocker-no-number",

@@ -11,7 +11,7 @@ import CollapsibleCard from "@/components/product/collapsible-card";
 import DialogHeader from "@/components/product/dialog-header";
 import StatusChip, { type StatusTone } from "@/components/product/status-chip";
 import { opensOnArrival } from "@/lib/cases/sections";
-import { recordNoticeOptin } from "@/lib/notices/actions";
+import { recordNoticeStop } from "@/lib/notices/actions";
 import type { CaseNoticePerson } from "@/lib/notices/facts";
 import { blockerKey, isNoticeKind, isUnconfirmed, KIND_KEY, noticeErrorKey, sentKey } from "@/lib/notices/notices";
 import { phoneLabel } from "@/lib/whatsapp/conversations";
@@ -27,6 +27,9 @@ const SENT_TONE: Record<string, StatusTone> = {
   failed: "attention",
 };
 
+/** Where a person asked to stop the notices: on their own link, or to a person of the firm, who recorded it. */
+const STOPPED_KEY = { client: "case-notices-stopped-link", firm: "case-notices-stopped-firm" } as const;
+
 /** A notice is called by its kind; one the screen does not know by its own word. */
 function useKindLabel() {
   const t = useTranslations("product");
@@ -36,10 +39,11 @@ function useKindLabel() {
 /**
  * What the case's clients are told on WhatsApp by themselves. Somebody comes
  * here to know whether the client will hear of the hearing and of the
- * lawsuit, and to fix what keeps them from it: a WhatsApp missing, the
- * agreement not given (recorded here with how it was given, or given by the
- * client on their link). Below, what is due now and why it cannot go, and
- * what went, with what became of each message.
+ * lawsuit, and to fix what keeps them from it: a WhatsApp missing, or a
+ * request to stop (made on the client's link, or recorded here with how the
+ * person asked). Nobody is asked to agree (0088): a person with a WhatsApp is
+ * told. Below, what is due now and why it cannot go, and what went, with what
+ * became of each message.
  */
 export default function NoticesCard({
   state,
@@ -52,7 +56,7 @@ export default function NoticesCard({
 }) {
   const t = useTranslations("product");
   const kindLabel = useKindLabel();
-  const [asking, setAsking] = useState<{ person: CaseNoticePerson; agreed: boolean } | null>(null);
+  const [asking, setAsking] = useState<{ person: CaseNoticePerson; stopped: boolean } | null>(null);
   const notices = state.notices;
   const names = new Map(notices.people.map((person) => [person.personId, person.name]));
   const off = notices.kindsOn.length === 0;
@@ -107,26 +111,26 @@ export default function NoticesCard({
               <StatusChip
                 tone={person.blocker ? "attention" : "positive"}
                 label={
-                  person.blocker
-                    ? t(blockerKey(person.blocker))
-                    : person.optin?.source === "client"
-                      ? t("case-notices-agreed-link", { day: person.optin.recordedLabel })
-                      : t("case-notices-agreed-firm", { day: person.optin?.recordedLabel ?? "" })
+                  person.blocker === "stopped" && person.stop
+                    ? t(STOPPED_KEY[person.stop.source], { day: person.stop.recordedLabel })
+                    : person.blocker
+                      ? t(blockerKey(person.blocker))
+                      : t("case-notices-receiving")
                 }
               />
-              {writable && person.phone && person.blocker === "no_optin" ? (
+              {writable && person.stop ? (
                 <Button
                   variant="outlined"
                   color="grey"
                   size="small"
-                  onClick={() => setAsking({ person, agreed: true })}
+                  onClick={() => setAsking({ person, stopped: false })}
                 >
-                  {t("case-notices-record")}
+                  {t("case-notices-resume")}
                 </Button>
               ) : null}
-              {writable && person.optin?.current ? (
-                <Button variant="text" color="grey" size="small" onClick={() => setAsking({ person, agreed: false })}>
-                  {t("case-notices-withdraw")}
+              {writable && person.phone && !person.stop ? (
+                <Button variant="text" color="grey" size="small" onClick={() => setAsking({ person, stopped: true })}>
+                  {t("case-notices-stop")}
                 </Button>
               ) : null}
             </Box>
@@ -182,10 +186,10 @@ export default function NoticesCard({
         </Box>
       ) : null}
       {asking ? (
-        <OptinDialog
+        <StopDialog
           caseId={state.case.id}
           person={asking.person}
-          agreed={asking.agreed}
+          stopped={asking.stopped}
           onClose={() => setAsking(null)}
           onSaved={() => {
             setAsking(null);
@@ -198,29 +202,29 @@ export default function NoticesCard({
 }
 
 const DIALOG_KEY = {
-  agree: {
-    title: "case-notices-record-title",
-    intro: "case-notices-record-intro",
-    submit: "case-notices-record",
+  stop: {
+    title: "case-notices-stop-title",
+    intro: "case-notices-stop-intro",
+    submit: "case-notices-stop",
   },
-  withdraw: {
-    title: "case-notices-withdraw-title",
-    intro: "case-notices-withdraw-intro",
-    submit: "case-notices-withdraw",
+  resume: {
+    title: "case-notices-resume-title",
+    intro: "case-notices-resume-intro",
+    submit: "case-notices-resume",
   },
 } as const;
 
-/** How the person agreed (in the contract, in a conversation), or why the agreement is taken back. */
-function OptinDialog({
+/** How the person asked the firm to stop the notices (by phone, in person), or to be told again. */
+function StopDialog({
   caseId,
   person,
-  agreed,
+  stopped,
   onClose,
   onSaved,
 }: {
   caseId: string;
   person: CaseNoticePerson;
-  agreed: boolean;
+  stopped: boolean;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -228,12 +232,12 @@ function OptinDialog({
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
-  const keys = DIALOG_KEY[agreed ? "agree" : "withdraw"];
+  const keys = DIALOG_KEY[stopped ? "stop" : "resume"];
   const submit = async () => {
     setBusy(true);
     setProblem(null);
     try {
-      const result = await recordNoticeOptin({ caseId, personId: person.personId, agreed, note });
+      const result = await recordNoticeStop({ caseId, personId: person.personId, stopped, note });
       if (!result.ok) setProblem(result.code);
       else onSaved();
     } catch {
@@ -243,15 +247,15 @@ function OptinDialog({
     }
   };
   return (
-    <Dialog open onClose={busy ? undefined : onClose} maxWidth="sm" fullWidth aria-labelledby="notice-optin-dialog">
-      <DialogHeader id="notice-optin-dialog" title={t(keys.title)} onClose={onClose} closeLabel={t("hearing-close")} />
+    <Dialog open onClose={busy ? undefined : onClose} maxWidth="sm" fullWidth aria-labelledby="notice-stop-dialog">
+      <DialogHeader id="notice-stop-dialog" title={t(keys.title)} onClose={onClose} closeLabel={t("hearing-close")} />
       <DialogContent className="flex flex-col gap-3">
         <Typography variant="body2" className="text-text-secondary">
           {t(keys.intro, { name: person.name })}
         </Typography>
         <TextField
           size="small"
-          id="notice-optin-note"
+          id="notice-stop-note"
           label={t("case-notices-note")}
           value={note}
           disabled={busy}

@@ -99,8 +99,11 @@ export type CaseNoticePerson = {
   personId: string;
   name: string;
   phone: string | null;
-  /** How the person agreed, and whether it was for the number the case has now. */
-  optin: { source: "client" | "firm"; recordedLabel: string; current: boolean; note: string | null } | null;
+  /**
+   * The person's request to stop the notices, in force (0088): made on their link, or recorded by a person of the
+   * firm saying how. Nobody is asked to agree: a person with no request is told.
+   */
+  stop: { source: "client" | "firm"; recordedLabel: string; note: string | null } | null;
   /** Why the person cannot be told now. */
   blocker: string | null;
 };
@@ -135,19 +138,19 @@ export async function caseNotices(
       isNoticeKind(kind) ? [kind] : [],
     ),
     people: list(answer.people).map((row) => {
-      const optin = row.optin as Record<string, unknown> | null;
+      const stop = row.stop as Record<string, unknown> | null;
       return {
         personId: String(row.person_id),
         name: String(row.name ?? ""),
         phone: text(row.phone),
-        optin: optin
-          ? {
-              source: optin.source === "client" ? "client" : "firm",
-              recordedLabel: momentLabel(String(optin.recorded_at ?? ""), timeZone),
-              current: optin.current === true,
-              note: text(optin.note),
-            }
-          : null,
+        stop:
+          stop && typeof stop === "object"
+            ? {
+                source: stop.source === "client" ? "client" : "firm",
+                recordedLabel: momentLabel(String(stop.recorded_at ?? ""), timeZone),
+                note: text(stop.note),
+              }
+            : null,
         blocker: text(row.blocker),
       };
     }),

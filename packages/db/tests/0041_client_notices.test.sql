@@ -5,8 +5,9 @@ select plan(42);
 -- ============================================================
 -- The notices to clients (0038). Who manages the firm submits each kind's
 -- text to the firm's account at the vendor and switches it on once approved;
--- a person agrees to be told (on their link, or as the firm records it), and
--- every agreement stays on record; the database says what is due and why
+-- since 0088 nobody is asked to agree: a person is told unless they asked to
+-- stop (on their link, as the firm records it, or with SAIR), and every
+-- request stays on record; the database says what is due and why
 -- something cannot go, and reserves each notice with its message to the
 -- outbox once, never twice, within the firm's ceiling: a phone is told a
 -- thing once, a change stands for the reminder of its moment, a passing
@@ -182,8 +183,11 @@ select ok(
   'a kind goes on only once the vendor approved its template, on the record'
 );
 
--- ---------- Agreeing to be told ----------
+-- ---------- Nobody is asked to agree ----------
 
+-- The owner, 2026-11-03 (0088): a notice goes to whoever a lawsuit tells, at the WhatsApp the firm has for them,
+-- unless they asked to stop. A person's word that they want the notices, when they never asked to stop, changes
+-- nothing.
 select pg_temp.sign_in('ad100000-0000-4000-8000-000000000001');
 set local role authenticated;
 insert into res values ('no_note', public.record_notice_optin(pg_temp.got('case', 'case_id')::uuid,
@@ -191,25 +195,22 @@ insert into res values ('no_note', public.record_notice_optin(pg_temp.got('case'
 reset role;
 select pg_temp.as_backend();
 set local role service_role;
-insert into res select 'blocked', jsonb_agg(jsonb_build_object('kind', c.kind, 'blocker', c.blocker))
+insert into res select 'unasked', jsonb_agg(jsonb_build_object('kind', c.kind, 'blocker', c.blocker))
   from public.notice_candidates('bd100000-0000-4000-8000-00000000000a', null) c;
 reset role;
 select pg_temp.sign_in('ad100000-0000-4000-8000-000000000001');
 set local role authenticated;
 insert into res values ('optin', public.record_notice_optin(pg_temp.got('case', 'case_id')::uuid,
   pg_temp.got('case', 'person_id')::uuid, true, 'Concordou no contrato de honorários.'));
-insert into res values ('optin_again', public.record_notice_optin(pg_temp.got('case', 'case_id')::uuid,
-  pg_temp.got('case', 'person_id')::uuid, true, 'Concordou no contrato de honorários.'));
 reset role;
 select ok(
   pg_temp.got('no_note', 'code') = 'note_required'
-  and (select payload @> '[{"kind": "hearing_reminder", "blocker": "no_optin"}]'::jsonb from res where name = 'blocked')
-  and pg_temp.got('optin', 'code') = 'recorded' and pg_temp.got('optin_again', 'code') = 'unchanged'
-  and (select source = 'firm' and phone = '5500999998888' and wording like '%(00) 99999-8888%' and note is not null
-       from public.notice_optins where person_id = pg_temp.got('case', 'person_id')::uuid and ended_at is null)
-  and (select count(*) = 1 from public.notice_optins where person_id = pg_temp.got('case', 'person_id')::uuid)
-  and (select count(*) = 1 from public.case_events where kind = 'notices_agreed'),
-  'a person of the firm records how somebody agreed, for the number the firm has, in words kept as they were'
+  and (select payload @> '[{"kind": "hearing_reminder", "blocker": null}]'::jsonb from res where name = 'unasked')
+  and pg_temp.got('optin', 'code') = 'unchanged'
+  and (select count(*) = 0 from public.notice_optins where person_id = pg_temp.got('case', 'person_id')::uuid)
+  and (select count(*) = 0 from public.notice_stops where person_id = pg_temp.got('case', 'person_id')::uuid)
+  and (select count(*) = 0 from public.case_events where kind in ('notices_agreed', 'notices_stopped', 'notices_resumed')),
+  'nobody is asked to agree: a person with a WhatsApp is told, and saying they want it changes nothing while they never asked to stop'
 );
 
 -- ---------- What is due, and reserving it once ----------
@@ -529,7 +530,7 @@ select ok(
   (select jsonb_array_length(payload -> 'sent') = (select count(*) from public.client_notices
                                                     where org_id = 'bd100000-0000-4000-8000-00000000000a')::integer
           and payload -> 'people' -> 0 ->> 'blocker' is null
-          and payload -> 'people' -> 0 -> 'optin' ->> 'source' = 'firm'
+          and jsonb_typeof(payload -> 'people' -> 0 -> 'stop') = 'null'
           and payload -> 'kinds_on' = '["hearing_change", "hearing_reminder", "lawsuit_update", "payment_alert"]'::jsonb
           and not (payload -> 'due' @> '[{"blocker": "kind_off"}]'::jsonb)
    from res where name = 'case_view')
@@ -539,8 +540,8 @@ select ok(
   'anybody of the firm reads the case''s people, what went and what is due, and the firm''s kinds'
 );
 
--- The client takes the agreement back on their link: it stays on record as given, the hearings of the next days
--- will not be told, and the home says so.
+-- The client stops the notices on their link: the request stays on record with what the server saw, the hearings
+-- of the next days will not be told, and the home says so.
 select pg_temp.sign_in('ad100000-0000-4000-8000-000000000001');
 set local role authenticated;
 insert into res values ('link', public.create_client_link(pg_temp.got('case', 'case_id')::uuid, pg_temp.got('case', 'person_id')::uuid,
@@ -548,7 +549,8 @@ insert into res values ('link', public.create_client_link(pg_temp.got('case', 'c
 reset role;
 select pg_temp.as_backend();
 set local role service_role;
-insert into res values ('withdrawn', public.client_link_set_notices('token-do-cliente-0041-aaaaaaaaaaaaaaaaaaaaaaaa', false, null, '{}'));
+insert into res values ('withdrawn', public.client_link_set_notices('token-do-cliente-0041-aaaaaaaaaaaaaaaaaaaaaaaa', false, null,
+  '{"user_agent": "Navegador de teste", "ip": "203.0.113.7", "extra": "ignorado"}'));
 reset role;
 set local role anon;
 insert into res values ('link_notices', public.client_link_notices('token-do-cliente-0041-aaaaaaaaaaaaaaaaaaaaaaaa'));
@@ -561,59 +563,59 @@ insert into res values ('unwarned', to_jsonb(public.firm_hearings_unwarned('bd10
   array[pg_temp.got('later_hearing', 'id')::uuid, pg_temp.got('hearing', 'id')::uuid])));
 reset role;
 select ok(
-  pg_temp.got('withdrawn', 'code') = 'withdrawn'
-  and (select ended_source = 'client' and ended_at is not null and wording like '%(00) 99999-8888%'
-       from public.notice_optins where person_id = pg_temp.got('case', 'person_id')::uuid and source = 'firm')
-  and (select payload ->> 'agreed' = 'false' and payload ->> 'phone' = '5500999998888' and payload ->> 'active' = 'true'
-              and payload ->> 'wording' like 'Quero receber pelo WhatsApp, no número (00) 99999-8888, os avisos do meu processo enviados pelo escritório Souza Advogados%'
-              and payload ->> 'wording' like '%alertas de segurança e pedidos para reenviar um documento recusado.%'
+  pg_temp.got('withdrawn', 'code') = 'stopped'
+  and (select source = 'client' and link_id = pg_temp.got('link', 'link_id')::uuid and note is null and recorded_by is null
+              and evidence = '{"ip": "203.0.113.7", "channel": "link", "user_agent": "Navegador de teste"}'::jsonb
+       from public.notice_stops where person_id = pg_temp.got('case', 'person_id')::uuid and ended_at is null)
+  and (select payload ->> 'stopped' = 'true' and payload ->> 'stopped_source' = 'client' and payload ->> 'stopped_at' is not null
+              and payload ->> 'agreed' = 'false' and payload ->> 'phone' = '5500999998888' and payload ->> 'active' = 'true'
+              and payload ->> 'firm' = 'Souza Advogados' and payload ->> 'opted_out' = 'false'
        from res where name = 'link_notices')
+  and (select count(*) = 1 from public.case_events where kind = 'notices_stopped' and actor_type = 'client')
   and pg_temp.got('today', 'hearings_unwarned') = '2'
   and (select payload = to_jsonb(array[pg_temp.got('later_hearing', 'id'), pg_temp.got('hearing', 'id')])
        from res where name = 'unwarned'),
-  'a client takes the agreement back on their link, kept on record, and the hearings they will not be told of are said to the firm'
+  'a client stops the notices on their link, kept on record with what the server saw, and the hearings they will not be told of are said to the firm'
 );
 
 select pg_temp.as_backend();
 set local role service_role;
-insert into res values ('stale', public.client_link_set_notices('token-do-cliente-0041-aaaaaaaaaaaaaaaaaaaaaaaa', true,
-  'Quero receber pelo WhatsApp os avisos, num texto que a página nunca mostrou.', '{}'));
-insert into res values ('agreed', public.client_link_set_notices('token-do-cliente-0041-aaaaaaaaaaaaaaaaaaaaaaaa', true,
-  pg_temp.got('link_notices', 'wording'), '{"user_agent": "Navegador de teste", "ip": "203.0.113.7", "extra": "ignorado"}'));
-insert into res values ('agreed_again', public.client_link_set_notices('token-do-cliente-0041-aaaaaaaaaaaaaaaaaaaaaaaa', true,
-  pg_temp.got('link_notices', 'wording'), '{}'));
+insert into res values ('resumed', public.client_link_set_notices('token-do-cliente-0041-aaaaaaaaaaaaaaaaaaaaaaaa', true, null,
+  '{"user_agent": "Navegador de teste", "ip": "203.0.113.8"}'));
+insert into res values ('resumed_again', public.client_link_set_notices('token-do-cliente-0041-aaaaaaaaaaaaaaaaaaaaaaaa', true, null, '{}'));
+reset role;
+set local role anon;
+insert into res values ('link_told', public.client_link_notices('token-do-cliente-0041-aaaaaaaaaaaaaaaaaaaaaaaa'));
 reset role;
 select ok(
-  pg_temp.got('stale', 'code') = 'wording_changed' and pg_temp.got('agreed', 'code') = 'agreed'
-  and pg_temp.got('agreed_again', 'code') = 'unchanged'
-  and (select source = 'client' and link_id is not null and note is null and recorded_by is null
-              and evidence = '{"ip": "203.0.113.7", "channel": "link", "user_agent": "Navegador de teste"}'::jsonb
-              and wording = pg_temp.got('link_notices', 'wording')
-       from public.notice_optins where person_id = pg_temp.got('case', 'person_id')::uuid and ended_at is null)
-  and (select count(*) = 2 from public.notice_optins where person_id = pg_temp.got('case', 'person_id')::uuid)
-  and (select count(*) = 1 from public.case_events where kind = 'notices_agreed' and actor_type = 'client'),
-  'a client agrees on their link only in the words the page showed, with what the server saw of the request and nothing else'
+  pg_temp.got('resumed', 'code') = 'resumed' and pg_temp.got('resumed_again', 'code') = 'unchanged'
+  and (select ended_source = 'client' and ended_by is null and ended_note is null
+              and ended_evidence = '{"ip": "203.0.113.8", "channel": "link", "user_agent": "Navegador de teste"}'::jsonb
+       from public.notice_stops where person_id = pg_temp.got('case', 'person_id')::uuid)
+  and not exists (select 1 from public.notice_stops
+                  where person_id = pg_temp.got('case', 'person_id')::uuid and ended_at is null)
+  and pg_temp.got('link_told', 'stopped') = 'false' and pg_temp.got('link_told', 'agreed') = 'true'
+  and (select count(*) = 1 from public.case_events where kind = 'notices_resumed' and actor_type = 'client'),
+  'a client who stopped asks on their link to be told again, with what the server saw, and the request stays on record as ended'
 );
 
--- A link is no switch to flip without end: it agrees a few times a day, and stops whenever asked.
+-- A link is no switch to flip without end: it stops whenever asked, and is told again a few times a day.
 select pg_temp.setting('{"optin_changes_per_day": 1}');
 select pg_temp.as_backend();
 set local role service_role;
 insert into res values ('stop', public.client_link_set_notices('token-do-cliente-0041-aaaaaaaaaaaaaaaaaaaaaaaa', false, null, '{}'));
-insert into res values ('too_many', public.client_link_set_notices('token-do-cliente-0041-aaaaaaaaaaaaaaaaaaaaaaaa', true,
-  pg_temp.got('link_notices', 'wording'), '{}'));
+insert into res values ('too_many', public.client_link_set_notices('token-do-cliente-0041-aaaaaaaaaaaaaaaaaaaaaaaa', true, null, '{}'));
 reset role;
 select pg_temp.setting('{"optin_changes_per_day": 10}');
 select pg_temp.as_backend();
 set local role service_role;
-insert into res values ('agreed_later', public.client_link_set_notices('token-do-cliente-0041-aaaaaaaaaaaaaaaaaaaaaaaa', true,
-  pg_temp.got('link_notices', 'wording'), '{}'));
+insert into res values ('agreed_later', public.client_link_set_notices('token-do-cliente-0041-aaaaaaaaaaaaaaaaaaaaaaaa', true, null, '{}'));
 reset role;
 select ok(
-  pg_temp.got('stop', 'code') = 'withdrawn' and pg_temp.got('too_many', 'code') = 'too_many'
-  and pg_temp.got('agreed_later', 'code') = 'agreed'
-  and (select count(*) = 3 from public.notice_optins where person_id = pg_temp.got('case', 'person_id')::uuid),
-  'a client stops whenever they ask, and agrees again a few times a day'
+  pg_temp.got('stop', 'code') = 'stopped' and pg_temp.got('too_many', 'code') = 'too_many'
+  and pg_temp.got('agreed_later', 'code') = 'resumed'
+  and (select count(*) = 2 from public.notice_stops where person_id = pg_temp.got('case', 'person_id')::uuid),
+  'a client stops whenever they ask, and is told again a few times a day'
 );
 
 select ok(
@@ -638,7 +640,7 @@ set local role authenticated;
 select throws_ok(
   $$select public.record_notice_optin((select id from public.cases where org_id = 'bd100000-0000-4000-8000-00000000000a' limit 1),
       (select person_id from public.case_parties where org_id = 'bd100000-0000-4000-8000-00000000000a' limit 1), false, 'Pedido por telefone.')$$,
-  '42501', 'not_allowed_in_support_session', 'a support visit records no agreement');
+  '42501', 'not_allowed_in_support_session', 'a support visit records no request about the notices');
 select throws_ok(
   $$select public.set_notice_kind('bd100000-0000-4000-8000-00000000000a', 'hearing_reminder', false)$$,
   '42501', 'not_allowed_in_support_session', 'nor switches a kind');
@@ -653,8 +655,9 @@ set local role authenticated;
 select ok(
   (select count(*) = 0 from public.client_notices where org_id = 'bd100000-0000-4000-8000-00000000000a')
   and (select count(*) = 0 from public.notice_optins where org_id = 'bd100000-0000-4000-8000-00000000000a')
+  and (select count(*) = 0 from public.notice_stops where org_id = 'bd100000-0000-4000-8000-00000000000a')
   and (select count(*) = 0 from public.firm_notice_kinds where org_id = 'bd100000-0000-4000-8000-00000000000a'),
-  'firm B reads none of firm A''s notices, agreements or kinds'
+  'firm B reads none of firm A''s notices, requests to stop or kinds'
 );
 select throws_ok($$select public.case_notices((select id from public.cases where org_id = 'bd100000-0000-4000-8000-00000000000a' limit 1))$$,
   'P0002', 'case_not_found', 'nor a case''s notices');
@@ -687,10 +690,6 @@ insert into res values ('go_b', public.save_proceeding(pg_temp.got('case_b', 'ca
 insert into res values ('hearing_b', public.save_hearing(null, pg_temp.got('go_b', 'proceeding_id')::uuid,
   jsonb_build_object('kind', 'conciliacao', 'mode', 'videoconferencia', 'day', to_char(current_date + 6, 'YYYY-MM-DD'),
     'time', '10:00', 'link', 'https://sala.invalid/8')));
-select public.record_notice_optin(pg_temp.got('case_b', 'case_id')::uuid, pg_temp.got('case_b', 'person_id')::uuid, true,
-  'Concordou no contrato de honorários.');
-select public.record_notice_optin(pg_temp.got('case_b', 'case_id')::uuid, pg_temp.got('paula', 'person_id')::uuid, true,
-  'Concordou no contrato de honorários.');
 insert into res values ('begun_b', public.begin_notice_template('bd100000-0000-4000-8000-00000000000b', 'hearing_reminder',
   pg_temp.kind_text('hearing_reminder')));
 insert into res values ('begun_b_change', public.begin_notice_template('bd100000-0000-4000-8000-00000000000b', 'hearing_change',
@@ -734,7 +733,7 @@ select ok(
   'a phone a family shares is told a thing once, and nothing goes while the firm''s token is refused'
 );
 
--- Who was told stops; the hearing moves: the relative who shares the phone, and agreed, is told of it.
+-- Who was told asks the firm to stop; the hearing moves: the relative who shares the phone is told of it.
 insert into res select 'told_b', jsonb_build_object('person', person_id) from public.client_notices
 where org_id = 'bd100000-0000-4000-8000-00000000000b' and kind = 'hearing_reminder';
 select pg_temp.later(60);
@@ -754,7 +753,7 @@ select ok(
   pg_temp.got('shared_change', 'reserved') = '1'
   and (select person_id <> pg_temp.got('told_b', 'person')::uuid and phone = '5500999997777'
        from public.client_notices where org_id = 'bd100000-0000-4000-8000-00000000000b' and kind = 'hearing_change'),
-  'a change goes to whoever of the lawsuit still agrees at the phone that was told, once'
+  'a change goes to whoever of the lawsuit is still told at the phone that was told, once'
 );
 
 -- Firm B answers on two accounts at the vendor: which one a text would go to is not the platform's to guess.
@@ -823,8 +822,6 @@ select pg_temp.sign_in('ad100000-0000-4000-8000-000000000001');
 set local role authenticated;
 insert into res values ('joana', public.save_case_person(pg_temp.got('case', 'case_id')::uuid, null,
   '{"full_name": "Joana Teste Lima", "phone": "5562999990077"}'::jsonb, 'claimant'));
-select public.record_notice_optin(pg_temp.got('case', 'case_id')::uuid, pg_temp.got('joana', 'person_id')::uuid, true,
-  'Concordou por mensagem no WhatsApp.');
 reset role;
 insert into public.wa_optouts (org_id, contact_wa_id, source) values ('bd100000-0000-4000-8000-00000000000a', '556299990077', 'keyword');
 select ok(
@@ -833,7 +830,7 @@ select ok(
   'a mobile is found with and without its ninth digit, and who asked to stop from either is not told'
 );
 
--- Maria's number changed: what she agreed to was for the old one.
+-- Maria's number changed: nothing was agreed for a number, so she is told at the new one at once.
 select pg_temp.sign_in('ad100000-0000-4000-8000-000000000001');
 set local role authenticated;
 select public.save_case_person(pg_temp.got('case', 'case_id')::uuid, pg_temp.got('case', 'person_id')::uuid,
@@ -841,19 +838,10 @@ select public.save_case_person(pg_temp.got('case', 'case_id')::uuid, pg_temp.got
 reset role;
 insert into res values ('new_number', jsonb_build_object('blocker',
   public.notice_person_blocker('bd100000-0000-4000-8000-00000000000a', pg_temp.got('case', 'person_id')::uuid)));
-select pg_temp.sign_in('ad100000-0000-4000-8000-000000000001');
-set local role authenticated;
-insert into res values ('optin_new_number', public.record_notice_optin(pg_temp.got('case', 'case_id')::uuid,
-  pg_temp.got('case', 'person_id')::uuid, true, 'Confirmou o número novo por telefone.'));
-reset role;
 select ok(
-  pg_temp.got('new_number', 'blocker') = 'no_optin' and pg_temp.got('optin_new_number', 'code') = 'recorded'
-  and (select phone = '5500999995555' and source = 'firm'
-       from public.notice_optins where person_id = pg_temp.got('case', 'person_id')::uuid and ended_at is null)
-  and (select count(*) = 4 from public.notice_optins where person_id = pg_temp.got('case', 'person_id')::uuid)
-  and (select count(*) = 1 from public.notice_optins
-       where person_id = pg_temp.got('case', 'person_id')::uuid and ended_source = 'replaced' and phone = '5500999998888'),
-  'an agreement is for its number: another number asks for another, and the one before stays on record as replaced'
+  pg_temp.got('new_number', 'blocker') is null
+  and (select count(*) = 0 from public.notice_optins where person_id = pg_temp.got('case', 'person_id')::uuid),
+  'a number that changed is told at once: nothing is asked to be agreed for a number'
 );
 
 -- ---------- The words of a hearing, and the earlier hour of its day ----------
@@ -954,7 +942,7 @@ select public.record_notice_template('bd100000-0000-4000-8000-00000000000a', 'do
   pg_temp.got('doc_begun', 'name'), 'APPROVED', 'UTILITY', pg_temp.kind_text('document_refused'), null,
   'ad100000-0000-4000-8000-000000000001');
 reset role;
--- A case still gathering papers: Rita, who agreed to be told, and her son Caio, a minor she answers for.
+-- A case still gathering papers: Rita, and her son Caio, a minor she answers for.
 select pg_temp.sign_in('ad100000-0000-4000-8000-000000000001');
 set local role authenticated;
 insert into res values ('doc_on', public.set_notice_kind('bd100000-0000-4000-8000-00000000000a', 'document_refused', true));
@@ -964,8 +952,6 @@ insert into res values ('rita_guardian', public.save_case_person(pg_temp.got('do
   pg_temp.got('doc_case', 'person_id')::uuid, '{}'::jsonb, 'guardian'));
 insert into res values ('caio', public.save_case_person(pg_temp.got('doc_case', 'case_id')::uuid, null,
   '{"full_name": "Caio Teste", "birth_date": "2015-07-07"}'::jsonb, 'claimant', pg_temp.got('rita_guardian', 'party_id')::uuid));
-select public.record_notice_optin(pg_temp.got('doc_case', 'case_id')::uuid, pg_temp.got('doc_case', 'person_id')::uuid, true,
-  'Concordou no contrato de honorários.');
 reset role;
 -- Her papers, as the firm received them.
 select pg_temp.as_backend();
@@ -1072,8 +1058,6 @@ select pg_temp.sign_in('ad100000-0000-4000-8000-000000000001');
 set local role authenticated;
 insert into res values ('bruno', public.save_case_person(pg_temp.got('doc_case', 'case_id')::uuid, null,
   '{"full_name": "Bruno Teste", "birth_date": "1982-02-02", "phone": "5500999993333"}'::jsonb, 'claimant'));
-select public.record_notice_optin(pg_temp.got('doc_case', 'case_id')::uuid, pg_temp.got('bruno', 'person_id')::uuid, true,
-  'Concordou no contrato de honorários.');
 insert into res values ('bruno_link', public.create_client_link(pg_temp.got('doc_case', 'case_id')::uuid,
   pg_temp.got('bruno', 'person_id')::uuid, encode(sha256(convert_to('token-do-bruno-0041-bbbbbbbbbbbbbbbbbbbbbbbb', 'UTF8')), 'hex')));
 reset role;
@@ -1135,8 +1119,6 @@ select pg_temp.sign_in('ad100000-0000-4000-8000-000000000001');
 set local role authenticated;
 insert into res values ('lucia_son', public.save_case_person(pg_temp.got('lucia_case', 'case_id')::uuid, null,
   '{"full_name": "Davi Teste", "birth_date": "2014-04-04"}'::jsonb, 'claimant', pg_temp.got('lucia_case', 'party_id')::uuid));
-select public.record_notice_optin(pg_temp.got('lucia_case', 'case_id')::uuid, pg_temp.got('lucia_case', 'person_id')::uuid, true,
-  'Concordou no contrato de honorários.');
 reset role;
 select pg_temp.as_backend();
 set local role service_role;

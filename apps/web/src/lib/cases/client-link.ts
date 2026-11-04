@@ -151,17 +151,19 @@ export type ClientLawsuit = {
 };
 
 /**
- * Whether the client is told on WhatsApp (`client_link_notices`, migration 0038): the number the firm has for
- * them, whether they agreed for it and how, whether they asked the firm to stop, and the words they agree to.
+ * Whether the client is told on WhatsApp (`client_link_notices`, migration 0088): nobody is asked to agree, so the
+ * link says where the notices go and lets the client stop them; whether they asked to stop (on this link or to the
+ * firm), and whether their number wrote SAIR to the firm.
  */
 export type ClientNotices = {
   /** The firm has a kind of notice on: it tells its clients something on WhatsApp. */
   active: boolean;
+  /** The firm's name, as the notices are signed. */
+  firm: string | null;
   phone: string | null;
-  agreed: boolean;
-  agreed_at: string | null;
+  stopped: boolean;
+  stopped_at: string | null;
   opted_out: boolean;
-  wording: string | null;
 };
 
 /**
@@ -221,11 +223,11 @@ export async function readClientTasks(token: string): Promise<ClientTasks> {
       told?.ok === true
         ? {
             active: told.active === true,
+            firm: typeof told.firm === "string" && told.firm ? told.firm : null,
             phone: told.phone ?? null,
-            agreed: told.agreed === true,
-            agreed_at: told.agreed_at ?? null,
+            stopped: told.stopped === true,
+            stopped_at: told.stopped_at ?? null,
             opted_out: told.opted_out === true,
-            wording: told.wording ?? null,
           }
         : null,
     civilCourt:

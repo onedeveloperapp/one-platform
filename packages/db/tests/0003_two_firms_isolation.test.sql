@@ -278,6 +278,9 @@ insert into public.notice_optins (person_id, org_id, phone, source, wording) val
    'Quero receber os avisos do meu processo.'),
   ('a2000000-0000-4000-8000-00000000000b', 'b1000000-0000-4000-8000-00000000000b', '5562999990002', 'client',
    'Quero receber os avisos do meu processo.');
+insert into public.notice_stops (person_id, org_id, source) values
+  ('a2000000-0000-4000-8000-00000000000a', 'b1000000-0000-4000-8000-00000000000a', 'client'),
+  ('a2000000-0000-4000-8000-00000000000b', 'b1000000-0000-4000-8000-00000000000b', 'client');
 insert into public.client_notices (org_id, case_id, person_id, phone, kind, occurrence, params, message_id)
 select m.org_id, c.id, p.id, '5500999990001', 'payment_alert', 'p:teste', '[]'::jsonb, m.id
 from public.wa_messages m
@@ -471,7 +474,7 @@ select is(
     'filing_receipts', 'firm_autonomy', 'firm_calendars',
     'firm_claim_defaults', 'firm_invitations', 'firm_modules', 'firm_notice_kinds', 'firm_signers', 'flight_alerts', 'flight_checks', 'flight_segments', 'hearings', 'import_batches', 'import_rows', 'invoices',
     'issued_documents', 'lawyer_signature_uses', 'legal_sources', 'memberships',
-    'movements', 'notice_optins', 'onboarding_state', 'partner_invitations', 'partner_links', 'pax_firm_clauses',
+    'movements', 'notice_optins', 'notice_stops', 'onboarding_state', 'partner_invitations', 'partner_links', 'pax_firm_clauses',
     'people',
     'proceeding_lawyers', 'proceeding_parties', 'proceeding_tracking', 'proceedings', 'publication_readings', 'publications', 'record_versions',
     'signature_envelopes',
@@ -647,7 +650,7 @@ select is(
     'filing_package_items', 'filing_packages',
     'filing_receipts', 'firm_autonomy', 'firm_calendars', 'firm_claim_defaults', 'firm_modules', 'firm_notice_kinds', 'firm_signers', 'flight_alerts', 'flight_checks', 'flight_segments', 'hearings', 'import_batches',
     'import_rows', 'invoices', 'issued_documents', 'lawyer_signature_uses', 'legal_sources',
-    'memberships', 'movements', 'notice_optins', 'partner_links', 'pax_firm_clauses', 'people', 'proceeding_lawyers', 'proceeding_parties', 'proceeding_tracking', 'proceedings',
+    'memberships', 'movements', 'notice_optins', 'notice_stops', 'partner_links', 'pax_firm_clauses', 'people', 'proceeding_lawyers', 'proceeding_parties', 'proceeding_tracking', 'proceedings',
     'publication_readings', 'publications',
     'signature_envelopes',
     'subscriptions', 'template_imports', 'test_chats', 'tracked_legs', 'tracked_trips',
@@ -690,7 +693,7 @@ select is(
     'filing_receipts', 'firm_autonomy', 'firm_calendars',
     'firm_claim_defaults', 'firm_invitations', 'firm_modules', 'firm_notice_kinds', 'firm_signers', 'flight_alerts', 'flight_checks', 'flight_segments', 'hearings', 'import_batches', 'import_rows', 'invoices',
     'issued_documents', 'lawyer_signature_uses', 'legal_sources', 'memberships',
-    'movements', 'notice_optins', 'onboarding_state', 'partner_invitations', 'partner_links', 'pax_firm_clauses',
+    'movements', 'notice_optins', 'notice_stops', 'onboarding_state', 'partner_invitations', 'partner_links', 'pax_firm_clauses',
     'people',
     'proceeding_lawyers', 'proceeding_parties', 'proceeding_tracking', 'proceedings', 'publication_readings', 'publications', 'record_versions',
     'signature_envelopes',

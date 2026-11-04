@@ -10,11 +10,13 @@ import { SimulatorProvider } from "@flyee/whatsapp/simulator";
  * own worker against a real database and the simulator where the vendor
  * stands: the firm submits a kind's text (the database names the template,
  * the simulator takes it, the platform keeps what it answered) and switches
- * it on, two clients agree, and the sweep reserves each one's reminder of a
- * hearing and sends it through the outbox. Sweeps that run at the same time,
- * on two connections, and sweeps that run again send nobody anything twice:
- * the acceptance of the notices (S10). A hearing that moves is told once, the
- * change standing for the reminder of its new moment.
+ * it on, and the sweep reserves each client's reminder of a hearing and
+ * sends it through the outbox, with nobody asked to agree first (0088).
+ * Sweeps that run at the same time, on two connections, and sweeps that run
+ * again send nobody anything twice: the acceptance of the notices (S10). A
+ * hearing that moves is told once, the change standing for the reminder of
+ * its new moment; a client who asked to stop is told nothing until they ask
+ * to be told again.
  *
  * It runs only when a migrated database is at hand
  * (`npm run test:db:roundtrip`); otherwise it is skipped. What stands in is
@@ -106,6 +108,9 @@ async function sentTo(): Promise<Record<string, number>> {
 
 describe.skipIf(!DB_URL)("the notices to clients, reserved and sent once", () => {
   const hearings: string[] = [];
+  // Each client's person and case, as the tests below write to them.
+  const people: string[] = [];
+  const cases: string[] = [];
 
   beforeAll(async () => {
     // Set on the process itself: a stubbed variable is taken back before each test.
@@ -152,7 +157,7 @@ describe.skipIf(!DB_URL)("the notices to clients, reserved and sent once", () =>
     );
     await switchOn("hearing_reminder");
 
-    // Two clients, each with a lawsuit the court has and a hearing in six days, each agreeing as the firm records.
+    // Two clients, each with a lawsuit the court has and a hearing in six days. Neither is asked to agree (0088).
     for (const client of CLIENTS) {
       const opened = await as(ANA).rpc("create_case", {
         target_org: FIRM,
@@ -193,14 +198,8 @@ describe.skipIf(!DB_URL)("the notices to clients, reserved and sent once", () =>
         }),
       );
       hearings.push(String(hearing.id));
-      await ok(
-        await as(ANA).rpc("record_notice_optin", {
-          target_case: created.case_id,
-          target_person: created.person_id,
-          target_agreed: true,
-          target_note: "Concordou no contrato de honorários.",
-        }),
-      );
+      people.push(String(created.person_id));
+      cases.push(String(created.case_id));
     }
   }, 120_000);
 
@@ -283,7 +282,7 @@ describe.skipIf(!DB_URL)("the notices to clients, reserved and sent once", () =>
   it("asks a client again for a paper ONE refused, with the reason, once", async () => {
     const { sweepNotices } = await import("@/lib/notices/work");
     await switchOn("document_refused");
-    // A case still gathering papers, of a client who agreed to be told.
+    // A case still gathering papers, of a client who never answered anything about the notices.
     const opened = await as(ANA).rpc("create_case", {
       target_org: FIRM,
       target_incident: "delay",
@@ -293,14 +292,6 @@ describe.skipIf(!DB_URL)("the notices to clients, reserved and sent once", () =>
     });
     expect(opened.error).toBeNull();
     const created = opened.data as Row;
-    await ok(
-      await as(ANA).rpc("record_notice_optin", {
-        target_case: created.case_id,
-        target_person: created.person_id,
-        target_agreed: true,
-        target_note: "Concordou no contrato de honorários.",
-      }),
-    );
     // Her proof of address arrived, and ONE's check refused it.
     const file = await ok(
       await backend().rpc("reserve_file", {
@@ -344,5 +335,48 @@ describe.skipIf(!DB_URL)("the notices to clients, reserved and sent once", () =>
 
     expect((await sweepNotices(backend() as never)).reserved).toBe(0);
     expect((await sentTo())["5500999990093"]).toBe(1);
+  });
+
+  it("tells a client who asked to stop nothing, and tells them again once they ask", async () => {
+    const { sweepNotices } = await import("@/lib/notices/work");
+    // Joana asked the firm by phone to stop; then her hearing moves.
+    const stopped = await ok(
+      await as(ANA).rpc("record_notice_optin", {
+        target_case: cases[1],
+        target_person: people[1],
+        target_agreed: false,
+        target_note: "Pediu por telefone para não receber.",
+      }),
+    );
+    expect(stopped.code).toBe("stopped");
+    await ok(
+      await as(ANA).rpc("save_hearing", {
+        target_hearing: hearings[1],
+        target_proceeding: null,
+        target_fields: {
+          kind: "conciliacao",
+          mode: "videoconferencia",
+          day: brasiliaDay(6),
+          time: "17:00",
+          link: "https://sala.invalid/avisos",
+        },
+      }),
+    );
+    expect((await sweepNotices(backend() as never)).reserved).toBe(0);
+    expect((await sentTo())[CLIENTS[1].phone]).toBe(1);
+
+    // She asks to be told again: the change she was not told of goes now, once.
+    const resumed = await ok(
+      await as(ANA).rpc("record_notice_optin", {
+        target_case: cases[1],
+        target_person: people[1],
+        target_agreed: true,
+        target_note: "Pediu na reunião para voltar a receber.",
+      }),
+    );
+    expect(resumed.code).toBe("resumed");
+    expect((await sweepNotices(backend() as never)).reserved).toBe(1);
+    expect((await sentTo())[CLIENTS[1].phone]).toBe(2);
+    expect((await sweepNotices(backend() as never)).reserved).toBe(0);
   });
 });

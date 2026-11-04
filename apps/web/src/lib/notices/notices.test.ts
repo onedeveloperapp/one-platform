@@ -127,8 +127,8 @@ describe("the words", () => {
       ...Object.values(KIND_STATE_KEY),
       ...[
         "no_phone",
-        "no_optin",
         "opted_out",
+        "stopped",
         "kind_off",
         "template_unusable",
         "no_number",

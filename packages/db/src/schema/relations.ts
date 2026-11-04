@@ -1,7 +1,7 @@
 // GENERATED from packages/db/migrations by `npm run db:schema:pull`.
 // Regenerate after every migration instead of editing by hand.
 import { relations } from "drizzle-orm/relations";
-import { profiles, organizations, usersInAuth, memberships, auditEvents, consentTerms, consentAcceptances, accessEvents, platformSettings, notifications, announcements, onboardingState, oabRegistrations, firmInvitations, subscriptions, plans, coupons, billingOperations, subscriptionModules, modules, invoices, entitlementGrants, signupAttribution, metaAttribution, purchaseAttributions, productEvents, helpCategories, helpArticles, leads, blogPosts, blogComments, impersonationSessions, newsletterSends, aiSpend, aiTasks, promptVersions, autonomyDecisions, aiRuns, approvals, connections, connectionSecrets, waNumbers, files, partners, issuedDocuments, waTemplates, waConversations, waMessages, people, caseParties, cases, airports, flightSegments, proceedings, courts, clientLinks, caseEvents, signatureEnvelopes, caseDocuments, clientConsents, airlines, productModules, partnerLinks, caseWeather, civilCourtAnswers, caseStatements, adminComplaints, certificateInventory, filingReceipts, filingPackages, djenCaptures, draftTemplates, legalSources, publications, caseDrafts, caseDraftVersions, dossiers, flightChecks, proceedingTracking, movements, importBatches, importRows, courtCalendarDays, deadlineActs, deadlines, publicationTriagePolicies, firmCalendars, hearingEventRemovals, noticeOptins, caseAdvances, clientNotices, noticeKinds, hearings, proceedingSignersSeen, pscProviders, lawyerSignatureUses, lawyerCpfs, filingPackageItems, testChats, trackedLegs, trackedTrips, paxTrips, flightAlerts, waConversationEvents, casePapers, templateImports, partnerInvitations, paxConfirmLinks, paxTravelers, paxConsentTerms, paxDocuments, paxConsents, partnerApiKeys, paxTripTravelers, announcementDismissals, newsletterDeliveries, proceedingParties, proceedingLawyers, firmSigners, firmModules, partnerMembers, waContacts, firmClaimDefaults, firmAutonomy, waOptouts, paxTripLegs, courtNotes, caseDraftCitations, courtCalendarYears, firmNoticeKinds, publicationReadings, courtSystems } from "./schema";
+import { profiles, organizations, usersInAuth, memberships, auditEvents, consentTerms, consentAcceptances, accessEvents, platformSettings, notifications, announcements, onboardingState, oabRegistrations, firmInvitations, subscriptions, plans, coupons, billingOperations, subscriptionModules, modules, invoices, entitlementGrants, signupAttribution, metaAttribution, purchaseAttributions, productEvents, helpCategories, helpArticles, leads, blogPosts, blogComments, impersonationSessions, newsletterSends, aiSpend, aiTasks, promptVersions, autonomyDecisions, aiRuns, approvals, connections, connectionSecrets, waNumbers, files, partners, issuedDocuments, waTemplates, waConversations, waMessages, people, caseParties, cases, airports, flightSegments, proceedings, courts, clientLinks, caseEvents, signatureEnvelopes, caseDocuments, clientConsents, airlines, productModules, partnerLinks, caseWeather, civilCourtAnswers, caseStatements, adminComplaints, certificateInventory, filingReceipts, filingPackages, djenCaptures, draftTemplates, legalSources, publications, caseDrafts, caseDraftVersions, dossiers, flightChecks, proceedingTracking, movements, importBatches, importRows, courtCalendarDays, deadlineActs, deadlines, publicationTriagePolicies, firmCalendars, hearingEventRemovals, noticeOptins, caseAdvances, clientNotices, noticeKinds, hearings, proceedingSignersSeen, pscProviders, lawyerSignatureUses, lawyerCpfs, filingPackageItems, testChats, trackedTrips, paxTrips, trackedLegs, flightAlerts, waConversationEvents, casePapers, partnerInvitations, paxConfirmLinks, paxTravelers, paxConsentTerms, paxDocuments, partnerApiKeys, paxConsents, templateImports, paxFirmClauses, noticeStops, paxTripTravelers, announcementDismissals, newsletterDeliveries, proceedingParties, proceedingLawyers, paxReadingDays, firmSigners, partnerMembers, waContacts, firmModules, firmClaimDefaults, firmAutonomy, waOptouts, paxTripLegs, courtNotes, caseDraftCitations, courtCalendarYears, firmNoticeKinds, publicationReadings, courtSystems } from "./schema";
 
 export const organizationsRelations = relations(organizations, ({one, many}) => ({
 	profile: one(profiles, {
@@ -73,24 +73,26 @@ export const organizationsRelations = relations(organizations, ({one, many}) => 
 	filingPackageItems: many(filingPackageItems),
 	lawyerSignatureUses: many(lawyerSignatureUses),
 	testChats: many(testChats),
-	trackedLegs: many(trackedLegs),
 	trackedTrips: many(trackedTrips),
+	trackedLegs: many(trackedLegs),
 	flightAlerts: many(flightAlerts),
 	waConversationEvents: many(waConversationEvents),
 	casePapers: many(casePapers),
-	templateImports: many(templateImports),
 	partnerInvitations: many(partnerInvitations),
 	partnerLinks: many(partnerLinks),
 	paxConfirmLinks: many(paxConfirmLinks),
-	paxTravelers: many(paxTravelers),
 	paxTrips: many(paxTrips),
 	paxDocuments: many(paxDocuments),
 	paxConsents: many(paxConsents),
+	paxTravelers: many(paxTravelers),
+	templateImports: many(templateImports),
+	paxFirmClauses: many(paxFirmClauses),
+	noticeStops: many(noticeStops),
 	proceedingParties: many(proceedingParties),
 	proceedingLawyers: many(proceedingLawyers),
 	firmSigners: many(firmSigners),
-	firmModules: many(firmModules),
 	waContacts: many(waContacts),
+	firmModules: many(firmModules),
 	firmClaimDefaults: many(firmClaimDefaults),
 	firmAutonomies: many(firmAutonomy),
 	waOptouts: many(waOptouts),
@@ -293,14 +295,13 @@ export const profilesRelations = relations(profiles, ({one, many}) => ({
 	lawyerSignatureUses: many(lawyerSignatureUses),
 	testChats: many(testChats),
 	waConversationEvents: many(waConversationEvents),
-	templateImports: many(templateImports),
+	partners: many(partners),
 	partnerInvitations_invitedBy: many(partnerInvitations, {
 		relationName: "partnerInvitations_invitedBy_profiles_id"
 	}),
 	partnerInvitations_acceptedBy: many(partnerInvitations, {
 		relationName: "partnerInvitations_acceptedBy_profiles_id"
 	}),
-	partners: many(partners),
 	partnerLinks_startedBy: many(partnerLinks, {
 		relationName: "partnerLinks_startedBy_profiles_id"
 	}),
@@ -309,7 +310,6 @@ export const profilesRelations = relations(profiles, ({one, many}) => ({
 	}),
 	paxConfirmLinks: many(paxConfirmLinks),
 	paxConsentTerms: many(paxConsentTerms),
-	paxTravelers: many(paxTravelers),
 	paxTrips: many(paxTrips),
 	paxDocuments: many(paxDocuments),
 	partnerApiKeys_createdBy: many(partnerApiKeys, {
@@ -317,6 +317,15 @@ export const profilesRelations = relations(profiles, ({one, many}) => ({
 	}),
 	partnerApiKeys_revokedBy: many(partnerApiKeys, {
 		relationName: "partnerApiKeys_revokedBy_profiles_id"
+	}),
+	paxTravelers: many(paxTravelers),
+	templateImports: many(templateImports),
+	paxFirmClauses: many(paxFirmClauses),
+	noticeStops_recordedBy: many(noticeStops, {
+		relationName: "noticeStops_recordedBy_profiles_id"
+	}),
+	noticeStops_endedBy: many(noticeStops, {
+		relationName: "noticeStops_endedBy_profiles_id"
 	}),
 	announcementDismissals: many(announcementDismissals),
 	proceedingLawyers: many(proceedingLawyers),
@@ -326,8 +335,8 @@ export const profilesRelations = relations(profiles, ({one, many}) => ({
 	firmSigners_addedBy: many(firmSigners, {
 		relationName: "firmSigners_addedBy_profiles_id"
 	}),
-	firmModules: many(firmModules),
 	partnerMembers: many(partnerMembers),
+	firmModules: many(firmModules),
 	firmClaimDefaults: many(firmClaimDefaults),
 	firmAutonomies: many(firmAutonomy),
 	waOptouts: many(waOptouts),
@@ -736,8 +745,8 @@ export const aiRunsRelations = relations(aiRuns, ({one, many}) => ({
 	publications: many(publications),
 	caseDrafts: many(caseDrafts),
 	caseDraftVersions: many(caseDraftVersions),
-	templateImports: many(templateImports),
 	paxDocuments: many(paxDocuments),
+	templateImports: many(templateImports),
 	publicationReadings: many(publicationReadings),
 }));
 
@@ -842,25 +851,25 @@ export const filesRelations = relations(files, ({one, many}) => ({
 	filingPackageItems_orgId: many(filingPackageItems, {
 		relationName: "filingPackageItems_orgId_files_id"
 	}),
-	templateImports: many(templateImports),
 	paxDocuments: many(paxDocuments),
+	templateImports: many(templateImports),
 }));
 
 export const partnersRelations = relations(partners, ({one, many}) => ({
 	files: many(files),
-	partnerInvitations: many(partnerInvitations),
 	profile: one(profiles, {
 		fields: [partners.createdBy],
 		references: [profiles.id]
 	}),
+	partnerInvitations: many(partnerInvitations),
 	partnerLinks: many(partnerLinks),
 	paxConfirmLinks: many(paxConfirmLinks),
 	paxConsentTerms: many(paxConsentTerms),
-	paxTravelers: many(paxTravelers),
 	paxTrips: many(paxTrips),
 	paxDocuments: many(paxDocuments),
-	paxConsents: many(paxConsents),
 	partnerApiKeys: many(partnerApiKeys),
+	paxConsents: many(paxConsents),
+	paxTravelers: many(paxTravelers),
 	partnerMembers: many(partnerMembers),
 }));
 
@@ -981,6 +990,7 @@ export const peopleRelations = relations(people, ({one, many}) => ({
 	noticeOptins: many(noticeOptins),
 	clientNotices: many(clientNotices),
 	casePapers: many(casePapers),
+	noticeStops: many(noticeStops),
 }));
 
 export const casePartiesRelations = relations(caseParties, ({one, many}) => ({
@@ -1187,6 +1197,7 @@ export const clientLinksRelations = relations(clientLinks, ({one, many}) => ({
 	civilCourtAnswers: many(civilCourtAnswers),
 	caseStatements: many(caseStatements),
 	noticeOptins: many(noticeOptins),
+	noticeStops: many(noticeStops),
 }));
 
 export const caseEventsRelations = relations(caseEvents, ({one}) => ({
@@ -1355,9 +1366,10 @@ export const partnerLinksRelations = relations(partnerLinks, ({one, many}) => ({
 		relationName: "partnerLinks_endedBy_profiles_id"
 	}),
 	paxConfirmLinks: many(paxConfirmLinks),
-	paxTravelers: many(paxTravelers),
 	paxTrips: many(paxTrips),
 	partnerApiKeys: many(partnerApiKeys),
+	paxTravelers: many(paxTravelers),
+	paxReadingDays: many(paxReadingDays),
 }));
 
 export const caseWeatherRelations = relations(caseWeather, ({one}) => ({
@@ -1561,6 +1573,7 @@ export const draftTemplatesRelations = relations(draftTemplates, ({one, many}) =
 	}),
 	caseDrafts: many(caseDrafts),
 	casePapers: many(casePapers),
+	templateImports: many(templateImports),
 }));
 
 export const legalSourcesRelations = relations(legalSources, ({one}) => ({
@@ -2092,19 +2105,7 @@ export const testChatsRelations = relations(testChats, ({one}) => ({
 	}),
 }));
 
-export const trackedLegsRelations = relations(trackedLegs, ({one}) => ({
-	organization: one(organizations, {
-		fields: [trackedLegs.orgId],
-		references: [organizations.id]
-	}),
-	trackedTrip: one(trackedTrips, {
-		fields: [trackedLegs.orgId],
-		references: [trackedTrips.id]
-	}),
-}));
-
 export const trackedTripsRelations = relations(trackedTrips, ({one, many}) => ({
-	trackedLegs: many(trackedLegs),
 	organization: one(organizations, {
 		fields: [trackedTrips.orgId],
 		references: [organizations.id]
@@ -2117,6 +2118,7 @@ export const trackedTripsRelations = relations(trackedTrips, ({one, many}) => ({
 		fields: [trackedTrips.paxTripId],
 		references: [paxTrips.id]
 	}),
+	trackedLegs: many(trackedLegs),
 	flightAlerts: many(flightAlerts),
 }));
 
@@ -2145,6 +2147,17 @@ export const paxTripsRelations = relations(paxTrips, ({one, many}) => ({
 	paxDocuments: many(paxDocuments),
 	paxTripTravelers: many(paxTripTravelers),
 	paxTripLegs: many(paxTripLegs),
+}));
+
+export const trackedLegsRelations = relations(trackedLegs, ({one}) => ({
+	organization: one(organizations, {
+		fields: [trackedLegs.orgId],
+		references: [organizations.id]
+	}),
+	trackedTrip: one(trackedTrips, {
+		fields: [trackedLegs.orgId],
+		references: [trackedTrips.id]
+	}),
 }));
 
 export const flightAlertsRelations = relations(flightAlerts, ({one}) => ({
@@ -2204,25 +2217,6 @@ export const casePapersRelations = relations(casePapers, ({one}) => ({
 	}),
 }));
 
-export const templateImportsRelations = relations(templateImports, ({one}) => ({
-	file: one(files, {
-		fields: [templateImports.orgId],
-		references: [files.id]
-	}),
-	organization: one(organizations, {
-		fields: [templateImports.orgId],
-		references: [organizations.id]
-	}),
-	profile: one(profiles, {
-		fields: [templateImports.requestedBy],
-		references: [profiles.id]
-	}),
-	aiRun: one(aiRuns, {
-		fields: [templateImports.runId],
-		references: [aiRuns.id]
-	}),
-}));
-
 export const partnerInvitationsRelations = relations(partnerInvitations, ({one}) => ({
 	organization: one(organizations, {
 		fields: [partnerInvitations.orgId],
@@ -2274,6 +2268,14 @@ export const paxConfirmLinksRelations = relations(paxConfirmLinks, ({one, many})
 
 export const paxTravelersRelations = relations(paxTravelers, ({one, many}) => ({
 	paxConfirmLinks: many(paxConfirmLinks),
+	paxTrips: many(paxTrips),
+	paxDocuments: many(paxDocuments),
+	paxConsents_givenBy: many(paxConsents, {
+		relationName: "paxConsents_givenBy_paxTravelers_id"
+	}),
+	paxConsents_travelerId: many(paxConsents, {
+		relationName: "paxConsents_travelerId_paxTravelers_id"
+	}),
 	partner: one(partners, {
 		fields: [paxTravelers.partnerId],
 		references: [partners.id]
@@ -2286,12 +2288,12 @@ export const paxTravelersRelations = relations(paxTravelers, ({one, many}) => ({
 		fields: [paxTravelers.orgId],
 		references: [organizations.id]
 	}),
-	paxTraveler: one(paxTravelers, {
+	paxTraveler_guardianId: one(paxTravelers, {
 		fields: [paxTravelers.guardianId],
 		references: [paxTravelers.id],
 		relationName: "paxTravelers_guardianId_paxTravelers_id"
 	}),
-	paxTravelers: many(paxTravelers, {
+	paxTravelers_guardianId: many(paxTravelers, {
 		relationName: "paxTravelers_guardianId_paxTravelers_id"
 	}),
 	profile: one(profiles, {
@@ -2302,13 +2304,13 @@ export const paxTravelersRelations = relations(paxTravelers, ({one, many}) => ({
 		fields: [paxTravelers.orgId],
 		references: [cases.id]
 	}),
-	paxTrips: many(paxTrips),
-	paxDocuments: many(paxDocuments),
-	paxConsents_givenBy: many(paxConsents, {
-		relationName: "paxConsents_givenBy_paxTravelers_id"
+	paxTraveler_duplicateOf: one(paxTravelers, {
+		fields: [paxTravelers.duplicateOf],
+		references: [paxTravelers.id],
+		relationName: "paxTravelers_duplicateOf_paxTravelers_id"
 	}),
-	paxConsents_travelerId: many(paxConsents, {
-		relationName: "paxConsents_travelerId_paxTravelers_id"
+	paxTravelers_duplicateOf: many(paxTravelers, {
+		relationName: "paxTravelers_duplicateOf_paxTravelers_id"
 	}),
 	paxTripTravelers: many(paxTripTravelers),
 }));
@@ -2356,6 +2358,27 @@ export const paxDocumentsRelations = relations(paxDocuments, ({one}) => ({
 	}),
 }));
 
+export const partnerApiKeysRelations = relations(partnerApiKeys, ({one}) => ({
+	partner: one(partners, {
+		fields: [partnerApiKeys.partnerId],
+		references: [partners.id]
+	}),
+	partnerLink: one(partnerLinks, {
+		fields: [partnerApiKeys.partnershipId],
+		references: [partnerLinks.id]
+	}),
+	profile_createdBy: one(profiles, {
+		fields: [partnerApiKeys.createdBy],
+		references: [profiles.id],
+		relationName: "partnerApiKeys_createdBy_profiles_id"
+	}),
+	profile_revokedBy: one(profiles, {
+		fields: [partnerApiKeys.revokedBy],
+		references: [profiles.id],
+		relationName: "partnerApiKeys_revokedBy_profiles_id"
+	}),
+}));
+
 export const paxConsentsRelations = relations(paxConsents, ({one}) => ({
 	paxTraveler_givenBy: one(paxTravelers, {
 		fields: [paxConsents.givenBy],
@@ -2385,24 +2408,62 @@ export const paxConsentsRelations = relations(paxConsents, ({one}) => ({
 	}),
 }));
 
-export const partnerApiKeysRelations = relations(partnerApiKeys, ({one}) => ({
-	partner: one(partners, {
-		fields: [partnerApiKeys.partnerId],
-		references: [partners.id]
+export const templateImportsRelations = relations(templateImports, ({one}) => ({
+	file: one(files, {
+		fields: [templateImports.orgId],
+		references: [files.id]
 	}),
-	partnerLink: one(partnerLinks, {
-		fields: [partnerApiKeys.partnershipId],
-		references: [partnerLinks.id]
+	organization: one(organizations, {
+		fields: [templateImports.orgId],
+		references: [organizations.id]
 	}),
-	profile_createdBy: one(profiles, {
-		fields: [partnerApiKeys.createdBy],
+	profile: one(profiles, {
+		fields: [templateImports.requestedBy],
+		references: [profiles.id]
+	}),
+	aiRun: one(aiRuns, {
+		fields: [templateImports.runId],
+		references: [aiRuns.id]
+	}),
+	draftTemplate: one(draftTemplates, {
+		fields: [templateImports.savedTemplateId],
+		references: [draftTemplates.id]
+	}),
+}));
+
+export const paxFirmClausesRelations = relations(paxFirmClauses, ({one}) => ({
+	organization: one(organizations, {
+		fields: [paxFirmClauses.orgId],
+		references: [organizations.id]
+	}),
+	profile: one(profiles, {
+		fields: [paxFirmClauses.createdBy],
+		references: [profiles.id]
+	}),
+}));
+
+export const noticeStopsRelations = relations(noticeStops, ({one}) => ({
+	organization: one(organizations, {
+		fields: [noticeStops.orgId],
+		references: [organizations.id]
+	}),
+	clientLink: one(clientLinks, {
+		fields: [noticeStops.linkId],
+		references: [clientLinks.id]
+	}),
+	profile_recordedBy: one(profiles, {
+		fields: [noticeStops.recordedBy],
 		references: [profiles.id],
-		relationName: "partnerApiKeys_createdBy_profiles_id"
+		relationName: "noticeStops_recordedBy_profiles_id"
 	}),
-	profile_revokedBy: one(profiles, {
-		fields: [partnerApiKeys.revokedBy],
+	profile_endedBy: one(profiles, {
+		fields: [noticeStops.endedBy],
 		references: [profiles.id],
-		relationName: "partnerApiKeys_revokedBy_profiles_id"
+		relationName: "noticeStops_endedBy_profiles_id"
+	}),
+	person: one(people, {
+		fields: [noticeStops.personId],
+		references: [people.id]
 	}),
 }));
 
@@ -2469,6 +2530,13 @@ export const proceedingLawyersRelations = relations(proceedingLawyers, ({one}) =
 	}),
 }));
 
+export const paxReadingDaysRelations = relations(paxReadingDays, ({one}) => ({
+	partnerLink: one(partnerLinks, {
+		fields: [paxReadingDays.partnershipId],
+		references: [partnerLinks.id]
+	}),
+}));
+
 export const firmSignersRelations = relations(firmSigners, ({one}) => ({
 	organization: one(organizations, {
 		fields: [firmSigners.orgId],
@@ -2487,21 +2555,6 @@ export const firmSignersRelations = relations(firmSigners, ({one}) => ({
 	membership: one(memberships, {
 		fields: [firmSigners.orgId],
 		references: [memberships.orgId]
-	}),
-}));
-
-export const firmModulesRelations = relations(firmModules, ({one}) => ({
-	organization: one(organizations, {
-		fields: [firmModules.orgId],
-		references: [organizations.id]
-	}),
-	productModule: one(productModules, {
-		fields: [firmModules.moduleKey],
-		references: [productModules.key]
-	}),
-	profile: one(profiles, {
-		fields: [firmModules.enabledBy],
-		references: [profiles.id]
 	}),
 }));
 
@@ -2524,6 +2577,21 @@ export const waContactsRelations = relations(waContacts, ({one}) => ({
 	waNumber: one(waNumbers, {
 		fields: [waContacts.numberId],
 		references: [waNumbers.id]
+	}),
+}));
+
+export const firmModulesRelations = relations(firmModules, ({one}) => ({
+	organization: one(organizations, {
+		fields: [firmModules.orgId],
+		references: [organizations.id]
+	}),
+	productModule: one(productModules, {
+		fields: [firmModules.moduleKey],
+		references: [productModules.key]
+	}),
+	profile: one(profiles, {
+		fields: [firmModules.enabledBy],
+		references: [profiles.id]
 	}),
 }));
 

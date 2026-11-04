@@ -119,15 +119,11 @@ select pg_temp.sign_in('a6100000-0000-4000-8000-000000000001');
 set local role authenticated;
 insert into res values ('mariana', pg_temp.full_case('b6100000-0000-4000-8000-00000000000a', 'Mariana Teste',
   '12345678909', '5500999996101', 'token-de-progresso-mariana-123456789'));
-insert into res values ('optin_mariana', public.record_notice_optin(pg_temp.got('mariana', 'case_id')::uuid,
-  pg_temp.got('mariana', 'person_id')::uuid, true, 'Concordou no contrato de honorários.'));
 reset role;
 select pg_temp.sign_in('a6100000-0000-4000-8000-000000000004');
 set local role authenticated;
 insert into res values ('pedro', pg_temp.full_case('b6100000-0000-4000-8000-00000000000b', 'Pedro Teste',
   '11144477735', '5500999996104', 'token-de-progresso-pedro-1234567890'));
-insert into res values ('optin_pedro', public.record_notice_optin(pg_temp.got('pedro', 'case_id')::uuid,
-  pg_temp.got('pedro', 'person_id')::uuid, true, 'Concordou por telefone com o escritório.'));
 reset role;
 insert into public.wa_conversations (org_id, number_id, contact_wa_id, last_inbound_at, last_message_at,
                                      last_message_preview, last_message_direction, unread_count, agent) values
@@ -303,8 +299,6 @@ select pg_temp.sign_in('a6100000-0000-4000-8000-000000000004');
 set local role authenticated;
 insert into res values ('rui', pg_temp.full_case('b6100000-0000-4000-8000-00000000000b', 'Rui Teste',
   '52998224725', '5500999996105', 'token-de-progresso-rui-12345678901'));
-insert into res values ('optin_rui', public.record_notice_optin(pg_temp.got('rui', 'case_id')::uuid,
-  pg_temp.got('rui', 'person_id')::uuid, true, 'Concordou por telefone com o escritório.'));
 insert into res values ('lia', pg_temp.full_case('b6100000-0000-4000-8000-00000000000b', 'Lia Teste',
   '11144477735', '5500999996106', 'token-de-progresso-lia-123456789012'));
 reset role;

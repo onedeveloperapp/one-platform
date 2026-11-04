@@ -18,8 +18,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
  * 0038): who manages the firm submits a kind's text to the vendor (the
  * database checks it and names the template, the vendor reviews it, ONE
  * keeps what it answered) and switches a kind on or off; anybody of the firm
- * records that somebody of a case agreed to be told, or that they asked to
- * stop. Never a support visit.
+ * records that somebody of a case asked to stop the notices, or to be told
+ * again (nobody is asked to agree, 0088). Never a support visit.
  */
 
 export type NoticeActionResult = { ok: true; code: string } | { ok: false; code: string; field?: string | null };
@@ -184,28 +184,33 @@ export async function setNoticeKind(kind: string, enabled: boolean): Promise<Not
   return { ok: true, code: String(answer.code ?? "on") };
 }
 
-/** Anybody of the firm records that somebody of a case agreed to be told on WhatsApp, saying how; or that they asked to stop. */
-export async function recordNoticeOptin(input: {
+/**
+ * Anybody of the firm records that somebody of a case asked to stop the notices on WhatsApp (`stopped`), or asked to
+ * be told again (`stopped: false`), saying how they asked. The database keeps it as a request to stop, or ends the
+ * one in force (0088; its function keeps the name it had when the firm recorded agreements).
+ */
+export async function recordNoticeStop(input: {
   caseId: string;
   personId: string;
-  agreed: boolean;
+  stopped: boolean;
   note: string;
 }): Promise<NoticeActionResult> {
   const context = await getMemberContext();
   if (!context?.firm) return { ok: false, code: "not_authorized" };
   if (!UUID.test(String(input?.caseId)) || !UUID.test(String(input?.personId)))
     return { ok: false, code: "person_not_found" };
-  if (typeof input.agreed !== "boolean" || typeof input.note !== "string") return { ok: false, code: "failed" };
+  if (typeof input.stopped !== "boolean" || typeof input.note !== "string") return { ok: false, code: "failed" };
   const { data, error } = await context.supabase.rpc("record_notice_optin", {
     target_case: input.caseId,
     target_person: input.personId,
-    target_agreed: input.agreed,
+    target_agreed: !input.stopped,
     target_note: input.note.slice(0, 500),
   });
   if (error) return { ok: false, code: raised(error.message) };
   const answer = (data ?? {}) as { ok?: boolean; code?: string; field?: string | null };
   if (!answer.ok) return { ok: false, code: String(answer.code ?? "failed"), field: answer.field ?? null };
-  if (answer.code === "recorded") await settleNotices();
+  // Being told again may make something due now: it goes in this round, not the next.
+  if (answer.code === "resumed") await settleNotices();
   revalidateNotices(input.caseId);
-  return { ok: true, code: String(answer.code ?? "recorded") };
+  return { ok: true, code: String(answer.code ?? "unchanged") };
 }
