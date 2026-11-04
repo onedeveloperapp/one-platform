@@ -14,11 +14,17 @@ import { Alert, Box, Button, Card, CardContent, MenuItem, TextField, Typography 
 import DocumentSlot, { type SlotState } from "@/components/cases/document-slot";
 import PersonFields from "@/components/cases/person-fields";
 import SegmentFields from "@/components/cases/segment-fields";
+import CardTitle from "@/components/product/card-title";
 import EmptyState from "@/components/product/empty-state";
-import StatusChip, { type StatusTone } from "@/components/product/status-chip";
+import QuickActions, { type QuickAction } from "@/components/product/quick-actions";
+import StateLine, { type StateTone } from "@/components/product/state-line";
+import StatusChip from "@/components/product/status-chip";
 import NiCheck from "@/icons/nexture/ni-check";
 import NiDocumentFull from "@/icons/nexture/ni-document-full";
+import NiDocumentPlus from "@/icons/nexture/ni-document-plus";
+import NiPaperclip from "@/icons/nexture/ni-paperclip";
 import NiPlane from "@/icons/nexture/ni-plane";
+import NiUploadCloud from "@/icons/nexture/ni-upload-cloud";
 import {
   caseErrorKey,
   caseLabel,
@@ -34,6 +40,14 @@ import {
   missingItems,
   PERSON_FIELD_KEY,
 } from "@/lib/cases/cases";
+import {
+  documentsStanding,
+  extraDocuments,
+  isOwed,
+  latestRefusal,
+  type NeedStanding,
+  needStanding,
+} from "@/lib/cases/client-documents";
 import type { ClientLinkView, ClientPerson, ClientTasks } from "@/lib/cases/client-link";
 import {
   addClientDependent,
@@ -72,10 +86,20 @@ type PoorPhoto = { kind: DocumentKind; partyId: string | null; documentId: strin
 /** What a photo sent all the same may be answered while it is still there to send: it could not be sent now. */
 const STILL_THERE: ReadonlySet<string> = new Set([PHOTO_POOR, "failed", "unavailable"]);
 
-const STATUS_TONE: Record<string, StatusTone> = { received: "info", accepted: "positive", rejected: "attention" };
 /** While a document sent in the last minutes waits for the firm, the folder is read again this often, for this long. */
 const CHECK_POLL_MS = 10_000;
 const CHECK_WATCH_MS = 5 * 60_000;
+/** How a document the firm needs stands, in its colour and in its words, on its line of the documents. */
+const NEED_LOOK: Record<NeedStanding, { tone: StateTone; key: string }> = {
+  accepted: { tone: "done", key: DOCUMENT_STATUS_KEY.accepted },
+  received: { tone: "waiting", key: "client-documents-in-check" },
+  rejected: { tone: "attention", key: DOCUMENT_STATUS_KEY.rejected },
+  missing: { tone: "attention", key: "client-documents-needed" },
+};
+/** The files a link still takes are said once they are few: a client far from the ceiling has nothing to weigh. */
+const FEW_UPLOADS_LEFT = 5;
+/** The line of a document of another kind than the ones the firm needs: its form, or the way to it. */
+const OTHER = "other";
 
 /**
  * What a client does on their link: their data and the data of the children
@@ -859,6 +883,8 @@ function Documents({
   const [problem, setProblem] = useState<{ key: string; code: string } | null>(null);
   const [otherKind, setOtherKind] = useState<DocumentKind>("receipt");
   const [otherParty, setOtherParty] = useState<string>(holder?.party_id ?? "");
+  // The form of a document of another kind: opened from "Enviar outro documento", closed once its file arrived.
+  const [otherOpen, setOtherOpen] = useState(false);
   const input = useRef<HTMLInputElement>(null);
   const target = useRef<{ key: string; kind: DocumentKind; partyId: string | null } | null>(null);
   // The photos the client sent that are hard to read, each said under the line it was sent from, with the two
@@ -874,13 +900,17 @@ function Documents({
   const card = useRef<HTMLDivElement | null>(null);
   const lines = useRef<Record<string, HTMLElement | null>>({});
   const back = useRef<string | null>(null);
+  // The form of another kind, just opened, puts the reader on its first choice: the kind of the document.
+  const opening = useRef(false);
   useEffect(() => {
     if (back.current === null) return;
     const line = lines.current[back.current];
     back.current = null;
+    const first = opening.current ? line?.querySelector<HTMLElement>('[role="combobox"]') : null;
+    opening.current = false;
     const active = window.document.activeElement;
     if (active && active !== window.document.body && !card.current?.contains(active)) return;
-    (line?.querySelector<HTMLElement>("button:not(:disabled)") ?? line)?.focus({ preventScroll: true });
+    (first ?? line?.querySelector<HTMLElement>("button:not(:disabled)") ?? line)?.focus({ preventScroll: true });
   });
 
   // One line per document the setting asks for, per person when it is per person: the same needs
@@ -931,6 +961,8 @@ function Documents({
       if (replaced) void discardClientUpload(token, replaced.documentId).catch(() => undefined);
       if (finished.ok) {
         if (replaced) forget(chosen.key);
+        // The document of another kind arrived: it is on the list now, and its form closes.
+        if (chosen.key === OTHER) setOtherOpen(false);
         return;
       }
       const waiting: PoorPhoto = {
@@ -958,8 +990,10 @@ function Documents({
     setProblem(null);
     try {
       const finished = await finishClientUpload(token, waiting.documentId, { insist: true });
-      if (finished.ok) forget(key);
-      else if (STILL_THERE.has(finished.code)) {
+      if (finished.ok) {
+        forget(key);
+        if (key === OTHER) setOtherOpen(false);
+      } else if (STILL_THERE.has(finished.code)) {
         // It could not be sent now: the photo is still where it was, and so is the choice.
         setProblem({ key, code: finished.code === PHOTO_POOR ? "failed" : finished.code });
       } else {
@@ -1031,18 +1065,77 @@ function Documents({
     reason ? (FILE_REFUSAL_KEY[reason] ? t(FILE_REFUSAL_KEY[reason]) : reason) : "";
 
   const people = view.people.filter((person) => person.party_id);
+  const standing = documentsStanding(needs, view.documents);
+  // What was sent that answers no need (a receipt, a photo of what happened): listed after the needs, as it came.
+  const extras = extraDocuments(needs, view.documents);
+  const nameOf = (partyId: string | null) =>
+    partyId ? (view.people.find((person) => person.party_id === partyId)?.full_name ?? null) : null;
+  const kindOf = (kind: string) => t(DOCUMENT_KIND_KEY[kind as DocumentKind] ?? DOCUMENT_KIND_KEY.other);
+
+  const openOther = () => {
+    setProblem(null);
+    setOtherOpen(true);
+    opening.current = true;
+    back.current = OTHER;
+  };
+  const closeOther = () => {
+    setProblem(null);
+    setOtherOpen(false);
+    back.current = OTHER;
+  };
+  // What was sent and serves may be sent again, one click away, never as a button that asks for it again; a
+  // document of another kind opens its form.
+  const again: QuickAction[] = needs
+    .filter((need) => !isOwed(needStanding(documentsFor(need, view.documents))))
+    .map((need) => ({
+      key: need.key,
+      label: need.name
+        ? t("client-documents-again-of", { document: t(DOCUMENT_KIND_KEY[need.kind]), name: need.name })
+        : t(DOCUMENT_KIND_KEY[need.kind]),
+      icon: <NiDocumentPlus size="medium" />,
+      disabled: busy !== null,
+      onClick: () => pick(need.key, need.kind, partyOf(need)),
+    }));
+  // A photo that waits in the form still has its two ways on when the case no longer takes new files.
+  const showOther = (editable && otherOpen) || Boolean(poor[OTHER]) || problem?.key === OTHER;
+  const left =
+    view.link.uploads_left <= FEW_UPLOADS_LEFT ? (
+      <Typography variant="body2" className="text-text-secondary">
+        {t("client-documents-left", { count: view.link.uploads_left })}
+      </Typography>
+    ) : null;
+
+  const chip =
+    standing.state === "owed" ? (
+      <StatusChip tone="attention" label={t("client-documents-owed", { count: standing.owed })} />
+    ) : standing.state === "checking" ? (
+      <StatusChip tone="info" label={t("client-documents-in-check")} />
+    ) : standing.state === "complete" ? (
+      <StatusChip tone="positive" label={t("client-documents-complete-chip")} />
+    ) : null;
 
   return (
     <Card ref={card} component="section" aria-labelledby="client-documents">
       <CardContent className="flex flex-col gap-4">
-        <Box className="flex flex-col gap-1">
-          <Typography id="client-documents" variant="h5" component="h2" className="mb-0">
-            {t("client-documents-title")}
-          </Typography>
-          <Typography variant="body2" className="text-text-secondary">
-            {t("client-documents-body")}
-          </Typography>
-        </Box>
+        <CardTitle
+          id="client-documents"
+          icon={<NiDocumentFull size="medium" />}
+          tone="secondary"
+          title={t("client-documents-title")}
+          chip={chip}
+          description={standing.state === "owed" || standing.state === "none" ? t("client-documents-body") : undefined}
+        />
+        {/* Nothing left for the client to send: the card says so first, and what was sent stays listed under it. */}
+        {standing.state === "checking" && (
+          <StateLine tone="waiting" emphasis>
+            {t("client-documents-checking")}
+          </StateLine>
+        )}
+        {standing.state === "complete" && (
+          <StateLine tone="done" emphasis>
+            {t("client-documents-complete")}
+          </StateLine>
+        )}
 
         <input
           ref={input}
@@ -1056,84 +1149,82 @@ function Documents({
           }}
         />
 
-        {needs.map((need) => {
-          const sent = documentsFor(need, view.documents);
-          const done = sent.some((document) => document.status !== "rejected");
-          return (
-            <Box
-              key={need.key}
-              ref={(line: HTMLElement | null) => {
-                lines.current[need.key] = line;
-              }}
-              tabIndex={-1}
-              className="border-grey-100 flex flex-col gap-3 rounded-2xl border p-4"
-            >
-              <Box className="flex flex-wrap items-center justify-between gap-2">
-                <Box className="flex min-w-0 flex-col">
-                  <Typography variant="body1" className="font-semibold">
-                    {t(DOCUMENT_KIND_KEY[need.kind])}
-                  </Typography>
-                  {need.name && (
-                    <Typography variant="body2" className="text-text-secondary break-words">
-                      {need.name}
-                    </Typography>
-                  )}
-                </Box>
-                {done ? (
-                  <StatusChip tone="positive" label={t("client-documents-done")} />
-                ) : (
-                  <StatusChip tone="attention" label={t("client-documents-needed")} />
-                )}
-              </Box>
-              {sent.map((document) => (
-                <Box key={document.id} className="flex flex-wrap items-center gap-2">
-                  <StatusChip
-                    tone={STATUS_TONE[document.status] ?? "neutral"}
-                    label={t(DOCUMENT_STATUS_KEY[document.status])}
-                  />
-                  <Typography variant="body2" className="min-w-0 break-all">
-                    {document.name}
-                  </Typography>
-                  {document.status === "rejected" && document.rejected_reason && (
-                    <Typography variant="body2" className="text-text-secondary w-full">
-                      {t("client-document-rejected", { reason: refusal(document.rejected_reason) })}
-                    </Typography>
-                  )}
-                </Box>
-              ))}
-              {poorNotice(need.key)}
-              {problemOf(need.key)}
-              {editable && !poor[need.key] && (
-                <Box>
-                  <Button
-                    variant={done ? "outlined" : "contained"}
-                    color={done ? "grey" : "primary"}
-                    size="small"
-                    disabled={busy !== null}
-                    onClick={() => pick(need.key, need.kind, partyOf(need))}
+        {/* One line per document: what it is and whose, how it stands on the right, and a button only where a
+            file is still owed. */}
+        {needs.length + extras.length > 0 && (
+          <Box component="ul" className="divide-grey-100 m-0 flex list-none flex-col divide-y p-0">
+            {needs.map((need) => {
+              const sent = documentsFor(need, view.documents);
+              const state = needStanding(sent);
+              const sending = busy?.key === need.key && !busy.insist;
+              const refused = state === "rejected" ? latestRefusal(sent) : null;
+              return (
+                <Box
+                  component="li"
+                  key={need.key}
+                  ref={(line: HTMLElement | null) => {
+                    lines.current[need.key] = line;
+                  }}
+                  tabIndex={-1}
+                  className="flex flex-col gap-2 py-3 first:pt-0 last:pb-0"
+                >
+                  <StateLine
+                    tone={sending ? "waiting" : NEED_LOOK[state].tone}
+                    icon={sending ? <NiUploadCloud size="medium" /> : undefined}
+                    status={sending ? t("client-documents-sending") : t(NEED_LOOK[state].key)}
+                    action={
+                      editable && isOwed(state) && !poor[need.key] ? (
+                        <Button
+                          variant="contained"
+                          size="small"
+                          disabled={busy !== null}
+                          onClick={() => pick(need.key, need.kind, partyOf(need))}
+                        >
+                          {state === "rejected" ? t("client-documents-send-more") : t("client-documents-send")}
+                        </Button>
+                      ) : undefined
+                    }
                   >
-                    {busy?.key === need.key
-                      ? t("client-documents-sending")
-                      : done
-                        ? t("client-documents-send-more")
-                        : t("client-documents-send")}
-                  </Button>
+                    <DocumentWords
+                      kind={t(DOCUMENT_KIND_KEY[need.kind])}
+                      name={need.name}
+                      detail={refused?.rejected_reason ? refusal(refused.rejected_reason) : null}
+                    />
+                  </StateLine>
+                  {poorNotice(need.key)}
+                  {problemOf(need.key)}
                 </Box>
-              )}
-            </Box>
-          );
-        })}
+              );
+            })}
+            {extras.map((document) => {
+              const state = needStanding([document]);
+              const reason = document.status === "rejected" && document.rejected_reason;
+              return (
+                <Box component="li" key={document.id} className="py-3 first:pt-0 last:pb-0">
+                  <StateLine tone={NEED_LOOK[state].tone} status={t(NEED_LOOK[state].key)}>
+                    {/* Several of a kind are told apart by the file each came in. */}
+                    <DocumentWords
+                      kind={kindOf(document.kind)}
+                      name={nameOf(document.party_id)}
+                      detail={reason ? refusal(reason) : document.name}
+                      oneLine={!reason}
+                    />
+                  </StateLine>
+                </Box>
+              );
+            })}
+          </Box>
+        )}
 
-        {/* A photo that waits here still has its two ways on when the case no longer takes new files. */}
-        {(editable || poor.other || problem?.key === "other") && (
+        {showOther ? (
           <Box
             ref={(line: HTMLElement | null) => {
-              lines.current.other = line;
+              lines.current[OTHER] = line;
             }}
             tabIndex={-1}
             className="border-grey-100 flex flex-col gap-3 rounded-2xl border p-4"
           >
-            <Typography variant="body1" className="font-semibold">
+            <Typography variant="body2" component="h3" className="font-semibold">
               {t("client-documents-other")}
             </Typography>
             {editable && (
@@ -1146,7 +1237,7 @@ function Documents({
                   label={t("client-documents-kind")}
                   value={otherKind}
                   // A photo that waits here was sent as a kind and for a person: they stay what the choice is about.
-                  disabled={Boolean(poor.other)}
+                  disabled={Boolean(poor[OTHER])}
                   onChange={(event) => setOtherKind(event.target.value as DocumentKind)}
                 >
                   {CLIENT_DOCUMENT_KINDS.map((kind) => (
@@ -1163,7 +1254,7 @@ function Documents({
                     id="client-other-person"
                     label={t("client-documents-person")}
                     value={otherParty}
-                    disabled={Boolean(poor.other)}
+                    disabled={Boolean(poor[OTHER])}
                     onChange={(event) => setOtherParty(event.target.value)}
                   >
                     {people.map((person) => (
@@ -1175,30 +1266,103 @@ function Documents({
                 )}
               </Box>
             )}
-            {poorNotice("other")}
-            {problemOf("other")}
-            {editable && !poor.other ? (
-              <Box>
+            {poorNotice(OTHER)}
+            {problemOf(OTHER)}
+            {editable && !poor[OTHER] && (
+              <Box className="flex flex-wrap items-center gap-2">
                 <Button
-                  variant="outlined"
-                  color="grey"
+                  variant="contained"
                   size="small"
+                  startIcon={<NiUploadCloud size="small" />}
                   disabled={busy !== null}
-                  onClick={() => pick("other", otherKind, otherParty || holder?.party_id || null)}
+                  onClick={() => pick(OTHER, otherKind, otherParty || holder?.party_id || null)}
                 >
-                  {busy?.key === "other" ? t("client-documents-sending") : t("client-documents-choose")}
+                  {busy?.key === OTHER ? t("client-documents-sending") : t("client-documents-choose")}
                 </Button>
+                <Button variant="text" color="grey" size="small" disabled={busy !== null} onClick={closeOther}>
+                  {t("client-cancel")}
+                </Button>
+                {left && <Box className="sm:ml-auto">{left}</Box>}
               </Box>
-            ) : null}
-            {editable && (
-              <Typography variant="body2" className="text-text-secondary">
-                {t("client-documents-left", { count: view.link.uploads_left })}
-              </Typography>
             )}
           </Box>
-        )}
+        ) : editable ? (
+          <Box
+            ref={(line: HTMLElement | null) => {
+              lines.current[OTHER] = line;
+            }}
+            tabIndex={-1}
+            className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1"
+          >
+            <Box className="-ml-2">
+              {again.length > 0 ? (
+                <QuickActions
+                  label={t("client-documents-other")}
+                  text={t("client-documents-other")}
+                  icon={<NiDocumentPlus size="small" />}
+                  align="left"
+                  actions={[
+                    ...again,
+                    {
+                      key: OTHER,
+                      label: t("client-documents-other-kind"),
+                      icon: <NiPaperclip size="medium" />,
+                      disabled: busy !== null,
+                      onClick: openOther,
+                    },
+                  ]}
+                />
+              ) : (
+                <Button
+                  variant="text"
+                  color="grey"
+                  size="small"
+                  className="hover:bg-grey-25"
+                  startIcon={<NiDocumentPlus size="small" />}
+                  disabled={busy !== null}
+                  onClick={openOther}
+                >
+                  {t("client-documents-other")}
+                </Button>
+              )}
+            </Box>
+            {left}
+          </Box>
+        ) : null}
       </CardContent>
     </Card>
+  );
+}
+
+/** What a line of the documents is about: the kind, whose it is, and under it what is said of it. */
+function DocumentWords({
+  kind,
+  name,
+  detail,
+  oneLine = false,
+}: {
+  kind: string;
+  name: string | null;
+  detail?: string | null;
+  /** A file's name is cut to one line; a reason is read whole. */
+  oneLine?: boolean;
+}) {
+  return (
+    <>
+      <span className="font-semibold">{kind}</span>
+      {name ? <span className="text-text-secondary"> · {name}</span> : null}
+      {detail ? (
+        <Typography
+          variant="caption"
+          component="span"
+          className={
+            oneLine ? "text-text-secondary block truncate pt-0.5" : "text-text-secondary block pt-0.5 break-words"
+          }
+        >
+          {detail}
+        </Typography>
+      ) : null}
+    </>
   );
 }
 

@@ -348,3 +348,62 @@ export function ProgressCounts({ steps, label }: { steps: ProgressCount[]; label
     </>
   );
 }
+
+export type ProgressListRow = {
+  key: string;
+  href: string;
+  /** What the row is: a case's number and client, a passenger's name. */
+  title: string;
+  /** Under it, in small: what kind of thing it is, since when. */
+  detail?: string | null;
+  /** The step it is at, in a word or two. */
+  step: string;
+  /** Its way in small (`ProgressBar`): how many steps, the one it is at, and how it stands. */
+  steps: number;
+  reached: number;
+  state: "progress" | "done" | "stopped";
+  /** The way in words, for assistive technology ("Peça, etapa 4 de 9"). */
+  label: string;
+};
+
+/**
+ * A few things along their way, one line each (the owner, 2026-11-03): what it is with a word under it, and on the
+ * right the step it is at with its way in small; the whole line leads to it. The latest few of a list on a home,
+ * where `ProgressSteps` would take a card for each and a table would be too much; the list itself is one click
+ * further, under it.
+ *
+ * Closest catalog entries: `ProgressBar`, which it carries on each line, and the rows of the case list, which show
+ * the same bar under a case's stage; this is their short form, for a home.
+ */
+export function ProgressList({ rows, label }: { rows: ProgressListRow[]; label: string }) {
+  return (
+    <Box component="ul" aria-label={label} className="divide-grey-100 m-0 flex list-none flex-col divide-y p-0">
+      {rows.map((row) => (
+        <Box component="li" key={row.key}>
+          <Box
+            component={Link}
+            href={row.href}
+            className="hover:bg-grey-25 -mx-2 flex flex-row items-center gap-3 rounded-xl px-2 py-2.5 no-underline outline-offset-2 transition-colors focus-visible:outline-2"
+          >
+            <Box className="flex min-w-0 flex-1 flex-col">
+              <Typography variant="body2" component="span" className="text-text-primary truncate font-semibold">
+                {row.title}
+              </Typography>
+              {row.detail ? (
+                <Typography variant="caption" component="span" className="text-text-secondary truncate">
+                  {row.detail}
+                </Typography>
+              ) : null}
+            </Box>
+            <Box className="flex flex-none flex-col items-end gap-1">
+              <Typography variant="body2" component="span" className="text-text-primary">
+                {row.step}
+              </Typography>
+              <ProgressBar steps={row.steps} reached={row.reached} state={row.state} label={row.label} />
+            </Box>
+          </Box>
+        </Box>
+      ))}
+    </Box>
+  );
+}

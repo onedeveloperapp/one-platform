@@ -36,12 +36,18 @@ const LOOK: Record<StateTone, { icon: ReactNode; colour: string }> = {
 export default function StateLine({
   tone,
   children,
+  status,
   action,
   icon,
   emphasis = false,
 }: {
   tone: StateTone;
   children: ReactNode;
+  /**
+   * The state in its own words at the end of the line ("Aceito" in a list of documents), so the states of a list
+   * line up on the right; it stays on the line on a phone, where an action goes under the words.
+   */
+  status?: ReactNode;
   /** The one thing the line asks for, beside it. */
   action?: ReactNode;
   /** What the line is about, in place of the state's own icon (a phone for the WhatsApp); the colour stays the state's. */
@@ -68,6 +74,11 @@ export default function StateLine({
         <Typography variant="body2" component="div" className="text-text-primary min-w-0 flex-1 pt-0.5">
           {children}
         </Typography>
+        {status ? (
+          <Typography variant="body2" component="span" className="text-text-secondary flex-none pt-0.5 text-right">
+            {status}
+          </Typography>
+        ) : null}
       </Box>
       {action ? <Box className="flex-none self-start sm:self-auto">{action}</Box> : null}
     </Box>

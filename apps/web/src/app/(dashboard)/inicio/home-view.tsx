@@ -1,6 +1,6 @@
 "use client";
 
-import CasesJourneyCard from "./cases-journey-card";
+import CasesJourneyCard, { type RecentCases } from "./cases-journey-card";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -81,6 +81,8 @@ export type HomeState =
       modules: ModuleOffer | null;
       /** How many of the firm's cases are at each step of their way (0082); null when it could not be read. */
       journey: JourneyOverview | null;
+      /** The latest cases in progress (`firm_cases`, the latest moved first); null when it could not be read. */
+      recent: RecentCases | null;
     }
   | { kind: "no-firm" }
   | { kind: "unavailable" }
@@ -455,7 +457,7 @@ export default function HomeView({ state }: { state: HomeState }) {
             ready.journey.declined +
             Object.values(ready.journey.steps).reduce((a, b) => a + b, 0) >
             0 ? (
-            <CasesJourneyCard overview={ready.journey} />
+            <CasesJourneyCard overview={ready.journey} recent={ready.recent} />
           ) : null}
         </>
       ) : null}

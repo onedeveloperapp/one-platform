@@ -7,6 +7,7 @@ import { cookies } from "next/headers";
 import { getTranslations } from "next-intl/server";
 
 import { readCaseJourney } from "@/lib/cases/journey-read";
+import { readCaseList } from "@/lib/cases/list-read";
 import { attentionGroups, pendingGroups, readFirmPending } from "@/lib/firm/pending";
 import { personFlowKey, personSetupOwed, signsAtTheBar } from "@/lib/firm/person-setup";
 import { isManager } from "@/lib/firm/roles";
@@ -17,6 +18,9 @@ import { readModuleOffer } from "@/lib/modules/offer-read";
 import { getActivationFacts, isSetupAnswered, onboardingFlowKey, waitsFirstCase } from "@/lib/onboarding";
 import { IMPERSONATION_MARKER_COOKIE } from "@flyee/auth";
 import { getOnboardingState } from "@flyee/onboarding";
+
+/** How many of the latest cases in progress the home shows; the list of them all is one click further. */
+const RECENT_CASES = 5;
 
 /**
  * /inicio: what needs somebody of the firm today. One question, answered by
@@ -82,6 +86,7 @@ async function loadHome(): Promise<
     cookieStore,
     moduleSetups,
     journey,
+    recent,
   ] = await Promise.all([
     context.supabase.rpc("firm_today", { target_org: firm.id }),
     context.supabase.rpc("firm_pending", { target_org: firm.id }),
@@ -100,6 +105,15 @@ async function loadHome(): Promise<
     manager ? readModuleSetups(context).catch(() => null) : Promise.resolve(null),
     // Where the firm's cases are along their way (0082): a read that fails hides the card, and the home stands.
     readCaseJourney(context.supabase, firm.id).catch(() => null),
+    // The latest cases in progress, each in a line with its way in small (the owner, 2026-11-03): the list's own
+    // read (`firm_cases`, the latest moved first), whose failure leaves the card with its counts alone.
+    readCaseList(context.supabase, firm.id, {
+      filter: null,
+      search: "",
+      module: null,
+      page: 0,
+      pageSize: RECENT_CASES,
+    }).catch(() => null),
   ]);
   if (manager && facts && !isSetupAnswered(facts)) return { kind: "setup", setup: await loadSetupState(context) };
   // Read failures owe nothing: a registration that could not be read is never said to be missing.
@@ -147,6 +161,7 @@ async function loadHome(): Promise<
     ownRegistrationMissing: signsAtTheBar(firm.firmFunction) && !registered,
     modules,
     journey,
+    recent: recent ? { rows: recent.rows } : null,
   };
 }
 

@@ -152,7 +152,9 @@ export default function PassengersView({ data }: { data: PassengersData | null }
     { filter: "upcoming", value: overview?.upcoming ?? null, icon: <NiPlane size="large" />, tone: "accent-4" },
   ];
 
-  const noneAtAll = overview?.travelers === 0 && filter === "all" && search.trim() === "";
+  // Nobody at all is read from the whole list itself, which keeps a passenger whose case the firm opened: a count of
+  // who is still with the agency said "no passenger yet" once the only one went to the firm, and hid them.
+  const noneAtAll = filter === "all" && search.trim() === "" && (page ? page.total === 0 : overview?.travelers === 0);
   const rows = page?.rows ?? [];
   const total = page?.total ?? 0;
 

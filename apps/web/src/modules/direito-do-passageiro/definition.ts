@@ -49,8 +49,9 @@ export const passengerModule: ModuleDefinition = {
   // The travel agency is this module's partner (0069): its setup is this module's page (0080), the second factor
   // first, then its name, the clause of its contract, its team and how its passengers reach ONE.
   partnerSetup: { kind: "agency", href: "/parceiro/configurar" },
-  // On the agency's home, its passengers' flights as they happen, once each agreed (0084).
-  partnerHome: () => import("./agency/partner-flights-card"),
+  // On the agency's home, its passengers in progress, each with where they are along their way, and their flights as
+  // they happen, once each agreed (0084).
+  partnerHome: () => import("./agency/partner-home-section"),
   // What a firm sets up of this module, after the core and before the home (0081): the Valor da Causa Pedido of the
   // air-passenger problems, the words of the clause its agencies register, and the partner agency.
   firmSetup: "/configurar/direito-do-passageiro",
