@@ -1,6 +1,7 @@
 import "server-only";
 
 import { momentLabel } from "@/lib/ai/approvals";
+import { type AccountState, accountStateOf, type AccountTopic, isAccountTopic } from "@/lib/cases/account";
 import { waIdCandidates } from "@/lib/cases/cases";
 import {
   CHRONOLOGY_STATUSES,
@@ -47,6 +48,14 @@ export type CaseStatement = StatementView & {
    * claim ran out, or no job picked it up. A person may ask that it be done now.
    */
   stalled: boolean;
+  /** What its order of the facts says the account still lacks (0090), as the setting names the points. */
+  missingTopics: AccountTopic[];
+  /** The questions the client is asked on their link, one for each point that is missing. */
+  questions: string[];
+  /** How many times ONE ordered it again by itself, after the client's answers or correction. */
+  rounds: number;
+  /** What the client answered to what was missing, while ONE orders the account again with it. */
+  clientAdded: string | null;
 };
 
 /** A claim older than this is nobody's any more (the setting `working_minutes` of the sweep, at its default). */
@@ -69,6 +78,10 @@ export type CaseComplaint = {
 };
 
 export type StatementFacts = {
+  /** Where the case's account stands, as ONE waits for it before the lawsuits (0090); null when unreadable. */
+  account: AccountState | null;
+  /** How many times ONE orders an account again by itself (the setting `statements.max_rounds`). */
+  accountMaxRounds: number;
   statements: CaseStatement[];
   audios: CaseAudio[];
   complaints: CaseComplaint[];
@@ -90,6 +103,10 @@ type StatementRow = {
   chronology_status: string;
   client_note: string | null;
   returned_note: string | null;
+  missing_topics: string[] | null;
+  questions: string[] | null;
+  rounds: number | null;
+  client_added: string | null;
   created_at: string;
 };
 
@@ -108,11 +125,11 @@ export async function loadStatementFacts(
   caseId: string,
   timeZone: string | null | undefined,
 ): Promise<StatementFacts> {
-  const [statements, complaints, setting, parties] = await Promise.all([
+  const [statements, complaints, setting, parties, account] = await Promise.all([
     supabase
       .from("case_statements")
       .select(
-        "id, party_id, source, audio_file_id, status, transcript, transcript_run_id, work, work_claimed_at, work_error, chronology, chronology_status, client_note, returned_note, created_at",
+        "id, party_id, source, audio_file_id, status, transcript, transcript_run_id, work, work_claimed_at, work_error, chronology, chronology_status, client_note, returned_note, missing_topics, questions, rounds, client_added, created_at",
       )
       .eq("case_id", caseId)
       .eq("org_id", firmId)
@@ -130,10 +147,13 @@ export async function loadStatementFacts(
       .eq("case_id", caseId)
       .eq("org_id", firmId)
       .order("created_at"),
+    supabase.rpc("case_account", { target_case: caseId }),
   ]);
   if (statements.error || complaints.error || setting.error || parties.error) {
     throw new Error("statement facts could not be read");
   }
+  // Where the account stands is read apart: a read that fails leaves it unsaid, never the account unread.
+  const accountAnswer = (account.error ? null : account.data) as { state?: unknown; max_rounds?: unknown } | null;
 
   const rows = (statements.data ?? []) as StatementRow[];
   const told: CaseStatement[] = rows
@@ -168,6 +188,10 @@ export async function loadStatementFacts(
           (row.work_claimed_at === null
             ? row.work_error !== null || olderThan(row.created_at, UNCLAIMED_MINUTES)
             : olderThan(row.work_claimed_at, CLAIM_MINUTES)),
+        missingTopics: (row.missing_topics ?? []).filter(isAccountTopic),
+        questions: (row.questions ?? []).filter((question) => typeof question === "string" && question.trim() !== ""),
+        rounds: typeof row.rounds === "number" ? row.rounds : 0,
+        clientAdded: row.client_added,
       };
     });
 
@@ -236,6 +260,8 @@ export async function loadStatementFacts(
   }
 
   return {
+    account: accountStateOf(accountAnswer?.state),
+    accountMaxRounds: typeof accountAnswer?.max_rounds === "number" ? accountAnswer.max_rounds : 0,
     statements: told,
     audios,
     complaints: (

@@ -9,8 +9,10 @@ import { Alert, Box, Button, MenuItem, TextField, Typography } from "@mui/materi
 
 import CollapsibleCard from "@/components/product/collapsible-card";
 import EmptyState from "@/components/product/empty-state";
+import StateLine from "@/components/product/state-line";
 import StatusChip, { type StatusTone } from "@/components/product/status-chip";
 import NiMicrophone from "@/icons/nexture/ni-microphone";
+import { ACCOUNT_TOPIC_SHORT_KEY } from "@/lib/cases/account";
 import { openCaseFile } from "@/lib/cases/actions";
 import { opensOnArrival } from "@/lib/cases/sections";
 import {
@@ -154,6 +156,8 @@ export default function StatementsCard({
     }
   };
 
+  const list = new Intl.ListFormat("pt-BR", { style: "long", type: "conjunction" });
+
   const row = (statement: CaseStatement) => {
     const stage = statementStage(statement);
     const lines = chronologyLines(statement.chronology);
@@ -208,6 +212,22 @@ export default function StatementsCard({
           </Box>
         ) : null}
 
+        {statement.missingTopics.length > 0 && statement.chronology ? (
+          // What the order of the facts says the account lacks, and what the client is asked on their link (0090).
+          <StateLine tone="info">
+            {t("case-statement-gaps", {
+              topics: list.format(statement.missingTopics.map((topic) => t(ACCOUNT_TOPIC_SHORT_KEY[topic]))),
+            })}{" "}
+            {statement.rounds >= state.accountMaxRounds
+              ? t("case-statement-gaps-done")
+              : t("case-statement-gaps-asked", { count: statement.questions.length })}
+          </StateLine>
+        ) : null}
+        {statement.clientAdded ? (
+          <Alert severity="info" className="neutral bg-background-paper/60!">
+            {t("case-statement-client-added", { answers: statement.clientAdded })}
+          </Alert>
+        ) : null}
         {statement.clientNote ? (
           <Alert severity="warning" className="neutral bg-background-paper/60!">
             {t("case-statement-client-note", { note: statement.clientNote })}

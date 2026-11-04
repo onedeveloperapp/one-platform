@@ -1,5 +1,6 @@
 import type { AirlineOption } from "../cases-types";
 
+import type { AccountState } from "@/lib/cases/account";
 import type { CaseStatus, Cause, LinkOwed, Origin, PersonData, RequiredDocument } from "@/lib/cases/cases";
 import type { CheckAnswer } from "@/lib/cases/document-check";
 import type { DocumentQuality } from "@/lib/cases/document-quality";
@@ -252,6 +253,10 @@ export type CaseState =
       civilCourt: CivilCourtNeed[];
       /** What the clients told about the trip, each with where its chronology stands. */
       statements: CaseStatement[];
+      /** Where the case's account stands, as ONE waits for it before the lawsuits (0090); null when unreadable. */
+      account: AccountState | null;
+      /** How many times ONE orders an account again by itself. */
+      accountMaxRounds: number;
       /** The audios the case's people sent over WhatsApp that are not an account yet. */
       audios: CaseAudio[];
       /** The complaints made before suing, with their protocol and what came of each. */

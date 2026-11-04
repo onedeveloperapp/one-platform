@@ -1,5 +1,6 @@
 import "server-only";
 
+import { type AccountState, accountStateOf } from "@/lib/cases/account";
 import type { PersonData, RequiredDocument } from "@/lib/cases/cases";
 import { createAnonClient } from "@/lib/public-content";
 
@@ -122,6 +123,10 @@ export type ClientStatement = {
   chronology: string | null;
   chronology_status: "none" | "approved" | "confirmed" | "contested";
   client_note: string | null;
+  /** The firm is ordering it again with what the client said or answered (0090). */
+  reordering: boolean;
+  /** What the order of the facts says is missing, asked of the client while they may still answer (0090). */
+  questions: string[];
 };
 
 /**
@@ -181,6 +186,8 @@ export type ClientCivilCourtItem = {
 };
 
 export type ClientTasks = {
+  /** Where the case's account of what happened stands (0090); null when it could not be read. */
+  account: AccountState | null;
   signatures: ClientSignature[];
   terms: ClientTerm[];
   statements: ClientStatement[];
@@ -200,7 +207,16 @@ export type ClientTasks = {
 export async function readClientTasks(token: string): Promise<ClientTasks> {
   const supabase = isTokenShape(token) ? createAnonClient() : null;
   if (!supabase) {
-    return { signatures: [], terms: [], statements: [], course: [], notices: null, civilCourt: null, agency: null };
+    return {
+      account: null,
+      signatures: [],
+      terms: [],
+      statements: [],
+      course: [],
+      notices: null,
+      civilCourt: null,
+      agency: null,
+    };
   }
   const [signatures, terms, statements, course, notices, civil, agency] = await Promise.all([
     supabase.rpc("client_link_signatures", { target_token: token }),
@@ -217,7 +233,14 @@ export async function readClientTasks(token: string): Promise<ClientTasks> {
   return {
     signatures: ((signatures.data as { signatures?: ClientSignature[] } | null)?.signatures ?? []) as ClientSignature[],
     terms: ((terms.data as { terms?: ClientTerm[] } | null)?.terms ?? []) as ClientTerm[],
-    statements: ((statements.data as { statements?: ClientStatement[] } | null)?.statements ?? []) as ClientStatement[],
+    account: accountStateOf((statements.data as { account?: unknown } | null)?.account),
+    statements: ((statements.data as { statements?: ClientStatement[] } | null)?.statements ?? []).map((statement) => ({
+      ...statement,
+      reordering: statement.reordering === true,
+      questions: Array.isArray(statement.questions)
+        ? statement.questions.filter((question): question is string => typeof question === "string")
+        : [],
+    })),
     course: ((course.data as { lawsuits?: ClientLawsuit[] } | null)?.lawsuits ?? []) as ClientLawsuit[],
     notices:
       told?.ok === true

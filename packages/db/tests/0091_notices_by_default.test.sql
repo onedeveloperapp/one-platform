@@ -171,7 +171,10 @@ select ok(
               and ended_evidence = '{"ip": "203.0.113.9", "channel": "link", "user_agent": "Navegador de teste"}'::jsonb
        from public.notice_stops where person_id = pg_temp.got('case', 'person_id')::uuid)
   and public.notice_person_blocker('b9100000-0000-4000-8000-00000000000a', pg_temp.got('case', 'person_id')::uuid) is null
-  and public.document_recipient('c9100000-0000-4000-8000-0000000000d1') = pg_temp.got('case', 'person_id')::uuid
+  -- Both may be told again: the paper is asked of one of them (two people written in one transaction have the
+  -- same moment, so which one is the order of their ids).
+  and public.document_recipient('c9100000-0000-4000-8000-0000000000d1')
+      in (pg_temp.got('case', 'person_id')::uuid, pg_temp.got('bento', 'person_id')::uuid)
   and (select count(*) = 1 from public.case_events where kind = 'notices_resumed' and actor_type = 'client'),
   'the client ends the firm''s record of their request on their link, with what the server saw, and is told again'
 );

@@ -49,6 +49,10 @@ type StatementToProcess = {
   /** The proposal the firm sent back and what it asked to change in it, while no proposal answered that. */
   returned_proposal: string | null;
   firm_note: string | null;
+  /** What the client answered to what an order of the facts said was missing (0090). */
+  client_added: string | null;
+  /** The legs of the trip as the case registers them, with what ANAC's record says of each flight (0090). */
+  trip: unknown;
 };
 
 /** A statement the sweep holds, with the number of the claim: only who holds it reads and records under it. */
@@ -166,15 +170,17 @@ export async function processClaimedStatement(
   }
 
   if (!row.transcript) return record("failed", { code: "not_transcribed" });
-  const trip = { incident: row.incident, airline: row.airline, flightDate: row.flight_date };
+  const legs = Array.isArray(row.trip) ? (row.trip as unknown[]) : [];
+  const trip = { incident: row.incident, airline: row.airline, flightDate: row.flight_date, legs };
   const contested = row.client_note ? { chronology: row.previous_chronology, clientNote: row.client_note } : null;
   const returned = row.firm_note ? { proposal: row.returned_proposal, firmNote: row.firm_note } : null;
+  const added = row.client_added ? { chronology: row.previous_chronology, answers: row.client_added } : null;
   return close(
     await runFirmTask({
       orgId: row.org_id,
       task: CHRONOLOGY_TASK,
-      input: { ...trip, relato: row.transcript, contestada: contested, devolvida: returned },
-      messages: [{ role: "user", content: chronologyBriefing(trip, row.transcript, contested, returned) }],
+      input: { ...trip, relato: row.transcript, contestada: contested, devolvida: returned, respostas: added },
+      messages: [{ role: "user", content: chronologyBriefing(trip, row.transcript, contested, returned, added) }],
       subject,
       idempotencyKey: key("cronologia"),
     }),

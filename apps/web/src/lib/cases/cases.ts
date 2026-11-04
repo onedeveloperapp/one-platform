@@ -209,6 +209,7 @@ export const EVENT_KEY: Record<string, string> = {
   client_statement_sent: "case-event-client-statement-sent",
   client_chronology_confirmed: "case-event-client-chronology-confirmed",
   client_chronology_contested: "case-event-client-chronology-contested",
+  client_statement_completed: "case-event-client-statement-completed",
   complaint_saved: "case-event-complaint-saved",
   complaint_removed: "case-event-complaint-removed",
   filing_package_requested: "case-event-filing-requested",

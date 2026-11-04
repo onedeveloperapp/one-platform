@@ -25,6 +25,7 @@ import NiDocumentPlus from "@/icons/nexture/ni-document-plus";
 import NiPaperclip from "@/icons/nexture/ni-paperclip";
 import NiPlane from "@/icons/nexture/ni-plane";
 import NiUploadCloud from "@/icons/nexture/ni-upload-cloud";
+import { accountAsksClient } from "@/lib/cases/account";
 import {
   caseErrorKey,
   caseLabel,
@@ -178,6 +179,9 @@ export default function ClientFolder({
       })
     : [];
 
+  // The client's account of what happened is asked here too, while it is theirs to give (0090).
+  const accountAsk = accountAsksClient(tasks.account);
+
   const kindKey = caseKindLabelKey(view.case.incident);
   const facts = [
     caseLabel(view.case.seq),
@@ -213,7 +217,7 @@ export default function ClientFolder({
             <Typography id="client-missing" variant="h5" component="h2" className="mb-0">
               {t("client-missing-title")}
             </Typography>
-            {missing.length === 0 ? (
+            {missing.length === 0 && !accountAsk ? (
               <Alert severity="success" className="neutral bg-background-paper/60!">
                 {t("client-missing-none")}
               </Alert>
@@ -230,6 +234,11 @@ export default function ClientFolder({
                           : t(DOCUMENT_KIND_KEY[item.kind])}
                   </Typography>
                 ))}
+                {accountAsk && (
+                  <Typography component="li" variant="body1">
+                    {accountAsk === "tell" ? t("client-missing-account") : t("client-missing-account-answer")}
+                  </Typography>
+                )}
               </Box>
             )}
           </CardContent>
@@ -260,6 +269,7 @@ export default function ClientFolder({
       <ClientStatements
         token={token}
         statements={tasks.statements}
+        account={tasks.account}
         editable={editable}
         onSaved={() => router.refresh()}
       />

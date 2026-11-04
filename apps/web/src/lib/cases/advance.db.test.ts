@@ -123,14 +123,35 @@ describe.skipIf(!DB_URL)("ONE carrying a case on, from its lawsuits to its filin
   }
 
   /**
+   * The client's account of a case, ordered with nothing missing (0090), as ONE's order of the facts leaves it:
+   * the statements' own path is walked by pgTAP 0029 and 0093.
+   */
+  async function told(who: string, caseId: string, partyId: string) {
+    const added = await call(as(who), "add_case_statement", {
+      target_case: caseId,
+      target_party: partyId,
+      target_file: null,
+      target_text: "O voo atrasou seis horas, sem informação da companhia, e perdi um compromisso no destino.",
+    });
+    expect(added.ok, "statement").toBe(true);
+    await sql.unsafe(
+      `update public.case_statements
+       set chronology = '20/09/2026, 10:00: o voo atrasou seis horas.', chronology_status = 'approved', work = null
+       where id = $1`,
+      [String(added.statement_id)],
+    );
+  }
+
+  /**
    * A case of a firm with one adult of Goiânia whose data is whole, a leg of the trip and, unless told
-   * otherwise, what they ask and the papers the setting names (an identity, a proof of address, a ticket).
+   * otherwise, what they ask, the papers the setting names (an identity, a proof of address, a ticket) and the
+   * client's account (0090).
    */
   async function readyCase(
     who: string,
     org: string,
     cpf: string,
-    options: { claim?: boolean; addressProof?: boolean } = {},
+    options: { claim?: boolean; addressProof?: boolean; account?: boolean } = {},
   ) {
     const opened = await call(as(who), "create_case", {
       target_org: org,
@@ -177,6 +198,7 @@ describe.skipIf(!DB_URL)("ONE carrying a case on, from its lawsuits to its filin
     };
     if (options.addressProof !== false)
       papers.address_proof = await accepted(who, org, caseId, "address_proof", partyId);
+    if (options.account !== false) await told(who, caseId, partyId);
     return { caseId, partyId, papers };
   }
 
@@ -375,6 +397,15 @@ describe.skipIf(!DB_URL)("ONE carrying a case on, from its lawsuits to its filin
     await accepted(ANA, FIRM, lacking.caseId, "address_proof", lacking.partyId);
     expect((await advanceOf(lacking.caseId)).after).toBeNull();
     expect((await carry(lacking.caseId)).created).toBe(1);
+
+    // A case whose client told nothing yet: ONE creates no lawsuit, and says it waits for the client's account
+    // (0090). The account arrives and is ordered with nothing missing: the case is woken, and ONE goes on.
+    const silent = await readyCase(ANA, FIRM, "52998224725", { account: false });
+    expect((await carry(silent.caseId)).waiting).toBe(1);
+    expect((await advanceOf(silent.caseId)).waiting).toBe("account_missing");
+    await told(ANA, silent.caseId, silent.partyId);
+    expect((await advanceOf(silent.caseId)).after).toBeNull();
+    expect((await carry(silent.caseId)).created).toBe(1);
   });
 
   it("leaves alone a firm where a person creates the lawsuits", async () => {

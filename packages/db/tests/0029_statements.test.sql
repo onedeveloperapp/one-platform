@@ -33,6 +33,9 @@ insert into public.memberships (org_id, user_id, role, firm_function) values
 insert into public.firm_autonomy (org_id, decision, mode) values
   ('bf100000-0000-4000-8000-00000000000a', 'chronology', 'approval'),
   ('bf100000-0000-4000-8000-00000000000b', 'chronology', 'approval');
+-- A client who says the order of the facts is wrong waits here for a person to ask for another, as before 0090:
+-- with no rounds, ONE never orders an account again by itself (0093 walks the rounds).
+update public.platform_settings set value = value || '{"max_rounds": 0}'::jsonb where key = 'statements';
 
 create temporary table res (name text primary key, payload jsonb);
 grant select, insert on res to anon, authenticated, service_role;

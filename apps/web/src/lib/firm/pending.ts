@@ -1,4 +1,4 @@
-import { isClientWait, waitingHref, waitingKey, waitingTagKey } from "@/lib/cases/advance";
+import { isClientWait, isOneWork, waitingHref, waitingKey, waitingTagKey } from "@/lib/cases/advance";
 import { type FirmToday, type TodayNeed, todayNeeds, type TodayViewer } from "@/lib/firm/today";
 import { formatCnj } from "@flyee/rules/cnj";
 
@@ -405,6 +405,8 @@ export function pendingGroups(
   for (const wait of pending.oneWaits) {
     const days = daysSince(wait.since, now);
     const stale = days >= pending.oneWaitsStaleDays;
+    // ONE's own work under way (the client's account being ordered) is nobody's to do, until it took too long.
+    if (isOneWork(wait.waiting) && !stale) continue;
     // What waits on the client (their signature) is the firm's to follow up only once it waited too long; until
     // then it is only to look at.
     groups[stale ? "late" : isClientWait(wait.waiting) ? "review" : "one"].push({

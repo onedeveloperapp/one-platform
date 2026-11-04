@@ -124,6 +124,35 @@ describe("what the model reads to propose a chronology", () => {
     expect(briefing).not.toContain("Cronologia anterior");
   });
 
+  it("gives the legs the case registers, with ANAC's record, before the account (0090)", () => {
+    const legs = [{ voo: "LA3456", origem: "GRU", destino: "REC", registro_oficial: { situacao: "cancelado" } }];
+    const briefing = chronologyBriefing({ ...trip, legs }, "Relato.");
+    expect(briefing).toContain("Trechos que o caso registra, com o que o registro oficial da ANAC diz de cada voo");
+    expect(briefing).toContain('"situacao": "cancelado"');
+    expect(briefing.indexOf("LA3456")).toBeLessThan(briefing.indexOf("Relato."));
+    expect(chronologyBriefing({ ...trip, legs: [] }, "Relato.")).not.toContain("Trechos");
+  });
+
+  it("carries what the client answered to what was missing, with the order it answers (0090)", () => {
+    const briefing = chronologyBriefing(trip, "Relato.", null, null, {
+      chronology: "20/09/2026, 16:00: o voo saiu.",
+      answers: "  Paguei R$ 980 no site.  ",
+    });
+    expect(briefing).toContain("Cronologia anterior, feita antes das respostas do cliente:");
+    expect(briefing).toContain("O que o cliente respondeu ao que faltava no relato");
+    expect(briefing.endsWith("Paguei R$ 980 no site.")).toBe(true);
+    // Contested and answered: the order before is said once, as the one the client said is wrong.
+    const both = chronologyBriefing(
+      trip,
+      "Relato.",
+      { chronology: "20/09/2026, 16:00: o voo saiu.", clientNote: "O voo saiu às 17h." },
+      null,
+      { chronology: "20/09/2026, 16:00: o voo saiu.", answers: "Paguei R$ 980." },
+    );
+    expect(both.split("20/09/2026, 16:00: o voo saiu.").length).toBe(2);
+    expect(both).toContain("Paguei R$ 980.");
+  });
+
   it("says so when the case registers nothing of the trip", () => {
     expect(chronologyBriefing({ incident: null, airline: null, flightDate: null }, "Relato.")).toContain(
       "O caso ainda não registra dados da viagem.",

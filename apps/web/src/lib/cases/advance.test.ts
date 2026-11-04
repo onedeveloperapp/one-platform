@@ -2,7 +2,17 @@ import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
-import { ADVANCE_WAITING, caseAdvanceOf, lawsuitsWaiting, waitingFix, waitingKey } from "@/lib/cases/advance";
+import {
+  accountWaiting,
+  ADVANCE_WAITING,
+  caseAdvanceOf,
+  isClientWait,
+  isOneWork,
+  lawsuitsWaiting,
+  waitingFix,
+  waitingHref,
+  waitingKey,
+} from "@/lib/cases/advance";
 import { caseHolder, caseMissing, type MissingParty, type PersonData, type RequiredDocument } from "@/lib/cases/cases";
 import { lawsuitPlan, type RuleParty } from "@/lib/cases/rules";
 import messages from "@flyee/content/messages/pt-BR.json";
@@ -97,6 +107,31 @@ describe("what ONE waits for before it creates a case's lawsuits", () => {
     expect(lawsuitsWaiting({ missing: [], claims: [1000000, null] })).toBeNull();
     expect(lawsuitsWaiting({ missing: [], claims: [null] })).toBeNull();
     expect(lawsuitsWaiting({ missing: [], claims: [1000000, 500000] })).toBeNull();
+  });
+
+  it("waits for the client's account, ordered with nothing the piece needs missing (0090)", () => {
+    expect(lawsuitsWaiting({ missing: [], claims: [null], account: "missing" })).toBe("account_missing");
+    expect(lawsuitsWaiting({ missing: [], claims: [null], account: "preparing" })).toBe("account_preparing");
+    expect(lawsuitsWaiting({ missing: [], claims: [null], account: "proposed" })).toBe("account_proposed");
+    expect(lawsuitsWaiting({ missing: [], claims: [null], account: "incomplete" })).toBe("account_incomplete");
+    expect(lawsuitsWaiting({ missing: [], claims: [null], account: "contested" })).toBe("account_contested");
+    expect(lawsuitsWaiting({ missing: [], claims: [null], account: "failed" })).toBe("account_failed");
+    expect(lawsuitsWaiting({ missing: [], claims: [null], account: "ready" })).toBeNull();
+    // What the case lacks of its people and its trip comes first; the agency's data after the account.
+    expect(lawsuitsWaiting({ missing: [{ type: "flight" }], claims: [null], account: "missing" })).toBe(
+      "case_incomplete",
+    );
+    expect(lawsuitsWaiting({ missing: [], claims: [null], account: "missing", unconfirmedHandoff: true })).toBe(
+      "account_missing",
+    );
+    // A caller that reads no account waits for none: a person creating the lawsuits is never stopped by it.
+    expect(lawsuitsWaiting({ missing: [], claims: [null] })).toBeNull();
+    expect(accountWaiting(null)).toBeNull();
+    // Telling it and answering what is missing are the client's; ordering it is ONE's own work.
+    expect(isClientWait("account_missing") && isClientWait("account_incomplete")).toBe(true);
+    expect(isClientWait("account_failed")).toBe(false);
+    expect(isOneWork("account_preparing")).toBe(true);
+    expect(waitingHref("account_incomplete", "c1")).toBe("/casos/c1#case-statements");
   });
 
   it("waits for the client to confirm the data an agency handed over (0071), after what is missing", () => {

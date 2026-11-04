@@ -33,6 +33,7 @@ import PageHeader from "@/components/product/page-header";
 import StatusChip from "@/components/product/status-chip";
 import NiFolder from "@/icons/nexture/ni-folder";
 import NiUsers from "@/icons/nexture/ni-users";
+import { ACCOUNT_MISSING_KEY } from "@/lib/cases/account";
 import {
   caseHolder,
   caseLabel,
@@ -142,11 +143,15 @@ export default function CaseView({ state: read }: { state: CaseState }) {
   });
   // The claimants of a lawsuit planned in the civil court whose word on it is missing, or a "no" (0025).
   const civilMissing = civilCourtPending(state.civilCourt);
+  // The client's account, while it is the client's or a person's to give or put right (0090); nothing while ONE
+  // orders it, nor once it is ready.
+  const accountMissing = state.account ? (ACCOUNT_MISSING_KEY[state.account] ?? null) : null;
   // What the case lacks is shown while it is gathered, and later while something is missing, until the case is
   // with the court or ended (a case brought from a spreadsheet lacks what nothing will ask of it).
   const showMissing =
     CLIENT_STAGES.includes(current.status) ||
-    (!["filed", "closed", "declined"].includes(current.status) && (missing.length > 0 || civilMissing.length > 0));
+    (!["filed", "closed", "declined"].includes(current.status) &&
+      (missing.length > 0 || civilMissing.length > 0 || accountMissing !== null));
   const nameOfParty = (partyId: string) =>
     state.parties.find((party) => party.partyId === partyId)?.person.full_name ?? "";
 
@@ -197,7 +202,10 @@ export default function CaseView({ state: read }: { state: CaseState }) {
       )}
       {/* Where the case stands along its way, what happens now and who it is with; what ONE waits for is said
           there too. What the case lacks is listed in its own card below. */}
-      <JourneyCard state={state} missing={showMissing ? missing.length + civilMissing.length : 0} />
+      <JourneyCard
+        state={state}
+        missing={showMissing ? missing.length + civilMissing.length + (accountMissing ? 1 : 0) : 0}
+      />
 
       {/* Each card opens by itself when the case's stage is about it or something in it waits for a person; the
           person may open or close every one at once to read the whole case. */}
@@ -211,7 +219,7 @@ export default function CaseView({ state: read }: { state: CaseState }) {
                   <Typography id="case-missing" variant="h5" component="h2" className="mb-0">
                     {t("case-missing-title")}
                   </Typography>
-                  {missing.length === 0 && civilMissing.length === 0 ? (
+                  {missing.length === 0 && civilMissing.length === 0 && accountMissing === null ? (
                     <Alert severity="success" className="neutral bg-background-paper/60!">
                       {t("case-missing-none")}
                     </Alert>
@@ -241,6 +249,11 @@ export default function CaseView({ state: read }: { state: CaseState }) {
                           {t(civilMissingKey(need), { name: nameOfParty(need.partyId) })}
                         </Typography>
                       ))}
+                      {accountMissing && (
+                        <Typography component="li" variant="body1">
+                          {t(accountMissing)}
+                        </Typography>
+                      )}
                     </Box>
                   )}
                 </CardContent>

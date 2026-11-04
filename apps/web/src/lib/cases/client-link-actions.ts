@@ -606,7 +606,10 @@ export async function finishClientStatement(token: string, statementId: string):
   return result;
 }
 
-/** The client confirms the chronology the firm approved, or says what is wrong in it. */
+/**
+ * The client confirms the chronology the firm approved, or says what is wrong in it. What they say is wrong is
+ * ordered again by ONE at once, within the setting's rounds (0090): the work starts now.
+ */
 export async function answerClientChronology(
   token: string,
   statementId: string,
@@ -618,13 +621,37 @@ export async function answerClientChronology(
   if (!isId(statementId)) return { ok: false, code: "not_found" };
   const supabase = createAnonClient();
   if (!supabase) return unavailable;
-  return fold(
+  const result = fold(
     await supabase.rpc("client_link_answer_chronology", {
       target_token: token,
       target_statement: statementId,
       target_agrees: agrees === true,
       target_note: agrees === true ? null : String(note ?? "").slice(0, 2000),
     }),
+    (answer) => ({ reordering: answer.reordering === true }),
+  );
+  if (result.ok && result.reordering) await queueStatementWork(statementId);
+  return result;
+}
+
+/**
+ * The client answers, on their link, what the order of the facts says is missing of their account (0090): the
+ * answers join the account, and ONE orders it again at once.
+ */
+export async function completeClientStatement(token: string, statementId: string, text: string): Promise<ClientResult> {
+  const closed = await refusal(token);
+  if (closed) return closed;
+  if (!isId(statementId) || typeof text !== "string") return { ok: false, code: "not_found" };
+  const supabase = createAnonClient();
+  if (!supabase) return unavailable;
+  const result = fold(
+    await supabase.rpc("client_link_complete_statement", {
+      target_token: token,
+      target_statement: statementId,
+      target_text: text.slice(0, 4000),
+    }),
     nothing,
   );
+  if (result.ok) await queueStatementWork(statementId);
+  return result;
 }

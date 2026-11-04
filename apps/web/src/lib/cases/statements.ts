@@ -88,16 +88,19 @@ const brDate = (value: string | null): string | null => {
 
 /**
  * What the model reads to propose a chronology: what the case registers of
- * the trip, then the account itself. When the client said a chronology was
- * wrong and the firm asked for another, that one and the client's words come
- * too, so the new proposal answers them. When the firm sent a proposal back
- * with what to change, the proposal and the firm's words come as well.
+ * the trip (its legs, with what ANAC's record says of each flight once read,
+ * 0090: the model never asks the client what the case knows), then the
+ * account itself. When the client said a chronology was wrong, or answered
+ * what one said was missing, that one and the client's words come too, so
+ * the new proposal answers them. When the firm sent a proposal back with
+ * what to change, the proposal and the firm's words come as well.
  */
 export function chronologyBriefing(
-  trip: { incident: string | null; airline: string | null; flightDate: string | null },
+  trip: { incident: string | null; airline: string | null; flightDate: string | null; legs?: unknown[] },
   account: string,
   contested: { chronology: string | null; clientNote: string | null } | null = null,
   returned: { proposal: string | null; firmNote: string | null } | null = null,
+  added: { chronology: string | null; answers: string | null } | null = null,
 ): string {
   const known = [
     caseKindForModel(trip.incident),
@@ -106,9 +109,15 @@ export function chronologyBriefing(
   ].filter(Boolean);
   const parts = [
     known.length > 0 ? `O que o caso registra: ${known.join(", ")}.` : "O caso ainda não registra dados da viagem.",
-    "Relato do cliente, nas palavras dele:",
-    account.trim(),
   ];
+  if (trip.legs && trip.legs.length > 0) {
+    parts.push(
+      "Trechos que o caso registra, com o que o registro oficial da ANAC diz de cada voo quando já foi lido:",
+      JSON.stringify(trip.legs, null, 2),
+    );
+  }
+  parts.push("Relato do cliente, nas palavras dele:", account.trim());
+  const answers = added?.answers?.trim() ?? "";
   if (contested?.clientNote?.trim()) {
     if (contested.chronology?.trim()) {
       parts.push("Cronologia anterior, que o cliente disse estar errada:", contested.chronology.trim());
@@ -116,6 +125,14 @@ export function chronologyBriefing(
     parts.push(
       "O que o cliente disse sobre ela (é a palavra dele sobre os fatos e vale como parte do relato):",
       contested.clientNote.trim(),
+    );
+  } else if (answers && added?.chronology?.trim()) {
+    parts.push("Cronologia anterior, feita antes das respostas do cliente:", added.chronology.trim());
+  }
+  if (answers) {
+    parts.push(
+      "O que o cliente respondeu ao que faltava no relato (é a palavra dele sobre os fatos e vale como parte do relato):",
+      answers,
     );
   }
   if (returned?.firmNote?.trim()) {

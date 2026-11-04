@@ -3,6 +3,7 @@ import "server-only";
 import { after } from "next/server";
 import { createHash, randomBytes } from "node:crypto";
 
+import { type AccountState, accountStateOf } from "@/lib/cases/account";
 import { lawsuitsWaiting } from "@/lib/cases/advance";
 import { caseMissing, firstNameOf, type MissingParty, type PersonData, type RequiredDocument } from "@/lib/cases/cases";
 import { draftBlocks } from "@/lib/cases/drafts";
@@ -112,6 +113,8 @@ type LawsuitFacts = {
   systems: { court: string; proceeding_kind: string; system: string; confirmed: boolean }[];
   /** A case an agency handed over (0071) whose client has not said on their link that they finished. */
   unconfirmedHandoff: boolean;
+  /** Where the client's account of what happened stands (0090): the lawsuits wait for it. */
+  account: AccountState | null;
 };
 
 /** What creating a case's lawsuits reads of it. Throws when a read failed; null for a case that is gone. */
@@ -134,6 +137,9 @@ async function loadLawsuitFacts(service: SupabaseClient, caseId: string): Promis
     if (finished.error) throw new Error("client links unreadable");
     unconfirmedHandoff = (finished.count ?? 0) === 0;
   }
+  // The client's account, as the database reads it (0090): the piece asked right after the lawsuits is written from it.
+  const told = await service.rpc("case_account_state", { target_case: caseId });
+  if (told.error) throw new Error("account unreadable");
   const [parties, documents, segments, settings, wages, courts, systems] = await Promise.all([
     service
       .from("case_parties")
@@ -219,6 +225,7 @@ async function loadLawsuitFacts(service: SupabaseClient, caseId: string): Promis
     courts: (courts.data ?? []) as { acronym: string; uf: string }[],
     systems: (systems.data ?? []) as { court: string; proceeding_kind: string; system: string; confirmed: boolean }[],
     unconfirmedHandoff,
+    account: accountStateOf(told.data),
   };
 }
 
@@ -271,6 +278,7 @@ async function createLawsuits(
   const waiting = lawsuitsWaiting({
     missing: missingOf(facts, day),
     claims: facts.parties.filter((party) => party.role === "claimant").map((party) => party.claimCents),
+    account: facts.account,
     unconfirmedHandoff: facts.unconfirmedHandoff,
   });
   if (waiting) return { waiting, created: false, lost: false };

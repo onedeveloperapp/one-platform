@@ -1,4 +1,4 @@
-import { CLIENT_WAITS } from "@/lib/cases/advance";
+import { CLIENT_WAITS, ONE_WORKS } from "@/lib/cases/advance";
 import { type CaseStatus, isCaseStatus } from "@/lib/cases/cases";
 
 /**
@@ -193,8 +193,9 @@ export type JourneyHolder = "client" | "firm" | "one" | "court" | "ended";
 // What ONE waits for that is the client's to give, besides the waits that are the client's alone (0054): what the
 // case lacks (the client's link takes it) and the client's word on the civil court.
 const CLIENT_GIVES = [...CLIENT_WAITS, "case_incomplete", "civil_court_unanswered"] as readonly string[];
-// ONE is trying again by itself: a step that failed for a moment, or a provider out of reach.
-const ONE_RETRIES = ["unavailable", "step_failed"] as readonly string[];
+// ONE is trying again by itself: a step that failed for a moment, or a provider out of reach; or it is ordering the
+// client's account (0090).
+const ONE_RETRIES = ["unavailable", "step_failed", ...ONE_WORKS] as readonly string[];
 
 export function journeyHolder(input: {
   status: CaseStatus;

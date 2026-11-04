@@ -1,3 +1,4 @@
+import type { AccountState } from "@/lib/cases/account";
 import type { Missing } from "@/lib/cases/cases";
 
 /**
@@ -37,6 +38,12 @@ export const ADVANCE_WAITING = [
   "paper_unwritable",
   "power_of_attorney_unsigned",
   "client_confirmation",
+  "account_missing",
+  "account_preparing",
+  "account_proposed",
+  "account_incomplete",
+  "account_contested",
+  "account_failed",
   "unavailable",
   "step_failed",
   "stuck",
@@ -48,9 +55,33 @@ export type AdvanceWaiting = (typeof ADVANCE_WAITING)[number];
  * waited longer than the setting's days, to follow the client up. A case an agency handed over (0071) waits for
  * its client to confirm on their link the data that came from the agency.
  */
-export const CLIENT_WAITS: readonly AdvanceWaiting[] = ["power_of_attorney_unsigned", "client_confirmation"];
+export const CLIENT_WAITS: readonly AdvanceWaiting[] = [
+  "power_of_attorney_unsigned",
+  "client_confirmation",
+  // The client tells what happened, or answers what is missing of it, on their link (0090).
+  "account_missing",
+  "account_incomplete",
+];
 
 export const isClientWait = (code: string): boolean => (CLIENT_WAITS as readonly string[]).includes(code);
+
+/** What ONE waits for that is its own work under way (the account being ordered): nobody of the firm is asked. */
+export const ONE_WORKS: readonly AdvanceWaiting[] = ["account_preparing"];
+
+export const isOneWork = (code: string): boolean => (ONE_WORKS as readonly string[]).includes(code);
+
+/** What ONE waits for of the client's account (0090): nothing once it is ready. */
+const ACCOUNT_WAITING: Record<Exclude<AccountState, "ready">, AdvanceWaiting> = {
+  missing: "account_missing",
+  preparing: "account_preparing",
+  proposed: "account_proposed",
+  incomplete: "account_incomplete",
+  contested: "account_contested",
+  failed: "account_failed",
+};
+
+export const accountWaiting = (state: AccountState | null | undefined): AdvanceWaiting | null =>
+  !state || state === "ready" ? null : ACCOUNT_WAITING[state];
 
 export const isAdvanceWaiting = (value: unknown): value is AdvanceWaiting =>
   (ADVANCE_WAITING as readonly unknown[]).includes(value);
@@ -59,18 +90,25 @@ export const isAdvanceWaiting = (value: unknown): value is AdvanceWaiting =>
  * What ONE waits for before it creates a case's lawsuits, or null when the
  * case has what they need: nothing the case screen lists as missing (each
  * person's data, the documents the setting names, a leg of the trip), and
- * somebody who claims. The Valor da Causa Pedido of each claimant is never
- * waited for (0064): with none, the lawsuit goes with no value and the
+ * somebody who claims, and the client's account of what happened, ordered
+ * with nothing the piece needs missing (0090: the piece ONE asks for right
+ * after is written from it, and a case with no account had its piece come
+ * back full of [COMPLETAR]). The Valor da Causa Pedido of each claimant is
+ * never waited for (0064): with none, the lawsuit goes with no value and the
  * judge defines it.
  */
 export function lawsuitsWaiting(input: {
   missing: Missing[];
   claims: (number | null)[];
+  /** Where the client's account stands (`case_account_state`); not given, it is not waited for. */
+  account?: AccountState | null;
   /** A case an agency handed over (0071) whose client has not said on their link that they finished. */
   unconfirmedHandoff?: boolean;
 }): AdvanceWaiting | null {
   if (input.missing.length > 0) return "case_incomplete";
   if (input.claims.length === 0) return "no_claimants";
+  const account = accountWaiting(input.account);
+  if (account) return account;
   // The data came from the agency, not from the client: ONE files nothing the client has not seen.
   if (input.unconfirmedHandoff) return "client_confirmation";
   return null;
@@ -99,6 +137,12 @@ const WAITING_KEY: Record<AdvanceWaiting, string> = {
   paper_unwritable: "advance-waiting-paper-unwritable",
   power_of_attorney_unsigned: "advance-waiting-power-of-attorney",
   client_confirmation: "advance-waiting-client-confirmation",
+  account_missing: "advance-waiting-account-missing",
+  account_preparing: "advance-waiting-account-preparing",
+  account_proposed: "advance-waiting-account-proposed",
+  account_incomplete: "advance-waiting-account-incomplete",
+  account_contested: "advance-waiting-account-contested",
+  account_failed: "advance-waiting-account-failed",
   unavailable: "advance-waiting-unavailable",
   step_failed: "advance-waiting-step-failed",
   stuck: "advance-waiting-stuck",
@@ -128,6 +172,12 @@ const WAITING_TAG_KEY: Record<AdvanceWaiting, string> = {
   paper_unwritable: "advance-tag-paper",
   power_of_attorney_unsigned: "advance-tag-paper",
   client_confirmation: "advance-tag-client-confirmation",
+  account_missing: "advance-tag-account",
+  account_preparing: "advance-tag-account",
+  account_proposed: "advance-tag-account",
+  account_incomplete: "advance-tag-account",
+  account_contested: "advance-tag-account",
+  account_failed: "advance-tag-account",
   unavailable: "advance-tag-error",
   step_failed: "advance-tag-error",
   stuck: "advance-tag-error",
@@ -162,6 +212,8 @@ export function waitingHref(code: string, caseId: string): string {
   if (code === "claims_missing") return `/casos/${caseId}#como-vai-a-juizo`;
   // The system ONE named for a lawsuit is approved, or not, under that lawsuit (0066).
   if (code === "system_unapproved") return `/casos/${caseId}#case-proceedings`;
+  // The client's account, its order of the facts and what was asked of it are in "O que aconteceu" (0090).
+  if (code.startsWith("account_")) return `/casos/${caseId}#case-statements`;
   return waitingFix(code)?.href ?? `/casos/${caseId}`;
 }
 

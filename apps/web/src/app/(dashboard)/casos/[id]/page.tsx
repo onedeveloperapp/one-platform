@@ -603,6 +603,8 @@ async function loadCase(id: string): Promise<CaseState> {
     },
     civilCourt,
     statements: told.statements,
+    account: told.account,
+    accountMaxRounds: told.accountMaxRounds,
     audios: told.audios,
     complaints: told.complaints,
     complaintAnswerDays: told.complaintAnswerDays,
