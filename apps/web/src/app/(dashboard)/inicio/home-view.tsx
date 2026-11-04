@@ -35,7 +35,7 @@ import NiShieldCheck from "@/icons/nexture/ni-shield-check";
 import NiTimeline from "@/icons/nexture/ni-timeline";
 import NiUsers from "@/icons/nexture/ni-users";
 import type { JourneyOverview } from "@/lib/cases/journey-read";
-import { type PendingGroup, sayPending } from "@/lib/firm/pending";
+import { homeTiles, type PendingGroup, sayPending } from "@/lib/firm/pending";
 import { type FirmToday, somethingForMe, type TodayNeed, todayNeeds } from "@/lib/firm/today";
 import type { ModuleOffer } from "@/lib/modules/offer";
 import type { ActivationFacts } from "@/lib/onboarding";
@@ -292,6 +292,19 @@ export default function HomeView({ state }: { state: HomeState }) {
         managesFirm: ready.manager,
       })
     : [];
+  // Each thing once (the owner, 2026-11-04): what the list of what holds a case names is never a tile too. While that
+  // list could not be read, every need is a tile, so nothing goes unseen.
+  const tiles = ready?.attention ? homeTiles(needs, ready.attention) : needs;
+  // Nothing waits only when the list was read and holds nothing, and no need is this person's: never beside the list
+  // of what holds a case, nor beside the error that says it could not be read.
+  const nothingWaits = Boolean(ready?.attention) && attentionTotal === 0 && !somethingForMe(needs);
+  // The setup's list already asks the registration at the bar while its step is open: the reminder waits for it.
+  const setupAsksRegistration = Boolean(
+    ready?.setup &&
+      !ready.setup.state.dismissed &&
+      !ready.setup.state.completedAt &&
+      ready.setup.facts.oab_signer !== true,
+  );
 
   return (
     <Box className="flex flex-col gap-6">
@@ -371,7 +384,7 @@ export default function HomeView({ state }: { state: HomeState }) {
             />
           ) : null}
 
-          {ready.ownRegistrationMissing ? (
+          {ready.ownRegistrationMissing && !setupAsksRegistration ? (
             // Set aside in their own setup: the DJEN is read by the registrations of the firm's people.
             <Alert
               severity="warning"
@@ -396,14 +409,13 @@ export default function HomeView({ state }: { state: HomeState }) {
             />
           ) : null}
 
-          <Box component="section" aria-labelledby="today-needs" className="flex flex-col gap-4">
-            <Typography id="today-needs" variant="h5" component="h2" className="mb-0">
-              {t("today-needs-title")}
-            </Typography>
-
-            {needs.length > 0 ? (
+          {tiles.length > 0 ? (
+            <Box component="section" aria-labelledby="today-needs" className="flex flex-col gap-4">
+              <Typography id="today-needs" variant="h5" component="h2" className="mb-0">
+                {ready.attention ? t("today-follow-title") : t("today-needs-title")}
+              </Typography>
               <Grid container spacing={2.5}>
-                {needs.map((need) => (
+                {tiles.map((need) => (
                   <Grid key={need.key} size={{ xs: 12, sm: 6, lg: 3 }}>
                     <StatTile
                       href={need.href}
@@ -416,10 +428,12 @@ export default function HomeView({ state }: { state: HomeState }) {
                   </Grid>
                 ))}
               </Grid>
-            ) : null}
+            </Box>
+          ) : null}
 
-            {!somethingForMe(needs) ? (
-              ready.today.whatsapp === "none" && ready.manager ? (
+          {nothingWaits ? (
+            <Box component="section" aria-label={t("today-needs-title")}>
+              {ready.today.whatsapp === "none" && ready.manager ? (
                 <EmptyState
                   icon={<NiMessages size="large" />}
                   title={t("today-empty-title")}
@@ -447,9 +461,9 @@ export default function HomeView({ state }: { state: HomeState }) {
                       : { label: t("today-empty-action-inbox"), href: "/atendimento" }
                   }
                 />
-              )
-            ) : null}
-          </Box>
+              )}
+            </Box>
+          ) : null}
 
           {/* The whole portfolio after the day's work: shown once the firm has a case, of any stage. */}
           {ready.journey &&

@@ -592,6 +592,29 @@ export const pendingWaitsOnFirm = (groups: readonly PendingGroup[]): boolean =>
 export const attentionGroups = (groups: readonly PendingGroup[]): PendingGroup[] =>
   groups.filter((group) => group.key === "late" || group.key === "one");
 
+/** The group of each need the center places by hand, beside `NEED_GROUP`. */
+const PLACED_BY_HAND: Partial<Record<TodayNeed["key"], PendingGroupKey>> = {
+  overdue: "late",
+  due: "today",
+  hearings: "today",
+  documents: "review",
+};
+
+/**
+ * The home's tiles beside its list of what holds a case (`attentionGroups`): each need of the home once (the owner,
+ * 2026-11-04, who found the home saying most things twice). What passed its time and what waits on the firm are lines
+ * of that list; the tiles keep what falls today and in the next days and what is good to look at. The papers to
+ * check are one list of cases, so their tile goes while the list names the ones waiting too long.
+ */
+export function homeTiles(needs: readonly TodayNeed[], attention: readonly PendingGroup[]): TodayNeed[] {
+  const listed = new Set(attention.flatMap((group) => group.items.map((item) => item.id)));
+  return needs.filter((need) => {
+    if (need.key === "documents") return !listed.has("documents:stale");
+    const place = PLACED_BY_HAND[need.key] ?? NEED_GROUP[need.key];
+    return place !== "late" && place !== "one";
+  });
+}
+
 /** The ids that would make somebody stop: a new one of these is told at once, wherever the person is. */
 export const urgentIds = (groups: readonly PendingGroup[]): string[] =>
   groups

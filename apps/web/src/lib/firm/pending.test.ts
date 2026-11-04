@@ -4,6 +4,7 @@ import {
   attentionGroups,
   daysSince,
   type FirmPending,
+  homeTiles,
   LINK_REASONS,
   pendingBadge,
   type PendingGroup,
@@ -14,7 +15,7 @@ import {
   sayPending,
   urgentIds,
 } from "@/lib/firm/pending";
-import type { FirmToday, TodayViewer } from "@/lib/firm/today";
+import { type FirmToday, todayNeeds, type TodayViewer } from "@/lib/firm/today";
 import messages from "@flyee/content/messages/pt-BR.json";
 
 const product = messages.product as Record<string, string>;
@@ -581,5 +582,60 @@ describe("the center of what waits for somebody", () => {
     for (const key of ["pending-title", "pending-open", "pending-new", "pending-empty-title", "pending-error"]) {
       expect(product[key], key).toBeTruthy();
     }
+  });
+});
+
+describe("the home says each thing once", () => {
+  const busy: FirmToday = {
+    ...NOTHING,
+    deadlinesOverdue: 1,
+    deadlinesSoon: 2,
+    hearingsSoon: 1,
+    hearingsUnresolved: 1,
+    approvalsMine: 3,
+    approvalsWaiting: 5,
+    conversationsWaiting: 4,
+    conversationsClosing: 1,
+    sendsFailed: 1,
+    documentsToReview: 5,
+    movementsNew: 1,
+    clientsFinished: 1,
+    draftsWaiting: 1,
+  };
+  const overdue: FirmPending = {
+    ...QUIET,
+    deadlinesOverdue: [
+      { deadlineId: "d1", caseId: CASE_A, seq: 7, title: "Réplica", cnj: "50002023920998090051", dueOn: "2026-10-19" },
+    ],
+    documentsStale: 2,
+  };
+
+  it("keeps as tiles what falls today and what is to look at, never what the list above names", () => {
+    const attention = attentionGroups(pendingGroups(busy, overdue, PARTNER, NOW));
+    const tiles = homeTiles(todayNeeds(busy, PARTNER), attention).map((need) => need.key);
+    expect(tiles).toEqual(["closing", "due", "hearings", "waiting", "moved", "clients", "queue"]);
+    // Nothing is both a tile and a line of the list.
+    const lines = new Set(attention.flatMap((entry) => entry.items.map((item) => item.id)));
+    for (const key of tiles) expect(lines.has(`need:${key}`), key).toBe(false);
+    // And every need of the home is one or the other: a tile, its line, or (deadlines and papers) its own lines.
+    const ownLines: Partial<Record<string, string>> = { overdue: "deadline:d1", documents: "documents:stale" };
+    for (const need of todayNeeds(busy, PARTNER)) {
+      const line = ownLines[need.key] ?? `need:${need.key}`;
+      expect(tiles.includes(need.key) || lines.has(line), need.key).toBe(true);
+    }
+  });
+
+  it("keeps the papers' tile while none of them waits too long", () => {
+    const fresh: FirmPending = { ...overdue, documentsStale: 0 };
+    const attention = attentionGroups(pendingGroups(busy, fresh, PARTNER, NOW));
+    expect(homeTiles(todayNeeds(busy, PARTNER), attention).map((need) => need.key)).toContain("documents");
+  });
+
+  it("shows a person their tiles by their function, as the list does", () => {
+    const attention = attentionGroups(pendingGroups(busy, overdue, ATTENDANCE, NOW));
+    const tiles = homeTiles(todayNeeds(busy, ATTENDANCE), attention).map((need) => need.key);
+    expect(tiles).not.toContain("due");
+    expect(tiles).not.toContain("hearings");
+    expect(tiles).toEqual(["closing", "waiting", "moved", "clients", "queue"]);
   });
 });
