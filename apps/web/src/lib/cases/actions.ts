@@ -303,8 +303,8 @@ export async function saveFlightSegment(
   const result = fold(data, error, (answer) => ({ segmentId: String(answer.segment_id) }));
   if (result.ok) {
     refresh(caseId);
-    // The leg owes its check against the official record: done now instead of at the next sweep.
-    await queueFlightCheck(caseId);
+    // The leg owes its check against the official record: done right after instead of at the next sweep.
+    await queueFlightCheck();
     await queueCaseAdvance(caseId);
   }
   return result;

@@ -1,11 +1,11 @@
 import "server-only";
 
-import { after } from "next/server";
 import { createHash } from "node:crypto";
 
 import { runFirmTask } from "@/lib/ai/executor";
 import { isModelDocument } from "@/lib/cases/drafts";
 import { supabaseFileStore } from "@/lib/files/store";
+import { soon } from "@/lib/jobs/soon";
 import { readDocx } from "@/lib/library/docx";
 import {
   exchangesOf,
@@ -18,7 +18,6 @@ import {
 import type { RunResult } from "@flyee/ai/runs";
 import { createServiceClient } from "@flyee/auth/service";
 import { unwritableCharacters } from "@flyee/documents/text-pdf";
-import { sendEvent } from "@flyee/jobs";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 /**
@@ -267,19 +266,10 @@ export async function expireTemplateImports(service: SupabaseClient): Promise<nu
 }
 
 /**
- * A request owes a work: the jobs take it at once. Without them (a machine
- * with no Inngest), the one work owed is done after the response is sent,
- * and the screen that waits for the request asks again for the next one, so
- * each work has a request's whole time.
+ * A request owes a work: the one work owed is done right after the response
+ * is sent, and the screen that waits for the request asks again for the next
+ * one, so each work has a request's whole time.
  */
 export async function queueTemplateImport(importId: string): Promise<void> {
-  const sent = await sendEvent("one/library.import.requested", { importId });
-  if (sent.sent) return;
-  after(async () => {
-    try {
-      await importNext(createServiceClient(), importId);
-    } catch {
-      // Still owed: the next look at it takes it.
-    }
-  });
+  soon("template-import", () => importNext(createServiceClient(), importId));
 }

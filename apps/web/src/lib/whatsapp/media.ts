@@ -1,14 +1,12 @@
 import "server-only";
 
-import { after } from "next/server";
-
 import { supabaseFileStore } from "@/lib/files/store";
+import { soon } from "@/lib/jobs/soon";
 import { forgetStaged, readStaged } from "@/lib/test-chat/staging";
 import { readWhatsAppSettings } from "@/lib/whatsapp/config";
 import { providerFor } from "@/lib/whatsapp/provider";
 import { createServiceClient } from "@flyee/auth/service";
 import { measureFile } from "@flyee/documents/measure";
-import { sendEvent } from "@flyee/jobs";
 import type { WhatsAppProvider } from "@flyee/whatsapp/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -206,31 +204,20 @@ export async function fetchPendingMedia(service: SupabaseClient, limit = 10): Pr
 }
 
 /**
- * A delivery brought a file: the jobs fetch it at once, and ONE's turn
- * follows. Without them (a machine with no Inngest), the file is fetched
- * after the response, and ONE's turn taken there once the passenger stopped
- * writing. Never waited for: the sweeps take both anyway.
+ * A delivery brought a file: it is fetched right after the response, and
+ * ONE's turn taken there once the passenger stopped writing. Never waited
+ * for: the sweeps take both anyway.
  */
 export async function queueMediaFetch(): Promise<void> {
-  const sent = await sendEvent("one/whatsapp.media.pending", {});
-  if (sent.sent) return;
-  try {
-    after(async () => {
-      try {
-        const service = createServiceClient();
-        const report = await fetchPendingMedia(service, 10);
-        if (report.conversations.length === 0) return;
-        // Loaded when needed: the turn answers through this outbox's sender.
-        const { GATHER_MS, takeConversationTurns } = await import("@/lib/conversations/agent-work");
-        await new Promise((resolve) => setTimeout(resolve, GATHER_MS));
-        for (const conversationId of report.conversations) {
-          await takeConversationTurns(service, { conversationId }).catch(() => undefined);
-        }
-      } catch {
-        // Still pending: the sweep takes it.
-      }
-    });
-  } catch {
-    // Outside a request: the sweep takes it.
-  }
+  soon("whatsapp-media", async () => {
+    const service = createServiceClient();
+    const report = await fetchPendingMedia(service, 10);
+    if (report.conversations.length === 0) return;
+    // Loaded when needed: the turn answers through this outbox's sender.
+    const { GATHER_MS, takeConversationTurns } = await import("@/lib/conversations/agent-work");
+    await new Promise((resolve) => setTimeout(resolve, GATHER_MS));
+    for (const conversationId of report.conversations) {
+      await takeConversationTurns(service, { conversationId }).catch(() => undefined);
+    }
+  });
 }

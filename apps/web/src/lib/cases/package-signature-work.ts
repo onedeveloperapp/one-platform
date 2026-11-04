@@ -1,14 +1,13 @@
 import "server-only";
 
-import { after } from "next/server";
 import { createHash } from "node:crypto";
 
 import { supabaseFileStore } from "@/lib/files/store";
+import { soon } from "@/lib/jobs/soon";
 import { signForCourt } from "@/lib/psc/sign";
 import { createServiceClient } from "@flyee/auth/service";
 import { takeBackFile } from "@flyee/documents/files";
 import { measureFile } from "@flyee/documents/measure";
-import { sendEvent } from "@flyee/jobs";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 /**
@@ -202,17 +201,9 @@ export async function signFilingPackages(
 
 /**
  * A package was just built, a lawyer asked for its signature, or a lawyer
- * authorized ONE: the jobs sign what is owed at once. Without them (a
- * machine with no Inngest), it is signed after the response is sent.
+ * authorized ONE: what is owed is signed right after the response is sent.
+ * The sweep takes what that did not finish.
  */
 export async function queuePackageSignature(packageId: string | null): Promise<void> {
-  const sent = await sendEvent("one/case.filing.signature", { packageId });
-  if (sent.sent) return;
-  after(async () => {
-    try {
-      await signFilingPackages(createServiceClient(), packageId ? 1 : 3, packageId);
-    } catch {
-      // Still owed: the sweep takes it.
-    }
-  });
+  soon("package-signature", () => signFilingPackages(createServiceClient(), packageId ? 1 : 3, packageId));
 }

@@ -1,38 +1,19 @@
 import "server-only";
 
 import { takeConversationTurns } from "@/lib/conversations/agent-work";
-import { createServiceClient } from "@flyee/auth/service";
-import { inngest } from "@flyee/jobs";
+import type { Sweep } from "@/lib/jobs/schedule";
 
 /**
- * ONE's turns in the firms' conversations (migration 0048): at once when a
- * passenger wrote (`one/conversation.turn`, gathered per conversation until
- * they stop writing for a few seconds), and every two minutes for what was
- * left. The database claims each turn under a number, so a turn is never
- * taken twice. The steps carry counts only.
+ * ONE's turns in the firms' conversations (migration 0048): a passenger who
+ * wrote is answered right after the delivery (`queueConversationTurn`); this
+ * takes what was left, a few turns a round. The database claims each turn
+ * under a number, so a turn is never taken twice. Counts only.
  */
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-export const conversationTurnFunction = inngest.createFunction(
+export const conversationSweeps: Sweep[] = [
   {
-    id: "one-conversation-turn",
-    retries: 1,
-    concurrency: { limit: 5 },
-    debounce: { key: "event.data.conversationId", period: "5s", timeout: "30s" },
+    key: "conversation-turns",
+    when: { every: 5 },
+    whileUsed: true,
+    run: async (service) => ({ ...(await takeConversationTurns(service, { limit: 5 })) }),
   },
-  { event: "one/conversation.turn" },
-  async ({ event, step }) => {
-    const named = event.data?.conversationId;
-    const conversationId = typeof named === "string" && UUID.test(named) ? named : null;
-    if (!conversationId) return { claimed: 0 };
-    return step.run("turn", () => takeConversationTurns(createServiceClient(), { conversationId }));
-  },
-);
-
-export const conversationTurnsSweepFunction = inngest.createFunction(
-  { id: "one-conversation-turns", retries: 1, concurrency: { limit: 1 } },
-  { cron: "*/2 * * * *" },
-  async ({ step }) => step.run("turns", () => takeConversationTurns(createServiceClient())),
-);
-
-export const conversationFunctions = [conversationTurnFunction, conversationTurnsSweepFunction];
+];

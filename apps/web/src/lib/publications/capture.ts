@@ -1,8 +1,7 @@
 import "server-only";
 
-import { after } from "next/server";
-
 import { djenClient } from "@/lib/courts/djen";
+import { soon } from "@/lib/jobs/soon";
 import { addDays, chunkItems, isDay, nextWindow, toCaptureItem } from "@/lib/publications/publications";
 import { createServiceClient } from "@flyee/auth/service";
 import {
@@ -12,7 +11,6 @@ import {
   DjenWindowTooLargeError,
 } from "@flyee/courts/providers/djen";
 import type { DjenClient } from "@flyee/courts/types";
-import { sendEvent } from "@flyee/jobs";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 /**
@@ -219,30 +217,24 @@ export async function captureNext(
   return held ? captureClaimed(service, client, held, options) : "none";
 }
 
-/** How many registrations a reading asked for by a person takes at once, where no job runs. */
+/** How many registrations a reading asked for by a person takes right after the answer. */
 const INLINE_CAPTURES = 6;
 
 /**
- * A person of the firm asked for a reading now: the job takes it at once.
- * Without the jobs (a machine with no Inngest) the firm's registrations are
- * read after the response is sent, a few at most; the rest stays owed.
+ * A person of the firm asked for a reading now: the firm's registrations are
+ * read right after the response is sent, a few at most; the rest stays owed
+ * to the sweep.
  */
 export async function queueFirmCapture(orgId: string): Promise<void> {
-  const sent = await sendEvent("one/publications.capture.requested", { orgId });
-  if (sent.sent) return;
-  after(async () => {
-    try {
-      const client = djenClient();
-      if (!client) return;
-      const service = createServiceClient();
-      for (let turn = 0; turn < INLINE_CAPTURES; turn += 1) {
-        const outcome = await captureNext(service, client, orgId);
-        // Nothing left, or the DJEN limited the calls: insisting with the next registration would only
-        // spend its attempts.
-        if (outcome === "none" || outcome === "retry") return;
-      }
-    } catch {
-      // Still owed: the sweep takes it.
+  soon("djen-capture", async () => {
+    const client = djenClient();
+    if (!client) return;
+    const service = createServiceClient();
+    for (let turn = 0; turn < INLINE_CAPTURES; turn += 1) {
+      const outcome = await captureNext(service, client, orgId);
+      // Nothing left, or the DJEN limited the calls: insisting with the next registration would only
+      // spend its attempts.
+      if (outcome === "none" || outcome === "retry") return;
     }
   });
 }

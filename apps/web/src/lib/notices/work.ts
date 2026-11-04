@@ -1,10 +1,8 @@
 import "server-only";
 
-import { after } from "next/server";
-
+import { soon } from "@/lib/jobs/soon";
 import { deliverOutbox } from "@/lib/whatsapp/send";
 import { createServiceClient } from "@flyee/auth/service";
-import { sendEvent } from "@flyee/jobs";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 /**
@@ -61,18 +59,10 @@ export async function sweepNotices(
 }
 
 /**
- * Somebody switched a kind on or agreed to be told: what is due now is asked
- * for at once (the job, or, with no jobs, right after the answer) instead of
- * at the next sweep. Never waited for.
+ * Somebody switched a kind on or agreed to be told: what is due now is
+ * reserved and sent right after the answer instead of at the next sweep.
+ * Never waited for.
  */
 export async function settleNotices(): Promise<void> {
-  const sent = await sendEvent("one/notices.sweep", {});
-  if (sent.sent) return;
-  after(async () => {
-    try {
-      await sweepNotices(createServiceClient(), { budgetMs: 20_000 });
-    } catch {
-      // Still due: the sweep reserves it.
-    }
-  });
+  soon("client-notices", () => sweepNotices(createServiceClient(), { budgetMs: 20_000 }));
 }

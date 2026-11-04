@@ -1,13 +1,11 @@
 import "server-only";
 
-import { after } from "next/server";
-
 import { failureCode, inProjudiHours, movementsOf, snapshotOf } from "@/lib/courts/course";
 import { type TrackingSources, trackingSources } from "@/lib/courts/tracking";
+import { soon } from "@/lib/jobs/soon";
 import { createServiceClient } from "@flyee/auth/service";
 import { AggregatorAuthError, AggregatorNoCreditError } from "@flyee/courts/providers/aggregator-http";
 import type { ProceedingRead } from "@flyee/courts/types";
-import { sendEvent } from "@flyee/jobs";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 /**
@@ -104,26 +102,12 @@ export async function readNext(
   });
 }
 
-/** How many readings a request takes at once where no job runs. */
-const INLINE_READS = 1;
-
 /**
- * A person asked for a lawsuit to be read now: the job takes it at once. Without the jobs (a machine with no
- * Inngest) it is read after the response is sent.
+ * A person asked for a lawsuit to be read now: it is read right after the response is sent. The sweep takes it
+ * when that did not finish.
  */
 export async function queueProceedingRead(trackingId: string): Promise<void> {
-  const sent = await sendEvent("one/proceedings.read.requested", { trackingId });
-  if (sent.sent) return;
-  after(async () => {
-    try {
-      const sources = trackingSources();
-      const service = createServiceClient();
-      for (let turn = 0; turn < INLINE_READS; turn += 1) {
-        const outcome = await readNext(service, sources, { requestedOnly: true, trackingId });
-        if (outcome === "none" || outcome === "stopped") return;
-      }
-    } catch {
-      // Still owed: the sweep takes it.
-    }
-  });
+  soon("proceeding-read", () =>
+    readNext(createServiceClient(), trackingSources(), { requestedOnly: true, trackingId }),
+  );
 }

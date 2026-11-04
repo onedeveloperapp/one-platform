@@ -50,10 +50,13 @@ async function ok(result: { data: unknown; error: { message: string } | null }):
   return answer;
 }
 
-/** What ONE carries of the case now: the worker of the jobs, with no job runner (what it asks for is done here). */
+/**
+ * What ONE carries of the case now: the sweep's worker. Its messages go at once; a piece or a package it asks for is
+ * left to its own work, which a test outside a request never schedules.
+ */
 async function carry(caseId: string) {
-  const { advanceCases, followByJobs } = await import("@/lib/cases/advance-work");
-  return advanceCases(backend() as never, 1, caseId, followByJobs);
+  const { advanceCases, followSoon } = await import("@/lib/cases/advance-work");
+  return advanceCases(backend() as never, 1, caseId, followSoon);
 }
 
 /** The messages the firm sent Maria, with what became of each. */

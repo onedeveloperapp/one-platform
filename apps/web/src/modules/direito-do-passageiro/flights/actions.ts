@@ -36,7 +36,7 @@ export async function recheckFlight(caseId: string, segmentId: string): Promise<
   if (error) return { ok: false, code: raised(error.message) };
   const answer = (data ?? {}) as { ok?: boolean; code?: string };
   if (!answer.ok) return { ok: false, code: String(answer.code ?? "failed") };
-  await queueFlightCheck(caseId);
+  await queueFlightCheck();
   revalidatePath(`/casos/${caseId}`);
   return { ok: true, code: "waiting" };
 }

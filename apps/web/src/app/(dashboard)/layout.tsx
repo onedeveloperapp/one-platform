@@ -7,6 +7,7 @@ import DashboardShell from "@/components/layout/dashboard-shell";
 import { resolveGate } from "@/lib/firm/gate";
 import { FIRM_SETUP_PATH } from "@/lib/firm/gate-rules";
 import type { MenuViewer } from "@/lib/firm/menu";
+import { sweepWhileUsed } from "@/lib/jobs/while-used";
 import { getMemberContext } from "@/lib/member/context";
 import { moduleMenuOf } from "@/lib/modules/offer";
 import { moduleOf } from "@/lib/modules/registry";
@@ -36,6 +37,9 @@ export default async function DashboardLayout({
     owesSecondFactor = gate.owesSecondFactor;
     partnerSetup = gate.partnerSetup;
     partnerSetupPending = gate.partnerSetupPending;
+    // Somebody works in ONE: the sweeps that serve what people wait on run now and then, after the answer
+    // (lib/jobs/while-used.ts), whatever the clock does.
+    sweepWhileUsed();
   }
   // The modules somebody of a partner works in, as the header names them: from ONE's catalog, or, when it could not
   // be read, by the name the module's own definition gives it, so the header still says which area this is.

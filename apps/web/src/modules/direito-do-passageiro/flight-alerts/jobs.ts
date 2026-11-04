@@ -1,43 +1,37 @@
 import "server-only";
 
+import type { Sweep } from "@/lib/jobs/schedule";
 import { watchTrips } from "@/modules/direito-do-passageiro/flight-alerts/watch";
 import { tellFlightAlerts } from "@/modules/direito-do-passageiro/flight-alerts/work";
 import { flightStatusProvider } from "@/modules/direito-do-passageiro/flights/status";
-import { createServiceClient } from "@flyee/auth/service";
-import { inngest } from "@flyee/jobs";
 
-/**
- * The alerts of the flights ONE follows (migration 0047): every two minutes,
- * what is due is claimed and told, once each; and at once when an alert was
- * just kept (`one/flight.alerts`). One run at a time: the database fences
- * each alert by its claim besides. The steps carry counts only.
- */
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-export const flightAlertsFunction = inngest.createFunction(
-  { id: "one-flight-alerts", retries: 1, concurrency: { limit: 1 } },
-  [{ cron: "*/2 * * * *" }, { event: "one/flight.alerts" }],
-  async ({ event, step }) => {
-    const named = event.name === "one/flight.alerts" ? event.data?.alertId : null;
-    const alertId = typeof named === "string" && UUID.test(named) ? named : null;
-    return step.run("tell", () => tellFlightAlerts(createServiceClient(), { alertId }));
+export const flightAlertSweeps: Sweep[] = [
+  /**
+   * The alerts of the flights ONE follows (migration 0047): what is due is
+   * claimed and told, once each; an alert just kept is told right after
+   * (`queueFlightAlert`). The database fences each alert by its claim, so two
+   * rounds at once tell nothing twice. Counts only.
+   */
+  {
+    key: "flight-alerts",
+    when: { every: 5 },
+    whileUsed: true,
+    run: async (service) => ({ ...(await tellFlightAlerts(service, { alertId: null })) }),
   },
-);
-
-/**
- * The flights ONE follows, read at FlightAware every ten minutes (0051): the
- * database decides which trips are due (their window, their interval, the
- * platform's daily reads). With no key in this environment nothing is read.
- */
-export const flightWatchFunction = inngest.createFunction(
-  { id: "one-flight-watch", retries: 0, concurrency: { limit: 1 } },
-  { cron: "*/10 * * * *" },
-  async ({ step }) =>
-    step.run("watch", async () => {
+  /**
+   * The flights ONE follows, read at FlightAware (0051): the database decides
+   * which trips are due (their window, their interval, the platform's and each
+   * firm's daily reads), so a round more reads nothing it should not. With no
+   * key in this environment nothing is read.
+   */
+  {
+    key: "flight-watch",
+    when: { every: 10 },
+    whileUsed: true,
+    run: async (service) => {
       const provider = flightStatusProvider();
-      if (!provider) return { claimed: 0, read: 0, told: 0, failed: 0, stopped: false };
-      return watchTrips(createServiceClient(), provider, { limit: 20 });
-    }),
-);
-
-export const flightAlertFunctions = [flightAlertsFunction, flightWatchFunction];
+      if (!provider) return { off: true };
+      return { ...(await watchTrips(service, provider, { limit: 20 })) };
+    },
+  },
+];

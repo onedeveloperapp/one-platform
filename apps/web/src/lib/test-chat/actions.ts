@@ -6,6 +6,7 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { firstNameOf } from "@/lib/cases/cases";
 import { FIRM_FILES_BUCKET } from "@/lib/files/bucket";
 import { isManager } from "@/lib/firm/roles";
+import { sweepWhileUsed } from "@/lib/jobs/while-used";
 import { getMemberContext } from "@/lib/member/context";
 import { stagedPath } from "@/lib/test-chat/staging";
 import {
@@ -153,6 +154,9 @@ export async function readTestThread(
   if (!TOKEN.test(String(token ?? "")) || !UUID.test(String(tripId ?? ""))) return { ok: false, code: "missing" };
   const service = backendOrNull();
   if (!service) return { ok: false, code: "unavailable" };
+  // The tester waits in front of the chat, which asks for what is new every few seconds: the sweeps that serve
+  // what people wait on run now and then, after the answer (lib/jobs/while-used.ts).
+  sweepWhileUsed();
   const since = after && !Number.isNaN(Date.parse(after)) ? after : null;
   const { data, error } = await service.rpc("test_chat_thread", {
     target_token: token,

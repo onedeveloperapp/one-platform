@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import { namesOf, sourcesOf } from "@/lib/admin/calendar";
 import { requireSuperadmin } from "@/lib/admin/session";
-import { sendEvent } from "@flyee/jobs";
+import { settleDeadlineCounts } from "@/lib/deadlines/count-work";
 
 /**
  * What the console of the forensic calendar does (migration 0034): record a
@@ -12,7 +12,7 @@ import { sendEvent } from "@flyee/jobs";
  * and keep the acts of the list; and keep what the platform read of how
  * each court decides a family split (0025). The database checks the role and records
  * each change; a change of a court's calendar has every open deadline of that
- * court counted again, and the job is asked to count them now.
+ * court counted again, right after the answer.
  *
  * A server action is a public endpoint: the role is checked here again.
  */
@@ -31,7 +31,7 @@ async function settled(answer: unknown, error: { message: string } | null): Prom
   if (!data.ok) return { ok: false, code: String(data.code ?? "failed") };
   revalidatePath("/admin/calendario");
   revalidatePath("/prazos");
-  if ((data.recounted ?? 0) > 0) await sendEvent("one/deadline.count", { deadlineId: null });
+  if ((data.recounted ?? 0) > 0) settleDeadlineCounts();
   return { ok: true, recounted: data.recounted ?? 0, days: data.days };
 }
 

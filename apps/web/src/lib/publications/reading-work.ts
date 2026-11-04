@@ -1,15 +1,13 @@
 import "server-only";
 
-import { after } from "next/server";
-
 import { providerReadiness, runFirmTask } from "@/lib/ai/executor";
 import { countDeadlines } from "@/lib/deadlines/count-work";
 import { syncHearings } from "@/lib/hearings/calendar-work";
+import { soon } from "@/lib/jobs/soon";
 import { triageText } from "@/lib/publications/publications";
 import { READING_TASK, type ReadingAct, readingBriefing, readingFailure } from "@/lib/publications/reading";
 import { isReadingKind, READING_KINDS, type ReadingKind } from "@/lib/publications/reading-words";
 import { createServiceClient } from "@flyee/auth/service";
-import { sendEvent } from "@flyee/jobs";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 /**
@@ -88,17 +86,7 @@ export type ReadingFollow = {
   hearing: (hearingId: string) => Promise<void>;
 };
 
-/** The jobs take what follows. */
-export const followReadingByJobs: ReadingFollow = {
-  deadline: async (deadlineId) => {
-    await sendEvent("one/deadline.count", { deadlineId });
-  },
-  hearing: async (hearingId) => {
-    await sendEvent("one/hearings.changed", { hearingId });
-  },
-};
-
-/** With no jobs, what follows is done here: the count, and the event of the calendar. */
+/** What follows is done in the same work: the count, and the event of the calendar; the sweeps take what fails. */
 const followReadingHere: ReadingFollow = {
   deadline: async (deadlineId) => {
     await countDeadlines(createServiceClient(), { limit: 1, deadlineId });
@@ -234,7 +222,7 @@ export async function readClaimedPublication(
 export async function readNext(
   service: SupabaseClient,
   publicationId: string | null = null,
-  follow: ReadingFollow = followReadingByJobs,
+  follow: ReadingFollow = followReadingHere,
   kinds: readonly ReadingKind[] = READING_KINDS,
 ): Promise<ReadingOutcome | "none"> {
   const held = (await claimPublicationReadings(service, 1, publicationId, kinds))[0];
@@ -242,23 +230,17 @@ export async function readNext(
 }
 
 /**
- * A person just triaged a publication as a deadline or a hearing: the jobs
- * read it at once. Without them (a machine with no Inngest), it is read
- * after the response is sent. Never waited for: the sweep reads it anyway.
+ * A person just triaged a publication as a deadline or a hearing: it is read
+ * right after the response is sent. Never waited for: the sweep reads it
+ * anyway.
  */
 export async function queuePublicationReading(publicationId: string): Promise<void> {
-  const sent = await sendEvent("one/publication.read", { publicationId });
-  if (sent.sent) return;
-  after(async () => {
-    try {
-      const service = createServiceClient();
-      const kinds = await readingReadyKinds(service);
-      for (let turn = 0; turn < READING_KINDS.length; turn += 1) {
-        const outcome = await readNext(service, publicationId, followReadingHere, kinds);
-        if (outcome === "none" || outcome === "released") break;
-      }
-    } catch {
-      // Still due: the sweep reads it.
+  soon("publication-reading", async () => {
+    const service = createServiceClient();
+    const kinds = await readingReadyKinds(service);
+    for (let turn = 0; turn < READING_KINDS.length; turn += 1) {
+      const outcome = await readNext(service, publicationId, followReadingHere, kinds);
+      if (outcome === "none" || outcome === "released") break;
     }
   });
 }

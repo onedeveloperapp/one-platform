@@ -6,6 +6,7 @@ import { getTranslations } from "next-intl/server";
 import { Box, Paper, Typography } from "@mui/material";
 
 import { openClientLink, readClientTasks } from "@/lib/cases/client-link";
+import { sweepWhileUsed } from "@/lib/jobs/while-used";
 import { isPreviewRobot } from "@/lib/links/preview-robot";
 
 /**
@@ -87,6 +88,9 @@ export default async function ClientLinkPage({ params }: { params: Promise<{ tok
     );
   }
 
+  // The client is here, and the page reads itself again while something they sent waits: the sweeps that serve
+  // what people wait on run now and then, after the answer (a check that failed is tried again).
+  sweepWhileUsed();
   return (
     <Frame>
       <ClientFolder token={token} view={view} tasks={await readClientTasks(token)} today={todayInBrazil()} />

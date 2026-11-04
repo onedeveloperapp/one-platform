@@ -10,16 +10,13 @@ under `<run-id>/<table>.jsonl.gz`. Each run is recorded in `backup_runs`
 
 ## How it runs
 
-- **Nightly cron** — `backupCronFunction` fires at `03:00 UTC` (Inngest).
+- **Nightly** — the platform's clock runs the sweep `backup` at `03:00 UTC`
+  (`apps/web/src/lib/backup-jobs.ts`, listed in `apps/web/src/lib/jobs/registry.ts`).
 - **On demand** — the superadmin clicks *Run backup now* in `/admin/backups`,
-  which sends `one/backup.run.requested`. Without Inngest keys the console falls
-  back to running the export inline (bounded by the serverless function
-  timeout — fine for template-scale data, not a large production DB).
+  which runs the export inline (bounded by the serverless function timeout —
+  fine for ONE's data today, not a large production DB).
 - **Retention** — after each successful run, runs (rows + archives) older than
   `BACKUP_RETENTION_DAYS` (default 30) are pruned.
-
-Register the jobs by spreading `backupFunctions` into the Inngest `serve()` call
-(`apps/web/src/app/api/inngest/route.ts`).
 
 ## Configuration
 
@@ -27,7 +24,6 @@ Register the jobs by spreading `backupFunctions` into the Inngest `serve()` call
 | --- | --- |
 | `DATABASE_URL` | Direct Postgres connection the export reads from. |
 | `SUPABASE_SERVICE_ROLE_KEY` + `NEXT_PUBLIC_SUPABASE_URL` | Writes archives to / signs downloads from the private bucket. |
-| `INNGEST_EVENT_KEY` / `INNGEST_SIGNING_KEY` | Run backups as a background job instead of inline. |
 | `BACKUP_RETENTION_DAYS` | Days to keep runs before pruning (default 30). |
 
 Without `DATABASE_URL` or the service key, `runBackup()` returns

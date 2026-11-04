@@ -1,49 +1,48 @@
 import "server-only";
 
+import type { Sweep } from "@/lib/jobs/schedule";
 import { claimPaxReadings, readClaimedPaxDocument } from "@/modules/direito-do-passageiro/agency/reading-work";
 import { removeForgottenBytes, sweepRetention } from "@/modules/direito-do-passageiro/agency/retention-work";
-import { createServiceClient } from "@flyee/auth/service";
-import { inngest } from "@flyee/jobs";
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/** How many documents one round reads: one just sent is read right after it arrived. */
+const READINGS_PER_ROUND = 3;
 
-/**
- * The reading of the documents an agency or its passenger sent (migration 0070): every five minutes what waits is
- * claimed and read, and at once when a document just arrived (`one/pax.document.uploaded`). Each document is
- * claimed in one step and read in another; a claim that never came back expires and the document is taken again.
- * The steps carry ids, claims and outcomes only.
- */
-export const paxReadingsFunction = inngest.createFunction(
-  { id: "one-pax-document-readings", retries: 1, concurrency: { limit: 2 } },
-  [{ cron: "*/5 * * * *" }, { event: "one/pax.document.uploaded" }],
-  async ({ event, step }) => {
-    const named = event.name === "one/pax.document.uploaded" ? event.data?.documentId : null;
-    const target = typeof named === "string" && UUID.test(named) ? named : null;
-    const claimed = await step.run("claim", () => claimPaxReadings(createServiceClient(), target ? 1 : 5, target));
-    const outcomes: Record<string, number> = {};
-    for (const claim of claimed) {
-      const outcome = await step.run(`read-${claim.documentId}-${claim.claim}`, () =>
-        readClaimedPaxDocument(createServiceClient(), claim),
-      );
-      outcomes[outcome] = (outcomes[outcome] ?? 0) + 1;
-    }
-    return { claimed: claimed.length, ...outcomes };
+export const agencySweeps: Sweep[] = [
+  /**
+   * The reading of the documents an agency or its passenger sent (migration
+   * 0070): one just sent is read right after it arrived (`queuePaxReading`);
+   * this takes what waits, one claimed and read at a time. A claim that never
+   * came back expires and the document is taken again. Counts only.
+   */
+  {
+    key: "pax-readings",
+    when: { every: 5 },
+    whileUsed: true,
+    run: async (service, until) => {
+      const outcomes: Record<string, number> = {};
+      for (let turn = 0; turn < READINGS_PER_ROUND && Date.now() < until; turn += 1) {
+        const [claim] = await claimPaxReadings(service, 1, null);
+        if (!claim) break;
+        const outcome = await readClaimedPaxDocument(service, claim).catch(() => "error");
+        outcomes[outcome] = (outcomes[outcome] ?? 0) + 1;
+      }
+      return outcomes;
+    },
   },
-);
-
-/**
- * How long an agency's passengers are kept (migration 0072): once a day, who the setting keeps no longer is
- * forgotten, and so is a passenger started from documents and never confirmed (0083); then the bytes of every file
- * forgotten since (by the sweep, the agency or the passenger) are removed. The steps carry counts only.
- */
-export const paxRetentionFunction = inngest.createFunction(
-  { id: "one-pax-retention", retries: 2, concurrency: { limit: 1 } },
-  { cron: "20 7 * * *" },
-  async ({ step }) => {
-    const swept = await step.run("sweep", () => sweepRetention(createServiceClient()));
-    const removed = await step.run("remove-bytes", () => removeForgottenBytes(createServiceClient()));
-    return { ...swept, removed };
+  /**
+   * How long an agency's passengers are kept (migration 0072): once a day, who
+   * the setting keeps no longer is forgotten, and so is a passenger started
+   * from documents and never confirmed (0083); then the bytes of every file
+   * forgotten since (by the sweep, the agency or the passenger) are removed.
+   * Counts only.
+   */
+  {
+    key: "pax-retention",
+    when: { daily: { hour: 7, minute: 20 } },
+    run: async (service) => {
+      const swept = await sweepRetention(service);
+      const removed = await removeForgottenBytes(service);
+      return { ...swept, removed };
+    },
   },
-);
-
-export const agencyFunctions = [paxReadingsFunction, paxRetentionFunction];
+];

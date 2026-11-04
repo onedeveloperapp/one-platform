@@ -1,13 +1,11 @@
 import "server-only";
 
-import { after } from "next/server";
-
+import { soon } from "@/lib/jobs/soon";
 import { createServiceClient } from "@flyee/auth/service";
 import { FLIGHT_CHECK_VERSION, type LegToCheck, matchLeg, monthsToSearch, withUnscheduled } from "@flyee/flights/check";
 import { AnacVraSource, VRA_URL_PATTERN } from "@flyee/flights/providers/anac-vra";
 import type { FlightRecordSource, VraMonth } from "@flyee/flights/types";
 import type { VraRecord } from "@flyee/flights/vra";
-import { sendEvent } from "@flyee/jobs";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 /**
@@ -190,17 +188,9 @@ async function settle(
 }
 
 /**
- * A leg was written: its check is done now instead of at the next sweep. Without the jobs (a machine with
- * no Inngest), after the response is sent.
+ * A leg was written: the legs owed a check are checked right after the response is sent instead of at the next
+ * sweep.
  */
-export async function queueFlightCheck(caseId: string | null): Promise<void> {
-  const sent = await sendEvent("one/case.flights.changed", { caseId });
-  if (sent.sent) return;
-  after(async () => {
-    try {
-      await checkFlights(createServiceClient(), { limit: 10 });
-    } catch {
-      // Still owed: the sweep takes it.
-    }
-  });
+export async function queueFlightCheck(): Promise<void> {
+  soon("flight-check", () => checkFlights(createServiceClient(), { limit: 10 }));
 }

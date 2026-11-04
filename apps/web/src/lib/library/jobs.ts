@@ -1,47 +1,36 @@
 import "server-only";
 
+import type { Sweep } from "@/lib/jobs/schedule";
 import { expireTemplateImports, importNext } from "@/lib/library/import-work";
-import { createServiceClient } from "@flyee/auth/service";
-import { inngest } from "@flyee/jobs";
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
-/** How many requests one run of the sweep works on: the next run takes the rest. */
-const IMPORTS_PER_RUN = 4;
+/** How many works on requests one sweep does: the next sweep takes the rest. */
+const IMPORTS_PER_ROUND = 2;
 
 /**
  * The models the library makes from documents (migrations 0067 and 0079),
  * recomputed from the data on every pass: each request owes its text, then its
  * marking, then, where the firm lets ONE, the save of the firm's model, one
- * work at a time, each claimed and done in the same step (a step has the time
- * of the jobs route, which the transcription of a long PDF needs). A request
- * named in the event (a person just asked, or answered what ONE asked) is
- * worked on at once, its works in turn; the cron takes what waits, and its
- * upkeep forgets what waited longer than the setting's days.
- *
- * The steps carry ids and outcomes only: the text of a document never enters
- * a job's recorded state.
+ * work at a time, each claimed and done in one go. A request a person just made
+ * or answered is worked on right after their answer (`queueTemplateImport`),
+ * and the screen that waits for it asks for the next work; the sweep takes what
+ * waits, and its upkeep forgets what waited longer than the setting's days.
+ * Counts only: the text of a document never enters a round's record.
  */
-export const templateImportsFunction = inngest.createFunction(
-  { id: "one-template-imports", retries: 1, concurrency: { limit: 2 } },
-  [{ cron: "*/5 * * * *" }, { event: "one/library.import.requested" }],
-  async ({ event, step }) => {
-    const asked = event.name === "one/library.import.requested" ? event.data?.importId : null;
-    const target = typeof asked === "string" && UUID.test(asked) ? asked : null;
-    const outcomes: Record<string, number> = {};
-    if (!target) {
-      const expired = await step.run("expire", () => expireTemplateImports(createServiceClient()));
+export const librarySweeps: Sweep[] = [
+  {
+    key: "template-imports",
+    when: { every: 5 },
+    whileUsed: true,
+    run: async (service, until) => {
+      const outcomes: Record<string, number> = {};
+      const expired = await expireTemplateImports(service);
       if (expired > 0) outcomes.expired = expired;
-    }
-    for (let turn = 0; turn < (target ? 3 : IMPORTS_PER_RUN); turn += 1) {
-      const outcome = await step.run(`import-${turn}`, () => importNext(createServiceClient(), target));
-      if (outcome === "none") break;
-      outcomes[outcome] = (outcomes[outcome] ?? 0) + 1;
-      // A request named goes on to its marking once its text is kept, and to its save once ONE owes it.
-      if (target && outcome !== "read" && outcome !== "saving") break;
-    }
-    return outcomes;
+      for (let turn = 0; turn < IMPORTS_PER_ROUND && Date.now() < until; turn += 1) {
+        const outcome = await importNext(service, null);
+        if (outcome === "none") break;
+        outcomes[outcome] = (outcomes[outcome] ?? 0) + 1;
+      }
+      return outcomes;
+    },
   },
-);
-
-export const libraryFunctions = [templateImportsFunction];
+];

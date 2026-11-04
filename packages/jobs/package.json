@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Inngest client and helpers for background jobs, queues and cron. Degrades gracefully: without keys, sendEvent reports failure so callers can fall back to inline processing.",
+  "description": "The platform's clock: the Inngest client and its serve for Next.js. ONE holds one function there (one-tick) and sends no events: the work a person waits on is done after their answer.",
   "exports": {
     ".": "./src/index.ts",
     "./next": "./src/next.ts"

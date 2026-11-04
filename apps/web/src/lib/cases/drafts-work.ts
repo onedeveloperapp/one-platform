@@ -1,7 +1,5 @@
 import "server-only";
 
-import { after } from "next/server";
-
 import { runFirmTask } from "@/lib/ai/executor";
 import {
   DRAFT_TASK,
@@ -12,11 +10,11 @@ import {
   revisionBriefing,
 } from "@/lib/cases/drafts";
 import { supabaseFileStore } from "@/lib/files/store";
+import { soon } from "@/lib/jobs/soon";
 import { createServiceClient } from "@flyee/auth/service";
 import { takeBackFile } from "@flyee/documents/files";
 import { measureFile } from "@flyee/documents/measure";
 import { renderTextPdf } from "@flyee/documents/text-pdf";
-import { sendEvent } from "@flyee/jobs";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 /**
@@ -247,8 +245,14 @@ export async function workClaimedDraft(service: SupabaseClient, held: DraftClaim
     payload: { file_id: reserved.fileId, sha256: measure.sha256, bytes: measure.bytes, pages: measure.pages ?? 1 },
   });
   if (outcome !== "issued") await takeBackFile(store, reserved.fileId, reserved.storagePath);
-  // A petition may let ONE ask for the filing package of its lawsuit (0039): the jobs look at the case now.
-  else await sendEvent("one/case.advance", { caseId: row.case_id }).catch(() => undefined);
+  // A petition may let ONE ask for the filing package of its lawsuit (0039): the case is looked at right after.
+  // Loaded when needed: the worker of a case reaches the pieces' own.
+  else {
+    await import("@/lib/cases/advance-work").then(
+      ({ queueCaseAdvance }) => queueCaseAdvance(row.case_id),
+      () => undefined,
+    );
+  }
   return outcome;
 }
 
@@ -323,25 +327,18 @@ export async function settleDraftReading(draftId: string): Promise<void> {
 }
 
 /**
- * A draft is owed a work: the jobs take it at once. Without them (a machine
- * with no Inngest), it is worked on after the response is sent: a first
- * text or a rewriting, then the reading of its citations, and the document
- * of a text ONE approved.
+ * A draft is owed a work: it is worked on right after the response is sent:
+ * a first text or a rewriting, then the reading of its citations, and the
+ * document of a text ONE approved. The sweep takes what that did not finish.
  */
 export async function queueDraftWork(draftId: string): Promise<void> {
-  const sent = await sendEvent("one/case.draft.requested", { draftId });
-  if (sent.sent) return;
-  after(async () => {
-    try {
-      const service = createServiceClient();
-      // The work owed, then what follows it: the reading of a text the AI wrote, and the document of a text ONE
-      // approved after reading it.
-      for (let turn = 0; turn < 3; turn += 1) {
-        const outcome = await draftNext(service, draftId);
-        if (outcome !== "generated" && outcome !== "revised" && outcome !== "checked") break;
-      }
-    } catch {
-      // Still owed: the sweep takes it.
+  soon("case-draft", async () => {
+    const service = createServiceClient();
+    // The work owed, then what follows it: the reading of a text the AI wrote, and the document of a text ONE
+    // approved after reading it.
+    for (let turn = 0; turn < 3; turn += 1) {
+      const outcome = await draftNext(service, draftId);
+      if (outcome !== "generated" && outcome !== "revised" && outcome !== "checked") break;
     }
   });
 }

@@ -1,12 +1,11 @@
 import "server-only";
 
-import { after } from "next/server";
 import { createHash, randomBytes } from "node:crypto";
 
 import { runFirmTask } from "@/lib/ai/executor";
 import { accountThanksMessage } from "@/lib/cases/account";
-import { base64, MODEL_IMAGE, processCaseDocuments } from "@/lib/cases/documents-work";
-import { processCaseStatements } from "@/lib/cases/statements-work";
+import { base64, MODEL_IMAGE, processCaseDocuments, queueDocumentProcessing } from "@/lib/cases/documents-work";
+import { queueStatementWork } from "@/lib/cases/statements-work";
 import {
   byPersonMessage,
   calledMessage,
@@ -32,12 +31,12 @@ import {
   turnFilesOf,
 } from "@/lib/conversations/agent";
 import { supabaseFileStore } from "@/lib/files/store";
+import { soon } from "@/lib/jobs/soon";
 import { deliverOutbox } from "@/lib/whatsapp/send";
 import { createServiceClient } from "@flyee/auth/service";
 import { BRAND } from "@flyee/content";
 import { normalizeImage } from "@flyee/documents/normalize";
 import type { FileStore } from "@flyee/documents/types";
-import { sendEvent } from "@flyee/jobs";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 /**
@@ -215,17 +214,12 @@ async function joinFiles(service: SupabaseClient, held: Held, context: TurnConte
   return true;
 }
 
-/** A statement joined from the conversation is transcribed and put in order: by the jobs, or here when there are none. */
+/**
+ * A statement joined from the conversation is transcribed and put in order right after, on its own, so the turn
+ * never waits for a model hearing an audio.
+ */
 async function workStatement(statementId: string): Promise<void> {
-  const sent = await sendEvent("one/case.statement.received", { statementId });
-  if (sent.sent) return;
-  try {
-    const service = createServiceClient();
-    const first = await processCaseStatements(service, 1, statementId);
-    if (first.transcribed) await processCaseStatements(service, 1, statementId);
-  } catch {
-    // Still owed: the sweep takes it.
-  }
+  await queueStatementWork(statementId);
 }
 
 /**
@@ -268,13 +262,11 @@ async function openCase(service: SupabaseClient, held: Held, context: TurnContex
       agency,
     }),
   });
-  // The documents an agency handed over to the case (0071) are checked now, as a client's are; the sweep takes
-  // what an event did not reach.
+  // The documents an agency handed over to the case (0071) are checked right after, as a client's are; the sweep
+  // takes what that did not finish.
   const handed = Array.isArray(answer.documents) ? answer.documents : [];
   for (const documentId of handed) {
-    if (typeof documentId === "string") {
-      await sendEvent("one/case.document.received", { documentId }).catch(() => undefined);
-    }
+    if (typeof documentId === "string") await queueDocumentProcessing(documentId);
   }
   if (answer.code === "opened") {
     report.opened += 1;
@@ -474,26 +466,16 @@ export async function takeConversationTurns(
 export const GATHER_MS = 5_500;
 
 /**
- * A passenger just wrote: the jobs answer once they stop writing (the event
- * is debounced per conversation), or, with none, the answer is taken after
- * the response, a few seconds later. Never waited for: the sweep takes it
- * anyway.
+ * A passenger just wrote: the answer is taken right after the response, a
+ * few seconds later, so messages written one after the other are answered
+ * together (the database claims the conversation's turn, so the requests of
+ * each of them answer once). Never waited for: the sweep takes it anyway.
  */
 export async function queueConversationTurn(conversationId: string): Promise<void> {
-  const sent = await sendEvent("one/conversation.turn", { conversationId });
-  if (sent.sent) return;
-  try {
-    after(async () => {
-      await new Promise((resolve) => setTimeout(resolve, GATHER_MS));
-      try {
-        await takeConversationTurns(createServiceClient(), { conversationId });
-      } catch {
-        // Still due: the sweep takes it.
-      }
-    });
-  } catch {
-    // Outside a request: the sweep takes it.
-  }
+  soon("conversation-turn", async () => {
+    await new Promise((resolve) => setTimeout(resolve, GATHER_MS));
+    await takeConversationTurns(createServiceClient(), { conversationId });
+  });
 }
 
 /**

@@ -1,16 +1,14 @@
 import "server-only";
 
-import { after } from "next/server";
-
 import { FILING_LABEL } from "@/lib/cases/filing";
 import { signFilingPackages } from "@/lib/cases/package-signature-work";
 import { supabaseFileStore } from "@/lib/files/store";
+import { soon } from "@/lib/jobs/soon";
 import { createServiceClient } from "@flyee/auth/service";
 import { filingKindOf, type FilingSource, partName, planFiling } from "@flyee/courts/filing";
 import { takeBackFile } from "@flyee/documents/files";
 import { measureFile } from "@flyee/documents/measure";
 import { recompressPdfImages, splitPdfBySize } from "@flyee/documents/normalize";
-import { sendEvent } from "@flyee/jobs";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 /**
@@ -230,17 +228,10 @@ export async function buildFilingPackages(
 }
 
 /**
- * A package was just asked for: the jobs build it at once. Without them (a
- * machine with no Inngest), it is built after the response is sent.
+ * A package was just asked for: it is built right after the response is
+ * sent, and signed there where it owes its signature. The sweep takes what
+ * that did not finish.
  */
 export async function queueFilingPackage(packageId: string): Promise<void> {
-  const sent = await sendEvent("one/case.filing.requested", { packageId });
-  if (sent.sent) return;
-  after(async () => {
-    try {
-      await buildFilingPackages(createServiceClient(), 1, packageId);
-    } catch {
-      // Still owed: the sweep takes it.
-    }
-  });
+  soon("filing-package", () => buildFilingPackages(createServiceClient(), 1, packageId));
 }

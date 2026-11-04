@@ -1,17 +1,15 @@
 import "server-only";
 
-import { after } from "next/server";
-
 import { runFirmTask } from "@/lib/ai/executor";
 import { checkBriefing, DOCUMENT_CHECK_TASK, isPassingFailure, processingPlan } from "@/lib/cases/document-check";
 import { readQuality } from "@/lib/cases/document-quality";
 import { keepQuality, measurePhoto } from "@/lib/cases/document-quality-work";
 import { supabaseFileStore } from "@/lib/files/store";
+import { soon } from "@/lib/jobs/soon";
 import { createServiceClient } from "@flyee/auth/service";
 import { takeBackFile } from "@flyee/documents/files";
 import { measureFile } from "@flyee/documents/measure";
 import { imagesToPdf, normalizeImage } from "@flyee/documents/normalize";
-import { sendEvent } from "@flyee/jobs";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 /**
@@ -170,8 +168,12 @@ export async function processClaimedDocument(service: SupabaseClient, documentId
     if (result.kind === "replayed" || !result.approvalId) {
       const { error: applyError } = await service.rpc("apply_unattended_document_check", { target_run: result.runId });
       if (applyError) throw new Error(`apply_unattended_document_check failed: ${applyError.message}`);
-      // The paper ONE just decided may be the last its case waited for (0039): the jobs look at the case now.
-      await sendEvent("one/case.advance", { caseId: row.case_id }).catch(() => undefined);
+      // The paper ONE just decided may be the last its case waited for (0039): the case is looked at right after.
+      // Loaded when needed: the worker of a case reaches the documents' own.
+      await import("@/lib/cases/advance-work").then(
+        ({ queueCaseAdvance }) => queueCaseAdvance(row.case_id),
+        () => undefined,
+      );
     }
   }
   return record("done");
@@ -236,19 +238,10 @@ export async function processCaseDocuments(
 }
 
 /**
- * A document just reached a case: the jobs process it at once. Without them
- * (a machine with no Inngest), it is processed after the response is sent,
- * so the person who sent it never waits for the model. The sweep catches
- * anything neither finished.
+ * A document just reached a case: it is processed right after the response is
+ * sent, so the person who sent it never waits for the model. The sweep catches
+ * what that did not finish.
  */
 export async function queueDocumentProcessing(documentId: string): Promise<void> {
-  const sent = await sendEvent("one/case.document.received", { documentId });
-  if (sent.sent) return;
-  after(async () => {
-    try {
-      await processCaseDocuments(createServiceClient(), 1, documentId);
-    } catch {
-      // Still pending: the sweep takes it.
-    }
-  });
+  soon("case-document", () => processCaseDocuments(createServiceClient(), 1, documentId));
 }

@@ -140,7 +140,7 @@ Operação:
 | --- | --- |
 | `ASAAS_API_KEY` / `ASAAS_WEBHOOK_TOKEN` / `ASAAS_BASE_URL` | cobrança em BRL (produção: `https://api.asaas.com/v3`) |
 | `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` | cobrança em USD |
-| `INNGEST_EVENT_KEY` / `INNGEST_SIGNING_KEY` | jobs em background. Sem elas o que parte de uma ação roda no próprio pedido, mas nada agendado roda (lembretes, resumos, encerramento de assinaturas, limpeza): obrigatórias em produção |
+| `INNGEST_SIGNING_KEY` | o relógio do ONE (`one-tick`, de 5 em 5 minutos), que roda as varreduras: o que ficou pendente, o que tem hora (lembretes, novas tentativas) e a manutenção. Sem ela, o trabalho que alguém espera roda logo depois de cada ação e as varreduras rodam enquanto o ONE está em uso, mas nada roda pelo relógio quando ninguém usa: obrigatória em produção. O ONE não envia eventos ao Inngest, então `INNGEST_EVENT_KEY` não é usada |
 | `RESEND_API_KEY` / `EMAIL_FROM` | e-mails do app (sem elas os avisos ficam só no sino do painel). **Obrigatórias para a lista de espera**: sem o e-mail de confirmação ninguém confirma, e o formulário responde que a lista está fora do ar. Ver "E-mails e jobs" |
 | `CONTACT_FORM_TO` | destino do formulário de contato |
 | `PUBLIC_FORMS_IP_SALT` | segredo da janela por rede da lista de espera (HMAC do IP). Sem ele não há limite por rede |
@@ -173,13 +173,12 @@ barra final).
 ## Pós-deploy (primeira vez)
 
 - **Inngest**: no dashboard do Inngest, sincronizar o app apontando para
-  `https://<domínio>/api/inngest` (depois de setar as duas chaves). A partir
-  daí, cada deploy de produção sincroniza sozinho (o passo "Sync the jobs with
-  Inngest" do workflow faz `PUT` em `https://<domínio>/api/inngest`; o domínio
-  vem da variável `PRODUCTION_URL` do repositório, ou do endereço atual). Sem a
-  sincronização, uma função nova não fica registrada: os eventos chegam ao
-  Inngest e nada roda. Para sincronizar à mão:
-  `curl -X PUT https://<domínio>/api/inngest`.
+  `https://<domínio>/api/inngest` (depois de setar a chave de assinatura). A
+  partir daí, cada deploy de produção sincroniza sozinho (o passo "Sync the jobs
+  with Inngest" do workflow faz `PUT` em `https://<domínio>/api/inngest`; o
+  domínio vem da variável `PRODUCTION_URL` do repositório, ou do endereço
+  atual). Sem a sincronização, o relógio não fica registrado e nada roda pelo
+  relógio. Para sincronizar à mão: `curl -X PUT https://<domínio>/api/inngest`.
 - **Webhooks de billing**: apontar Stripe para
   `https://<domínio>/api/webhooks/stripe` e Asaas para
   `https://<domínio>/api/webhooks/asaas`.
@@ -201,11 +200,11 @@ cadastro continuam acessíveis, só não aparecem nos botões.
    `npm run db:gate:remote`, que aplica todas as migrações (`0000`–`0023`) num
    projeto vazio e roda o pgTAP. O gate recusa um banco que ele não construiu.
 2. **Variáveis na Vercel**: as obrigatórias acima, mais `RESEND_API_KEY` e
-   `EMAIL_FROM` com o domínio verificado no Resend, `PUBLIC_FORMS_IP_SALT` e as
-   duas chaves do Inngest. O job diário `flyee-purge-expired-leads` apaga em 7
+   `EMAIL_FROM` com o domínio verificado no Resend, `PUBLIC_FORMS_IP_SALT` e a
+   chave de assinatura do Inngest. A varredura diária `purge-leads` apaga em 7
    dias os endereços não confirmados, prazo que a página e o e-mail prometem.
 3. **Deploy** pelo workflow, e então o Supabase Auth (Site URL e redirect URLs)
-   e a sincronização do Inngest (o job acima deve aparecer na lista).
+   e a sincronização do Inngest (`one-tick` deve aparecer na lista).
 4. **Sua conta de operador.** Crie a conta em `/auth/sign-up` e promova-a no SQL
    Editor do Supabase (a sessão do editor não tem JWT, e a trava de
    superadmin permite):
@@ -288,33 +287,25 @@ confirmação por e-mail no Supabase local.
 
 ### Jobs (Inngest)
 
-Depois de sincronizar o app em `https://<domínio>/api/inngest`, estas funções
-devem aparecer na lista:
+Desde 2026-11-04, o ONE tem uma só função no Inngest: o relógio `one-tick`, de
+5 em 5 minutos, que roda num passo todas as varreduras que vencem naquele
+tique. São duas execuções por tique, umas 18 mil por mês, dentro das 50 mil do
+plano gratuito. A lista das varreduras, com o horário de cada uma, fica em
+`apps/web/src/lib/jobs/registry.ts`. Depois de sincronizar o app em
+`https://<domínio>/api/inngest`, só `one-tick` deve aparecer na lista; a
+sincronização tira as funções de antes.
 
-| Função | Quando | O que faz |
-| --- | --- | --- |
-| `flyee-meeting-emails-sweep` | a cada 10 minutos | lembretes dos encontros (24 horas e última hora) e aviso da gravação |
-| `flyee-meeting-email` | evento | confirmação de uma inscrição; botões "Enviar agora" de `/admin/encontros` |
-| `flyee-token-reminders` | todo dia, 10:00 de Brasília | lembrete da conexão que vence em até 5 dias |
-| `flyee-term-end-notices` | todo dia, 10:15 de Brasília | aviso de período pago (compra parcelada) ou de kit que termina em até 15 dias, e liquidação dos kits que terminaram (aviso e tokens revogados quando nada mais mantém o acesso) |
-| `flyee-updates-digest` | terças, 10:00 de Brasília | resumo semanal de versões novas dos apps instalados |
-| `flyee-newsletter-send` | evento | entrega de uma mensagem para a lista, em lotes de 100 |
-| `flyee-maintenance` | todo dia, 01:30 de Brasília | consolida os eventos de uso do dia anterior e apaga o que venceu (eventos, trilha da CLI, sobras de login, uploads não concluídos) |
-| `flyee-settle-billing-cancellations` | a cada 15 minutos | encerra assinaturas cujo período acabou e avisa o integrante |
-| `flyee-billing-maintenance` | todo dia | reservas e checkouts abandonados |
-| `flyee-purge-expired-leads` | todo dia | apaga contatos não confirmados (7 dias) e descadastrados (6 meses) |
-| `admin-weekly-digest` | segundas, 08:30 de Brasília | resumo do operador |
-| `backup-run-cron` / `backup-run-manual` | todo dia / evento | backup lógico |
+O trabalho que alguém espera (ler um documento, conferir um papel, a resposta
+do ONE na conversa, o próximo passo de um caso) não passa pelo Inngest: roda
+logo depois da resposta de cada ação, no mesmo servidor. As varreduras que
+servem a quem espera também rodam enquanto o ONE está em uso, uma vez a cada 5
+minutos por servidor.
 
-`flyee-token-reminders-manual` e `flyee-updates-digest-manual` rodam as mesmas
-rotinas quando alguém dispara os eventos `flyee/token.reminder` e
-`flyee/updates.digest` pelo painel do Inngest.
-
-**Sem as chaves do Inngest**, o que parte de uma ação continua funcionando no
-próprio pedido (confirmação de inscrição em encontro, "Enviar agora", mensagem
-para a lista), mas **nada agendado roda**: lembretes, resumos, avisos de fim de
-período, encerramento de assinaturas e limpeza param. O Inngest é obrigatório
-em produção.
+**Sem a chave do Inngest**, ou com a cota do mês esgotada, tudo isso continua
+funcionando, mas **nada roda pelo relógio** quando ninguém usa o ONE: lembretes
+de audiência, avisos com hora marcada, a leitura do DJEN e dos tribunais, o
+backup e a limpeza esperam alguém usar o sistema (o backup e as leituras do
+DJEN, dos tribunais e da ANAC, só o relógio roda).
 
 Cada mensagem agendada é reservada no banco antes de ser enviada (migração
 `0023`), então uma função que roda duas vezes não escreve duas vezes para a

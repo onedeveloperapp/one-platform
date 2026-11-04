@@ -216,8 +216,8 @@ export async function saveClientSegment(
     }),
     nothing,
   );
-  // The leg the client wrote owes its check against the official record: done now, not at the next sweep.
-  if (saved.ok) await queueFlightCheck(null);
+  // The leg the client wrote owes its check against the official record: done right after, not at the next sweep.
+  if (saved.ok) await queueFlightCheck();
   return saved;
 }
 

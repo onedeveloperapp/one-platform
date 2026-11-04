@@ -1,24 +1,24 @@
 import "server-only";
 
-import { after } from "next/server";
 import { createHash, randomBytes } from "node:crypto";
 
 import { type AccountState, accountStateOf } from "@/lib/cases/account";
 import { lawsuitsWaiting } from "@/lib/cases/advance";
 import { caseMissing, firstNameOf, type MissingParty, type PersonData, type RequiredDocument } from "@/lib/cases/cases";
 import { draftBlocks } from "@/lib/cases/drafts";
-import { draftNext } from "@/lib/cases/drafts-work";
-import { buildFilingPackages } from "@/lib/cases/filing-work";
+import { queueDraftWork } from "@/lib/cases/drafts-work";
+import { queueFilingPackage } from "@/lib/cases/filing-work";
 import { lawsuitPlan, type MinimumWage, type RuleParty } from "@/lib/cases/rules";
 import { supabaseFileStore } from "@/lib/files/store";
+import { soon } from "@/lib/jobs/soon";
 import { WHATSAPP_COPY } from "@/lib/messages/whatsapp-copy";
+import { openReservedEnvelopes } from "@/lib/signatures/work";
 import { deliverOutbox } from "@/lib/whatsapp/send";
 import { createServiceClient } from "@flyee/auth/service";
 import { BRAND } from "@flyee/content";
 import { takeBackFile } from "@flyee/documents/files";
 import { measureFile } from "@flyee/documents/measure";
 import { renderTextPdf } from "@flyee/documents/text-pdf";
-import { sendEvent } from "@flyee/jobs";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 /**
@@ -51,7 +51,7 @@ export type HeldAdvance = {
 
 export type AdvanceOutcome = "created" | "acted" | "waiting" | "idle" | "lost" | "failed";
 
-/** What follows a piece, a package or a message ONE asked for: the jobs, or the work itself where there are none. */
+/** What follows a piece, a package or a message ONE asked for (`followSoon`: each done right after, on its own). */
 export type AdvanceFollow = {
   draft: (draftId: string) => Promise<void>;
   package: (packageId: string) => Promise<void>;
@@ -587,8 +587,9 @@ export async function advanceClaimedCase(
       if (papers.failed) failed = true;
       papersWaiting = papers.waiting;
       if (papers.envelopes > 0) asked.papers = papers.envelopes;
-      // An envelope of the firm's ZapSign account is opened by the backend (0023).
-      if (papers.zapsign) await sendEvent("one/signature.requested", {}).catch(() => undefined);
+      // An envelope of the firm's ZapSign account is opened by the backend (0023), right after; the sweep catches
+      // what that did not.
+      if (papers.zapsign) soon("signature-open", () => openReservedEnvelopes(createServiceClient(), 10));
     }
     // Once the papers went, the client hears that what they sent arrived and what comes next (0055, 0057).
     if (held.receivedDue || created) {
@@ -678,29 +679,13 @@ async function sendNow(messageId: string): Promise<void> {
   await deliverOutbox(createServiceClient(), { messageId });
 }
 
-/** The jobs take what ONE asked for. */
-export const followByJobs: AdvanceFollow = {
-  draft: async (draftId) => {
-    await sendEvent("one/case.draft.requested", { draftId });
-  },
-  package: async (packageId) => {
-    await sendEvent("one/case.filing.requested", { packageId });
-  },
-  message: sendNow,
-};
-
-/** With no jobs, what ONE asked for is worked on here: a first text and what follows it, a package built. */
-const followHere: AdvanceFollow = {
-  draft: async (draftId) => {
-    const service = createServiceClient();
-    for (let turn = 0; turn < 3; turn += 1) {
-      const outcome = await draftNext(service, draftId);
-      if (outcome !== "generated" && outcome !== "revised" && outcome !== "checked") break;
-    }
-  },
-  package: async (packageId) => {
-    await buildFilingPackages(createServiceClient(), 1, packageId);
-  },
+/**
+ * What ONE asked for is worked on right after, each on its own (`lib/jobs/soon.ts`): a first text and what follows
+ * it, a package built; a message is sent at once. What does not finish is the sweeps'.
+ */
+export const followSoon: AdvanceFollow = {
+  draft: queueDraftWork,
+  package: queueFilingPackage,
   message: sendNow,
 };
 
@@ -735,21 +720,15 @@ export async function advanceCases(
   return outcomes;
 }
 
+/** How many woken cases a change of the firm's (named no case) has looked at right after. */
+const WOKEN_AT_ONCE = 10;
+
 /**
  * Something a person just did may have a step for ONE to take in a case
- * (the database already woke it): the jobs look at once. Without them (a
- * machine with no Inngest), the case is looked at after the response is
- * sent. Named no case (a change of the firm's, such as who signs), the jobs
- * sweep the cases it woke; with none, the sweep's next pass does.
+ * (the database already woke it): the case is looked at right after they are
+ * answered. Named no case (a change of the firm's, such as who signs), the
+ * cases it woke are looked at, a few; the sweep takes whatever is left.
  */
 export async function queueCaseAdvance(caseId: string | null): Promise<void> {
-  const sent = await sendEvent("one/case.advance", { caseId });
-  if (sent.sent || !caseId) return;
-  after(async () => {
-    try {
-      await advanceCases(createServiceClient(), 1, caseId, followHere);
-    } catch {
-      // Still due: the sweep takes it.
-    }
-  });
+  soon("case-advance", () => advanceCases(createServiceClient(), caseId ? 1 : WOKEN_AT_ONCE, caseId, followSoon));
 }

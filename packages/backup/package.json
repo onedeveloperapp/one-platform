@@ -3,10 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Automatic logical database backups: exports every public table to gzipped JSONL in the private `backups` bucket, on a daily Inngest cron or on demand from /admin/backups.",
+  "description": "Automatic logical database backups: exports every public table to gzipped JSONL in the private `backups` bucket, nightly from the platform's clock (apps/web/src/lib/backup-jobs.ts) or on demand from /admin/backups.",
   "exports": {
     ".": "./src/index.ts",
-    "./jobs": "./src/jobs.ts",
     "./tables": "./src/tables.ts"
   },
   "scripts": {

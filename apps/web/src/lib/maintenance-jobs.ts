@@ -1,7 +1,6 @@
 import "server-only";
 
-import { createServiceClient } from "@flyee/auth/service";
-import { inngest } from "@flyee/jobs";
+import type { Sweep } from "@/lib/jobs/schedule";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 /**
@@ -11,8 +10,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
  *   `product_events_daily`;
  * - `purge_product_events`: raw events older than 13 months (the rollup stays).
  *
- * Every task is idempotent and independent: each runs as its own step, so one
- * that fails is retried alone and does not hold the others back.
+ * Every task is idempotent and independent: one that fails leaves the other to
+ * run, and the next night does it again.
  */
 
 async function call(service: SupabaseClient, fn: string): Promise<unknown> {
@@ -22,18 +21,14 @@ async function call(service: SupabaseClient, fn: string): Promise<unknown> {
 }
 
 /** Every night at 01:30 in Brasília (04:30 UTC), after the day in São Paulo has closed. */
-export const maintenanceFunction = inngest.createFunction(
-  { id: "one-maintenance", retries: 2, concurrency: { limit: 1 } },
-  { cron: "30 4 * * *" },
-  async ({ step }) => {
-    const rolledUp = await step.run("rollup-product-events", async () =>
-      call(createServiceClient(), "rollup_product_events"),
-    );
-    const eventsPurged = await step.run("purge-product-events", async () =>
-      call(createServiceClient(), "purge_product_events"),
-    );
-    return { rolledUp, eventsPurged };
+export const maintenanceSweeps: Sweep[] = [
+  {
+    key: "maintenance",
+    when: { daily: { hour: 4, minute: 30 } },
+    run: async (service) => {
+      const rolledUp = await call(service, "rollup_product_events").catch(() => "failed");
+      const eventsPurged = await call(service, "purge_product_events").catch(() => "failed");
+      return { rolledUp, eventsPurged };
+    },
   },
-);
-
-export const maintenanceFunctions = [maintenanceFunction];
+];

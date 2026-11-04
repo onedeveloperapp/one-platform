@@ -3,7 +3,6 @@
 import { createClient } from "@flyee/auth/server";
 import { createServiceClient } from "@flyee/auth/service";
 import { isBackupConfigured, runBackup } from "@flyee/backup";
-import { isInngestConfigured, sendEvent } from "@flyee/jobs";
 
 export type BackupActionResult<T> = { ok: true; data: T } | { ok: false; error: string };
 
@@ -18,9 +17,9 @@ async function isCallerSuperadmin(): Promise<boolean> {
 }
 
 /**
- * Kick off a backup. Prefers the Inngest job (survives the request); falls
- * back to running inline when Inngest has no keys — that path is bounded by
- * the serverless function timeout, so it suits small databases only.
+ * Kick off a backup, inline: the operator waits for it. Bounded by the
+ * function's time (five minutes), which suits the size of ONE's database
+ * today; the nightly backup runs from the clock's sweep (lib/backup-jobs.ts).
  */
 export async function triggerBackup(): Promise<BackupActionResult<{ mode: "queued" | "inline" }>> {
   if (!(await isCallerSuperadmin())) return { ok: false, error: "forbidden" };
@@ -28,13 +27,6 @@ export async function triggerBackup(): Promise<BackupActionResult<{ mode: "queue
     return { ok: false, error: "Defina DATABASE_URL e SUPABASE_SERVICE_ROLE_KEY para habilitar os backups." };
   }
 
-  if (isInngestConfigured) {
-    const result = await sendEvent("one/backup.run.requested", {});
-    if (result.sent) return { ok: true, data: { mode: "queued" } };
-  }
-
-  // No Inngest (or the send failed): run inline. Bounded by the function
-  // timeout — fine for template-scale data, not for a large production DB.
   const result = await runBackup({ trigger: "manual" });
   if (!result.ok) return { ok: false, error: result.hint };
   return { ok: true, data: { mode: "inline" } };

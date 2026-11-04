@@ -6,6 +6,7 @@ import { getTranslations } from "next-intl/server";
 
 import { Box, Paper, Typography } from "@mui/material";
 
+import { sweepWhileUsed } from "@/lib/jobs/while-used";
 import { isPreviewRobot } from "@/lib/links/preview-robot";
 import { openAgreement } from "@/modules/direito-do-passageiro/agency/link";
 
@@ -87,6 +88,9 @@ export default async function AgreementPage({ params }: { params: Promise<{ toke
       </Notice>
     );
   }
+  // The passenger is here, waiting for what ONE reads of what they send: the sweeps that serve what people wait on
+  // run now and then, after the answer.
+  sweepWhileUsed();
   return (
     <Frame>
       <AgreementView token={token} initial={view} />

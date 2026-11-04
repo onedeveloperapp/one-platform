@@ -1,8 +1,8 @@
 import "server-only";
 
 import { countInput, type DeadlineToCount } from "@/lib/deadlines/deadlines";
+import { soon } from "@/lib/jobs/soon";
 import { createServiceClient } from "@flyee/auth/service";
-import { sendEvent } from "@flyee/jobs";
 import { computeDeadline } from "@flyee/rules/deadlines";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -122,14 +122,20 @@ export async function countDeadlines(
  * Counts a deadline a person just wrote, before they are answered, so the
  * screen shows its day at once. When that did not happen now (another
  * worker holds it, it changed while it was counted, or the count could not
- * be made), the job is asked to; its sweep would reach it anyway.
+ * be made), it is tried again right after the answer; the sweep would reach
+ * it anyway.
  */
 export async function settleDeadlineCount(deadlineId: string): Promise<void> {
   try {
     const report = await countDeadlines(createServiceClient(), { limit: 1, deadlineId });
     if (report.counted + report.failed > 0) return;
   } catch {
-    // The job counts it.
+    // Tried again below.
   }
-  await sendEvent("one/deadline.count", { deadlineId });
+  soon("deadline-count", () => countDeadlines(createServiceClient(), { limit: 1, deadlineId }));
+}
+
+/** The court's calendar changed: the open deadlines whose count goes through it are counted right after. */
+export function settleDeadlineCounts(): void {
+  soon("deadline-counts", () => countDeadlines(createServiceClient(), { limit: 100 }));
 }

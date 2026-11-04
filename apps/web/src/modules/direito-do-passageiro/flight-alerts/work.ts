@@ -1,11 +1,9 @@
 import "server-only";
 
-import { after } from "next/server";
-
+import { soon } from "@/lib/jobs/soon";
 import { deliverOutbox } from "@/lib/whatsapp/send";
 import { type AlertLeg, alertParams } from "@/modules/direito-do-passageiro/flight-alerts/words";
 import { createServiceClient } from "@flyee/auth/service";
-import { sendEvent } from "@flyee/jobs";
 import { FLIGHT_PROBLEM_RULE, type FlightProblem, flightProblem, type WatchedLeg } from "@flyee/rules/flight-problem";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -170,22 +168,9 @@ export async function tellFlightAlerts(
 }
 
 /**
- * An alert was just kept: the jobs tell it at once, or, with none (a machine
- * with no Inngest), it is told after the response. Never waited for: the
- * sweep tells it anyway.
+ * An alert was just kept: it is told right after the response. Never waited
+ * for: the sweep tells it anyway.
  */
 export async function queueFlightAlert(alertId: string | null): Promise<void> {
-  const sent = await sendEvent("one/flight.alerts", { alertId });
-  if (sent.sent) return;
-  try {
-    after(async () => {
-      try {
-        await tellFlightAlerts(createServiceClient(), { alertId });
-      } catch {
-        // Still due: the sweep tells it.
-      }
-    });
-  } catch {
-    // Outside a request: the sweep tells it.
-  }
+  soon("flight-alert", () => tellFlightAlerts(createServiceClient(), { alertId }));
 }

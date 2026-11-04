@@ -1,10 +1,9 @@
 import "server-only";
 
-import { after } from "next/server";
-
 import { calendarGrant, calendarProvider, type GrantAccess } from "@/lib/calendar/provider";
 import { getVault } from "@/lib/connections/vault";
 import { eventOf, type HearingToSync } from "@/lib/hearings/hearings";
+import { soon } from "@/lib/jobs/soon";
 import { createServiceClient } from "@flyee/auth/service";
 import { eventIdOf } from "@flyee/calendar/event-id";
 import {
@@ -16,7 +15,6 @@ import {
   CalendarUnavailableError,
 } from "@flyee/calendar/types";
 import { BRAND } from "@flyee/content";
-import { sendEvent } from "@flyee/jobs";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 /**
@@ -300,20 +298,14 @@ export async function syncHearings(
 }
 
 /**
- * Asks the job for what the firm's calendar is owed now (one hearing, or
- * everything after a calendar was connected or made); where no job runs, it
- * is written after the response is sent. Never a wait in a person's answer.
+ * What the firm's calendar is owed now (one hearing, or everything after a
+ * calendar was connected or made) is written right after the response is
+ * sent. Never a wait in a person's answer; the sweep writes what is left.
  */
 async function settle(hearingId: string | null): Promise<void> {
-  const sent = await sendEvent("one/hearings.changed", { hearingId });
-  if (sent.sent) return;
-  after(async () => {
-    try {
-      await syncHearings(createServiceClient(), hearingId ? { limit: 1, hearingId } : { limit: 50 });
-    } catch {
-      // Still owed: the sweep writes it.
-    }
-  });
+  soon("hearing-calendar", () =>
+    syncHearings(createServiceClient(), hearingId ? { limit: 1, hearingId } : { limit: 50 }),
+  );
 }
 
 /** A person just wrote a hearing: its event is asked for at once, for a firm whose calendar is in use. */

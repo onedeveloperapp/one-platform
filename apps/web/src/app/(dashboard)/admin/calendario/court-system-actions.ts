@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { requireSuperadmin } from "@/lib/admin/session";
-import { sendEvent } from "@flyee/jobs";
+import { queueCaseAdvance } from "@/lib/cases/advance-work";
 
 /**
  * The operator's answer to a court system the firms did not approve (migration 0066): confirm the row of the table
@@ -72,7 +72,7 @@ export async function answerCourtSystem(input: {
   const answer = (data ?? {}) as { ok?: boolean; code?: string };
   if (!answer.ok) return { ok: false, code: String(answer.code ?? "failed") };
   revalidatePath("/admin/calendario");
-  // The cases of those lawsuits are looked at again by the database; the jobs are asked to look now.
-  await sendEvent("one/case.advance", { caseId: null }).catch(() => undefined);
+  // The cases of those lawsuits are woken by the database, and looked at right after the answer.
+  await queueCaseAdvance(null);
   return { ok: true };
 }

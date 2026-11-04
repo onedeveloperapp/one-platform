@@ -2,6 +2,7 @@
 
 import { pendingBadge, type PendingGroup, pendingGroups, pendingLate, readFirmPending } from "@/lib/firm/pending";
 import { readFirmToday, todayViewerOf } from "@/lib/firm/today";
+import { sweepWhileUsed } from "@/lib/jobs/while-used";
 import { getMemberContext } from "@/lib/member/context";
 
 export type PendingRead =
@@ -18,6 +19,9 @@ export async function readPendingCenter(): Promise<PendingRead> {
   const context = await getMemberContext();
   if (!context) return { ok: false, code: "unavailable" };
   if (!context.firm) return { ok: false, code: "no_firm" };
+  // The center asks every minute while a screen is in front of somebody: the sweeps that serve what people wait on
+  // run now and then, after the answer (lib/jobs/while-used.ts).
+  sweepWhileUsed();
 
   const [today, pending] = await Promise.all([
     context.supabase.rpc("firm_today", { target_org: context.firm.id }),

@@ -1,8 +1,9 @@
 import "server-only";
 
-import { agencyFunctions } from "@/modules/direito-do-passageiro/agency/jobs";
-import { flightAlertFunctions } from "@/modules/direito-do-passageiro/flight-alerts/jobs";
-import { flightFunctions } from "@/modules/direito-do-passageiro/flights/jobs";
+import type { Sweep } from "@/lib/jobs/schedule";
+import { agencySweeps } from "@/modules/direito-do-passageiro/agency/jobs";
+import { flightAlertSweeps } from "@/modules/direito-do-passageiro/flight-alerts/jobs";
+import { flightSweeps } from "@/modules/direito-do-passageiro/flights/jobs";
 
-/** Every job of the passenger module, for the core's list of jobs (`lib/modules/jobs.ts`). */
-export const passengerJobs = [...flightFunctions, ...flightAlertFunctions, ...agencyFunctions];
+/** Every sweep of the passenger module, for the core's list of sweeps (`lib/modules/jobs.ts`). */
+export const passengerSweeps: Sweep[] = [...flightSweeps, ...flightAlertSweeps, ...agencySweeps];

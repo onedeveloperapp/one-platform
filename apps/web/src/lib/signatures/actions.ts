@@ -10,7 +10,6 @@ import { openReservedEnvelopes, sendProviderCancels, SETTLED, syncEnvelope, zapS
 import { connectionRefusal, isSupportVisit } from "@/lib/whatsapp/session";
 import { createServiceClient } from "@flyee/auth/service";
 import { BRAND } from "@flyee/content";
-import { sendEvent } from "@flyee/jobs";
 import { webhookSecretHash, ZapSignAuthError, ZapSignProvider } from "@flyee/signatures/providers/zapsign";
 
 /**
@@ -204,15 +203,11 @@ export async function requestSignature(input: {
   });
   const result = fold(data, error, (answer) => ({ envelopeId: String(answer.envelope_id) }));
   if (result.ok && input.method === "zapsign") {
-    // Opened by the jobs at once; without them, this envelope (and only this one) is opened here.
-    // The sweep catches what neither finished.
-    const sent = await sendEvent("one/signature.requested", {});
-    if (!sent.sent) {
-      try {
-        await openReservedEnvelopes(createServiceClient(), 1, result.envelopeId);
-      } catch {
-        // Still reserved: the sweep opens it.
-      }
+    // This envelope (and only this one) is opened here, before the answer. The sweep catches what did not finish.
+    try {
+      await openReservedEnvelopes(createServiceClient(), 1, result.envelopeId);
+    } catch {
+      // Still reserved: the sweep opens it.
     }
   }
   if (result.ok) refresh(input.caseId);

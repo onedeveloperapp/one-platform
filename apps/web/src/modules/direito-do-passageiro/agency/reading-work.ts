@@ -1,14 +1,12 @@
 import "server-only";
 
-import { after } from "next/server";
-
 import { runFirmTask } from "@/lib/ai/executor";
 import { base64, MODEL_IMAGE } from "@/lib/cases/documents-work";
 import { supabaseFileStore } from "@/lib/files/store";
+import { soon } from "@/lib/jobs/soon";
 import type { PaxDocumentKind } from "@/modules/direito-do-passageiro/agency/passengers";
 import { createServiceClient } from "@flyee/auth/service";
 import { normalizeImage } from "@flyee/documents/normalize";
-import { sendEvent } from "@flyee/jobs";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 /**
@@ -165,17 +163,9 @@ export async function readPaxDocuments(
 }
 
 /**
- * A document just arrived: the jobs read it at once. Without them (a machine with no Inngest) it is read after
- * the response is sent, so nobody waits for the model. The sweep catches anything neither finished.
+ * A document just arrived: it is read right after the response is sent, so nobody waits for the model. The sweep
+ * catches what that did not finish.
  */
 export async function queuePaxReading(documentId: string): Promise<void> {
-  const sent = await sendEvent("one/pax.document.uploaded", { documentId });
-  if (sent.sent) return;
-  after(async () => {
-    try {
-      await readPaxDocuments(createServiceClient(), 1, documentId);
-    } catch {
-      // Still pending: the sweep takes it.
-    }
-  });
+  soon("pax-reading", () => readPaxDocuments(createServiceClient(), 1, documentId));
 }

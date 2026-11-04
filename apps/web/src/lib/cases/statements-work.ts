@@ -1,7 +1,5 @@
 import "server-only";
 
-import { after } from "next/server";
-
 import { runFirmTask } from "@/lib/ai/executor";
 import { accountQuestionsMessage } from "@/lib/cases/account";
 import {
@@ -11,9 +9,9 @@ import {
   TRANSCRIPTION_TASK,
 } from "@/lib/cases/statements";
 import { supabaseFileStore } from "@/lib/files/store";
+import { soon } from "@/lib/jobs/soon";
 import { deliverOutbox } from "@/lib/whatsapp/send";
 import { createServiceClient } from "@flyee/auth/service";
-import { sendEvent } from "@flyee/jobs";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 /**
@@ -249,20 +247,16 @@ export async function processCaseStatements(
 }
 
 /**
- * A statement just reached a case: the jobs work on it at once. Without them
- * (a machine with no Inngest), it is worked on after the response is sent:
- * first the transcription, then the chronology of what was transcribed.
+ * A statement just reached a case: it is worked on right after the response
+ * is sent: first the transcription, then the chronology of what was
+ * transcribed, and what the order of the facts says is missing is asked in
+ * the client's conversation (0092). The sweep takes what that did not finish.
  */
 export async function queueStatementWork(statementId: string): Promise<void> {
-  const sent = await sendEvent("one/case.statement.received", { statementId });
-  if (sent.sent) return;
-  after(async () => {
-    try {
-      const service = createServiceClient();
-      const first = await processCaseStatements(service, 1, statementId);
-      if (first.transcribed) await processCaseStatements(service, 1, statementId);
-    } catch {
-      // Still owed: the sweep takes it.
-    }
+  soon("case-statement", async () => {
+    const service = createServiceClient();
+    const first = await processCaseStatements(service, 1, statementId);
+    if (first.transcribed) await processCaseStatements(service, 1, statementId);
+    await askAccountQuestions(service, statementId);
   });
 }
