@@ -37,19 +37,25 @@ const model = vi.hoisted(() => ({
   asked: [] as { task: string; text: string; attachments: ChatAttachment[] }[],
 }));
 
-/** An answer of the marking, the parts a scenario does not say filled in. */
-const marking = (fields: Record<string, unknown>) => ({
-  documento: "peca",
-  o_que_e: "",
-  faltas: [],
-  perguntas: [],
-  tipo_de_processo: "ambos",
-  nome: "",
-  trocas: [],
-  pessoas: [],
-  observacoes: [],
-  ...fields,
-});
+/** An answer of the marking (its third version, 0093), the parts a scenario does not say filled in. */
+const marking = (fields: Record<string, unknown>) => {
+  const answer: Record<string, unknown> = {
+    documento: "peca",
+    o_que_e: "",
+    faltas: [],
+    perguntas: [],
+    tipo_de_processo: "ambos",
+    nome: "",
+    trocas: [],
+    paragrafos_do_escritorio: [],
+    pessoas: [],
+    observacoes: [],
+    ...fields,
+  };
+  // A change of whole paragraphs lists no pieces.
+  answer.trocas = (answer.trocas as Record<string, unknown>[]).map((troca) => ({ trechos: [], ...troca }));
+  return answer;
+};
 
 vi.mock("@flyee/ai/fake", async (original) => {
   const real = await original<typeof import("@flyee/ai/fake")>();
@@ -73,6 +79,57 @@ vi.mock("@flyee/ai/fake", async (original) => {
         model.asked.push({ task: "marcacao", text, attachments });
         if (text.includes("CONTESTAÇÃO")) {
           return marking({ documento: "outro", o_que_e: "uma contestação" });
+        }
+        if (text.includes("{{NOME COMPLETO}}")) {
+          // The firm's own form: the society and its lawyer are asked about first, and kept once the firm says so.
+          if (!text.includes("Resposta: Sim")) {
+            return marking({
+              documento: "procuracao",
+              o_que_e: "uma procuração",
+              perguntas: [
+                {
+                  pergunta: "A sociedade e a advogada nomeadas são as do escritório em todos os casos novos?",
+                  motivo: "O documento nomeia a sociedade e a advogada.",
+                },
+              ],
+            });
+          }
+          return marking({
+            documento: "procuracao",
+            o_que_e: "uma procuração",
+            nome: "Procuração do escritório",
+            trocas: [
+              {
+                de: 2,
+                ate: 2,
+                motivo: "o nome do cliente",
+                texto: "",
+                trechos: [{ antes: "{{NOME COMPLETO}}", depois: "[[NOME]]" }],
+              },
+              {
+                de: 3,
+                ate: 3,
+                motivo: "o CPF do cliente",
+                texto: "",
+                trechos: [{ antes: "{{CPF}}", depois: "[[CPF]]\n\n[[REPRESENTADOS]]" }],
+              },
+              {
+                de: 4,
+                ate: 4,
+                motivo: "a companhia",
+                texto: "",
+                trechos: [{ antes: "{{EMPRESA}}", depois: "[[RE]]" }],
+              },
+              {
+                de: 5,
+                ate: 5,
+                motivo: "a data",
+                texto: "",
+                trechos: [{ antes: "{{DIA}} de {{MÊS}} de {{ANO}}", depois: "[[DATA]]" }],
+              },
+            ],
+            paragrafos_do_escritorio: [4],
+          });
         }
         if (text.includes("CONTRATO DE HONORÁRIOS")) {
           // The contract leaves its fee blank: asked first, and written with the firm's answer.
@@ -197,6 +254,15 @@ const PETITION = [
   "Dá-se à causa o valor de R$ 10.000,00.",
   "Goiânia, 10 de maio de 2099.",
   "Fulano de Tal\nOAB/XX 00.000",
+];
+
+/** The firm's own power of attorney: the client's data as a form, the firm's society and lawyer as it writes them. */
+const FORM = [
+  "PROCURAÇÃO",
+  "Nome: {{NOME COMPLETO}}",
+  "CPF: {{CPF}}",
+  "Pelo presente instrumento, nomeia a sociedade SOUZA ADVOGADOS, CNPJ 11.222.333/0001-81, e a advogada ANA SOUZA, OAB/RJ 123.456, com escritório na Rua A, CEP 74000-000, contra {{EMPRESA}}.",
+  "Goiânia, {{DIA}} de {{MÊS}} de {{ANO}}.",
 ];
 
 const CONTRACT = [
@@ -467,6 +533,37 @@ describe.skipIf(!DB_URL)("the firm's own model made from a document it already u
     );
     expect(template?.body).toContain("HONORÁRIOS: 30% do proveito econômico.");
     expect(template?.is_default).toBe(true);
+  });
+
+  it("keeps the firm's own form and data once the firm says they are its own, and ONE saves it (0093)", async () => {
+    const { importNext } = await import("@/lib/library/import-work");
+    const sent = await send("Procuracao do escritorio.docx", DOCX, wordFile(FORM), "procuracao");
+    expect(await importNext(backend() as never, sent.importId)).toBe("read");
+    expect(await importNext(backend() as never, sent.importId)).toBe("asking");
+    expect(
+      (await call(asAna(), "answer_template_import", { target_import: sent.importId, target_answers: ["Sim"] })).code,
+    ).toBe("answered");
+    expect(await importNext(backend() as never, sent.importId)).toBe("saving");
+    // The firm's CNPJ, registration and CEP are its own: nothing is left for a person to look at, and ONE saves it.
+    expect(await importNext(backend() as never, sent.importId)).toBe("saved");
+    const [template] = await sql.unsafe(
+      `select t.body, t.prepared_by_one from public.draft_templates t
+       join public.template_imports i on i.saved_template_id = t.id where i.id = $1`,
+      [sent.importId],
+    );
+    expect(template?.prepared_by_one).toBe(true);
+    expect(template?.body).toBe(
+      [
+        "PROCURAÇÃO",
+        "Nome: [[NOME]]",
+        "CPF: [[CPF]]",
+        "[[REPRESENTADOS]]",
+        "Pelo presente instrumento, nomeia a sociedade SOUZA ADVOGADOS, CNPJ 11.222.333/0001-81, e a advogada ANA SOUZA, OAB/RJ 123.456, com escritório na Rua A, CEP 74000-000, contra [[RE]].",
+        "Goiânia, [[DATA]].",
+      ].join("\n\n"),
+    );
+    const shown = await view(sent.importId);
+    expect(shown.prepared?.checks).toEqual([]);
   });
 
   it("refuses a document that is no model ONE uses, and another firm reads nothing of what ONE does", async () => {

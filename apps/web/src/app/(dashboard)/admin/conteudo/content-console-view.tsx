@@ -62,7 +62,7 @@ const MARKS_HELP: Record<PlatformTemplate["documentKind"], string> = {
   piece:
     "Cite só fontes conferidas pelo ONE, como a biblioteca as escreve. As marcas [[PARTES]], [[RE]], [[JUIZO]], [[VALOR_DA_CAUSA]], [[PEDIDO_POR_PARTE]] e [[ADVOGADOS]] são preenchidas com os dados do caso.",
   procuracao:
-    "As marcas [[OUTORGANTE]], [[OUTORGADOS]], [[ESCRITORIO]], [[RE]], [[OBJETO]], [[LOCAL_DATA]] e [[NOME]] são preenchidas com os dados de cada cliente quando o ONE envia a procuração para ele assinar.",
+    "As marcas [[OUTORGANTE]], [[OUTORGADOS]], [[ESCRITORIO]], [[RE]], [[OBJETO]], [[LOCAL_DATA]] e [[NOME]] são preenchidas com os dados de cada cliente quando o ONE envia a procuração para ele assinar. Um formulário campo por campo usa [[NOME]], [[NACIONALIDADE]], [[ESTADO_CIVIL]], [[PROFISSAO]], [[CPF]], [[NASCIMENTO]], [[ENDERECO]], [[CEP]], [[EMAIL]] e [[TELEFONE]], com [[REPRESENTADOS]] para os filhos menores e [[DATA]] para a data de hoje.",
 };
 
 const ERROR_TEXT: Record<string, string> = {

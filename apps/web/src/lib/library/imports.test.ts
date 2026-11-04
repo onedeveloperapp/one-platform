@@ -4,6 +4,7 @@ import {
   changesShown,
   composeModel,
   exchangesOf,
+  firmTextsOf,
   HELD_KEY,
   HELD_REASONS,
   heldReasonOf,
@@ -135,9 +136,15 @@ describe("when ONE saves the model by itself", () => {
 
 describe("the model written from the paragraphs and the changes", () => {
   const changes = [
-    { from: 2, to: 2, text: "[[PARTES]], vem propor ação em face de [[RE]]", reason: "a qualificação das partes" },
-    { from: 3, to: 4, text: "[COMPLETAR: narrar os fatos do caso]", reason: "os fatos do caso" },
-    { from: 6, to: 6, text: "[[ADVOGADOS]]", reason: "quem assina" },
+    {
+      from: 2,
+      to: 2,
+      text: "[[PARTES]], vem propor ação em face de [[RE]]",
+      reason: "a qualificação das partes",
+      pieces: [],
+    },
+    { from: 3, to: 4, text: "[COMPLETAR: narrar os fatos do caso]", reason: "os fatos do caso", pieces: [] },
+    { from: 6, to: 6, text: "[[ADVOGADOS]]", reason: "quem assina", pieces: [] },
   ];
 
   it("keeps every paragraph no change names word for word, each change in the place of the ones it names", () => {
@@ -153,7 +160,7 @@ describe("the model written from the paragraphs and the changes", () => {
   });
 
   it("takes the paragraphs of an empty change out, and leaves a document no change names as it was", () => {
-    expect(composeModel(PARAGRAPHS, [{ from: 6, to: 6, text: "  ", reason: "a data" }])).toBe(
+    expect(composeModel(PARAGRAPHS, [{ from: 6, to: 6, text: "  ", reason: "a data", pieces: [] }])).toBe(
       PARAGRAPHS.slice(0, 5).join("\n\n"),
     );
     expect(composeModel(PARAGRAPHS, [])).toBe(PARAGRAPHS.join("\n\n"));
@@ -161,10 +168,10 @@ describe("the model written from the paragraphs and the changes", () => {
 
   it("never applies a change over a paragraph twice, past the last one, or backwards", () => {
     const odd = [
-      { from: 2, to: 3, text: "A", reason: "" },
-      { from: 3, to: 3, text: "B", reason: "" },
-      { from: 5, to: 9, text: "C", reason: "" },
-      { from: 6, to: 5, text: "D", reason: "" },
+      { from: 2, to: 3, text: "A", reason: "", pieces: [] },
+      { from: 3, to: 3, text: "B", reason: "", pieces: [] },
+      { from: 5, to: 9, text: "C", reason: "", pieces: [] },
+      { from: 6, to: 5, text: "D", reason: "", pieces: [] },
     ];
     expect(composeModel(PARAGRAPHS, odd)).toBe(
       [PARAGRAPHS[0], "A", PARAGRAPHS[3], PARAGRAPHS[4], PARAGRAPHS[5]].join("\n\n"),
@@ -182,23 +189,105 @@ describe("the model written from the paragraphs and the changes", () => {
   });
 });
 
+describe("a change of some words of a paragraph (0093)", () => {
+  const form = [
+    "PROCURAÇÃO",
+    "Nome: {{NOME COMPLETO}}",
+    "CPF: {{CPF}}",
+    "contra {{EMPRESA}}, como {{EMPRESA}} responde.",
+  ];
+
+  it("replaces only those words, every time they are written, and keeps the rest of the paragraph as it is", () => {
+    const changes = [
+      { from: 2, to: 2, text: "", reason: "o nome", pieces: [{ before: "{{NOME COMPLETO}}", after: "[[NOME]]" }] },
+      {
+        from: 3,
+        to: 3,
+        text: "",
+        reason: "o CPF",
+        pieces: [{ before: "{{CPF}}", after: "[[CPF]]\n\n[[REPRESENTADOS]]" }],
+      },
+      { from: 4, to: 4, text: "", reason: "a companhia", pieces: [{ before: "{{EMPRESA}}", after: "[[RE]]" }] },
+    ];
+    expect(composeModel(form, changes)).toBe(
+      "PROCURAÇÃO\n\nNome: [[NOME]]\n\nCPF: [[CPF]]\n\n[[REPRESENTADOS]]\n\ncontra [[RE]], como [[RE]] responde.",
+    );
+    expect(changesShown(form, changes)[0]).toEqual({
+      from: 2,
+      to: 2,
+      reason: "o nome",
+      before: "Nome: {{NOME COMPLETO}}",
+      after: "Nome: [[NOME]]",
+    });
+  });
+});
+
+describe("the firm's own data (0093)", () => {
+  const paragraphs = [
+    "PROCURAÇÃO",
+    "Nome: [[NOME]]",
+    "nomeia a sociedade SOUZA ADVOGADOS, CNPJ 11.222.333/0001-81, e a advogada ANA SOUZA, OAB/RJ 123.456, CEP 74000-000.",
+  ];
+  const proposal = { firmParagraphs: [3, 9] };
+  const answered = [{ questions: [{ question: "São do escritório?", why: "" }], answers: ["Sim"] }];
+
+  it("are the paragraphs the marking named, only once the firm answered a round of questions", () => {
+    expect(firmTextsOf(paragraphs, proposal, answered)).toEqual([paragraphs[2]]);
+    expect(firmTextsOf(paragraphs, proposal, [])).toEqual([]);
+    expect(firmTextsOf(paragraphs, proposal, [{ ...answered[0], answers: [" "] }])).toEqual([]);
+    expect(firmTextsOf(paragraphs, null, answered)).toEqual([]);
+  });
+
+  it("are no original case's: their CNPJ, registration and CEP are not counted, a CPF always is", () => {
+    const body = paragraphs.join("\n\n");
+    expect(modelChecks(body, [], "procuracao")).toEqual([
+      { kind: "identifier", identifier: "cnpj", count: 1 },
+      { kind: "identifier", identifier: "cep", count: 1 },
+      { kind: "identifier", identifier: "oab", count: 1 },
+    ]);
+    expect(modelChecks(body, [], "procuracao", [paragraphs[2]])).toEqual([]);
+    expect(
+      saveGate({ body, people: [], document: "procuracao", notes: [], unwritable: [], firmTexts: [paragraphs[2]] }),
+    ).toEqual({ save: true });
+    const withCpf = `${paragraphs[2]} CPF 529.982.247-25.`;
+    expect(modelChecks(withCpf, [], "procuracao", [withCpf])).toEqual([
+      { kind: "identifier", identifier: "cpf", count: 1 },
+    ]);
+  });
+});
+
 describe("the marking's answer as the database kept it", () => {
   it("is read with what it writes, a paper never for a kind of lawsuit", () => {
     const kept = proposalOf({
       document_kind: "procuracao",
       proceeding_kind: "juizado",
       name: "Procuração do escritório",
-      changes: [{ from: 1, to: 2, text: "[[OUTORGANTE]]", reason: "o cliente" }, { from: "x" }],
+      changes: [
+        { from: 1, to: 2, text: "[[OUTORGANTE]]", reason: "o cliente" },
+        {
+          from: 3,
+          to: 3,
+          text: "",
+          reason: "o nome",
+          pieces: [{ before: "{{NOME}}", after: "[[NOME]]" }, { after: "x" }],
+        },
+        { from: "x" },
+      ],
       people: ["Maria Teste", 3],
       notes: ["Confira os poderes."],
+      firm_paragraphs: [4, 0, "5", 6],
     });
     expect(kept).toEqual({
       name: "Procuração do escritório",
       documentKind: "procuracao",
       proceedingKind: null,
-      changes: [{ from: 1, to: 2, text: "[[OUTORGANTE]]", reason: "o cliente" }],
+      changes: [
+        { from: 1, to: 2, text: "[[OUTORGANTE]]", reason: "o cliente", pieces: [] },
+        { from: 3, to: 3, text: "", reason: "o nome", pieces: [{ before: "{{NOME}}", after: "[[NOME]]" }] },
+      ],
       people: ["Maria Teste"],
       notes: ["Confira os poderes."],
+      firmParagraphs: [4, 6],
     });
     expect(proposalOf({ document_kind: "outro" })).toBeNull();
     expect(proposalOf(null)).toBeNull();

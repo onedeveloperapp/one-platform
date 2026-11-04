@@ -91,8 +91,9 @@ export const DRAFT_MARK_KEY: Record<(typeof DRAFT_MARKS)[number], string> = {
 
 /**
  * The facts of a person of a case a power of attorney or a fee contract names
- * by a mark (`case_paper_filled`, migration 0054): the database writes them in
- * when ONE issues the paper for that person.
+ * by a mark (`case_paper_filled`, migrations 0054 and 0093): the database
+ * writes them in when ONE issues the paper for that person. A firm's own form
+ * names the person's data field by field (0093).
  */
 export const PAPER_MARKS = [
   "OUTORGANTE",
@@ -103,6 +104,17 @@ export const PAPER_MARKS = [
   "OBJETO",
   "LOCAL_DATA",
   "NOME",
+  "NACIONALIDADE",
+  "ESTADO_CIVIL",
+  "PROFISSAO",
+  "CPF",
+  "NASCIMENTO",
+  "ENDERECO",
+  "CEP",
+  "EMAIL",
+  "TELEFONE",
+  "REPRESENTADOS",
+  "DATA",
 ] as const;
 export const PAPER_MARK_KEY: Record<(typeof PAPER_MARKS)[number], string> = {
   OUTORGANTE: "paper-mark-outorgante",
@@ -113,6 +125,17 @@ export const PAPER_MARK_KEY: Record<(typeof PAPER_MARKS)[number], string> = {
   OBJETO: "paper-mark-objeto",
   LOCAL_DATA: "paper-mark-local-data",
   NOME: "paper-mark-nome",
+  NACIONALIDADE: "paper-mark-nacionalidade",
+  ESTADO_CIVIL: "paper-mark-estado-civil",
+  PROFISSAO: "paper-mark-profissao",
+  CPF: "paper-mark-cpf",
+  NASCIMENTO: "paper-mark-nascimento",
+  ENDERECO: "paper-mark-endereco",
+  CEP: "paper-mark-cep",
+  EMAIL: "paper-mark-email",
+  TELEFONE: "paper-mark-telefone",
+  REPRESENTADOS: "paper-mark-representados",
+  DATA: "paper-mark-data",
 };
 
 /** What a model of the library writes (0054): the piece of a lawsuit, a power of attorney or a fee contract. */

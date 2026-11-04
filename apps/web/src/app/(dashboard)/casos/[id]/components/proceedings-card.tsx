@@ -26,6 +26,7 @@ import {
 import CollapsibleCard from "@/components/product/collapsible-card";
 import DialogHeader from "@/components/product/dialog-header";
 import EmptyState from "@/components/product/empty-state";
+import StateLine from "@/components/product/state-line";
 import StatusChip, { type StatusTone } from "@/components/product/status-chip";
 import NiScale from "@/icons/nexture/ni-scale";
 import { removeProceeding, saveProceeding } from "@/lib/cases/actions";
@@ -100,6 +101,11 @@ export default function ProceedingsCard({
   const nameOfParty = (partyId: string) =>
     state.parties.find((party) => party.partyId === partyId)?.person.full_name ?? "";
   const nameOfLawyer = (userId: string) => state.team.find((member) => member.userId === userId)?.name ?? "";
+  const unnamedOf = (proceeding: CaseProceeding) =>
+    state.unnamedSigners
+      .filter((item) => item.proceedingId === proceeding.id)
+      .map((item) => item.lawyer ?? nameOfLawyer(item.userId))
+      .filter(Boolean);
   const courtName = (acronym: string | null) =>
     state.courts.find((court) => court.acronym === acronym)?.acronym ?? acronym;
 
@@ -219,6 +225,16 @@ export default function ProceedingsCard({
                   names: proceeding.lawyers.map(nameOfLawyer).filter(Boolean).join(", "),
                 })}
               </Typography>
+            )}
+            {proceeding.status === "planned" && unnamedOf(proceeding).length > 0 && (
+              // The firm's own power of attorney names its lawyers as the firm wrote them (0093): one who signs this
+              // lawsuit and is not among them holds no power of the client's.
+              <StateLine tone="attention">
+                {t("case-proceeding-power-unnamed", {
+                  names: unnamedOf(proceeding).join(", "),
+                  count: unnamedOf(proceeding).length,
+                })}
+              </StateLine>
             )}
             {proceeding.createdByOne && proceeding.status === "planned" && (
               <Typography variant="body2" className="text-text-secondary">

@@ -10,6 +10,7 @@ import {
   type CourtSystem,
   EVENTS_SHOWN,
   type TeamMember,
+  type UnnamedSigner,
 } from "./case-types";
 import CaseView from "./components/case-view";
 import { cookies } from "next/headers";
@@ -65,6 +66,16 @@ function checkOf(run: Embedded<{ output: unknown; approvals: Embedded<{ status: 
   return { answer, waiting: one(found.approvals)?.status === "pending" };
 }
 const text = (value: unknown): string | null => (typeof value === "string" && value !== "" ? value : null);
+
+/** The lawyers of the planned lawsuits the client's power of attorney does not name (`case_power_signers_missing`). */
+function unnamedSignersOf(value: unknown): UnnamedSigner[] {
+  return (Array.isArray(value) ? value : []).flatMap((item) => {
+    const row = (item ?? {}) as { proceeding_id?: unknown; user_id?: unknown; lawyer?: unknown };
+    const proceedingId = text(row.proceeding_id);
+    const userId = text(row.user_id);
+    return proceedingId && userId ? [{ proceedingId, userId, lawyer: text(row.lawyer) }] : [];
+  });
+}
 
 /** The day in Brazil's official time. */
 const todayInBrazil = () => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date());
@@ -243,48 +254,65 @@ async function loadCase(id: string): Promise<CaseState> {
   const course = await loadCourseFacts(supabase, firm, id, context.profile.timezone).catch(() => undefined);
   if (!course) return { kind: "error" };
   // The case's deadlines, and the acts of the list for a new one. A read that failed is an error of the page too.
-  const [deadlines, acts, hearings, people, zones, notices, civilCourt, advanced, linksOwed, stages, published] =
-    await Promise.all([
-      caseDeadlines(supabase, firm, id, context.profile.timezone).catch(() => undefined),
-      deadlineActs(supabase).catch(() => undefined),
-      caseHearings(supabase, firm, id, context.profile.timezone).catch(() => undefined),
-      colleagues(supabase, firm).catch(() => undefined),
-      courtZones(supabase).catch(() => undefined),
-      caseNotices(supabase, id, context.profile.timezone).catch(() => undefined),
-      loadCivilCourt(supabase, id).catch(() => undefined),
-      // What ONE waits for to carry the case on (0039). A read that failed is an error of the page too.
-      supabase
-        .from("case_advances")
-        .select("waiting, checked_at")
-        .eq("case_id", id)
-        .eq("org_id", firm)
-        .maybeSingle()
-        .then(({ data, error }) => (error ? undefined : { advance: caseAdvanceOf(data) })),
-      // Who of the case is owed a link and why ONE has not sent it (0046). A read that failed is an error of the page.
-      supabase
-        .rpc("case_links_owed", { target_case: id })
-        .then(({ data, error }) => (error ? undefined : (linksOwedOf(data) ?? undefined))),
-      // When the case entered each stage, for its progress: every change, however old (the timeline reads the latest
-      // events only). A read that failed is an error of the page too.
-      supabase
-        .from("case_events")
-        .select("at, data")
-        .eq("case_id", id)
-        .eq("org_id", firm)
-        .eq("kind", "status_changed")
-        .order("at")
-        .then(({ data, error }) => (error ? undefined : stageMomentsOf(data ?? []))),
-      // The decisions and payments published in the case's lawsuits, for its steps in court. One that could not be
-      // read leaves those steps unknown (the hearings still say theirs), never the page.
-      supabase
-        .from("publications")
-        .select("category, available_on")
-        .eq("case_id", id)
-        .eq("org_id", firm)
-        .eq("active", true)
-        .in("category", ["decisao", "pagamento"])
-        .then(({ data, error }) => courtPublicationsOf(error ? [] : (data ?? []))),
-    ]);
+  const [
+    deadlines,
+    acts,
+    hearings,
+    people,
+    zones,
+    notices,
+    civilCourt,
+    advanced,
+    linksOwed,
+    stages,
+    published,
+    unnamedSigners,
+  ] = await Promise.all([
+    caseDeadlines(supabase, firm, id, context.profile.timezone).catch(() => undefined),
+    deadlineActs(supabase).catch(() => undefined),
+    caseHearings(supabase, firm, id, context.profile.timezone).catch(() => undefined),
+    colleagues(supabase, firm).catch(() => undefined),
+    courtZones(supabase).catch(() => undefined),
+    caseNotices(supabase, id, context.profile.timezone).catch(() => undefined),
+    loadCivilCourt(supabase, id).catch(() => undefined),
+    // What ONE waits for to carry the case on (0039). A read that failed is an error of the page too.
+    supabase
+      .from("case_advances")
+      .select("waiting, checked_at")
+      .eq("case_id", id)
+      .eq("org_id", firm)
+      .maybeSingle()
+      .then(({ data, error }) => (error ? undefined : { advance: caseAdvanceOf(data) })),
+    // Who of the case is owed a link and why ONE has not sent it (0046). A read that failed is an error of the page.
+    supabase
+      .rpc("case_links_owed", { target_case: id })
+      .then(({ data, error }) => (error ? undefined : (linksOwedOf(data) ?? undefined))),
+    // When the case entered each stage, for its progress: every change, however old (the timeline reads the latest
+    // events only). A read that failed is an error of the page too.
+    supabase
+      .from("case_events")
+      .select("at, data")
+      .eq("case_id", id)
+      .eq("org_id", firm)
+      .eq("kind", "status_changed")
+      .order("at")
+      .then(({ data, error }) => (error ? undefined : stageMomentsOf(data ?? []))),
+    // The decisions and payments published in the case's lawsuits, for its steps in court. One that could not be
+    // read leaves those steps unknown (the hearings still say theirs), never the page.
+    supabase
+      .from("publications")
+      .select("category, available_on")
+      .eq("case_id", id)
+      .eq("org_id", firm)
+      .eq("active", true)
+      .in("category", ["decisao", "pagamento"])
+      .then(({ data, error }) => courtPublicationsOf(error ? [] : (data ?? []))),
+    // The lawyers of the planned lawsuits the client's power of attorney does not name (0093). One that could not be
+    // read says nothing of them, never the page.
+    supabase
+      .rpc("case_power_signers_missing", { target_case: id })
+      .then(({ data, error }) => unnamedSignersOf(error ? [] : data)),
+  ]);
   if (
     !deadlines ||
     !acts ||
@@ -602,6 +630,7 @@ async function loadCase(id: string): Promise<CaseState> {
       courtNotes: facts.courtNotes,
     },
     civilCourt,
+    unnamedSigners,
     statements: told.statements,
     account: told.account,
     accountMaxRounds: told.accountMaxRounds,

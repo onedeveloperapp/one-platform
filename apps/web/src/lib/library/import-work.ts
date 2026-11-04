@@ -81,6 +81,8 @@ type ToWork = {
   document_kind: string | null;
   people: unknown;
   notes: unknown;
+  /** The paragraphs of the firm's own data, once the firm said they are its own (0093). */
+  firm_texts?: unknown;
   run_key: string;
   max_chars: number;
   max_paragraphs: number;
@@ -224,6 +226,7 @@ export async function workClaimedImport(service: SupabaseClient, held: ImportCla
       document: row.document_kind,
       notes: textsOf(row.notes),
       unwritable: row.document_kind === "piece" ? unwritableCharacters(body) : [],
+      firmTexts: textsOf(row.firm_texts),
     });
     if (!gate.save) return record("review", { failure: gate.reason });
     return record("saved", { hash: createHash("sha256").update(body, "utf8").digest("hex") });

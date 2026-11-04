@@ -96,6 +96,7 @@ Distilled from the gamification research — most of it is a WARNING:
 - **A missing value hides its line**: never print "—", "null" or an empty label in its place.
 - **A time carries its zone**: said in the zone of the place it belongs to (a court, an airport, a store), the zone named when it may not be the reader's.
 - **Interpolated names read as a sentence**: no category word before a name that may already carry it ("the agency Agency Sol"), no label's capital kept inside a sentence, no two cards of one screen with the same title.
+- **An error says its real reason.** A refusal from a provider is read by its code and said as what happened (a sending limit reached, an e-mail that could not leave, an address that already has an account), with what the person can do; "check your connection" only for a request that never reached the server. Failure this prevents: a sign-up refused because the provider's e-mail sender hit its hourly limit told the person to check their connection, and they kept retrying.
 - **A one-time code verifies on its last digit**: typed or pasted, the code submits itself once complete, and a wrong one clears for a new try.
 
 ## Next.js App Router pitfalls (each one broke a screen in production)

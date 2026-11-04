@@ -33,6 +33,25 @@ export function nameMeetsRules(name: string): boolean {
   return name.trim().length >= 3;
 }
 
+/** Why the provider of the accounts refused a sign-up, by the words the sign-up has for it. */
+export type SignUpRefusal = "registered" | "email_limit" | "email_unavailable" | "failed";
+
+/**
+ * Reads the provider's refusal of a sign-up. Every sign-up sends a link to confirm the address, so the e-mail the
+ * provider could not send is said as that: its own sender sends a few an hour and only to the addresses its
+ * project allows (`over_email_send_rate_limit`, `email_address_not_authorized`), which read as "check your
+ * connection" until 2026-11-04, when an agency's sign-up from its invitation met the limit.
+ */
+export function signUpRefusal(error: { code?: string | null; message?: string | null }): SignUpRefusal {
+  const code = error.code ?? "";
+  if (code === "user_already_exists" || code === "email_exists") return "registered";
+  if (code === "over_email_send_rate_limit") return "email_limit";
+  if (code === "email_address_not_authorized" || /sending confirmation (e-?mail|mail)/i.test(error.message ?? "")) {
+    return "email_unavailable";
+  }
+  return "failed";
+}
+
 /** A password as the sign-up's field asks it: eight characters, upper and lower case, a character that is no letter or digit. */
 export function passwordMeetsRules(password: string): boolean {
   return password.length >= 8 && /[A-Z]/.test(password) && /[a-z]/.test(password) && /[^A-Za-z 0-9]/.test(password);

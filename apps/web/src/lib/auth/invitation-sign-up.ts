@@ -3,7 +3,14 @@
 import { headers } from "next/headers";
 import { createHash } from "node:crypto";
 
-import { type InvitationNext, invitationOfNext, nameMeetsRules, passwordMeetsRules } from "@/lib/auth/sign-up-rules";
+import {
+  type InvitationNext,
+  invitationOfNext,
+  nameMeetsRules,
+  passwordMeetsRules,
+  type SignUpRefusal,
+  signUpRefusal,
+} from "@/lib/auth/sign-up-rules";
 import { sanitizeInternalNext } from "@/lib/safe-next";
 import { isSupabaseConfigured } from "@flyee/auth";
 import { createClient } from "@flyee/auth/server";
@@ -24,7 +31,7 @@ export type InvitationHint = { ok: true; hint: string } | { ok: false };
 
 export type InvitationSignUpResult =
   | { ok: true; session: boolean }
-  | { ok: false; code: "invalid" | "closed" | "registered" | "failed" };
+  | { ok: false; code: "invalid" | "closed" | SignUpRefusal };
 
 type Preview = { found?: boolean; status?: string; email_hint?: string };
 
@@ -66,7 +73,7 @@ export async function signUpByInvitation(input: {
       data: { display_name: input.name.trim(), locale: input.locale },
     },
   });
-  if (error) return { ok: false, code: error.code === "user_already_exists" ? "registered" : "failed" };
+  if (error) return { ok: false, code: signUpRefusal(error) };
   // An address that has an account already comes back as a new one with no identity: the provider does not say
   // who exists. The person signs in instead.
   if (data.user && (data.user.identities?.length ?? 0) === 0) return { ok: false, code: "registered" };

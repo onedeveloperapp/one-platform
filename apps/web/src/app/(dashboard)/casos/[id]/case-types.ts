@@ -86,6 +86,9 @@ export type CaseDocument = {
   check: { answer: CheckAnswer; waiting: boolean } | null;
 };
 
+/** A lawyer who signs a planned lawsuit and whom the client's power of attorney does not name (0093). */
+export type UnnamedSigner = { proceedingId: string; userId: string; lawyer: string | null };
+
 export type CaseProceeding = {
   id: string;
   kind: "juizado" | "comum";
@@ -251,6 +254,8 @@ export type CaseState =
       rules: CaseRules;
       /** Each claimant of a lawsuit planned in the civil court, and their word on it (0025). */
       civilCourt: CivilCourtNeed[];
+      /** The lawyers of the planned lawsuits the client's power of attorney does not name (0093). */
+      unnamedSigners: UnnamedSigner[];
       /** What the clients told about the trip, each with where its chronology stands. */
       statements: CaseStatement[];
       /** Where the case's account stands, as ONE waits for it before the lawsuits (0090); null when unreadable. */

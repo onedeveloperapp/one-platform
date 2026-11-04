@@ -72,8 +72,14 @@ export type ImportRefusal = {
 export const HELD_REASONS = ["checks", "notes", "autonomy", "name_in_use", "library_full", "not_saved"] as const;
 export type HeldReason = (typeof HELD_REASONS)[number];
 
-/** A change of the marking: the paragraphs it takes the place of (counted from one) and what goes there. */
-export type ModelChange = { from: number; to: number; text: string; reason: string };
+/** Some words of a paragraph a change takes out (`before`, as the document writes them) and what goes there. */
+export type ModelPiece = { before: string; after: string };
+
+/**
+ * A change of the marking: the paragraphs it takes the place of (counted from one) and what goes there, or, with
+ * `pieces`, only some words of its one paragraph, the rest of it staying as the document writes it (0093).
+ */
+export type ModelChange = { from: number; to: number; text: string; reason: string; pieces: ModelPiece[] };
 
 /** What the marking answered, as the database kept it. */
 export type ImportProposal = {
@@ -85,6 +91,8 @@ export type ImportProposal = {
   people: string[];
   /** What the marking asks a lawyer to check. */
   notes: string[];
+  /** The paragraphs that hold the firm's own data, kept as the firm wrote them (0093). */
+  firmParagraphs: number[];
 };
 
 const text = (value: unknown): string => (typeof value === "string" ? value : "");
@@ -104,8 +112,13 @@ export function proposalOf(value: unknown): ImportProposal | null {
     const change = (item ?? {}) as Record<string, unknown>;
     const from = Number(change.from);
     const to = Number(change.to);
+    const pieces = (Array.isArray(change.pieces) ? change.pieces : []).flatMap((piece): ModelPiece[] => {
+      const row = (piece ?? {}) as Record<string, unknown>;
+      const before = text(row.before);
+      return before ? [{ before, after: text(row.after) }] : [];
+    });
     return Number.isInteger(from) && Number.isInteger(to)
-      ? [{ from, to, text: text(change.text), reason: text(change.reason) }]
+      ? [{ from, to, text: text(change.text), reason: text(change.reason), pieces }]
       : [];
   });
   return {
@@ -115,7 +128,29 @@ export function proposalOf(value: unknown): ImportProposal | null {
     changes,
     people: strings(kept.people),
     notes: strings(kept.notes),
+    firmParagraphs: (Array.isArray(kept.firm_paragraphs) ? kept.firm_paragraphs : []).filter(
+      (value): value is number => Number.isInteger(value) && (value as number) > 0,
+    ),
   };
+}
+
+/**
+ * The original texts of the paragraphs that hold the firm's own data, for the check of a model to tell the firm's
+ * own CNPJ, registrations at the bar, address, telephone and e-mail from the original case's: only once the firm
+ * answered a round of questions, where the marking asks whether they are its own in every case (what
+ * `template_import_firm_texts` of the database answers from the same request).
+ */
+export function firmTextsOf(
+  paragraphs: readonly string[],
+  proposal: Pick<ImportProposal, "firmParagraphs"> | null,
+  exchanges: readonly ImportExchange[],
+): string[] {
+  const answered = exchanges.some((round) => round.answers.some((answer) => answer.trim() !== ""));
+  if (!answered || !proposal) return [];
+  return [...new Set(proposal.firmParagraphs)]
+    .filter((at) => at >= 1 && at <= paragraphs.length)
+    .sort((a, b) => a - b)
+    .map((at) => paragraphs[at - 1]);
 }
 
 const isMissingCode = (value: unknown): value is MissingCode => (MISSING_CODES as readonly unknown[]).includes(value);
@@ -215,13 +250,27 @@ function usable(paragraphs: readonly string[], changes: readonly ModelChange[]):
   return kept;
 }
 
+/**
+ * What a change writes: its text in the place of its paragraphs, or, with pieces, its one paragraph with only those
+ * words replaced, in their order (what `template_import_body` of the database writes from the same answer).
+ */
+function changeText(paragraphs: readonly string[], change: ModelChange): string {
+  if (change.pieces.length === 0) return change.text.trim();
+  let written = paragraphs[change.from - 1] ?? "";
+  for (const piece of change.pieces) {
+    if (piece.before) written = written.split(piece.before).join(piece.after);
+  }
+  return written.trim();
+}
+
 /** The model: the document's paragraphs, each change in the place of the ones it names, apart by a blank line. */
 export function composeModel(paragraphs: readonly string[], changes: readonly ModelChange[]): string {
   const written: string[] = [];
   let next = 1;
   for (const change of usable(paragraphs, changes)) {
     written.push(...paragraphs.slice(next - 1, change.from - 1));
-    if (change.text.trim() !== "") written.push(change.text.trim());
+    const goes = changeText(paragraphs, change);
+    if (goes !== "") written.push(goes);
     next = change.to + 1;
   }
   written.push(...paragraphs.slice(next - 1));
@@ -237,7 +286,7 @@ export function changesShown(paragraphs: readonly string[], changes: readonly Mo
     to: change.to,
     reason: change.reason,
     before: paragraphs.slice(change.from - 1, change.to).join("\n\n"),
-    after: change.text.trim(),
+    after: changeText(paragraphs, change),
   }));
 }
 
@@ -286,23 +335,46 @@ function peopleLeft(body: string, people: readonly string[]): ModelCheck[] {
   return found;
 }
 
-/** The identifiers of a text, each kind with how many: what is counted as one kind is not counted as another. */
-function identifiersLeft(body: string): ModelCheck[] {
-  let left = body;
-  const counts = new Map<Identifier, number>();
-  const take = (identifier: Identifier, pattern: RegExp, keep: (match: string) => boolean = () => true) => {
+/** How each kind of identifier is written, in the order they are read: what one kind took, another never reads. */
+const IDENTIFIER_PATTERNS: readonly [Identifier, RegExp, (match: string) => boolean][] = [
+  ["email", /[\p{L}\p{N}._%+-]+@[\p{L}\p{N}.-]+\.\p{L}{2,}/gu, () => true],
+  ["cnpj", /(?<!\d)\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2}(?!\d)/g, isValidCnpj],
+  ["cpf", /(?<!\d)\d{3}\.?\d{3}\.?\d{3}-?\d{2}(?!\d)/g, isValidCpf],
+  ["cep", /(?<!\d)\d{5}-\d{3}(?!\d)/g, () => true],
+  ["oab", /\bOAB\s*[/-]?\s*[A-Z]{2}\s*(?:n[º°o.]*\s*)?\d/g, () => true],
+  ["telefone", /(?:\+?55[\s.-]?)?\(?(?<![\p{L}\p{N}])\d{2}\)?[\s.-]?9?\d{4}[\s.-]?\d{4}(?![\p{L}\p{N}])/gu, () => true],
+];
+
+/** Each identifier a text writes, with its kind and as it is written. */
+function identifiersIn(text: string): { identifier: Identifier; match: string }[] {
+  let left = text;
+  const found: { identifier: Identifier; match: string }[] = [];
+  for (const [identifier, pattern, keep] of IDENTIFIER_PATTERNS) {
     left = left.replace(pattern, (match) => {
       if (!keep(match)) return match;
-      counts.set(identifier, (counts.get(identifier) ?? 0) + 1);
+      found.push({ identifier, match });
       return " ".repeat(match.length);
     });
-  };
-  take("email", /[\p{L}\p{N}._%+-]+@[\p{L}\p{N}.-]+\.\p{L}{2,}/gu);
-  take("cnpj", /(?<!\d)\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2}(?!\d)/g, isValidCnpj);
-  take("cpf", /(?<!\d)\d{3}\.?\d{3}\.?\d{3}-?\d{2}(?!\d)/g, isValidCpf);
-  take("cep", /(?<!\d)\d{5}-\d{3}(?!\d)/g);
-  take("oab", /\bOAB\s*[/-]?\s*[A-Z]{2}\s*(?:n[º°o.]*\s*)?\d/g);
-  take("telefone", /(?:\+?55[\s.-]?)?\(?(?<![\p{L}\p{N}])\d{2}\)?[\s.-]?9?\d{4}[\s.-]?\d{4}(?![\p{L}\p{N}])/gu);
+  }
+  return found;
+}
+
+/**
+ * The identifiers of a text, each kind with how many, but the firm's own: what the paragraphs of the firm's own
+ * data write (`firmTextsOf`), never a CPF, which is a person's.
+ */
+function identifiersLeft(body: string, firmTexts: readonly string[] = []): ModelCheck[] {
+  const own = new Set(
+    firmTexts
+      .flatMap(identifiersIn)
+      .filter((item) => item.identifier !== "cpf")
+      .map((item) => `${item.identifier}:${item.match}`),
+  );
+  const counts = new Map<Identifier, number>();
+  for (const { identifier, match } of identifiersIn(body)) {
+    if (own.has(`${identifier}:${match}`)) continue;
+    counts.set(identifier, (counts.get(identifier) ?? 0) + 1);
+  }
   return IDENTIFIERS.flatMap((identifier): ModelCheck[] => {
     const count = counts.get(identifier) ?? 0;
     return count > 0 ? [{ kind: "identifier", identifier, count }] : [];
@@ -311,16 +383,22 @@ function identifiersLeft(body: string): ModelCheck[] {
 
 /**
  * What a lawyer should look at in a model ONE prepared before saving it: the
- * people of the original case still named, what is written as an identifier,
+ * people of the original case still named, what is written as an identifier
+ * (but the firm's own data, once the firm said they are its own: `firmTexts`),
  * and, in a paper a client signs, anything left to complete. What the PDF
  * cannot write is the server's to add (`unwritable`), where the writer of the
  * PDF is.
  */
-export function modelChecks(body: string, people: readonly string[], document: ModelDocument): ModelCheck[] {
+export function modelChecks(
+  body: string,
+  people: readonly string[],
+  document: ModelDocument,
+  firmTexts: readonly string[] = [],
+): ModelCheck[] {
   const toComplete = document === "piece" ? 0 : (body.match(/\[\s*COMPLETAR/gi)?.length ?? 0);
   return [
     ...peopleLeft(body, people),
-    ...identifiersLeft(body),
+    ...identifiersLeft(body, firmTexts),
     ...(toComplete > 0 ? [{ kind: "to_complete" as const, count: toComplete }] : []),
   ];
 }
@@ -339,8 +417,12 @@ export function saveGate(input: {
   document: ModelDocument;
   notes: readonly string[];
   unwritable: readonly string[];
+  /** The paragraphs of the firm's own data, once the firm said they are its own (`firmTextsOf`). */
+  firmTexts?: readonly string[];
 }): { save: true } | { save: false; reason: "checks" | "notes" } {
-  if (modelChecks(input.body, input.people, input.document).length > 0) return { save: false, reason: "checks" };
+  if (modelChecks(input.body, input.people, input.document, input.firmTexts ?? []).length > 0) {
+    return { save: false, reason: "checks" };
+  }
   if (input.document === "piece" && input.unwritable.length > 0) return { save: false, reason: "checks" };
   if (input.notes.some((note) => note.trim() !== "")) return { save: false, reason: "notes" };
   return { save: true };

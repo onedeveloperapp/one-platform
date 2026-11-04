@@ -6,6 +6,8 @@ import {
   type ChangeShown,
   changesShown,
   composeModel,
+  exchangesOf,
+  firmTextsOf,
   type HeldReason,
   heldReasonOf,
   IMPORT_STATUSES,
@@ -105,6 +107,7 @@ export type ImportRow = {
   saved_template_id?: string | null;
   paragraphs?: unknown;
   proposal?: unknown;
+  exchanges?: unknown;
   claimed_at?: string | null;
   requested_by?: string | null;
   created_at: string;
@@ -112,7 +115,7 @@ export type ImportRow = {
 
 /** What a request's dialog reads of it. */
 export const IMPORT_VIEW_COLUMNS =
-  "id, file_name, source, status, failure, expected_kind, questions, rounds, refusal, held_reason, saved_template_id, paragraphs, proposal, claimed_at, requested_by, created_at";
+  "id, file_name, source, status, failure, expected_kind, questions, rounds, refusal, held_reason, saved_template_id, paragraphs, proposal, exchanges, claimed_at, requested_by, created_at";
 
 const statusOf = (value: string): ImportStatus =>
   (IMPORT_STATUSES as readonly string[]).includes(value) ? (value as ImportStatus) : "failed";
@@ -142,7 +145,13 @@ export function importView(row: ImportRow, saved: SavedModel | null = null): Tem
       body,
       changes: changesShown(paragraphs, proposal.changes),
       checks: [
-        ...modelChecks(body, proposal.people, proposal.documentKind),
+        // The firm's own data, once it said they are its own, are no original case's (0093).
+        ...modelChecks(
+          body,
+          proposal.people,
+          proposal.documentKind,
+          firmTextsOf(paragraphs, proposal, exchangesOf(row.exchanges)),
+        ),
         ...(unwritable.length > 0 ? [{ kind: "unwritable" as const, characters: unwritable }] : []),
       ],
       notes: proposal.notes,

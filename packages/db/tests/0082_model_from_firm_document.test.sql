@@ -581,9 +581,9 @@ select ok(
   'ONE saves the models by default, and each firm may keep them to a person'
 );
 select ok(
-  (select is_active and output_schema -> 'required' ->> 0 = 'documento'
+  (select output_schema -> 'required' ->> 0 = 'documento'
      and output_schema -> 'properties' ? 'faltas' and output_schema -> 'properties' ? 'perguntas'
-   from public.prompt_versions where task = 'biblioteca.modelo.marcacao' and version = 2)
+   from public.prompt_versions where task = 'biblioteca.modelo.marcacao' and is_active)
   and (select count(*) = 1 from public.prompt_versions where task = 'biblioteca.modelo.marcacao' and is_active),
   'the marking in force checks the document first, and asks'
 );

@@ -30,7 +30,7 @@ import NiCheck from "@/icons/nexture/ni-check";
 import NiCross from "@/icons/nexture/ni-cross";
 import NiCrossSquare from "@/icons/nexture/ni-cross-square";
 import { invitationSignUpHint, signUpByInvitation } from "@/lib/auth/invitation-sign-up";
-import { invitationOfNext } from "@/lib/auth/sign-up-rules";
+import { invitationOfNext, signUpRefusal } from "@/lib/auth/sign-up-rules";
 import { resolvePostAuthDestination } from "@/lib/onboarding";
 import { enterAfterSessionChange, sanitizeInternalNext } from "@/lib/safe-next";
 import { cn } from "@/lib/utils";
@@ -130,6 +130,8 @@ export default function Page() {
           const refused: Record<string, string> = {
             registered: "signup-invite-registered",
             closed: "signup-invite-closed",
+            email_limit: "signup-email-limit",
+            email_unavailable: "signup-email-unavailable",
           };
           setServerError(t(refused[made.code] ?? "request-failed"));
           return;
@@ -158,7 +160,16 @@ export default function Page() {
         },
       });
       if (error) {
-        setServerError(t("request-failed"));
+        const refusal = signUpRefusal(error);
+        setServerError(
+          t(
+            refusal === "email_limit"
+              ? "signup-email-limit"
+              : refusal === "email_unavailable"
+                ? "signup-email-unavailable"
+                : "request-failed",
+          ),
+        );
         return;
       }
       if (data.session) {

@@ -10,7 +10,8 @@ import messages from "@flyee/content/messages/pt-BR.json";
 vi.mock("server-only", () => ({}));
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../../..");
-const PAPERS = fs.readFileSync(path.join(ROOT, "packages/db/migrations/0054_signature_papers.sql"), "utf8");
+// The latest definition of `case_paper_filled`: 0054, with the fields of a firm's own form since 0093.
+const PAPERS = fs.readFileSync(path.join(ROOT, "packages/db/migrations/0093_paper_fields.sql"), "utf8");
 
 const FIRM = "f0000000-0000-4000-8000-000000000001";
 const OTHER = "f0000000-0000-4000-8000-000000000002";
@@ -30,7 +31,7 @@ const row = (id: string, org: string | null, document: string, kind: string | nu
   is_default: isDefault,
 });
 
-describe("the marks of a paper (0054)", () => {
+describe("the marks of a paper (0054, 0093)", () => {
   it("are the ones the database fills, no more and no fewer", () => {
     const filled = [...PAPERS.matchAll(/replace\(filled, '\[\[([A-Z_]+)\]\]'/g)].map((match) => match[1]);
     expect([...filled].sort()).toEqual([...PAPER_MARKS].sort());

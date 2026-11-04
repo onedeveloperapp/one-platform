@@ -1,4 +1,4 @@
-import { invitationOfNext, nameMeetsRules, passwordMeetsRules } from "./sign-up-rules";
+import { invitationOfNext, nameMeetsRules, passwordMeetsRules, signUpRefusal } from "./sign-up-rules";
 import { describe, expect, it } from "vitest";
 
 const TOKEN = "Zm9vYmFyYmF6cXV4cXV1eGNvcmdlZ3JhdWx0Z2FycGx5"; // 44 characters of base64url, as ONE mints them
@@ -39,5 +39,27 @@ describe("the sign-up's fields", () => {
     expect(passwordMeetsRules("SENHA#123")).toBe(false);
     expect(passwordMeetsRules("Senha1234")).toBe(false);
     expect(passwordMeetsRules("Sh#1")).toBe(false);
+  });
+});
+
+describe("signUpRefusal", () => {
+  it("says the confirmation e-mail that could not leave as that, never as a connection", () => {
+    // The answer the development project gave on 2026-11-04 (status 429).
+    expect(signUpRefusal({ code: "over_email_send_rate_limit", message: "email rate limit exceeded" })).toBe(
+      "email_limit",
+    );
+    expect(signUpRefusal({ code: "email_address_not_authorized", message: "Email address not authorized" })).toBe(
+      "email_unavailable",
+    );
+    expect(signUpRefusal({ code: "unexpected_failure", message: "Error sending confirmation email" })).toBe(
+      "email_unavailable",
+    );
+  });
+
+  it("knows an address with an account, and calls anything else a failure", () => {
+    expect(signUpRefusal({ code: "user_already_exists" })).toBe("registered");
+    expect(signUpRefusal({ code: "email_exists" })).toBe("registered");
+    expect(signUpRefusal({ code: "weak_password", message: "Password is known to be weak" })).toBe("failed");
+    expect(signUpRefusal({})).toBe("failed");
   });
 });
