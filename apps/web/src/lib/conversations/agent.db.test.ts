@@ -138,6 +138,8 @@ describe.skipIf(!DB_URL)("ONE in the conversation, from the first word on a flig
       target_by: ANA,
     });
     expect(started.ok).toBe(true);
+    // A test chat brings no passenger of its own since 0087: the ready trips this test acts on are made here.
+    await sql.unsafe(`select public.seed_test_trips('${FIRM}')`);
   }, 120_000);
 
   afterAll(async () => {

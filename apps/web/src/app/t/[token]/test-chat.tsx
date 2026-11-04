@@ -3,7 +3,7 @@
 import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { Alert, Box, Button, Card, CardContent, Collapse, Link, Tab, Tabs, TextField, Typography } from "@mui/material";
+import { Alert, Box, Button, Card, CardContent, Collapse, Link, TextField, Typography } from "@mui/material";
 
 import MessageBubble from "@/components/product/message-bubble";
 import StatusChip, { type StatusTone } from "@/components/product/status-chip";
@@ -14,7 +14,6 @@ import NiScale from "@/icons/nexture/ni-scale";
 import NiSendRight from "@/icons/nexture/ni-send-right";
 import { mimeOf, uploadToSignedUrl } from "@/lib/files/browser-upload";
 import {
-  followRealFlight,
   readTestChat,
   readTestThread,
   runTestTool,
@@ -27,12 +26,10 @@ import {
   AGENCY_TRIP,
   messagePartsOf,
   QUICK_REPLIES,
-  REAL_FLIGHT,
   TEST_TOOLS,
   type TestChatView,
   type TestMessage,
   type TestTripView,
-  TRIP_KEY,
   waitsForChoice,
 } from "@/lib/test-chat/test-chat";
 import { flightLabel } from "@/modules/direito-do-passageiro/flight-alerts/words";
@@ -66,26 +63,6 @@ const FILE_KEY: Record<string, string> = {
   audio: "test-chat-audio",
   video: "test-chat-video",
 };
-
-/** The tab of a real flight before one is followed: a form, and no conversation yet. */
-const NEW_REAL = "voo_real:new";
-
-/** The tab of an agency's passenger before one is followed: how to have one, and no conversation yet. */
-const NEW_AGENCY = "agencia:new";
-
-/** The words of a real flight that could not be followed. */
-const realFlightErrorKey = (code: string): string =>
-  code === "no_source"
-    ? "test-chat-real-no-source"
-    : code === "invalid_flight"
-      ? "test-chat-real-invalid"
-      : code === "flight_not_found"
-        ? "test-chat-real-not-found"
-        : code === "source_unavailable"
-          ? "test-chat-real-unavailable"
-          : code === "too_many"
-            ? "test-chat-too-many"
-            : "test-chat-real-error";
 
 /** The words of a file that did not go. */
 const fileErrorKey = (code: string): string =>
@@ -139,22 +116,9 @@ function MessageText({ body, firm }: { body: string; firm: boolean }) {
  * last tab follows a real flight the tester names (0051), read at
  * FlightAware as a real passenger's would be.
  */
-export default function TestChat({
-  token,
-  initial,
-  realFlights,
-}: {
-  token: string;
-  initial: TestChatView;
-  /** FlightAware's key is in this environment: a real flight can be followed. */
-  realFlights: boolean;
-}) {
+export default function TestChat({ token, initial }: { token: string; initial: TestChatView }) {
   const t = useTranslations("product");
   const [view, setView] = useState(initial);
-  // The agency's passenger first: the test starts from what the agency registered.
-  const [tripId, setTripId] = useState(
-    () => initial.trips.find((item) => item.label === AGENCY_TRIP)?.id ?? NEW_AGENCY,
-  );
   const [threads, setThreads] = useState<Record<string, TestMessage[]>>({});
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
@@ -164,18 +128,10 @@ export default function TestChat({
   const picker = useRef<HTMLInputElement | null>(null);
   const [sendingFile, setSendingFile] = useState(false);
 
-  const placeholder = tripId === NEW_REAL || tripId === NEW_AGENCY;
-  // The tabs in the order of the test: the agency's passenger, the ready ones, then a real flight.
-  const trips = [...view.trips].sort((a, b) => tabRank(a.label) - tabRank(b.label));
-  const trip = placeholder ? null : (trips.find((item) => item.id === tripId) ?? trips[0] ?? null);
+  // The test is only the agency's passenger at the test WhatsApp (the owner, 2026-11-03): once they agreed on the
+  // agency's link, their trip is here; until then, how to have one.
+  const trip = view.trips.find((item) => item.label === AGENCY_TRIP) ?? null;
   const messages = (trip && threads[trip.id]) ?? [];
-  const hasReal = view.trips.some((item) => item.label === REAL_FLIGHT);
-  const hasAgency = view.trips.some((item) => item.label === AGENCY_TRIP);
-  // The agency's passenger agreed while their tab was still the one that says how: open their trip.
-  const agencyTripId = view.trips.find((item) => item.label === AGENCY_TRIP)?.id ?? null;
-  useEffect(() => {
-    if (tripId === NEW_AGENCY && agencyTripId) setTripId(agencyTripId);
-  }, [tripId, agencyTripId]);
   // What the page already has, read by the pull without starting it again at every message.
   const threadsRef = useRef(threads);
   threadsRef.current = threads;
@@ -219,22 +175,7 @@ export default function TestChat({
   useEffect(() => {
     const list = listRef.current;
     if (list) list.scrollTop = list.scrollHeight;
-  }, [messages.length, tripId]);
-
-  if (!trip && !placeholder) {
-    return (
-      <Box className="flex min-h-screen w-full justify-center px-4 py-8">
-        <Typography variant="body1">{t("test-chat-no-trips")}</Typography>
-      </Box>
-    );
-  }
-
-  // A real flight followed now: its tab, read again at once.
-  const followed = async (followedId: string | null) => {
-    await refreshView();
-    if (followedId) setTripId(followedId);
-    setNotice({ tone: "success", text: t("test-chat-real-following-now") });
-  };
+  }, [messages.length, trip?.id]);
 
   const send = async (input: { text?: string; reply?: string }) => {
     if (!trip) return false;
@@ -344,33 +285,6 @@ export default function TestChat({
           </Box>
         </Box>
 
-        {/* The tabs scroll inside their own width: the theme's tabs reach a little past it on a phone. */}
-        <Box className="max-w-full min-w-0 overflow-hidden">
-          <Tabs
-            value={tripId === NEW_AGENCY ? NEW_AGENCY : placeholder || !trip ? NEW_REAL : trip.id}
-            onChange={(_, value: string) => {
-              setTripId(value);
-              setNotice(null);
-              setDraft("");
-            }}
-            variant="scrollable"
-            scrollButtons="auto"
-            allowScrollButtonsMobile
-            aria-label={t("test-chat-passengers")}
-          >
-            {hasAgency ? null : <Tab value={NEW_AGENCY} label={t("test-chat-agency-tab")} className="normal-case" />}
-            {trips.map((item) => (
-              <Tab
-                key={item.id}
-                value={item.id}
-                label={`${item.passengerName.split(" ")[0]} · ${t(TRIP_KEY[item.label])}`}
-                className="normal-case"
-              />
-            ))}
-            {hasReal ? null : <Tab value={NEW_REAL} label={t("test-chat-real-tab")} className="normal-case" />}
-          </Tabs>
-        </Box>
-
         {trip ? (
           <TripTools
             trip={trip}
@@ -381,17 +295,7 @@ export default function TestChat({
           />
         ) : null}
 
-        {tripId === NEW_AGENCY ? (
-          <AgencyCard />
-        ) : placeholder || trip?.label === REAL_FLIGHT ? (
-          <RealFlightCard
-            token={token}
-            realFlights={realFlights}
-            delayHours={Math.round(view.delayMinutes / 60)}
-            another={!placeholder}
-            onFollowed={(id) => void followed(id)}
-          />
-        ) : null}
+        {trip ? null : <AgencyCard />}
 
         {notice ? (
           <Alert severity={notice.tone} className="neutral bg-background-paper/60!" onClose={() => setNotice(null)}>
@@ -526,112 +430,11 @@ export default function TestChat({
   );
 }
 
-/** Today in Brasília, "YYYY-MM-DD": the day a flight is named from. */
-const todayHere = () => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date());
-
-/**
- * The form of a real flight: its number and day, followed at FlightAware by
- * ONE as a real passenger's would be. Where this environment has no key, it
- * says so instead.
- */
-function RealFlightCard({
-  token,
-  realFlights,
-  delayHours,
-  another,
-  onFollowed,
-}: {
-  token: string;
-  realFlights: boolean;
-  delayHours: number;
-  /** A flight is followed already: this one takes its place. */
-  another: boolean;
-  onFollowed: (tripId: string | null) => void;
-}) {
-  const t = useTranslations("product");
-  const [flight, setFlight] = useState("");
-  const [day, setDay] = useState(todayHere);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const follow = async () => {
-    setBusy(true);
-    setError(null);
-    const result = await followRealFlight(token, { flight, date: day }).catch(() => ({ ok: false, code: "failed" }));
-    setBusy(false);
-    if (!result.ok) {
-      setError(t(realFlightErrorKey(result.code)));
-      return;
-    }
-    setFlight("");
-    onFollowed("tripId" in result && typeof result.tripId === "string" ? result.tripId : null);
-  };
-
-  return (
-    <Card component="section" aria-labelledby="test-chat-real">
-      <CardContent className="flex flex-col gap-3">
-        <Typography id="test-chat-real" variant="h5" component="h2" className="mb-0">
-          {another ? t("test-chat-real-other") : t("test-chat-real-title")}
-        </Typography>
-        <Typography variant="body2" className="text-text-secondary">
-          {t("test-chat-real-body", { hours: delayHours })}
-        </Typography>
-        {realFlights ? (
-          <>
-            <Box className="flex flex-col gap-3 sm:flex-row sm:items-start">
-              <TextField
-                id="test-chat-real-flight"
-                label={t("test-chat-real-flight")}
-                helperText={t("test-chat-real-flight-help")}
-                value={flight}
-                onChange={(event) => setFlight(event.target.value.slice(0, 12))}
-                size="small"
-                className="sm:flex-1"
-                disabled={busy}
-              />
-              <TextField
-                id="test-chat-real-day"
-                label={t("test-chat-real-day")}
-                type="date"
-                value={day}
-                onChange={(event) => setDay(event.target.value)}
-                size="small"
-                className="sm:w-48"
-                disabled={busy}
-                slotProps={{ inputLabel: { shrink: true } }}
-              />
-            </Box>
-            <Box>
-              <Button variant="contained" disabled={busy || flight.trim() === ""} onClick={() => void follow()}>
-                {busy ? t("test-chat-real-reading") : t("test-chat-real-follow")}
-              </Button>
-            </Box>
-          </>
-        ) : (
-          <Alert severity="info" className="neutral bg-background-paper/60!">
-            {t("test-chat-real-no-source")}
-          </Alert>
-        )}
-        {error ? (
-          <Alert severity="error" className="neutral bg-background-paper/60!" onClose={() => setError(null)}>
-            {error}
-          </Alert>
-        ) : null}
-      </CardContent>
-    </Card>
-  );
-}
-
-/** Where a tab of each kind of trip stands: the agency's passenger first, a real flight last. */
-function tabRank(label: string): number {
-  return label === AGENCY_TRIP ? 0 : label === REAL_FLIGHT ? 2 : 1;
-}
-
 /**
  * How the test starts (migration 0071): the agency registers the passenger with the test chat's number as their
  * WhatsApp, their data and documents and the trip, and the passenger agrees on the agency's link to be told of a
  * problem with the flight. No form here: the agency's area is where the passenger, the trip and the documents are.
- * Then the trip shows in this tab, and the tools make its problem happen.
+ * Then the trip shows here, and the tools make its flight go or its problem happen.
  */
 function AgencyCard() {
   const t = useTranslations("product");
@@ -664,9 +467,6 @@ function AgencyCard() {
             {t("test-chat-agency-step-6")}
           </Typography>
         </Box>
-        <Typography variant="body2" className="text-text-secondary">
-          {t("test-chat-agency-others")}
-        </Typography>
       </CardContent>
     </Card>
   );
@@ -764,7 +564,7 @@ function TripTools({
         <Collapse in={open}>
           <Box className="border-grey-100 flex flex-col gap-3 border-t pt-3">
             <Typography variant="body2" className="text-text-secondary">
-              {trip.label === REAL_FLIGHT ? t("test-chat-real-watching") : t("test-chat-tools-body")}
+              {t("test-chat-tools-body")}
             </Typography>
             <Box className="flex flex-row flex-wrap gap-2">
               {TEST_TOOLS[trip.label].map((tool, index) => (

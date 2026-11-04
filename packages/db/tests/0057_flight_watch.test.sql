@@ -70,6 +70,8 @@ insert into res values ('number_a', public.register_wa_number('b5700000-0000-400
 insert into res values ('chat_a', public.start_test_chat('b5700000-0000-4000-8000-00000000000a',
   pg_temp.got('number_a', 'number_id')::uuid, repeat('v', 43), 'a5700000-0000-4000-8000-000000000001'));
 reset role;
+-- A test chat brings no passenger of its own since 0087: the ready trips this test reads are made here.
+insert into res values ('seed_a', to_jsonb(public.seed_test_trips('b5700000-0000-4000-8000-00000000000a')));
 insert into res values ('helena', jsonb_build_object('id', pg_temp.real_trip('b5700000-0000-4000-8000-00000000000a', '5511988887771', interval '1 hour')));
 insert into res values ('later', jsonb_build_object('id', pg_temp.real_trip('b5700000-0000-4000-8000-00000000000a', '5511988887772', interval '14 days')));
 insert into res values ('rocha', jsonb_build_object('id', pg_temp.real_trip('b5700000-0000-4000-8000-00000000000b', '5511988887773', interval '30 minutes')));

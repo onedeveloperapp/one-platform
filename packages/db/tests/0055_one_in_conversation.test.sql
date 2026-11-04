@@ -87,6 +87,11 @@ insert into res values ('chat_a', public.start_test_chat('b5500000-0000-4000-800
   pg_temp.got('number_a', 'number_id')::uuid, repeat('a', 43), 'a5500000-0000-4000-8000-000000000001'));
 insert into res values ('chat_b', public.start_test_chat('b5500000-0000-4000-8000-00000000000b',
   pg_temp.got('number_b', 'number_id')::uuid, repeat('b', 43), 'a5500000-0000-4000-8000-000000000004'));
+-- A test chat brings no passenger of its own since 0087: the ready trips this test acts on are made here.
+reset role;
+insert into res values ('seed_a', to_jsonb(public.seed_test_trips('b5500000-0000-4000-8000-00000000000a')));
+insert into res values ('seed_b', to_jsonb(public.seed_test_trips('b5500000-0000-4000-8000-00000000000b')));
+set local role service_role;
 -- Mariana's flight is cancelled and she taps SIM.
 insert into res values ('mariana_alert', jsonb_build_object('id', pg_temp.told('b5500000-0000-4000-8000-00000000000a', 'cancelamento', 'cancelled', null)));
 insert into res values ('mariana', jsonb_build_object('conversation',

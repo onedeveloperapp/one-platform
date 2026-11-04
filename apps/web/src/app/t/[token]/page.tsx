@@ -5,7 +5,6 @@ import { getTranslations } from "next-intl/server";
 import { Box, Paper, Typography } from "@mui/material";
 
 import { readTestChat } from "@/lib/test-chat/actions";
-import { flightStatusProvider } from "@/modules/direito-do-passageiro/flights/status";
 
 /**
  * A firm's test chat (migration 0047): the page behind the link who manages
@@ -14,7 +13,8 @@ import { flightStatusProvider } from "@/modules/direito-do-passageiro/flights/st
  * firm's test chat only, until the firm changes the link or turns the chat
  * off. Nothing written here leaves ONE. Like a client's page, it asks
  * browsers to send no referrer and search engines to keep away, and it
- * loads no tracker.
+ * loads no tracker. Since 2026-11-03 it is the agency's passenger's only
+ * (migration 0087): the ready passengers and the real flight are gone.
  */
 export const metadata: Metadata = {
   title: { absolute: "Chat de teste" },
@@ -53,6 +53,5 @@ export default async function TestChatPage({ params }: { params: Promise<{ token
       <Notice title={t("test-chat-missing-title")} body={t("test-chat-missing-body")} />
     );
   }
-  // A real flight is followed only where FlightAware's key is (0051): the page says so where it is not.
-  return <TestChat token={token} initial={read.view} realFlights={flightStatusProvider() !== null} />;
+  return <TestChat token={token} initial={read.view} />;
 }

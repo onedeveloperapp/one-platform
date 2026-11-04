@@ -56,6 +56,8 @@ insert into res values ('number_a', public.register_wa_number('b8000000-0000-400
 insert into res values ('chat_a', public.start_test_chat('b8000000-0000-4000-8000-00000000000a',
   pg_temp.got('number_a', 'number_id')::uuid, repeat('w', 43), 'a8000000-0000-4000-8000-000000000001'));
 reset role;
+-- A test chat brings no passenger of its own since 0087: the ready trips this test needs are made here.
+insert into res values ('seed_a', to_jsonb(public.seed_test_trips('b8000000-0000-4000-8000-00000000000a')));
 
 -- The agency's trip, followed by the test chat as the passenger's agreement makes it (0071), and a trip of firm B.
 insert into public.tracked_trips (id, org_id, passenger_name, phone, airline_iata, is_test, label, consent_wording,

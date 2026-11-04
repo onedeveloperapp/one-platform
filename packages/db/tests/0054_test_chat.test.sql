@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap;
-select plan(30);
+select plan(31);
 
 -- ============================================================
 -- The firm's test chat and the trips ONE follows (0047): a third kind of
@@ -68,6 +68,13 @@ insert into res values ('started_b', public.start_test_chat('b5400000-0000-4000-
   pg_temp.got('number_b', 'number_id')::uuid, repeat('b', 43), 'a5400000-0000-4000-8000-000000000004'));
 reset role;
 
+-- A test chat brings no passenger of its own since 0087; the ready trips are this test's scenes, made here.
+insert into res values ('brought', jsonb_build_object('trips',
+  (select count(*) from public.tracked_trips t where t.org_id in ('b5400000-0000-4000-8000-00000000000a',
+                                                                  'b5400000-0000-4000-8000-00000000000b'))));
+insert into res values ('seed_a', to_jsonb(public.seed_test_trips('b5400000-0000-4000-8000-00000000000a')));
+insert into res values ('seed_b', to_jsonb(public.seed_test_trips('b5400000-0000-4000-8000-00000000000b')));
+
 -- ---------- The kind of number, the template, who may call what ----------
 
 select ok(
@@ -98,12 +105,14 @@ select ok(
   'who manages the firm or a partner turns it on, once'
 );
 
+select is((pg_temp.got('brought', 'trips'))::integer, 0, 'a test chat turned on brings no passenger of its own (0087)');
+
 select is(
   (select array_agg(t.label || ':' || t.passenger_name || ':' || (select count(*) from public.tracked_legs l where l.trip_id = t.id)
                     order by t.label)
    from public.tracked_trips t where t.org_id = 'b5400000-0000-4000-8000-00000000000a'),
   array['cancelamento:Mariana Teste:1', 'conexao:Lúcia Teste:2', 'familia:Rafael Teste:1', 'internacional:Pedro Teste:1'],
-  'it comes with four trips ready: a cancellation, a connection, a family and an international flight'
+  'the ready trips a test makes are a cancellation, a connection, a family and an international flight'
 );
 
 select ok(
@@ -424,7 +433,7 @@ select ok(
   pg_temp.got('restarted', 'code') = 'started'
   and pg_temp.got('number_a2', 'number_id') = pg_temp.got('number_a', 'number_id')
   and (select count(*) = 4 from public.tracked_trips t where t.org_id = 'b5400000-0000-4000-8000-00000000000a')
-  and (select count(*) = 1 from public.audit_events e
+  and (select count(*) = 2 from public.audit_events e
        where e.action = 'test_chat.started' and e.org_id = 'b5400000-0000-4000-8000-00000000000a'
          and e.metadata ->> 'trips_made' = '0'),
   'turned on again, the number and the trips are the ones it had'

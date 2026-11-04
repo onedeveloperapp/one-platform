@@ -231,9 +231,12 @@ export async function sendTestMessage(
 
 /**
  * The test chat follows a real flight (0051): the flight and day the tester
- * names, read at FlightAware with the platform's key, become the test chat's
- * fifth trip, read again there as a real passenger's would be, ONE writing
- * in the test chat when the rule finds a problem. Answers `following`, or
+ * names, read at FlightAware with the platform's key, become a trip of the
+ * test chat, read again there as a real passenger's would be, ONE writing
+ * in the test chat when the rule finds a problem. No screen offers it since
+ * the test chat is the agency's passenger's only (0087): it stays as the way
+ * the round trip of the watch follows a flight at FlightAware's fake, and
+ * as the way back to a real flight in the test chat. Answers `following`, or
  * why not: `no_source` (no key in this environment), `invalid_flight`,
  * `flight_not_found`, `source_unavailable`.
  */

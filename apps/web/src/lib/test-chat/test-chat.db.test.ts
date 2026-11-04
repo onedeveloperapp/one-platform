@@ -94,6 +94,8 @@ describe.skipIf(!DB_URL)("the test chat, where a passenger's phone stands", () =
         target_by: ANA,
       }),
     );
+    // A test chat brings no passenger of its own since 0087: the ready trips this test acts on are made here.
+    await sql.unsafe(`select public.seed_test_trips('${FIRM}')`);
     // Another firm, with a test chat of its own (its owner is a member of it for this purpose only).
     await sql
       .unsafe(

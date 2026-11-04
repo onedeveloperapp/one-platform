@@ -17,7 +17,6 @@ export const LEGACY_MODULE_IMPORTS: readonly string[] = [
   "src/app/(dashboard)/casos/[id]/case-types.ts",
   "src/app/(dashboard)/casos/[id]/components/trip-card.tsx",
   "src/app/(dashboard)/casos/[id]/page.tsx",
-  "src/app/t/[token]/page.tsx",
   "src/app/t/[token]/test-chat.tsx",
   "src/lib/cases/actions.ts",
   "src/lib/cases/client-link-actions.ts",
