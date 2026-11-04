@@ -99,6 +99,13 @@ A page can follow every rule below and still look like a beginner site if it is 
 - **Responsive:** mobile-first — the base layout is the phone; breakpoints only add columns/space. No horizontal scroll at 375px. Verify 375/768/1440.
 - **Routes:** a new public page lives in `app/[locale]/(marketing)/<portuguese-path>/`, is declared in `apps/web/src/i18n/routing.ts` (`pathnames`: its pt-BR address and its translated English one — this is also what makes it public to the middleware), enters `apps/web/src/app/sitemap.ts` when indexed, and exports its own `generateMetadata` spreading `publicPageMetadata({ path, locale })` (`lib/seo.ts`). Internal links use `LocaleLink` with the Portuguese path.
 
+**Lessons from production** (each one shipped broken once; keep them in every project):
+
+- **No loading boundary above a public page**: neither an `app/loading.tsx` nor a `<Suspense>` in the root layout. The response would start before `notFound()` or `redirect()` runs, so a missing page answers 200 (with `noindex`) and a moved one gets a meta refresh instead of a real redirect. Each signed-in area keeps its own boundary in its own layout.
+- **Decided before the first paint**: anything a public page decides in the browser and shows above the fold (the colour-mode class first of all) is decided from `<head>` before the first paint, never after hydration, or the page flashes and shifts.
+- **Hues on icons, bars and fills; words in text colours**: a palette hue rarely reaches 4.5:1 as small text on a light ground, so tinted words fail contrast while looking fine on a designer's screen.
+- **A missing value hides its line**, and **content that could not be read is never shown as an empty list** (a help centre or blog whose read failed says so, with a retry).
+
 ## SEO & discoverability (every page earns its ranking)
 
 The codebase already ships the technical layer — `sitemap.ts`, `robots.ts`, the shared Open Graph image, `Organization`/`WebSite` JSON-LD in the marketing layout, and `FAQPage`/`Product` JSON-LD emitted automatically by `Faq`/`PricingSection`. The committed per-page search direction (target term + intent per page) lives in `docs/SEO.md` — read it the way you read `docs/DESIGN.md`. Your job on each page is the on-page layer:

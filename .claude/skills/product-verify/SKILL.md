@@ -45,7 +45,23 @@ const leftovers = await page.evaluate(() =>
 
 // Context preservation: fill a form field, take the prerequisite detour the UI offers,
 // come back — assert the field still holds the value.
+
+// Counts match lists: for every tile, badge or heading count that labels a list, open the list it
+// leads to and compare its rows (or its total) with the number; the empty state must appear only
+// when the list itself is empty, never because a narrower count is zero.
+
+// Phone rows and dialogs, at 390: no row's text squeezed to a word per line beside its buttons (the
+// actions go under the text), and the first field of every dialog shows its whole floating label.
+const clipped = await page.evaluate(() =>
+  [...document.querySelectorAll("[role=dialog] label")].filter((l) => {
+    const box = l.getBoundingClientRect();
+    const dialog = l.closest("[role=dialog]")?.getBoundingClientRect();
+    return dialog && box.top < dialog.top;
+  }).length,
+);
 ```
+
+**Dev mode hydrates late.** A click before hydration is lost: before judging a control that "does nothing", retry until the menu or dialog answers (or wait for a sign the page hydrated). Judge a hydration warning only if it repeats on a fresh load.
 
 ## 3. Judge the journey bar (PASS/FAIL each item, with the step screenshot as evidence)
 
@@ -58,13 +74,27 @@ const leftovers = await page.evaluate(() =>
 7. **Destructive actions confirm** — cancel/delete/revoke name the consequence before executing and offer undo where feasible; concurrent state changes (already-started, already-cancelled) are handled, not clobbered.
 8. **Locale integrity** — every walked screen renders in the project's default locale; leaked English in a non-English product FAILS.
 9. **Mobile 390** — the journey is completable: primary action reachable, no floating widget covering fields, no horizontal scroll, long forms usable.
-10. **Keyboard/a11y quick pass** — the main journey is Tab-walkable, focus lands sensibly after dialogs open/close and after errors, `unnamed === 0` on every screen.
+10. **Keyboard/a11y quick pass** — the main journey is Tab-walkable (menu items are links, reachable by keyboard), focus lands sensibly after dialogs open/close, after errors and after an async action ends (back on the line acted on), `unnamed === 0` on every screen, and a card already decided is no longer clickable.
+11. **Counts agree with their lists** — every count beside or above a list equals what that list shows (probe above); a page that says "nothing here" while its list holds rows FAILS.
+12. **Only what is still owed is asked** — no card offers a button for something already done (a document that arrived, a link sent, an answer given); doing it again sits in a quick-actions menu; the person's own work is never listed for something the product does by itself.
+13. **Outcomes land where the person acted** — after an upload or a background check, the result (a refusal with its reason) shows on the line acted on while the person is still there; nothing says "working" after the work finished.
+14. **Nothing typed is lost** — closing an editor or dialog with unsaved text asks first, and a background refresh never resets it.
+15. **Words carry the state** — every state is said in words beside its colour; red appears only on failure or risk; a missing value hides its line instead of printing a placeholder.
+
+## 3b. When you cannot sign in to the data a screen needs
+
+Never look at a screen through a real person's account or production data. Instead:
+
+- **Draw the touched components from invented fixtures.** A component that reads its own data takes an optional first read (`initial`) or splits into a data-reading wrapper and a props-only body; render those on a temporary page under a path the middleware already serves without a session, with invented people only, and capture 1440/390 light/dark from it.
+- **A second dev server goes on its own port and build folder** when one is already running (for example a temporary `distDir: process.env.NEXT_DIST_DIR || ".next"` with `NEXT_DIST_DIR=.next-preview`), never on a port another session uses.
+- **Undo all of it in the same turn**: stop the server's whole process tree, delete the temporary page, revert the config and the `tsconfig.json` / `next-env.d.ts` that `next dev` rewrites, and delete the build folder after checking it is not a junction or symlink (deleting through a link deletes its target). Whatever stays in the work tree between turns may be committed and deployed by whoever commits next.
+- Say in the report that the screens were judged on fixtures, and which real journey is still to be walked signed in.
 
 ## 4. Close the loop
 
 - Report the verdict table to the user (one line per item, with the failing step/screenshot named).
 - FAIL items: fix under the `product-screen` skill rules, then re-walk the journey and re-judge. Do not report "done" with open FAILs.
-- Clean up: screenshots and scripts stay in the scratchpad; nothing from this skill is committed.
+- Clean up: screenshots and scripts stay in the scratchpad; nothing from this skill is committed; `git status` shows only the real work.
 
 ## Degraded mode (no browser available)
 
