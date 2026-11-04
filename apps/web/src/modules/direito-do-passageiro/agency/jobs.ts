@@ -3,6 +3,7 @@ import "server-only";
 import type { Sweep } from "@/lib/jobs/schedule";
 import { claimPaxReadings, readClaimedPaxDocument } from "@/modules/direito-do-passageiro/agency/reading-work";
 import { removeForgottenBytes, sweepRetention } from "@/modules/direito-do-passageiro/agency/retention-work";
+import { tellUnagreedDepartures } from "@/modules/direito-do-passageiro/agency/unagreed-notices";
 
 /** How many documents one round reads: one just sent is read right after it arrived. */
 const READINGS_PER_ROUND = 3;
@@ -36,6 +37,15 @@ export const agencySweeps: Sweep[] = [
    * forgotten since (by the sweep, the agency or the passenger) are removed.
    * Counts only.
    */
+  /**
+   * The agency's bell of a passenger who flies in the next days with no agreement (migration 0094): once an hour,
+   * each trip told once by its key, while there is time to send the link. Counts only.
+   */
+  {
+    key: "pax-unagreed-departures",
+    when: { hourly: 40 },
+    run: (service, until) => tellUnagreedDepartures(service, until),
+  },
   {
     key: "pax-retention",
     when: { daily: { hour: 7, minute: 20 } },

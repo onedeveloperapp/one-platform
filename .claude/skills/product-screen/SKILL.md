@@ -86,6 +86,13 @@ Distilled from the gamification research — most of it is a WARNING:
 - **Status that moves on its own is read again while it moves**: on a visible tab only, at a pace that matches how fast it changes, slower as it waits, stopping when nothing moves or after a bound. The newest answer wins, and a line never says "working" after the work finished.
 - **Focus follows the work, never the page.** When an async action ends, put the person back on the line they acted on (its first button that can be pressed, or the line itself), unless they moved on to type elsewhere; the page never scrolls under them.
 
+## Waits that end, and checks that can be given
+
+- **A request to check has a way to say it was checked.** Whatever the screen marks for a person to look at (data the product read, a suggestion, a figure to confirm) has its one action beside the mark ("Checked against the document"), and saving the record as it is counts as that look; the mark then goes and the history says who checked. A mark only an edit clears stays forever on data that was right. Failure this prevents: a person saved a record twice, unchanged, to "validate" what the product had read, and the card kept asking to check it.
+- **A wait on someone outside has a way forward for the team.** When the product waits on a third party (a client's answer, a signature, a document) before its next step, the screen says what it waits for and who answers, and the person who may decide gets "go on without it" beside it, with what that costs said before they confirm (what is left for a person to complete later). A wait only the outsider can end is a dead end the moment they stop answering. Failure this prevents: a case waited for a client's answers with nothing the firm could do but wait, and the user read it as the product failing to write the document.
+- **"Done" never claims the next step started while it still waits on the person.** A confirmation screen ("You told us you finished") says what is still owed by them, and only then what happens next. Failure this prevents: a client was told "the office is preparing your case" right after finishing, while the case waited for answers only they could give.
+- **What this environment cannot do is never shown as pending.** A state that waits on an integration not connected here ("not checked" when no lookup exists) is left out of the line, with one sentence elsewhere saying the integration is off; a grey "not checked" badge reads as a validation the person owes.
+
 ## Never lose what the person typed
 
 - An editor or a dialog with unsaved input asks before closing; a background refresh never closes or resets it; what was typed is kept in the tab and offered back when it is opened again.

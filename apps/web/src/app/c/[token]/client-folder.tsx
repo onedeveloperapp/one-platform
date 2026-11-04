@@ -280,6 +280,8 @@ export default function ClientFolder({
           token={token}
           finishedAt={view.link.finished_at}
           expiresAt={view.link.expires_at}
+          // What the action is prepared from and the client still owes (0090): told before and after they finish.
+          owed={OWED_OF_ASK[accountAsk ?? "none"]}
           onSaved={() => router.refresh()}
         />
       )}
@@ -1378,15 +1380,35 @@ function DocumentWords({
 
 // ---------- Finishing ----------
 
+/** What the account asks of the client (0090), as what the finish card says is still owed. */
+const OWED_OF_ASK: Record<"tell" | "answer" | "none", "account" | "questions" | null> = {
+  tell: "account",
+  answer: "questions",
+  none: null,
+};
+
+/** What the client still owes of their account, said before they finish and after (`product` namespace). */
+const FINISH_OWED_KEY: Record<"account" | "questions", string> = {
+  account: "client-finish-owed-account",
+  questions: "client-finish-owed-questions",
+};
+const FINISHED_OWED_KEY: Record<"account" | "questions", string> = {
+  account: "client-finished-owed-account",
+  questions: "client-finished-owed-questions",
+};
+
 function Finish({
   token,
   finishedAt,
   expiresAt,
+  owed,
   onSaved,
 }: {
   token: string;
   finishedAt: string | null;
   expiresAt: string;
+  /** What the action is prepared from and the client has not given yet: their account, or its missing answers. */
+  owed: "account" | "questions" | null;
   onSaved: () => void;
 }) {
   const t = useTranslations("product");
@@ -1415,12 +1437,18 @@ function Finish({
         <Typography id="client-finish" variant="h5" component="h2" className="mb-0">
           {t("client-finish-title")}
         </Typography>
-        {finishedAt ? (
+        {finishedAt && owed ? (
+          // Finished, while the action still waits on them: never "the firm prepares your action".
+          <StateLine tone="attention">{t(FINISHED_OWED_KEY[owed], { date: day(finishedAt) })}</StateLine>
+        ) : finishedAt ? (
           <Alert severity="success" icon={<NiCheck />} className="neutral bg-background-paper/60!">
             {t("client-finished", { date: day(finishedAt) })}
           </Alert>
         ) : (
-          <Typography variant="body1">{t("client-finish-body")}</Typography>
+          <>
+            <Typography variant="body1">{t("client-finish-body")}</Typography>
+            {owed && <StateLine tone="attention">{t(FINISH_OWED_KEY[owed])}</StateLine>}
+          </>
         )}
         <ProblemAlert problem={problem} />
         {!finishedAt && (

@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
+import { queueCaseAdvance } from "@/lib/cases/advance-work";
 import { STATEMENT_AUDIO_MIMES } from "@/lib/cases/statements";
 import { queueStatementWork } from "@/lib/cases/statements-work";
 import { discardUpload, finishUpload, startUpload } from "@/lib/files/uploads";
@@ -180,6 +181,27 @@ export async function removeCaseStatement(caseId: string, statementId: string): 
   const { data, error } = await context.supabase.rpc("remove_case_statement", { target_statement: statementId });
   const result = fold(data, error, () => ({}));
   if (result.ok) refresh(caseId);
+  return result;
+}
+
+/**
+ * A partner or a lawyer decides the case goes on without what the client did not answer of their account
+ * (migration 0094): the client is asked nothing more of it, and ONE looks at the case at once to create the
+ * lawsuits; the piece leaves those points for a lawyer to complete.
+ */
+export async function closeAccountGaps(caseId: string, statementId: string): Promise<StatementResult> {
+  const context = await getMemberContext();
+  if (!context?.firm || !isId(caseId) || !isId(statementId)) return { ok: false, code: "case_not_found" };
+  if (await isSupportVisit()) return { ok: false, code: "not_allowed_in_support_session" };
+  const { data, error } = await context.supabase.rpc("close_account_gaps", {
+    target_case: caseId,
+    target_statement: statementId,
+  });
+  const result = fold(data, error, () => ({}));
+  if (result.ok) {
+    refresh(caseId);
+    await queueCaseAdvance(caseId);
+  }
   return result;
 }
 

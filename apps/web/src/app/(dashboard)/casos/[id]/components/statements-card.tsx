@@ -17,6 +17,7 @@ import { openCaseFile } from "@/lib/cases/actions";
 import { opensOnArrival } from "@/lib/cases/sections";
 import {
   addCaseStatement,
+  closeAccountGaps,
   finishStatementUpload,
   removeCaseStatement,
   requestStatementChronology,
@@ -96,6 +97,8 @@ export default function StatementsCard({
   const [writing, setWriting] = useState<string | null>(null);
   const [heard, setHeard] = useState("");
   const [removing, setRemoving] = useState<string | null>(null);
+  // The statement whose missing answers a lawyer is about to go on without (0094).
+  const [closing, setClosing] = useState<string | null>(null);
   const input = useRef<HTMLInputElement>(null);
 
   const nameOf = (partyId: string | null) =>
@@ -166,6 +169,9 @@ export default function StatementsCard({
     // A chronology may be asked again whenever none is being made or waits in the queue, and the client has
     // not confirmed one: it failed, was turned down, was contested, or the firm takes back what it approved.
     const mayAskAgain = stage === "not_proposed" || stage === "contested" || stage === "waiting_client";
+    // The client is still asked what the account lacks, and ONE waits for the answers.
+    const gapsOpen =
+      statement.missingTopics.length > 0 && Boolean(statement.chronology) && statement.rounds < state.accountMaxRounds;
     return (
       <Box key={statement.id} className="border-grey-100 flex flex-col gap-2 rounded-2xl border p-4">
         <Box className="flex flex-wrap items-start justify-between gap-2">
@@ -213,15 +219,66 @@ export default function StatementsCard({
         ) : null}
 
         {statement.missingTopics.length > 0 && statement.chronology ? (
-          // What the order of the facts says the account lacks, and what the client is asked on their link (0090).
-          <StateLine tone="info">
+          // What the order of the facts says the account lacks, and what the client is asked on their link (0090)
+          // and in the conversation (0092). While they are asked, ONE waits for the answers before the lawsuits; a
+          // partner or a lawyer may go on without them (0094).
+          <StateLine
+            tone={gapsOpen ? "waiting" : "info"}
+            action={
+              writable && state.lawyer && gapsOpen && closing !== statement.id ? (
+                <Button
+                  variant="outlined"
+                  color="grey"
+                  size="small"
+                  disabled={busy !== null}
+                  onClick={() => setClosing(statement.id)}
+                >
+                  {t("case-statement-gaps-close")}
+                </Button>
+              ) : undefined
+            }
+          >
             {t("case-statement-gaps", {
               topics: list.format(statement.missingTopics.map((topic) => t(ACCOUNT_TOPIC_SHORT_KEY[topic]))),
             })}{" "}
-            {statement.rounds >= state.accountMaxRounds
+            {!gapsOpen
               ? t("case-statement-gaps-done")
-              : t("case-statement-gaps-asked", { count: statement.questions.length })}
+              : statement.askedInChat
+                ? t("case-statement-gaps-asked-chat", { count: statement.questions.length })
+                : t("case-statement-gaps-asked", { count: statement.questions.length })}
+            {gapsOpen ? " " : null}
+            {gapsOpen ? t("case-statement-gaps-wait") : null}
           </StateLine>
+        ) : statement.gapsClosed.length > 0 ? (
+          <StateLine tone="done">
+            {t("case-statement-gaps-closed", {
+              topics: list.format(statement.gapsClosed.map((topic) => t(ACCOUNT_TOPIC_SHORT_KEY[topic]))),
+            })}
+          </StateLine>
+        ) : null}
+        {closing === statement.id ? (
+          <Box className="flex flex-row flex-wrap items-center gap-2 pt-1">
+            <Typography variant="body2" className="text-text-primary">
+              {t("case-statement-gaps-close-confirm")}
+            </Typography>
+            <Button
+              variant="contained"
+              size="small"
+              disabled={busy !== null}
+              onClick={() =>
+                void run(
+                  statement.id,
+                  () => closeAccountGaps(state.case.id, statement.id),
+                  () => setClosing(null),
+                )
+              }
+            >
+              {busy === statement.id ? t("cases-working") : t("case-statement-gaps-close-yes")}
+            </Button>
+            <Button variant="text" color="grey" size="small" disabled={busy !== null} onClick={() => setClosing(null)}>
+              {t("cases-cancel")}
+            </Button>
+          </Box>
         ) : null}
         {statement.clientAdded ? (
           <Alert severity="info" className="neutral bg-background-paper/60!">

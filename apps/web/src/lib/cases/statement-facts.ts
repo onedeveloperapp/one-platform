@@ -56,6 +56,10 @@ export type CaseStatement = StatementView & {
   rounds: number;
   /** What the client answered to what was missing, while ONE orders the account again with it. */
   clientAdded: string | null;
+  /** ONE asked what was missing in the client's conversation too (0092), not only on the link. */
+  askedInChat: boolean;
+  /** What a partner or a lawyer decided the case goes on without (0094); empty when nothing was. */
+  gapsClosed: AccountTopic[];
 };
 
 /** A claim older than this is nobody's any more (the setting `working_minutes` of the sweep, at its default). */
@@ -107,6 +111,7 @@ type StatementRow = {
   questions: string[] | null;
   rounds: number | null;
   client_added: string | null;
+  asked_at: string | null;
   created_at: string;
 };
 
@@ -125,11 +130,11 @@ export async function loadStatementFacts(
   caseId: string,
   timeZone: string | null | undefined,
 ): Promise<StatementFacts> {
-  const [statements, complaints, setting, parties, account] = await Promise.all([
+  const [statements, complaints, setting, parties, account, closed] = await Promise.all([
     supabase
       .from("case_statements")
       .select(
-        "id, party_id, source, audio_file_id, status, transcript, transcript_run_id, work, work_claimed_at, work_error, chronology, chronology_status, client_note, returned_note, missing_topics, questions, rounds, client_added, created_at",
+        "id, party_id, source, audio_file_id, status, transcript, transcript_run_id, work, work_claimed_at, work_error, chronology, chronology_status, client_note, returned_note, missing_topics, questions, rounds, client_added, asked_at, created_at",
       )
       .eq("case_id", caseId)
       .eq("org_id", firmId)
@@ -148,12 +153,25 @@ export async function loadStatementFacts(
       .eq("org_id", firmId)
       .order("created_at"),
     supabase.rpc("case_account", { target_case: caseId }),
+    // What the firm went on without (0094), read apart: a database before it leaves it unsaid, never the case unread.
+    supabase
+      .from("case_statements")
+      .select("id, gaps_closed_topics, gaps_closed_at")
+      .eq("case_id", caseId)
+      .eq("org_id", firmId)
+      .not("gaps_closed_at", "is", null),
   ]);
   if (statements.error || complaints.error || setting.error || parties.error) {
     throw new Error("statement facts could not be read");
   }
   // Where the account stands is read apart: a read that fails leaves it unsaid, never the account unread.
   const accountAnswer = (account.error ? null : account.data) as { state?: unknown; max_rounds?: unknown } | null;
+  const closedOf = new Map(
+    ((closed.error ? [] : (closed.data ?? [])) as { id: string; gaps_closed_topics: string[] | null }[]).map((row) => [
+      row.id,
+      (row.gaps_closed_topics ?? []).filter(isAccountTopic),
+    ]),
+  );
 
   const rows = (statements.data ?? []) as StatementRow[];
   const told: CaseStatement[] = rows
@@ -192,6 +210,8 @@ export async function loadStatementFacts(
         questions: (row.questions ?? []).filter((question) => typeof question === "string" && question.trim() !== ""),
         rounds: typeof row.rounds === "number" ? row.rounds : 0,
         clientAdded: row.client_added,
+        askedInChat: row.asked_at !== null,
+        gapsClosed: closedOf.get(row.id) ?? [],
       };
     });
 

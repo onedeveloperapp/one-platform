@@ -218,6 +218,24 @@ export async function saveCasePerson(input: {
   return result;
 }
 
+/**
+ * A person of the firm says what ONE read of a person in their documents agrees with the documents (migration
+ * 0094): the marks of what was read go, and the timeline says which fields were confirmed. Saving the person as
+ * they are does it too, after the save.
+ */
+export async function confirmPersonReadFields(caseId: string, personId: string): Promise<CaseResult> {
+  const context = await getMemberContext();
+  if (!context?.firm || !isId(caseId)) return { ok: false, code: "case_not_found" };
+  if (!isId(personId)) return { ok: false, code: "person_not_found" };
+  const { data, error } = await context.supabase.rpc("confirm_person_read_fields", {
+    target_case: caseId,
+    target_person: personId,
+  });
+  const result = fold(data, error, () => ({}));
+  if (result.ok) refresh(caseId);
+  return result;
+}
+
 export async function removeCaseParty(caseId: string, partyId: string): Promise<CaseResult> {
   const context = await getMemberContext();
   if (!context?.firm || !isId(partyId)) return { ok: false, code: "not_found" };

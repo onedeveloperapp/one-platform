@@ -23,12 +23,19 @@ import DocumentSlot, { type SlotState } from "@/components/cases/document-slot";
 import PersonFields from "@/components/cases/person-fields";
 import CollapsibleCard from "@/components/product/collapsible-card";
 import DialogHeader from "@/components/product/dialog-header";
+import StateLine from "@/components/product/state-line";
 import StatusChip, { type StatusTone } from "@/components/product/status-chip";
 import { TILE_TONE } from "@/components/product/tile-tone";
 import NiDocumentFull from "@/icons/nexture/ni-document-full";
 import NiHome from "@/icons/nexture/ni-home";
 import NiKeyboard from "@/icons/nexture/ni-keyboard";
-import { checkCpf, finishCaseUpload, removeCaseParty, saveCasePerson } from "@/lib/cases/actions";
+import {
+  checkCpf,
+  confirmPersonReadFields,
+  finishCaseUpload,
+  removeCaseParty,
+  saveCasePerson,
+} from "@/lib/cases/actions";
 import { caseErrorKey, missingFields, PERSON_FIELD_KEY } from "@/lib/cases/cases";
 import { documentReadingOf, prefillErrorKey } from "@/lib/cases/document-prefill";
 import {
@@ -95,7 +102,10 @@ export default function PeopleCard({
   const [editing, setEditing] = useState<Member | "new" | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [notice, setNotice] = useState<
-    { kind: "error"; code: string } | { kind: "checked"; result: string; matches: boolean | null } | null
+    | { kind: "error"; code: string }
+    | { kind: "checked"; result: string; matches: boolean | null }
+    | { kind: "confirmed" }
+    | null
   >(null);
 
   const members = membersOf(state.parties);
@@ -134,6 +144,16 @@ export default function PeopleCard({
         ? { kind: "checked", result: result.result, matches: result.matches }
         : { kind: "error", code: result.code },
     );
+    if (result.ok) onChanged();
+  };
+
+  // What ONE read of a person, said by a person of the firm to agree with the documents (0094).
+  const confirmRead = async (member: Member) => {
+    setBusy(member.person.person_id);
+    setNotice(null);
+    const result = await confirmPersonReadFields(state.case.id, member.person.person_id);
+    setBusy(null);
+    setNotice(result.ok ? { kind: "confirmed" } : { kind: "error", code: result.code });
     if (result.ok) onChanged();
   };
 
@@ -192,6 +212,11 @@ export default function PeopleCard({
           {t(caseErrorKey(notice.code))}
         </Alert>
       )}
+      {notice?.kind === "confirmed" && (
+        <Alert severity="success" className="neutral bg-background-paper/60!" onClose={() => setNotice(null)}>
+          {t("case-person-read-confirmed")}
+        </Alert>
+      )}
       {notice?.kind === "checked" && (
         <Alert
           severity={notice.result === "found" && notice.matches !== false ? "success" : "warning"}
@@ -233,7 +258,10 @@ export default function PeopleCard({
                   {roleLine(member)}
                 </Typography>
               </Box>
-              {!isMinor && <StatusChip tone={chip.tone} label={t(chip.key, chip.values ?? {})} />}
+              {/* The registry's word, where this environment can ask it: with no lookup here, nothing waits on it. */}
+              {!isMinor && (state.cpfLookup || person.registry) && (
+                <StatusChip tone={chip.tone} label={t(chip.key, chip.values ?? {})} />
+              )}
             </Box>
             {facts.length > 0 && (
               <Typography variant="body2" className="break-words">
@@ -258,11 +286,27 @@ export default function PeopleCard({
               </Typography>
             )}
             {readItems(person.readFields).length > 0 && (
-              <Typography variant="body2" className="text-text-secondary">
+              // What ONE read waits for a person's look: confirmed here in one click, or by saving the person (0094).
+              <StateLine
+                tone="attention"
+                action={
+                  writable ? (
+                    <Button
+                      variant="outlined"
+                      color="grey"
+                      size="small"
+                      disabled={busy !== null}
+                      onClick={() => void confirmRead(member)}
+                    >
+                      {busy === person.person_id ? t("cases-working") : t("case-person-read-confirm")}
+                    </Button>
+                  ) : undefined
+                }
+              >
                 {t("case-person-read", {
                   items: list.format(readItems(person.readFields).map((item) => t(READ_ITEM_KEY[item]))),
                 })}
-              </Typography>
+              </StateLine>
             )}
             {writable && (
               <Box className="flex flex-wrap gap-2 pt-1">
@@ -484,6 +528,11 @@ function PersonDialog({
       });
       if (!joined.ok) dropUnsaved([doc.fileId]);
     }
+    // Saving a person whose data ONE read says somebody looked at them: the marks left go (0094). Best effort: the
+    // save went through, and the card still offers the confirmation if this did not.
+    if (member && readFrom.size > 0) {
+      await confirmPersonReadFields(state.case.id, member.person.person_id).catch(() => null);
+    }
     setBusy(false);
     onSaved();
   };
@@ -601,6 +650,11 @@ function PersonDialog({
                 <Alert severity="info" className="neutral">
                   {t("prefill-confirm-intro")}
                 </Alert>
+              )}
+              {member && readFrom.size > 0 && (
+                <Typography variant="body2" className="text-text-secondary">
+                  {t("case-person-read-save-confirms")}
+                </Typography>
               )}
               {!member && (
                 <RadioGroup

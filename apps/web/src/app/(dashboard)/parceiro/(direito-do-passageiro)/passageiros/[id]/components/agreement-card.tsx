@@ -75,7 +75,7 @@ export default function AgreementCard({
   };
 
   return (
-    <Card component="section" aria-labelledby="pax-agreement-title" className="h-full">
+    <Card component="section" id="acordo" aria-labelledby="pax-agreement-title" className="h-full scroll-mt-24">
       <CardContent className="flex flex-col gap-4">
         <Box className="flex flex-wrap items-center justify-between gap-2">
           <Typography id="pax-agreement-title" variant="h5" component="h2" className="mb-0">
