@@ -7,7 +7,9 @@ import {
   ACCOUNT_TOPIC_SHORT_KEY,
   ACCOUNT_TOPICS,
   accountAsksClient,
+  accountQuestionsMessage,
   accountStateOf,
+  accountThanksMessage,
   isAccountTopic,
 } from "@/lib/cases/account";
 import messages from "@flyee/content/messages/pt-BR.json";
@@ -38,6 +40,26 @@ describe("the client's account before the lawsuits (0090)", () => {
     expect(Object.keys(ACCOUNT_MISSING_KEY).sort()).toEqual(
       ACCOUNT_STATES.filter((state) => state !== "preparing" && state !== "ready").sort(),
     );
+  });
+
+  it("asks in the conversation one question a line, and thanks the client for the answers (0092)", () => {
+    expect(accountQuestionsMessage("Ana", ["Quanto você pagou?", " Você teve gastos? "])).toBe(
+      [
+        "Ana, para preparar a sua ação, o escritório precisa saber mais algumas coisas:",
+        "1. Quanto você pagou?",
+        "2. Você teve gastos?",
+        "Pode responder aqui mesmo, numa mensagem só. Se não lembrar de algo, é só dizer.",
+      ].join(String.fromCharCode(10)),
+    );
+    expect(accountQuestionsMessage("", ["Quanto você pagou?"]).startsWith("Para preparar a sua ação")).toBe(true);
+    expect(accountThanksMessage("Ana")).toBe(
+      "Obrigado, Ana. Recebi as suas respostas e vou organizar o seu relato com elas.",
+    );
+    expect(accountThanksMessage(" ")).toMatch(/^Obrigado\. Recebi/);
+    // The firm's copy rules: no dash, no exclamation.
+    for (const text of [accountQuestionsMessage("Ana", ["Quanto?"]), accountThanksMessage("Ana")]) {
+      expect(text).not.toMatch(/[—–!]/);
+    }
   });
 
   it("has words for every point, for the client and for the firm, and for every line of what is missing", () => {

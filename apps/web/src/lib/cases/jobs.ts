@@ -5,7 +5,7 @@ import { claimCaseDocuments, processClaimedDocument } from "@/lib/cases/document
 import { approveWaitingDrafts, draftNext } from "@/lib/cases/drafts-work";
 import { buildClaimedPackage, claimFilingPackages } from "@/lib/cases/filing-work";
 import { claimPackageSignatures, signClaimedPackage } from "@/lib/cases/package-signature-work";
-import { claimCaseStatements, processClaimedStatement } from "@/lib/cases/statements-work";
+import { askAccountQuestions, claimCaseStatements, processClaimedStatement } from "@/lib/cases/statements-work";
 import { createServiceClient } from "@flyee/auth/service";
 import { inngest, sendEvent } from "@flyee/jobs";
 
@@ -90,7 +90,10 @@ export const caseStatementsFunction = inngest.createFunction(
       );
       outcomes[second] = (outcomes[second] ?? 0) + 1;
     }
-    return { claimed: worked, ...outcomes };
+    // What an order of the facts says is missing is asked in the client's conversation too, once per round (0092):
+    // the one just ordered, or every account owed the question.
+    const asked = await step.run("ask-accounts", () => askAccountQuestions(createServiceClient(), target));
+    return { claimed: worked, asked, ...outcomes };
   },
 );
 

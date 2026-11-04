@@ -3619,6 +3619,7 @@
     "case-event-client-chronology-confirmed": "Cliente confirmou a cronologia",
     "case-event-client-chronology-contested": "Cliente apontou erro na cronologia",
     "case-event-client-statement-completed": "Cliente respondeu o que faltou no relato",
+    "case-event-account-asked": "ONE perguntou ao cliente no WhatsApp o que faltou no relato",
     "case-event-complaint-saved": "Reclamação registrada",
     "case-event-complaint-removed": "Reclamação removida",
     "case-error-statement-length": "O relato precisa ter entre 40 e 20.000 caracteres.",

@@ -66,6 +66,7 @@ const TIMELINE_MIGRATIONS = [
   fs.readFileSync(path.join(ROOT, "packages/db/migrations/0054_signature_papers.sql"), "utf8"),
   fs.readFileSync(path.join(ROOT, "packages/db/migrations/0088_notices_by_default.sql"), "utf8"),
   fs.readFileSync(path.join(ROOT, "packages/db/migrations/0090_account_before_piece.sql"), "utf8"),
+  fs.readFileSync(path.join(ROOT, "packages/db/migrations/0092_account_asked_in_chat.sql"), "utf8"),
 ].join(String.fromCharCode(10));
 const product = messages.product as Record<string, string>;
 

@@ -79,6 +79,28 @@ export function accountAsksClient(state: AccountState | null): "tell" | "answer"
 }
 
 /**
+ * ONE's message in the client's WhatsApp conversation with what their account is missing (0092): the questions of
+ * the order of the facts, one a line, and how to answer. The client reads the firm, never ONE.
+ */
+export function accountQuestionsMessage(firstName: string, questions: readonly string[]): string {
+  const name = firstName.trim();
+  const lead = name
+    ? `${name}, para preparar a sua ação, o escritório precisa saber mais algumas coisas:`
+    : "Para preparar a sua ação, o escritório precisa saber mais algumas coisas:";
+  return [
+    lead,
+    ...questions.map((question, index) => `${index + 1}. ${question.trim()}`),
+    "Pode responder aqui mesmo, numa mensagem só. Se não lembrar de algo, é só dizer.",
+  ].join("\n");
+}
+
+/** ONE's word once the client answered in the conversation: the account is ordered again with it. */
+export function accountThanksMessage(firstName: string): string {
+  const name = firstName.trim();
+  return `${name ? `Obrigado, ${name}.` : "Obrigado."} Recebi as suas respostas e vou organizar o seu relato com elas.`;
+}
+
+/**
  * Where an account stands, as a line of what a case still lacks, for the firm: nothing while ONE orders it or once
  * it is ready (ONE's work is never the firm's task).
  */

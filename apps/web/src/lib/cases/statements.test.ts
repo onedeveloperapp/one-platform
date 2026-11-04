@@ -133,6 +133,20 @@ describe("what the model reads to propose a chronology", () => {
     expect(chronologyBriefing({ ...trip, legs: [] }, "Relato.")).not.toContain("Trechos");
   });
 
+  it("gives what the accepted documents say of the purchase and the expenses (0091)", () => {
+    const readings = {
+      compras: [{ valor_pago: "R$ 980,00", localizador: "ABC123" }],
+      gastos: [{ descricao: "Jantar no aeroporto", valor: "R$ 62,50" }],
+    };
+    const briefing = chronologyBriefing({ ...trip, readings }, "Relato.");
+    expect(briefing).toContain("O que os documentos aceitos pelo escritório dizem da compra da passagem e dos gastos:");
+    expect(briefing).toContain('"valor_pago": "R$ 980,00"');
+    expect(briefing.indexOf("Jantar no aeroporto")).toBeLessThan(briefing.indexOf("Relato."));
+    expect(chronologyBriefing({ ...trip, readings: { compras: [], gastos: [] } }, "Relato.")).not.toContain(
+      "dizem da compra",
+    );
+  });
+
   it("carries what the client answered to what was missing, with the order it answers (0090)", () => {
     const briefing = chronologyBriefing(trip, "Relato.", null, null, {
       chronology: "20/09/2026, 16:00: o voo saiu.",

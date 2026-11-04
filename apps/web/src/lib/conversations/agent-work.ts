@@ -4,6 +4,7 @@ import { after } from "next/server";
 import { createHash, randomBytes } from "node:crypto";
 
 import { runFirmTask } from "@/lib/ai/executor";
+import { accountThanksMessage } from "@/lib/cases/account";
 import { base64, MODEL_IMAGE, processCaseDocuments } from "@/lib/cases/documents-work";
 import { processCaseStatements } from "@/lib/cases/statements-work";
 import {
@@ -334,7 +335,37 @@ async function takeTurn(service: SupabaseClient, held: Held, report: TurnReport)
   // What the passenger sent as files joins the case before anything is answered.
   await joinFiles(service, held, context);
 
-  if (context.answersLastHour >= ANSWERS_PER_HOUR) {
+  // ONE asked here what the client's account is missing (0092): what they write now is their answer, unless it is
+  // their plain answer to an alert.
+  const replied = lastClientWords(context.messages);
+  // A read that fails here never stops the turn: ONE answers the conversation as it would without it.
+  const open = await rpc(service, "conversation_account_open", {
+    target_conversation: held.conversationId,
+    target_claim: held.claim,
+  }).catch((): Record<string, unknown> => ({}));
+  const alertAnswer = context.alert && replied.length > 0 ? quickAnswer(replied[replied.length - 1]) : null;
+  const statementId = open.code === "open" && typeof open.statement_id === "string" ? open.statement_id : null;
+  let answeredAccount = false;
+  if (statementId && replied.length > 0 && !alertAnswer && quickAnswer(replied[replied.length - 1]) !== "stop") {
+    const completed = await rpc(service, "one_complete_statement", {
+      target_conversation: held.conversationId,
+      target_claim: held.claim,
+      target_statement: statementId,
+      target_text: replied.join("\n"),
+    });
+    if (completed.ok) {
+      answeredAccount = true;
+      await say(service, held, accountThanksMessage(typeof open.first_name === "string" ? open.first_name : "")).catch(
+        () => undefined,
+      );
+      report.answered += 1;
+      await workStatement(statementId);
+    }
+  }
+
+  if (answeredAccount) {
+    // The reply was the account's: nothing else of it waits for an answer.
+  } else if (context.answersLastHour >= ANSWERS_PER_HOUR) {
     await callPerson(service, held, "Muitas mensagens em pouco tempo: uma pessoa do escritório continua a conversa.");
     report.called += 1;
   } else {

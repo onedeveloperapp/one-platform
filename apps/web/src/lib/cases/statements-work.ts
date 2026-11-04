@@ -3,6 +3,7 @@ import "server-only";
 import { after } from "next/server";
 
 import { runFirmTask } from "@/lib/ai/executor";
+import { accountQuestionsMessage } from "@/lib/cases/account";
 import {
   CHRONOLOGY_TASK,
   chronologyBriefing,
@@ -10,6 +11,7 @@ import {
   TRANSCRIPTION_TASK,
 } from "@/lib/cases/statements";
 import { supabaseFileStore } from "@/lib/files/store";
+import { deliverOutbox } from "@/lib/whatsapp/send";
 import { createServiceClient } from "@flyee/auth/service";
 import { sendEvent } from "@flyee/jobs";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -53,6 +55,8 @@ type StatementToProcess = {
   client_added: string | null;
   /** The legs of the trip as the case registers them, with what ANAC's record says of each flight (0090). */
   trip: unknown;
+  /** What the documents the firm accepted say of the purchase and of each expense (0091). */
+  readings: unknown;
 };
 
 /** A statement the sweep holds, with the number of the claim: only who holds it reads and records under it. */
@@ -171,7 +175,11 @@ export async function processClaimedStatement(
 
   if (!row.transcript) return record("failed", { code: "not_transcribed" });
   const legs = Array.isArray(row.trip) ? (row.trip as unknown[]) : [];
-  const trip = { incident: row.incident, airline: row.airline, flightDate: row.flight_date, legs };
+  const readings =
+    typeof row.readings === "object" && row.readings !== null
+      ? (row.readings as { compras?: unknown[]; gastos?: unknown[] })
+      : null;
+  const trip = { incident: row.incident, airline: row.airline, flightDate: row.flight_date, legs, readings };
   const contested = row.client_note ? { chronology: row.previous_chronology, clientNote: row.client_note } : null;
   const returned = row.firm_note ? { proposal: row.returned_proposal, firmNote: row.firm_note } : null;
   const added = row.client_added ? { chronology: row.previous_chronology, answers: row.client_added } : null;
@@ -186,6 +194,44 @@ export async function processClaimedStatement(
     }),
     "proposed",
   );
+}
+
+/**
+ * ONE asks, in the client's WhatsApp conversation, what their account is missing (0092): each account owed the
+ * question now (the database says which: an order with questions and rounds left, not asked in this round, a
+ * conversation ONE holds inside the 24 hours), once per round. A message the database refuses (the window closed
+ * meanwhile) asks nothing; what was written, the outbox sends. Answers how many were asked.
+ */
+export async function askAccountQuestions(
+  service: SupabaseClient,
+  statementId: string | null = null,
+  limit = 20,
+): Promise<number> {
+  const { data, error } = await service.rpc("account_asks_owed", {
+    target_limit: limit,
+    target_statement: statementId,
+  });
+  if (error) throw new Error("account asks unreadable");
+  let asked = 0;
+  for (const row of (data ?? []) as { statement_id: string; first_name: string | null; questions: string[] | null }[]) {
+    const questions = (row.questions ?? []).filter((question) => typeof question === "string" && question.trim());
+    if (questions.length === 0) continue;
+    const written = await service.rpc("one_ask_account", {
+      target_statement: row.statement_id,
+      target_body: accountQuestionsMessage(row.first_name ?? "", questions),
+    });
+    const answer = (written.data ?? {}) as { ok?: boolean; message_id?: unknown };
+    if (written.error || !answer.ok) continue;
+    asked += 1;
+    if (typeof answer.message_id === "string") {
+      try {
+        await deliverOutbox(service, { messageId: answer.message_id });
+      } catch {
+        // Queued: the outbox's sweep sends it.
+      }
+    }
+  }
+  return asked;
 }
 
 /** Claims and works on what waits (or the one statement named), one after the other. */

@@ -96,7 +96,14 @@ const brDate = (value: string | null): string | null => {
  * what to change, the proposal and the firm's words come as well.
  */
 export function chronologyBriefing(
-  trip: { incident: string | null; airline: string | null; flightDate: string | null; legs?: unknown[] },
+  trip: {
+    incident: string | null;
+    airline: string | null;
+    flightDate: string | null;
+    legs?: unknown[];
+    /** What the documents the firm accepted say of the purchase and of each expense (0091). */
+    readings?: { compras?: unknown[]; gastos?: unknown[] } | null;
+  },
   account: string,
   contested: { chronology: string | null; clientNote: string | null } | null = null,
   returned: { proposal: string | null; firmNote: string | null } | null = null,
@@ -114,6 +121,14 @@ export function chronologyBriefing(
     parts.push(
       "Trechos que o caso registra, com o que o registro oficial da ANAC diz de cada voo quando já foi lido:",
       JSON.stringify(trip.legs, null, 2),
+    );
+  }
+  const compras = Array.isArray(trip.readings?.compras) ? trip.readings.compras : [];
+  const gastos = Array.isArray(trip.readings?.gastos) ? trip.readings.gastos : [];
+  if (compras.length > 0 || gastos.length > 0) {
+    parts.push(
+      "O que os documentos aceitos pelo escritório dizem da compra da passagem e dos gastos:",
+      JSON.stringify({ compras, gastos }, null, 2),
     );
   }
   parts.push("Relato do cliente, nas palavras dele:", account.trim());
