@@ -2,6 +2,7 @@
 
 import ClaimValueChoice from "../../../settings/autonomia/claim-value-choice";
 import TestChatCard from "../../../settings/connections/components/test-chat-card";
+import { PASSENGER_SETUP_STEPS, type PassengerSetupStep } from "./passenger-setup-steps";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
@@ -38,12 +39,6 @@ import { paxErrorKey } from "@/modules/direito-do-passageiro/agency/passengers";
 import { CLAUSE_MOST, clauseChange, clauseText } from "@/modules/direito-do-passageiro/agency/setup";
 import { PASSENGER_MODULE } from "@/modules/direito-do-passageiro/incidents";
 import { saveFirmClause } from "@/modules/direito-do-passageiro/setup-actions";
-
-export const PASSENGER_SETUP_STEPS = ["seguranca", "valores", "clausula", "agencia"] as const;
-export type PassengerSetupStep = (typeof PASSENGER_SETUP_STEPS)[number];
-
-export const isPassengerSetupStep = (value: unknown): value is PassengerSetupStep =>
-  typeof value === "string" && (PASSENGER_SETUP_STEPS as readonly string[]).includes(value);
 
 /** What the passenger module's setup shows (migration 0081), read by `passenger-setup-state.ts`. */
 export type PassengerSetupState =

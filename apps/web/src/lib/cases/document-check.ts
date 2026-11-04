@@ -37,7 +37,8 @@ export function processingPlan(input: { mime: string | null; wantsCheck: boolean
 const KIND_FOR_MODEL: Record<DocumentKind, string> = {
   identity: "documento de identidade com foto (RG, CNH, passaporte, carteira de trabalho ou outro documento oficial)",
   address_proof: "comprovante de endereço (conta de água, luz, telefone, internet, banco ou contrato de aluguel)",
-  ticket: "bilhete ou confirmação de reserva da passagem aérea",
+  // A boarding pass answers for the trip as a ticket does: an agency sends it where it sends the trip's document.
+  ticket: "bilhete, confirmação de reserva ou cartão de embarque da passagem aérea",
   boarding_pass: "cartão de embarque",
   receipt: "recibo, nota fiscal ou comprovante de uma despesa",
   evidence: "prova do que aconteceu (foto, conversa, aviso da companhia)",

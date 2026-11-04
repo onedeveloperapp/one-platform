@@ -1,6 +1,7 @@
 import "server-only";
 
-import type { PassengerSetupState, PassengerSetupStep } from "./passenger-setup-view";
+import type { PassengerSetupStep } from "./passenger-setup-steps";
+import type { PassengerSetupState } from "./passenger-setup-view";
 import { cookies } from "next/headers";
 
 import type { SecondFactorState } from "@/lib/ai/approvals";

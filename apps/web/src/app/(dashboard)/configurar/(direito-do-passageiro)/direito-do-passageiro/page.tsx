@@ -1,5 +1,6 @@
 import { loadPassengerSetupState } from "./passenger-setup-state";
-import PassengerSetupView, { isPassengerSetupStep } from "./passenger-setup-view";
+import { isPassengerSetupStep } from "./passenger-setup-steps";
+import PassengerSetupView from "./passenger-setup-view";
 import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 

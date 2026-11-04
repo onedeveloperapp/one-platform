@@ -1624,7 +1624,7 @@
     "connections-error-test-chat-not-allowed": "Este escritório já conectou um número de verdade. O chat de teste não funciona ao lado dele.",
     "connections-error-test-chat-off": "O chat de teste não está ligado. Ligue de novo para ter um link.",
     "connections-test-chat-title": "Chat de teste",
-    "connections-test-chat-body": "Enquanto o escritório não tem o WhatsApp conectado, o chat de teste faz o papel do celular do passageiro. Quem testa abre o link, escolhe um dos quatro passageiros prontos e simula o problema no voo, e o ONE conversa como conversaria no WhatsApp. Nada sai do ONE e ninguém recebe estas mensagens.",
+    "connections-test-chat-body": "Enquanto o escritório não tem o WhatsApp conectado, o chat de teste faz o papel do celular do passageiro. Quem testa usa o passageiro que uma agência parceira cadastrou com o WhatsApp do chat de teste, simula o problema no voo e vê o ONE conversar como conversaria no WhatsApp. Nada sai do ONE e ninguém recebe estas mensagens.",
     "connections-test-chat-on": "Ligado",
     "connections-test-chat-off": "Desligado",
     "connections-test-chat-since": "Ligado em {when}",

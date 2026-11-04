@@ -102,6 +102,7 @@ Distilled from the gamification research — most of it is a WARNING:
 
 - **Show a required step in place, never by `redirect()` from a page under the shell's Suspense boundary**: in a production build that redirect goes through the client router and the screen breaks (React error #310). Render the step where the page would be.
 - **After a sign-in, a sign-out or a change of account, load the next page anew** (a full navigation), never a client-router push: the router keeps the layout's redirect of the old session and replays it on every page under it, leaving a blank screen.
+- **A server file imports from a `"use client"` file only its components and its types.** Any other value exported there (a guard like `isStep()`, a list of steps, a constant) reaches the server as a client reference: it typechecks and builds, and throws when the page is requested ("Attempted to call ... from the server but ... is on the client"), so every visit lands on the error boundary. Put what the page and its view both read in a plain module beside them, imported by both.
 - **A component that reads its own data takes an optional first read as a prop** (`initial`): a server page can hand it one, and a preview or a test draws it from fixtures without a session.
 - **A server action is a public endpoint**: validate every argument as if a stranger sent it, and check the caller's right to act again inside it.
 
