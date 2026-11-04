@@ -4,6 +4,7 @@ import { advanceOne, followSoon } from "@/lib/cases/advance-work";
 import { claimCaseDocuments, processClaimedDocument } from "@/lib/cases/documents-work";
 import { approveWaitingDrafts, draftNext } from "@/lib/cases/drafts-work";
 import { buildClaimedPackage, claimFilingPackages } from "@/lib/cases/filing-work";
+import { answerFromStatement, sweepInterviews } from "@/lib/cases/interview-work";
 import { claimPackageSignatures, signClaimedPackage, signFilingPackages } from "@/lib/cases/package-signature-work";
 import { askAccountQuestions, claimCaseStatements, processClaimedStatement } from "@/lib/cases/statements-work";
 import type { Sweep } from "@/lib/jobs/schedule";
@@ -65,6 +66,8 @@ export const caseSweeps: Sweep[] = [
         const first = await processClaimedStatement(service, held).catch(() => "error");
         tally(outcomes, first);
         if (first !== "transcribed") continue;
+        // An audio sent while a question of the interview waited is its answer (0095).
+        await answerFromStatement(service, held.statementId);
         // Its text is there: the chronology is the next work, claimed under a number of its own.
         const [again] = await claimCaseStatements(service, 1, held.statementId);
         if (again) tally(outcomes, await processClaimedStatement(service, again).catch(() => "error"));
@@ -72,6 +75,18 @@ export const caseSweeps: Sweep[] = [
       const asked = await askAccountQuestions(service, null);
       return { ...outcomes, asked };
     },
+  },
+  /**
+   * The passengers' interviews (migration 0095): a case owed one is opened;
+   * each open one goes a step (the next question where none waits, a
+   * reminder of the one that waits, the database deciding when); and a
+   * passenger outside the 24 hours is asked by the firm's template to go on.
+   */
+  {
+    key: "case-interviews",
+    when: { every: 5 },
+    whileUsed: true,
+    run: (service, until) => sweepInterviews(service, until),
   },
   /**
    * The filing packages (migration 0027): a package a person or ONE asked for

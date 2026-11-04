@@ -2,6 +2,7 @@ import "server-only";
 
 import { type AccountState, accountStateOf } from "@/lib/cases/account";
 import type { PersonData, RequiredDocument } from "@/lib/cases/cases";
+import { type InterviewView, interviewViewOf } from "@/lib/cases/interview";
 import { createAnonClient } from "@/lib/public-content";
 
 /**
@@ -201,6 +202,8 @@ export type ClientTasks = {
    * the link asks them to confirm what came from it. Null for any other case.
    */
   agency: string | null;
+  /** The interview of the case (0095), one question per screen; null with none, or when it could not be read. */
+  interview: InterviewView | null;
 };
 
 /** What the link asks the client to sign, to accept and to confirm, and what it tells them. Read only: no visit is counted. */
@@ -216,9 +219,10 @@ export async function readClientTasks(token: string): Promise<ClientTasks> {
       notices: null,
       civilCourt: null,
       agency: null,
+      interview: null,
     };
   }
-  const [signatures, terms, statements, course, notices, civil, agency] = await Promise.all([
+  const [signatures, terms, statements, course, notices, civil, agency, interview] = await Promise.all([
     supabase.rpc("client_link_signatures", { target_token: token }),
     supabase.rpc("client_link_terms", { target_token: token }),
     supabase.rpc("client_link_statements", { target_token: token }),
@@ -226,11 +230,14 @@ export async function readClientTasks(token: string): Promise<ClientTasks> {
     supabase.rpc("client_link_notices", { target_token: token }),
     supabase.rpc("client_link_civil_court", { target_token: token }),
     supabase.rpc("client_link_agency", { target_token: token }),
+    supabase.rpc("client_link_interview", { target_token: token }),
   ]);
   const handed = agency.data as { ok?: boolean; agency?: unknown; finished?: unknown } | null;
   const asked = civil.data as { ok?: boolean; items?: unknown } | null;
   const told = notices.data as (ClientNotices & { ok?: boolean }) | null;
+  const interviewed = interview.error ? null : (interview.data as { ok?: boolean; interview?: unknown } | null);
   return {
+    interview: interviewed?.ok ? interviewViewOf(interviewed.interview) : null,
     signatures: ((signatures.data as { signatures?: ClientSignature[] } | null)?.signatures ?? []) as ClientSignature[],
     terms: ((terms.data as { terms?: ClientTerm[] } | null)?.terms ?? []) as ClientTerm[],
     account: accountStateOf((statements.data as { account?: unknown } | null)?.account),

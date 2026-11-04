@@ -486,6 +486,39 @@ $$;
 
 revoke all on function public.interviews_open(integer) from public, anon, authenticated;
 
+/**
+ * The open interview a conversation's turn answers: the one whose passenger
+ * this conversation is, for the worker that holds the turn. Service role.
+ */
+create or replace function public.conversation_interview(target_conversation uuid, target_claim integer)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  conversation public.wa_conversations%rowtype;
+  found_id uuid;
+begin
+  if auth.role() is distinct from 'service_role' then
+    raise exception 'not_authorized' using errcode = '42501';
+  end if;
+  select * into conversation from public.conversation_held(target_conversation, target_claim);
+  if conversation.id is null then
+    return jsonb_build_object('ok', false, 'code', 'not_working');
+  end if;
+  select i.id into found_id from public.case_interviews i
+  join public.cases c on c.id = i.case_id and c.status not in ('filed', 'closed', 'declined')
+  where i.org_id = conversation.org_id and i.status = 'open'
+    and (public.interview_conversation(i.id)).id = conversation.id
+  order by i.started_at desc, i.id
+  limit 1;
+  return jsonb_build_object('ok', true, 'code', case when found_id is null then 'none' else 'open' end, 'interview_id', found_id);
+end;
+$$;
+
+revoke all on function public.conversation_interview(uuid, integer) from public, anon, authenticated;
+
 /** An interview's facts for the firm's screen. Anybody of the firm. */
 create or replace function public.case_interview_view(target_case uuid)
 returns jsonb
@@ -532,7 +565,8 @@ revoke all on function public.interview_answer_facts(jsonb) from public, anon, a
  * it: `ask` a question when none waits; `again` the one that waits, when its
  * answer did not serve (within the setting's asks); `remind` the one that
  * waits, once, the setting's hours after it was asked, within the reminders
- * of a day. Only in a conversation ONE holds, inside the 24 hours, of a case
+ * of a day; `back` the one that waits, after ONE answered something the
+ * passenger asked meanwhile (no ask spent). Only in a conversation ONE holds, inside the 24 hours, of a case
  * still going, for a question with no answer. Service role.
  */
 create or replace function public.interview_ask(
@@ -559,7 +593,7 @@ begin
   if not found or interview.status <> 'open' then
     return jsonb_build_object('ok', false, 'code', 'not_open');
   end if;
-  if target_mode is null or target_mode not in ('ask', 'again', 'remind') then
+  if target_mode is null or target_mode not in ('ask', 'again', 'remind', 'back') then
     return jsonb_build_object('ok', false, 'code', 'invalid_mode');
   end if;
   if target_question is null or target_question not in ('aviso_local', 'aviso_quando', 'motivo', 'solucao', 'chegada',
@@ -575,7 +609,7 @@ begin
   if target_mode = 'ask' and interview.current_question is not null then
     return jsonb_build_object('ok', false, 'code', 'already_asked');
   end if;
-  if target_mode in ('again', 'remind') and interview.current_question is distinct from target_question then
+  if target_mode in ('again', 'remind', 'back') and interview.current_question is distinct from target_question then
     return jsonb_build_object('ok', false, 'code', 'not_current');
   end if;
   if target_mode = 'again' and interview.asks >= greatest(public.interview_setting('asks_per_question', 2), 1) then
@@ -600,7 +634,7 @@ begin
   end;
   update public.case_interviews set
     current_question = target_question,
-    asked_at = case when target_mode = 'remind' then asked_at else now() end,
+    asked_at = case when target_mode in ('remind', 'back') then asked_at else now() end,
     asks = case target_mode when 'ask' then 1 when 'again' then asks + 1 else asks end,
     reminded_at = case target_mode when 'remind' then now() when 'ask' then null else reminded_at end,
     reminded_on = case when target_mode = 'remind' then today else reminded_on end,
@@ -727,8 +761,12 @@ $$;
 
 revoke all on function public.interview_answer(uuid, text, text, text, text, jsonb, text, uuid) from public, anon, authenticated;
 
-/** Every question of the interview has its answer, its "not known" or its reason: it is done. Service role. */
-create or replace function public.interview_finish(target_interview uuid)
+/**
+ * Every question of the interview has its answer, its "not known" or its
+ * reason: it is done, and ONE says so in the conversation where it may.
+ * Service role.
+ */
+create or replace function public.interview_finish(target_interview uuid, target_body text default null)
 returns jsonb
 language plpgsql
 security definer
@@ -736,6 +774,8 @@ set search_path = public
 as $$
 declare
   interview public.case_interviews%rowtype;
+  conversation public.wa_conversations%rowtype;
+  message uuid;
 begin
   if auth.role() is distinct from 'service_role' then
     raise exception 'not_authorized' using errcode = '42501';
@@ -744,16 +784,26 @@ begin
   if not found or interview.status <> 'open' then
     return jsonb_build_object('ok', false, 'code', 'not_open');
   end if;
+  if nullif(btrim(coalesce(target_body, '')), '') is not null then
+    conversation := public.interview_conversation(interview.id);
+    if conversation.id is not null and conversation.agent = 'one' and public.wa_window_open(conversation.last_inbound_at) then
+      begin
+        message := public.one_message(conversation, target_body, null, null);
+      exception when sqlstate 'P0001' then
+        message := null;
+      end;
+    end if;
+  end if;
   update public.case_interviews set status = 'done', finished_at = now(), current_question = null, asked_at = null
   where id = interview.id;
   perform public.record_case_event(interview.org_id, interview.case_id, 'interview_done', 'system',
     jsonb_build_object('interview', interview.id,
       'answered', (select count(*) from public.case_interview_answers a where a.interview_id = interview.id and a.status <> 'skipped')));
-  return jsonb_build_object('ok', true, 'code', 'done');
+  return jsonb_build_object('ok', true, 'code', 'done', 'message_id', message);
 end;
 $$;
 
-revoke all on function public.interview_finish(uuid) from public, anon, authenticated;
+revoke all on function public.interview_finish(uuid, text) from public, anon, authenticated;
 
 -- ---------- The firm ----------
 

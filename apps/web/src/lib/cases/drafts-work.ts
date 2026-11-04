@@ -9,6 +9,7 @@ import {
   readDraft,
   revisionBriefing,
 } from "@/lib/cases/drafts";
+import { interviewForPiece } from "@/lib/cases/interview-work";
 import { supabaseFileStore } from "@/lib/files/store";
 import { soon } from "@/lib/jobs/soon";
 import { createServiceClient } from "@flyee/auth/service";
@@ -157,18 +158,24 @@ export async function workClaimedDraft(service: SupabaseClient, held: DraftClaim
     // what the lawyer asked to change in it. Hashed for the record, never kept as text by the run.
     let input: Record<string, unknown>;
     let briefing: string;
+    // The passenger's interview, answer by answer, and how the change was told against the 72 hours (0095).
+    const interview = await interviewForPiece(service, row.case_id).catch(() => null);
+    const facts =
+      interview && typeof row.facts === "object" && row.facts !== null
+        ? { ...(row.facts as Record<string, unknown>), ...interview }
+        : row.facts;
     if (row.work === "generate") {
       if (!row.template || !row.run_key) return record("failed", { code: "nothing_to_write" });
-      input = { template: row.template, facts: row.facts, library: row.library };
-      briefing = draftBriefing({ template: row.template, facts: row.facts, library: row.library });
+      input = { template: row.template, facts, library: row.library };
+      briefing = draftBriefing({ template: row.template, facts, library: row.library });
     } else {
       if (!row.body || !row.note || !row.run_key) return record("failed", { code: "nothing_to_write" });
-      input = { body: row.body, note: row.note, same: row.same ?? [], facts: row.facts, library: row.library };
+      input = { body: row.body, note: row.note, same: row.same ?? [], facts, library: row.library };
       briefing = revisionBriefing({
         body: row.body,
         note: row.note,
         same: row.same,
-        facts: row.facts,
+        facts,
         library: row.library,
       });
     }

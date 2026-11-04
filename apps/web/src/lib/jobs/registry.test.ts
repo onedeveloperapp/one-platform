@@ -27,6 +27,7 @@ describe("the platform's sweeps (2026-11-04)", () => {
         "case-advance",
         "case-documents",
         "case-drafts",
+        "case-interviews",
         "case-statements",
         "client-notices",
         "conversation-turns",

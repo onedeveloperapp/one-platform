@@ -191,13 +191,20 @@ describe.skipIf(!DB_URL)("ONE in the conversation, from the first word on a flig
     });
 
     const sent = await sentTo(MARIANA);
-    expect(sent.map((message) => message.kind)).toEqual(["template", "text"]);
+    expect(sent.map((message) => message.kind)).toEqual(["template", "text", "text"]);
     const steps = sent[1];
     expect(steps).toMatchObject({ by_one: true, model: false, sent_by: null });
     expect(["sent", "delivered"]).toContain(steps.status);
     expect(String(steps.body)).toContain(`Pronto, Mariana. O escritório abriu o seu caso, número ${opened.seq}.`);
     expect(String(steps.body)).toMatch(/1\. Abra o seu link: \S+\/c\/[A-Za-z0-9_-]{43}/);
+    expect(String(steps.body)).toContain("Responda aqui as perguntas que vou fazer agora sobre o que aconteceu");
     expect(String(steps.body)).not.toMatch(/[–—!]/);
+    // The interview starts right after (0095): its first question, one at a time; who travelled is on the trip.
+    expect(sent[2]).toMatchObject({
+      body: "Pergunta 1 de 9: Quando você soube do cancelamento, já estava no aeroporto?",
+      by_one: true,
+      model: false,
+    });
 
     const conversation = await conversationOf(MARIANA);
     const events = await sql.unsafe(
@@ -207,6 +214,67 @@ describe.skipIf(!DB_URL)("ONE in the conversation, from the first word on a flig
     expect(events.map((event) => event.kind)).toEqual(["case_opened", "link_sent"]);
     // Done: the same yes is never taken twice.
     expect(await takeConversationTurns(backend() as never)).toMatchObject({ claimed: 0 });
+  });
+
+  it("asks the interview one question at a time, takes each answer and what else it answers, and comes back after a question", async () => {
+    const { sendTestMessage } = await import("@/lib/test-chat/actions");
+    const { takeConversationTurns } = await import("@/lib/conversations/agent-work");
+    const trip = await tripOf("cancelamento");
+    model.answer = (briefing) =>
+      briefing.includes("Pergunta feita agora: [aviso_local]")
+        ? {
+            situacao: "respondida",
+            resposta: "Já estava no aeroporto quando soube.",
+            sim_nao: "sim",
+            quando: "",
+            // The arrival, said in the same message: never asked again.
+            outras: [
+              { pergunta: "chegada", resposta: "Chegou no dia seguinte às 9h40.", sim_nao: "nenhum", quando: "" },
+            ],
+          }
+        : briefing.includes("Pergunta feita agora: [motivo]")
+          ? { situacao: "pergunta", resposta: "", sim_nao: "nenhum", quando: "", outras: [] }
+          : { intencao: "pergunta", resposta: "Em média, de quatro a seis meses.", chamar_pessoa: null };
+
+    await sendTestMessage(TOKEN, trip, { text: "Sim, eu já estava lá. Cheguei só no outro dia, 9h40." });
+    expect(await takeConversationTurns(backend() as never)).toMatchObject({ claimed: 1, answered: 1, failed: 0 });
+    // The interpreter was handed the question, the ones to come and the words, and nothing that identifies her.
+    const read = model.briefings.at(-1) ?? "";
+    expect(read).toContain("Pergunta feita agora: [aviso_local]");
+    expect(read).toContain("Sim, eu já estava lá.");
+    const answers = await sql.unsafe(
+      `select a.question, a.status, a.source, a.facts, a.reason from public.case_interview_answers a
+       join public.tracked_trips t on t.case_id = a.case_id where t.id = $1 order by a.question`,
+      [trip],
+    );
+    expect(answers).toEqual([
+      expect.objectContaining({
+        question: "aviso_local",
+        status: "answered",
+        source: "chat",
+        facts: { sim_nao: "sim" },
+      }),
+      expect.objectContaining({ question: "aviso_quando", status: "skipped", source: "one", reason: "at_airport" }),
+      expect.objectContaining({ question: "chegada", status: "answered", source: "chat", facts: {} }),
+    ]);
+    // When she learned, at the airport, is never asked: the reason is next.
+    expect((await sentTo(MARIANA)).at(-1)).toMatchObject({
+      body: "Pergunta 3 de 8: A companhia disse por que isso aconteceu? Se você pegou no balcão a declaração de contingência, pode mandar a foto aqui.",
+      by_one: true,
+    });
+
+    // A question of hers in the middle: ONE answers it, and asks the one that waits again.
+    await sendTestMessage(TOKEN, trip, { text: "Quanto tempo demora o processo?" });
+    expect(await takeConversationTurns(backend() as never)).toMatchObject({ claimed: 1, failed: 0 });
+    const lastTwo = (await sentTo(MARIANA)).slice(-2).map((message) => String(message.body));
+    expect(lastTwo[0]).toBe("Em média, de quatro a seis meses.");
+    expect(lastTwo[1]).toMatch(/^Voltando à pergunta 3 de 8: A companhia disse por que isso aconteceu\?/);
+
+    // The firm goes on without the rest: ONE asks nothing more, and the account is ready.
+    const [{ case_id: caseId }] = await sql.unsafe(`select case_id from public.tracked_trips where id = $1`, [trip]);
+    expect(await call(as(ANA), "close_case_interview", { target_case: caseId })).toMatchObject({ ok: true });
+    const [{ state }] = await sql.unsafe(`select public.case_account_state($1) as state`, [caseId]);
+    expect(state).toBe("ready");
   });
 
   it("joins a photo of the identity and an audio to the case, checks the photo and tells the passenger", async () => {

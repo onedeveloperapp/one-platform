@@ -1,6 +1,7 @@
 "use client";
 
 import type { CaseState, CaseStatement } from "../case-types";
+import InterviewSection from "./interview-section";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useRef, useState } from "react";
@@ -502,13 +503,16 @@ export default function StatementsCard({
     (statement, index) => statement.stalled || stages[index] === "not_transcribed" || stages[index] === "not_proposed",
   );
   const unused = writable ? state.audios.length : 0;
-  const waitChip = contested ? (
-    <StatusChip tone="attention" label={t(STAGE_KEY.contested)} />
-  ) : unused > 0 ? (
-    <StatusChip tone="attention" label={t("case-statements-summary-audios", { count: unused })} />
-  ) : stopped ? (
-    <StatusChip tone="attention" label={t("case-statements-summary-stalled")} />
-  ) : null;
+  const waitChip =
+    state.interview?.status === "open" ? (
+      <StatusChip tone="info" label={t("interview-chip-open")} />
+    ) : contested ? (
+      <StatusChip tone="attention" label={t(STAGE_KEY.contested)} />
+    ) : unused > 0 ? (
+      <StatusChip tone="attention" label={t("case-statements-summary-audios", { count: unused })} />
+    ) : stopped ? (
+      <StatusChip tone="attention" label={t("case-statements-summary-stalled")} />
+    ) : null;
 
   return (
     <CollapsibleCard
@@ -536,7 +540,9 @@ export default function StatementsCard({
         </Alert>
       )}
 
-      {state.statements.length === 0 ? (
+      <InterviewSection state={state} writable={writable} onChanged={onChanged} />
+
+      {state.statements.length === 0 && state.interview ? null : state.statements.length === 0 ? (
         <EmptyState
           titleAs="h3"
           icon={<NiMicrophone />}

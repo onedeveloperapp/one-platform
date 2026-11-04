@@ -5,6 +5,13 @@ import { createHash, randomBytes } from "node:crypto";
 import { runFirmTask } from "@/lib/ai/executor";
 import { accountThanksMessage } from "@/lib/cases/account";
 import { base64, MODEL_IMAGE, processCaseDocuments, queueDocumentProcessing } from "@/lib/cases/documents-work";
+import {
+  advanceInterview,
+  answerInterview,
+  answerWithPaper,
+  readInterview,
+  startInterview,
+} from "@/lib/cases/interview-work";
 import { queueStatementWork } from "@/lib/cases/statements-work";
 import {
   byPersonMessage,
@@ -268,14 +275,20 @@ async function openCase(service: SupabaseClient, held: Held, context: TurnContex
   for (const documentId of handed) {
     if (typeof documentId === "string") await queueDocumentProcessing(documentId);
   }
-  if (answer.code === "opened") {
+  if (answer.code === "opened" || answer.code === "opened_without_link") {
     report.opened += 1;
-    await send(service, answer.message_id);
-    return;
-  }
-  if (answer.code === "opened_without_link") {
-    report.opened += 1;
-    await say(service, held, caseOpenedNoLinkMessage(alert.passengerName).replace("{caso}", String(answer.seq ?? "")));
+    if (answer.code === "opened") await send(service, answer.message_id);
+    else
+      await say(
+        service,
+        held,
+        caseOpenedNoLinkMessage(alert.passengerName).replace("{caso}", String(answer.seq ?? "")),
+      );
+    // The interview starts right after the next steps, here, one question at a time (0095).
+    if (typeof answer.case_id === "string") {
+      const interviewId = await startInterview(service, answer.case_id).catch(() => null);
+      if (interviewId) await advanceInterview(service, interviewId).catch(() => undefined);
+    }
     return;
   }
   if (answer.code === "by_person" || answer.code === "agency_closed") {
@@ -325,11 +338,45 @@ async function takeTurn(service: SupabaseClient, held: Held, report: TurnReport)
   if (!context) return;
 
   // What the passenger sent as files joins the case before anything is answered.
-  await joinFiles(service, held, context);
+  const joinedFiles = await joinFiles(service, held, context);
 
   // ONE asked here what the client's account is missing (0092): what they write now is their answer, unless it is
   // their plain answer to an alert.
   const replied = lastClientWords(context.messages);
+
+  // The interview of their case (0095): what they write now answers the question that waits, one at a time. A
+  // question of theirs is ONE's to answer first, and the question that waits is asked again after it. A read that
+  // fails here never stops the turn: ONE answers as it would without it.
+  const lastWord = replied.length > 0 ? quickAnswer(replied[replied.length - 1]) : null;
+  let interviewTook = false;
+  let interviewBack: string | null = null;
+  if (!(context.alert && lastWord) && lastWord !== "stop") {
+    const found = await rpc(service, "conversation_interview", {
+      target_conversation: held.conversationId,
+      target_claim: held.claim,
+    }).catch((): Record<string, unknown> => ({}));
+    const view =
+      typeof found.interview_id === "string"
+        ? await readInterview(service, { interviewId: found.interview_id }).catch(() => null)
+        : null;
+    if (view && view.status === "open") {
+      if (replied.length > 0) {
+        const outcome = await answerInterview(service, {
+          orgId: context.orgId,
+          view,
+          words: replied,
+          key: `${held.conversationId}:${held.claim}`,
+        }).catch(() => "none" as const);
+        if (outcome === "question") interviewBack = view.id;
+        else if (outcome !== "none") {
+          interviewTook = true;
+          report.answered += 1;
+        }
+      } else if (joinedFiles) {
+        interviewTook = await answerWithPaper(service, view).catch(() => false);
+      }
+    }
+  }
   // A read that fails here never stops the turn: ONE answers the conversation as it would without it.
   const open = await rpc(service, "conversation_account_open", {
     target_conversation: held.conversationId,
@@ -338,7 +385,14 @@ async function takeTurn(service: SupabaseClient, held: Held, report: TurnReport)
   const alertAnswer = context.alert && replied.length > 0 ? quickAnswer(replied[replied.length - 1]) : null;
   const statementId = open.code === "open" && typeof open.statement_id === "string" ? open.statement_id : null;
   let answeredAccount = false;
-  if (statementId && replied.length > 0 && !alertAnswer && quickAnswer(replied[replied.length - 1]) !== "stop") {
+  if (
+    !interviewTook &&
+    !interviewBack &&
+    statementId &&
+    replied.length > 0 &&
+    !alertAnswer &&
+    quickAnswer(replied[replied.length - 1]) !== "stop"
+  ) {
     const completed = await rpc(service, "one_complete_statement", {
       target_conversation: held.conversationId,
       target_claim: held.claim,
@@ -355,8 +409,8 @@ async function takeTurn(service: SupabaseClient, held: Held, report: TurnReport)
     }
   }
 
-  if (answeredAccount) {
-    // The reply was the account's: nothing else of it waits for an answer.
+  if (answeredAccount || interviewTook) {
+    // The reply was the account's, or the interview's: nothing else of it waits for an answer.
   } else if (context.answersLastHour >= ANSWERS_PER_HOUR) {
     await callPerson(service, held, "Muitas mensagens em pouco tempo: uma pessoa do escritório continua a conversa.");
     report.called += 1;
@@ -424,6 +478,9 @@ async function takeTurn(service: SupabaseClient, held: Held, report: TurnReport)
       }
     }
   }
+
+  // ONE answered what the passenger asked in the middle of the interview: the question that waits is asked again.
+  if (interviewBack) await advanceInterview(service, interviewBack, "back").catch(() => undefined);
 
   await rpc(service, "record_conversation_turn", {
     target_conversation: held.conversationId,

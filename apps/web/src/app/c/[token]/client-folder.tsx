@@ -2,6 +2,7 @@
 
 import ClientCivilCourt from "./client-civil-court";
 import ClientCourse from "./client-course";
+import ClientInterview from "./client-interview";
 import ClientNotices from "./client-notices";
 import ClientStatements from "./client-statements";
 import { ClientSignatures, ClientTerms } from "./client-tasks";
@@ -266,13 +267,24 @@ export default function ClientFolder({
         onSaved={() => router.refresh()}
       />
       <Trip token={token} view={view} editable={editable} onSaved={() => router.refresh()} />
-      <ClientStatements
-        token={token}
-        statements={tasks.statements}
-        account={tasks.account}
-        editable={editable}
-        onSaved={() => router.refresh()}
-      />
+      {tasks.interview && (
+        // The interview is the case's account (0095): one question per screen, the same as on WhatsApp.
+        <ClientInterview
+          token={token}
+          interview={tasks.interview}
+          editable={editable}
+          onSaved={() => router.refresh()}
+        />
+      )}
+      {(!tasks.interview || tasks.statements.length > 0) && (
+        <ClientStatements
+          token={token}
+          statements={tasks.statements}
+          account={tasks.account}
+          editable={editable}
+          onSaved={() => router.refresh()}
+        />
+      )}
       <ClientNotices token={token} notices={tasks.notices} editable={editable} onSaved={() => router.refresh()} />
       <ClientSignatures token={token} signatures={tasks.signatures} editable onSaved={() => router.refresh()} />
       {editable && (

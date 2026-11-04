@@ -2,6 +2,7 @@ import "server-only";
 
 import { runFirmTask } from "@/lib/ai/executor";
 import { accountQuestionsMessage } from "@/lib/cases/account";
+import { answerFromStatement } from "@/lib/cases/interview-work";
 import {
   CHRONOLOGY_TASK,
   chronologyBriefing,
@@ -256,7 +257,11 @@ export async function queueStatementWork(statementId: string): Promise<void> {
   soon("case-statement", async () => {
     const service = createServiceClient();
     const first = await processCaseStatements(service, 1, statementId);
-    if (first.transcribed) await processCaseStatements(service, 1, statementId);
+    if (first.transcribed) {
+      // An audio sent while a question of the interview waited is its answer (0095).
+      await answerFromStatement(service, statementId);
+      await processCaseStatements(service, 1, statementId);
+    }
     await askAccountQuestions(service, statementId);
   });
 }

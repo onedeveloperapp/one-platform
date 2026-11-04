@@ -634,6 +634,7 @@ async function loadCase(id: string): Promise<CaseState> {
     statements: told.statements,
     account: told.account,
     accountMaxRounds: told.accountMaxRounds,
+    interview: told.interview,
     audios: told.audios,
     complaints: told.complaints,
     complaintAnswerDays: told.complaintAnswerDays,

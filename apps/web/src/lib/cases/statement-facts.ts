@@ -3,6 +3,7 @@ import "server-only";
 import { momentLabel } from "@/lib/ai/approvals";
 import { type AccountState, accountStateOf, type AccountTopic, isAccountTopic } from "@/lib/cases/account";
 import { waIdCandidates } from "@/lib/cases/cases";
+import { type InterviewView, interviewViewOf } from "@/lib/cases/interview";
 import {
   CHRONOLOGY_STATUSES,
   chronologyShown,
@@ -86,6 +87,8 @@ export type StatementFacts = {
   account: AccountState | null;
   /** How many times ONE orders an account again by itself (the setting `statements.max_rounds`). */
   accountMaxRounds: number;
+  /** The passenger's interview (0095): null with none, or when it could not be read. */
+  interview: InterviewView | null;
   statements: CaseStatement[];
   audios: CaseAudio[];
   complaints: CaseComplaint[];
@@ -130,7 +133,7 @@ export async function loadStatementFacts(
   caseId: string,
   timeZone: string | null | undefined,
 ): Promise<StatementFacts> {
-  const [statements, complaints, setting, parties, account, closed] = await Promise.all([
+  const [statements, complaints, setting, parties, account, closed, interview] = await Promise.all([
     supabase
       .from("case_statements")
       .select(
@@ -160,6 +163,8 @@ export async function loadStatementFacts(
       .eq("case_id", caseId)
       .eq("org_id", firmId)
       .not("gaps_closed_at", "is", null),
+    // The interview, read apart (0095): a read that fails leaves it unsaid, never the case unread.
+    supabase.rpc("case_interview_view", { target_case: caseId }),
   ]);
   if (statements.error || complaints.error || setting.error || parties.error) {
     throw new Error("statement facts could not be read");
@@ -282,6 +287,7 @@ export async function loadStatementFacts(
   return {
     account: accountStateOf(accountAnswer?.state),
     accountMaxRounds: typeof accountAnswer?.max_rounds === "number" ? accountAnswer.max_rounds : 0,
+    interview: interview.error ? null : interviewViewOf(interview.data),
     statements: told,
     audios,
     complaints: (

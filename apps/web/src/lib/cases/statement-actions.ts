@@ -3,11 +3,13 @@
 import { revalidatePath } from "next/cache";
 
 import { queueCaseAdvance } from "@/lib/cases/advance-work";
+import { queueInterview } from "@/lib/cases/interview-work";
 import { STATEMENT_AUDIO_MIMES } from "@/lib/cases/statements";
 import { queueStatementWork } from "@/lib/cases/statements-work";
 import { discardUpload, finishUpload, startUpload } from "@/lib/files/uploads";
 import { getMemberContext } from "@/lib/member/context";
 import { isSupportVisit } from "@/lib/whatsapp/session";
+import { isInterviewQuestion } from "@flyee/rules/interview";
 
 /**
  * What a person of the firm does with a client's account and with the
@@ -197,6 +199,49 @@ export async function closeAccountGaps(caseId: string, statementId: string): Pro
     target_case: caseId,
     target_statement: statementId,
   });
+  const result = fold(data, error, () => ({}));
+  if (result.ok) {
+    refresh(caseId);
+    await queueCaseAdvance(caseId);
+  }
+  return result;
+}
+
+/**
+ * A person of the firm answers a question of the passenger's interview for them (what they told on the phone), or
+ * corrects an answer (migration 0095); with no words, the passenger does not know. The interview goes on at once.
+ */
+export async function answerInterviewQuestion(
+  caseId: string,
+  question: string,
+  text: string | null,
+): Promise<StatementResult> {
+  const context = await getMemberContext();
+  if (!context?.firm || !isId(caseId)) return { ok: false, code: "case_not_found" };
+  if (!isInterviewQuestion(question)) return { ok: false, code: "invalid_question" };
+  if (await isSupportVisit()) return { ok: false, code: "not_allowed_in_support_session" };
+  const { data, error } = await context.supabase.rpc("answer_case_interview", {
+    target_case: caseId,
+    target_question: question,
+    target_text: text ? String(text).slice(0, 2000) : null,
+  });
+  const result = fold(data, error, () => ({}));
+  if (result.ok) {
+    refresh(caseId);
+    queueInterview({ caseId });
+  }
+  return result;
+}
+
+/**
+ * A partner or a lawyer decides the case goes on without what the passenger did not answer (migration 0095): ONE
+ * asks nothing more, and looks at the case at once to create the lawsuits.
+ */
+export async function closeInterview(caseId: string): Promise<StatementResult> {
+  const context = await getMemberContext();
+  if (!context?.firm || !isId(caseId)) return { ok: false, code: "case_not_found" };
+  if (await isSupportVisit()) return { ok: false, code: "not_allowed_in_support_session" };
+  const { data, error } = await context.supabase.rpc("close_case_interview", { target_case: caseId });
   const result = fold(data, error, () => ({}));
   if (result.ok) {
     refresh(caseId);

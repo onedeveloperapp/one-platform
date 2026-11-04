@@ -7,6 +7,7 @@ import type { DocumentQuality } from "@/lib/cases/document-quality";
 import type { CaseDossier, CaseDraft, CasePieces } from "@/lib/cases/draft-facts";
 import type { CivilCourtNeed, CourtNote, FamilyState } from "@/lib/cases/family";
 import type { CaseFiling } from "@/lib/cases/filing-facts";
+import type { InterviewView } from "@/lib/cases/interview";
 import type { StageMoment } from "@/lib/cases/journey";
 import type { ReadFields } from "@/lib/cases/read-fields";
 import type { Ceiling, LawyerCauses, WeatherAssessment } from "@/lib/cases/rules";
@@ -262,6 +263,8 @@ export type CaseState =
       account: AccountState | null;
       /** How many times ONE orders an account again by itself. */
       accountMaxRounds: number;
+      /** The passenger's interview, one question at a time (0095); null with none, or unreadable. */
+      interview: InterviewView | null;
       /** The audios the case's people sent over WhatsApp that are not an account yet. */
       audios: CaseAudio[];
       /** The complaints made before suing, with their protocol and what came of each. */

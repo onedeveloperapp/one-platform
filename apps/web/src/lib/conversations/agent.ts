@@ -68,7 +68,7 @@ export function caseStepsMessage(input: {
       `Pronto, ${name}. O escritório abriu o seu caso, número {caso}, com os dados e os documentos que vieram de ${input.agency}. Os próximos passos:`,
       `1. Abra o seu link: ${input.url}`,
       `2. Confira ${theirs} e os documentos que vieram da agência, e corrija o que estiver errado.`,
-      "3. Conte o que aconteceu, por texto ou por áudio.",
+      "3. Responda aqui as perguntas que vou fazer agora sobre o que aconteceu, uma de cada vez.",
       "4. Quando estiver tudo certo, avise no fim da página que terminou: o escritório só segue com o seu caso depois disso.",
       "O link é só seu. Se alguém mais viajou com você, me diga aqui.",
     ].join("\n");
@@ -83,7 +83,7 @@ export function caseStepsMessage(input: {
     `1. Abra o seu link: ${input.url}`,
     `2. Envie ${identities}, um comprovante de endereço e o cartão de embarque ou o bilhete.`,
     `3. Confira ${whose}, que o escritório leu nos documentos, e complete o que faltar.`,
-    "4. Conte o que aconteceu, por texto ou por áudio.",
+    "4. Responda aqui as perguntas que vou fazer agora sobre o que aconteceu, uma de cada vez.",
     "O link é só seu. Se alguém mais viajou com você, me diga aqui.",
   ].join("\n");
 }

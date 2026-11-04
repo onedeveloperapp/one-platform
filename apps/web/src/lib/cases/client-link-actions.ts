@@ -8,6 +8,7 @@ import { isTokenShape } from "@/lib/cases/client-link";
 import { finishLinkUpload, takeBackClientUpload } from "@/lib/cases/client-uploads";
 import { readLinkUpload } from "@/lib/cases/document-prefill-work";
 import { queueDocumentProcessing } from "@/lib/cases/documents-work";
+import { queueInterview } from "@/lib/cases/interview-work";
 import { queueStatementWork } from "@/lib/cases/statements-work";
 import { FIRM_FILES_BUCKET, supabaseFileStore } from "@/lib/files/store";
 import { settleNotices } from "@/lib/notices/work";
@@ -16,6 +17,7 @@ import { isSupportVisit } from "@/lib/whatsapp/session";
 import { queueFlightCheck } from "@/modules/direito-do-passageiro/flights/checks-work";
 import { createServiceClient } from "@flyee/auth/service";
 import { measureFile } from "@flyee/documents/measure";
+import { isInterviewQuestion } from "@flyee/rules/interview";
 
 /**
  * What a client does through their link, as server actions. The token is the
@@ -653,5 +655,42 @@ export async function completeClientStatement(token: string, statementId: string
     nothing,
   );
   if (result.ok) await queueStatementWork(statementId);
+  return result;
+}
+
+/**
+ * The client answers a question of their case's interview on their link (migration 0095): a yes or a no, a moment,
+ * their words, or that they do not remember. The interview goes on at once (the next question, or done).
+ */
+export async function answerClientInterview(
+  token: string,
+  question: string,
+  answer: { unknown?: boolean; text?: string | null; yesNo?: "sim" | "nao" | null; moment?: string | null },
+): Promise<ClientResult> {
+  const closed = await refusal(token);
+  if (closed) return closed;
+  if (!isInterviewQuestion(question)) return { ok: false, code: "invalid_question" };
+  const supabase = createAnonClient();
+  if (!supabase) return unavailable;
+  const moment =
+    typeof answer?.moment === "string" && /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2})?$/.test(answer.moment)
+      ? answer.moment
+      : null;
+  const result = fold(
+    await supabase.rpc("client_link_interview_answer", {
+      target_token: token,
+      target_question: question,
+      target_unknown: answer?.unknown === true,
+      target_text: typeof answer?.text === "string" ? answer.text.slice(0, 2000) : null,
+      target_yes_no: answer?.yesNo === "sim" || answer?.yesNo === "nao" ? answer.yesNo : null,
+      target_moment: moment,
+    }),
+    nothing,
+  );
+  if (result.ok) {
+    const { data } = await supabase.rpc("client_link_interview", { target_token: token });
+    const interviewId = (data as { interview?: { id?: unknown } } | null)?.interview?.id;
+    if (typeof interviewId === "string") queueInterview({ interviewId });
+  }
   return result;
 }
