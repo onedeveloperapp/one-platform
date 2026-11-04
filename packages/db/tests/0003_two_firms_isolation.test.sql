@@ -186,6 +186,12 @@ insert into public.case_weather (org_id, case_id, icao, observed_at, raw) values
 insert into public.case_statements (org_id, case_id, source, transcript) values
   ('b1000000-0000-4000-8000-00000000000a', 'a3000000-0000-4000-8000-00000000000a', 'firm', 'O voo da cliente do escritório A atrasou seis horas.'),
   ('b1000000-0000-4000-8000-00000000000b', 'a3000000-0000-4000-8000-00000000000b', 'firm', 'O voo do cliente do escritório B foi cancelado.');
+insert into public.case_interviews (id, org_id, case_id) values
+  ('a3900000-0000-4000-8000-00000000000a', 'b1000000-0000-4000-8000-00000000000a', 'a3000000-0000-4000-8000-00000000000a'),
+  ('a3900000-0000-4000-8000-00000000000b', 'b1000000-0000-4000-8000-00000000000b', 'a3000000-0000-4000-8000-00000000000b');
+insert into public.case_interview_answers (org_id, interview_id, case_id, question, status, answer, source) values
+  ('b1000000-0000-4000-8000-00000000000a', 'a3900000-0000-4000-8000-00000000000a', 'a3000000-0000-4000-8000-00000000000a', 'aviso_local', 'answered', 'Já estava no aeroporto.', 'chat'),
+  ('b1000000-0000-4000-8000-00000000000b', 'a3900000-0000-4000-8000-00000000000b', 'a3000000-0000-4000-8000-00000000000b', 'aviso_local', 'answered', 'Soube pelo aplicativo.', 'chat');
 insert into public.admin_complaints (org_id, case_id, channel) values
   ('b1000000-0000-4000-8000-00000000000a', 'a3000000-0000-4000-8000-00000000000a', 'anac_passageiro'),
   ('b1000000-0000-4000-8000-00000000000b', 'a3000000-0000-4000-8000-00000000000b', 'consumidor_gov');
@@ -466,7 +472,7 @@ select is(
    from pg_temp.firm_rows('b1000000-0000-4000-8000-00000000000a') where visible > 0),
   array[
     'admin_complaints', 'ai_runs', 'approvals', 'audit_events', 'billing_operations', 'case_advances', 'case_documents',
-    'case_draft_citations', 'case_draft_versions', 'case_drafts', 'case_events',
+    'case_draft_citations', 'case_draft_versions', 'case_drafts', 'case_events', 'case_interview_answers', 'case_interviews',
     'case_papers', 'case_parties', 'case_statements',
     'case_weather', 'cases', 'certificate_inventory', 'civil_court_answers', 'client_consents', 'client_links', 'client_notices', 'connections',
     'consent_acceptances',
@@ -643,7 +649,7 @@ select is(
    from pg_temp.firm_rows('b1000000-0000-4000-8000-00000000000a') where visible > 0),
   array[
     'admin_complaints', 'ai_runs', 'approvals', 'case_advances', 'case_documents', 'case_draft_citations', 'case_draft_versions',
-    'case_drafts', 'case_events', 'case_papers', 'case_parties', 'case_statements',
+    'case_drafts', 'case_events', 'case_interview_answers', 'case_interviews', 'case_papers', 'case_parties', 'case_statements',
     'case_weather', 'cases', 'certificate_inventory', 'civil_court_answers', 'client_consents',
     'client_links', 'client_notices',
     'consent_acceptances', 'deadlines', 'djen_captures', 'dossiers', 'draft_templates', 'entitlement_grants', 'files',
@@ -685,7 +691,7 @@ select is(
    from pg_temp.firm_rows('b1000000-0000-4000-8000-00000000000b') where visible > 0),
   array[
     'admin_complaints', 'ai_runs', 'approvals', 'audit_events', 'billing_operations', 'case_advances', 'case_documents',
-    'case_draft_citations', 'case_draft_versions', 'case_drafts', 'case_events',
+    'case_draft_citations', 'case_draft_versions', 'case_drafts', 'case_events', 'case_interview_answers', 'case_interviews',
     'case_papers', 'case_parties', 'case_statements',
     'case_weather', 'cases', 'certificate_inventory', 'civil_court_answers', 'client_consents', 'client_links', 'client_notices', 'connections',
     'consent_acceptances',

@@ -71,7 +71,7 @@ select is(
       and p.prorettype <> 'event_trigger'::regtype
   ),
   -- The client_link_* functions are a client's way in, by the token of their link (0022, 0023, 0025, 0026, 0038,
-  -- 0085);
+  -- 0085, 0095);
   -- the pax_link_* ones a passenger's, by the link of the agency's partnership (0070).
   array[
     'client_link_add_dependent', 'client_link_agency', 'client_link_answer_chronology', 'client_link_assign_upload',
@@ -79,7 +79,8 @@ select is(
     'client_link_course',
     'client_link_discard_upload',
     'client_link_finish',
-    'client_link_finish_statement', 'client_link_finish_upload', 'client_link_notices',
+    'client_link_finish_statement', 'client_link_finish_upload', 'client_link_interview', 'client_link_interview_answer',
+    'client_link_notices',
     'client_link_open', 'client_link_remove_segment', 'client_link_reserve_signed', 'client_link_reserve_statement',
     'client_link_reserve_upload',
     'client_link_save_person', 'client_link_save_segment', 'client_link_signature_original', 'client_link_signatures',

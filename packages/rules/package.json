@@ -11,6 +11,7 @@
     "./flight": "./src/flight.ts",
     "./flight-problem": "./src/flight-problem.ts",
     "./forum": "./src/forum.ts",
+    "./interview": "./src/interview.ts",
     "./oab": "./src/oab.ts",
     "./person": "./src/person.ts",
     "./proceedings": "./src/proceedings.ts",
@@ -19,6 +20,6 @@
     "./weather": "./src/weather.ts"
   },
   "scripts": {
-    "test": "node --experimental-strip-types --test src/rules.test.ts src/domain.test.ts src/deadlines.test.ts src/flight-problem.test.ts"
+    "test": "node --experimental-strip-types --test src/rules.test.ts src/domain.test.ts src/deadlines.test.ts src/flight-problem.test.ts src/interview.test.ts"
   }
 }
