@@ -7,7 +7,11 @@ import { Box, Button, Card, CardContent, Collapse, Typography, useMediaQuery } f
 
 import StatusChip from "@/components/product/status-chip";
 import { TILE_TONE, type TileTone } from "@/components/product/tile-tone";
+import NiCheck from "@/icons/nexture/ni-check";
 import NiChevronDownSmall from "@/icons/nexture/ni-chevron-down-small";
+import NiClock from "@/icons/nexture/ni-clock";
+import NiCrossSquare from "@/icons/nexture/ni-cross-square";
+import NiExclamationSquare from "@/icons/nexture/ni-exclamation-square";
 import NiLoader from "@/icons/nexture/ni-loader";
 import { cn } from "@/lib/utils";
 
@@ -20,7 +24,55 @@ type Command = { seq: number; open: boolean };
  * head, opens by itself when something comes to wait for the firm there, and closes by itself once it is done,
  * when it was not the person who opened it.
  */
-export type CardMark = { firm: boolean; failed: boolean; client: boolean; working: string | null };
+export type CardMark = {
+  firm: boolean;
+  failed: boolean;
+  client: boolean;
+  working: string | null;
+  /**
+   * Where the card stands, in a word or two with its tone (the owner, 2026-11-05): done, ONE at work there, waiting
+   * for the client, asking the firm, failed, or nothing yet. Said on its head as a badge and in the colour of its
+   * icon, so a closed card reads as where it stands.
+   */
+  state?: { tone: CardTone; label: string } | null;
+};
+
+/** How a card stands, as its head says it. */
+export type CardTone = "done" | "working" | "client" | "firm" | "failed" | "idle";
+
+/** The badge of each state: its tint, and the mark before its words (the words always say the state too). */
+const STATE_CHIP: Record<
+  CardTone,
+  { tone: "positive" | "info" | "attention" | "danger" | "neutral"; icon: ReactNode }
+> = {
+  done: { tone: "positive", icon: <NiCheck size="small" /> },
+  working: { tone: "info", icon: <NiLoader size="small" className="animate-spin motion-reduce:animate-none" /> },
+  client: { tone: "info", icon: <NiClock size="small" /> },
+  firm: { tone: "attention", icon: <NiExclamationSquare size="small" /> },
+  failed: { tone: "danger", icon: <NiCrossSquare size="small" /> },
+  idle: { tone: "neutral", icon: null },
+};
+
+/** The icon of a card in the colour of where it stands, with the state's own mark in its corner. */
+const STATE_TILE: Record<Exclude<CardTone, "idle">, { tile: string; badge: string; icon: ReactNode }> = {
+  done: { tile: "bg-success/10 text-success", badge: "bg-success text-text-contrast", icon: <NiCheck size={12} /> },
+  working: {
+    tile: "bg-accent-4-light/15 text-accent-4",
+    badge: "bg-accent-4 text-text-contrast",
+    icon: <NiLoader size={12} className="animate-spin motion-reduce:animate-none" />,
+  },
+  client: {
+    tile: "bg-accent-4-light/15 text-accent-4",
+    badge: "bg-accent-4 text-text-contrast",
+    icon: <NiClock size={12} />,
+  },
+  firm: {
+    tile: "bg-accent-3-light/10 text-accent-3",
+    badge: "bg-accent-3 text-text-contrast",
+    icon: <NiExclamationSquare size={12} />,
+  },
+  failed: { tile: "bg-error/10 text-error", badge: "bg-error text-text-contrast", icon: <NiCrossSquare size={12} /> },
+};
 
 /** The words of the marks, in the screen's language. */
 export type CardMarkWords = { firm: string; failed: string; client: string };
@@ -187,9 +239,18 @@ export default function CollapsibleCard({
     setOpen(!open);
   };
 
-  // What the top knows of the card, said on its head when the card's own chip does not say it already.
+  // Where the card stands: its own chip says what asks for somebody there in its own words; the state's badge says
+  // the rest (done, ONE at work, waiting for the client, nothing yet), and ONE at work beside a card's own chip too.
+  const state = mark?.state ?? null;
+  const stateChip =
+    state && (!chip || state.tone === "working") ? (
+      <StatusChip label={state.label} tone={STATE_CHIP[state.tone].tone} icon={STATE_CHIP[state.tone].icon} />
+    ) : null;
+  const stateLook = state && state.tone !== "idle" ? STATE_TILE[state.tone] : null;
+
+  // A screen that gives no state says what the top knows of the card, when the card's own chip does not say it.
   const markChip =
-    mark && group?.words
+    !state && mark && group?.words
       ? mark.failed && !chip
         ? { label: group.words.failed, tone: "danger" as const }
         : mark.firm && !chip
@@ -221,12 +282,23 @@ export default function CollapsibleCard({
             <span
               aria-hidden
               className={cn(
-                "flex h-10 w-10 flex-none items-center justify-center rounded-xl",
-                TILE_TONE[look.tone ?? "primary"].bg,
-                TILE_TONE[look.tone ?? "primary"].text,
+                "relative flex h-10 w-10 flex-none items-center justify-center rounded-xl",
+                stateLook
+                  ? stateLook.tile
+                  : [TILE_TONE[look.tone ?? "primary"].bg, TILE_TONE[look.tone ?? "primary"].text],
               )}
             >
               {look.icon}
+              {stateLook ? (
+                <span
+                  className={cn(
+                    "border-background-paper absolute -right-1.5 -bottom-1.5 flex h-5 w-5 items-center justify-center rounded-full border-2",
+                    stateLook.badge,
+                  )}
+                >
+                  {stateLook.icon}
+                </span>
+              ) : null}
             </span>
           ) : null}
           <Box className="flex min-w-0 flex-1 flex-col gap-1">
@@ -242,11 +314,12 @@ export default function CollapsibleCard({
                   {title}
                 </button>
               </Typography>
-              {chip || markChip || mark?.working ? (
+              {chip || stateChip || markChip || (!state && mark?.working) ? (
                 <Box className="relative z-[1] flex flex-wrap items-center gap-2">
                   {chip}
+                  {stateChip}
                   {markChip ? <StatusChip label={markChip.label} tone={markChip.tone} /> : null}
-                  {mark?.working ? (
+                  {!state && mark?.working ? (
                     <StatusChip
                       label={mark.working}
                       tone="info"

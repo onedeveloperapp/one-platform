@@ -58,4 +58,21 @@ describe("CollapsibleCard and the marks of the top", () => {
     expect(screen.getByText("Espera o cliente")).toBeTruthy();
     expect(header().getAttribute("aria-expanded")).toBe("false");
   });
+
+  it("says where the card stands on its head, and a card's own chip before the state's words", () => {
+    const view = render(<Screen mark={{ ...quiet, state: { tone: "done", label: "Todos aceitos" } }} />);
+    expect(screen.getByText("Todos aceitos")).toBeTruthy();
+    view.rerender(
+      <CollapsibleGroup
+        marks={{ "case-documents": { ...quiet, state: { tone: "firm", label: "Decidir documentos" } } }}
+        words={WORDS}
+      >
+        <CollapsibleCard id="case-documents" title="Documentos" chip={<span>1 para conferir</span>}>
+          <p>conteúdo</p>
+        </CollapsibleCard>
+      </CollapsibleGroup>,
+    );
+    expect(screen.getByText("1 para conferir")).toBeTruthy();
+    expect(screen.queryByText("Decidir documentos")).toBeNull();
+  });
 });

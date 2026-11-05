@@ -56,13 +56,16 @@ import NiScale from "@/icons/nexture/ni-scale";
 import NiSendRight from "@/icons/nexture/ni-send-right";
 import NiTimeline from "@/icons/nexture/ni-timeline";
 import NiUsers from "@/icons/nexture/ni-users";
+import { cardStates } from "@/lib/cases/card-state";
 import { caseHolder, caseLabel, caseMissing, groupOf, STATUS_KEY } from "@/lib/cases/cases";
 import { civilCourtPending } from "@/lib/cases/family";
 import { interviewCounts } from "@/lib/cases/interview";
 import { caseJourney } from "@/lib/cases/journey";
 import { caseNow, SECTION_ANCHOR } from "@/lib/cases/now";
 import { readCasePulse } from "@/lib/cases/pulse-actions";
-import type { CaseSection } from "@/lib/cases/sections";
+import { CASE_SECTIONS, type CaseSection } from "@/lib/cases/sections";
+import { statementStage } from "@/lib/cases/statements";
+import { sayPending } from "@/lib/firm/pending";
 import { caseKindLabelKey } from "@/lib/modules/registry";
 import { setPublicationJudgment } from "@/lib/publications/actions";
 
@@ -226,7 +229,34 @@ export default function CaseView({ state: read }: { state: CaseState }) {
       },
       facts: { signatureSince, filingSince },
     });
-    return { now, journey };
+    // Where each card stands, said on its head (the owner, 2026-11-05).
+    const cards = cardStates(
+      {
+        status: ready.case.status,
+        now: ready.readAt,
+        today: ready.today,
+        peopleMissing: missing.filter((item) => item.type === "fields").length,
+        people: ready.parties.length,
+        flightMissing: missing.some((item) => item.type === "flight"),
+        segments: ready.segments.length,
+        documentsMissing: missing.filter((item) => item.type === "document").length,
+        documents: ready.documents,
+        account: ready.account,
+        statements: ready.statements.map((statement) => ({ stage: statementStage(statement) })),
+        interviewOpen: ready.interview?.status === "open",
+        envelopes: ready.envelopes,
+        proceedings: ready.proceedings,
+        drafts: ready.pieces.drafts,
+        filings: ready.filings,
+        hearings: ready.hearings.upcoming,
+        deadlinesOpen: ready.deadlines.open.length,
+        complaints: ready.complaints,
+        links: ready.links,
+        dossierIssued: ready.pieces.dossiers.some((dossier) => dossier.status === "issued"),
+      },
+      now,
+    );
+    return { now, journey, cards };
   }, [ready]);
 
   const live = useLiveRead({
@@ -252,15 +282,16 @@ export default function CaseView({ state: read }: { state: CaseState }) {
   // and what ONE does there now.
   const marks = useMemo(() => {
     const out: Record<string, CardMark> = {};
-    for (const [section, mark] of Object.entries(facts?.now.sections ?? {}) as [
-      CaseSection,
-      { firm: boolean; failed: boolean; client: boolean; working: boolean },
-    ][]) {
+    for (const section of CASE_SECTIONS) {
+      const mark = facts?.now.sections[section];
+      const state = facts?.cards[section];
+      if (!mark && !state) continue;
       out[SECTION_ANCHOR[section]] = {
-        firm: mark.firm,
-        failed: mark.failed,
-        client: mark.client,
-        working: mark.working ? t(WORKING_KEY[section] ?? "case-card-working") : null,
+        firm: mark?.firm ?? false,
+        failed: mark?.failed ?? false,
+        client: mark?.client ?? false,
+        working: mark?.working ? t(WORKING_KEY[section] ?? "case-card-working") : null,
+        state: state ? { tone: state.tone, label: sayPending(t, state.text) } : null,
       };
     }
     return out;

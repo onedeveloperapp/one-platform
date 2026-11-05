@@ -9,11 +9,13 @@ import { Box, Button, Card, CardContent, Collapse, Typography } from "@mui/mater
 
 import ProgressSteps, { ProgressBar, ProgressNow, type ProgressStep } from "@/components/product/progress-steps";
 import StateLine from "@/components/product/state-line";
+import StatusChip, { type StatusTone } from "@/components/product/status-chip";
 import type { LiveRead } from "@/components/product/use-live-read";
 import NiCalendar from "@/icons/nexture/ni-calendar";
 import NiDocumentFull from "@/icons/nexture/ni-document-full";
 import NiFlag from "@/icons/nexture/ni-flag";
 import NiFolder from "@/icons/nexture/ni-folder";
+import NiLoader from "@/icons/nexture/ni-loader";
 import NiMessageDots from "@/icons/nexture/ni-message-dots";
 import NiMoney from "@/icons/nexture/ni-money";
 import NiPen from "@/icons/nexture/ni-pen";
@@ -64,6 +66,22 @@ const STEP_SECTION: Partial<Record<JourneyStepId, CaseSection>> = {
   drafting: "drafts",
   filing: "filing",
   hearing: "hearings",
+};
+
+/** The tint of whose turn a line is: the firm's to act, the client's and ONE's under way, the platform's only said. */
+const OWNER_TONE: Record<NowItem["owner"], StatusTone> = {
+  firm: "attention",
+  client: "info",
+  one: "info",
+  platform: "neutral",
+};
+
+/** How many lines of what holds the case are each owner's, in the order the list says them. */
+const OWNER_COUNT_KEY: Record<NowItem["owner"], string> = {
+  firm: "case-now-count-firm",
+  client: "case-now-count-client",
+  one: "case-now-count-one",
+  platform: "case-now-count-platform",
 };
 
 /** A day as the steps say it: "3 de nov.", with the year when it is not this one. A bare day is the day itself. */
@@ -334,48 +352,69 @@ export default function JourneyCard({
 
         {now.working.length > 0 ? (
           <Box component="section" aria-labelledby="case-now-working" className="flex flex-col gap-2">
-            <Typography id="case-now-working" variant="subtitle2" component="h3" className="mb-0">
-              {t("case-now-title-working")}
-            </Typography>
-            {now.working.map((line) => (
-              <StateLine
-                key={line.id}
-                tone="waiting"
-                status={
-                  line.slow
-                    ? t("case-now-slow")
-                    : line.since
-                      ? t("case-now-since", { time: clock(line.since) })
-                      : undefined
-                }
-                action={line.section ? way({ ...line, owner: "one" }, t("case-now-see")) : undefined}
-              >
-                {say(line)}
-              </StateLine>
-            ))}
+            <Box className="flex flex-wrap items-center gap-2">
+              <Typography id="case-now-working" variant="subtitle2" component="h3" className="mb-0">
+                {t("case-now-title-working")}
+              </Typography>
+              <StatusChip
+                tone="info"
+                label={t("case-now-count-working", { count: now.working.length })}
+                icon={<NiLoader size="small" className="animate-spin motion-reduce:animate-none" />}
+              />
+            </Box>
+            <Box className="border-accent-4/30 bg-accent-4-light/5 flex flex-col gap-3 rounded-2xl border p-3">
+              {now.working.map((line) => (
+                <StateLine
+                  key={line.id}
+                  tone="waiting"
+                  status={
+                    line.slow
+                      ? t("case-now-slow")
+                      : line.since
+                        ? t("case-now-since", { time: clock(line.since) })
+                        : undefined
+                  }
+                  action={line.section ? way({ ...line, owner: "one" }, t("case-now-see")) : undefined}
+                >
+                  {say(line)}
+                </StateLine>
+              ))}
+            </Box>
           </Box>
         ) : null}
 
         {!journey.ended ? (
           <Box component="section" aria-labelledby="case-now-blocking" className="flex flex-col gap-2">
-            <Typography id="case-now-blocking" variant="subtitle2" component="h3" className="mb-0">
-              {t("case-now-title-blocking")}
-            </Typography>
+            <Box className="flex flex-wrap items-center gap-2">
+              <Typography id="case-now-blocking" variant="subtitle2" component="h3" className="mb-0">
+                {t("case-now-title-blocking")}
+              </Typography>
+              {(["firm", "client", "one", "platform"] as const).map((owner) => {
+                const count = now.blocking.filter((line) => line.owner === owner).length;
+                return count > 0 ? (
+                  <StatusChip key={owner} tone={OWNER_TONE[owner]} label={t(OWNER_COUNT_KEY[owner], { count })} />
+                ) : null;
+              })}
+            </Box>
             {now.blocking.length === 0 ? (
-              <StateLine tone="done">{t(working ? "case-now-nothing-working" : "case-now-nothing")}</StateLine>
+              <StateLine tone="done" emphasis>
+                {t(working ? "case-now-nothing-working" : "case-now-nothing")}
+              </StateLine>
             ) : (
-              now.blocking.map((line) => (
-                <StateLine
-                  key={line.id}
-                  tone={line.tone}
-                  status={whose(line)}
-                  action={
-                    line.ask ? ask(line) : way(line, line.owner === "firm" ? t("case-now-do") : t("case-now-see"))
-                  }
-                >
-                  {say(line)}
-                </StateLine>
-              ))
+              <Box className="border-grey-100 flex flex-col gap-3 rounded-2xl border p-3">
+                {now.blocking.map((line) => (
+                  <StateLine
+                    key={line.id}
+                    tone={line.tone}
+                    status={<StatusChip tone={OWNER_TONE[line.owner]} label={whose(line)} />}
+                    action={
+                      line.ask ? ask(line) : way(line, line.owner === "firm" ? t("case-now-do") : t("case-now-see"))
+                    }
+                  >
+                    {say(line)}
+                  </StateLine>
+                ))}
+              </Box>
             )}
           </Box>
         ) : null}
