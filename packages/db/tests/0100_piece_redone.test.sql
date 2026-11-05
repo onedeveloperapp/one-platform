@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap;
-select plan(12);
+select plan(13);
 
 -- ============================================================
 -- The purchase is asked nowhere, and ONE writes a piece again when the
@@ -8,7 +8,8 @@ select plan(12);
 -- instructions of the order of the facts leave the purchase out; a piece the
 -- AI wrote before the account changed, still with something to complete and
 -- touched by nobody, of a lawsuit still planned, is given up and asked again
--- from the same model, as the firm lets ONE start pieces, once per change.
+-- from the same model, as the firm lets ONE start pieces, once per change;
+-- the sweep hands such a case to the worker (0098).
 -- Two firms: nothing of one reaches the other.
 --
 -- Every person, firm and number here is invented.
@@ -153,7 +154,22 @@ select ok(
 
 -- ---------- The account came after the piece: ONE writes it again ----------
 
-insert into res values ('redone', pg_temp.redo('due'));
+-- The sweep hands the worker a case whose piece is to be written again, and sets aside one with nothing for ONE.
+select pg_temp.as_backend();
+set local role service_role;
+insert into res values ('claim_due', public.claim_case_advances(1, pg_temp.got('due', 'case_id')::uuid));
+insert into res values ('claim_whole', public.claim_case_advances(1, pg_temp.got('whole', 'case_id')::uuid));
+insert into res values ('claim_b', public.claim_case_advances(1, pg_temp.got('firm_b', 'case_id')::uuid));
+insert into res select 'redone', public.advance_redo_pieces(pg_temp.got('due', 'case_id')::uuid,
+  (payload -> 'claimed' -> 0 ->> 'claim')::integer) from res where name = 'claim_due';
+reset role;
+select ok(
+  (select payload -> 'claimed' -> 0 ->> 'case_id' = pg_temp.got('due', 'case_id') from res where name = 'claim_due')
+  and (select jsonb_array_length(payload -> 'claimed') = 0 and (payload ->> 'parked')::integer = 1
+       from res where name = 'claim_whole')
+  and (select jsonb_array_length(payload -> 'claimed') = 0 from res where name = 'claim_b'),
+  'the sweep takes a case whose piece is to be written again, and sets aside one with nothing for ONE'
+);
 select ok(
   pg_temp.got('redone', 'code') = 'redone' and pg_temp.status('due') = 'cancelled'
   and (select jsonb_array_length(payload -> 'drafts') = 1 from res where name = 'redone'),
