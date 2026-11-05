@@ -7,7 +7,7 @@ import { useState } from "react";
 import { Box, Button, Typography } from "@mui/material";
 
 import CollapsibleCard from "@/components/product/collapsible-card";
-import { EVENT_KEY, isCaseStatus, STATUS_KEY } from "@/lib/cases/cases";
+import { eventKeyOf, isCaseStatus, STATUS_KEY } from "@/lib/cases/cases";
 import { opensOnArrival } from "@/lib/cases/sections";
 
 type Ready = Extract<CaseState, { kind: "ready" }>;
@@ -47,7 +47,8 @@ export default function TimelineCard({ state }: { state: Ready }) {
     if (event.kind === "status_changed" && isCaseStatus(event.data.to)) {
       return t("case-event-status-to", { status: t(STATUS_KEY[event.data.to]) });
     }
-    return EVENT_KEY[event.kind] ? t(EVENT_KEY[event.kind]) : event.kind;
+    const key = eventKeyOf(event);
+    return key ? t(key) : event.kind;
   };
   const actor = (event: Ready["events"][number]) =>
     event.actorType === "person"

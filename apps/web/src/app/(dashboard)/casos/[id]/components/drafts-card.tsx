@@ -63,6 +63,22 @@ const KIND_KEY: Record<CaseProceeding["kind"], string> = {
   comum: "case-proceeding-kind-comum",
 };
 
+/** What ONE is doing with a text it carries, said in place of "to review" (0099, 0100). */
+const ONE_REDO_KEY: Record<"asking" | "rewriting", string> = {
+  asking: "draft-status-one-asking",
+  rewriting: "draft-status-one-rewriting",
+};
+
+/** What ONE is doing with a text it carries, in a sentence. */
+const ONE_REDO_LINE_KEY: Record<"asking" | "rewriting", string> = {
+  asking: "draft-one-asking",
+  rewriting: "draft-one-rewriting",
+};
+
+/** A piece's state in a word: what ONE does with it, when it carries it, else its status. */
+const statusLabelKey = (draft: Pick<CaseDraft, "status" | "oneRedo">): string =>
+  draft.status === "proposed" && draft.oneRedo ? ONE_REDO_KEY[draft.oneRedo] : DRAFT_STATUS_KEY[draft.status];
+
 const STATUS_TONE: Record<DraftStatus, StatusTone> = {
   generating: "info",
   proposed: "attention",
@@ -167,7 +183,8 @@ export default function DraftsCard({
     proceeding,
     draft: draftToShow(drafts.filter((draft) => draft.proceedingId === proceeding.id)),
   }));
-  const toRevise = pieces.some(({ draft }) => draft?.status === "proposed");
+  const toRevise = pieces.some(({ draft }) => draft?.status === "proposed" && !draft.oneRedo);
+  const oneAtWork = pieces.some(({ draft }) => draft?.status === "proposed" && draft.oneRedo !== null);
   const notWritten = pieces.some(({ draft }) => draft?.status === "failed");
   const noPiece = t("drafts-summary-none");
 
@@ -183,7 +200,7 @@ export default function DraftsCard({
             : pieces
                 .map(
                   ({ proceeding, draft }) =>
-                    `${t(KIND_KEY[proceeding.kind])}: ${draft ? t(DRAFT_STATUS_KEY[draft.status]) : noPiece}`,
+                    `${t(KIND_KEY[proceeding.kind])}: ${draft ? t(statusLabelKey(draft)) : noPiece}`,
                 )
                 .join(" · ")
       }
@@ -192,6 +209,8 @@ export default function DraftsCard({
           <StatusChip tone="danger" label={t("draft-status-failed")} />
         ) : toRevise ? (
           <StatusChip tone="attention" label={t("draft-status-proposed")} />
+        ) : oneAtWork ? (
+          <StatusChip tone="info" label={t("drafts-one-at-work")} />
         ) : null
       }
       description={t("drafts-body")}
@@ -412,7 +431,14 @@ function Lawsuit({
   // change nothing here, so it is not offered, and the words about the queue say so.
   const answerIsText = draft !== null && (answer === null || !answer.rewriting || answer.version === draft.version);
   const mayReject =
-    status === "proposed" && writable && lawyer && draft !== null && draft.aiWaits && !revision && answerIsText;
+    status === "proposed" &&
+    writable &&
+    lawyer &&
+    draft !== null &&
+    draft.aiWaits &&
+    !revision &&
+    answerIsText &&
+    !draft.oneRedo;
   // A rewriting is put back to work by who may ask for one (while it is made the text is nobody's to edit):
   // one that could not be made, or one that waits its turn for too long.
   const mayResume =
@@ -422,7 +448,11 @@ function Lawsuit({
   const mayDiscard = writable && draft !== null && ["generating", "proposed", "failed"].includes(draft.status);
   // A partner or a lawyer approves the text as it is, without opening it, once what it cites was read and while
   // the AI rewrites nothing: the database's gate answers as for an approval from the preview.
-  const mayApproveAsIs = status === "proposed" && writable && lawyer && draft !== null && draft.checked && !revision;
+  // ONE asks the client what the text lacks, or writes it again with the answers (0099, 0100): nothing is asked of
+  // the firm meanwhile, and a lawyer who edits it takes it over.
+  const oneRedo = status === "proposed" ? (draft?.oneRedo ?? null) : null;
+  const mayApproveAsIs =
+    status === "proposed" && writable && lawyer && draft !== null && draft.checked && !revision && !oneRedo;
   const hasText = draft !== null && draft.version > 0;
 
   const headingId = `lawsuit-${proceeding.id}`;
@@ -438,7 +468,12 @@ function Lawsuit({
         <Typography id={headingId} variant="subtitle2" component="h3" className="mb-0 min-w-0 flex-1">
           {title}
         </Typography>
-        {draft ? <StatusChip tone={STATUS_TONE[draft.status]} label={t(DRAFT_STATUS_KEY[draft.status])} /> : null}
+        {draft ? (
+          <StatusChip
+            tone={status === "proposed" && oneRedo ? "info" : STATUS_TONE[draft.status]}
+            label={t(statusLabelKey(draft))}
+          />
+        ) : null}
       </Box>
 
       {!planned ? (
@@ -455,6 +490,11 @@ function Lawsuit({
 
       {draft && status === "proposed" ? (
         <Box className="flex flex-col gap-3">
+          {oneRedo ? (
+            <Typography variant="body2" className="text-text-primary" role="status">
+              {t(ONE_REDO_LINE_KEY[oneRedo])}
+            </Typography>
+          ) : null}
           <Typography variant="body2" className="text-text-secondary">
             {[
               t("draft-proposed-summary", { version: draft.version, template: draft.templateName }),
@@ -627,8 +667,8 @@ function Lawsuit({
         <Box className="flex flex-wrap gap-2">
           {status === "proposed" ? (
             // Reading a piece is for anybody of the firm, a support visit included; writing on it is a lawyer's.
-            <Button variant="contained" disabled={pending} onClick={() => onEdit(draft.id)}>
-              {t(writable && lawyer && !revising ? "draft-open" : "draft-read")}
+            <Button variant={oneRedo ? "outlined" : "contained"} disabled={pending} onClick={() => onEdit(draft.id)}>
+              {t(writable && lawyer && !revising && !oneRedo ? "draft-open" : "draft-read")}
             </Button>
           ) : null}
           {mayApproveAsIs ? (

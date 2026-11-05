@@ -19,7 +19,7 @@ import NiMoney from "@/icons/nexture/ni-money";
 import NiPen from "@/icons/nexture/ni-pen";
 import NiScale from "@/icons/nexture/ni-scale";
 import NiSendRight from "@/icons/nexture/ni-send-right";
-import { EVENT_KEY, PERSON_FIELD_KEY } from "@/lib/cases/cases";
+import { eventKeyOf, PERSON_FIELD_KEY } from "@/lib/cases/cases";
 import {
   type CaseJourney,
   JOURNEY_ENDED_KEY,
@@ -400,7 +400,7 @@ export default function JourneyCard({
                     ) : undefined
                   }
                 >
-                  {EVENT_KEY[event.kind] ? t(EVENT_KEY[event.kind]) : t("case-now-event-other")}
+                  {eventKeyOf(event) ? t(eventKeyOf(event) as string) : t("case-now-event-other")}
                 </StateLine>
               );
             })}

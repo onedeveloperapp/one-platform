@@ -8,6 +8,7 @@ import { Alert, Box, Button, TextField, Typography } from "@mui/material";
 
 import StateLine, { type StateTone } from "@/components/product/state-line";
 import {
+  interviewCounts,
   interviewRows,
   NOTICE_STANDING_KEY,
   noticeOf,
@@ -17,7 +18,7 @@ import {
 } from "@/lib/cases/interview";
 import { answerInterviewQuestion, closeInterview } from "@/lib/cases/statement-actions";
 import { statementErrorKey } from "@/lib/cases/statements";
-import { interviewProgress, type InterviewQuestion } from "@flyee/rules/interview";
+import type { InterviewQuestion } from "@flyee/rules/interview";
 
 type Ready = Extract<CaseState, { kind: "ready" }>;
 
@@ -55,8 +56,10 @@ export default function InterviewSection({
   if (!view) return null;
 
   const rows = interviewRows(view);
-  const progress = interviewProgress(view.facts);
-  const settled = rows.filter((row) => row.state === "answered" || row.state === "unknown").length;
+  const progress = interviewCounts(view);
+  const settled = progress.done;
+  // Once the lawsuits exist, the questions are what the piece lacks, and ONE writes it again with the answers (0099).
+  const forPiece = state.proceedings.length > 0;
   const notice = noticeOf(view.facts);
   const open = view.status === "open";
 
@@ -80,15 +83,24 @@ export default function InterviewSection({
 
   const lead =
     view.status === "done"
-      ? { tone: "done" as const, words: t("interview-done") }
+      ? { tone: "done" as const, words: t(forPiece ? "interview-piece-done" : "interview-done") }
       : view.status === "closed"
         ? { tone: "info" as const, words: t("interview-closed") }
         : view.inChat
           ? {
               tone: "waiting" as const,
-              words: t("interview-open-chat", { position: progress.position, total: progress.total }),
+              words: t(forPiece ? "interview-piece-open-chat" : "interview-open-chat", {
+                position: progress.position,
+                total: progress.total,
+              }),
             }
-          : { tone: "waiting" as const, words: t("interview-open-link", { done: settled, total: progress.total }) };
+          : {
+              tone: "waiting" as const,
+              words: t(forPiece ? "interview-piece-open-link" : "interview-open-link", {
+                done: settled,
+                total: progress.total,
+              }),
+            };
 
   return (
     <Box className="border-grey-100 flex flex-col gap-3 rounded-2xl border p-4" id="case-interview">
@@ -110,7 +122,7 @@ export default function InterviewSection({
       {closing && (
         <Box className="flex flex-row flex-wrap items-center gap-2">
           <Typography variant="body2" className="text-text-primary">
-            {t("interview-close-confirm")}
+            {t(forPiece ? "interview-piece-close-confirm" : "interview-close-confirm")}
           </Typography>
           <Button
             variant="contained"

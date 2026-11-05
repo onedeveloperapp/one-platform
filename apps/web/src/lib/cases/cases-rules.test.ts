@@ -15,6 +15,7 @@ import {
   documentNeeds,
   documentsFor,
   EVENT_KEY,
+  eventKeyOf,
   FILE_REFUSAL_KEY,
   formatLocalTime,
   isNeedMet,
@@ -309,6 +310,13 @@ describe("the words of the cases", () => {
     for (const kind of ["document_accepted", "document_rejected", "signature_refused", "signature_expired"])
       kinds.add(kind);
     for (const kind of kinds) expect(EVENT_KEY[kind], kind).toBeTruthy();
+  });
+
+  it("says a round of questions about what a piece lacks in its own words (0099)", () => {
+    expect(eventKeyOf({ kind: "interview_started", data: { piece: true } })).toBe("case-event-interview-started-piece");
+    expect(eventKeyOf({ kind: "interview_started", data: { piece: false } })).toBe(EVENT_KEY.interview_started);
+    expect(eventKeyOf({ kind: "interview_withdrawn", data: {} })).toBe("case-event-interview-withdrawn");
+    expect(eventKeyOf({ kind: "nothing_known" })).toBeNull();
   });
 
   it("has words for every refusal the database answers, and the app's own", () => {

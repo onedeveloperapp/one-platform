@@ -95,6 +95,8 @@ type Draft = {
   work: string | null;
   slow?: boolean;
   requestedAt?: string | null;
+  /** What ONE is doing with a text it carries (0099, 0100): asking the client what it lacks, or writing it again. */
+  oneRedo?: "asking" | "rewriting" | null;
 };
 type Filing = {
   id: string;
@@ -681,10 +683,22 @@ export function caseNow(input: CaseNowInput): CaseNow {
               section: "drafts",
             }),
           );
+        } else if (draft.status === "proposed" && draft.oneRedo === "rewriting") {
+          // The client answered what the piece lacked: ONE writes it again with the answers (0097, 0100).
+          working.push(
+            item({
+              id: `draft:${draft.id}`,
+              owner: "one",
+              tone: "waiting",
+              text: { key: "case-now-draft-rewriting", values: { kind } },
+              section: "drafts",
+            }),
+          );
         } else if (draft.status === "proposed") {
           // While ONE asks the client what the piece lacks, the piece waits for the client: ONE writes it again with
           // the answers (0099). A lawyer may still take it up on its card.
-          const asking = input.interview?.status === "open" && input.interview.total > 0;
+          const asking =
+            (draft.oneRedo === "asking" || input.interview?.status === "open") && (input.interview?.total ?? 0) > 0;
           blocking.push(
             item(
               asking && input.interview

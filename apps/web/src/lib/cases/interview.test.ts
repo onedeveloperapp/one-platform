@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   askMessage,
+  interviewCounts,
   interviewDoneMessage,
   interviewReadingOf,
   interviewRows,
@@ -170,5 +171,20 @@ describe("the interview as the app reads it (0095)", () => {
       ["bagagem", "next"],
     ]);
     expect(rows.find((item) => item.question === "acompanhantes")?.reason).toBe("companions_on_record");
+  });
+
+  it("keeps a round before in sight, and counts only the round asked now (0100)", () => {
+    // A round about what the piece lacks, after a round whose answers stay on the card.
+    const round = interviewViewOf({ ...row, scope: ["gastos", "consequencias"], current_question: "gastos" })!;
+    expect(interviewRows(round).map((item) => [item.question, item.state])).toEqual([
+      ["motivo", "unknown"],
+      ["chegada", "answered"],
+      ["gastos", "asked"],
+      ["consequencias", "next"],
+    ]);
+    expect(interviewCounts(round)).toEqual({ position: 1, total: 2, done: 0 });
+    // Done, it lists what was answered and nothing still to ask.
+    const done = interviewViewOf({ ...row, status: "done", scope: ["gastos"], current_question: null })!;
+    expect(interviewRows(done).map((item) => item.question)).toEqual(["motivo", "chegada"]);
   });
 });

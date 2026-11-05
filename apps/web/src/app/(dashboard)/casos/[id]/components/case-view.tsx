@@ -58,14 +58,13 @@ import NiTimeline from "@/icons/nexture/ni-timeline";
 import NiUsers from "@/icons/nexture/ni-users";
 import { caseHolder, caseLabel, caseMissing, groupOf, STATUS_KEY } from "@/lib/cases/cases";
 import { civilCourtPending } from "@/lib/cases/family";
-import { interviewRows } from "@/lib/cases/interview";
+import { interviewCounts } from "@/lib/cases/interview";
 import { caseJourney } from "@/lib/cases/journey";
 import { caseNow, SECTION_ANCHOR } from "@/lib/cases/now";
 import { readCasePulse } from "@/lib/cases/pulse-actions";
 import type { CaseSection } from "@/lib/cases/sections";
 import { caseKindLabelKey } from "@/lib/modules/registry";
 import { setPublicationJudgment } from "@/lib/publications/actions";
-import { interviewProgress } from "@flyee/rules/interview";
 
 /** The head of each card: what it is, as an icon of its family's tint. */
 const LOOKS: Record<CaseSection, CardLook> = {
@@ -142,14 +141,13 @@ export default function CaseView({ state: read }: { state: CaseState }) {
     });
     const interview = ready.interview
       ? (() => {
-          const progress = interviewProgress(ready.interview.facts);
-          const rows = interviewRows(ready.interview);
+          const counts = interviewCounts(ready.interview);
           return {
             status: ready.interview.status,
             inChat: ready.interview.inChat,
-            position: progress.position,
-            total: progress.total,
-            done: rows.filter((row) => row.state === "answered" || row.state === "unknown").length,
+            position: counts.position,
+            total: counts.total,
+            done: counts.done,
           };
         })()
       : null;

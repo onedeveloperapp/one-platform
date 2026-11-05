@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap;
-select plan(13);
+select plan(15);
 
 -- ============================================================
 -- The piece leaves to complete only what its claim cannot stand without,
@@ -9,7 +9,9 @@ select plan(13);
 -- and untouched, has ONE interview the client on what it lacks, only those
 -- questions, never one answered before, never when the firm went on without
 -- it; while the client is asked no piece is written again, and once they
--- answered it is, once. Two firms: nothing of one reaches the other.
+-- answered it is, once; nothing is asked of a piece older than the client's
+-- latest answer, and the case screen reads what ONE does with each piece
+-- (0100). Two firms: nothing of one reaches the other.
 --
 -- Every person, firm and number here is invented.
 -- ============================================================
@@ -45,11 +47,12 @@ $$ select set_config('request.jwt.claims', '{"role":"service_role"}', true); $$;
 create function pg_temp.got(name text, field text) returns text language sql as
 $$ select payload ->> got.field from res where res.name = got.name; $$;
 
--- A case of a firm, with a planned lawsuit and the AI's first text of its piece, written five hours ago by a run
+-- A case of a firm, with a planned lawsuit and the AI's first text of its piece, written `ago` (five hours) by a run
 -- that answered `said` (null: a run of a version before 0099, which said nothing of what it left to complete).
 -- `edited` adds a version a lawyer wrote.
 create function pg_temp.drafted(name text, who uuid, org uuid, template uuid, body text, said jsonb,
-                                incident text default 'cancellation', edited boolean default false)
+                                incident text default 'cancellation', edited boolean default false,
+                                ago interval default interval '5 hours')
 returns void language plpgsql as $$
 declare
   made jsonb;
@@ -70,7 +73,7 @@ begin
                                   version, requested_auto, requested_at)
   values (draft, org, (made ->> 'case_id')::uuid, lawsuit, template, 'Inicial do juizado',
           'Modelo de teste com o texto de uma peça.', 'ai', 'proposed', case when edited then 2 else 1 end, true,
-          now() - interval '5 hours');
+          now() - ago);
   perform pg_temp.as_backend();
   set local role service_role;
   started := public.start_ai_run(org, 'caso.peca.minuta', repeat('f', 64), null, 'case_draft', draft::text,
@@ -80,7 +83,7 @@ begin
       || case when said is null then '{}'::jsonb else jsonb_build_object('pendencias', said) end, 900, 400);
   reset role;
   insert into public.case_draft_versions (org_id, draft_id, version, author, body, run_id, created_at)
-  values (org, draft, 1, 'ai', body, (started ->> 'run_id')::uuid, now() - interval '5 hours');
+  values (org, draft, 1, 'ai', body, (started ->> 'run_id')::uuid, now() - ago);
   if edited then
     insert into public.case_draft_versions (org_id, draft_id, version, author, author_id, body, based_on, created_at)
     values (org, draft, 2, 'person', who, body || ' Corrigido por um advogado.', 1, now() - interval '4 hours');
@@ -160,6 +163,14 @@ select public.interview_answer(pg_temp.got('started', 'interview_id')::uuid, 'ch
 select public.interview_answer(pg_temp.got('started', 'interview_id')::uuid, 'assistencia', 'unknown');
 reset role;
 select is(pg_temp.redo('due'), 0, 'no piece is written again while the client is being asked');
+select pg_temp.sign_in('a1010000-0000-4000-8000-000000000001');
+set local role authenticated;
+insert into res values ('one_asking', public.case_drafts_one_redo(pg_temp.got('due', 'case_id')::uuid));
+reset role;
+select ok(
+  (select payload ->> pg_temp.got('due', 'draft_id') = 'asking' from res where name = 'one_asking'),
+  'the case screen reads that ONE asks the client what the piece lacks'
+);
 
 select pg_temp.as_backend();
 set local role service_role;
@@ -173,18 +184,30 @@ select ok(
        where r.draft_id = pg_temp.got('due', 'draft_id')::uuid),
   'once the client answered, ONE writes the piece again with the answers'
 );
+select pg_temp.sign_in('a1010000-0000-4000-8000-000000000001');
+set local role authenticated;
+insert into res values ('one_rewriting', public.case_drafts_one_redo(pg_temp.got('due', 'case_id')::uuid));
+insert into res values ('one_none', public.case_drafts_one_redo(pg_temp.got('downgrade', 'case_id')::uuid));
+reset role;
+select pg_temp.as_backend();
+select ok(
+  (select payload ->> pg_temp.got('due', 'draft_id') = 'rewriting' from res where name = 'one_rewriting')
+  and (select payload = '{}'::jsonb from res where name = 'one_none'),
+  'and then that ONE writes it again; a piece ONE does not carry is a lawyer''s as before'
+);
 select ok(
   pg_temp.scope('due') = '{}'::text[]
   and (select payload -> 'cases' ? pg_temp.got('due', 'case_id') = false
        from (select jsonb_build_object('cases', coalesce(jsonb_agg(c), '[]'::jsonb)) as payload
              from public.interviews_to_start(50) c) x),
-  'a question answered, or said not known, is never asked again'
+  'nothing is asked of a piece older than the client''s answers: ONE writes it again first'
 );
 
 -- A piece written again that still lacks something never answered opens the interview done before, with only that.
 update public.case_drafts set status = 'cancelled' where id = pg_temp.got('due', 'draft_id')::uuid;
 select pg_temp.drafted('due_again', 'a1010000-0000-4000-8000-000000000001', 'b1010000-0000-4000-8000-00000000000a',
-  'd1010000-0000-4000-8000-00000000000a', 'Excelentíssimo Juízo. [COMPLETAR: o motivo]', '["motivo", "gastos"]'::jsonb);
+  'd1010000-0000-4000-8000-00000000000a', 'Excelentíssimo Juízo. [COMPLETAR: o motivo]', '["motivo", "gastos"]'::jsonb,
+  'cancellation', false, interval '0 seconds');
 update public.case_drafts set case_id = pg_temp.got('due', 'case_id')::uuid,
   proceeding_id = pg_temp.got('due', 'proceeding_id')::uuid
 where id = pg_temp.got('due_again', 'draft_id')::uuid;
@@ -197,7 +220,7 @@ select ok(
   and pg_temp.got('reopened', 'interview_id') = pg_temp.got('started', 'interview_id')
   and (select status = 'open' and scope = array['motivo'] and finished_at is null
        from public.case_interviews where case_id = pg_temp.got('due', 'case_id')::uuid),
-  'the interview done before is opened again with what the new piece lacks and nobody answered'
+  'the piece written again after the answers has the interview opened again with what it lacks and nobody answered'
 );
 
 -- ---------- A piece written before 0099 ----------
@@ -219,9 +242,8 @@ select pg_temp.drafted('legacy_bare', 'a1010000-0000-4000-8000-000000000001', 'b
   'd1010000-0000-4000-8000-00000000000a', 'Excelentíssimo Juízo. [COMPLETAR: os fatos]', null, 'delay');
 select ok(
   pg_temp.scope('legacy') = array['solucao', 'gastos']
-  and pg_temp.scope('legacy_bare') = array['aviso_local', 'aviso_quando', 'motivo', 'chegada', 'assistencia', 'gastos',
-                                           'consequencias', 'acompanhantes', 'bagagem'],
-  'a piece written before says nothing of what it lacks: the account''s gaps stand for it, else every question'
+  and pg_temp.scope('legacy_bare') = '{}'::text[],
+  'a piece written before says nothing of what it lacks: only the account''s own gaps stand for it, never every question'
 );
 select pg_temp.as_backend();
 set local role service_role;

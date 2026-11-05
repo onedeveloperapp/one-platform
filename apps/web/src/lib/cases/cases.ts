@@ -146,6 +146,16 @@ export const DOCUMENT_STATUS_KEY: Record<DocumentStatus, string> = {
   rejected: "case-document-status-rejected",
 };
 
+/**
+ * The words of one event of a case's timeline: its kind's, or the variant its data says (a round of questions about
+ * what a piece lacks, 0099). Null for a kind with no words.
+ */
+export function eventKeyOf(event: { kind: string; data?: unknown }): string | null {
+  const data = event.data && typeof event.data === "object" ? (event.data as Record<string, unknown>) : null;
+  if (event.kind === "interview_started" && data?.piece === true) return "case-event-interview-started-piece";
+  return EVENT_KEY[event.kind] ?? null;
+}
+
 /** The words of each event of a case's timeline (`case_events.kind`, migration 0022). */
 export const EVENT_KEY: Record<string, string> = {
   created: "case-event-created",
@@ -218,6 +228,7 @@ export const EVENT_KEY: Record<string, string> = {
   interview_answered: "case-event-interview-answered",
   interview_closed: "case-event-interview-closed",
   draft_redone: "case-event-draft-redone",
+  interview_withdrawn: "case-event-interview-withdrawn",
   complaint_saved: "case-event-complaint-saved",
   complaint_removed: "case-event-complaint-removed",
   filing_package_requested: "case-event-filing-requested",

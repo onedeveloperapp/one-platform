@@ -8,6 +8,7 @@ import {
   isInterviewQuestion,
   noticeStanding,
   QUESTION_SHAPE,
+  questionsFor,
   questionsOf,
   SKIP_REASONS,
   type SkipReason,
@@ -326,20 +327,37 @@ export const NOTICE_STANDING_PIECE: Record<"at_airport" | "late" | "early", stri
   early: "72h_ou_mais",
 };
 
-/** Each question of the interview's problem, with where it stands: answered, not known, left out, asked now, to come. */
+/**
+ * Each question of the interview, with where it stands: answered, not known, left out, asked now, to come. Every
+ * answer stays in sight, also one of a round before (0099); a question never answered is listed while it may still
+ * be asked (the round's, open or closed), never once the interview is done.
+ */
 export function interviewRows(view: InterviewView): {
   question: InterviewQuestion;
   state: "answered" | "unknown" | "skipped" | "asked" | "next";
   answer: InterviewAnswerView | null;
   reason: SkipReason | null;
 }[] {
-  return questionsOf(view.facts).map((question) => {
-    const answer = view.answers[question] ?? null;
-    if (answer) return { question, state: answer.status, answer, reason: answer.reason };
-    const reason = skipReason(question, view.facts);
-    if (reason) return { question, state: "skipped", answer: null, reason };
-    return { question, state: view.currentQuestion === question ? "asked" : "next", answer: null, reason: null };
-  });
+  const asked = new Set(questionsOf(view.facts));
+  return questionsFor(view.facts.incident)
+    .filter((question) => view.answers[question] || (view.status !== "done" && asked.has(question)))
+    .map((question) => {
+      const answer = view.answers[question] ?? null;
+      if (answer) return { question, state: answer.status, answer, reason: answer.reason };
+      const reason = skipReason(question, view.facts);
+      if (reason) return { question, state: "skipped", answer: null, reason };
+      return { question, state: view.currentQuestion === question ? "asked" : "next", answer: null, reason: null };
+    });
+}
+
+/** Where the round stands: the question asked now among the ones it asks, and how many of them have an answer. */
+export function interviewCounts(view: InterviewView): { position: number; total: number; done: number } {
+  const { position, total } = interviewProgress(view.facts);
+  const asked = new Set(questionsOf(view.facts));
+  const done = interviewRows(view).filter(
+    (row) => asked.has(row.question) && (row.state === "answered" || row.state === "unknown"),
+  ).length;
+  return { position, total, done };
 }
 
 /** What the interview says of the 72 hours, for the firm and the piece; null when it cannot tell. */

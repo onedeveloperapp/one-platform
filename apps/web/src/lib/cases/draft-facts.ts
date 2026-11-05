@@ -77,6 +77,11 @@ export type CaseDraft = {
   requestedBy: string | null;
   /** Asked for by ONE itself, where the firm lets it (0039, `start_piece`). */
   requestedAuto: boolean;
+  /**
+   * What ONE is doing with a text it carries (0099, 0100): `asking` the client what it lacks, or `rewriting` it with
+   * the client's answers; null when it waits for a lawyer as before.
+   */
+  oneRedo: "asking" | "rewriting" | null;
   /** When it last changed: the day a draft given up was given up. */
   updatedLabel: string;
 };
@@ -205,7 +210,7 @@ export async function loadCasePieces(
   const runIds = [...new Set(rows.flatMap((row) => (row.run_id ? [row.run_id] : [])))];
   const alikeCases = [...new Set(rows.flatMap((row) => alikeOf(row.alike).map((item) => item.case)))];
 
-  const [bodies, sources, waiting, cases, written] = await Promise.all([
+  const [bodies, sources, waiting, cases, written, oneRedo] = await Promise.all([
     Promise.all(
       open.map((row) =>
         supabase
@@ -240,7 +245,17 @@ export async function loadCasePieces(
           .eq("org_id", firmId)
           .in("run_id", runIds)
       : { data: [], error: null },
+    // What ONE is doing with the texts it carries: asking the client what they lack, or writing them again (0100).
+    // A read that fails says nothing of it, and the pieces read as before.
+    open.length > 0 ? supabase.rpc("case_drafts_one_redo", { target_case: caseId }) : { data: {}, error: null },
   ]);
+  const redoOf = new Map<string, "asking" | "rewriting">(
+    !oneRedo.error && oneRedo.data && typeof oneRedo.data === "object"
+      ? Object.entries(oneRedo.data as Record<string, unknown>).flatMap(([id, state]) =>
+          state === "asking" || state === "rewriting" ? [[id, state] as const] : [],
+        )
+      : [],
+  );
   if (
     bodies.some((body) => body.error) ||
     sources.some((read) => read.error) ||
@@ -384,6 +399,7 @@ export async function loadCasePieces(
           requestedLabel: momentLabel(row.requested_at, timeZone),
           requestedBy: row.requested_by ? names.get(row.requested_by) || null : null,
           requestedAuto: row.requested_auto === true,
+          oneRedo: row.status === "proposed" ? (redoOf.get(row.id) ?? null) : null,
           updatedLabel: momentLabel(row.updated_at, timeZone),
         } satisfies CaseDraft,
       ];

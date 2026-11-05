@@ -132,6 +132,19 @@ describe("caseNow", () => {
       owner: "firm",
       text: { key: "case-now-draft-review" },
     });
+    // Once the client answered, ONE writes it again: its work, nothing asked of a lawyer (0100).
+    const rewriting = caseNow(
+      base({
+        status: "drafting",
+        proceedings: [planned],
+        drafts: [{ ...draft, oneRedo: "rewriting" }] as unknown as CaseNowInput["drafts"],
+      }),
+    );
+    expect(rewriting.working.find((one) => one.id === "draft:dr")).toMatchObject({
+      owner: "one",
+      text: { key: "case-now-draft-rewriting" },
+    });
+    expect(rewriting.blocking.find((one) => one.id === "draft:dr")).toBeUndefined();
   });
 
   it("says the package waits for a lawyer to file it, never that the case is with ONE", () => {
