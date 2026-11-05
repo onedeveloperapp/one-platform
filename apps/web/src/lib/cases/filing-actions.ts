@@ -8,6 +8,7 @@ import { queueFilingPackage } from "@/lib/cases/filing-work";
 import { queuePackageSignature } from "@/lib/cases/package-signature-work";
 import { discardUpload, downloadUrl, finishUpload } from "@/lib/files/uploads";
 import { getMemberContext } from "@/lib/member/context";
+import { settleFirmNotices } from "@/lib/notices/work";
 import { isSupportVisit } from "@/lib/whatsapp/session";
 
 /**
@@ -168,7 +169,11 @@ export async function attachFilingReceipt(input: {
     target_filed_on: input.filedOn,
   });
   const result = fold(data, error, () => ({}));
-  if (result.ok) refresh(input.caseId);
+  if (result.ok) {
+    refresh(input.caseId);
+    // The client is told the lawsuit was filed: a test case's at once, a real case's after its minutes (0103).
+    await settleFirmNotices(context.firm.id);
+  }
   // A receipt this request has just measured and that found no place is taken back.
   else if (finished.measured && !(await isSupportVisit())) await discardUpload(context, input.fileId);
   return result;

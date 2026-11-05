@@ -66,3 +66,19 @@ export async function sweepNotices(
 export async function settleNotices(): Promise<void> {
   soon("client-notices", () => sweepNotices(createServiceClient(), { budgetMs: 20_000 }));
 }
+
+/**
+ * Something a notice tells was just written in a firm (a hearing, by a person or by ONE from its publication; a
+ * payment triaged; a lawsuit filed): what is due to the firm's clients now is reserved and sent right after, never
+ * waited for. A test case's notice is due at once (0103), so the client of the test chat is told of a hearing the
+ * test court marked minutes ahead; a real case's waits its minutes after the write, and the sweep sends it.
+ */
+export async function settleFirmNotices(orgId: string): Promise<void> {
+  soon("client-notices-firm", async () => {
+    const service = createServiceClient();
+    const { data, error } = await service.rpc("reserve_client_notices", { target_org: orgId, target_limit: PER_FIRM });
+    if (error) return;
+    const reserved = Number((data as { reserved?: number } | null)?.reserved ?? 0);
+    if (reserved > 0) await deliverOutbox(service, { limit: reserved, budgetMs: 20_000 });
+  });
+}

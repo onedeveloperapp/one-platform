@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import { isDjenCaptureOn } from "@/lib/courts/djen";
 import { getMemberContext } from "@/lib/member/context";
+import { settleFirmNotices } from "@/lib/notices/work";
 import { queueFirmCapture } from "@/lib/publications/capture";
 import {
   findPublications,
@@ -85,6 +86,8 @@ export async function triagePublication(input: {
   const result = fold(data, error);
   if (!result.ok) return result;
   refresh();
+  // A payment warns the client against the scam: a test case's at once, a real case's after its minutes (0103).
+  if (input.category === "pagamento") await settleFirmNotices(context.firm.id);
   // A decision: whether it is the lawsuit's judgment is read from its own words, and the person is asked only when
   // they say nothing clear (the owner, 2026-11-05; migration 0096).
   if (input.category === "decisao") {

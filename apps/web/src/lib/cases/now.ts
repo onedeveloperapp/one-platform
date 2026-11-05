@@ -948,13 +948,21 @@ export function caseNow(input: CaseNowInput): CaseNow {
     }
     const untriaged = input.publications.filter((publication) => publication.category === null).length;
     if (untriaged > 0) {
+      // With no hearing set and none triaged before, what the court published may be the hearing it just marked: once
+      // a person says so, ONE writes it in the agenda and the client is told (the owner's test, 2026-11-05).
+      const mayBeHearing =
+        !input.hearings.some((hearing) => hearing.status === "scheduled") &&
+        !input.publications.some((publication) => publication.category === "audiencia");
       blocking.push(
         item({
           id: "publications:untriaged",
           owner: "firm",
           actor: "deadlines",
           tone: "attention",
-          text: { key: "case-now-publications-untriaged", values: { count: untriaged } },
+          text: {
+            key: mayBeHearing ? "case-now-publications-untriaged-hearing" : "case-now-publications-untriaged",
+            values: { count: untriaged },
+          },
           href: "/publicacoes",
         }),
       );

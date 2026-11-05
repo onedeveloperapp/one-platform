@@ -2576,6 +2576,7 @@
     "case-now-deadlines-review": "{count, plural, one {# prazo pede} other {# prazos pedem}} um novo olhar.",
     "case-now-hearing-silent": "A audiência de {day} às {time} já passou: diga o que aconteceu nela.",
     "case-now-publications-untriaged": "{count, plural, one {# publicação do processo espera} other {# publicações do processo esperam}} a triagem.",
+    "case-now-publications-untriaged-hearing": "{count, plural, one {# publicação do processo espera a triagem e pode ser} other {# publicações do processo esperam a triagem, e uma pode ser}} a audiência que o tribunal marcou. Triada como Audiência, o ONE a registra na agenda e avisa o cliente.",
     "case-now-judgment-ask": "Saiu uma decisão em {day}, e o texto não deixa claro: ela é a sentença?",
     "case-now-judgment-yes": "É a sentença",
     "case-now-judgment-no": "Não é",

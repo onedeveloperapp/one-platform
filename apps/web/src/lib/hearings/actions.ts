@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { settleCalendarSync, settleHearingSync } from "@/lib/hearings/calendar-work";
 import { isHearingKind, isHearingMode, isHearingOutcome } from "@/lib/hearings/hearings";
 import { getMemberContext } from "@/lib/member/context";
+import { settleFirmNotices } from "@/lib/notices/work";
 
 /**
  * What a person of the firm does with a hearing (migration 0037): write it,
@@ -119,7 +120,11 @@ export async function saveHearing(input: HearingInput): Promise<HearingActionRes
   const result = fold(data, error);
   if (!result.ok) return result;
   const id = result.id ?? hearingId;
-  if (id && result.code !== "unchanged") await settleHearingSync(id, result.calendar === true);
+  if (id && result.code !== "unchanged") {
+    await settleHearingSync(id, result.calendar === true);
+    // The client is told by the notices: a test case's at once, a real case's after its minutes (0103).
+    await settleFirmNotices(context.firm.id);
+  }
   refresh(id ? await caseOf(id) : null);
   return result;
 }
@@ -144,7 +149,10 @@ export async function setHearingStatus(input: {
   });
   const result = fold(data, error);
   if (!result.ok) return result;
-  if (result.code !== "unchanged") await settleHearingSync(input.hearingId, result.calendar === true);
+  if (result.code !== "unchanged") {
+    await settleHearingSync(input.hearingId, result.calendar === true);
+    await settleFirmNotices(context.firm.id);
+  }
   refresh(await caseOf(input.hearingId));
   return result;
 }

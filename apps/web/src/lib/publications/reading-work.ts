@@ -4,6 +4,7 @@ import { providerReadiness, runFirmTask } from "@/lib/ai/executor";
 import { countDeadlines } from "@/lib/deadlines/count-work";
 import { syncHearings } from "@/lib/hearings/calendar-work";
 import { soon } from "@/lib/jobs/soon";
+import { settleFirmNotices } from "@/lib/notices/work";
 import { triageText } from "@/lib/publications/publications";
 import { READING_TASK, type ReadingAct, readingBriefing, readingFailure } from "@/lib/publications/reading";
 import { isReadingKind, READING_KINDS, type ReadingKind } from "@/lib/publications/reading-words";
@@ -80,19 +81,26 @@ export async function claimPublicationReadings(
   );
 }
 
-/** What follows what ONE recorded: the deadline counted, the hearing written to the firm's calendar. */
+/**
+ * What follows what ONE recorded: the deadline counted, the hearing written to the firm's calendar and its client
+ * told.
+ */
 export type ReadingFollow = {
   deadline: (deadlineId: string) => Promise<void>;
-  hearing: (hearingId: string) => Promise<void>;
+  hearing: (hearingId: string, orgId: string) => Promise<void>;
 };
 
-/** What follows is done in the same work: the count, and the event of the calendar; the sweeps take what fails. */
+/**
+ * What follows is done in the same work: the count, and the event of the calendar; the notices are sent right after
+ * (a test case's hearing at once, 0103). The sweeps take what fails.
+ */
 const followReadingHere: ReadingFollow = {
   deadline: async (deadlineId) => {
     await countDeadlines(createServiceClient(), { limit: 1, deadlineId });
   },
-  hearing: async (hearingId) => {
+  hearing: async (hearingId, orgId) => {
     await syncHearings(createServiceClient(), { limit: 1, hearingId });
+    await settleFirmNotices(orgId);
   },
 };
 
@@ -174,7 +182,7 @@ export async function readClaimedPublication(
           await follow.deadline(answer.deadline_id);
         }
         if (typeof answer.hearing_id === "string" && UUID.test(answer.hearing_id)) {
-          await follow.hearing(answer.hearing_id);
+          await follow.hearing(answer.hearing_id, row.org_id);
         }
       } catch {
         // The sweeps take it.

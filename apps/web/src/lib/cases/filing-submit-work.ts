@@ -4,6 +4,7 @@ import { lawsuitFilingOf, submissionOf, type SubmissionToSend } from "@/lib/case
 import { mniChannelFor, TestCourtChannel } from "@/lib/courts/filing-channel";
 import { supabaseFileStore } from "@/lib/files/store";
 import { soon } from "@/lib/jobs/soon";
+import { settleFirmNotices } from "@/lib/notices/work";
 import { receiptBlocks, receiptDay, unitOf } from "@/lib/test-court/test-court";
 import { createServiceClient } from "@flyee/auth/service";
 import type { FilingChannel, FilingOutcome } from "@flyee/courts/types";
@@ -205,6 +206,8 @@ export async function submitClaimedFiling(service: SupabaseClient, held: Submiss
     if (receiptFile && code !== "filed" && code !== "filed_unnumbered") {
       await takeBackFile(store, receiptFile.id, receiptFile.path).catch(() => undefined);
     }
+    // The client is told the lawsuit was filed: a test case's at once, a real case's after its minutes (0103).
+    if (code === "filed" || code === "filed_unnumbered") await settleFirmNotices(sub.orgId);
     return code;
   }
   if (outcome.kind === "refused") return record("refused", { protocol: outcome.protocol, message: outcome.message });

@@ -211,6 +211,30 @@ describe("caseNow", () => {
     expect(ids(caseNow(base({ envelopes: [{ ...envelope, status: "opening" }] })).working)).toEqual(["envelope:e1"]);
   });
 
+  it("in court with no hearing set, says a publication that waits for triage may be the hearing", () => {
+    const untriaged = { id: "p1", category: null, availableOn: "2026-11-05", judgment: null, readings: [] };
+    const textOf = (now: ReturnType<typeof caseNow>) =>
+      now.blocking.find((line) => line.id === "publications:untriaged")?.text;
+    expect(textOf(caseNow(base({ status: "filed", publications: [untriaged] })))).toEqual({
+      key: "case-now-publications-untriaged-hearing",
+      values: { count: 1 },
+    });
+    // A hearing set, or one triaged before, and the publication is only one to triage.
+    const scheduled = {
+      id: "h1",
+      status: "scheduled",
+      startsAt: "2026-11-09T12:00:00Z",
+      timeZone: "America/Sao_Paulo",
+    };
+    expect(textOf(caseNow(base({ status: "filed", hearings: [scheduled], publications: [untriaged] })))?.key).toBe(
+      "case-now-publications-untriaged",
+    );
+    const known = { ...untriaged, id: "p0", category: "audiencia" };
+    expect(textOf(caseNow(base({ status: "filed", publications: [known, untriaged] })))?.key).toBe(
+      "case-now-publications-untriaged",
+    );
+  });
+
   it("in court, says the hearing that passed with no word on it, and the decision nobody said is the judgment", () => {
     const now = caseNow(
       base({

@@ -174,7 +174,10 @@ export default function JourneyCard({
       : JOURNEY_NOW_KEY[journey.current];
   const extra = hearingAt
     ? t("journey-next-hearing", { day: hearingAt.day, time: hearingAt.time })
-    : journey.current === "hearing" && !journey.ended && !now.blocking.some((line) => line.id.startsWith("hearing:"))
+    : journey.current === "hearing" &&
+        !journey.ended &&
+        // A publication that waits for triage may be the hearing the court marked: its own line says so.
+        !now.blocking.some((line) => line.id.startsWith("hearing:") || line.id === "publications:untriaged")
       ? t("journey-hearing-unset")
       : null;
 
