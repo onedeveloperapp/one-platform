@@ -10,6 +10,7 @@ import { Alert, Box, Button, Grid, Typography } from "@mui/material";
 
 import AttentionList, { type AttentionGroup } from "@/components/product/attention-list";
 import EmptyState from "@/components/product/empty-state";
+import HomeHero, { type HeroOrnament } from "@/components/product/home-hero";
 import { StatTile } from "@/components/product/home-tiles";
 import ModulesQuickAccess from "@/components/product/modules-quick-access";
 import OnboardingChecklistCard from "@/components/product/onboarding-checklist-card";
@@ -21,20 +22,24 @@ import NiCalendarClock from "@/icons/nexture/ni-calendar-clock";
 import NiClock from "@/icons/nexture/ni-clock";
 import NiDocumentCross from "@/icons/nexture/ni-document-cross";
 import NiDocumentFull from "@/icons/nexture/ni-document-full";
+import NiEmail from "@/icons/nexture/ni-email";
 import NiExclamationSquare from "@/icons/nexture/ni-exclamation-square";
 import NiFlag from "@/icons/nexture/ni-flag";
 import NiFolderCheck from "@/icons/nexture/ni-folder-check";
 import NiInbox from "@/icons/nexture/ni-inbox";
+import NiLink from "@/icons/nexture/ni-link";
 import NiListCheck from "@/icons/nexture/ni-list-check";
 import NiMessageCross from "@/icons/nexture/ni-message-cross";
 import NiMessages from "@/icons/nexture/ni-messages";
 import NiMicrophone from "@/icons/nexture/ni-microphone";
 import NiPaperclip from "@/icons/nexture/ni-paperclip";
-import NiRefresh from "@/icons/nexture/ni-refresh";
+import NiPen from "@/icons/nexture/ni-pen";
 import NiRobot from "@/icons/nexture/ni-robot";
 import NiScale from "@/icons/nexture/ni-scale";
 import NiShieldCheck from "@/icons/nexture/ni-shield-check";
 import NiTimeline from "@/icons/nexture/ni-timeline";
+import NiUser from "@/icons/nexture/ni-user";
+import NiUserCross from "@/icons/nexture/ni-user-cross";
 import NiUsers from "@/icons/nexture/ni-users";
 import type { WaitingDecisions } from "@/lib/ai/decisions";
 import type { JourneyOverview } from "@/lib/cases/journey-read";
@@ -217,7 +222,13 @@ const NEED: Record<TodayNeed["key"], { label: string; hint: string; tone: TileTo
     label: "today-need-reading",
     hint: "today-need-reading-hint",
     tone: "accent-4",
-    icon: <NiRefresh size="large" />,
+    icon: <NiUserCross size="large" />,
+  },
+  skipped: {
+    label: "today-need-skipped",
+    hint: "today-need-skipped-hint",
+    tone: "accent-3",
+    icon: <NiDocumentCross size="large" />,
   },
   moved: {
     label: "today-need-moved",
@@ -264,6 +275,56 @@ const NEED: Record<TodayNeed["key"], { label: string; hint: string; tone: TileTo
 };
 
 /**
+ * The icon of each kind of thing that holds a case, by the key of its tag (`pending-tag-*`, and the waits of a case,
+ * `advance-tag-*`): what a person tells a card of "O escritório precisa agir" by before reading it. A kind with none
+ * here takes the exclamation of the list itself.
+ */
+const TAG_ICON: Record<string, React.ReactNode> = {
+  "pending-tag-deadline": <NiClock size="medium" />,
+  "pending-tag-hearing": <NiCalendar size="medium" />,
+  "pending-tag-calendar": <NiCalendar size="medium" />,
+  "pending-tag-conversation": <NiMessages size="medium" />,
+  "pending-tag-message": <NiMessageCross size="medium" />,
+  "pending-tag-approval": <NiListCheck size="medium" />,
+  "pending-tag-publication": <NiInbox size="medium" />,
+  "pending-tag-client": <NiUser size="medium" />,
+  "pending-tag-civil": <NiScale size="medium" />,
+  "pending-tag-documents": <NiPaperclip size="medium" />,
+  "pending-tag-movement": <NiTimeline size="medium" />,
+  "pending-tag-piece": <NiDocumentFull size="medium" />,
+  "pending-tag-filing": <NiScale size="medium" />,
+  "pending-tag-account": <NiMicrophone size="medium" />,
+  "pending-tag-complaint": <NiFlag size="medium" />,
+  "pending-tag-link": <NiLink size="medium" />,
+  "pending-tag-signature": <NiPen size="medium" />,
+  "pending-tag-cloud-signature": <NiPen size="medium" />,
+  "pending-tag-case": <NiFolderCheck size="medium" />,
+  "advance-tag-documents": <NiPaperclip size="medium" />,
+  "advance-tag-paper": <NiPen size="medium" />,
+  "advance-tag-signer": <NiPen size="medium" />,
+  "advance-tag-model": <NiDocumentFull size="medium" />,
+  "advance-tag-court": <NiScale size="medium" />,
+  "advance-tag-system": <NiScale size="medium" />,
+  "advance-tag-civil": <NiScale size="medium" />,
+  "advance-tag-claimants": <NiUsers size="medium" />,
+  "advance-tag-family": <NiUsers size="medium" />,
+  "advance-tag-domicile": <NiUser size="medium" />,
+  "advance-tag-client-confirmation": <NiUser size="medium" />,
+  "advance-tag-account": <NiMicrophone size="medium" />,
+  "advance-tag-case-incomplete": <NiFolderCheck size="medium" />,
+};
+
+/** The small icons on the arcs of the home's hero: the firm's work, each in its family's tint. */
+const HERO_ORNAMENTS: HeroOrnament[] = [
+  { key: "messages", icon: <NiMessages size="medium" />, tone: "secondary" },
+  { key: "scale", icon: <NiScale size="medium" />, tone: "primary" },
+  { key: "piece", icon: <NiDocumentFull size="medium" />, tone: "accent-1" },
+  { key: "hearing", icon: <NiCalendar size="medium" />, tone: "accent-2" },
+  { key: "email", icon: <NiEmail size="medium" />, tone: "accent-4" },
+  { key: "one", icon: <NiRobot size="medium" />, tone: "primary" },
+];
+
+/**
  * The firm's home. Somebody opens it at the start of the day to know what
  * needs them and to go there: success is nothing waiting. So it is a handful
  * of counts, each one a way into where the work is done, and for a firm still
@@ -300,6 +361,8 @@ export default function HomeView({ state }: { state: HomeState }) {
         title: sayPending(t, item.label),
         detail: item.detail ? sayPending(t, item.detail) : undefined,
         count: item.count,
+        countLabel: t("today-attention-count", { count: item.count }),
+        icon: TAG_ICON[item.tag.key],
       })),
     };
   });
@@ -331,29 +394,30 @@ export default function HomeView({ state }: { state: HomeState }) {
 
   return (
     <Box className="flex flex-col gap-6">
-      <PageHeader
-        title={ready?.firstName ? t("today-greeting", { name: ready.firstName }) : t("today-title")}
-        crumbs={[{ label: t("today-title") }]}
-        description={
-          ready
-            ? [
-                t("today-description", { firm: ready.firm.name }),
-                live.live && live.checkedAt
-                  ? t("today-live", {
-                      time: new Intl.DateTimeFormat("pt-BR", {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                        timeZone: "America/Sao_Paulo",
-                      }).format(new Date(live.checkedAt)),
-                    })
-                  : null,
-              ]
-                .filter(Boolean)
-                .join(" ")
-            : undefined
-        }
-      />
-      {ready?.modules ? <ModulesQuickAccess offer={ready.modules} /> : null}
+      <PageHeader title={t("today-home-title")} crumbs={[{ label: t("today-home-title") }]} />
+
+      {/* The greeting and the way into each module, in one card at the top (the owner's model of 2026-11-05). */}
+      {ready ? (
+        <HomeHero
+          id="today-hero"
+          title={ready.firstName ? t("today-greeting", { name: ready.firstName }) : t("today-title")}
+          description={t("today-description", { firm: ready.firm.name })}
+          aside={
+            live.live && live.checkedAt
+              ? t("today-live", {
+                  time: new Intl.DateTimeFormat("pt-BR", {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                    timeZone: "America/Sao_Paulo",
+                  }).format(new Date(live.checkedAt)),
+                })
+              : undefined
+          }
+          ornaments={HERO_ORNAMENTS}
+        >
+          {ready.modules ? <ModulesQuickAccess offer={ready.modules} inHero /> : null}
+        </HomeHero>
+      ) : null}
 
       {state.kind === "unavailable" ? (
         <Alert severity="info" className="neutral bg-background-paper/60!">

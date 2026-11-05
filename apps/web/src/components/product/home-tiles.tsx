@@ -16,6 +16,11 @@ import { cn } from "@/lib/utils";
  * come, one the firm did not contract), named in words. With no `href` the
  * card is a plain readout: a link that goes nowhere would be a control that
  * does nothing.
+ *
+ * `eyebrow` is the template's hero tile ("Generate / Image" of its AI pages):
+ * a small grey line over the title, and no description. `outlined` draws the
+ * card with a hairline instead of its shadow, for a tile that sits inside
+ * another card (the home's hero), where a shadow in a shadow reads as clutter.
  */
 export function QuickActionTile({
   href,
@@ -23,6 +28,8 @@ export function QuickActionTile({
   tone,
   title,
   description,
+  eyebrow,
+  outlined = false,
   badge,
   label,
 }: {
@@ -31,7 +38,12 @@ export function QuickActionTile({
   icon: React.ReactNode;
   tone: TileTone;
   title: string;
-  description: string;
+  /** One line under the title. Optional only beside an `eyebrow`, which says what the tile is. */
+  description?: string;
+  /** A small line over the title (what kind of thing the tile opens, or its state). */
+  eyebrow?: string;
+  /** A hairline in place of the card's shadow: a tile inside another card. */
+  outlined?: boolean;
   /** A state beside the title, in words (a `StatusChip`). */
   badge?: React.ReactNode;
   /** What the card says to a screen reader when the badge alone is not words (a lock). */
@@ -43,7 +55,12 @@ export function QuickActionTile({
     <Card
       {...shell}
       aria-label={label}
-      className={cn("flex h-full flex-row p-1", href && "transition-transform hover:scale-[1.02]")}
+      elevation={outlined ? 0 : undefined}
+      className={cn(
+        "flex h-full flex-row p-1",
+        outlined && "border-grey-100 border",
+        href && "transition-transform hover:scale-[1.02]",
+      )}
     >
       <Box
         aria-hidden
@@ -51,16 +68,23 @@ export function QuickActionTile({
       >
         {icon}
       </Box>
-      <CardContent className="min-w-0">
+      <CardContent className="min-w-0 text-left">
+        {eyebrow ? (
+          <Typography variant="body2" className="text-text-secondary leading-5">
+            {eyebrow}
+          </Typography>
+        ) : null}
         <Box className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
           <Typography variant="subtitle2" component="p" className="leading-5">
             {title}
           </Typography>
           {badge}
         </Box>
-        <Typography variant="body1" className="text-text-secondary line-clamp-1 leading-5">
-          {description}
-        </Typography>
+        {description ? (
+          <Typography variant="body1" className="text-text-secondary line-clamp-1 leading-5">
+            {description}
+          </Typography>
+        ) : null}
       </CardContent>
     </Card>
   );

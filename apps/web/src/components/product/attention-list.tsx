@@ -1,11 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import type { ReactNode } from "react";
 
-import { Box, Card, CardContent, List, ListItemButton, Typography } from "@mui/material";
+import { Box, Card, CardContent, Typography } from "@mui/material";
 
 import StatusChip from "@/components/product/status-chip";
-import NiChevronRightSmall from "@/icons/nexture/ni-chevron-right-small";
 import NiExclamationSquare from "@/icons/nexture/ni-exclamation-square";
 import { cn } from "@/lib/utils";
 
@@ -22,14 +22,13 @@ export type AttentionItem = {
   detail?: string;
   /** How many things the line stands for; shown when more than one. */
   count?: number;
+  /** The count in words (3 casos), said in its pill; the number alone when not given. */
+  countLabel?: string;
+  /** The icon of the kind of thing (a deadline's clock, a publication's inbox), at `size="medium"`. */
+  icon?: ReactNode;
 };
 
 export type AttentionGroup = { key: string; title: string; tone: AttentionTone; items: AttentionItem[] };
-
-const BAR: Record<AttentionTone, string> = {
-  danger: "border-l-error",
-  attention: "border-l-accent-3",
-};
 
 const ICON: Record<AttentionTone, string> = {
   danger: "bg-error-light/10 text-error",
@@ -39,14 +38,17 @@ const ICON: Record<AttentionTone, string> = {
 /**
  * What holds a firm's cases until somebody of the firm acts, at the top of
  * the screen where a person starts the day: one card, its colour the most
- * urgent of what it holds, each line one thing with its kind named (a pastel
- * badge, never colour alone), what it is, of which case and since when, one
- * click from where it is done.
+ * urgent of what it holds, and in it, by group, one card per thing (the
+ * template's grid of projects, the owner's model of 2026-11-05): the icon of
+ * its kind on the group's tint, what it is, its kind named in a pastel badge
+ * (never colour alone), of which case and since when in two lines at most,
+ * and how many when it stands for more than one, the whole card one click
+ * from where it is done.
  *
  * Closest catalog entries: the pending center's drawer (the same lines, in a
  * List of links) and StatTile (one count, one place to go). Neither says, per
- * thing, what it is and where it is put right, which is the job here; the bar
- * at the left of each line is the TILE_TONE hue on a bar, never on the words.
+ * thing, what it is and where it is put right, which is the job here; the
+ * group's hue rides on the icon's tint and the badge, never on the words.
  */
 export default function AttentionList({
   id,
@@ -92,37 +94,55 @@ export default function AttentionList({
           .filter((group) => group.items.length > 0)
           .map((group) => (
             <Box key={group.key} component="section" aria-labelledby={`${id}-${group.key}`}>
-              <Typography id={`${id}-${group.key}`} variant="subtitle2" component="h3" className="mb-1">
+              <Typography id={`${id}-${group.key}`} variant="subtitle2" component="h3" className="mb-2">
                 {group.title}
               </Typography>
-              <List disablePadding className="flex flex-col gap-1">
+              <Box component="ul" className="m-0 grid list-none grid-cols-1 gap-3 p-0 md:grid-cols-2">
                 {group.items.map((item) => (
-                  <ListItemButton
-                    key={item.id}
-                    component={Link}
-                    href={item.href}
-                    className={cn("rounded-r-lg border-l-4 py-2 pr-2 pl-3", BAR[group.tone])}
-                  >
-                    <Box className="flex min-w-0 flex-1 flex-col gap-1 sm:flex-row sm:items-center sm:gap-3">
-                      <StatusChip tone={group.tone} label={item.tag} className="self-start sm:self-center" />
-                      <Box className="flex min-w-0 flex-col">
-                        <Typography variant="body1">{item.title}</Typography>
-                        {item.detail ? (
-                          <Typography variant="body2" className="text-text-secondary">
-                            {item.detail}
-                          </Typography>
-                        ) : null}
+                  <Box component="li" key={item.id} className="flex">
+                    <Box
+                      component={Link}
+                      href={item.href}
+                      className="border-grey-100 hover:border-grey-200 hover:bg-grey-25 flex w-full flex-col gap-2 rounded-2xl border p-4 no-underline outline-offset-2 transition-colors focus-visible:outline-2"
+                    >
+                      <Box className="flex flex-row items-start gap-3">
+                        <Box
+                          aria-hidden
+                          className={cn(
+                            "flex h-9 w-9 flex-none items-center justify-center rounded-xl",
+                            ICON[group.tone],
+                          )}
+                        >
+                          {item.icon ?? <NiExclamationSquare size="medium" />}
+                        </Box>
+                        <Typography
+                          variant="body1"
+                          className="text-text-primary min-w-0 flex-1 self-center font-semibold"
+                        >
+                          {item.title}
+                        </Typography>
+                        <StatusChip tone={group.tone} label={item.tag} className="flex-none" />
                       </Box>
+                      {item.detail ? (
+                        <Typography variant="body2" className="text-text-secondary line-clamp-2">
+                          {item.detail}
+                        </Typography>
+                      ) : null}
+                      {item.count && item.count > 1 ? (
+                        <Box className="flex flex-row">
+                          <Typography
+                            variant="body2"
+                            component="span"
+                            className={cn("rounded-full px-2.5 py-0.5 font-semibold", ICON[group.tone])}
+                          >
+                            {item.countLabel ?? item.count}
+                          </Typography>
+                        </Box>
+                      ) : null}
                     </Box>
-                    {item.count && item.count > 1 ? (
-                      <Typography variant="subtitle2" component="span" className="ml-3">
-                        {item.count}
-                      </Typography>
-                    ) : null}
-                    <NiChevronRightSmall size="medium" className="text-text-secondary ml-2 flex-none" />
-                  </ListItemButton>
+                  </Box>
                 ))}
-              </List>
+              </Box>
             </Box>
           ))}
       </CardContent>

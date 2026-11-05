@@ -411,6 +411,7 @@ describe("what needs somebody today", () => {
       publicationsNew: 9,
       publicationsCancelled: 1,
       publicationsToReview: 2,
+      // Two registrations whose reading is late: ONE's own work, never a need of the firm (2026-11-05).
       djenLate: 2,
       // One reading left a communication out, and one stopped for a lawyer still on record.
       djenIncomplete: 1,
@@ -438,7 +439,8 @@ describe("what needs somebody today", () => {
       ["cancelled", 1, "/publicacoes?ver=canceladas"],
       ["publications", 9, "/publicacoes"],
       ["checks", 2, "/publicacoes?ver=conferir"],
-      ["reading", 4, "/publicacoes"],
+      ["reading", 1, "/publicacoes#leitura"],
+      ["skipped", 1, "/publicacoes"],
       ["recheck", 1, "/prazos?ver=rever"],
       ["approvals", 1, "/aprovacoes"],
       ["moved", 4, "/casos?ver=andamento"],
@@ -464,8 +466,18 @@ describe("what needs somebody today", () => {
     ]);
   });
 
+  it("never counts a late reading of the DJEN as the firm's: it is ONE's own work (2026-11-05)", () => {
+    // Where the DJEN is not read at all, every registration is late for good, and the firm has nothing to do.
+    expect(todayNeeds({ ...quiet, djenLate: 3 })).toEqual([]);
+    // What a person puts right stays: a reading that stopped for a lawyer on record, a communication left out.
+    expect(todayNeeds({ ...quiet, djenLate: 3, djenStopped: 1, djenIncomplete: 2 })).toEqual([
+      { key: "reading", count: 1, href: "/publicacoes#leitura" },
+      { key: "skipped", count: 2, href: "/publicacoes" },
+    ]);
+  });
+
   it("shows what the courts published to who works on it, and to nobody else as theirs to do", () => {
-    const today = { ...quiet, publicationsNew: 9, publicationsCancelled: 1, djenLate: 2, conversationsWaiting: 1 };
+    const today = { ...quiet, publicationsNew: 9, publicationsCancelled: 1, djenStopped: 2, conversationsWaiting: 1 };
     const everything = { triagesPublications: true, worksDeadlines: true, confirmsDeadlines: true, managesFirm: true };
     const answers = { triagesPublications: false, worksDeadlines: false, confirmsDeadlines: false, managesFirm: false };
     expect(todayNeeds(today, everything).map((need) => need.key)).toEqual([
@@ -557,6 +569,7 @@ describe("what needs somebody today", () => {
       "checks",
       "cancelled",
       "reading",
+      "skipped",
       "failed",
       "queue",
     ]) {

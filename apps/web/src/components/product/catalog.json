@@ -51,8 +51,8 @@
     {
       "name": "QuickActionTile",
       "from": "@/components/product/home-tiles",
-      "props": "href?, icon, tone, title, description, badge?, label?",
-      "use": "A shortcut: full-height tinted icon column (w-16) + title + one-line description. Four across, never two columns. A badge (StatusChip) beside the title names a state; no href is a readout."
+      "props": "href?, icon, tone, title, description?, eyebrow?, outlined?, badge?, label?",
+      "use": "A shortcut: full-height tinted icon column (w-16) + title + one-line description. Four across, never two columns. A badge (StatusChip) beside the title names a state; no href is a readout. `eyebrow` is the template's hero tile: a small grey line over the title (its kind or state) and no description; `outlined` swaps the shadow for a hairline, for a tile inside another card (HomeHero)."
     },
     {
       "name": "TILE_TONE",
@@ -103,10 +103,16 @@
       "use": "What an act a person just did changed, said whole and in front of them (the owner, 2026-11-03): an answer that binds them (an agreement given or taken back), a decision others will act on. A large icon on its tint, the title in the person's words ('Acordo registrado'), one consequence a line with its icon (what ONE follows now, where the alerts go, how to change one's mind), and one button ('Entendi'). A line of Alert at the top of the page was read past by the passenger who agreed: an act whose consequences the person must understand is confirmed here, never in an Alert or a toast. Not for the routine save of a form (the field's own state says it) nor for the beat between setup steps (StepCelebrationDialog)."
     },
     {
+      "name": "HomeHero",
+      "from": "@/components/product/home-hero",
+      "props": "id, title, description?, aside?, ornaments?[{key,icon,tone}] (up to six), children (the row of quick actions)",
+      "use": "The top of a home: one wide card with the greeting and a line centred over a row of quick actions (ModulesQuickAccess inHero), dashed arcs at both sides carrying small tinted icons (decoration, aria-hidden, lg and up only). The template's AI hero. One per home, never a second header: the page's h1 stays in PageHeader."
+    },
+    {
       "name": "ModulesQuickAccess",
       "from": "@/components/product/modules-quick-access",
-      "props": "offer (ModuleOffer of lib/modules/offer.ts)",
-      "use": "ONE's modules as the home's quick access: one QuickActionTile per module with its own icon (ModuleIcon), three across so a module's name and its state share a line, a contracted one opening its area (/modulos/<key>), one to come badged Em breve and one not contracted with a lock, both to the overview (/modulos#<key>). Never in the setup: nothing there leads away from it. Renders nothing for an empty offer."
+      "props": "offer (ModuleOffer of lib/modules/offer.ts), inHero?",
+      "use": "ONE's modules as the home's quick access: one QuickActionTile per module with its own icon (ModuleIcon), three across so a module's name and its state share a line, a contracted one opening its area (/modulos/<key>), one to come badged Em breve and one not contracted with a lock, both to the overview (/modulos#<key>). Never in the setup: nothing there leads away from it. Renders nothing for an empty offer. `inHero` draws only the centred row of outlined tiles for HomeHero, each saying its state in its eyebrow."
     },
     {
       "name": "ModuleIcon",
@@ -123,8 +129,8 @@
     {
       "name": "AttentionList",
       "from": "@/components/product/attention-list",
-      "props": "id, title, description?, total, groups[{key,title,tone: danger | attention,items[{id,href,tag,title,detail?,count?}]}]",
-      "use": "What holds a firm's cases until somebody acts, where a person starts the day: one card coloured by its most urgent group (danger = past its time, attention = waiting on the firm), each line one thing with its kind as a StatusChip tag, what it is and of which case, one click from where it is done. The hue rides on the bar at the left of each line and on the badges, never on the words. Not for counters (StatTile) nor for a list of records to manage (DataTable)."
+      "props": "id, title, description?, total, groups[{key,title,tone: danger | attention,items[{id,href,tag,title,detail?,count?,countLabel?,icon?}]}]",
+      "use": "What holds a firm's cases until somebody acts, where a person starts the day: one card coloured by its most urgent group (danger = past its time, attention = waiting on the firm), and in it, by group, a two-column grid of outlined cards (the template's projects grid): the icon of the thing's kind on the group's tint, what it is, its kind as a StatusChip tag on the right, of which case in two lines at most, a pill with how many when more than one; the whole card one click from where it is done. The hue rides on the icon's tint and the badges, never on the words. Not for counters (StatTile) nor for a list of records to manage (DataTable)."
     },
     {
       "name": "CollapsibleCard",

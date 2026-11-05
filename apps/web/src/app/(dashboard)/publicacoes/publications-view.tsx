@@ -243,20 +243,32 @@ function PublicationsScreen({ state, onReadAgain }: { state: PublicationsState; 
     data && (data.counts.review > 0 || data.aiTriage.sampled.length > 0 || ready?.view === "conferir"),
   );
   const reading = data ? readingState(data.captures.map((capture) => capture.health)) : "none";
-  const unsure = isUnsureReading(reading);
+  // Where the DJEN is not read at all (a development machine, a preview), no registration is ever read: its reading
+  // is neither late nor unsure, and the screen says only that (2026-11-05).
+  const off = Boolean(ready && !ready.captureOn);
+  const unsure = !off && isUnsureReading(reading);
   const leftOut = (data?.captures ?? []).filter((capture) => capture.leftOut > 0);
+  // What the team puts right: a registration the DJEN refuses as it is written, or a reading that stopped. Anything
+  // else of the reading is ONE's own work, which it tries again by itself.
+  const teamFixes = Boolean(
+    data &&
+      (data.stopped.length > 0 ||
+        data.captures.some((capture) => capture.health === "failed" && capture.error === "djen_invalid_registration")),
+  );
   // The words each state takes, named here: a call that reads a message is handed its key and nothing else.
   const readingWarningKey =
     reading === "failing" ? "publications-reading-warning-failing" : "publications-reading-warning-late";
   // What a reading left out is said by each reading that left it, right below.
   const warnsOfReading = reading === "failing" || reading === "late";
-  const nothingKey = unsure
-    ? "publications-nothing-unsure"
-    : reading === "ok"
-      ? "publications-nothing-ok"
-      : "publications-nothing-pending";
+  const nothingKey = off
+    ? "publications-nothing-off"
+    : unsure
+      ? "publications-nothing-unsure"
+      : reading === "ok"
+        ? "publications-nothing-ok"
+        : "publications-nothing-pending";
   const emptyBodyKey =
-    ready && ready.view === "por-triar" && (unsure || reading === "none")
+    ready && ready.view === "por-triar" && !off && (unsure || reading === "none")
       ? "publications-empty-untriaged-unsure"
       : EMPTY_KEY[ready?.view ?? "por-triar"].body;
 
@@ -421,7 +433,7 @@ function PublicationsScreen({ state, onReadAgain }: { state: PublicationsState; 
         </Alert>
       ) : null}
 
-      {ready && data && !ready.captureOn ? (
+      {ready && data && off && total > 0 ? (
         <Alert severity="info" className="neutral bg-background-paper/60!">
           {t("publications-capture-off")}
         </Alert>
@@ -502,10 +514,10 @@ function PublicationsScreen({ state, onReadAgain }: { state: PublicationsState; 
       {ready && data && total === 0 && (reading !== "none" || data.hasRegistrations) ? (
         <EmptyState
           icon={<NiInbox size="large" />}
-          title={t("publications-nothing-title")}
+          title={t(off ? "publications-nothing-off-title" : "publications-nothing-title")}
           description={t(nothingKey)}
           action={mayAsk && !asking ? { label: t("publications-capture-now"), onClick: askForReading } : undefined}
-          secondaryAction={{ label: t("publications-first-read-team"), href: "/settings/team" }}
+          secondaryAction={teamFixes ? { label: t("publications-first-read-team"), href: "/settings/team" } : undefined}
         />
       ) : null}
 
@@ -584,7 +596,7 @@ function PublicationsScreen({ state, onReadAgain }: { state: PublicationsState; 
       ) : null}
 
       {ready && data && (data.captures.length > 0 || data.stopped.length > 0) ? (
-        <ReadingCard captures={data.captures} stopped={data.stopped} />
+        <ReadingCard captures={data.captures} stopped={data.stopped} off={off} />
       ) : null}
 
       {ready && data && total > 0 ? (
@@ -686,10 +698,11 @@ function PublicationsScreen({ state, onReadAgain }: { state: PublicationsState; 
 }
 
 /** How far the reading of the gazette went, per registration at the bar: what makes "nothing new" mean something. */
-function ReadingCard({ captures, stopped }: { captures: CaptureRow[]; stopped: StoppedRow[] }) {
+function ReadingCard({ captures, stopped, off }: { captures: CaptureRow[]; stopped: StoppedRow[]; off: boolean }) {
   const t = useTranslations("product");
   return (
-    <Card component="section" aria-labelledby="publications-reading">
+    // `#leitura` is where the home leads a person who has a reading of the firm's to put right.
+    <Card component="section" id="leitura" aria-labelledby="publications-reading" className="scroll-mt-24">
       <CardContent className="flex flex-col gap-3">
         <Typography id="publications-reading" variant="h5" component="h2" className="mb-0">
           {t("publications-reading-title")}
@@ -732,7 +745,12 @@ function ReadingCard({ captures, stopped }: { captures: CaptureRow[]; stopped: S
                     </Typography>
                   ) : null}
                 </Box>
-                <StatusChip tone={HEALTH_TONE[capture.health]} label={t(HEALTH_KEY[capture.health])} />
+                {/* Where nothing is read, no reading is late: the chip says only that. */}
+                {off ? (
+                  <StatusChip tone="neutral" label={t("publication-capture-off")} />
+                ) : (
+                  <StatusChip tone={HEALTH_TONE[capture.health]} label={t(HEALTH_KEY[capture.health])} />
+                )}
               </Box>
             );
           })}
@@ -773,6 +791,11 @@ function ReadingCard({ captures, stopped }: { captures: CaptureRow[]; stopped: S
                   <StatusChip tone="attention" label={t("publications-reading-stopped-chip")} />
                 </Box>
               ))}
+            </Box>
+            <Box className="-ml-2">
+              <Button component={Link} href="/settings/team" variant="text" color="primary" size="small">
+                {t("publications-reading-stopped-team")}
+              </Button>
             </Box>
           </Box>
         ) : null}

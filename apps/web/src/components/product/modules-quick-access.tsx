@@ -19,8 +19,12 @@ import type { ModuleOffer } from "@/lib/modules/offer";
  *
  * Closest catalog entry: `QuickActionTile`, used as it is, with its badge for the state. It replaced the line of
  * chips under the title (`ModulesStrip`), which named the modules and opened none of them.
+ *
+ * `inHero` draws the row of the home's hero (`HomeHero`, the owner's model of 2026-11-05): centred, the tiles
+ * outlined and smaller, each saying its state in the small line over the module's name, under the hero's own
+ * heading instead of one of its own.
  */
-export default function ModulesQuickAccess({ offer }: { offer: ModuleOffer }) {
+export default function ModulesQuickAccess({ offer, inHero = false }: { offer: ModuleOffer; inHero?: boolean }) {
   const t = useTranslations("product");
   const cards = [
     ...offer.contracted.map((module) => ({ module, state: "contracted" as const })),
@@ -28,6 +32,33 @@ export default function ModulesQuickAccess({ offer }: { offer: ModuleOffer }) {
     ...offer.locked.map((module) => ({ module, state: "locked" as const })),
   ];
   if (cards.length === 0) return null;
+  if (inHero) {
+    return (
+      <Box component="nav" aria-label={t("modules-quick-title")} className="w-full">
+        <Box component="ul" className="m-0 flex list-none flex-wrap justify-center gap-3 p-0">
+          {cards.map(({ module, state }) => (
+            <Box component="li" key={module.key} className="w-full sm:w-60">
+              <QuickActionTile
+                outlined
+                href={state === "contracted" ? `/modulos/${module.key}` : `/modulos#${module.key}`}
+                icon={<ModuleIcon name={module.icon} />}
+                tone={module.tone}
+                eyebrow={
+                  state === "contracted"
+                    ? t("modules-status-contracted")
+                    : state === "soon"
+                      ? t("modules-status-soon")
+                      : t("modules-status-locked")
+                }
+                title={module.name}
+                badge={state === "locked" ? <NiLock size="small" className="text-text-secondary" /> : undefined}
+              />
+            </Box>
+          ))}
+        </Box>
+      </Box>
+    );
+  }
   return (
     <Box component="section" aria-labelledby="modules-quick" className="flex flex-col gap-4">
       <Typography id="modules-quick" variant="h5" component="h2" className="mb-0">

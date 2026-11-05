@@ -34,7 +34,10 @@ export type FirmToday = {
   publicationsCancelled: number;
   /** Publications the AI triaged that wait for a person's check (0035). */
   publicationsToReview: number;
-  /** Registrations at the bar of the firm whose reading of the DJEN is late, or that no reading has seen for that long. */
+  /**
+   * Registrations at the bar of the firm whose reading of the DJEN is late, or that no reading has seen for that long.
+   * Read, never a need of the firm: a reading that is late is ONE's own work (2026-11-05, see `todayNeeds`).
+   */
   djenLate: number;
   /** Registrations whose last reading left out a communication it could not keep. */
   djenIncomplete: number;
@@ -244,6 +247,7 @@ export type TodayNeed = {
     | "checks"
     | "cancelled"
     | "reading"
+    | "skipped"
     | "clients"
     | "civil"
     | "documents"
@@ -303,7 +307,13 @@ export function todayNeeds(today: FirmToday, viewer: TodayViewer = EVERYTHING): 
         // A time may be running in one of them: right after what has a clock of its own.
         { key: "publications", count: today.publicationsNew, href: "/publicacoes" },
         { key: "checks", count: today.publicationsToReview, href: "/publicacoes?ver=conferir" },
-        { key: "reading", count: today.djenLate + today.djenIncomplete + today.djenStopped, href: "/publicacoes" },
+        // Of the reading of the DJEN, only what a person of the firm puts right (2026-11-05): a reading that stopped
+        // for a lawyer still on record (the registration back on the team, or another lawyer on the lawsuit), and a
+        // communication the reading could not keep (read at the DJEN by its certificate). A reading that is late is
+        // ONE's own work, which the operator watches (`admin_djen_health`) and /publicacoes says: where the DJEN is
+        // not read at all, every registration would be late for good, with nothing for the firm to do.
+        { key: "reading", count: today.djenStopped, href: "/publicacoes#leitura" },
+        { key: "skipped", count: today.djenIncomplete, href: "/publicacoes" },
       ]
     : [];
   const needs: TodayNeed[] = [

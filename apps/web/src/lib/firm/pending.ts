@@ -13,13 +13,13 @@ import { formatCnj } from "@flyee/rules/cnj";
  *   late    what passed its time: deadlines past their day (each, with its
  *           case), hearings with no word on them, papers nobody decided for
  *           too long, cases ONE waits on for too long, messages that did not
- *           go out, complaints past their day, a calendar or a reading that
- *           stopped;
+ *           go out, complaints past their day, a calendar that stopped;
  *   today   what falls today, and in the next days;
  *   one     what keeps ONE from carrying on: each case it waits on, with what
  *           it waits for, each client's link it could not send, with why, each
  *           conversation where ONE called a person (late once the passenger
- *           waited the setting's minutes), and every decision only a person
+ *           waited the setting's minutes), a reading of the DJEN that stopped
+ *           or left a communication out, and every decision only a person
  *           takes;
  *   review  what is good to look at and holds nothing up.
  *
@@ -255,10 +255,13 @@ const NEED_GROUP: Partial<Record<TodayNeed["key"], PendingGroupKey>> = {
   complaints: "late",
   failed: "late",
   calendar: "late",
-  reading: "late",
   closing: "today",
   approvals: "one",
   publications: "one",
+  // What ONE cannot read of the DJEN until a person acts: a reading that stopped, a communication left out. Never
+  // late: nothing of it passed a time, and a reading that is late is ONE's own (2026-11-05).
+  reading: "one",
+  skipped: "one",
   confirm: "one",
   recheck: "one",
   untimed: "one",
@@ -297,6 +300,7 @@ const NEED_TAG: Record<TodayNeed["key"], string> = {
   cancelled: "pending-tag-publication",
   publications: "pending-tag-publication",
   reading: "pending-tag-publication",
+  skipped: "pending-tag-publication",
   clients: "pending-tag-client",
   civil: "pending-tag-civil",
   documents: "pending-tag-documents",
