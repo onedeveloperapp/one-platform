@@ -30,8 +30,10 @@ describe("the client's account before the lawsuits (0090)", () => {
     expect(accountStateOf("incomplete")).toBe("incomplete");
     expect(accountStateOf("whatever")).toBeNull();
     expect(accountStateOf(null)).toBeNull();
-    expect(isAccountTopic("compra")).toBe(true);
+    expect(isAccountTopic("gastos")).toBe(true);
     expect(isAccountTopic("outro")).toBe(false);
+    // The purchase is asked nowhere: the piece speaks of it only where a document says it (0097).
+    expect(isAccountTopic("compra")).toBe(false);
   });
 
   it("never names ONE's own work, nor a ready account, as something the case lacks", () => {

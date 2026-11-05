@@ -173,6 +173,9 @@ export default function StatementsCard({
     // The client is still asked what the account lacks, and ONE waits for the answers.
     const gapsOpen =
       statement.missingTopics.length > 0 && Boolean(statement.chronology) && statement.rounds < state.accountMaxRounds;
+    // ONE waits for the answers only before the lawsuits: once they exist the answers hold nothing, and go to the
+    // piece when they come (ONE writes it again by itself while no lawyer touched it, 0097).
+    const gapsHold = gapsOpen && state.proceedings.length === 0;
     return (
       <Box key={statement.id} className="border-grey-100 flex flex-col gap-2 rounded-2xl border p-4">
         <Box className="flex flex-wrap items-start justify-between gap-2">
@@ -224,9 +227,9 @@ export default function StatementsCard({
           // and in the conversation (0092). While they are asked, ONE waits for the answers before the lawsuits; a
           // partner or a lawyer may go on without them (0094).
           <StateLine
-            tone={gapsOpen ? "waiting" : "info"}
+            tone={gapsHold ? "waiting" : "info"}
             action={
-              writable && state.lawyer && gapsOpen && closing !== statement.id ? (
+              writable && state.lawyer && gapsHold && closing !== statement.id ? (
                 <Button
                   variant="outlined"
                   color="grey"
@@ -248,7 +251,7 @@ export default function StatementsCard({
                 ? t("case-statement-gaps-asked-chat", { count: statement.questions.length })
                 : t("case-statement-gaps-asked", { count: statement.questions.length })}
             {gapsOpen ? " " : null}
-            {gapsOpen ? t("case-statement-gaps-wait") : null}
+            {gapsHold ? t("case-statement-gaps-wait") : gapsOpen ? t("case-statement-gaps-piece") : null}
           </StateLine>
         ) : statement.gapsClosed.length > 0 ? (
           <StateLine tone="done">

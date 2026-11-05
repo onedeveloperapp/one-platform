@@ -217,6 +217,7 @@ export const EVENT_KEY: Record<string, string> = {
   interview_done: "case-event-interview-done",
   interview_answered: "case-event-interview-answered",
   interview_closed: "case-event-interview-closed",
+  draft_redone: "case-event-draft-redone",
   complaint_saved: "case-event-complaint-saved",
   complaint_removed: "case-event-complaint-removed",
   filing_package_requested: "case-event-filing-requested",

@@ -87,7 +87,7 @@ reset role;
 select ok(
   (select output_schema -> 'properties' ? 'faltam' and output_schema -> 'required' ? 'perguntas'
    from public.prompt_versions where task = 'caso.relato.cronologia' and is_active)
-  and public.statement_account_topics() = array['compra', 'aviso', 'solucao', 'chegada', 'assistencia', 'gastos', 'consequencias']
+  and public.statement_account_topics() = array['aviso', 'solucao', 'chegada', 'assistencia', 'gastos', 'consequencias']
   and not has_function_privilege('authenticated', 'public.case_account_state(uuid)', 'EXECUTE')
   and not has_function_privilege('anon', 'public.case_account(uuid)', 'EXECUTE')
   and has_function_privilege('anon', 'public.client_link_complete_statement(text, uuid, text)', 'EXECUTE'),
@@ -124,8 +124,8 @@ update public.case_statements set work_claimed_at = null where id = pg_temp.got(
 insert into res values ('first_order', pg_temp.ordered('b9300000-0000-4000-8000-00000000000a',
   pg_temp.got('written', 'statement_id')::uuid,
   '{"cronologia": "20/09/2026, 21:30: o voo LA3456 foi cancelado.\nPassou a noite no aeroporto.",
-    "faltam": ["compra", "gastos", "outro"],
-    "perguntas": ["Quanto você pagou pela passagem e onde comprou!", "Você teve algum gasto — comida ou transporte?"]}'::jsonb));
+    "faltam": ["chegada", "gastos", "outro"],
+    "perguntas": ["Em que dia e a que horas você chegou a Recife!", "Você teve algum gasto — comida ou transporte?"]}'::jsonb));
 reset role;
 select ok(
   (select payload -> 'trip' -> 0 ->> 'voo' = 'LA3456'
@@ -136,8 +136,8 @@ select ok(
   'the order of the facts reads the trip as the case registers it, with what ANAC''s record says of the flight'
 );
 select ok(
-  (select chronology_status = 'approved' and missing_topics = array['compra', 'gastos']
-          and questions = array['Quanto você pagou pela passagem e onde comprou.', 'Você teve algum gasto, comida ou transporte?']
+  (select chronology_status = 'approved' and missing_topics = array['chegada', 'gastos']
+          and questions = array['Em que dia e a que horas você chegou a Recife.', 'Você teve algum gasto, comida ou transporte?']
    from public.case_statements where id = pg_temp.got('written', 'statement_id')::uuid)
   and pg_temp.state(pg_temp.got('case', 'case_id')::uuid) = 'incomplete',
   'what is missing is kept as the setting names it, the questions plain, and the account is incomplete'
@@ -149,16 +149,16 @@ select pg_temp.as_client();
 set local role anon;
 insert into res values ('link_read', public.client_link_statements('token-do-relato-0093-aaaaaaaaaaaaaaaa'));
 insert into res values ('answered', public.client_link_complete_statement('token-do-relato-0093-aaaaaaaaaaaaaaaa',
-  pg_temp.got('written', 'statement_id')::uuid, 'Comprei no site da companhia por R$ 980. Gastei R$ 60 com comida.'));
+  pg_temp.got('written', 'statement_id')::uuid, 'Cheguei a Recife no dia 21 às 14h. Gastei R$ 60 com comida.'));
 insert into res values ('answered_again', public.client_link_complete_statement('token-do-relato-0093-aaaaaaaaaaaaaaaa',
   pg_temp.got('written', 'statement_id')::uuid, 'Mais uma resposta.'));
 reset role;
 select ok(
   pg_temp.got('link_read', 'account') = 'incomplete'
   and pg_temp.told('link_read', pg_temp.got('written', 'statement_id')::uuid) -> 'questions'
-      = '["Quanto você pagou pela passagem e onde comprou.", "Você teve algum gasto, comida ou transporte?"]'::jsonb
+      = '["Em que dia e a que horas você chegou a Recife.", "Você teve algum gasto, comida ou transporte?"]'::jsonb
   and pg_temp.got('answered', 'code') = 'sent' and pg_temp.got('answered_again', 'code') = 'nothing_to_answer'
-  and (select rounds = 1 and work = 'chronology' and chronology_status = 'none' and client_added like 'Comprei no site%'
+  and (select rounds = 1 and work = 'chronology' and chronology_status = 'none' and client_added like 'Cheguei a Recife%'
        from public.case_statements where id = pg_temp.got('written', 'statement_id')::uuid)
   and pg_temp.state(pg_temp.got('case', 'case_id')::uuid) = 'preparing'
   and exists (select 1 from public.case_events where kind = 'client_statement_completed' and actor_type = 'client'),
@@ -174,11 +174,11 @@ from public.case_statement_to_process(pg_temp.got('written', 'statement_id')::uu
 update public.case_statements set work_claimed_at = null where id = pg_temp.got('written', 'statement_id')::uuid;
 insert into res values ('second_order', pg_temp.ordered('b9300000-0000-4000-8000-00000000000a',
   pg_temp.got('written', 'statement_id')::uuid,
-  '{"cronologia": "Comprou a passagem no site da companhia por R$ 980.\n20/09/2026, 21:30: o voo LA3456 foi cancelado.\nGastou R$ 60 com comida.",
+  '{"cronologia": "20/09/2026, 21:30: o voo LA3456 foi cancelado.\n21/09/2026, 14:00: chegou a Recife.\nGastou R$ 60 com comida.",
     "faltam": [], "perguntas": []}'::jsonb));
 reset role;
 select ok(
-  (select payload ->> 'client_added' like 'Comprei no site%' and payload ->> 'previous_chronology' like '%foi cancelado%'
+  (select payload ->> 'client_added' like 'Cheguei a Recife%' and payload ->> 'previous_chronology' like '%foi cancelado%'
    from res where name = 'details_again')
   and (select chronology_status = 'approved' and missing_topics = '{}' and questions = '{}' and client_added is null
        from public.case_statements where id = pg_temp.got('written', 'statement_id')::uuid)

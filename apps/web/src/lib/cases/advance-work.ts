@@ -601,6 +601,21 @@ export async function advanceClaimedCase(
         return "lost";
       }
     }
+    // A piece the AI wrote before the client's account came is written again, while no lawyer touched it and it
+    // still leaves something to complete (0097): before the steps, so they ask for no other piece meanwhile.
+    const { data: redone, error: redoError } = await service.rpc("advance_redo_pieces", {
+      target_case: held.caseId,
+      target_claim: held.claim,
+    });
+    if (redoError) throw new Error("piece redo failed");
+    const redo = (redone ?? {}) as { ok?: boolean; code?: string; drafts?: unknown };
+    if (!redo.ok && redo.code === "not_working") {
+      await deliverMessages(asked.messages, follow);
+      return "lost";
+    }
+    if (Array.isArray(redo.drafts)) {
+      asked.drafts.push(...redo.drafts.filter((id): id is string => typeof id === "string"));
+    }
     const { data, error } = await service.rpc("advance_case_steps", {
       target_case: held.caseId,
       target_claim: held.claim,
@@ -621,7 +636,9 @@ export async function advanceClaimedCase(
       await deliverMessages(asked.messages, follow);
       return "lost";
     }
-    asked.drafts = Array.isArray(steps.drafts) ? steps.drafts.filter((id): id is string => typeof id === "string") : [];
+    if (Array.isArray(steps.drafts)) {
+      asked.drafts.push(...steps.drafts.filter((id): id is string => typeof id === "string"));
+    }
     asked.packages = Array.isArray(steps.packages)
       ? steps.packages.filter((id): id is string => typeof id === "string")
       : [];

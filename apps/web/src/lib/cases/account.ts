@@ -31,16 +31,11 @@ export const isAccountState = (value: unknown): value is AccountState =>
 /** The state the database answered, or null for an answer that is none. */
 export const accountStateOf = (value: unknown): AccountState | null => (isAccountState(value) ? value : null);
 
-/** The points a piece of a flight problem needs of the account, in the order a person tells them. */
-export const ACCOUNT_TOPICS = [
-  "compra",
-  "aviso",
-  "solucao",
-  "chegada",
-  "assistencia",
-  "gastos",
-  "consequencias",
-] as const;
+/**
+ * The points a piece of a flight problem needs of the account, in the order a person tells them. Never the purchase
+ * (the owner, 2026-11-04): the piece speaks of it only where a document says it (0097).
+ */
+export const ACCOUNT_TOPICS = ["aviso", "solucao", "chegada", "assistencia", "gastos", "consequencias"] as const;
 export type AccountTopic = (typeof ACCOUNT_TOPICS)[number];
 
 export const isAccountTopic = (value: unknown): value is AccountTopic =>
@@ -48,7 +43,6 @@ export const isAccountTopic = (value: unknown): value is AccountTopic =>
 
 /** Each point as the client reads it, when the link tells them what to tell. */
 export const ACCOUNT_TOPIC_KEY: Record<AccountTopic, string> = {
-  compra: "account-topic-compra",
   aviso: "account-topic-aviso",
   solucao: "account-topic-solucao",
   chegada: "account-topic-chegada",
@@ -59,7 +53,6 @@ export const ACCOUNT_TOPIC_KEY: Record<AccountTopic, string> = {
 
 /** Each point in a few words, as the firm reads what an account still lacks. */
 export const ACCOUNT_TOPIC_SHORT_KEY: Record<AccountTopic, string> = {
-  compra: "account-topic-short-compra",
   aviso: "account-topic-short-aviso",
   solucao: "account-topic-short-solucao",
   chegada: "account-topic-short-chegada",
