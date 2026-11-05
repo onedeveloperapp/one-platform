@@ -36,9 +36,10 @@ import NiScale from "@/icons/nexture/ni-scale";
 import NiShieldCheck from "@/icons/nexture/ni-shield-check";
 import NiTimeline from "@/icons/nexture/ni-timeline";
 import NiUsers from "@/icons/nexture/ni-users";
+import type { WaitingDecisions } from "@/lib/ai/decisions";
 import type { JourneyOverview } from "@/lib/cases/journey-read";
 import { readHomePulse } from "@/lib/cases/pulse-actions";
-import { homeTiles, type PendingGroup, sayPending } from "@/lib/firm/pending";
+import { homeTiles, type PendingGroup, sayPending, withDecisions } from "@/lib/firm/pending";
 import { type FirmToday, somethingForMe, type TodayNeed, todayNeeds } from "@/lib/firm/today";
 import type { ModuleOffer } from "@/lib/modules/offer";
 import type { ActivationFacts } from "@/lib/onboarding";
@@ -88,6 +89,8 @@ export type HomeState =
       recent: RecentCases | null;
       /** The mark of what the home shows (0096, `firm_pulse`): what it follows while open; null when unreadable. */
       pulse: string | null;
+      /** The decisions that wait, each placed where it is decided; null when unread (then counted as before). */
+      decisions: WaitingDecisions | null;
     }
   | { kind: "no-firm" }
   | { kind: "unavailable" }
@@ -302,12 +305,15 @@ export default function HomeView({ state }: { state: HomeState }) {
   });
   const attentionTotal = (ready?.attention ?? []).reduce((sum, group) => sum + group.total, 0);
   const needs = ready
-    ? todayNeeds(ready.today, {
-        triagesPublications: ready.triagesPublications,
-        worksDeadlines: ready.worksDeadlines,
-        confirmsDeadlines: ready.confirmsDeadlines,
-        managesFirm: ready.manager,
-      })
+    ? withDecisions(
+        todayNeeds(ready.today, {
+          triagesPublications: ready.triagesPublications,
+          worksDeadlines: ready.worksDeadlines,
+          confirmsDeadlines: ready.confirmsDeadlines,
+          managesFirm: ready.manager,
+        }),
+        ready.decisions,
+      )
     : [];
   // Each thing once (the owner, 2026-11-04): what the list of what holds a case names is never a tile too. While that
   // list could not be read, every need is a tile, so nothing goes unseen.

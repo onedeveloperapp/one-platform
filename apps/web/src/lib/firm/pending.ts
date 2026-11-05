@@ -1,3 +1,4 @@
+import { decisionItems, type WaitingDecisions } from "@/lib/ai/decisions";
 import { waitingHref, waitingKey, waitingTagKey, waitPlaceOf } from "@/lib/cases/advance";
 import { type FirmToday, type TodayNeed, todayNeeds, type TodayViewer } from "@/lib/firm/today";
 import { formatCnj } from "@flyee/rules/cnj";
@@ -336,15 +337,32 @@ const needItem = (need: TodayNeed): PendingItem => ({
   count: need.count,
 });
 
+/**
+ * The needs of the home with the decisions that wait read one by one (the owner, 2026-11-05): the person's own are
+ * lines of their own, each leading to where it is decided, so their count leaves the needs; the ones of another
+ * function stay one need, counted as the list of all of them shows them (never the text of a piece, approved on its
+ * case only). Unread, the needs stay as the home counted them.
+ */
+export function withDecisions(needs: readonly TodayNeed[], decisions: WaitingDecisions | null): TodayNeed[] {
+  if (!decisions) return [...needs];
+  return needs
+    .filter((need) => need.key !== "approvals")
+    .map((need) => (need.key === "queue" ? { ...need, count: decisions.others } : need))
+    .filter((need) => need.count > 0);
+}
+
 /** The groups of the center, most urgent first, each with what it holds; a group with nothing is left out. */
 export function pendingGroups(
   today: FirmToday,
   pending: FirmPending,
   viewer: TodayViewer,
   now: Date = new Date(),
+  decisions: WaitingDecisions | null = null,
 ): PendingGroup[] {
   const groups: Record<PendingGroupKey, PendingItem[]> = { late: [], today: [], one: [], review: [] };
-  const needs = todayNeeds(today, viewer);
+  const needs = withDecisions(todayNeeds(today, viewer), decisions);
+  // Each decision of the person's, where it is decided: its case or its conversation.
+  if (decisions) groups.one.push(...decisionItems(decisions));
 
   // Deadlines past their day, each with its case: the one thing nothing else may come before.
   if (viewer.worksDeadlines && today.deadlinesOverdue > 0) {

@@ -3,7 +3,6 @@
 import ApprovalCard, { type DecisionKind } from "./approval-card";
 import ConversationReplyCard from "./conversation-reply-card";
 import DocumentCheckCard from "./document-check-card";
-import DraftApprovalCard from "./draft-approval-card";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -199,16 +198,6 @@ export default function ApprovalsView({ state }: { state: ApprovalsState }) {
                     key={approval.id}
                     approval={approval}
                     conversation={approval.conversation}
-                    canDecide={canDecide}
-                    blocked={blocked}
-                    onDecided={decided}
-                  />
-                ) : approval.draft ? (
-                  // A text the AI wrote for a piece is read and corrected on its case: its card leads there.
-                  <DraftApprovalCard
-                    key={approval.id}
-                    approval={approval}
-                    draft={approval.draft}
                     canDecide={canDecide}
                     blocked={blocked}
                     onDecided={decided}

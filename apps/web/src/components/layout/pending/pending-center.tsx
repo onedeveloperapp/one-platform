@@ -258,6 +258,25 @@ export default function PendingCenter() {
                 </Box>
               ))
             )}
+            {/* Every decision the firm left to a person, of every case, for whoever reviews many in a row: the list
+                is out of the main menu, and each line above already leads to where its decision is taken. */}
+            {state.kind === "ready" &&
+            state.groups.some((group) =>
+              group.items.some((item) => item.id.startsWith("decision") || item.id === "need:queue"),
+            ) ? (
+              <Box>
+                <Button
+                  variant="text"
+                  color="grey"
+                  size="small"
+                  component={Link}
+                  href="/aprovacoes"
+                  onClick={() => setOpen(false)}
+                >
+                  {t("pending-decisions-all")}
+                </Button>
+              </Box>
+            ) : null}
           </Box>
         </Box>
       </Drawer>

@@ -17,7 +17,6 @@ import NextureIcons, { type IconName } from "@/icons/icon-registry";
 import NiCalendar from "@/icons/nexture/ni-calendar";
 import NiCalendarClock from "@/icons/nexture/ni-calendar-clock";
 import NiInbox from "@/icons/nexture/ni-inbox";
-import NiListCheck from "@/icons/nexture/ni-list-check";
 import NiLock from "@/icons/nexture/ni-lock";
 import NiMessages from "@/icons/nexture/ni-messages";
 import NiPuzzle from "@/icons/nexture/ni-puzzle";
@@ -57,13 +56,6 @@ const WORK: { path: string; label: string; hint: string; tone: TileTone; icon: R
     hint: "module-area-work-inbox-hint",
     tone: "primary",
     icon: <NiMessages size="large" />,
-  },
-  {
-    path: "/aprovacoes",
-    label: "module-area-work-approvals",
-    hint: "module-area-work-approvals-hint",
-    tone: "secondary",
-    icon: <NiListCheck size="large" />,
   },
   {
     path: "/protocolo",

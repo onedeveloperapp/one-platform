@@ -15,7 +15,8 @@ import {
 import CaseView from "./components/case-view";
 import { cookies } from "next/headers";
 
-import { momentLabel } from "@/lib/ai/approvals";
+import { momentLabel, type SecondFactorState } from "@/lib/ai/approvals";
+import { pendingApprovalsOf, type PendingRow } from "@/lib/ai/pending-approvals";
 import { caseAdvanceOf } from "@/lib/cases/advance";
 import { CAUSES, isCaseStatus, linksOwedOf, ORIGINS, type RequiredDocument } from "@/lib/cases/cases";
 import { readCheckAnswer } from "@/lib/cases/document-check";
@@ -29,6 +30,7 @@ import { readFieldsOf } from "@/lib/cases/read-fields";
 import { loadCivilCourt, loadRuleFacts } from "@/lib/cases/rule-facts";
 import { assessWeather, caseDomicile, smallClaimsCeiling, tripPlaces } from "@/lib/cases/rules";
 import { loadStatementFacts } from "@/lib/cases/statement-facts";
+import { CHRONOLOGY_TASK, TRANSCRIPTION_TASK } from "@/lib/cases/statements";
 import { loadCourseFacts } from "@/lib/courts/course-facts";
 import { caseDeadlines, deadlineActs } from "@/lib/deadlines/facts";
 import { type AutonomyDecision, type AutonomyMode, firmAutonomyOf } from "@/lib/firm/autonomy";
@@ -298,6 +300,39 @@ async function loadCase(id: string): Promise<CaseState> {
   // The pieces and the dossiers name who asked and who approved. A read that failed is an error of the page.
   const pieces = await loadCasePieces(supabase, firm, id, names, context.profile.timezone).catch(() => undefined);
   if (!pieces) return { kind: "error" };
+  // The order of the facts (and a transcription) ONE proposed that waits for a person, decided on the card of what
+  // happened, never in a list elsewhere (the owner, 2026-11-05); and whether this session may decide it now. One that
+  // could not be read leaves the card saying what it waits for, as before, never the page.
+  const statementIds = told.statements.map((statement) => statement.id);
+  const [statementApprovals, assurance] = await Promise.all([
+    statementIds.length === 0
+      ? Promise.resolve([])
+      : supabase
+          .from("approvals")
+          .select(
+            "id, run_id, task, approver_functions, created_at, ai_runs!inner(output, subject_type, subject_id), ai_tasks(name, description, revisable)",
+          )
+          .eq("org_id", firm)
+          .eq("status", "pending")
+          .in("task", [CHRONOLOGY_TASK, TRANSCRIPTION_TASK])
+          .in("ai_runs.subject_id", statementIds)
+          .order("created_at")
+          .then(async ({ data, error }) =>
+            error
+              ? []
+              : ((await pendingApprovalsOf({
+                  supabase,
+                  firmId: firm,
+                  timeZone: context.profile.timezone,
+                  names,
+                  rows: (data ?? []) as PendingRow[],
+                }).catch(() => null)) ?? []),
+          ),
+    supabase.auth.mfa.getAuthenticatorAssuranceLevel(),
+  ]);
+  // `nextLevel` is aal2 exactly when the account has a verified factor; `currentLevel` when this session confirmed it.
+  const secondFactor: SecondFactorState =
+    assurance.data?.currentLevel === "aal2" ? "ok" : assurance.data?.nextLevel === "aal2" ? "challenge" : "missing";
   // What the official record and FlightAware said of each leg. A read that failed is an error of the page too.
   const flights = await loadFlightChecks(
     supabase,
@@ -738,6 +773,9 @@ async function loadCase(id: string): Promise<CaseState> {
     today: todayInBrazil(),
     cpfLookup: cpfLookup() !== null,
     supportVisit: cookieStore.has(IMPERSONATION_MARKER_COOKIE),
+    statementApprovals,
+    secondFactor,
+    firmFunction: context.firm.firmFunction,
   };
 }
 

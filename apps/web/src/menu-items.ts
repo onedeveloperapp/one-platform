@@ -79,14 +79,6 @@ export const leftMenuItems: MenuItem[] = [
     href: "/atendimento",
   },
   {
-    id: "aprovacoes",
-    icon: "NiListCheck",
-    label: "menu-aprovacoes",
-    description: "menu-aprovacoes-description",
-    color: "text-primary",
-    href: "/aprovacoes",
-  },
-  {
     id: "protocolo",
     icon: "NiScale",
     label: "menu-protocolo",

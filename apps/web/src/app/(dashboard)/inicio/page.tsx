@@ -6,6 +6,7 @@ import HomeView, { type HomeState } from "./home-view";
 import { cookies } from "next/headers";
 import { getTranslations } from "next-intl/server";
 
+import { readWaitingDecisions } from "@/lib/ai/decisions-read";
 import { readCaseJourney } from "@/lib/cases/journey-read";
 import { readCaseList } from "@/lib/cases/list-read";
 import { firmPulseOf } from "@/lib/cases/pulse";
@@ -89,6 +90,7 @@ async function loadHome(): Promise<
     journey,
     recent,
     pulse,
+    decisions,
   ] = await Promise.all([
     context.supabase.rpc("firm_today", { target_org: firm.id }),
     context.supabase.rpc("firm_pending", { target_org: firm.id }),
@@ -121,6 +123,9 @@ async function loadHome(): Promise<
     context.supabase
       .rpc("firm_pulse", { target_org: firm.id })
       .then(({ data, error }) => (error ? null : firmPulseOf(data))),
+    // Each decision that waits for this person, placed where it is decided (its case, its conversation); unread,
+    // the home counts them as before.
+    readWaitingDecisions(context.supabase, firm.id, firm.firmFunction).catch(() => null),
   ]);
   if (manager && facts && !isSetupAnswered(facts)) return { kind: "setup", setup: await loadSetupState(context) };
   // Read failures owe nothing: a registration that could not be read is never said to be missing.
@@ -145,7 +150,8 @@ async function loadHome(): Promise<
     today: read,
     // What holds a case until somebody of the firm acts, as the center of the header says it (0044, 0053); null
     // when it could not be read, which the home says, never as nothing waiting.
-    attention: waiting ? attentionGroups(pendingGroups(read, waiting, viewer)) : null,
+    attention: waiting ? attentionGroups(pendingGroups(read, waiting, viewer, new Date(), decisions)) : null,
+    decisions,
     triagesPublications: viewer.triagesPublications,
     worksDeadlines: viewer.worksDeadlines,
     confirmsDeadlines: viewer.confirmsDeadlines,

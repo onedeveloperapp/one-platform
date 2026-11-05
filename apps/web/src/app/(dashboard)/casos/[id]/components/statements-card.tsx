@@ -1,5 +1,6 @@
 "use client";
 
+import ApprovalCard from "../../../aprovacoes/components/approval-card";
 import type { CaseState, CaseStatement } from "../case-types";
 import InterviewSection from "./interview-section";
 import Link from "next/link";
@@ -10,9 +11,11 @@ import { Alert, Box, Button, MenuItem, TextField, Typography } from "@mui/materi
 
 import CollapsibleCard from "@/components/product/collapsible-card";
 import EmptyState from "@/components/product/empty-state";
+import SecondFactorPrompt from "@/components/product/second-factor-prompt";
 import StateLine from "@/components/product/state-line";
 import StatusChip, { type StatusTone } from "@/components/product/status-chip";
 import NiMicrophone from "@/icons/nexture/ni-microphone";
+import { mayDecide } from "@/lib/ai/approvals";
 import { ACCOUNT_TOPIC_SHORT_KEY } from "@/lib/cases/account";
 import { openCaseFile } from "@/lib/cases/actions";
 import { opensOnArrival } from "@/lib/cases/sections";
@@ -161,12 +164,16 @@ export default function StatementsCard({
   };
 
   const list = new Intl.ListFormat("pt-BR", { style: "long", type: "conjunction" });
+  // What waits for a person of each account: decided on its row.
+  const approvalOf = (statement: CaseStatement) =>
+    state.statementApprovals.find((approval) => approval.statement?.id === statement.id) ?? null;
 
   const row = (statement: CaseStatement) => {
     const stage = statementStage(statement);
     const lines = chronologyLines(statement.chronology);
     const previous = chronologyLines(statement.previousChronology);
     const expanded = open === statement.id;
+    const approval = approvalOf(statement);
     // A chronology may be asked again whenever none is being made or waits in the queue, and the client has
     // not confirmed one: it failed, was turned down, was contested, or the firm takes back what it approved.
     const mayAskAgain = stage === "not_proposed" || stage === "contested" || stage === "waiting_client";
@@ -432,7 +439,8 @@ export default function StatementsCard({
                 {busy === statement.id ? t("cases-working") : t("case-statement-resume")}
               </Button>
             ) : null}
-            {stage === "waiting_firm" || stage === "transcript_waits" ? (
+            {(stage === "waiting_firm" || stage === "transcript_waits") && !approvalOf(statement) ? (
+              // Decided right here once it is read; unread, the list of every decision still has it.
               <Button variant="text" color="grey" size="small" href="/aprovacoes" LinkComponent={Link}>
                 {t("case-statement-open-queue")}
               </Button>
@@ -494,6 +502,28 @@ export default function StatementsCard({
             ) : null}
           </Box>
         )}
+        {approval ? (
+          // What ONE proposed of this account, decided here, beside it (the owner, 2026-11-05): approved as it is or
+          // corrected, sent back with what to change, or refused.
+          <Box className="flex flex-col gap-3 pt-2">
+            {mayDecide(state.firmFunction, approval.approverFunctions) &&
+            !state.supportVisit &&
+            state.secondFactor !== "ok" ? (
+              <SecondFactorPrompt
+                state={state.secondFactor}
+                reason={t("case-statement-decide-factor")}
+                onConfirmed={onChanged}
+              />
+            ) : null}
+            <ApprovalCard
+              approval={approval}
+              onCase
+              canDecide={mayDecide(state.firmFunction, approval.approverFunctions)}
+              blocked={state.supportVisit || state.secondFactor !== "ok"}
+              onDecided={() => onChanged()}
+            />
+          </Box>
+        ) : null}
       </Box>
     );
   };

@@ -1,5 +1,6 @@
 "use server";
 
+import { readWaitingDecisions } from "@/lib/ai/decisions-read";
 import { pendingBadge, type PendingGroup, pendingGroups, pendingLate, readFirmPending } from "@/lib/firm/pending";
 import { readFirmToday, todayViewerOf } from "@/lib/firm/today";
 import { sweepWhileUsed } from "@/lib/jobs/while-used";
@@ -23,14 +24,16 @@ export async function readPendingCenter(): Promise<PendingRead> {
   // run now and then, after the answer (lib/jobs/while-used.ts).
   sweepWhileUsed();
 
-  const [today, pending] = await Promise.all([
+  const [today, pending, decisions] = await Promise.all([
     context.supabase.rpc("firm_today", { target_org: context.firm.id }),
     context.supabase.rpc("firm_pending", { target_org: context.firm.id }),
+    // Each decision that waits, placed where it is decided; unread, the center counts them as before.
+    readWaitingDecisions(context.supabase, context.firm.id, context.firm.firmFunction).catch(() => null),
   ]);
   const todayRead = today.error ? null : readFirmToday(today.data);
   const pendingRead = pending.error ? null : readFirmPending(pending.data);
   if (!todayRead || !pendingRead) return { ok: false, code: "unavailable" };
 
-  const groups = pendingGroups(todayRead, pendingRead, todayViewerOf(context.firm));
+  const groups = pendingGroups(todayRead, pendingRead, todayViewerOf(context.firm), new Date(), decisions);
   return { ok: true, groups, badge: pendingBadge(groups), late: pendingLate(groups) };
 }

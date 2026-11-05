@@ -1,5 +1,6 @@
 import type { AirlineOption } from "../cases-types";
 
+import type { PendingApproval, SecondFactorState } from "@/lib/ai/approvals";
 import type { AccountState } from "@/lib/cases/account";
 import type { CaseStatus, Cause, LinkOwed, Origin, PersonData, RequiredDocument } from "@/lib/cases/cases";
 import type { CheckAnswer } from "@/lib/cases/document-check";
@@ -329,6 +330,12 @@ export type CaseState =
       /** The CPF registry is configured in this environment. */
       cpfLookup: boolean;
       supportVisit: boolean;
+      /** The order of the facts (and a transcription) of the case's accounts that waits for a person (0016, 0026). */
+      statementApprovals: PendingApproval[];
+      /** Whether this session may decide what asks the second factor now. */
+      secondFactor: SecondFactorState;
+      /** The person's function in the firm: who the answers that wait name as deciders. */
+      firmFunction: FirmFunction;
     }
   | { kind: "not-found" }
   | { kind: "no-firm" }
