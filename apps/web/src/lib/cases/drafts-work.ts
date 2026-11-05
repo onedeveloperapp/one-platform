@@ -9,7 +9,7 @@ import {
   readDraft,
   revisionBriefing,
 } from "@/lib/cases/drafts";
-import { interviewForPiece } from "@/lib/cases/interview-work";
+import { interviewForPiece, queueInterview } from "@/lib/cases/interview-work";
 import { supabaseFileStore } from "@/lib/files/store";
 import { soon } from "@/lib/jobs/soon";
 import { createServiceClient } from "@flyee/auth/service";
@@ -158,11 +158,15 @@ export async function workClaimedDraft(service: SupabaseClient, held: DraftClaim
     // what the lawyer asked to change in it. Hashed for the record, never kept as text by the run.
     let input: Record<string, unknown>;
     let briefing: string;
-    // The passenger's interview, answer by answer, and how the change was told against the 72 hours (0095).
-    const interview = await interviewForPiece(service, row.case_id).catch(() => null);
+    // The passenger's interview, answer by answer, and how the change was told against the 72 hours (0095); and the
+    // facts its claim cannot stand without, the only ones a [COMPLETAR] is written for (0099).
+    const [interview, essentials] = await Promise.all([
+      interviewForPiece(service, row.case_id).catch(() => null),
+      pieceEssentials(service, row.case_id),
+    ]);
     const facts =
-      interview && typeof row.facts === "object" && row.facts !== null
-        ? { ...(row.facts as Record<string, unknown>), ...interview }
+      typeof row.facts === "object" && row.facts !== null
+        ? { ...(row.facts as Record<string, unknown>), ...(interview ?? {}), essenciais: essentials }
         : row.facts;
     if (row.work === "generate") {
       if (!row.template || !row.run_key) return record("failed", { code: "nothing_to_write" });
@@ -208,7 +212,12 @@ export async function workClaimedDraft(service: SupabaseClient, held: DraftClaim
     // Where the firm lets ONE approve a piece (0016, `piece_text`), the first text the AI wrote is approved once
     // its citations were read and the gate lets it: the database decides, in a step of its own, and its PDF is
     // then owed as after a lawyer's approval. One it does not approve waits for a lawyer, as before.
-    if (checked === "checked") await approveUnattended(service, row.draft_id);
+    if (checked === "checked") {
+      await approveUnattended(service, row.draft_id);
+      // A piece left with something to complete has ONE ask the client what it lacks, and written again with the
+      // answers (0099): the database says whether it is owed, right after, never waited for.
+      queueInterview({ caseId: row.case_id });
+    }
     return checked;
   }
 
@@ -267,6 +276,14 @@ export async function workClaimedDraft(service: SupabaseClient, held: DraftClaim
  * ONE approves a draft where its firm lets it (`approve_case_draft_unattended`): the database says whether, and
  * a failure here leaves the draft as it is, for the sweep or a lawyer.
  */
+/** The facts a case's piece cannot stand without (`drafts.essentials`, 0099); the flight alone when it cannot be read. */
+async function pieceEssentials(service: SupabaseClient, caseId: string): Promise<string[]> {
+  const { data, error } = await service.rpc("piece_essentials", { target_case: caseId });
+  if (error || !Array.isArray(data)) return ["voo"];
+  const codes = (data as unknown[]).filter((code): code is string => typeof code === "string");
+  return codes.length > 0 ? codes : ["voo"];
+}
+
 async function approveUnattended(service: SupabaseClient, draftId: string): Promise<void> {
   try {
     await service.rpc("approve_case_draft_unattended", { target_draft: draftId });

@@ -89,7 +89,19 @@ export type InterviewFacts = {
   /** Who travelled is on record: the trip an agency registered or ONE followed, or more than one person in the case. */
   companionsKnown: boolean;
   answers: Partial<Record<InterviewQuestion, InterviewAnswer>>;
+  /**
+   * The questions this interview asks when it asks what a piece still lacks (0099), in no order of its own; empty or
+   * absent: every question of the problem.
+   */
+  only?: InterviewQuestion[] | null;
 };
+
+/** The questions this interview asks, in the order they are asked: its problem's, cut to `only` when it has one. */
+export function questionsOf(facts: Pick<InterviewFacts, "incident" | "only">): InterviewQuestion[] {
+  const all = questionsFor(facts.incident);
+  const only = facts.only ?? [];
+  return only.length > 0 ? all.filter((question) => only.includes(question)) : all;
+}
 
 /** Why a question is left out, as the screens say it. */
 export const SKIP_REASONS = [
@@ -162,7 +174,7 @@ export function interviewPlan(facts: InterviewFacts): {
   next: InterviewQuestion | null;
 } {
   const skips: { question: InterviewQuestion; reason: SkipReason }[] = [];
-  for (const question of questionsFor(facts.incident)) {
+  for (const question of questionsOf(facts)) {
     if (facts.answers[question]) continue;
     const reason = skipReason(question, facts);
     if (reason) {
@@ -177,7 +189,7 @@ export function interviewPlan(facts: InterviewFacts): {
 
 /** How many of a problem's questions are left to ask, the one asked now included (for "Pergunta 3 de 7"). */
 export function interviewProgress(facts: InterviewFacts): { position: number; total: number } {
-  const all = questionsFor(facts.incident);
+  const all = questionsOf(facts);
   const leftOut = new Set<InterviewQuestion>(
     all.filter((question) =>
       facts.answers[question] ? facts.answers[question].status === "skipped" : skipReason(question, facts) !== null,

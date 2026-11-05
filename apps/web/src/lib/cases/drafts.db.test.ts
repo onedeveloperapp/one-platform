@@ -61,7 +61,7 @@ vi.mock("@flyee/ai/fake", async (original) => {
           model.failure = null;
           throw failure;
         }
-        return { texto: model.text, observacoes: model.notes };
+        return { texto: model.text, pendencias: [], observacoes: model.notes };
       });
     }
   }
@@ -669,7 +669,7 @@ describe.skipIf(!DB_URL)("the piece of a lawsuit, written and issued by the work
     expect(await approve(asAna(), draftId)).toMatchObject({ ok: false, code: "citations_not_verified" });
     // The queue approves no piece, as it came or corrected there: a piece is read on its case, with what it
     // cites beside it and as its document will say it.
-    for (const corrected of [null, { texto: CORRECTED, observacoes: [] }]) {
+    for (const corrected of [null, { texto: CORRECTED, pendencias: [], observacoes: [] }]) {
       const inQueue = await asAna().rpc("decide_approval", {
         target_approval: approval,
         target_decision: "approved",

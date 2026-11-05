@@ -107,6 +107,33 @@ describe("caseNow", () => {
     expect(ids(caseNow(base({ account: "proposed", proceedings: [planned] })).blocking)).toContain("account:proposed");
   });
 
+  it("says the piece waits for the client while ONE asks what it lacks, else for a lawyer (0099)", () => {
+    const draft = { id: "dr", proceedingId: "lw", status: "proposed", work: null, requestedAt: null } as const;
+    const asking = caseNow(
+      base({
+        status: "drafting",
+        account: "incomplete",
+        proceedings: [planned],
+        drafts: [draft] as unknown as CaseNowInput["drafts"],
+        interview: { status: "open", inChat: true, position: 1, total: 2, done: 0 },
+      }),
+    );
+    const line = asking.blocking.find((one) => one.id === "draft:dr");
+    expect(line).toMatchObject({ owner: "client", text: { key: "case-now-draft-asking-chat" } });
+    expect(asking.holder).toBe("client");
+    const review = caseNow(
+      base({
+        status: "drafting",
+        proceedings: [planned],
+        drafts: [draft] as unknown as CaseNowInput["drafts"],
+      }),
+    );
+    expect(review.blocking.find((one) => one.id === "draft:dr")).toMatchObject({
+      owner: "firm",
+      text: { key: "case-now-draft-review" },
+    });
+  });
+
   it("says the package waits for a lawyer to file it, never that the case is with ONE", () => {
     const now = caseNow(
       base({

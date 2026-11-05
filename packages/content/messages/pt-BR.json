@@ -2531,6 +2531,8 @@
     "case-now-system-unapproved": "Aprove, ou não, o sistema {system} que o ONE definiu para a ação ({kind}).",
     "case-now-power-unnamed": "A procuração do escritório não nomeia {lawyer}, que assina a ação ({kind}): ajuste o modelo ou quem assina.",
     "case-now-draft-review": "Revise e aprove a peça da ação ({kind}).",
+    "case-now-draft-asking-chat": "O cliente responde no WhatsApp o que falta na peça da ação ({kind}): pergunta {position} de {total}. O ONE refaz a peça com as respostas.",
+    "case-now-draft-asking-link": "O cliente responde no link o que falta na peça da ação ({kind}): {done} de {total} respondidas. O ONE refaz a peça com as respostas.",
     "case-now-draft-failed": "A peça da ação ({kind}) não foi escrita: peça de novo.",
     "case-now-filing-failed": "O pacote da ação ({kind}) não foi montado: veja o que aconteceu.",
     "case-now-filing-blocked": "O pacote da ação ({kind}) espera {reason}.",

@@ -34,7 +34,7 @@ vi.mock("@flyee/ai/fake", async (original) => {
   const real = await original<typeof import("@flyee/ai/fake")>();
   class ToldProvider extends real.FakeChatProvider {
     constructor(name?: AiProviderName) {
-      super(name, () => ({ texto: model.text, observacoes: [] }));
+      super(name, () => ({ texto: model.text, pendencias: [], observacoes: [] }));
     }
   }
   return { ...real, FakeChatProvider: ToldProvider };

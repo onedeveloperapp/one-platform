@@ -682,15 +682,36 @@ export function caseNow(input: CaseNowInput): CaseNow {
             }),
           );
         } else if (draft.status === "proposed") {
+          // While ONE asks the client what the piece lacks, the piece waits for the client: ONE writes it again with
+          // the answers (0099). A lawyer may still take it up on its card.
+          const asking = input.interview?.status === "open" && input.interview.total > 0;
           blocking.push(
-            item({
-              id: `draft:${draft.id}`,
-              owner: "firm",
-              actor: "lawyer",
-              tone: "attention",
-              text: { key: "case-now-draft-review", values: { kind } },
-              section: "drafts",
-            }),
+            item(
+              asking && input.interview
+                ? {
+                    id: `draft:${draft.id}`,
+                    owner: "client",
+                    tone: "waiting",
+                    text: input.interview.inChat
+                      ? {
+                          key: "case-now-draft-asking-chat",
+                          values: { kind, position: input.interview.position, total: input.interview.total },
+                        }
+                      : {
+                          key: "case-now-draft-asking-link",
+                          values: { kind, done: input.interview.done, total: input.interview.total },
+                        },
+                    section: "drafts",
+                  }
+                : {
+                    id: `draft:${draft.id}`,
+                    owner: "firm",
+                    actor: "lawyer",
+                    tone: "attention",
+                    text: { key: "case-now-draft-review", values: { kind } },
+                    section: "drafts",
+                  },
+            ),
           );
         } else if (draft.status === "failed") {
           blocking.push(

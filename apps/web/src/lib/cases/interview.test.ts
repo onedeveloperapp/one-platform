@@ -7,6 +7,7 @@ import {
   interviewReadingOf,
   interviewRows,
   interviewViewOf,
+  pendingQuestions,
   questionText,
   resumeWhat,
 } from "@/lib/cases/interview";
@@ -61,6 +62,24 @@ describe("the interview as the app reads it (0095)", () => {
     expect(Object.keys(view?.answers ?? {}).sort()).toEqual(["chegada", "motivo"]);
     expect(view?.facts.answers.chegada).toEqual({ status: "answered", yesNo: null, moment: "2026-09-21T09:40" });
     expect(interviewViewOf({ ...row, status: "lost" })).toBeNull();
+  });
+
+  it("asks only what the piece lacks, saying why first, once (0099)", () => {
+    const view = interviewViewOf({ ...row, scope: ["gastos", "solucao", "compra"], current_question: null });
+    expect(view?.facts.only).toEqual(["gastos", "solucao"]);
+    expect(interviewViewOf(row)?.facts.only).toBeNull();
+    const scoped = facts({ only: ["solucao", "gastos"] });
+    expect(askMessage("solucao", scoped, "ask")).toBe(
+      "Para terminar a sua ação, o escritório precisa de mais 2 respostas. Pergunta 1 de 2: O que a companhia ofereceu no lugar do voo: outro voo, o reembolso ou outro transporte? E você aceitou?",
+    );
+    expect(askMessage("chegada", facts({ only: ["chegada"] }), "ask")).toMatch(
+      /^Para terminar a sua ação, o escritório precisa de mais uma resposta\. Pergunta 1 de 1:/,
+    );
+    const second = facts({ only: ["solucao", "gastos"], answers: { solucao: { status: "answered" } } });
+    expect(askMessage("gastos", second, "ask")).toMatch(/^Pergunta 2 de 2: /);
+    expect(askMessage("solucao", scoped, "ask")).not.toMatch(/[—–!]/);
+    expect(resumeWhat(scoped)).toBe("2 respostas");
+    expect(pendingQuestions(scoped, "solucao")).toEqual(["gastos"]);
   });
 
   it("asks each question in plain words, with no dash, exclamation or the purchase", () => {

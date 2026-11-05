@@ -8,7 +8,7 @@ import {
   isInterviewQuestion,
   noticeStanding,
   QUESTION_SHAPE,
-  questionsFor,
+  questionsOf,
   SKIP_REASONS,
   type SkipReason,
   skipReason,
@@ -100,6 +100,8 @@ export function interviewViewOf(value: unknown): InterviewView | null {
   const alertKind =
     alert && (alert.kind === "cancelled" || alert.kind === "changed" || alert.kind === "delayed") ? alert.kind : null;
   const current = isInterviewQuestion(row.current_question) ? row.current_question : null;
+  // The questions it asks when it asks what a piece lacks (0099).
+  const only = Array.isArray(row.scope) ? (row.scope as unknown[]).filter(isInterviewQuestion) : [];
   return {
     id,
     caseId,
@@ -125,6 +127,7 @@ export function interviewViewOf(value: unknown): InterviewView | null {
       actualArrival: text(row.actual_arrival),
       companionsKnown: row.companions_known === true,
       answers: ruleAnswers,
+      only: only.length > 0 ? only : null,
     },
     answers,
   };
@@ -207,6 +210,10 @@ export function askMessage(question: InterviewQuestion, facts: InterviewFacts, m
     case "back":
       return `Voltando à pergunta ${position} de ${total}: ${asked}`;
     default:
+      // An interview that asks what the piece lacks says why first, once (0099).
+      if (position === 1 && (facts.only?.length ?? 0) > 0) {
+        return `Para terminar a sua ação, o escritório precisa de mais ${total === 1 ? "uma resposta" : `${total} respostas`}. Pergunta 1 de ${total}: ${asked}`;
+      }
       return `Pergunta ${position} de ${total}: ${asked}`;
   }
 }
@@ -217,15 +224,13 @@ export const interviewDoneMessage = (firstName: string): string =>
 
 /** What the firm's template says is still owed, as its value: "uma resposta", "3 respostas". */
 export function resumeWhat(facts: InterviewFacts): string {
-  const left = questionsFor(facts.incident).filter(
-    (question) => !facts.answers[question] && !skipReason(question, facts),
-  ).length;
+  const left = questionsOf(facts).filter((question) => !facts.answers[question] && !skipReason(question, facts)).length;
   return left <= 1 ? "uma resposta" : `${left} respostas`;
 }
 
 /** The questions still to come after the one asked now: what the AI may find answered in the same message. */
 export function pendingQuestions(facts: InterviewFacts, current: InterviewQuestion | null): InterviewQuestion[] {
-  return questionsFor(facts.incident).filter(
+  return questionsOf(facts).filter(
     (question) => question !== current && !facts.answers[question] && !skipReason(question, facts),
   );
 }
@@ -328,7 +333,7 @@ export function interviewRows(view: InterviewView): {
   answer: InterviewAnswerView | null;
   reason: SkipReason | null;
 }[] {
-  return questionsFor(view.facts.incident).map((question) => {
+  return questionsOf(view.facts).map((question) => {
     const answer = view.answers[question] ?? null;
     if (answer) return { question, state: answer.status, answer, reason: answer.reason };
     const reason = skipReason(question, view.facts);

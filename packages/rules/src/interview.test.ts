@@ -8,6 +8,7 @@ import {
   interviewProgress,
   noticeStanding,
   questionsFor,
+  questionsOf,
   skipReason,
   waitMinutes,
 } from "./interview.ts";
@@ -48,6 +49,22 @@ test("the questions of each problem, in order; none for a bag and none asked of 
       false,
     );
   }
+});
+
+test("an interview that asks what a piece lacks asks only that, in the order of its problem (0099)", () => {
+  const scoped = facts({ only: ["gastos", "chegada", "solucao"] });
+  assert.deepEqual(questionsOf(scoped), ["solucao", "chegada", "gastos"]);
+  assert.deepEqual(interviewPlan(scoped), { skips: [], next: "solucao" });
+  assert.deepEqual(interviewProgress(scoped), { position: 1, total: 3 });
+  // A question its problem does not have is never asked, and with none the whole problem is.
+  assert.deepEqual(questionsOf(facts({ incident: "delay", only: ["solucao", "gastos"] })), ["gastos"]);
+  assert.deepEqual(questionsOf(facts({ only: [] })), questionsFor("cancellation"));
+  // Answered, it is done.
+  const answered = facts({
+    only: ["chegada"],
+    answers: { chegada: { status: "answered", moment: "2099-10-23T09:10" } },
+  });
+  assert.deepEqual(interviewPlan(answered), { skips: [], next: null });
 });
 
 test("a question waits for the one before, and the first one is asked first", () => {
