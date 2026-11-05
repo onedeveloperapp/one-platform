@@ -4,6 +4,7 @@ import type { PersonSetupState } from "./person-setup-view";
 import { cookies } from "next/headers";
 
 import type { SecondFactorState } from "@/lib/ai/approvals";
+import { cloudSigningOffered } from "@/lib/cases/filing-facts";
 import type { PersonSetupStep } from "@/lib/firm/person-setup";
 import { OAB_STATES, type OabRegistration } from "@/lib/firm/roles";
 import type { MemberContext } from "@/lib/member/context";
@@ -20,10 +21,14 @@ export async function loadPersonSetupState(
 ): Promise<PersonSetupState> {
   const firm = context?.firm ?? null;
   if (!context || !firm) return { kind: "unavailable" };
-  const [registrations, assurance, cookieStore] = await Promise.all([
+  const [registrations, assurance, cookieStore, declaredCpf, cloudSigning] = await Promise.all([
     context.supabase.from("oab_registrations").select("id, uf, number, kind").eq("user_id", context.userId),
     context.supabase.auth.mfa.getAuthenticatorAssuranceLevel(),
     cookies(),
+    // The CPF for the signature in the cloud (0041), asked where a provider can be used here; a read that fails asks
+    // nothing (the team's card asks it when a lawsuit needs it).
+    context.supabase.from("lawyer_cpfs").select("user_id").eq("user_id", context.userId).maybeSingle(),
+    cloudSigningOffered(context.supabase).catch(() => false),
   ]);
   if (registrations.error) return { kind: "error" };
   const secondFactor: SecondFactorState =
@@ -37,6 +42,7 @@ export async function loadPersonSetupState(
     registrations: ((registrations.data ?? []) as OabRegistration[]).filter((registration) =>
       (OAB_STATES as readonly string[]).includes(registration.uf),
     ),
+    asksCpf: cloudSigning && !declaredCpf.error && declaredCpf.data === null,
     secondFactor,
     supportVisit: cookieStore.has(IMPERSONATION_MARKER_COOKIE),
     step,

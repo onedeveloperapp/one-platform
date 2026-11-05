@@ -12,6 +12,7 @@ import { cookies } from "next/headers";
 
 import { momentLabel, type SecondFactorState } from "@/lib/ai/approvals";
 import { isCertificateKind, isCourtSystemName } from "@/lib/cases/statements";
+import { momentWords, ownSignatureNeed, readFilingAttention } from "@/lib/firm/filing-attention";
 import {
   isFirmFunction,
   isInvitableRole,
@@ -104,7 +105,7 @@ async function loadCloudSignatures(
   backToCase: string | null,
 ): Promise<CloudSignatureData | null> {
   const timezone = context.profile.timezone;
-  const [pscRows, signatureRows, useRows, declared, assurance, cookieStore] = await Promise.all([
+  const [pscRows, signatureRows, useRows, declared, assurance, cookieStore, attention] = await Promise.all([
     context.supabase.from("psc_providers").select("slug, name").eq("active", true).order("name"),
     context.supabase
       .from("connections")
@@ -123,8 +124,14 @@ async function loadCloudSignatures(
     context.supabase.from("lawyer_cpfs").select("cpf").eq("user_id", context.userId).maybeSingle(),
     context.supabase.auth.mfa.getAuthenticatorAssuranceLevel(),
     cookies(),
+    // What ONE's filing waits on the person for (0102), the same reading the center of what waits says. Unread, the
+    // card says the rest as before.
+    context.supabase
+      .rpc("firm_filing_attention", { target_org: firmId })
+      .then(({ data, error }) => (error ? null : readFilingAttention(data))),
   ]);
   if (pscRows.error || signatureRows.error || useRows.error || declared.error) return null;
+  const need = ownSignatureNeed(attention, context.userId);
 
   const uses = (useRows.data ?? []) as UseRow[];
   const caseIds = [...new Set(uses.map((row) => row.case_id).filter((id): id is string => !!id))];
@@ -203,6 +210,9 @@ async function loadCloudSignatures(
     outcome: isSignatureOutcome(outcome) ? outcome : null,
     backToCase,
     declaredCpf: typeof declared.data?.cpf === "string" ? cpfMiddleLabel(declared.data.cpf.slice(3, 9)) : null,
+    waiting: need
+      ? { state: need.state, lawsuits: need.lawsuits, endsWords: momentWords(need.expiresAt, new Date(), timezone) }
+      : null,
     secondFactor: (assurance.data?.currentLevel === "aal2"
       ? "ok"
       : assurance.data?.nextLevel === "aal2"

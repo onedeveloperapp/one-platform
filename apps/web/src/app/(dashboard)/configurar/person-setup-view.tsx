@@ -1,6 +1,7 @@
 "use client";
 
 import { teamErrorKey } from "../settings/team/team-types";
+import SetupCpf, { declareSetupCpf } from "./setup-cpf";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 
@@ -41,6 +42,8 @@ export type PersonSetupState =
       firmFunction: FirmFunction;
       /** The person's registrations at the bar. */
       registrations: OabRegistration[];
+      /** Their CPF for the signature in the cloud is asked: a provider can be used here and they declared none. */
+      asksCpf: boolean;
       secondFactor: SecondFactorState;
       supportVisit: boolean;
       /** The step the address asked for (`?passo=`). */
@@ -101,6 +104,10 @@ function PersonSetupFlow({ state }: { state: Extract<PersonSetupState, { kind: "
   const [touched, setTouched] = useState(false);
   const [oabError, setOabError] = useState<string | null>(null);
   const numberOk = NUMBER_PATTERN.test(cleanNumber(number));
+  // The CPF for the signature in the cloud, optional: what is typed goes only whole and checked, and one that is not
+  // is said under the field when the step goes on.
+  const [cpf, setCpf] = useState("");
+  const [cpfError, setCpfError] = useState<string | null>(null);
   const oabReady = registered || (Boolean(uf) && numberOk);
 
   // ---------- The end ----------
@@ -124,16 +131,25 @@ function PersonSetupFlow({ state }: { state: Extract<PersonSetupState, { kind: "
 
   const saveOab = async (): Promise<boolean> => {
     setOabError(null);
-    if (registered) return true;
-    setTouched(true);
-    if (!uf || !numberOk) return false;
-    const added = await addOabRegistration({ uf, number: cleanNumber(number), kind: "principal" }).catch(() => ({
-      ok: false as const,
-      code: "failed",
-    }));
-    if (!added.ok) {
-      setOabError(t(teamErrorKey(added.code)));
-      return false;
+    if (!registered) {
+      setTouched(true);
+      if (!uf || !numberOk) return false;
+      const added = await addOabRegistration({ uf, number: cleanNumber(number), kind: "principal" }).catch(() => ({
+        ok: false as const,
+        code: "failed",
+      }));
+      if (!added.ok) {
+        setOabError(t(teamErrorKey(added.code)));
+        return false;
+      }
+    }
+    if (state.asksCpf) {
+      setCpfError(null);
+      const refused = await declareSetupCpf(cpf);
+      if (refused) {
+        setCpfError(t(refused));
+        return false;
+      }
     }
     return true;
   };
@@ -244,6 +260,18 @@ function PersonSetupFlow({ state }: { state: Extract<PersonSetupState, { kind: "
         <Typography variant="body2" className="text-text-secondary">
           {t("person-setup-oab-signs")}
         </Typography>
+        {state.asksCpf ? (
+          <SetupCpf
+            id="person-setup-cpf"
+            value={cpf}
+            onChange={(value) => {
+              setCpf(value);
+              setCpfError(null);
+            }}
+            disabled={blocked}
+            error={cpfError}
+          />
+        ) : null}
         {oabError ? (
           <Alert severity="error" className="neutral bg-background-paper/60!" role="alert">
             {oabError}

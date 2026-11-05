@@ -7,9 +7,11 @@ import { cookies } from "next/headers";
 import { getTranslations } from "next-intl/server";
 
 import { readWaitingDecisions } from "@/lib/ai/decisions-read";
+import { cloudSigningOffered } from "@/lib/cases/filing-facts";
 import { readCaseJourney } from "@/lib/cases/journey-read";
 import { readCaseList } from "@/lib/cases/list-read";
 import { firmPulseOf } from "@/lib/cases/pulse";
+import { readFilingAttention } from "@/lib/firm/filing-attention";
 import { attentionGroups, pendingGroups, readFirmPending } from "@/lib/firm/pending";
 import { personFlowKey, personSetupOwed, signsAtTheBar } from "@/lib/firm/person-setup";
 import { isManager } from "@/lib/firm/roles";
@@ -91,6 +93,8 @@ async function loadHome(): Promise<
     recent,
     pulse,
     decisions,
+    filing,
+    cloudSigning,
   ] = await Promise.all([
     context.supabase.rpc("firm_today", { target_org: firm.id }),
     context.supabase.rpc("firm_pending", { target_org: firm.id }),
@@ -126,6 +130,11 @@ async function loadHome(): Promise<
     // Each decision that waits for this person, placed where it is decided (its case, its conversation); unread,
     // the home counts them as before.
     readWaitingDecisions(context.supabase, firm.id, firm.firmFunction).catch(() => null),
+    // What ONE's filing waits on a person for (0102), as the center says it; unread, the rest stands.
+    context.supabase
+      .rpc("firm_filing_attention", { target_org: firm.id })
+      .then(({ data, error }) => (error ? null : readFilingAttention(data))),
+    cloudSigningOffered(context.supabase).catch(() => false),
   ]);
   if (manager && facts && !isSetupAnswered(facts)) return { kind: "setup", setup: await loadSetupState(context) };
   // Read failures owe nothing: a registration that could not be read is never said to be missing.
@@ -150,7 +159,29 @@ async function loadHome(): Promise<
     today: read,
     // What holds a case until somebody of the firm acts, as the center of the header says it (0044, 0053); null
     // when it could not be read, which the home says, never as nothing waiting.
-    attention: waiting ? attentionGroups(pendingGroups(read, waiting, viewer, new Date(), decisions)) : null,
+    attention: waiting
+      ? attentionGroups(
+          pendingGroups(
+            read,
+            waiting,
+            viewer,
+            new Date(),
+            decisions,
+            filing
+              ? {
+                  attention: filing,
+                  viewer: {
+                    userId: context.userId,
+                    firmFunction: firm.firmFunction,
+                    managesFirm: viewer.managesFirm,
+                    cloudSigning,
+                    timeZone: context.profile.timezone,
+                  },
+                }
+              : null,
+          ),
+        )
+      : null,
     decisions,
     triagesPublications: viewer.triagesPublications,
     worksDeadlines: viewer.worksDeadlines,

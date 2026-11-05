@@ -93,6 +93,13 @@ export type CaseDocument = {
 /** A lawyer who signs a planned lawsuit and whom the client's power of attorney does not name (0093). */
 export type UnnamedSigner = { proceedingId: string; userId: string; lawyer: string | null };
 
+/**
+ * A planned lawsuit whose files ONE will sign in the cloud and that no lawyer of it covers yet with an
+ * authorization (0102), with whether the person reading signs it and declared their CPF: asked on the card of the
+ * filing before the package exists. Listed only where a provider of the cloud signature can be used here.
+ */
+export type SignatureAhead = { proceedingId: string; viewerSigns: boolean; viewerCpf: boolean };
+
 export type CaseProceeding = {
   id: string;
   kind: "juizado" | "comum";
@@ -277,6 +284,8 @@ export type CaseState =
       civilCourt: CivilCourtNeed[];
       /** The lawyers of the planned lawsuits the client's power of attorney does not name (0093). */
       unnamedSigners: UnnamedSigner[];
+      /** The planned lawsuits whose cloud signature no lawyer of them covers yet (0102). */
+      signatureAhead: SignatureAhead[];
       /** What the clients told about the trip, each with where its chronology stands. */
       statements: CaseStatement[];
       /** Where the case's account stands, as ONE waits for it before the lawsuits (0090); null when unreadable. */

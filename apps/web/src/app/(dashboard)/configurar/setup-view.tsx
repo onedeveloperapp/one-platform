@@ -7,6 +7,7 @@ import NoticesCard from "../settings/connections/components/notices-card";
 import SignatureAccountCard from "../settings/connections/components/signature-account-card";
 import TestChatCard from "../settings/connections/components/test-chat-card";
 import { teamErrorKey } from "../settings/team/team-types";
+import SetupCpf, { declareSetupCpf } from "./setup-cpf";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useEffect, useRef, useState } from "react";
@@ -69,6 +70,8 @@ export type SetupState =
       registrations: OabRegistration[];
       /** Who answers already signs what ONE prepares. */
       signs: boolean;
+      /** Their CPF for the signature in the cloud is asked: a provider can be used here and they declared none. */
+      asksCpf: boolean;
       /** What the firm said; null while it never answered. */
       worksAlone: boolean | null;
       answered: boolean;
@@ -215,6 +218,11 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
   const [signs, setSigns] = useState(choosesSigner ? true : state.signs);
   const [oabError, setOabError] = useState<string | null>(null);
   const numberOk = NUMBER_PATTERN.test(cleanNumber(number));
+  // The CPF for the signature in the cloud, optional: what is typed goes only whole and checked, and one that is not
+  // is said under the field when the step goes on.
+  const asksCpf = lawyer && state.asksCpf;
+  const [cpf, setCpf] = useState("");
+  const [cpfError, setCpfError] = useState<string | null>(null);
   const oabReady = !lawyer || registered || (Boolean(uf) && numberOk);
 
   // ---------- Alone or with a team ----------
@@ -320,6 +328,14 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
       const chosen = await setFirmSigner(state.userId, signs);
       if (!chosen.ok) {
         setOabError(t(autonomyErrorKey(chosen.code)));
+        return false;
+      }
+    }
+    if (asksCpf) {
+      setCpfError(null);
+      const refused = await declareSetupCpf(cpf);
+      if (refused) {
+        setCpfError(t(refused));
         return false;
       }
     }
@@ -547,6 +563,19 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
             <Typography variant="body2" className="text-text-secondary">
               {t("setup-oab-not-partner")}
             </Typography>
+          ) : null}
+
+          {asksCpf ? (
+            <SetupCpf
+              id="setup-cpf"
+              value={cpf}
+              onChange={(value) => {
+                setCpf(value);
+                setCpfError(null);
+              }}
+              disabled={blocked}
+              error={cpfError}
+            />
           ) : null}
 
           {oabError ? (

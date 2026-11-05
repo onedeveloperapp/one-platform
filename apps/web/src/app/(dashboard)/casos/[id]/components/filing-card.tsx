@@ -13,6 +13,7 @@ import DocumentSlot, { type SlotState } from "@/components/cases/document-slot";
 import CollapsibleCard from "@/components/product/collapsible-card";
 import ConfirmActionDialog from "@/components/product/confirm-action-dialog";
 import EmptyState from "@/components/product/empty-state";
+import StateLine from "@/components/product/state-line";
 import StatusChip, { type StatusTone } from "@/components/product/status-chip";
 import { TILE_TONE } from "@/components/product/tile-tone";
 import NiDocumentCheck from "@/icons/nexture/ni-document-check";
@@ -110,6 +111,15 @@ export default function FilingCard({
       !(filing.signature.takesSigned && filing.signature.status !== null && filing.signature.status !== "signed"),
   );
   const notBuilt = packages.some(({ filing }) => filing?.status === "failed");
+  // A lawsuit of the person's whose files ONE will sign in the cloud waits on their authorization before its package
+  // exists (0102): the card opens for them, and says it on that lawsuit.
+  const authorizeAhead =
+    state.lawyer &&
+    packages.some(
+      ({ proceeding, filing }) =>
+        (!filing || filing.status === "requested") &&
+        state.signatureAhead.some((ahead) => ahead.proceedingId === proceeding.id && ahead.viewerSigns),
+    );
   const noPackage = t("filing-summary-none");
 
   return (
@@ -131,10 +141,17 @@ export default function FilingCard({
           <StatusChip tone="danger" label={t("filing-status-failed")} />
         ) : readyToFile ? (
           <StatusChip tone="attention" label={t("filing-status-ready")} />
+        ) : authorizeAhead ? (
+          <StatusChip tone="attention" label={t("filing-chip-authorize")} />
         ) : null
       }
       description={t("filing-body")}
-      defaultOpen={opensOnArrival(state.case.status, "filing", readyToFile || notBuilt, lawsuits.length === 0)}
+      defaultOpen={opensOnArrival(
+        state.case.status,
+        "filing",
+        readyToFile || notBuilt || authorizeAhead,
+        lawsuits.length === 0,
+      )}
     >
       {lawsuits.length === 0 ? (
         <EmptyState
@@ -442,6 +459,13 @@ function Lawsuit({
   const oneFiles = !held && oneFilesIt(filing);
   // The court took it from ONE and gave no number to read: what is left of the lawyer's way is the receipt.
   const unnumbered = filedWithoutNumber(filing);
+  // Its files will be signed in the cloud and no lawyer of it covers them yet (0102): asked before the package is
+  // built, so ONE does not stop there. Who signs it is shown the way to authorize; anybody else, whose it is.
+  const ahead =
+    proceeding.status === "planned" && (!filing || filing.status === "requested") && !held
+      ? (state.signatureAhead.find((item) => item.proceedingId === proceeding.id) ?? null)
+      : null;
+  const aheadMine = ahead !== null && ahead.viewerSigns && state.lawyer;
 
   return (
     <Box className="border-grey-100 flex flex-col gap-3 rounded-2xl border p-4">
@@ -525,6 +549,29 @@ function Lawsuit({
         <Typography variant="body2" className="text-text-secondary">
           {t("filing-needs-forum")}
         </Typography>
+      ) : null}
+
+      {ahead ? (
+        <StateLine
+          tone={aheadMine ? "attention" : "info"}
+          action={
+            aheadMine && writable ? (
+              <Button
+                variant="outlined"
+                color="grey"
+                size="small"
+                href={`/settings/team?voltar=${state.case.id}#team-cloud-signature`}
+                LinkComponent={Link}
+              >
+                {t("filing-signature-authorize")}
+              </Button>
+            ) : undefined
+          }
+        >
+          {aheadMine
+            ? t(ahead.viewerCpf ? "filing-signature-ahead-mine" : "filing-signature-ahead-mine-cpf")
+            : t("filing-signature-ahead")}
+        </StateLine>
       ) : null}
 
       {outdated && showPackage ? (

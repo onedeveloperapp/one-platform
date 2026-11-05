@@ -270,7 +270,7 @@ function toFiling(row: PackageRow, timeZone: string | null | undefined, context:
  * is registered at one the list offers (as the team's card offers them).
  * Throws when the list could not be read.
  */
-async function cloudSigningOffered(supabase: SupabaseClient): Promise<boolean> {
+export async function cloudSigningOffered(supabase: SupabaseClient): Promise<boolean> {
   const { data, error } = await supabase.from("psc_providers").select("slug").eq("active", true);
   if (error) throw new Error("the cloud signature providers could not be read");
   return ((data ?? []) as { slug: string }[]).some((row) => pscAvailable(row.slug));

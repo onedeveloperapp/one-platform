@@ -4,6 +4,7 @@ import type { SetupState } from "./setup-view";
 import { cookies } from "next/headers";
 
 import type { SecondFactorState } from "@/lib/ai/approvals";
+import { cloudSigningOffered } from "@/lib/cases/filing-facts";
 import { isManager, OAB_STATES, type OabRegistration } from "@/lib/firm/roles";
 import type { SetupStepKey } from "@/lib/firm/setup-steps";
 import { loadSetupPapers } from "@/lib/library/facts";
@@ -46,6 +47,8 @@ export async function loadSetupState(
     decides,
     paperImports,
     moduleSetups,
+    declaredCpf,
+    cloudSigning,
   ] = await Promise.all([
     context.supabase.from("oab_registrations").select("id, uf, number, kind").eq("user_id", context.userId),
     context.supabase.from("firm_signers").select("user_id").eq("org_id", firm.id),
@@ -62,6 +65,10 @@ export async function loadSetupState(
     readPaperImports(context.supabase, firm.id).catch(() => ({ procuracao: null, contrato: null })),
     // The modules' own setups: a read that fails opens the home at the finish, never a setup not owed.
     readModuleSetups(context).catch(() => null),
+    // The CPF of who answers, for the signature in the cloud (0041), asked where a provider can be used here. A read
+    // that fails asks nothing: the team's card asks it when a lawsuit needs it.
+    context.supabase.from("lawyer_cpfs").select("user_id").eq("user_id", context.userId).maybeSingle(),
+    cloudSigningOffered(context.supabase).catch(() => false),
   ]);
   if (registrations.error || signers.error || organization.error || !organization.data) return { kind: "error" };
 
@@ -81,6 +88,7 @@ export async function loadSetupState(
       (OAB_STATES as readonly string[]).includes(registration.uf),
     ),
     signs: signing.includes(context.userId),
+    asksCpf: cloudSigning && !declaredCpf.error && declaredCpf.data === null,
     worksAlone: org.works_alone,
     answered: org.setup_answered_at !== null,
     whatsapp: !numbers.error && (numbers.data ?? []).length > 0,

@@ -12,6 +12,7 @@ import CollapsibleCard from "@/components/product/collapsible-card";
 import ConfirmActionDialog from "@/components/product/confirm-action-dialog";
 import EmptyState from "@/components/product/empty-state";
 import { CpfField } from "@/components/product/fields";
+import StateLine from "@/components/product/state-line";
 import StatusChip, { type StatusTone } from "@/components/product/status-chip";
 import NiPen from "@/icons/nexture/ni-pen";
 import { declareLawyerCpf, endLawyerSignature, startLawyerSignature } from "@/lib/psc/actions";
@@ -54,6 +55,13 @@ const OUTCOME_SEVERITY: Record<SignatureOutcome, "success" | "info" | "error"> =
   "teste-falhou": "error",
   "teste-pendente": "info",
   erro: "error",
+};
+
+/** What ONE's filing waits on the lawyer for (0102), said at the top of their own part of the card. */
+const WAITING_KEY: Record<NonNullable<CloudSignatureData["waiting"]>["state"], string> = {
+  cpf_missing: "psc-waiting-cpf",
+  none: "psc-waiting-none",
+  expiring: "psc-waiting-expiring",
 };
 
 /** The reasons an authorization ended that the lawyer reads in words; an end by time or by a person is said apart. */
@@ -146,6 +154,10 @@ export default function CloudSignatureCard({
   const gated = data.secondFactor !== "ok";
   const nothingHere =
     data.offers.length === 0 && data.mine.length === 0 && data.team.length === 0 && data.uses.length === 0;
+  // Lawsuits of the person's whose files ONE will sign wait on their authorization: said first, and renewing one that
+  // ends soon is the card's main button. Only where a provider can be used here, and never in a support visit.
+  const waiting = mayAuthorize && !readOnly && data.offers.length > 0 ? data.waiting : null;
+  const renew = waiting?.state === "expiring";
 
   const authorize = async () => {
     if (busy || !psc) return;
@@ -325,9 +337,15 @@ export default function CloudSignatureCard({
         id="team-cloud-signature"
         title={t("psc-title")}
         summary={summary}
-        chip={failingNow ? <StatusChip label={t(STATE.failing.key)} tone={STATE.failing.tone} /> : null}
+        chip={
+          failingNow ? (
+            <StatusChip label={t(STATE.failing.key)} tone={STATE.failing.tone} />
+          ) : waiting ? (
+            <StatusChip label={t(renew ? "psc-waiting-chip-expiring" : "psc-waiting-chip")} tone="attention" />
+          ) : null
+        }
         description={mayAuthorize ? t("psc-body") : t("psc-body-reader")}
-        defaultOpen={Boolean(outcome) || Boolean(backToCase) || failingNow}
+        defaultOpen={Boolean(outcome) || Boolean(backToCase) || failingNow || Boolean(waiting)}
         bodyClassName="gap-5"
       >
         {outcome ? (
@@ -365,6 +383,11 @@ export default function CloudSignatureCard({
           <>
             {mayAuthorize ? (
               <Box className="flex flex-col gap-4">
+                {waiting ? (
+                  <StateLine tone="attention" emphasis>
+                    {t(WAITING_KEY[waiting.state], { count: waiting.lawsuits, when: waiting.endsWords })}
+                  </StateLine>
+                ) : null}
                 {data.mine.length > 0 ? (
                   <Box component="ul" className="m-0 flex list-none flex-col p-0">
                     {data.mine.map((item) => row(item, false))}
@@ -485,17 +508,19 @@ export default function CloudSignatureCard({
                       </Grid>
                       <Grid size={{ xs: 12, sm: 3 }}>
                         <Button
-                          variant={inForce.length > 0 ? "outlined" : "contained"}
-                          color={inForce.length > 0 ? "grey" : "primary"}
+                          variant={inForce.length > 0 && !renew ? "outlined" : "contained"}
+                          color={inForce.length > 0 && !renew ? "grey" : "primary"}
                           fullWidth
                           disabled={busy !== null || !psc}
                           onClick={() => void authorize()}
                         >
                           {busy === "authorize"
                             ? t("psc-authorizing")
-                            : inForce.length > 0
-                              ? t("psc-authorize-again")
-                              : t("psc-authorize")}
+                            : renew
+                              ? t("psc-renew")
+                              : inForce.length > 0
+                                ? t("psc-authorize-again")
+                                : t("psc-authorize")}
                         </Button>
                       </Grid>
                     </Grid>

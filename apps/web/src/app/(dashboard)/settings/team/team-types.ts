@@ -70,6 +70,12 @@ export type CloudSignatureData = {
   backToCase: string | null;
   /** The CPF the person declared, by its middle only, or null when they declared none. */
   declaredCpf: string | null;
+  /**
+   * What ONE's filing waits on the person for (0102): their lawsuits whose files ONE will sign in the cloud, with
+   * no authorization of theirs to cover them (no CPF, none, or one that ends within the hours ahead, with when it
+   * ends in words: "hoje às 14:30"). Null when nothing waits on them, or it could not be read.
+   */
+  waiting: { state: "cpf_missing" | "none" | "expiring"; lawsuits: number; endsWords: string } | null;
   secondFactor: SecondFactorState;
   supportVisit: boolean;
 };

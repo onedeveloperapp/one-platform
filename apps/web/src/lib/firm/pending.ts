@@ -1,5 +1,6 @@
 import { decisionItems, type WaitingDecisions } from "@/lib/ai/decisions";
 import { waitingHref, waitingKey, waitingTagKey, waitPlaceOf } from "@/lib/cases/advance";
+import { type FilingAttention, filingAttentionItems, type FilingViewer } from "@/lib/firm/filing-attention";
 import { type FirmToday, type TodayNeed, todayNeeds, type TodayViewer } from "@/lib/firm/today";
 import { formatCnj } from "@flyee/rules/cnj";
 
@@ -358,6 +359,8 @@ export function pendingGroups(
   viewer: TodayViewer,
   now: Date = new Date(),
   decisions: WaitingDecisions | null = null,
+  /** What ONE's filing waits on a person for (0102); null when it could not be read. */
+  filing: { attention: FilingAttention; viewer: FilingViewer } | null = null,
 ): PendingGroup[] {
   const groups: Record<PendingGroupKey, PendingItem[]> = { late: [], today: [], one: [], review: [] };
   const needs = withDecisions(todayNeeds(today, viewer), decisions);
@@ -580,6 +583,12 @@ export function pendingGroups(
         count: laterHearings,
       });
     }
+  }
+
+  // What ONE's filing waits on a person for: a lawyer's signature in the cloud before the package needs it, and a
+  // filing that came back (0102).
+  if (filing) {
+    groups.one.push(...filingAttentionItems(filing.attention, filing.viewer, now));
   }
 
   // Every other need of the home, in the home's own order, in its group (the deadlines, hearings and papers

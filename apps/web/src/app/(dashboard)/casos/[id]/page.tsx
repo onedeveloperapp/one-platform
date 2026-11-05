@@ -9,6 +9,7 @@ import {
   type CourtOption,
   type CourtSystem,
   EVENTS_SHOWN,
+  type SignatureAhead,
   type TeamMember,
   type UnnamedSigner,
 } from "./case-types";
@@ -22,7 +23,7 @@ import { CAUSES, isCaseStatus, linksOwedOf, ORIGINS, type RequiredDocument } fro
 import { readCheckAnswer } from "@/lib/cases/document-check";
 import { readQuality } from "@/lib/cases/document-quality";
 import { loadCasePieces } from "@/lib/cases/draft-facts";
-import { loadCaseFilings } from "@/lib/cases/filing-facts";
+import { cloudSigningOffered, loadCaseFilings } from "@/lib/cases/filing-facts";
 import { cpfLookup } from "@/lib/cases/identity";
 import { courtPublicationsOf, stageMomentsOf } from "@/lib/cases/journey";
 import { casePulseOf } from "@/lib/cases/pulse";
@@ -78,6 +79,17 @@ function unnamedSignersOf(value: unknown): UnnamedSigner[] {
     const proceedingId = text(row.proceeding_id);
     const userId = text(row.user_id);
     return proceedingId && userId ? [{ proceedingId, userId, lawyer: text(row.lawyer) }] : [];
+  });
+}
+
+/** The planned lawsuits whose cloud signature no lawyer of them covers yet (`case_signature_ahead`). */
+function signatureAheadOf(value: unknown): SignatureAhead[] {
+  return (Array.isArray(value) ? value : []).flatMap((item) => {
+    const row = (item ?? {}) as { proceeding_id?: unknown; viewer_signs?: unknown; viewer_cpf?: unknown };
+    const proceedingId = text(row.proceeding_id);
+    return proceedingId
+      ? [{ proceedingId, viewerSigns: row.viewer_signs === true, viewerCpf: row.viewer_cpf === true }]
+      : [];
   });
 }
 
@@ -359,6 +371,7 @@ async function loadCase(id: string): Promise<CaseState> {
     stages,
     published,
     unnamedSigners,
+    signatureAhead,
     pulse,
     autonomy,
   ] = await Promise.all([
@@ -401,6 +414,12 @@ async function loadCase(id: string): Promise<CaseState> {
     supabase
       .rpc("case_power_signers_missing", { target_case: id })
       .then(({ data, error }) => unnamedSignersOf(error ? [] : data)),
+    // The planned lawsuits whose files ONE will sign in the cloud and that no lawyer of them covers yet (0102), where
+    // a provider of the cloud signature can be used here. One that could not be read says nothing, never the page.
+    Promise.all([
+      supabase.rpc("case_signature_ahead", { target_case: id }),
+      cloudSigningOffered(supabase).catch(() => false),
+    ]).then(([{ data, error }, offered]) => (error || !offered ? [] : signatureAheadOf(data))),
     // The mark of the case and whether ONE is at it (0096), for the screen to follow it while it is open. One that
     // could not be read leaves the screen as it was before (read again by the person), never the page.
     supabase.rpc("case_pulse", { target_case: id }).then(({ data, error }) => (error ? null : casePulseOf(data))),
@@ -734,6 +753,7 @@ async function loadCase(id: string): Promise<CaseState> {
     },
     civilCourt,
     unnamedSigners,
+    signatureAhead,
     statements: told.statements,
     account: told.account,
     accountMaxRounds: told.accountMaxRounds,

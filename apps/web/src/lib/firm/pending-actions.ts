@@ -1,6 +1,8 @@
 "use server";
 
 import { readWaitingDecisions } from "@/lib/ai/decisions-read";
+import { cloudSigningOffered } from "@/lib/cases/filing-facts";
+import { readFilingAttention } from "@/lib/firm/filing-attention";
 import { pendingBadge, type PendingGroup, pendingGroups, pendingLate, readFirmPending } from "@/lib/firm/pending";
 import { readFirmToday, todayViewerOf } from "@/lib/firm/today";
 import { sweepWhileUsed } from "@/lib/jobs/while-used";
@@ -24,16 +26,39 @@ export async function readPendingCenter(): Promise<PendingRead> {
   // run now and then, after the answer (lib/jobs/while-used.ts).
   sweepWhileUsed();
 
-  const [today, pending, decisions] = await Promise.all([
+  const [today, pending, decisions, filing, cloudSigning] = await Promise.all([
     context.supabase.rpc("firm_today", { target_org: context.firm.id }),
     context.supabase.rpc("firm_pending", { target_org: context.firm.id }),
     // Each decision that waits, placed where it is decided; unread, the center counts them as before.
     readWaitingDecisions(context.supabase, context.firm.id, context.firm.firmFunction).catch(() => null),
+    // What ONE's filing waits on a person for (0102); unread, the center says the rest as before.
+    context.supabase.rpc("firm_filing_attention", { target_org: context.firm.id }),
+    cloudSigningOffered(context.supabase).catch(() => false),
   ]);
   const todayRead = today.error ? null : readFirmToday(today.data);
   const pendingRead = pending.error ? null : readFirmPending(pending.data);
   if (!todayRead || !pendingRead) return { ok: false, code: "unavailable" };
 
-  const groups = pendingGroups(todayRead, pendingRead, todayViewerOf(context.firm), new Date(), decisions);
+  const viewer = todayViewerOf(context.firm);
+  const attention = filing.error ? null : readFilingAttention(filing.data);
+  const groups = pendingGroups(
+    todayRead,
+    pendingRead,
+    viewer,
+    new Date(),
+    decisions,
+    attention
+      ? {
+          attention,
+          viewer: {
+            userId: context.userId,
+            firmFunction: context.firm.firmFunction,
+            managesFirm: viewer.managesFirm,
+            cloudSigning,
+            timeZone: context.profile.timezone,
+          },
+        }
+      : null,
+  );
   return { ok: true, groups, badge: pendingBadge(groups), late: pendingLate(groups) };
 }
