@@ -5,23 +5,65 @@ import { createContext, type ReactNode, useCallback, useContext, useEffect, useM
 
 import { Box, Button, Card, CardContent, Collapse, Typography, useMediaQuery } from "@mui/material";
 
+import StatusChip from "@/components/product/status-chip";
+import { TILE_TONE, type TileTone } from "@/components/product/tile-tone";
 import NiChevronDownSmall from "@/icons/nexture/ni-chevron-down-small";
+import NiLoader from "@/icons/nexture/ni-loader";
 import { cn } from "@/lib/utils";
 
 /** An order given to every card of a screen at once: open them all, or close them all. */
 type Command = { seq: number; open: boolean };
 
-const GroupContext = createContext<{ command: Command | null; setAll: (open: boolean) => void } | null>(null);
+/**
+ * What the screen knows of a card from the top of it (the owner's audit, 2026-11-05): something there waits for
+ * the firm, failed, or waits for the client, and what ONE is doing there now, in words. The card says it on its
+ * head, opens by itself when something comes to wait for the firm there, and closes by itself once it is done,
+ * when it was not the person who opened it.
+ */
+export type CardMark = { firm: boolean; failed: boolean; client: boolean; working: string | null };
+
+/** The words of the marks, in the screen's language. */
+export type CardMarkWords = { firm: string; failed: string; client: string };
+
+/** The head of each card: the icon of what it is, on its family's tint. */
+export type CardLook = { icon: ReactNode; tone?: TileTone };
+
+type Group = {
+  command: Command | null;
+  setAll: (open: boolean) => void;
+  marks: Record<string, CardMark>;
+  looks: Record<string, CardLook>;
+  words: CardMarkWords | null;
+};
+
+const GroupContext = createContext<Group | null>(null);
+
+const NO_MARKS: Record<string, CardMark> = {};
+const NO_LOOKS: Record<string, CardLook> = {};
 
 /**
  * The cards of one screen, opened or closed together by its
  * `CollapsibleGroupToggle`. Each card below obeys the latest order once, and
- * is the person's again right after it.
+ * is the person's again right after it. The screen may hand each card, by its
+ * id, the icon of its head (`looks`) and what the top knows of it (`marks`).
  */
-export function CollapsibleGroup({ children }: { children: ReactNode }) {
+export function CollapsibleGroup({
+  children,
+  marks,
+  looks,
+  words,
+}: {
+  children: ReactNode;
+  marks?: Record<string, CardMark>;
+  looks?: Record<string, CardLook>;
+  words?: CardMarkWords;
+}) {
   const [command, setCommand] = useState<Command | null>(null);
   const setAll = useCallback((open: boolean) => setCommand((last) => ({ seq: (last?.seq ?? 0) + 1, open })), []);
-  const value = useMemo(() => ({ command, setAll }), [command, setAll]);
+  const value = useMemo(
+    () => ({ command, setAll, marks: marks ?? NO_MARKS, looks: looks ?? NO_LOOKS, words: words ?? null }),
+    [command, setAll, marks, looks, words],
+  );
   return <GroupContext.Provider value={value}>{children}</GroupContext.Provider>;
 }
 
@@ -99,24 +141,71 @@ export default function CollapsibleCard({
   bodyClassName?: string;
   children: ReactNode;
 }) {
-  const [open, setOpen] = useState(defaultOpen);
+  const group = useContext(GroupContext);
+  const mark = group?.marks[id] ?? null;
+  const look = group?.looks[id] ?? null;
+  // Something there waits for the firm, or failed: the card opens for it, and closes once it is done.
+  const attention = Boolean(mark && (mark.firm || mark.failed));
+  const [open, setOpen] = useState(defaultOpen || attention);
+  // Why the card is open: on arrival by its stage, for something that waits, or by the person (who keeps it open).
+  const [openedBy, setOpenedBy] = useState<"arrival" | "attention" | "person" | null>(
+    attention ? "attention" : defaultOpen ? "arrival" : null,
+  );
   const card = useRef<HTMLElement>(null);
   const reduceMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
   const bodyId = `${id}-body`;
 
   // The screen's "open all" or "close all", obeyed once when it is given.
-  const command = useContext(GroupContext)?.command ?? null;
+  const command = group?.command ?? null;
   const [seen, setSeen] = useState(command?.seq ?? 0);
   if (command && command.seq !== seen) {
     setSeen(command.seq);
     setOpen(command.open);
+    setOpenedBy(command.open ? "person" : null);
   }
+
+  // Something came to wait for the firm here while the screen was open: the card opens, once. Once it is done, a
+  // card that opened for it closes, unless the person opened it or is working in it (a field in it has the focus).
+  const [wasAttention, setWasAttention] = useState(attention);
+  if (attention !== wasAttention) {
+    setWasAttention(attention);
+    if (attention && !open) {
+      setOpen(true);
+      setOpenedBy("attention");
+    } else if (!attention && open && openedBy === "attention") {
+      const focused =
+        typeof document !== "undefined" && card.current !== null && card.current.contains(document.activeElement);
+      if (!focused) {
+        setOpen(false);
+        setOpenedBy(null);
+      }
+    }
+  }
+
+  const toggle = () => {
+    setOpenedBy(open ? null : "person");
+    setOpen(!open);
+  };
+
+  // What the top knows of the card, said on its head when the card's own chip does not say it already.
+  const markChip =
+    mark && group?.words
+      ? mark.failed && !chip
+        ? { label: group.words.failed, tone: "danger" as const }
+        : mark.firm && !chip
+          ? { label: group.words.firm, tone: "attention" as const }
+          : mark.client && !chip && !mark.working
+            ? { label: group.words.client, tone: "neutral" as const }
+            : null
+      : null;
 
   useEffect(() => {
     const follow = () => {
       const hash = decodeURIComponent(window.location.hash.slice(1));
       if (!hash || (hash !== id && hash !== anchor)) return;
+      // The person came to this card (a link of the top, or an address): it is theirs, and never closes by itself.
       setOpen(true);
+      setOpenedBy("person");
       window.requestAnimationFrame(() => card.current?.scrollIntoView({ block: "start" }));
     };
     follow();
@@ -128,6 +217,18 @@ export default function CollapsibleCard({
     <Card component="section" ref={card} aria-labelledby={id} id={anchor} className="scroll-mt-24">
       <CardContent className="flex flex-col">
         <Box className="group relative flex items-start gap-3">
+          {look ? (
+            <span
+              aria-hidden
+              className={cn(
+                "flex h-10 w-10 flex-none items-center justify-center rounded-xl",
+                TILE_TONE[look.tone ?? "primary"].bg,
+                TILE_TONE[look.tone ?? "primary"].text,
+              )}
+            >
+              {look.icon}
+            </span>
+          ) : null}
           <Box className="flex min-w-0 flex-1 flex-col gap-1">
             <Box className="flex flex-wrap items-center gap-x-3 gap-y-1">
               <Typography id={id} variant={titleAs === "h2" ? "h5" : "h6"} component={titleAs} className="mb-0">
@@ -135,13 +236,25 @@ export default function CollapsibleCard({
                   type="button"
                   aria-expanded={open}
                   aria-controls={bodyId}
-                  onClick={() => setOpen((now) => !now)}
+                  onClick={toggle}
                   className="focus-visible:after:ring-primary dark:focus-visible:after:ring-primary-light cursor-pointer text-left outline-hidden after:absolute after:-inset-2 after:rounded-2xl after:content-[''] focus-visible:after:ring-2"
                 >
                   {title}
                 </button>
               </Typography>
-              {chip ? <Box className="relative z-[1] flex flex-wrap items-center gap-2">{chip}</Box> : null}
+              {chip || markChip || mark?.working ? (
+                <Box className="relative z-[1] flex flex-wrap items-center gap-2">
+                  {chip}
+                  {markChip ? <StatusChip label={markChip.label} tone={markChip.tone} /> : null}
+                  {mark?.working ? (
+                    <StatusChip
+                      label={mark.working}
+                      tone="info"
+                      icon={<NiLoader size="small" className="animate-spin motion-reduce:animate-none" />}
+                    />
+                  ) : null}
+                </Box>
+              ) : null}
             </Box>
             {summary && !(summaryClosedOnly && open) ? (
               <Typography variant="body2" className="text-text-secondary break-words">

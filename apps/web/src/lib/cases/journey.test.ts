@@ -1,10 +1,10 @@
 import {
   caseJourney,
   type CourtFacts,
+  courtPublicationsOf,
   courtStep,
   journeyCounts,
   journeyGroupsOf,
-  journeyHolder,
   NO_COURT_FACTS,
   type StageMoment,
   stageMomentsOf,
@@ -245,28 +245,67 @@ describe("journeyCounts", () => {
   });
 });
 
-describe("journeyHolder", () => {
-  const base = { waiting: null, missing: 0, pieceWaitsLawyer: false };
-  it("is with the client while their link still lacks something, and with ONE once it has it all", () => {
-    expect(journeyHolder({ ...base, status: "documents", missing: 2 })).toBe("client");
-    expect(journeyHolder({ ...base, status: "documents" })).toBe("one");
+describe("the way read from the case's work (0096)", () => {
+  const DRAFTING: StageMoment[] = [
+    { from: "intake", to: "documents", at: "2026-11-02T10:00:00Z" },
+    { from: "documents", to: "drafting", at: "2026-11-04T10:00:00Z" },
+  ];
+
+  it("stays at the signature while a paper sent waits to be signed, whatever stage ONE moved the case to", () => {
+    const journey = caseJourney({
+      status: "drafting",
+      createdAt: CREATED,
+      moments: DRAFTING,
+      court: NO_COURT_FACTS,
+      facts: { signatureSince: "2026-11-04T10:00:05Z", filingSince: null },
+    });
+    expect(journey.current).toBe("signature");
+    expect(states(journey).slice(0, 4)).toEqual([
+      "intake:done",
+      "documents:done",
+      "signature:current",
+      "drafting:next",
+    ]);
+    expect(journey.steps[2].at).toBe("2026-11-04T10:00:05Z");
   });
 
-  it("follows what ONE waits for", () => {
-    expect(journeyHolder({ ...base, status: "signature", waiting: "power_of_attorney_unsigned" })).toBe("client");
-    expect(journeyHolder({ ...base, status: "documents", waiting: "client_confirmation" })).toBe("client");
-    expect(journeyHolder({ ...base, status: "drafting", waiting: "no_signer" })).toBe("firm");
-    expect(journeyHolder({ ...base, status: "ready", waiting: "system_unapproved" })).toBe("firm");
-    expect(journeyHolder({ ...base, status: "drafting", waiting: "step_failed" })).toBe("one");
+  it("is at the filing once a package is being built or waits for the lawyer, with the case still in drafting", () => {
+    const journey = caseJourney({
+      status: "drafting",
+      createdAt: CREATED,
+      moments: DRAFTING,
+      court: NO_COURT_FACTS,
+      facts: { signatureSince: null, filingSince: "2026-11-05T09:00:00Z" },
+    });
+    expect(journey.current).toBe("filing");
+    expect(journey.steps[3].state).toBe("done");
+    expect(journey.steps[4]).toMatchObject({ state: "current", at: "2026-11-05T09:00:00Z" });
   });
 
-  it("is with a lawyer when a piece waits, with the firm to file, with the court, with the firm to close it", () => {
-    expect(journeyHolder({ ...base, status: "drafting", pieceWaitsLawyer: true })).toBe("firm");
-    expect(journeyHolder({ ...base, status: "drafting" })).toBe("one");
-    expect(journeyHolder({ ...base, status: "ready" })).toBe("firm");
-    expect(journeyHolder({ ...base, status: "filed", waiting: "no_signer" })).toBe("court");
-    expect(journeyHolder({ ...base, status: "filed", paid: true })).toBe("firm");
-    expect(journeyHolder({ ...base, status: "closed" })).toBe("ended");
-    expect(journeyHolder({ ...base, status: "declined" })).toBe("ended");
+  it("never moves a case in court back by what its preparation left", () => {
+    const journey = caseJourney({
+      status: "filed",
+      createdAt: CREATED,
+      moments: FILED,
+      court: NO_COURT_FACTS,
+      facts: { signatureSince: "2026-11-04T10:00:05Z", filingSince: "2026-11-05T09:00:00Z" },
+    });
+    expect(journey.current).toBe("hearing");
+  });
+
+  it("judges a case only by a decision said to be the judgment", () => {
+    expect(
+      courtPublicationsOf([
+        { category: "decisao", available_on: "2026-11-01", judgment: false },
+        { category: "decisao", available_on: "2026-11-03", judgment: null },
+        { category: "pagamento", available_on: "2026-11-05" },
+      ]),
+    ).toEqual({ decidedAt: null, paidAt: "2026-11-05" });
+    expect(
+      courtPublicationsOf([
+        { category: "decisao", available_on: "2026-11-01", judgment: false },
+        { category: "decisao", available_on: "2026-11-04", judgment: true },
+      ]).decidedAt,
+    ).toBe("2026-11-04");
   });
 });

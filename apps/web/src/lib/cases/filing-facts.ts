@@ -76,6 +76,8 @@ export type CaseFiling = {
   problems: { documentId: string; code: string }[];
   error: string | null;
   requestedLabel: string;
+  /** When it was asked for: since when the case waits at its filing. */
+  requestedAt: string;
   /** Asked long enough ago that a job should have built it by now. */
   slow: boolean;
   items: FilingItem[];
@@ -168,6 +170,7 @@ function toFiling(row: PackageRow, timeZone: string | null | undefined, context:
     ),
     error: row.error,
     requestedLabel: momentLabel(row.requested_at, timeZone),
+    requestedAt: row.requested_at,
     slow: row.status === "requested" && Date.now() - new Date(row.requested_at).getTime() > SLOW_MINUTES * 60_000,
     blocker: null,
     signature: {

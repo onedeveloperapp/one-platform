@@ -18,6 +18,7 @@ import {
 } from "@mui/material";
 
 import CollapsibleCard from "@/components/product/collapsible-card";
+import ConfirmActionDialog from "@/components/product/confirm-action-dialog";
 import DialogHeader from "@/components/product/dialog-header";
 import EmptyState from "@/components/product/empty-state";
 import StatusChip, { type StatusTone } from "@/components/product/status-chip";
@@ -69,6 +70,9 @@ export default function ComplaintCard({
   const [editing, setEditing] = useState<CaseComplaint | "new" | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
+
+  // Removing a complaint is said before it is done: its protocol and dates leave the case and the dossier.
+  const [removing, setRemoving] = useState<CaseComplaint | null>(null);
 
   const remove = async (complaint: CaseComplaint) => {
     setBusy(complaint.id);
@@ -176,7 +180,7 @@ export default function ComplaintCard({
                       color="grey"
                       size="small"
                       disabled={busy !== null}
-                      onClick={() => void remove(complaint)}
+                      onClick={() => setRemoving(complaint)}
                     >
                       {t("case-complaint-remove")}
                     </Button>
@@ -199,6 +203,22 @@ export default function ComplaintCard({
           }}
         />
       )}
+      {removing ? (
+        <ConfirmActionDialog
+          title={t("case-complaint-remove-title")}
+          consequences={[t("case-complaint-remove-consequence")]}
+          requireReason={false}
+          confirmLabel={t("case-complaint-remove")}
+          cancelLabel={t("cases-cancel")}
+          busyLabel={t("cases-working")}
+          tone="danger"
+          onConfirm={async () => {
+            await remove(removing);
+            return null;
+          }}
+          onClose={() => setRemoving(null)}
+        />
+      ) : null}
     </CollapsibleCard>
   );
 }

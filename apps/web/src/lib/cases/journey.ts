@@ -1,4 +1,3 @@
-import { CLIENT_WAITS, ONE_WORKS } from "@/lib/cases/advance";
 import { type CaseStatus, isCaseStatus } from "@/lib/cases/cases";
 
 /**
@@ -88,19 +87,23 @@ export function stepOf(status: CaseStatus, marks: CourtMarks): JourneyStepId | n
 }
 
 /**
- * The day a case's first decision and first payment were published, from its publications in force triaged so
- * (0028): what the court's side of its way reads besides its hearings.
+ * The day a case's judgment and first payment were published, from its publications in force triaged so (0028):
+ * what the court's side of its way reads besides its hearings. A decision is the judgment only when it was said to
+ * be (0096, `judgment`): an injunction or an order on costs, before it, judges nothing.
  */
-export function courtPublicationsOf(rows: { category: unknown; available_on: unknown }[]): {
+export function courtPublicationsOf(rows: { category: unknown; available_on: unknown; judgment?: unknown }[]): {
   decidedAt: string | null;
   paidAt: string | null;
 } {
-  const first = (category: string) =>
+  const first = (keep: (row: { category: unknown; judgment?: unknown }) => boolean) =>
     rows
-      .filter((row) => row.category === category && typeof row.available_on === "string")
+      .filter((row) => keep(row) && typeof row.available_on === "string")
       .map((row) => row.available_on as string)
       .sort()[0] ?? null;
-  return { decidedAt: first("decisao"), paidAt: first("pagamento") };
+  return {
+    decidedAt: first((row) => row.category === "decisao" && row.judgment === true),
+    paidAt: first((row) => row.category === "pagamento"),
+  };
 }
 
 export const marksOf = (facts: CourtFacts): CourtMarks => ({
@@ -118,12 +121,29 @@ export function stageMomentsOf(rows: { at: unknown; data: unknown }[]): StageMom
   });
 }
 
+/**
+ * What the case's work shows of its way before the court, beside its stage (the owner's audit, 2026-11-05): ONE
+ * moves a case to drafting when it creates the lawsuits, with the client's power of attorney still to be signed, and
+ * builds the package with the case still in drafting. The way says where the case really is: at the signature while
+ * a paper sent waits to be signed or confirmed, and at the filing once a package is being built or is ready.
+ */
+export type JourneyFacts = {
+  /** Since when a paper the client signs waits to be signed, or for the firm to confirm it; null when none waits. */
+  signatureSince: string | null;
+  /** Since when a package of a lawsuit is being built or waits to be filed; null when none. */
+  filingSince: string | null;
+};
+
+export const NO_JOURNEY_FACTS: JourneyFacts = { signatureSince: null, filingSince: null };
+
 export function caseJourney(input: {
   status: CaseStatus;
   createdAt: string;
   moments: StageMoment[];
   court: CourtFacts;
+  facts?: JourneyFacts;
 }): CaseJourney {
+  const facts = input.facts ?? NO_JOURNEY_FACTS;
   const moments = [...input.moments].sort((a, b) => a.at.localeCompare(b.at));
   // The latest time the case entered a stage: a stage gone back to begins again then.
   const enteredAt = (status: CaseStatus): string | null => {
@@ -137,8 +157,12 @@ export function caseJourney(input: {
   // when it was filed (or became ready, while under way), each step in court by what the court showed.
   const reachedAt = (id: JourneyStepId, state: JourneyStepState): string | null => {
     switch (id) {
+      case "signature":
+        return state === "current" && facts.signatureSince ? facts.signatureSince : enteredAt("signature");
       case "filing":
-        return state === "done" ? (enteredAt("filed") ?? enteredAt("ready")) : enteredAt("ready");
+        return state === "done"
+          ? (enteredAt("filed") ?? enteredAt("ready"))
+          : (enteredAt("ready") ?? facts.filingSince);
       case "hearing":
         return state === "done" ? court.heldAt : null;
       case "judgment":
@@ -182,44 +206,14 @@ export function caseJourney(input: {
     return { steps: build(last, "done", true), current: "closed", ended: "closed", reached: last };
   }
 
-  const current = stepOf(input.status, marks) ?? "intake";
+  let current = stepOf(input.status, marks) ?? "intake";
+  if (input.status !== "filed") {
+    if (facts.signatureSince && JOURNEY_STEPS.indexOf(current) > JOURNEY_STEPS.indexOf("signature"))
+      current = "signature";
+    else if (current === "drafting" && facts.filingSince) current = "filing";
+  }
   const index = JOURNEY_STEPS.indexOf(current);
   return { steps: build(index, "current"), current, ended: null, reached: index };
-}
-
-/** Who a case is with now: the client, the firm, ONE, the court; or nobody, once it ended. */
-export type JourneyHolder = "client" | "firm" | "one" | "court" | "ended";
-
-// What ONE waits for that is the client's to give, besides the waits that are the client's alone (0054): what the
-// case lacks (the client's link takes it) and the client's word on the civil court.
-const CLIENT_GIVES = [...CLIENT_WAITS, "case_incomplete", "civil_court_unanswered"] as readonly string[];
-// ONE is trying again by itself: a step that failed for a moment, or a provider out of reach; or it is ordering the
-// client's account (0090).
-const ONE_RETRIES = ["unavailable", "step_failed", ...ONE_WORKS] as readonly string[];
-
-export function journeyHolder(input: {
-  status: CaseStatus;
-  /** What ONE waits for to carry the case on by itself (0039), or null. */
-  waiting: string | null;
-  /** How many things the case still lacks of its people and its trip. */
-  missing: number;
-  /** A piece of the case waits for a lawyer to read and approve it. */
-  pieceWaitsLawyer: boolean;
-  /** A publication of the case was triaged as a payment: closing the case is the firm's. */
-  paid?: boolean;
-}): JourneyHolder {
-  if (input.status === "closed" || input.status === "declined") return "ended";
-  if (input.status === "filed") return input.paid ? "firm" : "court";
-  if (input.waiting) {
-    if (CLIENT_GIVES.includes(input.waiting)) return "client";
-    if (ONE_RETRIES.includes(input.waiting)) return "one";
-    return "firm";
-  }
-  if (input.status === "intake" || input.status === "documents" || input.status === "signature") {
-    return input.missing > 0 ? "client" : "one";
-  }
-  if (input.status === "drafting") return input.pieceWaitsLawyer ? "firm" : "one";
-  return "firm";
 }
 
 /** One group of a firm's cases as the database counts them (`firm_case_journey`, 0082). */
@@ -297,14 +291,6 @@ export const JOURNEY_NOW_KEY: Record<JourneyStepId, string> = {
 export const JOURNEY_ENDED_KEY: Record<"closed" | "declined", string> = {
   closed: "journey-now-closed",
   declined: "journey-now-declined",
-};
-
-export const JOURNEY_HOLDER_KEY: Record<JourneyHolder, string> = {
-  client: "journey-holder-client",
-  firm: "journey-holder-firm",
-  one: "journey-holder-one",
-  court: "journey-holder-court",
-  ended: "journey-holder-ended",
 };
 
 /**

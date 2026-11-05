@@ -7,6 +7,7 @@ import { Box, Typography } from "@mui/material";
 
 import StatusChip, { type StatusTone } from "@/components/product/status-chip";
 import NiCheck from "@/icons/nexture/ni-check";
+import NiClock from "@/icons/nexture/ni-clock";
 import NiCross from "@/icons/nexture/ni-cross";
 import NiLoader from "@/icons/nexture/ni-loader";
 import { cn } from "@/lib/utils";
@@ -55,12 +56,21 @@ export default function ProgressSteps({
   steps,
   label,
   stateWords,
+  working = true,
+  href,
 }: {
   steps: ProgressStep[];
   /** What the steps are of, for assistive technology ("Andamento do caso"). */
   label: string;
   /** Each state in words, said to assistive technology beside each step. */
   stateWords: Record<ProgressStepState, string>;
+  /**
+   * Something is at work on the step under way now: its mark turns. A step that waits for somebody keeps its own
+   * icon, in the colour of under way, so a turning mark never says work that is not happening.
+   */
+  working?: boolean;
+  /** Where each step is done, for the steps that lead somewhere (a card of the screen). */
+  href?: (step: ProgressStep) => string | null;
 }) {
   const reached = Math.max(
     0,
@@ -72,7 +82,7 @@ export default function ProgressSteps({
   const node = (step: ProgressStep) => (
     <span aria-hidden className="bg-background-paper relative z-10 flex h-10 w-10 flex-none rounded-xl">
       <span className={cn("flex h-full w-full items-center justify-center rounded-xl border", NODE[step.state])}>
-        {step.state === "current" ? (
+        {step.state === "current" && working ? (
           <NiLoader size="small" className="animate-spin motion-reduce:animate-none" />
         ) : step.state === "stopped" ? (
           <NiCross size="small" />
@@ -127,17 +137,32 @@ export default function ProgressSteps({
           className="relative m-0 grid list-none gap-2 p-0"
           style={{ gridTemplateColumns: `repeat(${steps.length}, minmax(0, 1fr))` }}
         >
-          {steps.map((step) => (
-            <Box
-              component="li"
-              key={step.key}
-              aria-current={step.state === "current" ? "step" : undefined}
-              className="flex flex-col items-center gap-2"
-            >
-              {node(step)}
-              {words(step, "center")}
-            </Box>
-          ))}
+          {steps.map((step) => {
+            const to = href?.(step) ?? null;
+            return (
+              <Box
+                component="li"
+                key={step.key}
+                aria-current={step.state === "current" ? "step" : undefined}
+                className="flex flex-col items-center gap-2"
+              >
+                {to ? (
+                  <a
+                    href={to}
+                    className="focus-visible:ring-primary flex flex-col items-center gap-2 rounded-xl no-underline outline-hidden focus-visible:ring-2"
+                  >
+                    {node(step)}
+                    {words(step, "center")}
+                  </a>
+                ) : (
+                  <>
+                    {node(step)}
+                    {words(step, "center")}
+                  </>
+                )}
+              </Box>
+            );
+          })}
         </Box>
       </Box>
 
@@ -178,8 +203,11 @@ export function ProgressNow({
   text,
   extra,
   action,
+  working = true,
 }: {
   tone: "progress" | "done" | "stopped";
+  /** Under way and something is at work now: the mark turns; under way and waiting for somebody, a clock. */
+  working?: boolean;
   /** Who it is with now, or the state in two words, said first and in bold. */
   lead: string;
   text: string;
@@ -199,8 +227,10 @@ export function ProgressNow({
     >
       <Box className="flex min-w-0 flex-1 flex-row gap-3">
         <span aria-hidden className={cn("flex-none pt-0.5", look.icon)}>
-          {tone === "progress" ? (
+          {tone === "progress" && working ? (
             <NiLoader size="medium" className="animate-spin motion-reduce:animate-none" />
+          ) : tone === "progress" ? (
+            <NiClock size="medium" />
           ) : tone === "done" ? (
             <NiCheck size="medium" />
           ) : (

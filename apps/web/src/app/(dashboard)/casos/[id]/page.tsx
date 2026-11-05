@@ -24,12 +24,14 @@ import { loadCasePieces } from "@/lib/cases/draft-facts";
 import { loadCaseFilings } from "@/lib/cases/filing-facts";
 import { cpfLookup } from "@/lib/cases/identity";
 import { courtPublicationsOf, stageMomentsOf } from "@/lib/cases/journey";
+import { casePulseOf } from "@/lib/cases/pulse";
 import { readFieldsOf } from "@/lib/cases/read-fields";
 import { loadCivilCourt, loadRuleFacts } from "@/lib/cases/rule-facts";
 import { assessWeather, caseDomicile, smallClaimsCeiling, tripPlaces } from "@/lib/cases/rules";
 import { loadStatementFacts } from "@/lib/cases/statement-facts";
 import { loadCourseFacts } from "@/lib/courts/course-facts";
 import { caseDeadlines, deadlineActs } from "@/lib/deadlines/facts";
+import { type AutonomyDecision, type AutonomyMode, firmAutonomyOf } from "@/lib/firm/autonomy";
 import { isFirmFunction, isManager } from "@/lib/firm/roles";
 import { caseHearings, colleagues, courtZones } from "@/lib/hearings/facts";
 import { getMemberContext } from "@/lib/member/context";
@@ -79,6 +81,61 @@ function unnamedSignersOf(value: unknown): UnnamedSigner[] {
 
 /** The day in Brazil's official time. */
 const todayInBrazil = () => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date());
+
+type PublicationRow = {
+  id: string;
+  category: string | null;
+  available_on: string;
+  judgment: boolean | null;
+  readings: { kind: string; status: string }[];
+};
+
+/**
+ * The publications in force of a case: what its steps in court and its top read. With the word on the judgment and
+ * what ONE reads of each (0096, 0040); a database without them is read as it was, every decision unasked.
+ */
+async function readCasePublications(
+  supabase: NonNullable<Awaited<ReturnType<typeof getMemberContext>>>["supabase"],
+  firm: string,
+  caseId: string,
+): Promise<PublicationRow[]> {
+  const full = await supabase
+    .from("publications")
+    .select("id, category, available_on, judgment, publication_readings(kind, status)")
+    .eq("case_id", caseId)
+    .eq("org_id", firm)
+    .eq("active", true);
+  if (!full.error) {
+    return ((full.data ?? []) as Record<string, unknown>[]).map((row) => ({
+      id: String(row.id),
+      category: typeof row.category === "string" ? row.category : null,
+      available_on: String(row.available_on ?? ""),
+      judgment: typeof row.judgment === "boolean" ? row.judgment : null,
+      readings: (Array.isArray(row.publication_readings) ? row.publication_readings : []).flatMap((reading) => {
+        const value = (reading ?? {}) as { kind?: unknown; status?: unknown };
+        return typeof value.kind === "string" && typeof value.status === "string"
+          ? [{ kind: value.kind, status: value.status }]
+          : [];
+      }),
+    }));
+  }
+  const plain = await supabase
+    .from("publications")
+    .select("id, category, available_on")
+    .eq("case_id", caseId)
+    .eq("org_id", firm)
+    .eq("active", true)
+    .in("category", ["decisao", "pagamento"]);
+  if (plain.error) return [];
+  // Before 0096 every decision judged the case, as the screen read it then.
+  return ((plain.data ?? []) as { id: string; category: string; available_on: string }[]).map((row) => ({
+    id: row.id,
+    category: row.category,
+    available_on: row.available_on,
+    judgment: row.category === "decisao" ? true : null,
+    readings: [],
+  }));
+}
 
 /**
  * /casos/[id]: one case and everything in it, read under the person's own
@@ -267,6 +324,8 @@ async function loadCase(id: string): Promise<CaseState> {
     stages,
     published,
     unnamedSigners,
+    pulse,
+    autonomy,
   ] = await Promise.all([
     caseDeadlines(supabase, firm, id, context.profile.timezone).catch(() => undefined),
     deadlineActs(supabase).catch(() => undefined),
@@ -297,21 +356,23 @@ async function loadCase(id: string): Promise<CaseState> {
       .eq("kind", "status_changed")
       .order("at")
       .then(({ data, error }) => (error ? undefined : stageMomentsOf(data ?? []))),
-    // The decisions and payments published in the case's lawsuits, for its steps in court. One that could not be
-    // read leaves those steps unknown (the hearings still say theirs), never the page.
-    supabase
-      .from("publications")
-      .select("category, available_on")
-      .eq("case_id", id)
-      .eq("org_id", firm)
-      .eq("active", true)
-      .in("category", ["decisao", "pagamento"])
-      .then(({ data, error }) => courtPublicationsOf(error ? [] : (data ?? []))),
+    // The publications of the case's lawsuits in force: the judgment and the first payment for its steps in court
+    // (a decision is the judgment only when it was said to be, 0096), what nobody triaged yet, and what ONE reads of
+    // each. One that could not be read leaves those steps unknown (the hearings still say theirs), never the page;
+    // a database without the word on the judgment is read as before.
+    readCasePublications(supabase, firm, id),
     // The lawyers of the planned lawsuits the client's power of attorney does not name (0093). One that could not be
     // read says nothing of them, never the page.
     supabase
       .rpc("case_power_signers_missing", { target_case: id })
       .then(({ data, error }) => unnamedSignersOf(error ? [] : data)),
+    // The mark of the case and whether ONE is at it (0096), for the screen to follow it while it is open. One that
+    // could not be read leaves the screen as it was before (read again by the person), never the page.
+    supabase.rpc("case_pulse", { target_case: id }).then(({ data, error }) => (error ? null : casePulseOf(data))),
+    // What the firm lets ONE decide alone, for the words of what ONE does next. Unreadable, ONE's default is said.
+    supabase
+      .rpc("firm_autonomy", { target_org: firm })
+      .then(({ data, error }) => (error ? null : firmAutonomyOf(data))),
   ]);
   if (
     !deadlines ||
@@ -508,7 +569,14 @@ async function loadCase(id: string): Promise<CaseState> {
     })),
     linksOwed,
     stageMoments: stages,
-    courtPublications: published,
+    courtPublications: courtPublicationsOf(published),
+    publications: published.map((row) => ({
+      id: row.id,
+      category: row.category,
+      availableOn: row.available_on,
+      judgment: row.judgment,
+      readings: row.readings,
+    })),
     events: (
       (events.data ?? []) as {
         id: string;
@@ -656,6 +724,11 @@ async function loadCase(id: string): Promise<CaseState> {
             : null,
         }
       : null,
+    pulse,
+    autonomy: Object.fromEntries((autonomy ?? []).map((decision) => [decision.key, decision.mode])) as Partial<
+      Record<AutonomyDecision, AutonomyMode>
+    >,
+    readAt: new Date().toISOString(),
     managesFirm: isManager(context.firm.role),
     worksDeadlines: ["socio", "advogado", "controladoria"].includes(context.firm.firmFunction),
     confirmsDeadlines: context.firm.firmFunction === "socio" || context.firm.firmFunction === "controladoria",

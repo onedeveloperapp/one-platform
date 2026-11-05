@@ -8,6 +8,7 @@ import { getTranslations } from "next-intl/server";
 
 import { readCaseJourney } from "@/lib/cases/journey-read";
 import { readCaseList } from "@/lib/cases/list-read";
+import { firmPulseOf } from "@/lib/cases/pulse";
 import { attentionGroups, pendingGroups, readFirmPending } from "@/lib/firm/pending";
 import { personFlowKey, personSetupOwed, signsAtTheBar } from "@/lib/firm/person-setup";
 import { isManager } from "@/lib/firm/roles";
@@ -87,6 +88,7 @@ async function loadHome(): Promise<
     moduleSetups,
     journey,
     recent,
+    pulse,
   ] = await Promise.all([
     context.supabase.rpc("firm_today", { target_org: firm.id }),
     context.supabase.rpc("firm_pending", { target_org: firm.id }),
@@ -114,6 +116,11 @@ async function loadHome(): Promise<
       page: 0,
       pageSize: RECENT_CASES,
     }).catch(() => null),
+    // The mark of what the home shows (0096), for it to follow the firm while open; unreadable, it is read again by
+    // the person, as before.
+    context.supabase
+      .rpc("firm_pulse", { target_org: firm.id })
+      .then(({ data, error }) => (error ? null : firmPulseOf(data))),
   ]);
   if (manager && facts && !isSetupAnswered(facts)) return { kind: "setup", setup: await loadSetupState(context) };
   // Read failures owe nothing: a registration that could not be read is never said to be missing.
@@ -162,6 +169,7 @@ async function loadHome(): Promise<
     modules,
     journey,
     recent: recent ? { rows: recent.rows } : null,
+    pulse,
   };
 }
 

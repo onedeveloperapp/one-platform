@@ -24,6 +24,7 @@ import {
 } from "@mui/material";
 
 import CollapsibleCard from "@/components/product/collapsible-card";
+import ConfirmActionDialog from "@/components/product/confirm-action-dialog";
 import DialogHeader from "@/components/product/dialog-header";
 import EmptyState from "@/components/product/empty-state";
 import StateLine from "@/components/product/state-line";
@@ -108,6 +109,9 @@ export default function ProceedingsCard({
       .filter(Boolean);
   const courtName = (acronym: string | null) =>
     state.courts.find((court) => court.acronym === acronym)?.acronym ?? acronym;
+
+  // Removing a planned lawsuit is said before it is done: its piece and package go, and ONE never makes it again.
+  const [removing, setRemoving] = useState<CaseProceeding | null>(null);
 
   const remove = async (proceeding: CaseProceeding) => {
     setBusy(proceeding.id);
@@ -261,7 +265,7 @@ export default function ProceedingsCard({
                     color="grey"
                     size="small"
                     disabled={busy !== null}
-                    onClick={() => void remove(proceeding)}
+                    onClick={() => setRemoving(proceeding)}
                   >
                     {t("client-trip-remove")}
                   </Button>
@@ -283,6 +287,22 @@ export default function ProceedingsCard({
           }}
         />
       )}
+      {removing ? (
+        <ConfirmActionDialog
+          title={t("case-proceeding-remove-title")}
+          consequences={[t("case-proceeding-remove-consequence"), t("case-proceeding-remove-consequence-one")]}
+          requireReason={false}
+          confirmLabel={t("client-trip-remove")}
+          cancelLabel={t("cases-cancel")}
+          busyLabel={t("cases-working")}
+          tone="danger"
+          onConfirm={async () => {
+            await remove(removing);
+            return null;
+          }}
+          onClose={() => setRemoving(null)}
+        />
+      ) : null}
     </CollapsibleCard>
   );
 }

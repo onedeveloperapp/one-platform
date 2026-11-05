@@ -5,7 +5,8 @@ select plan(13);
 -- ============================================================
 -- How many of a firm's cases are at each step of their way (0082): the
 -- cases grouped by stage and, in court, by a hearing held and by a
--- publication in force triaged as a decision and as a payment. Two firms:
+-- publication in force triaged as a decision said to be the judgment (0096)
+-- and as a payment. Two firms:
 -- A, with a case at each point of the way and one of a second module; B,
 -- with one case in court. Each reads its own, and nothing of the other's.
 --
@@ -67,15 +68,15 @@ insert into public.hearings (org_id, case_id, proceeding_id, kind, starts_at, ti
   ('b8500000-0000-4000-8000-00000000000b', 'c8500000-0000-4000-8000-000000000009', 'e8500000-0000-4000-8000-000000000009',
    'conciliacao', now() - interval '10 days', 'America/Sao_Paulo', 'videoconferencia', 'held', 'sem_acordo');
 
-insert into public.publications (org_id, hash, court, cnj, available_on, kind, body, case_id, proceeding_id, category, triaged_at, active, cancelled_at, cancel_reason) values
+insert into public.publications (org_id, hash, court, cnj, available_on, kind, body, case_id, proceeding_id, category, triaged_at, active, cancelled_at, cancel_reason, judgment) values
   ('b8500000-0000-4000-8000-00000000000a', 'andamento0002decisao', 'TJGO', '50002023920998090051', current_date - 5, 'Intimação', 'Sentença.',
-   'c8500000-0000-4000-8000-000000000002', 'e8500000-0000-4000-8000-000000000002', 'decisao', now(), false, now(), 'Publicada por engano.'),
+   'c8500000-0000-4000-8000-000000000002', 'e8500000-0000-4000-8000-000000000002', 'decisao', now(), false, now(), 'Publicada por engano.', true),
   ('b8500000-0000-4000-8000-00000000000a', 'andamento0004decisao', 'TJGO', '50002023920998090051', current_date - 20, 'Intimação', 'Sentença.',
-   'c8500000-0000-4000-8000-000000000004', 'e8500000-0000-4000-8000-000000000004', 'decisao', now(), true, null, null),
+   'c8500000-0000-4000-8000-000000000004', 'e8500000-0000-4000-8000-000000000004', 'decisao', now(), true, null, null, true),
   ('b8500000-0000-4000-8000-00000000000a', 'andamento0005decisao', 'TJGO', '50002023920998090051', current_date - 60, 'Intimação', 'Sentença.',
-   'c8500000-0000-4000-8000-000000000005', 'e8500000-0000-4000-8000-000000000005', 'decisao', now(), true, null, null),
+   'c8500000-0000-4000-8000-000000000005', 'e8500000-0000-4000-8000-000000000005', 'decisao', now(), true, null, null, true),
   ('b8500000-0000-4000-8000-00000000000a', 'andamento0005pagamento', 'TJGO', '50002023920998090051', current_date - 3, 'Intimação', 'Alvará.',
-   'c8500000-0000-4000-8000-000000000005', 'e8500000-0000-4000-8000-000000000005', 'pagamento', now(), true, null, null);
+   'c8500000-0000-4000-8000-000000000005', 'e8500000-0000-4000-8000-000000000005', 'pagamento', now(), true, null, null, null);
 
 create temporary table res (name text primary key, payload jsonb);
 grant select, insert on res to anon, authenticated, service_role;

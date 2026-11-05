@@ -80,6 +80,8 @@ const clipped = await page.evaluate(() =>
 13. **Outcomes land where the person acted** — after an upload or a background check, the result (a refusal with its reason) shows on the line acted on while the person is still there; nothing says "working" after the work finished.
 14. **Nothing typed is lost** — closing an editor or dialog with unsaved text asks first, and a background refresh never resets it.
 15. **Words carry the state** — every state is said in words beside its colour; red appears only on failure or risk; a missing value hides its line instead of printing a placeholder.
+16. **The open screen follows the background work** — trigger work the product does by itself (an action that sets it to work, an outsider's upload in another tab) and keep the screen open without reloading: what the product did shows within seconds, the screen says when it last knew it was current, and no spinner turns when nothing is under way. A screen that shows the result only after a reload FAILS.
+17. **Whose turn is said, and is true** — for each wait the screen shows, the owner it names (the team and which role, the outsider, the product, the platform) is the one who can actually end it, the way to end it is offered only to who may, and the record's "who has it now" agrees with the lines below it. A record said to be with the product while it waits for the team FAILS.
 
 ## 3b. When you cannot sign in to the data a screen needs
 

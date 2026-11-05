@@ -1,5 +1,7 @@
 "use client";
 
+import type { ReactNode } from "react";
+
 import { Button } from "@mui/material";
 
 import { cn } from "@/lib/utils";
@@ -38,11 +40,14 @@ const TONE_COLOR: Record<StatusTone, "grey" | "primary" | "success" | "accent-3"
 export default function StatusChip({
   label,
   tone = "neutral",
+  icon,
   className,
 }: {
   /** The state, in words. */
   label: string;
   tone?: StatusTone;
+  /** A mark before the words: the spinner of work under way, said by the words too. */
+  icon?: ReactNode;
   className?: string;
 }) {
   return (
@@ -53,6 +58,7 @@ export default function StatusChip({
       size="tiny"
       variant="pastel"
       color={TONE_COLOR[tone]}
+      startIcon={icon}
       className={cn("text-text-primary! pointer-events-none flex-none whitespace-nowrap", className)}
     >
       {label}

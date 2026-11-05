@@ -9,12 +9,14 @@ import type { CivilCourtNeed, CourtNote, FamilyState } from "@/lib/cases/family"
 import type { CaseFiling } from "@/lib/cases/filing-facts";
 import type { InterviewView } from "@/lib/cases/interview";
 import type { StageMoment } from "@/lib/cases/journey";
+import type { CasePulse } from "@/lib/cases/pulse";
 import type { ReadFields } from "@/lib/cases/read-fields";
 import type { Ceiling, LawyerCauses, WeatherAssessment } from "@/lib/cases/rules";
 import type { CaseAudio, CaseComplaint, CaseStatement } from "@/lib/cases/statement-facts";
 import type { ComplaintChannel } from "@/lib/cases/statements";
 import type { CourseFacts } from "@/lib/courts/course-facts";
 import type { CaseDeadlines, DeadlineAct } from "@/lib/deadlines/facts";
+import type { AutonomyDecision, AutonomyMode } from "@/lib/firm/autonomy";
 import type { FirmFunction } from "@/lib/firm/roles";
 import type { CaseHearings, Colleague } from "@/lib/hearings/facts";
 import type { CourtZones } from "@/lib/hearings/hearings";
@@ -244,8 +246,25 @@ export type CaseState =
       zapsign: boolean;
       /** Every time the case entered a stage, the oldest first: the dates of its progress. */
       stageMoments: StageMoment[];
-      /** The day the case's first decision and first payment were published (its steps in court besides the hearings). */
+      /** The day the case's judgment and first payment were published (its steps in court besides the hearings). */
       courtPublications: { decidedAt: string | null; paidAt: string | null };
+      /**
+       * The publications in force of the case's lawsuits: what nobody triaged yet, a decision nobody said is or is
+       * not the judgment (0096), and what ONE reads of each (0040).
+       */
+      publications: {
+        id: string;
+        category: string | null;
+        availableOn: string;
+        judgment: boolean | null;
+        readings: { kind: string; status: string }[];
+      }[];
+      /** The mark of the case and whether ONE is at it (0096): what the screen follows while it is open; null unread. */
+      pulse: CasePulse | null;
+      /** How the firm lets ONE take each decision now; a decision not read is ONE's, the platform's default. */
+      autonomy: Partial<Record<AutonomyDecision, AutonomyMode>>;
+      /** When the case was read, for the screen to say how fresh it is. */
+      readAt: string;
       events: CaseEvent[];
       team: TeamMember[];
       airlines: AirlineOption[];

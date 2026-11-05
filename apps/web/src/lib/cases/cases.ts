@@ -228,6 +228,7 @@ export const EVENT_KEY: Record<string, string> = {
   filing_package_signature_failed: "case-event-filing-signature-failed",
   publication_captured: "case-event-publication-captured",
   publication_triaged: "case-event-publication-triaged",
+  publication_judged: "case-event-publication-judged",
   publication_cancelled: "case-event-publication-cancelled",
   draft_requested: "case-event-draft-requested",
   signers_named: "case-event-signers-named",

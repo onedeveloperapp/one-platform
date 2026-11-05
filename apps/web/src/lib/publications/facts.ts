@@ -81,6 +81,11 @@ export type PublicationRow = {
   /** Who checked the AI's word, and when. */
   reviewedBy: string | null;
   reviewedLabel: string | null;
+  /**
+   * Of a decision, whether it is the lawsuit's judgment (0096): what the app read of its words (`rule`) or what a
+   * person said (`person`); null while nobody could tell, when the person is asked.
+   */
+  judgment: { value: boolean; source: "rule" | "person" } | null;
 };
 
 /**
@@ -337,6 +342,26 @@ async function toRows(
     publicationsWithDeadline(supabase, firmId, ids),
   ]);
   if (cases.error || lawsuits.error) throw new Error("the cases of the publications could not be read");
+  // The word on the judgment of the decisions, read apart: a database without it (before 0096) leaves it unsaid.
+  const decisions = raw.filter((row) => row.category === "decisao").map((row) => row.id);
+  const judged = new Map<string, { value: boolean; source: "rule" | "person" }>();
+  if (decisions.length > 0) {
+    const { data, error } = await supabase
+      .from("publications")
+      .select("id, judgment, judgment_source")
+      .eq("org_id", firmId)
+      .in("id", decisions);
+    if (!error) {
+      for (const found of (data ?? []) as { id: string; judgment: boolean | null; judgment_source: string | null }[]) {
+        if (
+          typeof found.judgment === "boolean" &&
+          (found.judgment_source === "rule" || found.judgment_source === "person")
+        ) {
+          judged.set(found.id, { value: found.judgment, source: found.judgment_source });
+        }
+      }
+    }
+  }
   if (readings.error) throw new Error("what ONE read of the publications could not be read");
   const read = readingsOf(readings.data);
   const seqs = new Map(((cases.data ?? []) as { id: string; seq: number }[]).map((found) => [found.id, found.seq]));
@@ -379,6 +404,7 @@ async function toRows(
     reviewDue: Boolean(row.review_due),
     reviewedBy: row.reviewed_by ? names.get(row.reviewed_by) || null : null,
     reviewedLabel: row.reviewed_at ? momentLabel(row.reviewed_at, timeZone) : null,
+    judgment: judged.get(row.id) ?? null,
   }));
 }
 

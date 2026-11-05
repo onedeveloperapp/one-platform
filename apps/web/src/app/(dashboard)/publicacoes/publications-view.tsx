@@ -26,6 +26,7 @@ import EmptyState from "@/components/product/empty-state";
 import { StatTile } from "@/components/product/home-tiles";
 import ModuleScope from "@/components/product/module-scope";
 import PageHeader from "@/components/product/page-header";
+import StateLine from "@/components/product/state-line";
 import StatusChip, { type StatusTone } from "@/components/product/status-chip";
 import type { TileTone } from "@/components/product/tile-tone";
 import NiDocumentCheck from "@/icons/nexture/ni-document-check";
@@ -52,6 +53,7 @@ import {
   requestPublicationsCapture,
   searchPublications,
   setFirmAiTriage,
+  setPublicationJudgment,
   triagePublication,
 } from "@/lib/publications/actions";
 import type {
@@ -963,6 +965,12 @@ function PublicationCard({
   const reading = useRef(0);
   const changeButton = useRef<HTMLButtonElement | null>(null);
   const moveFocus = useRef(false);
+  /**
+   * Of a decision, whether it is the lawsuit's judgment (0096): what was read with the list, then what the triage
+   * answered (the app's reading of its words) or the person said; `asking` while the person corrects it.
+   */
+  const [judgment, setJudgment] = useState(row.judgment);
+  const [judgmentAsked, setJudgmentAsked] = useState(false);
 
   const category = said ? said.category : row.category;
   const savedNote = said ? said.note : row.note;
@@ -1015,12 +1023,33 @@ function PublicationCard({
         moveFocus.current = true;
         onSaid({ category: chosen, note: kept, reading: result.reading ?? null, at: Date.now() });
         setChanging(false);
+        // A decision: the app read its words, and asks the person only when they say nothing clear.
+        if (chosen === "decisao") {
+          setJudgment(typeof result.judgment === "boolean" ? { value: result.judgment, source: "rule" } : null);
+          setJudgmentAsked(result.judgment === null);
+        }
         // ONE reads what the publication set (0040): the card says so, and the form stays one click away.
         if (result.reading) return;
         // A publication that sets a time is counted right away, unless one of its deadlines already is.
         if (chosen === "prazo" && deadlines.length === 0 && !counted) setCounting(true);
         // One that sets a hearing of a lawsuit of the firm is written in the agenda right away, the same way.
         if (chosen === "audiencia" && row.proceedingId && hearings.length === 0 && !scheduled) setScheduling(true);
+      } catch {
+        setError(t("publication-error-failed"));
+      }
+    });
+
+  const sayJudgment = (value: boolean) =>
+    startTransition(async () => {
+      setError(null);
+      try {
+        const result = await setPublicationJudgment(row.id, value);
+        if (!result.ok) {
+          setError(t(publicationErrorKey(result.code)));
+          return;
+        }
+        setJudgment({ value, source: "person" });
+        setJudgmentAsked(false);
       } catch {
         setError(t("publication-error-failed"));
       }
@@ -1183,6 +1212,59 @@ function PublicationCard({
           <Typography variant="body2" className="text-text-secondary">
             {staysWords.join(" ")}
           </Typography>
+        ) : null}
+
+        {category === "decisao" && row.active ? (
+          judgment && !judgmentAsked ? (
+            <StateLine
+              tone={judgment.source === "person" ? "done" : "info"}
+              action={
+                mayTriage ? (
+                  <Button
+                    variant="text"
+                    color="grey"
+                    size="small"
+                    disabled={pending}
+                    onClick={() => setJudgmentAsked(true)}
+                  >
+                    {t("publication-judgment-change")}
+                  </Button>
+                ) : undefined
+              }
+            >
+              {t(judgmentWordsKey(judgment))}
+            </StateLine>
+          ) : (
+            <StateLine
+              tone="attention"
+              action={
+                mayTriage ? (
+                  <Box className="flex flex-wrap gap-2">
+                    <Button
+                      variant="outlined"
+                      color="grey"
+                      size="small"
+                      disabled={pending}
+                      onClick={() => sayJudgment(true)}
+                    >
+                      {t("publication-judgment-yes")}
+                    </Button>
+                    <Button
+                      variant="outlined"
+                      color="grey"
+                      size="small"
+                      disabled={pending}
+                      onClick={() => sayJudgment(false)}
+                    >
+                      {t("publication-judgment-no")}
+                    </Button>
+                  </Box>
+                ) : undefined
+              }
+            >
+              {t("publication-judgment-ask")}
+            </StateLine>
+          )
         ) : null}
 
         {hearings.length > 0 || scheduled ? (
@@ -1498,4 +1580,12 @@ function TriageAnswers({
       ) : null}
     </Box>
   );
+}
+
+/** What a card says of the word on a decision being the judgment (0096): the app's reading, or a person's answer. */
+function judgmentWordsKey(judgment: { value: boolean; source: "rule" | "person" }): string {
+  if (judgment.source === "person") {
+    return judgment.value ? "publication-judgment-person-yes" : "publication-judgment-person-no";
+  }
+  return judgment.value ? "publication-judgment-rule-yes" : "publication-judgment-rule-no";
 }

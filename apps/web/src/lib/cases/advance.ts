@@ -51,24 +51,75 @@ export const ADVANCE_WAITING = [
 export type AdvanceWaiting = (typeof ADVANCE_WAITING)[number];
 
 /**
- * What ONE waits for that is the client's to do, not the firm's (0054): the firm is asked to act only once it
- * waited longer than the setting's days, to follow the client up. A case an agency handed over (0071) waits for
- * its client to confirm on their link the data that came from the agency.
+ * Who a wait of ONE is with (the owner's audit of the case screen, 2026-11-05): the client (on their link or in
+ * the conversation), the firm (and who of it acts: anybody, a lawyer, who decides for the firm, or who approves the
+ * court's system), ONE itself (its own work, or a try again it makes by itself) or the platform (a fact only the
+ * operator of ONE puts right, and the firm cannot). The case screen, the center of what waits and the home read
+ * this one table, so a wait is never the client's in one place and the firm's in another.
  */
-export const CLIENT_WAITS: readonly AdvanceWaiting[] = [
-  "power_of_attorney_unsigned",
-  "client_confirmation",
-  // The client tells what happened, or answers what is missing of it, on their link (0090).
-  "account_missing",
-  "account_incomplete",
-];
+export type WaitOwner = "client" | "firm" | "one" | "platform";
+export type WaitActor = "anyone" | "lawyer" | "partner" | "deciders";
+export type WaitPlace = {
+  owner: WaitOwner;
+  /** Who of the firm acts on it; null for a wait that is not the firm's. */
+  actor: WaitActor | null;
+  /** The card of the case where it is put right (`CaseSection`), or null for a place out of the case. */
+  section: string | null;
+};
 
-export const isClientWait = (code: string): boolean => (CLIENT_WAITS as readonly string[]).includes(code);
+const CLIENT = (section: string): WaitPlace => ({ owner: "client", actor: null, section });
+const FIRM = (actor: WaitActor, section: string | null): WaitPlace => ({ owner: "firm", actor, section });
+const ONE = (section: string | null): WaitPlace => ({ owner: "one", actor: null, section });
+const PLATFORM = (section: string): WaitPlace => ({ owner: "platform", actor: null, section });
 
-/** What ONE waits for that is its own work under way (the account being ordered): nobody of the firm is asked. */
-export const ONE_WORKS: readonly AdvanceWaiting[] = ["account_preparing"];
+export const WAIT_PLACE: Record<AdvanceWaiting, WaitPlace> = {
+  case_incomplete: CLIENT("people"),
+  claims_missing: FIRM("partner", "rules"),
+  ceiling_unknown: PLATFORM("rules"),
+  domicile_unknown: FIRM("anyone", "people"),
+  no_claimants: FIRM("anyone", "people"),
+  court_unknown: FIRM("lawyer", "proceedings"),
+  no_signer: FIRM("partner", null),
+  signers_removed: FIRM("lawyer", "proceedings"),
+  no_model: FIRM("lawyer", null),
+  documents_waiting: FIRM("anyone", "documents"),
+  system_unknown: PLATFORM("proceedings"),
+  system_unapproved: FIRM("deciders", "proceedings"),
+  system_refused: PLATFORM("proceedings"),
+  held: FIRM("lawyer", "rules"),
+  suspension_pending: FIRM("lawyer", "rules"),
+  family_split_unchosen: FIRM("lawyer", "rules"),
+  civil_court_unanswered: CLIENT("rules"),
+  too_many_documents: FIRM("anyone", "documents"),
+  paper_incomplete: FIRM("anyone", "people"),
+  paper_unwritable: FIRM("anyone", "signatures"),
+  power_of_attorney_unsigned: CLIENT("signatures"),
+  client_confirmation: CLIENT("link"),
+  account_missing: CLIENT("statements"),
+  account_preparing: ONE("statements"),
+  account_proposed: FIRM("anyone", "statements"),
+  account_incomplete: CLIENT("statements"),
+  account_contested: ONE("statements"),
+  account_failed: FIRM("lawyer", "statements"),
+  unavailable: ONE(null),
+  step_failed: ONE(null),
+  stuck: FIRM("anyone", null),
+};
 
-export const isOneWork = (code: string): boolean => (ONE_WORKS as readonly string[]).includes(code);
+/** Where a wait is put right, and by whom; a refusal the screen has no words of its own for is the firm's. */
+export function waitPlaceOf(code: string): WaitPlace {
+  return isAdvanceWaiting(code) ? WAIT_PLACE[code] : FIRM("anyone", null);
+}
+
+/** What ONE waits for that is the client's to do, not the firm's: the firm is asked to follow it up only once it waited too long. */
+export const CLIENT_WAITS: readonly AdvanceWaiting[] = ADVANCE_WAITING.filter(
+  (code) => WAIT_PLACE[code].owner === "client",
+);
+export const isClientWait = (code: string): boolean => waitPlaceOf(code).owner === "client";
+
+/** What ONE waits for that is its own work under way, or a try again it makes by itself: nobody of the firm is asked. */
+export const ONE_WORKS: readonly AdvanceWaiting[] = ADVANCE_WAITING.filter((code) => WAIT_PLACE[code].owner === "one");
+export const isOneWork = (code: string): boolean => waitPlaceOf(code).owner === "one";
 
 /** What ONE waits for of the client's account (0090): nothing once it is ready. */
 const ACCOUNT_WAITING: Record<Exclude<AccountState, "ready">, AdvanceWaiting> = {

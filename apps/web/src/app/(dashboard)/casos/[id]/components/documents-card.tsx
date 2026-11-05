@@ -20,6 +20,7 @@ import CheckSuggestion from "@/components/product/check-suggestion";
 import CollapsibleCard from "@/components/product/collapsible-card";
 import DialogHeader from "@/components/product/dialog-header";
 import EmptyState from "@/components/product/empty-state";
+import StateLine from "@/components/product/state-line";
 import StatusChip, { type StatusTone } from "@/components/product/status-chip";
 import NiPaperclip from "@/icons/nexture/ni-paperclip";
 import { decideCaseDocument, finishCaseUpload, openCaseFile, startCaseUpload } from "@/lib/cases/actions";
@@ -83,6 +84,8 @@ export default function DocumentsCard({
   const [problem, setProblem] = useState<string | null>(null);
   const [kind, setKind] = useState<DocumentKind>("evidence");
   const [party, setParty] = useState<string>("");
+  // A document ONE is still checking that the person chose to decide without waiting for it.
+  const [early, setEarly] = useState<string | null>(null);
   const input = useRef<HTMLInputElement>(null);
 
   const personOf = (partyId: string | null) =>
@@ -95,7 +98,12 @@ export default function DocumentsCard({
       ? readDataDiffers(document.check.answer.data, person)
       : [];
   };
-  const toReview = state.documents.filter((document) => document.status === "received");
+  // What ONE is checking now is ONE's work, never the firm's task: only what waits for a person is to review.
+  const checking = state.documents.filter(
+    (document) =>
+      document.status === "received" && (document.processing === "pending" || document.processing === "working"),
+  );
+  const toReview = state.documents.filter((document) => document.status === "received" && !checking.includes(document));
   const decided = state.documents.filter((document) => document.status !== "received");
 
   const open = async (document: CaseDocument, fileId: string = document.fileId) => {
@@ -233,7 +241,18 @@ export default function DocumentsCard({
             {t("case-document-open-pdf")}
           </Button>
         )}
-        {writable && document.status === "received" && (
+        {writable && document.status === "received" && checking.includes(document) && early !== document.id && (
+          <Button
+            variant="text"
+            color="grey"
+            size="small"
+            disabled={busy !== null}
+            onClick={() => setEarly(document.id)}
+          >
+            {t("case-document-decide-early")}
+          </Button>
+        )}
+        {writable && document.status === "received" && (!checking.includes(document) || early === document.id) && (
           <>
             <Button variant="contained" size="small" disabled={busy !== null} onClick={() => void accept(document)}>
               {t("case-document-accept")}
@@ -250,6 +269,11 @@ export default function DocumentsCard({
           </>
         )}
       </Box>
+      {early === document.id && checking.includes(document) ? (
+        <Typography variant="body2" className="text-text-secondary">
+          {t("case-document-decide-early-help")}
+        </Typography>
+      ) : null}
     </Box>
   );
 
@@ -294,6 +318,12 @@ export default function DocumentsCard({
         />
       )}
 
+      {checking.length > 0 && (
+        <Box className="flex flex-col gap-2">
+          <StateLine tone="waiting">{t("case-documents-checking", { count: checking.length })}</StateLine>
+          {checking.map(row)}
+        </Box>
+      )}
       {toReview.length > 0 && (
         <Box className="flex flex-col gap-2">
           <Typography variant="subtitle2" component="h3">

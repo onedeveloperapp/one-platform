@@ -1,8 +1,10 @@
-import { defineConfig } from "vitest/config";
 import tsconfigPaths from "vite-tsconfig-paths";
+import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   plugins: [tsconfigPaths()],
+  // The app's tsconfig keeps JSX for Next to compile; a test that draws a component has it compiled here.
+  oxc: { jsx: { runtime: "automatic" } },
   test: {
     environment: "jsdom",
     setupFiles: ["./vitest.setup.ts"],

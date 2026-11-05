@@ -22,6 +22,7 @@ import {
 import DocumentSlot, { type SlotState } from "@/components/cases/document-slot";
 import PersonFields from "@/components/cases/person-fields";
 import CollapsibleCard from "@/components/product/collapsible-card";
+import ConfirmActionDialog from "@/components/product/confirm-action-dialog";
 import DialogHeader from "@/components/product/dialog-header";
 import StateLine from "@/components/product/state-line";
 import StatusChip, { type StatusTone } from "@/components/product/status-chip";
@@ -157,6 +158,9 @@ export default function PeopleCard({
     if (result.ok) onChanged();
   };
 
+  // Taking a person out of the case is said before it is done: what goes with them, what stays.
+  const [removing, setRemoving] = useState<Member | null>(null);
+
   const remove = async (member: Member) => {
     setBusy(member.person.person_id);
     setNotice(null);
@@ -174,6 +178,25 @@ export default function PeopleCard({
     setBusy(null);
     onChanged();
   };
+
+  const removingDialog = removing ? (
+    <ConfirmActionDialog
+      title={t("case-person-remove-title", { name: removing.person.full_name })}
+      consequences={[t("case-person-remove-consequence-link"), t("case-person-remove-consequence-answers")]}
+      staysTitle={t("confirm-stays")}
+      stays={[t("case-person-remove-stays")]}
+      requireReason={false}
+      confirmLabel={t("case-person-remove")}
+      cancelLabel={t("cases-cancel")}
+      busyLabel={t("cases-working")}
+      tone="danger"
+      onConfirm={async () => {
+        await remove(removing);
+        return null;
+      }}
+      onClose={() => setRemoving(null)}
+    />
+  ) : null;
 
   return (
     <CollapsibleCard
@@ -324,7 +347,7 @@ export default function PeopleCard({
                     color="grey"
                     size="small"
                     disabled={busy !== null}
-                    onClick={() => void remove(member)}
+                    onClick={() => setRemoving(member)}
                   >
                     {t("case-person-remove")}
                   </Button>
@@ -352,6 +375,7 @@ export default function PeopleCard({
           }}
         />
       )}
+      {removingDialog}
     </CollapsibleCard>
   );
 }

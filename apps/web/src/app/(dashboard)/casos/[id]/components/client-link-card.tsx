@@ -20,6 +20,7 @@ import {
 } from "@mui/material";
 
 import CollapsibleCard from "@/components/product/collapsible-card";
+import ConfirmActionDialog from "@/components/product/confirm-action-dialog";
 import StatusChip from "@/components/product/status-chip";
 import { createClientLink, type LinkDelivery, revokeClientLink } from "@/lib/cases/actions";
 import { caseErrorKey, CLIENT_STAGES, LINK_OWED_KEY } from "@/lib/cases/cases";
@@ -103,6 +104,9 @@ export default function ClientLinkCard({
     onChanged();
   };
 
+  // Ending a link is said before it is done: the client loses the way in, and a new one goes in its place.
+  const [revoking, setRevoking] = useState<string | null>(null);
+
   const revoke = async (linkId: string) => {
     setBusy(true);
     setProblem(null);
@@ -175,7 +179,7 @@ export default function ClientLinkCard({
           </Typography>
           {writable && (
             <Box className="pt-1">
-              <Button variant="text" color="grey" size="small" disabled={busy} onClick={() => void revoke(link.id)}>
+              <Button variant="text" color="grey" size="small" disabled={busy} onClick={() => setRevoking(link.id)}>
                 {t("case-link-revoke")}
               </Button>
             </Box>
@@ -311,6 +315,24 @@ export default function ClientLinkCard({
           )}
         </Box>
       )}
+      {revoking ? (
+        <ConfirmActionDialog
+          title={t("case-link-revoke-title")}
+          consequences={[t("case-link-revoke-consequence"), t("case-link-revoke-consequence-new")]}
+          staysTitle={t("confirm-stays")}
+          stays={[t("case-link-revoke-stays")]}
+          requireReason={false}
+          confirmLabel={t("case-link-revoke")}
+          cancelLabel={t("cases-cancel")}
+          busyLabel={t("cases-working")}
+          tone="danger"
+          onConfirm={async () => {
+            await revoke(revoking);
+            return null;
+          }}
+          onClose={() => setRevoking(null)}
+        />
+      ) : null}
     </CollapsibleCard>
   );
 }

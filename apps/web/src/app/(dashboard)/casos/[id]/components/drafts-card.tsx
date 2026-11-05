@@ -50,7 +50,6 @@ import {
   draftToShow,
   hasPersonMark,
   isDraftBlocker,
-  isDraftInCourse,
   personMarks,
   unknownMarks,
 } from "@/lib/cases/drafts";
@@ -83,8 +82,6 @@ const GAP_KEY: Record<NonNullable<CitedSource["gap"]>, string> = {
 };
 
 /** How often the card asks again while the backend works on a draft, and once that work is late. */
-const POLL_MS = 6_000;
-const SLOW_POLL_MS = 60_000;
 /** The fewest characters that say what the AI is to change in a text. */
 const REQUEST_MIN = 10;
 /** What the gate answers for a text with a mark of a person left in it (`case_draft_text_blocker`). */
@@ -156,26 +153,9 @@ export default function DraftsCard({
   const lawsuits = state.proceedings.filter(
     (proceeding) => proceeding.status === "planned" || drafts.some((draft) => draft.proceedingId === proceeding.id),
   );
-  const working = drafts.some((draft) => draft.work !== null && !draft.slow);
-  // A work that is late may still be done by itself: one that failed for a passing reason waits its turn.
-  const waiting = !working && drafts.some((draft) => draft.work !== null && draft.slow);
-  const live = drafts.some((draft) => isDraftInCourse(draft.status));
-
-  // A draft the backend is working on is read again by itself: often while the work is expected, and now and
-  // then once it is late, when the card also offers to put its work back.
-  useEffect(() => {
-    if (!working && !waiting) return;
-    const timer = window.setInterval(onChanged, working ? POLL_MS : SLOW_POLL_MS);
-    return () => window.clearInterval(timer);
-  }, [working, waiting, onChanged]);
-
-  // What a colleague did meanwhile, or a source registered in another tab, shows when the person comes back.
-  useEffect(() => {
-    if (!live) return;
-    const again = () => onChanged();
-    window.addEventListener("focus", again);
-    return () => window.removeEventListener("focus", again);
-  }, [live, onChanged]);
+  // A draft the backend is working on is read again by the screen itself (its pulse, `useLiveRead` in the case's
+  // view): often while the work is expected, and less often once it is late, when the card also offers to put its
+  // work back; what a colleague did meanwhile shows when the person comes back to the tab.
 
   const titleOf = (proceeding: CaseProceeding): string =>
     [t(KIND_KEY[proceeding.kind]), proceeding.court, proceeding.comarca].filter(Boolean).join(" · ");

@@ -23,61 +23,271 @@ import TimelineCard from "./timeline-card";
 import TripCard from "./trip-card";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 
-import { Alert, Box, Button, Card, CardContent, Grid, Typography } from "@mui/material";
+import { Alert, Box, Button, Grid } from "@mui/material";
 
-import { CollapsibleGroup, CollapsibleGroupToggle } from "@/components/product/collapsible-card";
+import {
+  type CardLook,
+  type CardMark,
+  CollapsibleGroup,
+  CollapsibleGroupToggle,
+} from "@/components/product/collapsible-card";
 import EmptyState from "@/components/product/empty-state";
 import PageHeader from "@/components/product/page-header";
+import QuickActions from "@/components/product/quick-actions";
 import StatusChip from "@/components/product/status-chip";
+import { useLiveRead } from "@/components/product/use-live-read";
+import NiAnnouncement from "@/icons/nexture/ni-announcement";
+import NiBell from "@/icons/nexture/ni-bell";
+import NiBriefcase from "@/icons/nexture/ni-briefcase";
+import NiCalendar from "@/icons/nexture/ni-calendar";
+import NiCalendarClock from "@/icons/nexture/ni-calendar-clock";
+import NiChange from "@/icons/nexture/ni-change";
+import NiClipboard from "@/icons/nexture/ni-clipboard";
+import NiDocumentCheck from "@/icons/nexture/ni-document-check";
+import NiDocumentFull from "@/icons/nexture/ni-document-full";
 import NiFolder from "@/icons/nexture/ni-folder";
+import NiLink from "@/icons/nexture/ni-link";
+import NiMessageDots from "@/icons/nexture/ni-message-dots";
+import NiPen from "@/icons/nexture/ni-pen";
+import NiPlane from "@/icons/nexture/ni-plane";
+import NiScale from "@/icons/nexture/ni-scale";
+import NiSendRight from "@/icons/nexture/ni-send-right";
+import NiTimeline from "@/icons/nexture/ni-timeline";
 import NiUsers from "@/icons/nexture/ni-users";
-import { ACCOUNT_MISSING_KEY } from "@/lib/cases/account";
-import {
-  caseHolder,
-  caseLabel,
-  caseMissing,
-  CLIENT_STAGES,
-  DOCUMENT_KIND_KEY,
-  groupOf,
-  PERSON_FIELD_KEY,
-  STATUS_KEY,
-} from "@/lib/cases/cases";
-import { type CivilCourtNeed, civilCourtPending } from "@/lib/cases/family";
+import { caseHolder, caseLabel, caseMissing, groupOf, STATUS_KEY } from "@/lib/cases/cases";
+import { civilCourtPending } from "@/lib/cases/family";
+import { interviewRows } from "@/lib/cases/interview";
+import { caseJourney } from "@/lib/cases/journey";
+import { caseNow, SECTION_ANCHOR } from "@/lib/cases/now";
+import { readCasePulse } from "@/lib/cases/pulse-actions";
+import type { CaseSection } from "@/lib/cases/sections";
 import { caseKindLabelKey } from "@/lib/modules/registry";
+import { setPublicationJudgment } from "@/lib/publications/actions";
+import { interviewProgress } from "@flyee/rules/interview";
 
-/** How a missing word on the civil court is said: none yet, the adult's "no", or the "no" of who answers for a minor. */
-const civilMissingKey = (need: CivilCourtNeed): string =>
-  need.accepted !== false
-    ? "case-missing-civil"
-    : need.minor
-      ? "case-missing-civil-declined-minor"
-      : "case-missing-civil-declined";
+/** The head of each card: what it is, as an icon of its family's tint. */
+const LOOKS: Record<CaseSection, CardLook> = {
+  people: { icon: <NiUsers size="medium" /> },
+  trip: { icon: <NiPlane size="medium" /> },
+  statements: { icon: <NiMessageDots size="medium" /> },
+  documents: { icon: <NiFolder size="medium" /> },
+  complaints: { icon: <NiAnnouncement size="medium" />, tone: "accent-2" },
+  signatures: { icon: <NiPen size="medium" /> },
+  rules: { icon: <NiScale size="medium" />, tone: "secondary" },
+  proceedings: { icon: <NiBriefcase size="medium" />, tone: "secondary" },
+  deadlines: { icon: <NiCalendarClock size="medium" />, tone: "accent-2" },
+  hearings: { icon: <NiCalendar size="medium" />, tone: "accent-2" },
+  drafts: { icon: <NiDocumentFull size="medium" />, tone: "secondary" },
+  filing: { icon: <NiSendRight size="medium" />, tone: "secondary" },
+  link: { icon: <NiLink size="medium" />, tone: "accent-1" },
+  notices: { icon: <NiBell size="medium" />, tone: "accent-1" },
+  summary: { icon: <NiClipboard size="medium" />, tone: "accent-1" },
+  dossier: { icon: <NiDocumentCheck size="medium" />, tone: "accent-1" },
+  timeline: { icon: <NiTimeline size="medium" />, tone: "accent-1" },
+};
+
+/** What ONE is doing in each card, in a word on its head. */
+const WORKING_KEY: Partial<Record<CaseSection, string>> = {
+  people: "case-card-working-reading",
+  documents: "case-card-working-checking",
+  statements: "case-card-working-ordering",
+  signatures: "case-card-working-sending",
+  link: "case-card-working-sending",
+  drafts: "case-card-working-writing",
+  filing: "case-card-working-filing",
+  deadlines: "case-card-working-reading",
+  hearings: "case-card-working-reading",
+};
+
+/** The stages a paper sent to be signed waits in: ONE sending it, the client signing it, the firm confirming it. */
+const SIGNATURE_WAITS = ["reserved", "opening", "pending", "received", "uncertain"];
 
 /**
- * One case. Somebody of the firm comes here to move the case forward: see
- * what it still lacks, get it from the client (their link), check what the
- * client sent, and record the lawsuits. So it opens with what is missing and
- * where the case stands, and keeps the story (the timeline) beside it.
+ * One case. Somebody of the firm comes here to know where the case stands and to do what only they do. So it
+ * opens with where it is along its way, who it is with, what ONE is doing at this moment, what holds it and whose
+ * turn each thing is (the owner's audit, 2026-11-05), and the cards below hold the work, each saying on its head
+ * whether something there waits for the firm or ONE works there now. The screen follows the database by itself
+ * while it is open: what ONE does and what the client sends shows with no reload.
  */
 export default function CaseView({ state: read }: { state: CaseState }) {
   const t = useTranslations("product");
   const router = useRouter();
   const [staging, setStaging] = useState(false);
-  const refresh = useCallback(() => router.refresh(), [router]);
-  // The case as it was last read whole. A card of this screen asks again by itself while the backend works
-  // (a piece being written, a document being checked): one of those reads that fails must not take the
-  // screen away from a person who is in the middle of a text.
+  // The case as it was last read whole: a read that fails (the database, or the session read again) must not take
+  // the screen away from a person who is in the middle of a text.
   const [lastReady, setLastReady] = useState(read.kind === "ready" ? read : null);
   if (read.kind === "ready" && read !== lastReady) setLastReady(read);
-  // A read that failed (the database, or the session read again) is no answer about the case: what the
-  // person had stays. A case that is not there, or a person no longer of a firm, is an answer, and shows.
+  // A read that failed is no answer about the case: what the person had stays. A case that is not there, or a
+  // person no longer of a firm, is an answer, and shows.
   const failed = read.kind === "error" || read.kind === "unavailable";
   const stale = failed && lastReady !== null;
   const state: CaseState = failed && lastReady ? lastReady : read;
+  const ready = state.kind === "ready" ? state : null;
 
-  if (state.kind !== "ready") {
+  // What happens in the case now, read from what the screen read (pure).
+  const facts = useMemo(() => {
+    if (!ready) return null;
+    const missing = caseMissing({
+      parties: ready.parties,
+      documents: ready.documents.map((document) => ({
+        kind: document.kind,
+        party_id: document.partyId,
+        status: document.status,
+      })),
+      segments: ready.segments.length,
+      required: ready.required,
+      today: ready.today,
+    });
+    const interview = ready.interview
+      ? (() => {
+          const progress = interviewProgress(ready.interview.facts);
+          const rows = interviewRows(ready.interview);
+          return {
+            status: ready.interview.status,
+            inChat: ready.interview.inChat,
+            position: progress.position,
+            total: progress.total,
+            done: rows.filter((row) => row.state === "answered" || row.state === "unknown").length,
+          };
+        })()
+      : null;
+    const civil = civilCourtPending(ready.civilCourt).map((need) => ({
+      partyId: need.partyId,
+      accepted: need.accepted,
+      minor: need.minor,
+    }));
+    const now = caseNow({
+      status: ready.case.status,
+      today: ready.today,
+      now: ready.readAt,
+      parties: ready.parties,
+      documents: ready.documents,
+      missing,
+      civilCourt: civil,
+      account: ready.account,
+      interview,
+      waiting: ready.advance?.waiting ?? null,
+      waitingSince: ready.pulse?.advance.waitingSince ?? null,
+      advance: ready.pulse ? { running: ready.pulse.advance.running, due: ready.pulse.advance.due } : null,
+      linksOwed: ready.linksOwed,
+      envelopes: ready.envelopes,
+      proceedings: ready.proceedings,
+      drafts: ready.pieces.drafts,
+      filings: ready.filings,
+      unnamedSigners: ready.unnamedSigners,
+      deadlines: ready.deadlines.open,
+      hearings: ready.hearings.upcoming,
+      hearingMinutes: ready.hearings.durationMinutes,
+      publications: ready.publications,
+      complaints: ready.complaints.map((complaint) => ({
+        id: complaint.id,
+        outcome: complaint.outcome,
+        answerDueOn: complaint.answerDueOn,
+      })),
+      statementsWorking: ready.statements
+        .filter((statement) => statement.work !== null && !statement.stalled)
+        .map((statement) => ({
+          id: statement.id,
+          spoken: statement.spoken && statement.work === "transcribe",
+          since: null,
+        })),
+    });
+    const signatureSince =
+      ready.envelopes
+        .filter((envelope) => SIGNATURE_WAITS.includes(envelope.status))
+        .map((envelope) => envelope.createdAt)
+        .sort()[0] ?? null;
+    const filingSince =
+      ready.filings
+        .filter((filing) => filing.status === "requested" || filing.status === "ready")
+        .map((filing) => filing.requestedAt)
+        .sort()[0] ?? null;
+    const journey = caseJourney({
+      status: ready.case.status,
+      createdAt: ready.case.createdAt,
+      moments: ready.stageMoments,
+      court: {
+        heldAt:
+          ready.hearings.past
+            .filter((hearing) => hearing.status === "held")
+            .map((hearing) => hearing.startsAt)
+            .sort()
+            .at(-1) ?? null,
+        nextHearingAt:
+          ready.hearings.upcoming
+            .filter(
+              (hearing) =>
+                hearing.status === "scheduled" && Date.parse(hearing.startsAt) > Date.parse(ready.hearings.now),
+            )
+            .map((hearing) => hearing.startsAt)
+            .sort()[0] ?? null,
+        decidedAt: ready.courtPublications.decidedAt,
+        paidAt: ready.courtPublications.paidAt,
+      },
+      facts: { signatureSince, filingSince },
+    });
+    return { now, journey };
+  }, [ready]);
+
+  const live = useLiveRead({
+    stamp: ready?.pulse?.stamp ?? null,
+    read: useCallback(async () => {
+      if (!ready) return null;
+      const answer = await readCasePulse(ready.case.id);
+      return answer.ok ? answer.pulse.stamp : null;
+    }, [ready]),
+    // ONE at work there now (a work already late is still followed, at the slower pace).
+    busy: facts?.now.working.some((line) => !line.slow) ?? false,
+    onChange: useCallback(() => router.refresh(), [router]),
+  });
+
+  // A person's write: the screen reads again now, and asks often for a while, since ONE goes on from it.
+  const { acted } = live;
+  const refresh = useCallback(() => {
+    acted();
+    router.refresh();
+  }, [acted, router]);
+
+  // What the top knows of each card, by its id: something there waits for the firm or failed, or for the client,
+  // and what ONE does there now.
+  const marks = useMemo(() => {
+    const out: Record<string, CardMark> = {};
+    for (const [section, mark] of Object.entries(facts?.now.sections ?? {}) as [
+      CaseSection,
+      { firm: boolean; failed: boolean; client: boolean; working: boolean },
+    ][]) {
+      out[SECTION_ANCHOR[section]] = {
+        firm: mark.firm,
+        failed: mark.failed,
+        client: mark.client,
+        working: mark.working ? t(WORKING_KEY[section] ?? "case-card-working") : null,
+      };
+    }
+    return out;
+  }, [facts, t]);
+  const looks = useMemo(
+    () =>
+      Object.fromEntries(
+        Object.entries(LOOKS).map(([section, look]) => [SECTION_ANCHOR[section as CaseSection], look]),
+      ),
+    [],
+  );
+  const words = useMemo(
+    () => ({ firm: t("case-card-mark-firm"), failed: t("case-card-mark-failed"), client: t("case-card-mark-client") }),
+    [t],
+  );
+
+  const onJudgment = useCallback(
+    async (publicationId: string, judgment: boolean) => {
+      const result = await setPublicationJudgment(publicationId, judgment);
+      if (result.ok) refresh();
+    },
+    [refresh],
+  );
+
+  if (state.kind !== "ready" || !facts) {
     return (
       <Box className="flex flex-col gap-6">
         <PageHeader
@@ -97,7 +307,7 @@ export default function CaseView({ state: read }: { state: CaseState }) {
             severity="error"
             className="neutral bg-background-paper/60!"
             action={
-              <Button color="inherit" size="small" onClick={refresh}>
+              <Button color="inherit" size="small" onClick={() => router.refresh()}>
                 {t("cases-retry")}
               </Button>
             }
@@ -130,30 +340,6 @@ export default function CaseView({ state: read }: { state: CaseState }) {
   const writable = !state.supportVisit;
   // Whoever answers for the case: the first adult claimant, or else a guardian of the minors, never a minor.
   const holderParty = caseHolder(state.parties, state.today);
-  const missing = caseMissing({
-    parties: state.parties,
-    documents: state.documents.map((document) => ({
-      kind: document.kind,
-      party_id: document.partyId,
-      status: document.status,
-    })),
-    segments: state.segments.length,
-    required: state.required,
-    today: state.today,
-  });
-  // The claimants of a lawsuit planned in the civil court whose word on it is missing, or a "no" (0025).
-  const civilMissing = civilCourtPending(state.civilCourt);
-  // The client's account, while it is the client's or a person's to give or put right (0090); nothing while ONE
-  // orders it, nor once it is ready.
-  const accountMissing = state.account ? (ACCOUNT_MISSING_KEY[state.account] ?? null) : null;
-  // What the case lacks is shown while it is gathered, and later while something is missing, until the case is
-  // with the court or ended (a case brought from a spreadsheet lacks what nothing will ask of it).
-  const showMissing =
-    CLIENT_STAGES.includes(current.status) ||
-    (!["filed", "closed", "declined"].includes(current.status) &&
-      (missing.length > 0 || civilMissing.length > 0 || accountMissing !== null));
-  const nameOfParty = (partyId: string) =>
-    state.parties.find((party) => party.partyId === partyId)?.person.full_name ?? "";
 
   return (
     <Box className="flex flex-col gap-6">
@@ -168,11 +354,19 @@ export default function CaseView({ state: read }: { state: CaseState }) {
         action={
           <Box className="flex flex-wrap items-center gap-2">
             <StatusChip tone={GROUP_TONE[groupOf(current.status)]} label={t(STATUS_KEY[current.status])} />
-            {writable && (
-              <Button variant="outlined" color="grey" size="small" onClick={() => setStaging(true)}>
-                {t("case-stage-change")}
-              </Button>
-            )}
+            {writable ? (
+              <QuickActions
+                label={t("case-more-actions")}
+                actions={[
+                  {
+                    key: "stage",
+                    label: t("case-stage-change"),
+                    icon: <NiChange size="medium" />,
+                    onClick: () => setStaging(true),
+                  },
+                ]}
+              />
+            ) : null}
           </Box>
         }
       />
@@ -182,7 +376,7 @@ export default function CaseView({ state: read }: { state: CaseState }) {
           severity="warning"
           className="neutral bg-background-paper/60!"
           action={
-            <Button color="inherit" size="small" onClick={refresh}>
+            <Button color="inherit" size="small" onClick={() => router.refresh()}>
               {t("cases-retry")}
             </Button>
           }
@@ -200,78 +394,29 @@ export default function CaseView({ state: read }: { state: CaseState }) {
           {t("case-closed-reason", { reason: current.closeReason })}
         </Alert>
       )}
-      {/* Where the case stands along its way, what happens now and who it is with; what ONE waits for is said
-          there too. What the case lacks is listed in its own card below. */}
-      <JourneyCard
-        state={state}
-        missing={showMissing ? missing.length + civilMissing.length + (accountMissing ? 1 : 0) : 0}
-      />
 
-      {/* Each card opens by itself when the case's stage is about it or something in it waits for a person; the
-          person may open or close every one at once to read the whole case. */}
-      <CollapsibleGroup>
+      {/* Where the case stands, who it is with, what ONE is doing now and what holds it: said once, here. */}
+      <JourneyCard state={state} journey={facts.journey} now={facts.now} live={live} onJudgment={onJudgment} />
+
+      {/* Each card opens by itself when the case's stage is about it or something in it waits for the firm, and
+          closes once that is done; the person may open or close every one at once to read the whole case. */}
+      <CollapsibleGroup marks={marks} looks={looks} words={words}>
         <CollapsibleGroupToggle className="-mb-3" />
         <Grid container spacing={3}>
           <Grid size={{ xs: 12, lg: 8 }} className="flex flex-col gap-3">
-            {showMissing && (
-              <Card component="section" aria-labelledby="case-missing">
-                <CardContent className="flex flex-col gap-3">
-                  <Typography id="case-missing" variant="h5" component="h2" className="mb-0">
-                    {t("case-missing-title")}
-                  </Typography>
-                  {missing.length === 0 && civilMissing.length === 0 && accountMissing === null ? (
-                    <Alert severity="success" className="neutral bg-background-paper/60!">
-                      {t("case-missing-none")}
-                    </Alert>
-                  ) : (
-                    <Box component="ul" className="m-0 flex list-disc flex-col gap-1 pl-5">
-                      {missing.map((item, index) => (
-                        <Typography key={index} component="li" variant="body1">
-                          {item.type === "fields"
-                            ? t("case-missing-fields", {
-                                name: item.name,
-                                fields: item.fields
-                                  .map((field) => t(PERSON_FIELD_KEY[field as keyof typeof PERSON_FIELD_KEY]))
-                                  .join(", "),
-                              })
-                            : item.type === "flight"
-                              ? t("client-missing-flight")
-                              : item.name
-                                ? t("client-missing-document", {
-                                    document: t(DOCUMENT_KIND_KEY[item.kind]),
-                                    name: item.name,
-                                  })
-                                : t(DOCUMENT_KIND_KEY[item.kind])}
-                        </Typography>
-                      ))}
-                      {civilMissing.map((need) => (
-                        <Typography key={`civil-${need.partyId}`} component="li" variant="body1">
-                          {t(civilMissingKey(need), { name: nameOfParty(need.partyId) })}
-                        </Typography>
-                      ))}
-                      {accountMissing && (
-                        <Typography component="li" variant="body1">
-                          {t(accountMissing)}
-                        </Typography>
-                      )}
-                    </Box>
-                  )}
-                </CardContent>
-              </Card>
-            )}
-
+            {/* In the order the case goes: its people and trip, what happened, the papers, the lawsuits, the court. */}
             <PeopleCard state={state} writable={writable} onChanged={refresh} />
             <TripCard state={state} writable={writable} onChanged={refresh} />
             <StatementsCard state={state} writable={writable} onChanged={refresh} />
             <DocumentsCard state={state} writable={writable} onChanged={refresh} />
-            <ComplaintCard state={state} writable={writable} onChanged={refresh} />
             <SignaturesCard state={state} writable={writable} onChanged={refresh} />
             <RulesCard state={state} writable={writable} onChanged={refresh} />
             <ProceedingsCard state={state} writable={writable} onChanged={refresh} />
-            <DeadlinesCard state={state} writable={writable} onChanged={refresh} />
-            <HearingsCard state={state} writable={writable} onChanged={refresh} />
             <DraftsCard state={state} writable={writable} onChanged={refresh} />
             <FilingCard state={state} writable={writable} onChanged={refresh} />
+            <HearingsCard state={state} writable={writable} onChanged={refresh} />
+            <DeadlinesCard state={state} writable={writable} onChanged={refresh} />
+            <ComplaintCard state={state} writable={writable} onChanged={refresh} />
           </Grid>
 
           <Grid size={{ xs: 12, lg: 4 }} className="flex flex-col gap-3">

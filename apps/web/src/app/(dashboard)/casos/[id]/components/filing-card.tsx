@@ -4,7 +4,7 @@ import type { CaseFiling, CaseProceeding, CaseState } from "../case-types";
 import CourtSystem from "./court-system";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 
 import { Alert, Box, Button, Checkbox, FormControlLabel, Grid, MenuItem, TextField, Typography } from "@mui/material";
 
@@ -71,10 +71,6 @@ const STATUS_TONE: Record<PackageStatus, StatusTone> = {
   cancelled: "neutral",
 };
 
-/** How often the card asks again while a package is being built or signed, and for how long at most. */
-const POLL_MS = 5_000;
-const POLL_FOR_MS = 5 * 60_000;
-
 /**
  * The filing of each lawsuit of the case. Somebody comes here when the case
  * is ready to go to court: to get the package built (the petition and the
@@ -95,30 +91,21 @@ export default function FilingCard({
 }) {
   const t = useTranslations("product");
   const lawsuits = state.proceedings.filter((proceeding) => proceeding.status !== "closed");
-  const building = state.filings.some((filing) => filing.status === "requested" && !filing.slow);
-  // ONE signs a package right after it is built, where the court's system takes the files signed.
-  const signing = state.filings.some((filing) => filing.status === "ready" && filing.signature.status === "due");
-  const polling = building || signing;
-  // A request the person just made starts the asking again, also where it had stopped.
-  const [pollRound, setPollRound] = useState(0);
-  const restartPolling = useCallback(() => setPollRound((round) => round + 1), []);
-
-  // A package being built or signed is read again by itself: the person does not have to ask. One that is
-  // late (no job took it) stops the asking, and the card offers to build it again; a signature that takes
-  // more than a few minutes is read on the person's next visit, or after their next request.
-  useEffect(() => {
-    if (!polling) return;
-    const since = Date.now();
-    const timer = window.setInterval(() => {
-      if (Date.now() - since > POLL_FOR_MS) window.clearInterval(timer);
-      else onChanged();
-    }, POLL_MS);
-    return () => window.clearInterval(timer);
-  }, [polling, onChanged, pollRound]);
+  // A package being built or signed is read again by the screen itself (its pulse, `useLiveRead` in the case's
+  // view), however long it takes: the person does not have to ask. A request the person just made reads it again at
+  // once (`onChanged`), and makes the screen ask often for a while.
+  const restartPolling = onChanged;
 
   // The package each lawsuit has now, and whether one is ready to be filed or could not be built.
   const packages = lawsuits.map((proceeding) => ({ proceeding, filing: currentFiling(state.filings, proceeding) }));
-  const readyToFile = packages.some(({ filing }) => filing?.status === "ready" && !filing.blocker);
+  // Ready for the lawyer only once nothing of ONE's is left on it: a package ONE still signs, or whose signature
+  // waits or failed, is not yet to be filed (the top of the case says what it waits for).
+  const readyToFile = packages.some(
+    ({ filing }) =>
+      filing?.status === "ready" &&
+      !filing.blocker &&
+      !(filing.signature.takesSigned && filing.signature.status !== null && filing.signature.status !== "signed"),
+  );
   const notBuilt = packages.some(({ filing }) => filing?.status === "failed");
   const noPackage = t("filing-summary-none");
 
@@ -221,6 +208,8 @@ function Lawsuit({
   );
   // Asking for another package brings the form back over the one there is.
   const [again, setAgain] = useState(false);
+  // Cancelling a package is said before it is done: its files go, and ONE asks for no other by itself.
+  const [cancelling, setCancelling] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   // Which action a problem answers: one of the signature is said beside it.
@@ -833,16 +822,28 @@ function Lawsuit({
               {t("filing-build-again")}
             </Button>
           ) : null}
-          <Button
-            variant="text"
-            color="grey"
-            size="small"
-            disabled={busy !== null}
-            onClick={() => void run("cancel", () => cancelFilingPackage(state.case.id, filing.id))}
-          >
+          <Button variant="text" color="grey" size="small" disabled={busy !== null} onClick={() => setCancelling(true)}>
             {busy === "cancel" ? t("cases-working") : t("filing-cancel")}
           </Button>
         </Box>
+      ) : null}
+      {cancelling && filing ? (
+        <ConfirmActionDialog
+          title={t("filing-cancel-title")}
+          consequences={[t("filing-cancel-consequence"), t("filing-cancel-consequence-one")]}
+          staysTitle={t("confirm-stays")}
+          stays={[t("filing-cancel-stays")]}
+          requireReason={false}
+          confirmLabel={t("filing-cancel")}
+          cancelLabel={t("cases-cancel")}
+          busyLabel={t("cases-working")}
+          tone="danger"
+          onConfirm={async () => {
+            await run("cancel", () => cancelFilingPackage(state.case.id, filing.id));
+            return null;
+          }}
+          onClose={() => setCancelling(false)}
+        />
       ) : null}
     </Box>
   );

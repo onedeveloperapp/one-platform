@@ -1,4 +1,4 @@
-import { isClientWait, isOneWork, waitingHref, waitingKey, waitingTagKey } from "@/lib/cases/advance";
+import { waitingHref, waitingKey, waitingTagKey, waitPlaceOf } from "@/lib/cases/advance";
 import { type FirmToday, type TodayNeed, todayNeeds, type TodayViewer } from "@/lib/firm/today";
 import { formatCnj } from "@flyee/rules/cnj";
 
@@ -405,11 +405,16 @@ export function pendingGroups(
   for (const wait of pending.oneWaits) {
     const days = daysSince(wait.since, now);
     const stale = days >= pending.oneWaitsStaleDays;
-    // ONE's own work under way (the client's account being ordered) is nobody's to do, until it took too long.
-    if (isOneWork(wait.waiting) && !stale) continue;
-    // What waits on the client (their signature) is the firm's to follow up only once it waited too long; until
-    // then it is only to look at.
-    groups[stale ? "late" : isClientWait(wait.waiting) ? "review" : "one"].push({
+    // Who the wait is with, by the one table the case screen reads too (`WAIT_PLACE`): never the client's on the
+    // case and the firm's here.
+    const place = waitPlaceOf(wait.waiting);
+    // ONE's own work under way (the client's account being ordered, a try again) is nobody's to do, until it took
+    // too long.
+    if (place.owner === "one" && !stale) continue;
+    // What waits on the client (their data, their signature, their word) is the firm's to follow up only once it
+    // waited too long; what only the platform puts right is the firm's to look at, never to do.
+    const group = place.owner === "platform" ? "review" : stale ? "late" : place.owner === "firm" ? "one" : "review";
+    groups[group].push({
       id: `case:${wait.caseId}:${wait.waiting}`,
       href: waitingHref(wait.waiting, wait.caseId),
       tag: { key: waitingTagKey(wait.waiting) },

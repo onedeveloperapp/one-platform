@@ -15,6 +15,7 @@ import { isPublicationCategory, plainText, PUBLICATIONS_SHOWN, searchedCnj } fro
 import { type ReadingKind, readingKindOf } from "@/lib/publications/reading-words";
 import { queuePublicationReading, readingReadyKinds } from "@/lib/publications/reading-work";
 import { createServiceClient } from "@flyee/auth/service";
+import { judgmentOf } from "@flyee/rules/judgment";
 
 /**
  * What a person of the firm does with what the courts publish (migration
@@ -70,7 +71,7 @@ export async function triagePublication(input: {
   publicationId: string;
   category: string;
   note?: string | null;
-}): Promise<PublicationResult<{ reading?: ReadingKind | null }>> {
+}): Promise<PublicationResult<{ reading?: ReadingKind | null; judgment?: boolean | null }>> {
   const context = await getMemberContext();
   // No session, or no firm: nothing here is this person's to do, and the screen says to try again.
   if (!context?.firm) return { ok: false, code: "failed" };
@@ -84,6 +85,12 @@ export async function triagePublication(input: {
   const result = fold(data, error);
   if (!result.ok) return result;
   refresh();
+  // A decision: whether it is the lawsuit's judgment is read from its own words, and the person is asked only when
+  // they say nothing clear (the owner, 2026-11-05; migration 0096).
+  if (input.category === "decisao") {
+    const judgment = await judgeDecision(context.supabase, input.publicationId);
+    return { ...result, reading: null, judgment };
+  }
   const kind = readingKindOf(input.category);
   if (!kind) return { ...result, reading: null };
   // Whether ONE owes it a reading is the database's word: the firm's choice and the publication's lawsuit decide.
@@ -108,6 +115,60 @@ export async function triagePublication(input: {
     // The sweep reads it.
   }
   return { ...result, reading: kind };
+}
+
+/**
+ * Whether a publication a person just triaged as a decision is the lawsuit's judgment, by its type and its words
+ * (`@flyee/rules/judgment`): what they say clearly is kept as the rule's (never over a word somebody already said),
+ * and null is answered when they say nothing clear, for the screen to ask the person. A database without the word on
+ * the judgment answers true, as every decision judged the case before.
+ */
+async function judgeDecision(
+  supabase: NonNullable<Awaited<ReturnType<typeof getMemberContext>>>["supabase"],
+  publicationId: string,
+): Promise<boolean | null> {
+  const { data, error } = await supabase
+    .from("publications")
+    .select("body, document_type, judgment, judgment_source")
+    .eq("id", publicationId)
+    .maybeSingle();
+  if (error || !data) return null;
+  const row = data as {
+    body: string;
+    document_type: string | null;
+    judgment: boolean | null;
+    judgment_source: string | null;
+  };
+  if (row.judgment_source) return row.judgment;
+  const reading = judgmentOf({ documentType: row.document_type, text: row.body });
+  if (reading === null) return null;
+  const saved = await supabase.rpc("set_publication_judgment", {
+    target_publication: publicationId,
+    target_judgment: reading,
+    target_source: "rule",
+  });
+  return saved.error ? null : reading;
+}
+
+/**
+ * A person says whether a decision the court published is the lawsuit's judgment: asked when its words do not say
+ * it clearly, on the publication's card and on its case. Their word corrects the rule's.
+ */
+export async function setPublicationJudgment(publicationId: string, judgment: boolean): Promise<PublicationResult> {
+  const context = await getMemberContext();
+  if (!context?.firm) return { ok: false, code: "failed" };
+  if (!isId(publicationId) || typeof judgment !== "boolean") return { ok: false, code: "not_found" };
+  const { data, error } = await context.supabase.rpc("set_publication_judgment", {
+    target_publication: publicationId,
+    target_judgment: judgment,
+    target_source: "person",
+  });
+  const result = fold(data, error);
+  if (result.ok) {
+    refresh();
+    revalidatePath("/casos");
+  }
+  return result;
 }
 
 /**

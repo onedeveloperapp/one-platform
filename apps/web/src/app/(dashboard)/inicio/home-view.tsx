@@ -4,6 +4,7 @@ import CasesJourneyCard, { type RecentCases } from "./cases-journey-card";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
+import { useCallback } from "react";
 
 import { Alert, Box, Button, Grid, Typography } from "@mui/material";
 
@@ -14,6 +15,7 @@ import ModulesQuickAccess from "@/components/product/modules-quick-access";
 import OnboardingChecklistCard from "@/components/product/onboarding-checklist-card";
 import PageHeader from "@/components/product/page-header";
 import type { TileTone } from "@/components/product/tile-tone";
+import { useLiveRead } from "@/components/product/use-live-read";
 import NiCalendar from "@/icons/nexture/ni-calendar";
 import NiCalendarClock from "@/icons/nexture/ni-calendar-clock";
 import NiClock from "@/icons/nexture/ni-clock";
@@ -35,6 +37,7 @@ import NiShieldCheck from "@/icons/nexture/ni-shield-check";
 import NiTimeline from "@/icons/nexture/ni-timeline";
 import NiUsers from "@/icons/nexture/ni-users";
 import type { JourneyOverview } from "@/lib/cases/journey-read";
+import { readHomePulse } from "@/lib/cases/pulse-actions";
 import { homeTiles, type PendingGroup, sayPending } from "@/lib/firm/pending";
 import { type FirmToday, somethingForMe, type TodayNeed, todayNeeds } from "@/lib/firm/today";
 import type { ModuleOffer } from "@/lib/modules/offer";
@@ -83,6 +86,8 @@ export type HomeState =
       journey: JourneyOverview | null;
       /** The latest cases in progress (`firm_cases`, the latest moved first); null when it could not be read. */
       recent: RecentCases | null;
+      /** The mark of what the home shows (0096, `firm_pulse`): what it follows while open; null when unreadable. */
+      pulse: string | null;
     }
   | { kind: "no-firm" }
   | { kind: "unavailable" }
@@ -267,6 +272,18 @@ export default function HomeView({ state }: { state: HomeState }) {
   const router = useRouter();
 
   const ready = state.kind === "ready" ? state : null;
+
+  // The home follows the firm while it is open (the owner, 2026-11-05): what ONE did, what a client sent, what a
+  // colleague decided, read again when the mark of what it shows changes, with no reload.
+  const live = useLiveRead({
+    stamp: ready?.pulse ?? null,
+    read: useCallback(async () => {
+      const answer = await readHomePulse();
+      return answer.ok ? answer.pulse : null;
+    }, []),
+    busy: false,
+    onChange: useCallback(() => router.refresh(), [router]),
+  });
   const attention: AttentionGroup[] = (ready?.attention ?? []).map((group) => {
     const late = group.key === "late";
     return {
@@ -311,7 +328,24 @@ export default function HomeView({ state }: { state: HomeState }) {
       <PageHeader
         title={ready?.firstName ? t("today-greeting", { name: ready.firstName }) : t("today-title")}
         crumbs={[{ label: t("today-title") }]}
-        description={ready ? t("today-description", { firm: ready.firm.name }) : undefined}
+        description={
+          ready
+            ? [
+                t("today-description", { firm: ready.firm.name }),
+                live.live && live.checkedAt
+                  ? t("today-live", {
+                      time: new Intl.DateTimeFormat("pt-BR", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                        timeZone: "America/Sao_Paulo",
+                      }).format(new Date(live.checkedAt)),
+                    })
+                  : null,
+              ]
+                .filter(Boolean)
+                .join(" ")
+            : undefined
+        }
       />
       {ready?.modules ? <ModulesQuickAccess offer={ready.modules} /> : null}
 

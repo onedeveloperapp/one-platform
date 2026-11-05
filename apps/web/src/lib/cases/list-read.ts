@@ -35,24 +35,30 @@ export async function readCaseList(
 async function withCourtMarks(supabase: SupabaseClient, orgId: string, page: CaseListPage): Promise<CaseListPage> {
   const filed = page.rows.filter((row) => row.status === "filed").map((row) => row.id);
   if (filed.length === 0) return page;
-  const [held, published] = await Promise.all([
-    supabase.from("hearings").select("case_id").eq("org_id", orgId).eq("status", "held").in("case_id", filed),
+  const publishedOf = (columns: string) =>
     supabase
       .from("publications")
-      .select("case_id, category")
+      .select(columns)
       .eq("org_id", orgId)
       .eq("active", true)
       .in("category", ["decisao", "pagamento"])
-      .in("case_id", filed),
+      .in("case_id", filed);
+  const [held, withJudgment] = await Promise.all([
+    supabase.from("hearings").select("case_id").eq("org_id", orgId).eq("status", "held").in("case_id", filed),
+    publishedOf("case_id, category, judgment"),
   ]);
+  // A database without the word on the judgment (before 0096) is read as it was: every decision judged the case.
+  const published = withJudgment.error ? await publishedOf("case_id, category") : withJudgment;
   if (held.error || published.error) return page;
+  const rows = (published.data ?? []) as unknown as { case_id: string; category: string; judgment?: boolean | null }[];
   const heldCases = new Set((held.data ?? []).map((row) => row.case_id as string));
+  // A decision judges a case only when it was said to be the judgment (0096).
   const decided = new Set(
-    (published.data ?? []).filter((row) => row.category === "decisao").map((row) => row.case_id as string),
+    rows
+      .filter((row) => row.category === "decisao" && (withJudgment.error ? true : row.judgment === true))
+      .map((row) => row.case_id),
   );
-  const paid = new Set(
-    (published.data ?? []).filter((row) => row.category === "pagamento").map((row) => row.case_id as string),
-  );
+  const paid = new Set(rows.filter((row) => row.category === "pagamento").map((row) => row.case_id));
   return {
     ...page,
     rows: page.rows.map((row) =>
