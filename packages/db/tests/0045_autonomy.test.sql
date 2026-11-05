@@ -115,12 +115,12 @@ reset role;
 select ok(
   (select array_agg(key order by position) from public.autonomy_decisions)
     = array['reply_client', 'open_case_from_chat', 'send_client_link', 'send_signature_papers', 'document_check', 'chronology', 'piece_text', 'deadline_confirm', 'file_or_hold',
-            'create_lawsuits', 'start_piece', 'request_package', 'sign_package', 'publication_deadline',
+            'create_lawsuits', 'start_piece', 'request_package', 'sign_package', 'file_lawsuit', 'publication_deadline',
             'publication_hearing', 'model_from_document']
   and (select bool_and(default_mode = 'auto' and not held) from public.autonomy_decisions)
   and (select task from public.autonomy_decisions where key = 'document_check') = 'caso.documento.conferencia'
   and (select task from public.autonomy_decisions where key = 'chronology') = 'caso.relato.cronologia'
-  and jsonb_array_length((select payload -> 'items' from res where name = 'read_a')) = 16
+  and jsonb_array_length((select payload -> 'items' from res where name = 'read_a')) = 17
   and (select bool_and(item ->> 'mode' = 'auto' and item ->> 'chosen' is null)
        from res, jsonb_array_elements(payload -> 'items') item where name = 'read_a'),
   'ONE decides by default each decision of the catalog, and anybody of the firm reads how the firm has them'

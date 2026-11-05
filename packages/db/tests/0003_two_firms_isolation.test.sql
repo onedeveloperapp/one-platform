@@ -207,6 +207,9 @@ insert into public.filing_package_items (org_id, package_id, position, name, fil
 insert into public.filing_receipts (org_id, package_id, proceeding_id, file_id, cnj, filed_on) values
   ('b1000000-0000-4000-8000-00000000000a', 'a9000000-0000-4000-8000-00000000000a', 'a8000000-0000-4000-8000-00000000000a', 'e3000000-0000-4000-8000-00000000000a', '50002023920998090051', current_date),
   ('b1000000-0000-4000-8000-00000000000b', 'a9000000-0000-4000-8000-00000000000b', 'a8000000-0000-4000-8000-00000000000b', 'e3000000-0000-4000-8000-00000000000b', '50003037620998090051', current_date);
+insert into public.filing_submissions (org_id, case_id, proceeding_id, package_id, channel, status, protocol) values
+  ('b1000000-0000-4000-8000-00000000000a', 'a3000000-0000-4000-8000-00000000000a', 'a8000000-0000-4000-8000-00000000000a', 'a9000000-0000-4000-8000-00000000000a', 'test_court', 'filed', 'TESTE-A'),
+  ('b1000000-0000-4000-8000-00000000000b', 'a3000000-0000-4000-8000-00000000000b', 'a8000000-0000-4000-8000-00000000000b', 'a9000000-0000-4000-8000-00000000000b', 'test_court', 'filed', 'TESTE-B');
 insert into public.proceeding_tracking (org_id, case_id, proceeding_id, cnj, source, status) values
   ('b1000000-0000-4000-8000-00000000000a', 'a3000000-0000-4000-8000-00000000000a', 'a8000000-0000-4000-8000-00000000000a', '50002023920998090051', 'projudi', 'tracked'),
   ('b1000000-0000-4000-8000-00000000000b', 'a3000000-0000-4000-8000-00000000000b', 'a8000000-0000-4000-8000-00000000000b', '50003037620998090051', 'projudi', 'tracked');
@@ -477,7 +480,7 @@ select is(
     'case_weather', 'cases', 'certificate_inventory', 'civil_court_answers', 'client_consents', 'client_links', 'client_notices', 'connections',
     'consent_acceptances',
     'deadlines', 'djen_captures', 'dossiers', 'draft_templates', 'entitlement_grants', 'files', 'filing_package_items', 'filing_packages',
-    'filing_receipts', 'firm_autonomy', 'firm_calendars',
+    'filing_receipts', 'filing_submissions', 'firm_autonomy', 'firm_calendars',
     'firm_claim_defaults', 'firm_invitations', 'firm_modules', 'firm_notice_kinds', 'firm_signers', 'flight_alerts', 'flight_checks', 'flight_segments', 'hearings', 'import_batches', 'import_rows', 'invoices',
     'issued_documents', 'lawyer_signature_uses', 'legal_sources', 'memberships',
     'movements', 'notice_optins', 'notice_stops', 'onboarding_state', 'partner_invitations', 'partner_links', 'pax_firm_clauses',
@@ -654,7 +657,7 @@ select is(
     'client_links', 'client_notices',
     'consent_acceptances', 'deadlines', 'djen_captures', 'dossiers', 'draft_templates', 'entitlement_grants', 'files',
     'filing_package_items', 'filing_packages',
-    'filing_receipts', 'firm_autonomy', 'firm_calendars', 'firm_claim_defaults', 'firm_modules', 'firm_notice_kinds', 'firm_signers', 'flight_alerts', 'flight_checks', 'flight_segments', 'hearings', 'import_batches',
+    'filing_receipts', 'filing_submissions', 'firm_autonomy', 'firm_calendars', 'firm_claim_defaults', 'firm_modules', 'firm_notice_kinds', 'firm_signers', 'flight_alerts', 'flight_checks', 'flight_segments', 'hearings', 'import_batches',
     'import_rows', 'invoices', 'issued_documents', 'lawyer_signature_uses', 'legal_sources',
     'memberships', 'movements', 'notice_optins', 'notice_stops', 'partner_links', 'pax_firm_clauses', 'people', 'proceeding_lawyers', 'proceeding_parties', 'proceeding_tracking', 'proceedings',
     'publication_readings', 'publications',
@@ -696,7 +699,7 @@ select is(
     'case_weather', 'cases', 'certificate_inventory', 'civil_court_answers', 'client_consents', 'client_links', 'client_notices', 'connections',
     'consent_acceptances',
     'deadlines', 'djen_captures', 'dossiers', 'draft_templates', 'entitlement_grants', 'files', 'filing_package_items', 'filing_packages',
-    'filing_receipts', 'firm_autonomy', 'firm_calendars',
+    'filing_receipts', 'filing_submissions', 'firm_autonomy', 'firm_calendars',
     'firm_claim_defaults', 'firm_invitations', 'firm_modules', 'firm_notice_kinds', 'firm_signers', 'flight_alerts', 'flight_checks', 'flight_segments', 'hearings', 'import_batches', 'import_rows', 'invoices',
     'issued_documents', 'lawyer_signature_uses', 'legal_sources', 'memberships',
     'movements', 'notice_optins', 'notice_stops', 'onboarding_state', 'partner_invitations', 'partner_links', 'pax_firm_clauses',

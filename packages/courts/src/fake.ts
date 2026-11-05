@@ -4,6 +4,9 @@ import type {
   CourtProceeding,
   DjenClient,
   DjenCommunication,
+  FilingChannel,
+  FilingOutcome,
+  LawsuitFiling,
   OabRegistration,
   ProceedingRead,
   ProceedingSource,
@@ -130,6 +133,87 @@ export class FakeProceedingSource implements ProceedingSource {
       found: true,
       proceeding,
       movements: proceeding.secret ? [] : [...movements].sort((a, b) => a.at.localeCompare(b.at)),
+    };
+  }
+}
+
+/** The national codes of an initial petition taken first (Resolução CNJ 46): 202 and its children 361, 362, 363. */
+const INITIAL_PETITION_TYPES = ["202", "361", "362", "363"];
+
+/** The bytes of a PDF: its header within the first 1,024 bytes. */
+const isPdf = (bytes: Uint8Array): boolean =>
+  bytes instanceof Uint8Array && new TextDecoder("latin1").decode(bytes.subarray(0, 1024)).includes("%PDF-");
+
+/**
+ * The two check digits of a CNJ number from its other 18, in the order Annex VIII of Resolução CNJ 65/2008 puts
+ * them (NNNNNNN AAAA J TR OOOO): 98 minus that number followed by 00, modulo 97. As `@flyee/rules/cnj` computes them.
+ */
+const cnjCheckDigits = (withoutCheck: string): string =>
+  String(98n - (BigInt(`${withoutCheck}00`) % 97n)).padStart(2, "0");
+
+/** The moment the fake court says it received a lawsuit, unless the test gives it a clock. */
+export const FAKE_FILING_CLOCK = "2026-10-15T13:00:00.000Z";
+
+/**
+ * A court's filing channel in memory, for development and tests. It takes what the MNI takes at the least (a
+ * plaintiff, a defendant, the initial petition first, every document a PDF) and refuses anything else, saying why;
+ * a lawsuit it takes gets the protocol `FAKE-<n>`, a number of TJGO of the year 2099 (segment 8, court 09, origin
+ * 0001, sequence n) with its check digits, a small receipt and the moment of its clock. Deterministic: no network,
+ * and a fixed clock unless the test gives one.
+ *
+ * It keeps every filing that reached it (`received`): taken, refused, or whose answer was lost. A test makes the
+ * next sending fail (`failNext`): `unavailable` reaches nothing (nothing is received); `unknown` reaches the fake
+ * court and answers nothing (it is received, and nothing of it is told).
+ */
+export class FakeFilingChannel implements FilingChannel {
+  readonly name = "fake";
+  readonly received: LawsuitFiling[] = [];
+  private readonly clock: () => Date;
+  private filed = 0;
+  private next: "unavailable" | "unknown" | null = null;
+
+  constructor(options: { now?: () => Date } = {}) {
+    this.clock = options.now ?? (() => new Date(FAKE_FILING_CLOCK));
+  }
+
+  /** The next sending fails so: `unavailable` (the court could not be reached) or `unknown` (no answer came). */
+  failNext(kind: "unavailable" | "unknown"): void {
+    this.next = kind;
+  }
+
+  async fileLawsuit(filing: LawsuitFiling): Promise<FilingOutcome> {
+    const failing = this.next;
+    this.next = null;
+    if (failing === "unavailable") return { kind: "unavailable", reason: "fake_unreachable" };
+    this.received.push(filing);
+    if (failing === "unknown") return { kind: "unknown", reason: "fake_no_answer" };
+
+    const problems: string[] = [];
+    if (filing.plaintiffs.length === 0) problems.push("a ação não tem autor");
+    if (filing.defendants.length === 0) problems.push("a ação não tem réu");
+    if (filing.documents.length === 0) problems.push("a ação não tem documento");
+    else if (!INITIAL_PETITION_TYPES.includes(filing.documents[0].typeCode)) {
+      problems.push("o primeiro documento não é a petição inicial");
+    }
+    filing.documents.forEach((document, index) => {
+      if (!isPdf(document.pdf)) problems.push(`o documento ${index + 1} não é um PDF`);
+    });
+    if (problems.length > 0) {
+      return { kind: "refused", protocol: null, message: `O tribunal simulado não recebeu: ${problems.join("; ")}.` };
+    }
+
+    this.filed += 1;
+    const sequence = String(this.filed).padStart(7, "0");
+    const rest = { year: "2099", segment: "8", court: "09", origin: "0001" };
+    const check = cnjCheckDigits(`${sequence}${rest.year}${rest.segment}${rest.court}${rest.origin}`);
+    const protocol = `FAKE-${this.filed}`;
+    return {
+      kind: "filed",
+      protocol,
+      caseNumber: `${sequence}${check}${rest.year}${rest.segment}${rest.court}${rest.origin}`,
+      receipt: new TextEncoder().encode(`%PDF-1.4\n% Recibo do tribunal simulado, protocolo ${protocol}\n%%EOF\n`),
+      at: this.clock(),
+      message: "Petição recebida pelo tribunal simulado.",
     };
   }
 }

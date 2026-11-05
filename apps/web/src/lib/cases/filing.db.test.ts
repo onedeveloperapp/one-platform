@@ -416,4 +416,63 @@ describe.skipIf(!DB_URL)("a filing package, built by the worker against the data
     // And while the package waits, nobody claims it.
     expect(await claimFilingPackages(backend() as never, 1, String(asked.package_id))).toEqual([]);
   }, 120_000);
+
+  it("leaves a real lawsuit to the lawyer while its court gives ONE no channel, and ONE files a test case itself (0101)", async () => {
+    const { buildFilingPackages } = await import("@/lib/cases/filing-work");
+    const submissions = async () =>
+      sql.unsafe(`select status, channel, protocol from public.filing_submissions where case_id = $1`, [caseId]);
+
+    // A real case: the package is built, and nothing is sent anywhere (the TJGO's channel is off).
+    const real = await ask(["identity"]);
+    expect(await buildFilingPackages(backend() as never, 1, String(real.package_id))).toEqual({ ready: 1 });
+    expect(await submissions()).toEqual([]);
+
+    // A test case: ONE files it in the test court as soon as its package is ready, and keeps the receipt. It goes
+    // signed by a lawyer of the lawsuit with a registration at the bar (what ONE names when it creates a lawsuit).
+    await sql.unsafe(`update public.cases set is_test = true where id = $1`, [caseId]);
+    await sql.unsafe(
+      `insert into public.oab_registrations (user_id, uf, number) values ($1, 'GO', '12345') on conflict do nothing`,
+      [ANA],
+    );
+    await sql.unsafe(
+      `insert into public.proceeding_lawyers (proceeding_id, user_id, org_id) values ($1, $2, $3) on conflict do nothing`,
+      [proceedingId, ANA, FIRM],
+    );
+    const test = await ask(["identity"]);
+    expect(await buildFilingPackages(backend() as never, 1, String(test.package_id))).toEqual({ ready: 1 });
+    const [sent] = await submissions();
+    expect([sent?.status, sent?.channel, String(sent?.protocol ?? "").startsWith("TESTE-")]).toEqual([
+      "filed",
+      "test_court",
+      true,
+    ]);
+    const lawsuit = (
+      await sql.unsafe(
+        `select p.status, p.cnj, public.test_court_number(p.id) as expected from public.proceedings p where p.id = $1`,
+        [proceedingId],
+      )
+    )[0];
+    expect([lawsuit.status, lawsuit.cnj]).toEqual(["filed", lawsuit.expected]);
+    const receipt = (
+      await sql.unsafe(
+        `select f.storage_path, f.purpose, r.recorded_by from public.filing_receipts r join public.files f on f.id = r.file_id
+         where r.package_id = $1`,
+        [test.package_id],
+      )
+    )[0];
+    expect([receipt?.purpose, receipt?.recorded_by]).toEqual(["filing_receipt", null]);
+    const stored = bucket.get(String(receipt?.storage_path)) as Uint8Array;
+    expect(new TextDecoder().decode(stored.slice(0, 5))).toBe("%PDF-");
+    expect(
+      Number(
+        (
+          await sql.unsafe(
+            `select count(*)::int as n from public.case_events where case_id = $1 and kind = 'filed_by_one'
+               and actor_type = 'system'`,
+            [caseId],
+          )
+        )[0].n,
+      ),
+    ).toBe(1);
+  }, 120_000);
 });

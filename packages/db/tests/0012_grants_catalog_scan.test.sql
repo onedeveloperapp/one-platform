@@ -131,6 +131,8 @@ select is(
   array[
     'billing_webhook_events',
     'connection_secrets',
+    -- Each court's channel to file by machine, the operator's data (0101): read through the backend's functions.
+    'court_filing_channels',
     'hearing_event_removals',
     'lead_submissions',
     'meta_attribution',

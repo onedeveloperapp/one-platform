@@ -22,6 +22,7 @@ export const AUTONOMY_DECISIONS = [
   "start_piece",
   "request_package",
   "sign_package",
+  "file_lawsuit",
   "publication_deadline",
   "publication_hearing",
   "model_from_document",
@@ -94,6 +95,7 @@ export const DECISION_KEY: Record<AutonomyDecision, { title: string; body: strin
   start_piece: { title: "autonomy-start-piece", body: "autonomy-start-piece-body" },
   request_package: { title: "autonomy-request-package", body: "autonomy-request-package-body" },
   sign_package: { title: "autonomy-sign-package", body: "autonomy-sign-package-body" },
+  file_lawsuit: { title: "autonomy-file-lawsuit", body: "autonomy-file-lawsuit-body" },
   publication_deadline: { title: "autonomy-publication-deadline", body: "autonomy-publication-deadline-body" },
   publication_hearing: { title: "autonomy-publication-hearing", body: "autonomy-publication-hearing-body" },
   model_from_document: { title: "autonomy-model-from-document", body: "autonomy-model-from-document-body" },
@@ -106,7 +108,7 @@ export const MODE_KEY: Record<AutonomyMode, string> = {
 };
 
 /** The decisions that are a lawyer's own acts: the screen says what the bar recommends beside them. */
-export const LAWYER_ACTS: readonly AutonomyDecision[] = ["piece_text", "file_or_hold", "sign_package"];
+export const LAWYER_ACTS: readonly AutonomyDecision[] = ["piece_text", "file_or_hold", "sign_package", "file_lawsuit"];
 
 /** The words of a refusal. */
 export function autonomyErrorKey(code: string): string {

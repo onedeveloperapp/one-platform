@@ -1,6 +1,7 @@
 import "server-only";
 
 import { FILING_LABEL } from "@/lib/cases/filing";
+import { submitFilings } from "@/lib/cases/filing-submit-work";
 import { signFilingPackages } from "@/lib/cases/package-signature-work";
 import { supabaseFileStore } from "@/lib/files/store";
 import { soon } from "@/lib/jobs/soon";
@@ -222,7 +223,11 @@ export async function buildFilingPackages(
     const outcome = await buildClaimedPackage(service, held).catch(() => "error");
     outcomes[outcome] = (outcomes[outcome] ?? 0) + 1;
     // A package built may owe its signature (0042): signed now, in the same work.
-    if (outcome === "ready") await signFilingPackages(service, 1, held.packageId).catch(() => undefined);
+    if (outcome === "ready") {
+      await signFilingPackages(service, 1, held.packageId).catch(() => undefined);
+      // And filed, where ONE files it (0101): a package nothing keeps from being filed goes to the court now.
+      await submitFilings(service, 1, held.packageId).catch(() => undefined);
+    }
   }
   return outcomes;
 }

@@ -36,6 +36,7 @@ describe("the platform's sweeps (2026-11-04)", () => {
         "djen-capture",
         "files-upkeep",
         "filing-packages",
+        "filing-submissions",
         "flight-alerts",
         "flight-checks",
         "flight-watch",

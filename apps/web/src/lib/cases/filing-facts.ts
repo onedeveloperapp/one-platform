@@ -57,6 +57,62 @@ export type FilingSignature = {
 export type FilingReceipt = { id: string; cnj: string; filedOn: string };
 
 /** The package of a lawsuit, as the case shows it. */
+/**
+ * ONE filing a package itself (0101): through which channel (the court's MNI, or the test court of a test case), what
+ * keeps it from doing so now, how the firm has the decision, and what came of the submission. Null when it could
+ * not be read: the card then shows the lawyer's own way, as before.
+ */
+export type FilingByOne = {
+  channel: "mni" | "test_court" | null;
+  blocker: string | null;
+  mode: "auto" | "sampled" | "approval";
+  submission: {
+    id: string;
+    status: "owed" | "claimed" | "sending" | "filed" | "refused" | "unknown" | "failed";
+    channel: "mni" | "test_court";
+    protocol: string | null;
+    caseNumber: string | null;
+    message: string | null;
+    error: string | null;
+    attempts: number;
+    retryAfter: string | null;
+    filedAt: string | null;
+    requested: boolean;
+  } | null;
+};
+
+const SUBMISSION_STATUSES = ["owed", "claimed", "sending", "filed", "refused", "unknown", "failed"] as const;
+
+/** One package's row of `case_filing_by_one`, read. */
+function filingByOneOf(row: Record<string, unknown>): FilingByOne {
+  const sub = row.submission && typeof row.submission === "object" ? (row.submission as Record<string, unknown>) : null;
+  const status = (SUBMISSION_STATUSES as readonly unknown[]).includes(sub?.status)
+    ? (sub?.status as FilingByOne["submission"] extends infer S ? (S extends { status: infer T } ? T : never) : never)
+    : null;
+  const text = (value: unknown) => (typeof value === "string" && value !== "" ? value : null);
+  return {
+    channel: row.channel === "mni" || row.channel === "test_court" ? row.channel : null,
+    blocker: text(row.blocker),
+    mode: row.mode === "approval" || row.mode === "sampled" ? row.mode : "auto",
+    submission:
+      sub && status
+        ? {
+            id: String(sub.id),
+            status,
+            channel: sub.channel === "mni" ? "mni" : "test_court",
+            protocol: text(sub.protocol),
+            caseNumber: text(sub.case_number),
+            message: text(sub.message),
+            error: text(sub.error),
+            attempts: typeof sub.attempts === "number" ? sub.attempts : 0,
+            retryAfter: text(sub.retry_after),
+            filedAt: text(sub.filed_at),
+            requested: sub.requested === true,
+          }
+        : null,
+  };
+}
+
 export type CaseFiling = {
   id: string;
   proceedingId: string;
@@ -88,6 +144,8 @@ export type CaseFiling = {
    */
   blocker: string | null;
   signature: FilingSignature;
+  /** ONE filing it itself (0101); null when it could not be read. */
+  byOne: FilingByOne | null;
 };
 
 type Embedded<T> = T | T[] | null;
@@ -173,6 +231,7 @@ function toFiling(row: PackageRow, timeZone: string | null | undefined, context:
     requestedAt: row.requested_at,
     slow: row.status === "requested" && Date.now() - new Date(row.requested_at).getTime() > SLOW_MINUTES * 60_000,
     blocker: null,
+    byOne: null,
     signature: {
       takesSigned: context.takesSigned,
       cloudSigning: context.cloudSigning,
@@ -277,14 +336,28 @@ export async function loadCaseFilings(
       }) ?? []
     );
   });
-  const blockers = await blockersOf(
-    supabase,
-    firmId,
-    filings.filter((filing) => filing.status !== "filed").map((filing) => filing.proceedingId),
-  );
-  return filings.map((filing) =>
-    filing.status === "filed" ? filing : { ...filing, blocker: blockers.get(filing.proceedingId) ?? null },
-  );
+  const [blockers, byOne] = await Promise.all([
+    blockersOf(
+      supabase,
+      firmId,
+      filings.filter((filing) => filing.status !== "filed").map((filing) => filing.proceedingId),
+    ),
+    // What ONE does with each package (0101). A read that fails says nothing of it: the lawyer's own way shows.
+    supabase.rpc("case_filing_by_one", { target_case: caseId }).then(
+      ({ data, error }) =>
+        new Map(
+          error || !Array.isArray(data)
+            ? []
+            : (data as Record<string, unknown>[]).map((row) => [String(row.package_id), filingByOneOf(row)] as const),
+        ),
+      () => new Map<string, FilingByOne>(),
+    ),
+  ]);
+  return filings.map((filing) => ({
+    ...filing,
+    blocker: filing.status === "filed" ? filing.blocker : (blockers.get(filing.proceedingId) ?? null),
+    byOne: byOne.get(filing.id) ?? null,
+  }));
 }
 
 /** What keeps each lawsuit named from being filed now, by lawsuit. Throws when it could not be read. */

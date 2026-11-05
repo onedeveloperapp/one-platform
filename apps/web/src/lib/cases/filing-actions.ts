@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { cnjDigits } from "@/lib/cases/filing";
+import { queueFilingSubmission } from "@/lib/cases/filing-submit-work";
 import { queueFilingPackage } from "@/lib/cases/filing-work";
 import { queuePackageSignature } from "@/lib/cases/package-signature-work";
 import { discardUpload, downloadUrl, finishUpload } from "@/lib/files/uploads";
@@ -14,7 +15,8 @@ import { isSupportVisit } from "@/lib/whatsapp/session";
  * (migration 0027): ask for it, give it up, download its files in their
  * order and attach the receipt the court's system gave. Every write is a
  * function of the database; these actions carry the request and turn the
- * answer into a code the screen has words for. ONE files nothing: the lawyer
+ * answer into a code the screen has words for. ONE files the lawsuit itself
+ * through the court's own channel where it can (0101); elsewhere the lawyer
  * files in the court's own system.
  */
 
@@ -187,4 +189,49 @@ export async function openFilingReceipt(
   if (!receipt) return { ok: false, code: "not_found" };
   const link = await downloadUrl(context, receipt.file_id as string);
   return link.ok ? { ok: true, url: link.url } : { ok: false, code: link.code };
+}
+
+/**
+ * A lawyer asks ONE to file a package, where the firm keeps the filing to a lawyer (0101): with the second factor.
+ * ONE files it right after the answer.
+ */
+export async function requestFilingByOne(caseId: string, packageId: string): Promise<FilingResult> {
+  const context = await getMemberContext();
+  if (!context?.firm || !isId(caseId) || !isId(packageId)) return { ok: false, code: "not_found" };
+  const { data, error } = await context.supabase.rpc("request_filing_submission", { target_package: packageId });
+  if (error && (error.message ?? "").includes("second_factor_required"))
+    return { ok: false, code: "second_factor_required" };
+  const result = fold(data, error, () => ({}));
+  if (result.ok) {
+    refresh(caseId);
+    queueFilingSubmission(packageId);
+  }
+  return result;
+}
+
+/**
+ * A lawyer has ONE send a filing again: one the court refused or could not be reached for, or one whose answer
+ * nobody could read, this one only once they say the court's system does not have the lawsuit (0101).
+ */
+export async function retryFilingByOne(input: {
+  caseId: string;
+  packageId: string;
+  submissionId: string;
+  notInCourt: boolean;
+}): Promise<FilingResult> {
+  const context = await getMemberContext();
+  if (!context?.firm || !isId(input?.caseId) || !isId(input?.packageId) || !isId(input?.submissionId))
+    return { ok: false, code: "not_found" };
+  const { data, error } = await context.supabase.rpc("retry_filing_submission", {
+    target_submission: input.submissionId,
+    target_not_in_court: input.notInCourt === true,
+  });
+  if (error && (error.message ?? "").includes("second_factor_required"))
+    return { ok: false, code: "second_factor_required" };
+  const result = fold(data, error, () => ({}));
+  if (result.ok) {
+    refresh(input.caseId);
+    queueFilingSubmission(input.packageId);
+  }
+  return result;
 }

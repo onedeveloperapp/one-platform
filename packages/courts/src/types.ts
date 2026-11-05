@@ -147,3 +147,95 @@ export interface ProceedingSource {
    */
   read(cnj: string): Promise<ProceedingRead>;
 }
+
+// ---------- Filing a lawsuit through a court's own channel (the MNI) ----------
+
+/**
+ * A party of a lawsuit to be filed, as a court's filing channel takes it.
+ * What is not on record goes as such, never invented: the MNI's own "D"
+ * ("desconhecido") for a sex nobody wrote, no document, no address.
+ */
+export type FilingParty = {
+  name: string;
+  sex: "M" | "F" | "D";
+  kind: "fisica" | "juridica";
+  /** A CPF (11 digits) or a CNPJ (14 digits), digits only; null when not on record. */
+  document: string | null;
+  address: {
+    street: string;
+    number: string | null;
+    complement: string | null;
+    district: string | null;
+    city: string;
+    /** The state's two letters. */
+    state: string;
+    /** The CEP, digits only. */
+    zip: string | null;
+  } | null;
+  /** The lawyers who sign for the party: the registration as the MNI writes it (UF, seven digits, a letter). */
+  lawyers: { name: string; oab: string; cpf: string | null }[];
+  /** Who answers for a party who is a minor, named on the party. */
+  representedBy: { name: string; document: string | null } | null;
+};
+
+/** A document of the filing, the petition first. */
+export type FilingDocument = {
+  /** Its own id at the sender, unique within the filing. */
+  id: string;
+  /**
+   * The national code of its type (Resolução CNJ 46): 202 the initial petition, 99 a power of attorney, 65 an
+   * identity, 277 a proof of address; the court's table says which it takes.
+   */
+  typeCode: string;
+  description: string;
+  pdf: Uint8Array;
+  /** The lawyer's signature over it, when the court takes one: the CMS (`.p7s`) and the signer's certificate (PEM). */
+  signature: { cms: Uint8Array; certificatePem: string; signedAt: Date } | null;
+};
+
+/** A new lawsuit, as a court's filing channel takes it. Every code is the court's, from the platform's table. */
+export type LawsuitFiling = {
+  /** The locality (comarca) the lawsuit is distributed in, by the court's own code. */
+  localityCode: string;
+  /** The court's code of the competence the lawsuit goes to, when it asks one. */
+  competence: number | null;
+  /** The judging body it is addressed to; the MNI asks one even of an initial petition. */
+  judgingBody: { code: string; name: string; ibgeCity: string };
+  /** The class of the lawsuit (Resolução CNJ 46): 436 the small-claims court, 7 the common civil procedure. */
+  classCode: number;
+  /** Its subjects (Resolução CNJ 46), one of them the main one. */
+  subjects: { code: number; main: boolean }[];
+  /** The value of the cause, in reais; null when none is given (the judge defines it). */
+  value: number | null;
+  plaintiffs: FilingParty[];
+  defendants: FilingParty[];
+  /** The petition first, then the documents, in the order of the filing package. */
+  documents: FilingDocument[];
+  sentAt: Date;
+};
+
+/**
+ * What sending a lawsuit came to:
+ * - `filed`: the court received it, with its protocol, the lawsuit's number when the court said it, and the
+ *   receipt it gave (a PDF);
+ * - `refused`: the court answered it did not take it, and why (nothing was filed);
+ * - `unavailable`: the court could not be reached, and nothing was sent (safe to send again later);
+ * - `unknown`: it was sent and no answer could be read: it may have been filed, so it is never sent again
+ *   by itself (a person looks in the court's system first).
+ */
+export type FilingOutcome =
+  | { kind: "filed"; protocol: string; caseNumber: string | null; receipt: Uint8Array | null; at: Date; message: string | null }
+  | { kind: "refused"; protocol: string | null; message: string }
+  | { kind: "unavailable"; reason: string }
+  | { kind: "unknown"; reason: string };
+
+/**
+ * A court's own channel to file a new lawsuit by machine: the MNI
+ * (`entregarManifestacaoProcessual`), with the credential the court gave.
+ * Never a lawyer's login on the court's screen.
+ */
+export interface FilingChannel {
+  /** Which channel this is ("mni", "fake", "test_court"). */
+  readonly name: string;
+  fileLawsuit(filing: LawsuitFiling): Promise<FilingOutcome>;
+}

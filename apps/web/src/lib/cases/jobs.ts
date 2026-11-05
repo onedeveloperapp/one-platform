@@ -3,6 +3,7 @@ import "server-only";
 import { advanceOne, followSoon } from "@/lib/cases/advance-work";
 import { claimCaseDocuments, processClaimedDocument } from "@/lib/cases/documents-work";
 import { approveWaitingDrafts, draftNext } from "@/lib/cases/drafts-work";
+import { submitFilings } from "@/lib/cases/filing-submit-work";
 import { buildClaimedPackage, claimFilingPackages } from "@/lib/cases/filing-work";
 import { answerFromStatement, sweepInterviews } from "@/lib/cases/interview-work";
 import { claimPackageSignatures, signClaimedPackage, signFilingPackages } from "@/lib/cases/package-signature-work";
@@ -104,7 +105,28 @@ export const caseSweeps: Sweep[] = [
         if (!held) break;
         const outcome = await buildClaimedPackage(service, held).catch(() => "error");
         tally(outcomes, outcome);
-        if (outcome === "ready") await signFilingPackages(service, 1, held.packageId).catch(() => undefined);
+        if (outcome === "ready") {
+          await signFilingPackages(service, 1, held.packageId).catch(() => undefined);
+          await submitFilings(service, 1, held.packageId).catch(() => undefined);
+        }
+      }
+      return outcomes;
+    },
+  },
+  /**
+   * ONE files the lawsuits (migration 0101): a package ready that nothing keeps from being filed goes through the
+   * court's channel (or the test court), once; a court out of reach is tried again after its wait. A few a round.
+   */
+  {
+    key: "filing-submissions",
+    when: { every: 5 },
+    whileUsed: true,
+    run: async (service, until) => {
+      const outcomes: Record<string, number> = {};
+      for (let turn = 0; turn < 2 && Date.now() < until; turn += 1) {
+        const round = await submitFilings(service, 1, null);
+        if (Object.keys(round).length === 0) break;
+        for (const [key, count] of Object.entries(round)) outcomes[key] = (outcomes[key] ?? 0) + count;
       }
       return outcomes;
     },

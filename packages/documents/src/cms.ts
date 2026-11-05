@@ -273,7 +273,14 @@ const sameBytes = (a: ArrayBuffer | Uint8Array, b: ArrayBuffer | Uint8Array): bo
  */
 export async function readAttachedCms(
   bytes: Uint8Array,
-): Promise<{ content: Uint8Array; signed: boolean; signerSubject: string; signerSerialHex: string }> {
+): Promise<{
+  content: Uint8Array;
+  signed: boolean;
+  signerSubject: string;
+  signerSerialHex: string;
+  /** The signer's certificate in PEM, what a court's channel asks beside the signature (the MNI); empty when absent. */
+  signerCertificatePem: string;
+}> {
   ensureEngine();
   const contentInfo = pkijs.ContentInfo.fromBER(ownBuffer(bytes));
   if (contentInfo.contentType !== OID.signedData) throw new Error("cms: not a signed data");
@@ -321,5 +328,13 @@ export async function readAttachedCms(
     signed,
     signerSubject: typeof subject === "string" ? subject : "",
     signerSerialHex: certificate ? Buffer.from(certificate.serialNumber.valueBlock.valueHexView).toString("hex") : "",
+    signerCertificatePem: certificate
+      ? `-----BEGIN CERTIFICATE-----\n${
+          Buffer.from(certificate.toSchema().toBER(false))
+            .toString("base64")
+            .match(/.{1,64}/g)
+            ?.join("\n") ?? ""
+        }\n-----END CERTIFICATE-----`
+      : "",
   };
 }

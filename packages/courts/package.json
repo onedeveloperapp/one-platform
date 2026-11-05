@@ -12,6 +12,7 @@
     "./oab": "./src/oab.ts",
     "./providers/djen": "./src/providers/djen.ts",
     "./providers/projudi": "./src/providers/projudi.ts",
+    "./providers/mni": "./src/providers/mni.ts",
     "./providers/aggregator-http": "./src/providers/aggregator-http.ts",
     "./providers/escavador": "./src/providers/escavador.ts",
     "./providers/judit": "./src/providers/judit.ts",
@@ -19,6 +20,6 @@
     "./compare": "./src/compare.ts"
   },
   "scripts": {
-    "test": "node --experimental-strip-types --test src/contract.test.ts src/filing.test.ts src/proceedings.test.ts"
+    "test": "node --experimental-strip-types --test src/contract.test.ts src/filing.test.ts src/proceedings.test.ts src/filing-channel.test.ts"
   }
 }

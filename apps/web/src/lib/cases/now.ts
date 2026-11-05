@@ -106,6 +106,8 @@ type Filing = {
   slow?: boolean;
   blocker: string | null;
   signature: { takesSigned: boolean; status: "due" | "waiting" | "signed" | "failed" | null };
+  /** ONE filing it itself (0101): through which channel, what keeps it from doing so, and what came of its sending. */
+  byOne?: { channel: string | null; blocker: string | null; submission: { status: string } | null } | null;
 };
 type Deadline = { id: string; status: string; overdue: boolean; review: boolean };
 type Hearing = { id: string; status: string; startsAt: string; timeZone: string };
@@ -162,6 +164,14 @@ const dayWords = (day: string) =>
 const SYSTEMS = ["projudi", "eproc", "pje", "esaj", "outro"];
 /** A court's system in its own name ("PJe"), or as it is written when the screen has no word for it. */
 const systemWord = (system: string) => (SYSTEMS.includes(system) ? { message: `case-system-${system}` } : system);
+
+/** What came of ONE's filing, where a lawyer takes it up (0101). */
+const FILING_SENT_KEY: Record<"refused" | "failed" | "unknown" | "filed", string> = {
+  refused: "case-now-filing-one-refused",
+  failed: "case-now-filing-one-failed",
+  unknown: "case-now-filing-one-unknown",
+  filed: "case-now-filing-one-unnumbered",
+};
 
 const documentWord = (kind: string) => (isDocumentKind(kind) ? DOCUMENT_KIND_KEY[kind] : "case-now-document");
 
@@ -829,16 +839,45 @@ export function caseNow(input: CaseNowInput): CaseNow {
             }),
           );
         } else {
-          blocking.push(
-            item({
-              id: `filing:${filing.id}`,
-              owner: "firm",
-              actor: "lawyer",
-              tone: "attention",
-              text: { key: "case-now-filing-ready", values: { kind, system: systemWord(filing.system) } },
-              section: "filing",
-            }),
-          );
+          // ONE files it itself through the court's channel (0101): its work, until the court refuses it, does not
+          // answer, or takes it without a number, which a lawyer then takes up.
+          const byOne = filing.byOne ?? null;
+          const sent = byOne?.submission?.status ?? null;
+          const where =
+            byOne?.channel === "test_court" ? { message: "filing-one-test-court" } : systemWord(filing.system);
+          if (sent === "refused" || sent === "failed" || sent === "unknown" || sent === "filed") {
+            blocking.push(
+              item({
+                id: `filing:${filing.id}`,
+                owner: "firm",
+                actor: "lawyer",
+                tone: sent === "unknown" || sent === "filed" ? "attention" : "failed",
+                text: { key: FILING_SENT_KEY[sent], values: { kind, system: where } },
+                section: "filing",
+              }),
+            );
+          } else if (byOne?.channel && (sent !== null || byOne.blocker === null)) {
+            working.push(
+              item({
+                id: `filing:${filing.id}`,
+                owner: "one",
+                tone: "waiting",
+                text: { key: "case-now-filing-one", values: { kind, system: where } },
+                section: "filing",
+              }),
+            );
+          } else {
+            blocking.push(
+              item({
+                id: `filing:${filing.id}`,
+                owner: "firm",
+                actor: "lawyer",
+                tone: "attention",
+                text: { key: "case-now-filing-ready", values: { kind, system: systemWord(filing.system) } },
+                section: "filing",
+              }),
+            );
+          }
         }
       }
     }

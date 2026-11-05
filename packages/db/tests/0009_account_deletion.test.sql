@@ -286,6 +286,7 @@ select is(
     'filing_package_items.file_id',
     'filing_package_items.signed_file_id',
     'filing_receipts.file_id',
+    'filing_submissions.receipt_file_id',
     'firm_modules.module_key',
     'firm_notice_kinds.kind',
     'flight_segments.destination_iata',

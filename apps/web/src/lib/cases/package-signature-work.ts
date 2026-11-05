@@ -195,6 +195,11 @@ export async function signFilingPackages(
   for (const held of await claimPackageSignatures(service, limit, packageId)) {
     const outcome = await signClaimedPackage(service, held).catch(() => "error");
     outcomes[outcome] = (outcomes[outcome] ?? 0) + 1;
+    // Signed, it may go to the court at once, where ONE files it (0101).
+    if (outcome === "signed") {
+      const { submitFilings } = await import("@/lib/cases/filing-submit-work");
+      await submitFilings(service, 1, held.packageId).catch(() => undefined);
+    }
   }
   return outcomes;
 }

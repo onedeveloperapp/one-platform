@@ -2,6 +2,7 @@
 
 import type { CaseFiling, CaseProceeding, CaseState } from "../case-types";
 import CourtSystem from "./court-system";
+import FilingByOne, { filedWithoutNumber, oneFilesIt } from "./filing-by-one";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
@@ -38,8 +39,10 @@ import {
   cancelFilingPackage,
   openFilingFile,
   openFilingReceipt,
+  requestFilingByOne,
   requestFilingPackage,
   requestPackageSignature,
+  retryFilingByOne,
 } from "@/lib/cases/filing-actions";
 import { dropUnsaved, sendForReading } from "@/lib/cases/prefill-browser";
 import { opensOnArrival } from "@/lib/cases/sections";
@@ -435,6 +438,10 @@ function Lawsuit({
   // Only the lawyer whose certificate signed the files takes the .p7s out of ONE, to file them.
   const ownSignedFiles = signedFiles && viewerSigned && writable && !held;
   const stepsFiles: FilingFiles = !signature?.takesSigned ? "court" : ownSignedFiles ? "signed" : "sign_first";
+  // ONE files the lawsuit itself through the court's channel, or is about to (0101): the lawyer's own steps step back.
+  const oneFiles = !held && oneFilesIt(filing);
+  // The court took it from ONE and gave no number to read: what is left of the lawyer's way is the receipt.
+  const unnumbered = filedWithoutNumber(filing);
 
   return (
     <Box className="border-grey-100 flex flex-col gap-3 rounded-2xl border p-4">
@@ -489,6 +496,29 @@ function Lawsuit({
             {t("filing-receipt-open")}
           </Button>
         </Box>
+      ) : null}
+
+      {filing?.byOne && showPackage && !(held && filing.status === "ready") ? (
+        <FilingByOne
+          filing={filing}
+          systemName={systemName}
+          mayAct={writable && state.lawyer}
+          busy={busy !== null}
+          onRequest={() => void run("file", () => requestFilingByOne(state.case.id, filing.id), onStarted)}
+          onRetry={(notInCourt) =>
+            void run(
+              "file",
+              () =>
+                retryFilingByOne({
+                  caseId: state.case.id,
+                  packageId: filing.id,
+                  submissionId: filing.byOne?.submission?.id ?? "",
+                  notInCourt,
+                }),
+              onStarted,
+            )
+          }
+        />
       ) : null}
 
       {proceeding.status === "planned" && (!proceeding.court || !proceeding.system) ? (
@@ -629,20 +659,22 @@ function Lawsuit({
             ))}
           </Box>
 
-          <Box className="flex flex-col gap-1">
-            <Typography variant="body2" className="text-text-secondary">
-              {t("filing-steps-title")}
-            </Typography>
-            <Box component="ol" className="m-0 flex list-decimal flex-col gap-1 pl-5">
-              {filingStepsOf(filing.system, stepsFiles).map((step) => (
-                <Typography component="li" variant="body1" key={step}>
-                  {t(step)}
-                </Typography>
-              ))}
+          {oneFiles || unnumbered ? null : (
+            <Box className="flex flex-col gap-1">
+              <Typography variant="body2" className="text-text-secondary">
+                {t("filing-steps-title")}
+              </Typography>
+              <Box component="ol" className="m-0 flex list-decimal flex-col gap-1 pl-5">
+                {filingStepsOf(filing.system, stepsFiles).map((step) => (
+                  <Typography component="li" variant="body1" key={step}>
+                    {t(step)}
+                  </Typography>
+                ))}
+              </Box>
             </Box>
-          </Box>
+          )}
 
-          {outdated || blocked ? null : writable && state.lawyer ? (
+          {outdated || blocked || oneFiles ? null : writable && state.lawyer ? (
             <Box className="border-grey-100 flex flex-col gap-3 rounded-2xl border p-4">
               <Typography variant="body1" className="font-semibold">
                 {t("filing-receipt-title")}
