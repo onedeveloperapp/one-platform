@@ -417,8 +417,13 @@ export function caseNow(input: CaseNowInput): CaseNow {
         }),
       );
     }
+    // What the client still owes of it holds the case only before its lawsuits: ONE waits for it to create them.
+    // Once they exist it holds nothing, and goes to the piece when it comes (ONE writes it again, 0097), which the
+    // card of the account says.
+    const accountHolds = input.proceedings.length === 0;
     switch (input.account) {
       case "missing":
+        if (!accountHolds) break;
         blocking.push(
           item({
             id: "account:missing",
@@ -455,6 +460,7 @@ export function caseNow(input: CaseNowInput): CaseNow {
         );
         break;
       case "incomplete":
+        if (!accountHolds) break;
         blocking.push(
           item({
             id: "account:incomplete",

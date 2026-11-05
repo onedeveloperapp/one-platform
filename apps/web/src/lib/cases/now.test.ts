@@ -95,6 +95,18 @@ describe("caseNow", () => {
     expect(now.sections.trip).toMatchObject({ client: true });
   });
 
+  it("holds the case on the client's account only before its lawsuits, never after (0097)", () => {
+    expect(ids(caseNow(base({ account: "incomplete" })).blocking)).toContain("account:incomplete");
+    expect(ids(caseNow(base({ account: "missing" })).blocking)).toContain("account:missing");
+    for (const account of ["incomplete", "missing"] as const) {
+      const now = caseNow(base({ status: "drafting", account, proceedings: [planned] }));
+      expect(ids(now.blocking)).not.toContain(`account:${account}`);
+      expect(now.sections.statements).not.toMatchObject({ client: true });
+    }
+    // What the firm decides of an account still asks the firm: its approval writes the piece again.
+    expect(ids(caseNow(base({ account: "proposed", proceedings: [planned] })).blocking)).toContain("account:proposed");
+  });
+
   it("says the package waits for a lawyer to file it, never that the case is with ONE", () => {
     const now = caseNow(
       base({
