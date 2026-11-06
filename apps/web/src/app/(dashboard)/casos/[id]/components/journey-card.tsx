@@ -10,10 +10,8 @@ import { Box, Button, Card, CardContent, Collapse, Typography } from "@mui/mater
 import ActivityCards, { type ActivityItem } from "@/components/product/activity-cards";
 import ProgressSteps, { ProgressBar, ProgressNow, type ProgressStep } from "@/components/product/progress-steps";
 import StateLine from "@/components/product/state-line";
-import StatusChip, { type StatusTone } from "@/components/product/status-chip";
 import type { TileTone } from "@/components/product/tile-tone";
 import type { LiveRead } from "@/components/product/use-live-read";
-import NiAi from "@/icons/nexture/ni-ai";
 import NiCalendar from "@/icons/nexture/ni-calendar";
 import NiClock from "@/icons/nexture/ni-clock";
 import NiDocumentFull from "@/icons/nexture/ni-document-full";
@@ -21,7 +19,6 @@ import NiFlag from "@/icons/nexture/ni-flag";
 import NiFolder from "@/icons/nexture/ni-folder";
 import NiInbox from "@/icons/nexture/ni-inbox";
 import NiLink from "@/icons/nexture/ni-link";
-import NiLoader from "@/icons/nexture/ni-loader";
 import NiMessageDots from "@/icons/nexture/ni-message-dots";
 import NiMessages from "@/icons/nexture/ni-messages";
 import NiMicrophone from "@/icons/nexture/ni-microphone";
@@ -66,24 +63,24 @@ type Ready = Extract<CaseState, { kind: "ready" }>;
 // Typed by the sections a case may have, "publications" included whether or not the case's card of its publications is
 // in this build yet: every card a thing of ONE leads to has its look, and one with none takes ONE's own.
 const SECTION_LOOK: Partial<Record<CaseSection | "publications", { icon: ReactNode; tone: TileTone }>> = {
-  people: { icon: <NiUsers size="medium" />, tone: "primary" },
-  trip: { icon: <NiPlane size="medium" />, tone: "secondary" },
-  statements: { icon: <NiMicrophone size="medium" />, tone: "accent-1" },
-  documents: { icon: <NiPaperclip size="medium" />, tone: "secondary" },
-  complaints: { icon: <NiFlag size="medium" />, tone: "accent-4" },
-  signatures: { icon: <NiPen size="medium" />, tone: "accent-2" },
-  rules: { icon: <NiScale size="medium" />, tone: "accent-4" },
-  proceedings: { icon: <NiTimeline size="medium" />, tone: "primary" },
-  deadlines: { icon: <NiClock size="medium" />, tone: "accent-2" },
-  hearings: { icon: <NiCalendar size="medium" />, tone: "accent-2" },
-  publications: { icon: <NiInbox size="medium" />, tone: "accent-2" },
-  drafts: { icon: <NiDocumentFull size="medium" />, tone: "accent-1" },
-  filing: { icon: <NiSendRight size="medium" />, tone: "primary" },
-  link: { icon: <NiLink size="medium" />, tone: "secondary" },
-  notices: { icon: <NiMessages size="medium" />, tone: "secondary" },
-  summary: { icon: <NiDocumentFull size="medium" />, tone: "primary" },
-  dossier: { icon: <NiFolder size="medium" />, tone: "primary" },
-  timeline: { icon: <NiTimeline size="medium" />, tone: "primary" },
+  people: { icon: <NiUsers size="small" />, tone: "primary" },
+  trip: { icon: <NiPlane size="small" />, tone: "secondary" },
+  statements: { icon: <NiMicrophone size="small" />, tone: "accent-1" },
+  documents: { icon: <NiPaperclip size="small" />, tone: "secondary" },
+  complaints: { icon: <NiFlag size="small" />, tone: "accent-4" },
+  signatures: { icon: <NiPen size="small" />, tone: "accent-2" },
+  rules: { icon: <NiScale size="small" />, tone: "accent-4" },
+  proceedings: { icon: <NiTimeline size="small" />, tone: "primary" },
+  deadlines: { icon: <NiClock size="small" />, tone: "accent-2" },
+  hearings: { icon: <NiCalendar size="small" />, tone: "accent-2" },
+  publications: { icon: <NiInbox size="small" />, tone: "accent-2" },
+  drafts: { icon: <NiDocumentFull size="small" />, tone: "accent-1" },
+  filing: { icon: <NiSendRight size="small" />, tone: "primary" },
+  link: { icon: <NiLink size="small" />, tone: "secondary" },
+  notices: { icon: <NiMessages size="small" />, tone: "secondary" },
+  summary: { icon: <NiDocumentFull size="small" />, tone: "primary" },
+  dossier: { icon: <NiFolder size="small" />, tone: "primary" },
+  timeline: { icon: <NiTimeline size="small" />, tone: "primary" },
 };
 
 /** How many of ONE's latest events are read to make the cards, and how many cards show. */
@@ -110,22 +107,6 @@ const STEP_SECTION: Partial<Record<JourneyStepId, CaseSection>> = {
   drafting: "drafts",
   filing: "filing",
   hearing: "hearings",
-};
-
-/** The tint of whose turn a line is: the firm's to act, the client's and ONE's under way, the platform's only said. */
-const OWNER_TONE: Record<NowItem["owner"], StatusTone> = {
-  firm: "attention",
-  client: "info",
-  one: "info",
-  platform: "neutral",
-};
-
-/** How many lines of what holds the case are each owner's, in the order the list says them. */
-const OWNER_COUNT_KEY: Record<NowItem["owner"], string> = {
-  firm: "case-now-count-firm",
-  client: "case-now-count-client",
-  one: "case-now-count-one",
-  platform: "case-now-count-platform",
 };
 
 /** A day as the steps say it: "3 de nov.", with the year when it is not this one. A bare day is the day itself. */
@@ -220,8 +201,14 @@ export default function JourneyCard({
     ? t("journey-next-hearing", { day: hearingAt.day, time: hearingAt.time })
     : journey.current === "hearing" &&
         !journey.ended &&
-        // A publication that waits for triage may be the hearing the court marked: its own line says so.
-        !now.blocking.some((line) => line.id.startsWith("hearing:") || line.id === "publications:untriaged")
+        // A publication that waits for triage, or whose hearing ONE is reading or could not read, may be the hearing
+        // the court marked: its own line says so.
+        ![...now.blocking, ...now.working].some(
+          (line) =>
+            line.id.startsWith("hearing:") ||
+            line.id === "publications:untriaged" ||
+            (line.id.startsWith("reading:") && line.id.endsWith(":hearing")),
+        )
       ? t("journey-hearing-unset")
       : null;
 
@@ -300,7 +287,7 @@ export default function JourneyCard({
   // What ONE did a moment ago, the same kind of thing once (the latest of it), with how many times: two movements of
   // the court are one card that says two, never two cards that say the same.
   const recent: ActivityItem[] = [];
-  const seen = new Map<string, { item: ActivityItem; times: number; movements: number }>();
+  const seen = new Map<string, { item: ActivityItem; times: number; movements: number; ai: boolean }>();
   for (const event of recentByOne(state.events, state.readAt, 24, RECENT_READ)) {
     const group = seen.get(event.kind);
     const movements = typeof event.data.count === "number" ? event.data.count : 0;
@@ -311,13 +298,13 @@ export default function JourneyCard({
     }
     if (seen.size >= RECENT_CARDS) continue;
     const section = sectionOfEvent(event.kind);
-    // A publication the DJEN brought is triaged where every publication is: its own screen.
+    // A publication the DJEN brought is worked on the case's own card of publications.
     const publication = event.kind.startsWith("publication_");
     const look =
       (section ? SECTION_LOOK[section] : undefined) ??
       (publication
-        ? { icon: <NiInbox size="medium" />, tone: "accent-4" as const }
-        : { icon: <NiRobot size="medium" />, tone: "primary" as const });
+        ? { icon: <NiInbox size="small" />, tone: "accent-4" as const }
+        : { icon: <NiRobot size="small" />, tone: "primary" as const });
     const title = eventKeyOf(event) ? t(eventKeyOf(event) as string) : t("case-now-event-other");
     const item: ActivityItem = {
       key: event.id,
@@ -325,26 +312,23 @@ export default function JourneyCard({
       tone: look.tone,
       title,
       when: ago(event.at),
-      actor:
-        event.actorType === "ai"
-          ? { icon: <NiAi size="small" />, label: t("case-actor-ai") }
-          : { icon: <NiRobot size="small" />, label: t("case-actor-system") },
       action: section
-        ? {
-            label: t("case-now-see"),
-            name: t("case-now-recent-see", { what: title }),
-            onClick: () => goToSection(section),
-          }
+        ? { onClick: () => goToSection(section) }
         : publication
-          ? { label: t("case-now-see"), name: t("case-now-recent-see", { what: title }), href: "/publicacoes" }
+          ? { onClick: () => goToSection("publications") }
           : undefined,
     };
-    seen.set(event.kind, { item, times: 1, movements });
+    seen.set(event.kind, { item, times: 1, movements, ai: event.actorType === "ai" });
     recent.push(item);
   }
+  // Under the title, in one quiet line: how many movements, how many times, and the AI when it was the AI (the
+  // heading already says it was ONE).
   for (const group of seen.values()) {
-    if (group.movements > 0) group.item.detail = t("case-now-recent-movements", { count: group.movements });
-    if (group.times > 1) group.item.count = t("case-now-recent-times", { count: group.times });
+    group.item.facts = [
+      group.movements > 0 ? t("case-now-recent-movements", { count: group.movements }) : null,
+      group.times > 1 ? t("case-now-recent-times", { count: group.times }) : null,
+      group.ai ? t("case-actor-ai") : null,
+    ].filter((fact): fact is string => fact !== null);
   }
 
   return (
@@ -447,69 +431,50 @@ export default function JourneyCard({
 
         {now.working.length > 0 ? (
           <Box component="section" aria-labelledby="case-now-working" className="flex flex-col gap-2">
-            <Box className="flex flex-wrap items-center gap-2">
-              <Typography id="case-now-working" variant="subtitle2" component="h3" className="mb-0">
-                {t("case-now-title-working")}
-              </Typography>
-              <StatusChip
-                tone="info"
-                label={t("case-now-count-working", { count: now.working.length })}
-                icon={<NiLoader size="small" className="animate-spin motion-reduce:animate-none" />}
-              />
-            </Box>
-            <Box className="border-accent-4/30 bg-accent-4-light/5 flex flex-col gap-3 rounded-2xl border p-3">
-              {now.working.map((line) => (
-                <StateLine
-                  key={line.id}
-                  tone="waiting"
-                  status={
-                    line.slow
-                      ? t("case-now-slow")
-                      : line.since
-                        ? t("case-now-since", { time: clock(line.since) })
-                        : undefined
-                  }
-                  action={line.section ? way({ ...line, owner: "one" }, t("case-now-see")) : undefined}
-                >
-                  {say(line)}
-                </StateLine>
-              ))}
-            </Box>
+            <Typography id="case-now-working" variant="subtitle2" component="h3" className="mb-0">
+              {t("case-now-title-working")}
+            </Typography>
+            {now.working.map((line) => (
+              <StateLine
+                key={line.id}
+                tone="waiting"
+                status={
+                  line.slow
+                    ? t("case-now-slow")
+                    : line.since
+                      ? t("case-now-since", { time: clock(line.since) })
+                      : undefined
+                }
+                action={line.section ? way({ ...line, owner: "one" }, t("case-now-see")) : undefined}
+              >
+                {say(line)}
+              </StateLine>
+            ))}
           </Box>
         ) : null}
 
         {!journey.ended ? (
           <Box component="section" aria-labelledby="case-now-blocking" className="flex flex-col gap-2">
-            <Box className="flex flex-wrap items-center gap-2">
-              <Typography id="case-now-blocking" variant="subtitle2" component="h3" className="mb-0">
-                {t("case-now-title-blocking")}
-              </Typography>
-              {(["firm", "client", "one", "platform"] as const).map((owner) => {
-                const count = now.blocking.filter((line) => line.owner === owner).length;
-                return count > 0 ? (
-                  <StatusChip key={owner} tone={OWNER_TONE[owner]} label={t(OWNER_COUNT_KEY[owner], { count })} />
-                ) : null;
-              })}
-            </Box>
+            <Typography id="case-now-blocking" variant="subtitle2" component="h3" className="mb-0">
+              {t("case-now-title-blocking")}
+            </Typography>
             {now.blocking.length === 0 ? (
-              <StateLine tone="done" emphasis>
-                {t(working ? "case-now-nothing-working" : "case-now-nothing")}
-              </StateLine>
+              <StateLine tone="done">{t(working ? "case-now-nothing-working" : "case-now-nothing")}</StateLine>
             ) : (
-              <Box className="border-grey-100 flex flex-col gap-3 rounded-2xl border p-3">
-                {now.blocking.map((line) => (
-                  <StateLine
-                    key={line.id}
-                    tone={line.tone}
-                    status={<StatusChip tone={OWNER_TONE[line.owner]} label={whose(line)} />}
-                    action={
-                      line.ask ? ask(line) : way(line, line.owner === "firm" ? t("case-now-do") : t("case-now-see"))
-                    }
-                  >
-                    {say(line)}
-                  </StateLine>
-                ))}
-              </Box>
+              now.blocking.map((line) => (
+                <StateLine
+                  key={line.id}
+                  tone={line.tone}
+                  action={
+                    line.ask ? ask(line) : way(line, line.owner === "firm" ? t("case-now-do") : t("case-now-see"))
+                  }
+                >
+                  {say(line)}
+                  <Box component="span" className="text-text-secondary block">
+                    {whose(line)}
+                  </Box>
+                </StateLine>
+              ))
             )}
           </Box>
         ) : null}

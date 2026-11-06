@@ -3,36 +3,33 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 
-import { Box, Button, Typography } from "@mui/material";
+import { Box, ButtonBase, Typography } from "@mui/material";
 
 import { TILE_TONE, type TileTone } from "@/components/product/tile-tone";
+import NiChevronRightSmall from "@/icons/nexture/ni-chevron-right-small";
 import { cn } from "@/lib/utils";
 
-/** One thing the product did by itself a moment ago, as a card. */
+/** One thing the product did by itself a moment ago, as a compact card. */
 export type ActivityItem = {
   key: string;
-  /** The icon of what it is about (a lawsuit's scale, a document's clip), at `size="medium"`. */
+  /** The icon of what it is about (a lawsuit's scale, a document's clip), at `size="small"`. */
   icon: ReactNode;
   tone: TileTone;
   title: string;
-  /** One line more, when the record has it (how many movements, of which lawsuit). */
-  detail?: string;
   /** When, in words (há 1 hora). */
   when: string;
-  /** Who did it, as the card's author: the product, or its AI. */
-  actor: { icon: ReactNode; label: string };
-  /** How many times it happened, in words, when the card stands for more than one. */
-  count?: string;
-  /** Where it is seen: a button that moves to its card, or a link to another screen. */
-  action?: { label: string; name?: string; onClick?: () => void; href?: string };
+  /** What else the record says, each in a few words (4 movimentações novas, 3 vezes, IA do ONE). */
+  facts?: string[];
+  /** Where it is seen: the whole card moves to its card on the screen, or leads to another screen. */
+  action?: { onClick?: () => void; href?: string };
 };
 
 /**
- * What the product did by itself a moment ago, one outlined card per thing (the template's projects card and its
- * post card, the owner's model of 2026-11-05): the icon of what it is about on its family's tint, what it did, when
- * in a pill on the right, a line more when the record has one, and at its foot who did it, as a post's author, with
- * how many times and the way to see it as pastel pills. Three across from a laptop on, one under the other on a
- * phone.
+ * What the product did by itself a moment ago, one compact outlined card each, a few across (the owner's model of
+ * 2026-11-05, made lighter on 2026-11-06 when the top of a case read as noise): the icon of what it is about on its
+ * family's tint, what it did, and under it one quiet line with when and what else the record says (how many times, a
+ * detail, the AI when it was the AI). The whole card is the way to see it, with a chevron, so no button, pill or
+ * author footer competes with the title. Three across from a laptop on, one under the other on a phone.
  *
  * Closest catalog entries: `StateLine` (one line of a state, with a status and an action: what this replaced, which
  * read as a list of checks with "Ver" drifting at the right edge) and the "Timeline de atividade" template (a long
@@ -46,82 +43,56 @@ export default function ActivityCards({ id, title, items }: { id: string; title:
       <Typography id={id} variant="subtitle2" component="h3" className="mb-0">
         {title}
       </Typography>
-      <Box component="ul" className="m-0 grid list-none grid-cols-1 gap-3 p-0 sm:grid-cols-2 lg:grid-cols-3">
+      <Box component="ul" className="m-0 grid list-none grid-cols-1 gap-2 p-0 sm:grid-cols-2 lg:grid-cols-3">
         {items.map((item) => {
           const style = TILE_TONE[item.tone];
-          return (
-            <Box component="li" key={item.key} className="border-grey-100 flex flex-col gap-3 rounded-2xl border p-4">
-              <Box className="flex flex-row items-start gap-3">
-                <Box
-                  aria-hidden
-                  className={cn("flex h-9 w-9 flex-none items-center justify-center rounded-xl", style.bg, style.text)}
-                >
-                  {item.icon}
-                </Box>
-                <Typography variant="body1" className="min-w-0 flex-1 self-center font-semibold">
+          const body = (
+            <>
+              <Box
+                aria-hidden
+                className={cn("flex h-8 w-8 flex-none items-center justify-center rounded-lg", style.bg, style.text)}
+              >
+                {item.icon}
+              </Box>
+              <Box className="flex min-w-0 flex-1 flex-col">
+                <Typography variant="body2" component="span" className="text-text-primary font-semibold">
                   {item.title}
                 </Typography>
-                <Typography
-                  variant="body2"
-                  component="span"
-                  className="bg-grey-50 text-text-secondary flex-none rounded-full px-2.5 py-0.5 whitespace-nowrap"
+                <Typography variant="caption" component="span" className="text-text-secondary">
+                  {/* Each fact whole on its line: "3 vezes" never splits across two. */}
+                  {[item.when, ...(item.facts ?? [])].map((fact, index) => (
+                    <span key={fact}>
+                      {index > 0 ? " · " : null}
+                      <span className="whitespace-nowrap">{fact}</span>
+                    </span>
+                  ))}
+                </Typography>
+              </Box>
+              {item.action ? <NiChevronRightSmall size="small" className="text-text-secondary flex-none" /> : null}
+            </>
+          );
+          const frame =
+            "border-grey-100 flex w-full flex-row items-center gap-3 rounded-2xl border px-3 py-2.5 text-left";
+          return (
+            <Box component="li" key={item.key} className="flex">
+              {item.action?.href ? (
+                <ButtonBase
+                  component={Link}
+                  href={item.action.href}
+                  className={cn(frame, "hover:bg-grey-25 focus-visible:bg-grey-25")}
                 >
-                  {item.when}
-                </Typography>
-              </Box>
-              {item.detail ? (
-                <Typography variant="body2" className="text-text-secondary">
-                  {item.detail}
-                </Typography>
-              ) : null}
-              <Box className="mt-auto flex flex-row flex-wrap items-center justify-between gap-2">
-                <Box className="flex flex-row items-center gap-2">
-                  <Box
-                    aria-hidden
-                    className="bg-primary-light/10 text-primary flex h-7 w-7 items-center justify-center rounded-full"
-                  >
-                    {item.actor.icon}
-                  </Box>
-                  <Typography variant="body2" className="text-text-secondary">
-                    {item.actor.label}
-                  </Typography>
-                </Box>
-                <Box className="flex flex-row items-center gap-2">
-                  {item.count ? (
-                    <Typography
-                      variant="body2"
-                      component="span"
-                      className="bg-grey-50 text-text-secondary rounded-full px-2.5 py-0.5 whitespace-nowrap"
-                    >
-                      {item.count}
-                    </Typography>
-                  ) : null}
-                  {item.action ? (
-                    item.action.href ? (
-                      <Button
-                        variant="pastel"
-                        color="primary"
-                        size="small"
-                        href={item.action.href}
-                        LinkComponent={Link}
-                        aria-label={item.action.name}
-                      >
-                        {item.action.label}
-                      </Button>
-                    ) : (
-                      <Button
-                        variant="pastel"
-                        color="primary"
-                        size="small"
-                        onClick={item.action.onClick}
-                        aria-label={item.action.name}
-                      >
-                        {item.action.label}
-                      </Button>
-                    )
-                  ) : null}
-                </Box>
-              </Box>
+                  {body}
+                </ButtonBase>
+              ) : item.action?.onClick ? (
+                <ButtonBase
+                  onClick={item.action.onClick}
+                  className={cn(frame, "hover:bg-grey-25 focus-visible:bg-grey-25")}
+                >
+                  {body}
+                </ButtonBase>
+              ) : (
+                <Box className={frame}>{body}</Box>
+              )}
             </Box>
           );
         })}

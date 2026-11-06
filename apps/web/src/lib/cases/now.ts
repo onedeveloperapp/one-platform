@@ -1047,7 +1047,7 @@ export function caseNow(input: CaseNowInput): CaseNow {
                 key: "case-now-publication-unread",
                 values: { what: kind, day: dayWords(publication.availableOn) },
               },
-              href: reading.kind === "hearing" ? "/agenda#sem-audiencia" : "/prazos#sem-prazo",
+              section: "publications",
             }),
           );
         }
