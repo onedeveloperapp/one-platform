@@ -119,6 +119,19 @@ const MARKED_KEY: Partial<Record<CaseSection, Partial<Record<CardTone, string>>>
   link: { firm: "card-state-link-firm", working: "card-state-link-working", client: "card-state-link-client" },
 };
 
+/**
+ * The word of a card the top marks, where the card's own facts say which of its waits it is: of the publications,
+ * a triage ONE made that waits for the lawyer's awareness, or one ONE left to a person to triage (0104).
+ */
+function markedWord(section: CaseSection, tone: CardTone, input: CardStateInput): string | null {
+  if (section === "publications" && tone === "firm") {
+    return input.publications.some((publication) => publication.ackOwed)
+      ? "card-state-publications-firm"
+      : "card-state-publications-firm-triage";
+  }
+  return null;
+}
+
 const GENERIC_KEY: Record<Exclude<CardTone, "done" | "idle">, string> = {
   firm: "card-state-firm",
   working: "card-state-working",
@@ -131,7 +144,12 @@ export function cardStates(input: CardStateInput, now: CaseNow): Partial<Record<
   const set = (section: CaseSection, own: () => CardState | null) => {
     const tone = fromNow(section, now);
     if (tone) {
-      states[section] = at(tone, MARKED_KEY[section]?.[tone] ?? GENERIC_KEY[tone as keyof typeof GENERIC_KEY]);
+      states[section] = at(
+        tone,
+        markedWord(section, tone, input) ??
+          MARKED_KEY[section]?.[tone] ??
+          GENERIC_KEY[tone as keyof typeof GENERIC_KEY],
+      );
       return;
     }
     const state = own();

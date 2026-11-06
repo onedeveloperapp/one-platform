@@ -48,6 +48,7 @@ import {
   ZONE_KEY,
 } from "@/lib/hearings/hearings";
 import {
+  acknowledgePublication,
   acknowledgePublicationCancel,
   readPublication,
   setPublicationJudgment,
@@ -86,6 +87,12 @@ export const CATEGORY_LOOK: Record<PublicationCategory, { icon: React.ReactNode;
 };
 
 /** A deadline is what nobody may miss: it takes the accent the app uses for "look at this". */
+/** Of one nobody triaged yet, what ONE does with it (0104), in words. */
+const TRIAGE_STATE_KEY: Record<"working" | "left", string> = {
+  working: "publication-triage-working",
+  left: "publication-triage-left",
+};
+
 export const CATEGORY_TONE: Record<PublicationCategory, StatusTone> = {
   prazo: "attention",
   audiencia: "attention",
@@ -112,6 +119,7 @@ export default function PublicationCard({
   seen,
   onSaid,
   onSeen,
+  onAcknowledged,
 }: {
   row: PublicationRow;
   /** What ONE recorded of it since the list was read, while ONE reads it. */
@@ -126,6 +134,8 @@ export default function PublicationCard({
   seen: boolean;
   onSaid: (said: Said) => void;
   onSeen: () => void;
+  /** The person said they are aware of ONE's triage (0104): what the list or the case does with it. */
+  onAcknowledged?: () => void;
 }) {
   const t = useTranslations("product");
   const [pending, startTransition] = useTransition();
@@ -150,6 +160,8 @@ export default function PublicationCard({
    */
   const [judgment, setJudgment] = useState(row.judgment);
   const [judgmentAsked, setJudgmentAsked] = useState(false);
+  /** The person said here that they are aware of ONE's triage (0104). */
+  const [acked, setAcked] = useState(false);
 
   const category = said ? said.category : row.category;
   const savedNote = said ? said.note : row.note;
@@ -213,6 +225,23 @@ export default function PublicationCard({
         if (chosen === "prazo" && deadlines.length === 0 && !counted) setCounting(true);
         // One that sets a hearing of a lawsuit of the firm is written in the agenda right away, the same way.
         if (chosen === "audiencia" && row.proceedingId && hearings.length === 0 && !scheduled) setScheduling(true);
+      } catch {
+        setError(t("publication-error-failed"));
+      }
+    });
+
+  /** The lawyer, or who triages, says they are aware of what ONE triaged it as (0104). */
+  const acknowledgeTriage = () =>
+    startTransition(async () => {
+      setError(null);
+      try {
+        const result = await acknowledgePublication(row.id, row.caseId);
+        if (!result.ok) {
+          setError(t(publicationErrorKey(result.code)));
+          return;
+        }
+        setAcked(true);
+        onAcknowledged?.();
       } catch {
         setError(t("publication-error-failed"));
       }
@@ -537,6 +566,24 @@ export default function PublicationCard({
           </Alert>
         ) : null}
 
+        {row.ackOwed && !acked && !said && category && !controls && row.active ? (
+          <StateLine
+            tone="attention"
+            emphasis
+            action={
+              mayTriage ? (
+                <Button variant="contained" size="small" disabled={pending} onClick={acknowledgeTriage}>
+                  {t("publication-ack")}
+                </Button>
+              ) : undefined
+            }
+          >
+            {row.lawyers.length > 0
+              ? t("publication-ack-owed", { category: t(CATEGORY_KEY[category]), names: row.lawyers.join(", ") })
+              : t("publication-ack-owed-anyone", { category: t(CATEGORY_KEY[category]) })}
+          </StateLine>
+        ) : null}
+
         {category && !controls ? (
           <Box className="flex flex-wrap items-center gap-3">
             {" "}
@@ -557,6 +604,12 @@ export default function PublicationCard({
                 !said && row.reviewedBy && row.reviewedLabel
                   ? t("publication-reviewed-by", { name: row.reviewedBy, when: row.reviewedLabel })
                   : null,
+                // The awareness of ONE's triage (0104), once given.
+                !said && acked
+                  ? t("publication-acked-now")
+                  : !said && row.ackedBy && row.ackedLabel
+                    ? t("publication-acked-by", { name: row.ackedBy, when: row.ackedLabel })
+                    : null,
                 savedNote,
               ]
                 .filter(Boolean)
@@ -564,12 +617,17 @@ export default function PublicationCard({
             </Typography>
             {mayTriage && row.active ? (
               <Button ref={changeButton} variant="text" color="grey" size="small" onClick={() => setChanging(true)}>
-                {t("publication-change")}
+                {t(row.ackOwed && !acked && !said ? "publication-correct" : "publication-change")}
               </Button>
             ) : null}
           </Box>
         ) : null}
 
+        {category === null && row.triageState && row.active ? (
+          <StateLine tone={row.triageState === "working" ? "waiting" : "info"}>
+            {t(TRIAGE_STATE_KEY[row.triageState])}
+          </StateLine>
+        ) : null}
         {controls && !full ? answers : null}
         {!controls && error ? (
           <Alert severity="error" className="neutral bg-background-paper/60!">

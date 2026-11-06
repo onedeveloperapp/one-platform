@@ -98,6 +98,7 @@ export default function PublicationsCard({
               setSeen((current) => ({ ...current, [row.id]: true }));
               onChanged();
             }}
+            onAcknowledged={onChanged}
           />
         ))
       )}

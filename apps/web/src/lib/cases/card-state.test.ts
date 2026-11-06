@@ -119,6 +119,15 @@ describe("cardStates", () => {
       sections: { publications: { firm: true, working: false, client: false, failed: false } },
     });
     expect(marked.publications).toMatchObject({ tone: "firm", text: { key: "card-state-publications-firm" } });
+    // What waits is the triage ONE left to a person: the card says that, not the awareness.
+    const toTriage = cardStates(base({ status: "filed", publications: [{ category: null, ackOwed: false }] }), {
+      ...quiet,
+      sections: { publications: { firm: true, working: false, client: false, failed: false } },
+    });
+    expect(toTriage.publications).toMatchObject({
+      tone: "firm",
+      text: { key: "card-state-publications-firm-triage" },
+    });
   });
 
   it("says a complaint past its day as the firm's, and the client's link as where it stands", () => {

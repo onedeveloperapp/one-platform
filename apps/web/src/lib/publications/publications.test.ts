@@ -41,6 +41,8 @@ const HEARINGS = fs.readFileSync(path.join(ROOT, "packages/db/migrations/0037_he
 const MIGRATION = fs.readFileSync(path.join(ROOT, "packages/db/migrations/0028_publications.sql"), "utf8");
 /** The triage with a sample (0035): the columns of a triage the AI applied, granted beside the others. */
 const SAMPLED = fs.readFileSync(path.join(ROOT, "packages/db/migrations/0035_triage_sampled.sql"), "utf8");
+/** ONE's triage and the lawyer's awareness (0104): the columns of the awareness, and the instructions in force. */
+const BY_ONE = fs.readFileSync(path.join(ROOT, "packages/db/migrations/0104_one_triages_publications.sql"), "utf8");
 const SCREEN = path.join(ROOT, "apps/web/src/app/(dashboard)/publicacoes");
 const product = messages.product as Record<string, string>;
 const char = (code: number) => String.fromCodePoint(code);
@@ -61,9 +63,11 @@ describe("what a publication is", () => {
   });
 
   it("asks the AI for the fields its instructions name, and the database reads the ones it keeps from the run", () => {
-    const schema = /\$schema\$([\s\S]*?)\$schema\$/.exec(MIGRATION)?.[1] ?? "{}";
+    // The instructions in force are the latest (0104, which asks how sure the AI is); the first named the rest.
+    const schema = /\$schema\$([\s\S]*?)\$schema\$/.exec(BY_ONE)?.[1] ?? "{}";
     const seeded = JSON.parse(schema) as { required: string[]; properties: { categoria: { enum: string[] } } };
     expect([...seeded.required].sort()).toEqual([...TASK_OUTPUT_KEYS[TRIAGE_TASK]].sort());
+    expect(BY_ONE).toContain("certainty := run.output ->> 'certeza';");
     expect(seeded.properties.categoria.enum).toEqual([...PUBLICATION_CATEGORIES]);
     // What is kept beside a publication is read from the run's own answer, by these names.
     expect(MIGRATION).toContain("said := run.output ->> 'categoria';");
@@ -78,7 +82,7 @@ describe("what a publication is", () => {
       [...text.matchAll(/grant select \(([^)]+)\) on table public\.publications to authenticated/g)].flatMap((match) =>
         match[1].split(",").map((column) => column.trim()),
       );
-    const granted = [...grantsOf(MIGRATION), ...grantsOf(SAMPLED), ...grantsOf(HEARINGS)];
+    const granted = [...grantsOf(MIGRATION), ...grantsOf(SAMPLED), ...grantsOf(HEARINGS), ...grantsOf(BY_ONE)];
     expect(granted.length).toBeGreaterThan(20);
     for (const column of PUBLICATION_LIST_COLUMNS) expect(granted, column).toContain(column);
     // What the AI said stays the platform's: a member reads only that a triage was the AI's, never its word in the shadow.
