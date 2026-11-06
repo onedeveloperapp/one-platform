@@ -6,7 +6,7 @@
  * the firm's case past the hand-over.
  */
 
-import { type ConsentAnswer, type Reagree, type TripState } from "./passengers";
+import { type ConsentAnswer, type PaxRow, type Reagree, type TripState } from "./passengers";
 
 /** The way of a trip, in the order it goes. */
 export const TRIP_JOURNEY = ["agreement", "watching", "alerted", "firm"] as const;
@@ -55,6 +55,7 @@ export const PASSENGER_JOURNEY = ["agreement", "watching", "firm"] as const;
 
 export function passengerReached(input: {
   consent: ConsentAnswer | null;
+  /** Their way ended with the firm: a trip of theirs became a case and none is ahead of them (0106). */
   handedOver: boolean;
   /** The yes no longer covers their trips (their WhatsApp changed, or a trip waits, 0086): back at the agreement. */
   reagree?: boolean;
@@ -62,11 +63,39 @@ export function passengerReached(input: {
   reached: number;
   state: "progress" | "done" | "stopped";
 } {
-  if (input.handedOver) return { reached: 2, state: "done" };
+  // A next trip waiting for the yes is the agency's again, also after a case (0106).
   if (input.consent === "agreed" && input.reagree) return { reached: 0, state: "progress" };
+  if (input.handedOver) return { reached: 2, state: "done" };
   if (input.consent === "agreed") return { reached: 1, state: "progress" };
   if (input.consent === "declined" || input.consent === "withdrawn") return { reached: 0, state: "stopped" };
   return { reached: 0, state: "progress" };
+}
+
+/**
+ * Where a passenger of the list stands, read the same on the list and on the home. "Com o escritório" is of the
+ * trip that became a case, never of the person (the owner, 2026-11-05): a passenger whose trip went to the firm and
+ * who has another trip ahead goes on along the way from it (an agreement owed again, or ONE following it), with the
+ * case said beside it; only one with nothing ahead is at the firm's step.
+ */
+export function passengerStanding(row: Pick<PaxRow, "consent" | "reagree" | "handedOver" | "nextDeparture">): {
+  reached: number;
+  state: "progress" | "done" | "stopped";
+  /** A yes that no longer covers their trips (their WhatsApp changed, or a trip waits, 0086): owed again. */
+  reagree: boolean;
+  /** Their way ended with the firm: nothing of theirs is ahead. */
+  withFirm: boolean;
+  /** A trip of theirs is a case at the firm while their way goes on. */
+  hadCase: boolean;
+} {
+  const reagree = row.consent === "agreed" && row.reagree !== null;
+  // The list's next departure is never of the trip that became a case (0106).
+  const withFirm = row.handedOver && !reagree && row.nextDeparture === null;
+  return {
+    ...passengerReached({ consent: row.consent, handedOver: withFirm, reagree }),
+    reagree,
+    withFirm,
+    hadCase: row.handedOver && !withFirm,
+  };
 }
 
 // The `product` message keys, spelled out so the catalog check sees each one.

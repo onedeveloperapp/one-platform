@@ -129,6 +129,8 @@ export type PaxDocument = {
   name: string;
   createdAt: string;
   read: PaxDocumentRead | null;
+  /** Went to the firm with a case (0106): the file is the firm's now, and the agency no longer opens it. */
+  handed: boolean;
 };
 
 export type PaxTraveler = {
@@ -297,6 +299,7 @@ function documentOf(raw: unknown): PaxDocument | null {
             note: text(read.note) ?? "",
           }
         : null,
+    handed: row.handed === true,
   };
 }
 
@@ -588,6 +591,8 @@ export function paxErrorKey(code: string): string {
       return "pax-error-too-many-children";
     case "trip_locked":
       return "pax-error-trip-locked";
+    case "trip_with_firm":
+      return "pax-error-trip-with-firm";
     case "invalid_kind":
     case "invalid_trip":
       return "pax-error-document-kind";

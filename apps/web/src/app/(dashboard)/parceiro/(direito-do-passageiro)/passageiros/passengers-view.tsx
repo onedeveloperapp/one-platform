@@ -20,7 +20,7 @@ import NiPlane from "@/icons/nexture/ni-plane";
 import NiUserCross from "@/icons/nexture/ni-user-cross";
 import NiUsers from "@/icons/nexture/ni-users";
 import { listPassengers } from "@/modules/direito-do-passageiro/agency/actions";
-import { PASSENGER_JOURNEY, passengerReached, TRIP_STEP_KEY } from "@/modules/direito-do-passageiro/agency/journey";
+import { PASSENGER_JOURNEY, passengerStanding, TRIP_STEP_KEY } from "@/modules/direito-do-passageiro/agency/journey";
 import {
   CONSENT_KEY,
   CONSENT_TONE,
@@ -366,10 +366,9 @@ export default function PassengersView({ data }: { data: PassengersData | null }
 function PassengerRow({ row }: { row: PaxRow }) {
   const t = useTranslations("product");
   const consent = row.consent ?? "none";
-  // A yes that no longer covers their trips (their WhatsApp changed, or a trip waits, 0086) is an agreement owed again.
-  const reagree = !row.handedOver && row.consent === "agreed" && row.reagree !== null;
-  // Where the passenger is along the way, in small: the agreement, a trip ONE follows, the firm.
-  const progress = passengerReached({ consent: row.consent, handedOver: row.handedOver, reagree });
+  // Where the passenger is along the way, in small: the agreement, a trip ONE follows, the firm. A yes that no
+  // longer covers their trips (0086) is an agreement owed again, also after a trip of theirs became a case (0106).
+  const progress = passengerStanding(row);
   const details = [
     row.cpf ? t("pax-row-cpf", { cpf: formatCpf(row.cpf) }) : null,
     row.nextDeparture ? t("pax-row-next", { date: localTimeLabel(row.nextDeparture) }) : null,
@@ -404,13 +403,14 @@ function PassengerRow({ row }: { row: PaxRow }) {
         <Box className="flex flex-wrap gap-1.5">
           {row.minor && <StatusChip label={t("pax-row-minor")} tone="info" />}
           {row.reading && <StatusChip label={t("pax-row-reading")} tone="neutral" />}
-          {row.handedOver ? (
+          {progress.withFirm ? (
             <StatusChip label={t("pax-row-handed-over")} tone="primary" />
-          ) : reagree ? (
+          ) : progress.reagree ? (
             <StatusChip label={t(REAGREE_CHIP_KEY)} tone="attention" />
           ) : (
             <StatusChip label={t(CONSENT_KEY[consent])} tone={CONSENT_TONE[consent]} />
           )}
+          {progress.hadCase && <StatusChip label={t("pax-row-had-case")} tone="primary" />}
         </Box>
       </Link>
     </Box>

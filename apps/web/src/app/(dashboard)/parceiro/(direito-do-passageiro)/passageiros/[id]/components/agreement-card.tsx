@@ -48,7 +48,8 @@ export default function AgreementCard({
   const [busy, setBusy] = useState(false);
   const consent = detail.consent ?? "none";
   // A yes that no longer covers the passenger's trips (0086): said as owed again, with why and the way back.
-  const reagree = !traveler.handedOver && detail.consent === "agreed" ? detail.reagree : null;
+  // Also after a trip of theirs became a case: a next trip waits for their yes as any other (0106).
+  const reagree = detail.consent === "agreed" ? detail.reagree : null;
 
   const issue = async () => {
     setBusy(true);
@@ -145,21 +146,19 @@ export default function AgreementCard({
                 {t("pax-error-no-clause")}
               </Alert>
             )}
-            {!traveler.handedOver && (
-              <Box>
-                <Button
-                  variant={issued ? "text" : "contained"}
-                  disabled={busy || !hasClause}
-                  onClick={() => void issue()}
-                >
-                  {busy
-                    ? t("pax-agreement-issuing")
-                    : detail.confirmLink
-                      ? t("pax-agreement-issue-again")
-                      : t("pax-agreement-issue")}
-                </Button>
-              </Box>
-            )}
+            <Box>
+              <Button
+                variant={issued ? "text" : "contained"}
+                disabled={busy || !hasClause}
+                onClick={() => void issue()}
+              >
+                {busy
+                  ? t("pax-agreement-issuing")
+                  : detail.confirmLink
+                    ? t("pax-agreement-issue-again")
+                    : t("pax-agreement-issue")}
+              </Button>
+            </Box>
 
             {detail.consents.length > 0 && (
               <Box className="flex flex-col gap-1">

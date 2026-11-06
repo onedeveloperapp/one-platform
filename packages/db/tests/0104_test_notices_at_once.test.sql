@@ -81,8 +81,13 @@ select pg_temp.lawsuit('teste', 'a1040000-0000-4000-8000-000000000001', 'b104000
 select pg_temp.lawsuit('outra', 'a1040000-0000-4000-8000-000000000002', 'b1040000-0000-4000-8000-00000000000b',
   '5000503-83.2099.8.09.0051', '5500999104003', true);
 
--- The test court marks the hearing minutes ahead: both of firm A are moved to ten minutes from now, written now.
-update public.hearings set starts_at = now() + interval '10 minutes'
+-- The test court marks the hearing minutes ahead: both of firm A are moved to ten minutes from now, written now;
+-- after 23:50 in Brasília, to before midnight, so the reminder of the day is of today (the test ran at 23:51).
+create function pg_temp.soon() returns timestamptz language sql stable as
+$$ select now() + least(interval '10 minutes',
+     ((date_trunc('day', now() at time zone 'America/Sao_Paulo') + interval '1 day') at time zone 'America/Sao_Paulo'
+      - now()) / 2); $$;
+update public.hearings set starts_at = pg_temp.soon()
 where id in (pg_temp.got('real', 'hearing_id')::uuid, pg_temp.got('teste', 'hearing_id')::uuid);
 
 select ok(
@@ -93,7 +98,7 @@ select ok(
   and not has_function_privilege('authenticated', 'public.notice_candidates(uuid, uuid)', 'EXECUTE')
   and (select count(*) = 2 from public.hearings
        where id in (pg_temp.got('real', 'hearing_id')::uuid, pg_temp.got('teste', 'hearing_id')::uuid)
-         and starts_at = now() + interval '10 minutes' and changed_at = now()),
+         and starts_at = pg_temp.soon() and changed_at = now()),
   'a real case and a test case of one firm, each with a hearing ten minutes ahead written a moment ago'
 );
 
@@ -103,7 +108,7 @@ select ok(
   (select count(*) = 1 from public.notice_candidates('b1040000-0000-4000-8000-00000000000a', null) c
    where c.kind = 'hearing_reminder' and c.hearing_id = pg_temp.got('teste', 'hearing_id')::uuid
      and c.person_id = pg_temp.got('teste', 'person_id')::uuid and c.occurrence like '%:day'
-     and c.closes = now() + interval '10 minutes'),
+     and c.closes = pg_temp.soon()),
   'the client of a test case is due the reminder of the day the moment the hearing is written, until it starts'
 );
 

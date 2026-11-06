@@ -25,7 +25,9 @@ import { isMinorOn } from "@flyee/rules/person";
  * partnership who answers for them. A field ONE read from a document says so under it until somebody writes it;
  * only what changed is sent, so a save never takes that mark from a field nobody touched. Another WhatsApp for a
  * passenger whose yes covers their trips is confirmed first (the owner, 2026-11-03): an agreement covers the
- * WhatsApp it was given at, so ONE stops following their trips until they agree again at the new one.
+ * WhatsApp it was given at, so ONE stops following their trips until they agree again at the new one. A passenger
+ * whose trip became a case is kept up to date here for their next trips (0106); what the firm received with the
+ * case is the firm's, and a change here does not reach it.
  */
 export default function PersonCard({
   detail,
@@ -49,7 +51,6 @@ export default function PersonCard({
   const minor = isMinorOn(values.birth_date || null, today) === true;
   const shown = minor ? PAX_MINOR_FORM : PAX_ADULT_FORM;
   const read = useMemo(() => new Set<PersonField>(traveler.readFields), [traveler.readFields]);
-  const locked = traveler.handedOver;
 
   const changed = personFields(values, shown, initial);
   const guardianChanged = (guardian?.id ?? null) !== (detail.guardian?.id ?? null);
@@ -96,7 +97,7 @@ export default function PersonCard({
           className="flex flex-col gap-4"
           onSubmit={(event) => {
             event.preventDefault();
-            if (!dirty || busy || locked) return;
+            if (!dirty || busy) return;
             if (phoneEndsFollowing) setConfirmingPhone(true);
             else void submit();
           }}
@@ -111,7 +112,7 @@ export default function PersonCard({
             }}
             errorField={fieldProblem}
             errorText={problem ? t(paxErrorKey(problem.code)) : null}
-            disabled={busy || locked}
+            disabled={busy}
             read={read}
           />
           {minor && (
@@ -123,7 +124,7 @@ export default function PersonCard({
               value={guardian}
               exclude={[traveler.id]}
               adultsOnly
-              disabled={busy || locked}
+              disabled={busy}
               onChange={(next) => {
                 setGuardian(next);
                 setSaved(false);
@@ -138,13 +139,11 @@ export default function PersonCard({
               {t("pax-person-saved")}
             </Alert>
           )}
-          {!locked && (
-            <Box className="flex justify-end">
-              <Button type="submit" variant="contained" disabled={busy || !dirty}>
-                {busy ? t("pax-saving") : t("pax-person-save")}
-              </Button>
-            </Box>
-          )}
+          <Box className="flex justify-end">
+            <Button type="submit" variant="contained" disabled={busy || !dirty}>
+              {busy ? t("pax-saving") : t("pax-person-save")}
+            </Button>
+          </Box>
         </Box>
       </CardContent>
       {confirmingPhone && (

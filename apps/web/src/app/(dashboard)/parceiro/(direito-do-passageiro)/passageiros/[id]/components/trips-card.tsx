@@ -61,7 +61,8 @@ const changeable = (trip: PaxTrip) => trip.state === "waiting_consent" || trip.s
  * a problem told, the passenger with the firm; the owner, 2026-11-03) and what happens now, who travels, every leg,
  * and the passenger's ticket and boarding pass of it; once the passenger agreed, its flight step by step as it
  * happens (0084), read again every minute while one is under way. An adult holds a trip (the alerts go to their
- * WhatsApp); a child travels along on the trip of the adult who holds it.
+ * WhatsApp); a child travels along on the trip of the adult who holds it. The trip that became a case is the
+ * firm's and takes nothing more here; the passenger's next trips go on as any other (0106).
  */
 export default function TripsCard({
   detail,
@@ -78,7 +79,7 @@ export default function TripsCard({
   const flightRead = useFlightsRead(flights, readFlights, anyMoving);
   // Whose yes the trips wait for again when it no longer covers them (0086): the passenger's, or a child's adult's.
   const reagreeHolder = detail.guardian?.id ?? traveler.id;
-  const reagree = detail.consent === "agreed" && !traveler.handedOver ? detail.reagree : null;
+  const reagree = detail.consent === "agreed" ? detail.reagree : null;
   const flightOf = (trip: PaxTrip) =>
     flightRead.ok
       ? (flightRead.trips.find((flight) => flight.tripId === trip.id && flight.legs.length > 0) ?? null)
@@ -86,7 +87,6 @@ export default function TripsCard({
   const [editing, setEditing] = useState<PaxTrip | "new" | null>(null);
   const [sending, setSending] = useState<string | null>(null);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
-  const locked = traveler.handedOver;
   const self = { id: traveler.id, fullName: traveler.fullName };
 
   const send = async (trip: PaxTrip, kind: PaxDocumentKind, file: File) => {
@@ -125,7 +125,7 @@ export default function TripsCard({
               {traveler.minor ? t("pax-trips-minor-help") : t("pax-trips-help")}
             </Typography>
           </Box>
-          {!locked && !traveler.minor && detail.trips.length > 0 && (
+          {!traveler.minor && detail.trips.length > 0 && (
             <Button variant="outlined" color="grey" size="small" onClick={() => setEditing("new")}>
               {t("pax-trip-add")}
             </Button>
@@ -138,9 +138,7 @@ export default function TripsCard({
             icon={<NiPlane size="large" />}
             title={t("pax-trips-empty-title")}
             description={traveler.minor ? t("pax-trips-minor-help") : t("pax-trips-empty-body")}
-            action={
-              locked || traveler.minor ? undefined : { label: t("pax-trip-add"), onClick: () => setEditing("new") }
-            }
+            action={traveler.minor ? undefined : { label: t("pax-trip-add"), onClick: () => setEditing("new") }}
           />
         ) : (
           <Box component="ul" className="m-0 flex list-none flex-col gap-4 p-0">
@@ -199,11 +197,12 @@ export default function TripsCard({
                   {documents.length > 0 && (
                     <Box component="ul" className="m-0 flex list-none flex-col gap-2 p-0">
                       {documents.map((document) => (
-                        <DocumentLine key={document.id} document={document} canOpen={!locked} />
+                        <DocumentLine key={document.id} document={document} />
                       ))}
                     </Box>
                   )}
-                  {!locked && (
+                  {/* The trip that became a case is the firm's: what the case needs of it goes through the case. */}
+                  {trip.state !== "case_opened" && (
                     <Box className="flex flex-wrap gap-2">
                       {changeable(trip) && holder && (
                         <Button variant="outlined" color="grey" size="small" onClick={() => setEditing(trip)}>

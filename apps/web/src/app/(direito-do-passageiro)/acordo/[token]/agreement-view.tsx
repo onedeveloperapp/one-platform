@@ -379,7 +379,8 @@ export default function AgreementView({ token, initial }: { token: string; initi
       <DocumentsSection
         token={token}
         people={view.people}
-        trips={view.trips}
+        // The trip that became a case is the firm's: what the case needs of it goes through the case (0106).
+        trips={view.trips.filter((trip) => trip.state !== "case_opened")}
         uploadsLeft={view.uploadsLeft}
         onSent={async () => {
           setWatchUntil(Date.now() + WATCH_MS);

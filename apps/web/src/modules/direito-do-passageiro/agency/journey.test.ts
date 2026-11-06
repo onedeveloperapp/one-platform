@@ -1,4 +1,4 @@
-import { passengerReached, tripJourney } from "./journey";
+import { passengerReached, passengerStanding, tripJourney } from "./journey";
 import { describe, expect, it } from "vitest";
 
 const states = (journey: ReturnType<typeof tripJourney>) => journey.steps.map((step) => `${step.step}:${step.state}`);
@@ -48,5 +48,50 @@ describe("passengerReached", () => {
       state: "progress",
     });
     expect(passengerReached({ consent: "agreed", handedOver: true })).toEqual({ reached: 2, state: "done" });
+    // A next trip of a passenger with the firm waits for their yes again (0106).
+    expect(passengerReached({ consent: "agreed", handedOver: true, reagree: true })).toEqual({
+      reached: 0,
+      state: "progress",
+    });
+  });
+});
+
+describe("passengerStanding", () => {
+  const row = { consent: "agreed" as const, reagree: null, handedOver: false, nextDeparture: null };
+
+  it("reads a passenger who never went to the firm as before", () => {
+    expect(passengerStanding(row)).toEqual({
+      reached: 1,
+      state: "progress",
+      reagree: false,
+      withFirm: false,
+      hadCase: false,
+    });
+    expect(passengerStanding({ ...row, reagree: "trip_waiting" })).toMatchObject({ reached: 0, reagree: true });
+  });
+
+  it("is at the firm only while nothing of theirs is ahead", () => {
+    expect(passengerStanding({ ...row, handedOver: true })).toEqual({
+      reached: 2,
+      state: "done",
+      reagree: false,
+      withFirm: true,
+      hadCase: false,
+    });
+  });
+
+  it("goes on from a next trip, with the case said beside it", () => {
+    // ONE follows the next trip: their yes covers it.
+    expect(passengerStanding({ ...row, handedOver: true, nextDeparture: "2099-03-10T08:10" })).toEqual({
+      reached: 1,
+      state: "progress",
+      reagree: false,
+      withFirm: false,
+      hadCase: true,
+    });
+    // The next trip waits for their yes.
+    expect(
+      passengerStanding({ ...row, handedOver: true, reagree: "trip_waiting", nextDeparture: "2099-03-10T08:10" }),
+    ).toEqual({ reached: 0, state: "progress", reagree: true, withFirm: false, hadCase: true });
   });
 });

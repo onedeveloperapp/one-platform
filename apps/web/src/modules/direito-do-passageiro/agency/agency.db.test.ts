@@ -309,17 +309,36 @@ describe.skipIf(!DB_URL)("an agency's passenger, from the agency's area to the f
     expect(firmReads.data ?? []).toHaveLength(1);
     expect(agencyReads.data ?? []).toHaveLength(0);
 
-    // The agency reads that its passenger is with the firm, and changes nothing of them any more.
+    // The agency reads that the trip is with the firm, and its document as gone there. The passenger stays the
+    // agency's for their next trips (0106): it keeps their record, which never reaches what the firm received, and
+    // sends nothing more of the trip that became the case.
     const detail = await call(as(DUDA), "pax_traveler_detail", { target_traveler: traveler });
     expect((detail.traveler as Row).handed_over_at).not.toBeNull();
-    expect(((detail.trips as Row[])[0] as Row).state).toBe("case_opened");
+    const caseTrip = (detail.trips as Row[])[0] as Row;
+    expect(caseTrip.state).toBe("case_opened");
+    expect((detail.documents as Row[]).map((document) => document.handed)).toEqual([true]);
     const changed = await call(as(DUDA), "pax_save_traveler", {
       target_partnership: PARTNERSHIP,
       target_traveler: traveler,
       target_fields: { email: "outro@teste.invalid" },
       target_guardian: null,
     });
-    expect(changed.code).toBe("handed_over");
+    expect(changed.code).toBe("saved");
+    const [client] = await sql.unsafe(
+      `select p.email from public.case_parties cp join public.people p on p.id = cp.person_id
+       where cp.case_id = $1 and cp.role = 'claimant'`,
+      [opened.id],
+    );
+    expect(client.email).toBe("rafaela@teste.invalid");
+    const refused = await call(as(DUDA), "pax_reserve_document", {
+      target_traveler: traveler,
+      target_kind: "boarding_pass",
+      target_trip: caseTrip.id,
+      target_name: "cartao.pdf",
+      target_mime: "application/pdf",
+      target_bytes: 2048,
+    });
+    expect(refused.code).toBe("trip_with_firm");
   });
 
   it("hands a passenger what is kept of them on the link, and deletes it with its files when they ask", async () => {

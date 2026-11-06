@@ -12,7 +12,7 @@ import { ProgressList, type ProgressListRow } from "@/components/product/progres
 import NiArrowRight from "@/icons/nexture/ni-arrow-right";
 import NiUsers from "@/icons/nexture/ni-users";
 import { listPassengers } from "@/modules/direito-do-passageiro/agency/actions";
-import { PASSENGER_JOURNEY, passengerReached, TRIP_STEP_KEY } from "@/modules/direito-do-passageiro/agency/journey";
+import { PASSENGER_JOURNEY, passengerStanding, TRIP_STEP_KEY } from "@/modules/direito-do-passageiro/agency/journey";
 import {
   CONSENT_KEY,
   localTimeLabel,
@@ -22,13 +22,6 @@ import {
 
 /** How many passengers in progress the home shows; the list of them all is one click further. */
 const RECENT_PASSENGERS = 5;
-
-/** Where a passenger is along their way, as the list of passengers shows it, in one line of the home. */
-function progressOf(row: PaxRow) {
-  // A yes that no longer covers their trips (their WhatsApp changed, or a trip waits, 0086) is an agreement owed again.
-  const reagree = !row.handedOver && row.consent === "agreed" && row.reagree !== null;
-  return { reagree, ...passengerReached({ consent: row.consent, handedOver: row.handedOver, reagree }) };
-}
 
 /**
  * The agency's passengers in progress, on its home (the owner, 2026-11-03): the first few of its list (the next to
@@ -56,19 +49,24 @@ export default function PartnerPassengersCard({ initial }: { initial?: PaxRow[] 
   }, [attempt, initial]);
 
   const going = Array.isArray(rows)
-    ? rows.filter((row) => progressOf(row).state !== "stopped").slice(0, RECENT_PASSENGERS)
+    ? rows.filter((row) => passengerStanding(row).state !== "stopped").slice(0, RECENT_PASSENGERS)
     : [];
   const lines: ProgressListRow[] = going.map((row) => {
-    const progress = progressOf(row);
+    // Where the passenger is along their way, as the list of passengers shows it, in one line of the home.
+    const progress = passengerStanding(row);
     const consent = row.consent ?? "none";
     const step = t(TRIP_STEP_KEY[PASSENGER_JOURNEY[progress.reached]]);
-    const standing = row.handedOver ? null : progress.reagree ? t(REAGREE_CHIP_KEY) : t(CONSENT_KEY[consent]);
+    const standing = progress.withFirm ? null : progress.reagree ? t(REAGREE_CHIP_KEY) : t(CONSENT_KEY[consent]);
     return {
       key: row.id,
       href: `/parceiro/passageiros/${row.id}`,
       title: row.fullName,
       detail:
-        [standing, row.nextDeparture ? t("pax-row-next", { date: localTimeLabel(row.nextDeparture) }) : null]
+        [
+          standing,
+          progress.hadCase ? t("pax-row-had-case") : null,
+          row.nextDeparture ? t("pax-row-next", { date: localTimeLabel(row.nextDeparture) }) : null,
+        ]
           .filter(Boolean)
           .join(" · ") || null,
       step,

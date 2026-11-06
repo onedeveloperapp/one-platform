@@ -92,10 +92,11 @@ export default function PassengerView({ state }: { state: PassengerState }) {
           description={summary}
         />
       </Grid>
+      {/* A trip of theirs became a case: the firm has it, and the passenger is still the agency's for the next (0106). */}
       {traveler.handedOver && (
         <Grid size={12}>
           <Alert severity="info" className="neutral bg-background-paper/60!">
-            {t("pax-detail-handed-over", { firm: state.firm })}
+            {t("pax-detail-handed-over", { firm: state.firm, name: traveler.fullName })}
           </Alert>
         </Grid>
       )}
