@@ -187,4 +187,4 @@ ONE is a SaaS for mass-litigation law firms in Brazil, built in this repository.
 - Locale: pt-BR only.
 - Do not introduce Cloudflare-specific services (Workers, D1, R2, Workers AI).
 
-This repo stays **private**: the UI layer contains commercially licensed code (the Nexture template components).
+This repo stays **private**.

@@ -38,4 +38,4 @@ Nunca aponte uma chave para o serviço de outro produto, e nunca rode os scripts
 
 Só pelo GitHub Actions (`.github/workflows/deploy.yml`), por acionamento manual: uma prévia por padrão, produção quando escolhida.
 
-Repositório privado: contém código de interface licenciado comercialmente (MUI X e os componentes do template Nexture).
+Repositório privado.
