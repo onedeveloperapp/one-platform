@@ -7,20 +7,33 @@ import { type ReactNode, useState } from "react";
 
 import { Box, Button, Card, CardContent, Collapse, Typography } from "@mui/material";
 
+import ActivityCards, { type ActivityItem } from "@/components/product/activity-cards";
 import ProgressSteps, { ProgressBar, ProgressNow, type ProgressStep } from "@/components/product/progress-steps";
 import StateLine from "@/components/product/state-line";
 import StatusChip, { type StatusTone } from "@/components/product/status-chip";
+import type { TileTone } from "@/components/product/tile-tone";
 import type { LiveRead } from "@/components/product/use-live-read";
+import NiAi from "@/icons/nexture/ni-ai";
 import NiCalendar from "@/icons/nexture/ni-calendar";
+import NiClock from "@/icons/nexture/ni-clock";
 import NiDocumentFull from "@/icons/nexture/ni-document-full";
 import NiFlag from "@/icons/nexture/ni-flag";
 import NiFolder from "@/icons/nexture/ni-folder";
+import NiInbox from "@/icons/nexture/ni-inbox";
+import NiLink from "@/icons/nexture/ni-link";
 import NiLoader from "@/icons/nexture/ni-loader";
 import NiMessageDots from "@/icons/nexture/ni-message-dots";
+import NiMessages from "@/icons/nexture/ni-messages";
+import NiMicrophone from "@/icons/nexture/ni-microphone";
 import NiMoney from "@/icons/nexture/ni-money";
+import NiPaperclip from "@/icons/nexture/ni-paperclip";
 import NiPen from "@/icons/nexture/ni-pen";
+import NiPlane from "@/icons/nexture/ni-plane";
+import NiRobot from "@/icons/nexture/ni-robot";
 import NiScale from "@/icons/nexture/ni-scale";
 import NiSendRight from "@/icons/nexture/ni-send-right";
+import NiTimeline from "@/icons/nexture/ni-timeline";
+import NiUsers from "@/icons/nexture/ni-users";
 import { eventKeyOf, PERSON_FIELD_KEY } from "@/lib/cases/cases";
 import {
   type CaseJourney,
@@ -45,6 +58,37 @@ import { sayPending } from "@/lib/firm/pending";
 import { momentIn } from "@/lib/hearings/hearings";
 
 type Ready = Extract<CaseState, { kind: "ready" }>;
+
+/**
+ * The icon and the family's tint of what a thing ONE did is about, by the card of the case it leads to: what a
+ * person tells the cards of "O que o ONE fez há pouco" apart by at a glance.
+ */
+// Typed by the sections a case may have, "publications" included whether or not the case's card of its publications is
+// in this build yet: every card a thing of ONE leads to has its look, and one with none takes ONE's own.
+const SECTION_LOOK: Partial<Record<CaseSection | "publications", { icon: ReactNode; tone: TileTone }>> = {
+  people: { icon: <NiUsers size="medium" />, tone: "primary" },
+  trip: { icon: <NiPlane size="medium" />, tone: "secondary" },
+  statements: { icon: <NiMicrophone size="medium" />, tone: "accent-1" },
+  documents: { icon: <NiPaperclip size="medium" />, tone: "secondary" },
+  complaints: { icon: <NiFlag size="medium" />, tone: "accent-4" },
+  signatures: { icon: <NiPen size="medium" />, tone: "accent-2" },
+  rules: { icon: <NiScale size="medium" />, tone: "accent-4" },
+  proceedings: { icon: <NiTimeline size="medium" />, tone: "primary" },
+  deadlines: { icon: <NiClock size="medium" />, tone: "accent-2" },
+  hearings: { icon: <NiCalendar size="medium" />, tone: "accent-2" },
+  publications: { icon: <NiInbox size="medium" />, tone: "accent-2" },
+  drafts: { icon: <NiDocumentFull size="medium" />, tone: "accent-1" },
+  filing: { icon: <NiSendRight size="medium" />, tone: "primary" },
+  link: { icon: <NiLink size="medium" />, tone: "secondary" },
+  notices: { icon: <NiMessages size="medium" />, tone: "secondary" },
+  summary: { icon: <NiDocumentFull size="medium" />, tone: "primary" },
+  dossier: { icon: <NiFolder size="medium" />, tone: "primary" },
+  timeline: { icon: <NiTimeline size="medium" />, tone: "primary" },
+};
+
+/** How many of ONE's latest events are read to make the cards, and how many cards show. */
+const RECENT_READ = 12;
+const RECENT_CARDS = 3;
 
 const STEP_ICON: Record<JourneyStepId, ReactNode> = {
   intake: <NiMessageDots size="small" />,
@@ -253,7 +297,55 @@ export default function JourneyCard({
     if (minutes < 60) return t("case-now-ago-minutes", { count: minutes });
     return t("case-now-ago-hours", { count: Math.round(minutes / 60) });
   };
-  const recent = recentByOne(state.events, state.readAt);
+  // What ONE did a moment ago, the same kind of thing once (the latest of it), with how many times: two movements of
+  // the court are one card that says two, never two cards that say the same.
+  const recent: ActivityItem[] = [];
+  const seen = new Map<string, { item: ActivityItem; times: number; movements: number }>();
+  for (const event of recentByOne(state.events, state.readAt, 24, RECENT_READ)) {
+    const group = seen.get(event.kind);
+    const movements = typeof event.data.count === "number" ? event.data.count : 0;
+    if (group) {
+      group.times += 1;
+      group.movements += movements;
+      continue;
+    }
+    if (seen.size >= RECENT_CARDS) continue;
+    const section = sectionOfEvent(event.kind);
+    // A publication the DJEN brought is triaged where every publication is: its own screen.
+    const publication = event.kind.startsWith("publication_");
+    const look =
+      (section ? SECTION_LOOK[section] : undefined) ??
+      (publication
+        ? { icon: <NiInbox size="medium" />, tone: "accent-4" as const }
+        : { icon: <NiRobot size="medium" />, tone: "primary" as const });
+    const title = eventKeyOf(event) ? t(eventKeyOf(event) as string) : t("case-now-event-other");
+    const item: ActivityItem = {
+      key: event.id,
+      icon: look.icon,
+      tone: look.tone,
+      title,
+      when: ago(event.at),
+      actor:
+        event.actorType === "ai"
+          ? { icon: <NiAi size="small" />, label: t("case-actor-ai") }
+          : { icon: <NiRobot size="small" />, label: t("case-actor-system") },
+      action: section
+        ? {
+            label: t("case-now-see"),
+            name: t("case-now-recent-see", { what: title }),
+            onClick: () => goToSection(section),
+          }
+        : publication
+          ? { label: t("case-now-see"), name: t("case-now-recent-see", { what: title }), href: "/publicacoes" }
+          : undefined,
+    };
+    seen.set(event.kind, { item, times: 1, movements });
+    recent.push(item);
+  }
+  for (const group of seen.values()) {
+    if (group.movements > 0) group.item.detail = t("case-now-recent-movements", { count: group.movements });
+    if (group.times > 1) group.item.count = t("case-now-recent-times", { count: group.times });
+  }
 
   return (
     <Card component="section" aria-labelledby="case-journey-title">
@@ -422,32 +514,7 @@ export default function JourneyCard({
           </Box>
         ) : null}
 
-        {recent.length > 0 ? (
-          <Box component="section" aria-labelledby="case-now-recent" className="flex flex-col gap-2">
-            <Typography id="case-now-recent" variant="subtitle2" component="h3" className="mb-0">
-              {t("case-now-title-recent")}
-            </Typography>
-            {recent.map((event) => {
-              const section = sectionOfEvent(event.kind);
-              return (
-                <StateLine
-                  key={event.id}
-                  tone="done"
-                  status={ago(event.at)}
-                  action={
-                    section ? (
-                      <Button variant="text" color="grey" size="small" onClick={() => goToSection(section)}>
-                        {t("case-now-see")}
-                      </Button>
-                    ) : undefined
-                  }
-                >
-                  {eventKeyOf(event) ? t(eventKeyOf(event) as string) : t("case-now-event-other")}
-                </StateLine>
-              );
-            })}
-          </Box>
-        ) : null}
+        <ActivityCards id="case-now-recent" title={t("case-now-title-recent")} items={recent} />
       </CardContent>
     </Card>
   );

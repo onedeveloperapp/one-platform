@@ -14,6 +14,7 @@ import JourneyCard from "./journey-card";
 import NoticesCard from "./notices-card";
 import PeopleCard from "./people-card";
 import ProceedingsCard from "./proceedings-card";
+import PublicationsCard from "./publications-card";
 import RulesCard from "./rules-card";
 import SignaturesCard from "./signatures-card";
 import StageDialog from "./stage-dialog";
@@ -48,6 +49,7 @@ import NiClipboard from "@/icons/nexture/ni-clipboard";
 import NiDocumentCheck from "@/icons/nexture/ni-document-check";
 import NiDocumentFull from "@/icons/nexture/ni-document-full";
 import NiFolder from "@/icons/nexture/ni-folder";
+import NiInbox from "@/icons/nexture/ni-inbox";
 import NiLink from "@/icons/nexture/ni-link";
 import NiMessageDots from "@/icons/nexture/ni-message-dots";
 import NiPen from "@/icons/nexture/ni-pen";
@@ -81,6 +83,7 @@ const LOOKS: Record<CaseSection, CardLook> = {
   proceedings: { icon: <NiBriefcase size="medium" />, tone: "secondary" },
   deadlines: { icon: <NiCalendarClock size="medium" />, tone: "accent-2" },
   hearings: { icon: <NiCalendar size="medium" />, tone: "accent-2" },
+  publications: { icon: <NiInbox size="medium" />, tone: "accent-2" },
   drafts: { icon: <NiDocumentFull size="medium" />, tone: "secondary" },
   filing: { icon: <NiSendRight size="medium" />, tone: "secondary" },
   link: { icon: <NiLink size="medium" />, tone: "accent-1" },
@@ -101,6 +104,7 @@ const WORKING_KEY: Partial<Record<CaseSection, string>> = {
   filing: "case-card-working-filing",
   deadlines: "case-card-working-reading",
   hearings: "case-card-working-reading",
+  publications: "case-card-working-triaging",
 };
 
 /** The stages a paper sent to be signed waits in: ONE sending it, the client signing it, the firm confirming it. */
@@ -249,6 +253,10 @@ export default function CaseView({ state: read }: { state: CaseState }) {
         drafts: ready.pieces.drafts,
         filings: ready.filings,
         hearings: ready.hearings.upcoming,
+        publications: (ready.publicationRows?.rows ?? []).map((row) => ({
+          category: row.category,
+          ackOwed: row.ackOwed,
+        })),
         deadlinesOpen: ready.deadlines.open.length,
         complaints: ready.complaints,
         links: ready.links,
@@ -444,6 +452,7 @@ export default function CaseView({ state: read }: { state: CaseState }) {
             <DraftsCard state={state} writable={writable} onChanged={refresh} />
             <FilingCard state={state} writable={writable} onChanged={refresh} />
             <HearingsCard state={state} writable={writable} onChanged={refresh} />
+            <PublicationsCard state={state} writable={writable} onChanged={refresh} />
             <DeadlinesCard state={state} writable={writable} onChanged={refresh} />
             <ComplaintCard state={state} writable={writable} onChanged={refresh} />
           </Grid>

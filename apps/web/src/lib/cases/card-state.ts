@@ -46,6 +46,8 @@ export type CardStateInput = {
   drafts: Draft[];
   filings: Filing[];
   hearings: Hearing[];
+  /** The publications of the case's lawsuits: what they were triaged as, and whether ONE's triage waits (0104). */
+  publications: { category: string | null; ackOwed: boolean }[];
   /** The case's open deadlines, and whether it ever had one. */
   deadlinesOpen: number;
   complaints: Complaint[];
@@ -107,6 +109,7 @@ const MARKED_KEY: Partial<Record<CaseSection, Partial<Record<CardTone, string>>>
     failed: "card-state-filing-failed",
   },
   hearings: { firm: "card-state-hearings-firm", working: "card-state-hearings-working" },
+  publications: { firm: "card-state-publications-firm", working: "card-state-publications-working" },
   deadlines: {
     firm: "card-state-deadlines-firm",
     failed: "card-state-deadlines-failed",
@@ -219,6 +222,15 @@ export function cardStates(input: CardStateInput, now: CaseNow): Partial<Record<
       .filter((hearing) => hearing.status === "scheduled" && Date.parse(hearing.startsAt) > nowAt)
       .sort((a, b) => a.startsAt.localeCompare(b.startsAt))[0];
     return next ? at("idle", "card-state-hearings-next") : at("idle", "card-state-hearings-none");
+  });
+
+  // ONE triages what the court publishes and the lawyer says they are aware of it (0104): every one triaged and
+  // acknowledged is done; none yet is said so.
+  set("publications", () => {
+    if (input.publications.length === 0) return at("idle", "card-state-publications-none");
+    return input.publications.every((publication) => publication.category !== null && !publication.ackOwed)
+      ? at("done", "card-state-publications-done")
+      : null;
   });
 
   set("deadlines", () =>

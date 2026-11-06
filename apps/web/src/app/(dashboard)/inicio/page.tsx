@@ -14,6 +14,7 @@ import { firmPulseOf } from "@/lib/cases/pulse";
 import { readFilingAttention } from "@/lib/firm/filing-attention";
 import { attentionGroups, pendingGroups, readFirmPending } from "@/lib/firm/pending";
 import { personFlowKey, personSetupOwed, signsAtTheBar } from "@/lib/firm/person-setup";
+import { readPublicationAcks } from "@/lib/firm/publication-acks";
 import { isManager } from "@/lib/firm/roles";
 import { readFirmToday, todayViewerOf } from "@/lib/firm/today";
 import { getMemberContext } from "@/lib/member/context";
@@ -95,6 +96,7 @@ async function loadHome(): Promise<
     decisions,
     filing,
     cloudSigning,
+    acks,
   ] = await Promise.all([
     context.supabase.rpc("firm_today", { target_org: firm.id }),
     context.supabase.rpc("firm_pending", { target_org: firm.id }),
@@ -135,6 +137,10 @@ async function loadHome(): Promise<
       .rpc("firm_filing_attention", { target_org: firm.id })
       .then(({ data, error }) => (error ? null : readFilingAttention(data))),
     cloudSigningOffered(context.supabase).catch(() => false),
+    // The awareness of ONE's triage of the publications owed (0104), as the center says it.
+    context.supabase
+      .rpc("firm_publication_acks", { target_org: firm.id })
+      .then(({ data, error }) => (error ? null : readPublicationAcks(data))),
   ]);
   if (manager && facts && !isSetupAnswered(facts)) return { kind: "setup", setup: await loadSetupState(context) };
   // Read failures owe nothing: a registration that could not be read is never said to be missing.
@@ -179,6 +185,7 @@ async function loadHome(): Promise<
                   },
                 }
               : null,
+            acks ? { acks, viewer: { userId: context.userId, firmFunction: firm.firmFunction } } : null,
           ),
         )
       : null,

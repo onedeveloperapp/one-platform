@@ -40,6 +40,7 @@ import { caseHearings, colleagues, courtZones } from "@/lib/hearings/facts";
 import { getMemberContext } from "@/lib/member/context";
 import { isCaseKindOf } from "@/lib/modules/registry";
 import { caseNotices } from "@/lib/notices/facts";
+import { loadCasePublications } from "@/lib/publications/facts";
 import { loadFlightChecks } from "@/modules/direito-do-passageiro/flights/facts";
 import { weatherProvider } from "@/modules/direito-do-passageiro/flights/weather";
 import { IMPERSONATION_MARKER_COOKIE } from "@flyee/auth";
@@ -374,6 +375,7 @@ async function loadCase(id: string): Promise<CaseState> {
     signatureAhead,
     pulse,
     autonomy,
+    publicationRows,
   ] = await Promise.all([
     caseDeadlines(supabase, firm, id, context.profile.timezone).catch(() => undefined),
     deadlineActs(supabase).catch(() => undefined),
@@ -427,6 +429,9 @@ async function loadCase(id: string): Promise<CaseState> {
     supabase
       .rpc("firm_autonomy", { target_org: firm })
       .then(({ data, error }) => (error ? null : firmAutonomyOf(data))),
+    // Every publication of the case's lawsuits, as its card shows them, ONE's triage and the awareness owed (0104).
+    // One that could not be read leaves the card saying so, never the page.
+    loadCasePublications(supabase, firm, id, context.profile.timezone).catch(() => null),
   ]);
   if (
     !deadlines ||
@@ -624,13 +629,21 @@ async function loadCase(id: string): Promise<CaseState> {
     linksOwed,
     stageMoments: stages,
     courtPublications: courtPublicationsOf(published),
-    publications: published.map((row) => ({
-      id: row.id,
-      category: row.category,
-      availableOn: row.available_on,
-      judgment: row.judgment,
-      readings: row.readings,
-    })),
+    publications: published.map((row) => {
+      // What ONE did of it and the awareness it owes, from the card's own rows (0104).
+      const card = publicationRows?.rows.find((found) => found.id === row.id);
+      return {
+        id: row.id,
+        category: row.category,
+        availableOn: row.available_on,
+        judgment: row.judgment,
+        readings: row.readings,
+        ackOwed: card?.ackOwed ?? false,
+        triageState: card?.triageState ?? null,
+        lawyers: card?.lawyers ?? [],
+      };
+    }),
+    publicationRows,
     events: (
       (events.data ?? []) as {
         id: string;

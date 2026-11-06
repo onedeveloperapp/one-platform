@@ -48,6 +48,7 @@ describe("the platform's sweeps (2026-11-04)", () => {
         "pax-readings",
         "pax-retention",
         "pax-unagreed-departures",
+        "publication-acks",
         "publication-reading",
         "publication-triage",
         "purge-leads",

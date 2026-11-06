@@ -22,6 +22,7 @@ import type { FirmFunction } from "@/lib/firm/roles";
 import type { CaseHearings, Colleague } from "@/lib/hearings/facts";
 import type { CourtZones } from "@/lib/hearings/hearings";
 import type { CaseNotices } from "@/lib/notices/facts";
+import type { PublicationRow } from "@/lib/publications/facts";
 import type { FlightChecks } from "@/modules/direito-do-passageiro/flights/facts";
 
 export type CasePerson = PersonData & {
@@ -266,7 +267,18 @@ export type CaseState =
         availableOn: string;
         judgment: boolean | null;
         readings: { kind: string; status: string }[];
+        /** ONE triaged it and nobody said yet that they are aware of it (0104). */
+        ackOwed?: boolean;
+        /** Of one nobody triaged: ONE is triaging it, or left it to a person (0104). */
+        triageState?: "working" | "left" | null;
+        /** The lawyers it was addressed to, by name. */
+        lawyers?: string[];
       }[];
+      /**
+       * Every publication of the case's lawsuits as its card shows them (0104), the newest first, with whether there
+       * are more than shown; null when they could not be read, which the card says.
+       */
+      publicationRows: { rows: PublicationRow[]; more: boolean } | null;
       /** The mark of the case and whether ONE is at it (0096): what the screen follows while it is open; null unread. */
       pulse: CasePulse | null;
       /** How the firm lets ONE take each decision now; a decision not read is ONE's, the platform's default. */

@@ -1,14 +1,24 @@
 import "server-only";
 
 import { providerReadiness, runFirmTask } from "@/lib/ai/executor";
+import { soon } from "@/lib/jobs/soon";
+import { settleFirmNotices } from "@/lib/notices/work";
+import { tellPublicationAcks } from "@/lib/publications/ack-notices";
 import { TRIAGE_TASK, triageBriefing, triageFailure, triageText } from "@/lib/publications/publications";
+import { queuePublicationReading } from "@/lib/publications/reading-work";
+import { createServiceClient } from "@flyee/auth/service";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 /**
- * The shadow triage of a publication (migration 0028): the AI says what the
- * publication is, and its answer is kept beside the publication, out of the
- * firm's sight, to be compared with what a person says. It decides nothing
- * and asks nobody anything.
+ * ONE's triage of a publication (migrations 0028, 0035 and 0104): the AI says
+ * what the publication is and how sure it is, and the database decides what
+ * that is: where the firm lets ONE triage, an answer it is sure of, of a
+ * whole text nobody triaged, is the publication's triage, and the lawyer it
+ * was addressed to is asked to say they are aware of it; anything else is
+ * kept beside the publication, out of the firm's sight, for a person to
+ * triage. What follows a triage ONE made (the reading of a deadline or a
+ * hearing, the bell of the awareness, the client's notices) is asked for
+ * right after.
  *
  * Nothing here says what the model answered: the worker names the run, and
  * the database reads the run's own answer. Only ids leave this file.
@@ -86,8 +96,42 @@ const OUTCOMES = ["done", "retry", "failed", "released"] as const;
  */
 export type TriageOutcome = (typeof OUTCOMES)[number] | "not_held" | "in_course";
 
+/** What follows a triage ONE made, asked for and never waited on: the sweeps reach it anyway. */
+export type TriageFollow = (publicationId: string, orgId: string) => Promise<void>;
+
+/**
+ * Right after: the reading of a deadline or a hearing (0040), the bell of the awareness owed (0104) and the client's
+ * notices (a payment's warning against the scam).
+ */
+const followTriageHere: TriageFollow = async (publicationId, orgId) => {
+  await queuePublicationReading(publicationId);
+  soon("publication-acks", () => tellPublicationAcks(createServiceClient(), Date.now() + 20_000, publicationId));
+  await settleFirmNotices(orgId);
+};
+
+/**
+ * Publications just arrived (the DJEN's capture, the test court): ONE triages them right after the answer, instead
+ * of at the next sweep, so a hearing the court marked reaches the agenda and the client while it is still ahead.
+ * Never waited for; where no model can be asked here, nothing is claimed.
+ */
+export async function queuePublicationTriage(): Promise<void> {
+  soon("publication-triage", async () => {
+    const service = createServiceClient();
+    if (!(await triageReady(service))) return;
+    const until = Date.now() + 60_000;
+    for (let turn = 0; turn < 10 && Date.now() < until; turn += 1) {
+      const outcome = await triageNext(service);
+      if (outcome === "none" || outcome === "released") break;
+    }
+  });
+}
+
 /** Asks the AI what a claimed publication is and records what came of it. Never throws for what a model did. */
-export async function triageClaimedPublication(service: SupabaseClient, held: TriageClaim): Promise<TriageOutcome> {
+export async function triageClaimedPublication(
+  service: SupabaseClient,
+  held: TriageClaim,
+  follow: TriageFollow = followTriageHere,
+): Promise<TriageOutcome> {
   const { data, error } = await service.rpc("publication_to_triage", {
     target_publication: held.publicationId,
     target_claim: held.claim,
@@ -108,9 +152,12 @@ export async function triageClaimedPublication(service: SupabaseClient, held: Tr
       target_code: input.code ?? null,
     });
     if (recordError) throw new Error(`record_publication_triage failed: ${recordError.message}`);
-    // What was recorded is what the database says: it is the one that knows whether a try was the last.
-    const answer = String((recorded as { code?: string } | null)?.code ?? "");
-    return OUTCOMES.find((code) => code === answer) ?? "not_held";
+    // What was recorded is what the database says: it is the one that knows whether a try was the last, and
+    // whether the AI's answer is now the publication's triage.
+    const answer = (recorded ?? {}) as { code?: string; applied?: boolean };
+    const code = OUTCOMES.find((known) => known === String(answer.code ?? "")) ?? "not_held";
+    if (code === "done" && answer.applied === true) await follow(row.publication_id, row.org_id);
+    return code;
   };
   /** A failure, said as what it says of the publication: a try of its own, or nothing at all. */
   const failed = (code: string, runId: string | null = null) => record(triageFailure(code), { runId, code });

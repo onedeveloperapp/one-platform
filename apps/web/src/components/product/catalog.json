@@ -133,6 +133,12 @@
       "use": "What holds a firm's cases until somebody acts, where a person starts the day: one card coloured by its most urgent group (danger = past its time, attention = waiting on the firm), and in it, by group, a two-column grid of outlined cards (the template's projects grid): the icon of the thing's kind on the group's tint, what it is, its kind as a StatusChip tag on the right, of which case in two lines at most, a pill with how many when more than one; the whole card one click from where it is done. The hue rides on the icon's tint and the badges, never on the words. Not for counters (StatTile) nor for a list of records to manage (DataTable)."
     },
     {
+      "name": "ActivityCards",
+      "from": "@/components/product/activity-cards",
+      "props": "id, title, items[{key, icon, tone, title, detail?, when, actor{icon,label}, count?, action?{label, name?, onClick? | href?}}]",
+      "use": "What the product did by itself a moment ago (the few latest things, not a history): one outlined card each, three across from a laptop on, with the icon of what it is about on its family tint, what it did, when in a pill on the right, a line more when the record has it, and at its foot who did it as a post author with how many times and the way to see it as pastel pills. Group the same kind of thing into one card with its count. For a long history where the order is the meaning, the Timeline de atividade template."
+    },
+    {
       "name": "CollapsibleCard",
       "from": "@/components/product/collapsible-card",
       "props": "id, anchor?, title, titleAs? (h2 | h3), summary?, summaryClosedOnly?, chip? (StatusChip or InfoHint, kept clickable above the header), description?, action?, defaultOpen?, bodyClassName?, children; CollapsibleGroup around a screen of many and CollapsibleGroupToggle (Abrir/Fechar todos os cartões); CollapsibleGroup takes marks? (by card id: firm, failed, client, and working, the words of what the product does there now), looks? (by card id: the icon of its head and its tone) and words? (the words of the marks)",

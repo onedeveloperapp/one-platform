@@ -577,10 +577,14 @@ describe("how the reading of a registration is doing", () => {
     const screen = fs.readFileSync(path.join(SCREEN, "publications-view.tsx"), "utf8");
     // The card of the readings is there whenever a reading is, or one that stopped, with or without publications.
     expect(screen).toMatch(/data\.captures\.length > 0 \|\| data\.stopped\.length > 0\) \? \(\s*<ReadingCard/);
-    // In the source, what warns of the reading comes before what lists the publications.
-    expect(screen.indexOf("{t(readingWarningKey)}")).toBeGreaterThan(0);
-    expect(screen.indexOf("{t(readingWarningKey)}")).toBeLessThan(screen.indexOf("<PublicationCard"));
-    expect(screen.indexOf("publications-reading-left-out")).toBeLessThan(screen.indexOf("<PublicationCard"));
+    // On the screen, the card of the reading (which says a reading that failed, is late or left something out, on its
+    // head even closed) comes before what lists the publications (2026-11-05).
+    expect(screen.indexOf("<ReadingCard")).toBeGreaterThan(0);
+    expect(screen.indexOf("<ReadingCard")).toBeLessThan(screen.indexOf("<PublicationCard"));
+    const card = screen.slice(screen.indexOf("function ReadingCard("));
+    expect(card).toContain("summary={summary}");
+    expect(card).toContain("publications-reading-warning-late");
+    expect(card).toContain("publications-reading-left-out");
     // An empty list of what is to triage does not say "all triaged" over a reading that is not up to date.
     expect(screen).toContain("publications-empty-untriaged-unsure");
     expect(screen).toContain("publications-reading-warning-failing");

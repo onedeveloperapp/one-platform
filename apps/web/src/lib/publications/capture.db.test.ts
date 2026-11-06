@@ -630,6 +630,11 @@ describe.skipIf(!DB_URL)("the DJEN, read by the worker against the database", ()
       "@/lib/publications/triage-work"
     );
     expect(await triageReady(backend() as never)).toBe(true);
+    // A firm that keeps the triage to a person (0104): the AI's answer, however sure, decides nothing.
+    await sql.unsafe(
+      `insert into public.firm_autonomy (org_id, decision, mode) values ($1, 'publication_triage', 'approval'), ($2, 'publication_triage', 'approval')`,
+      [FIRM, OTHER_FIRM],
+    );
     const publication = (
       await sql.unsafe(
         `select id from public.publications where org_id = $1 and hash = 'djendocaso000001abcdefghijklm'`,
@@ -713,5 +718,69 @@ describe.skipIf(!DB_URL)("the DJEN, read by the worker against the database", ()
     });
     expect(said.code).toBe("saved");
     expect((await call(asAna(), "firm_today", { target_org: FIRM })).publications_new).toBe(9);
+  });
+
+  it("has ONE triage what the AI is sure of, and asks the lawyer it was addressed to for their awareness", async () => {
+    const { claimPublicationTriage, triageClaimedPublication } = await import("@/lib/publications/triage-work");
+    // The firm lets ONE triage again, as by default (0104).
+    await sql.unsafe(`delete from public.firm_autonomy where org_id = $1 and decision = 'publication_triage'`, [FIRM]);
+    const publication = (
+      await sql.unsafe(
+        `select id, lawyer_ids from public.publications
+         where org_id = $1 and category is null and ai_category is null and active and not truncated
+         order by captured_at limit 1`,
+        [FIRM],
+      )
+    )[0];
+    expect(publication).toBeDefined();
+    const held = await claimPublicationTriage(backend() as never, 1, String(publication.id));
+    expect(held).toHaveLength(1);
+    // The test model answers the first word of each list: a term, and sure of it.
+    const followed: string[] = [];
+    expect(
+      await triageClaimedPublication(backend() as never, held[0], async (publicationId) => {
+        followed.push(publicationId);
+      }),
+    ).toBe("done");
+    const triaged = (
+      await sql.unsafe(
+        `select category, ai_applied, ack_owed, triaged_by, acked_by from public.publications where id = $1`,
+        [publication.id],
+      )
+    )[0];
+    expect(triaged).toMatchObject({
+      category: "prazo",
+      ai_applied: true,
+      ack_owed: true,
+      triaged_by: null,
+      acked_by: null,
+    });
+    // What follows a triage ONE made (the reading of the term, the bell, the notices) is asked for at once.
+    expect(followed).toEqual([String(publication.id)]);
+
+    // The firm reads what awareness is owed, with who it waits on: the lawyers it was addressed to.
+    const owed = await call(asAna(), "firm_publication_acks", { target_org: FIRM });
+    const item = (owed.items as Row[]).find((row) => row.publication_id === String(publication.id));
+    expect(item).toMatchObject({ category: "prazo", late: false });
+    const signers = (
+      await sql.unsafe(
+        `select coalesce(array_agg(m.user_id::text order by m.user_id), '{}') as ids
+         from public.publications p join public.memberships m on m.org_id = p.org_id and m.user_id = any (p.lawyer_ids)
+         where p.id = $1 and m.firm_function in ('socio', 'advogado')`,
+        [publication.id],
+      )
+    )[0].ids as string[];
+    expect(signers.length).toBeGreaterThan(0);
+    expect([...(item?.lawyers as string[])].sort()).toEqual([...signers].sort());
+
+    // Said by who triages: nothing is owed of it any more.
+    const acknowledged = await call(asAna(), "acknowledge_publication", { target_publication: publication.id });
+    expect(acknowledged.code).toBe("saved");
+    const after = (
+      await sql.unsafe(`select ack_owed, acked_by, category from public.publications where id = $1`, [publication.id])
+    )[0];
+    expect(after).toMatchObject({ ack_owed: false, acked_by: ANA, category: "prazo" });
+    const left = await call(asAna(), "firm_publication_acks", { target_org: FIRM });
+    expect((left.items as Row[]).some((row) => row.publication_id === String(publication.id))).toBe(false);
   });
 });

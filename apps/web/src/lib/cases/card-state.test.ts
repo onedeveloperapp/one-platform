@@ -24,6 +24,7 @@ const base = (overrides: Partial<CardStateInput> = {}): CardStateInput => ({
   drafts: [],
   filings: [],
   hearings: [],
+  publications: [],
   deadlinesOpen: 0,
   complaints: [],
   links: [],
@@ -95,6 +96,29 @@ describe("cardStates", () => {
     expect(states.filing?.tone).toBe("done");
     expect(states.hearings?.text.key).toBe("card-state-hearings-next");
     expect(states.deadlines?.tone).toBe("done");
+  });
+
+  it("says the publications: none yet, ONE's triage that waits for the lawyer's awareness, and all of them done", () => {
+    expect(cardStates(base({ status: "filed" }), quiet).publications?.text.key).toBe("card-state-publications-none");
+    const waiting = cardStates(
+      base({
+        status: "filed",
+        publications: [
+          { category: "audiencia", ackOwed: true },
+          { category: "prazo", ackOwed: false },
+        ],
+      }),
+      quiet,
+    );
+    expect(waiting.publications).toBeUndefined();
+    const done = cardStates(base({ status: "filed", publications: [{ category: "ciencia", ackOwed: false }] }), quiet);
+    expect(done.publications).toMatchObject({ tone: "done", text: { key: "card-state-publications-done" } });
+    // What the top says of the card comes first: the lawyer's awareness, the firm's.
+    const marked = cardStates(base({ status: "filed", publications: [{ category: "prazo", ackOwed: true }] }), {
+      ...quiet,
+      sections: { publications: { firm: true, working: false, client: false, failed: false } },
+    });
+    expect(marked.publications).toMatchObject({ tone: "firm", text: { key: "card-state-publications-firm" } });
   });
 
   it("says a complaint past its day as the firm's, and the client's link as where it stands", () => {

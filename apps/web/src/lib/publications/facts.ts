@@ -82,6 +82,16 @@ export type PublicationRow = {
   reviewedBy: string | null;
   reviewedLabel: string | null;
   /**
+   * ONE triaged it and no person said yet that they are aware of it (0104): asked of the lawyers it was addressed
+   * to (`lawyers`), or, with none of the firm, of anybody who triages.
+   */
+  ackOwed: boolean;
+  /** Who said they are aware of ONE's triage (or triaged it after ONE), and when. */
+  ackedBy: string | null;
+  ackedLabel: string | null;
+  /** Of one nobody triaged yet: ONE is triaging it (`working`), or left it to a person (`left`, 0104). */
+  triageState: "working" | "left" | null;
+  /**
    * Of a decision, whether it is the lawsuit's judgment (0096): what the app read of its words (`rule`) or what a
    * person said (`person`); null while nobody could tell, when the person is asked.
    */
@@ -261,6 +271,9 @@ type Row = {
   reviewed_by: string | null;
   reviewed_at: string | null;
   hearing_settled_at: string | null;
+  ack_owed: boolean | null;
+  acked_by: string | null;
+  acked_at: string | null;
 };
 
 type CaptureRecord = {
@@ -315,7 +328,8 @@ async function toRows(
   const caseIds = [...new Set(raw.flatMap((row) => (row.case_id ? [row.case_id] : [])))];
   const lawsuitIds = [...new Set(raw.flatMap((row) => (row.proceeding_id ? [row.proceeding_id] : [])))];
   const ids = raw.map((row) => row.id);
-  const [cases, lawsuits, deadlines, hearings, readings, withDeadline] = await Promise.all([
+  const untriaged = raw.filter((row) => row.category === null).map((row) => row.id);
+  const [cases, lawsuits, deadlines, hearings, readings, withDeadline, states] = await Promise.all([
     caseIds.length > 0
       ? supabase.from("cases").select("id, seq").eq("org_id", firmId).in("id", caseIds)
       : Promise.resolve({ data: [], error: null }),
@@ -340,8 +354,19 @@ async function toRows(
           .in("publication_id", ids)
       : Promise.resolve({ data: [], error: null }),
     publicationsWithDeadline(supabase, firmId, ids),
+    // Whether ONE is triaging what nobody triaged yet, or left it to a person (0104). Unread, nothing is said of it.
+    untriaged.length > 0
+      ? supabase
+          .rpc("publication_triage_states", { target_publications: untriaged })
+          .then(({ data, error }) => (error ? [] : ((data ?? []) as { publication_id: string; state: string }[])))
+      : Promise.resolve([] as { publication_id: string; state: string }[]),
   ]);
   if (cases.error || lawsuits.error) throw new Error("the cases of the publications could not be read");
+  const triageStates = new Map(
+    states.flatMap((found) =>
+      found.state === "working" || found.state === "left" ? [[found.publication_id, found.state] as const] : [],
+    ),
+  );
   // The word on the judgment of the decisions, read apart: a database without it (before 0096) leaves it unsaid.
   const decisions = raw.filter((row) => row.category === "decisao").map((row) => row.id);
   const judged = new Map<string, { value: boolean; source: "rule" | "person" }>();
@@ -404,6 +429,10 @@ async function toRows(
     reviewDue: Boolean(row.review_due),
     reviewedBy: row.reviewed_by ? names.get(row.reviewed_by) || null : null,
     reviewedLabel: row.reviewed_at ? momentLabel(row.reviewed_at, timeZone) : null,
+    ackOwed: Boolean(row.ack_owed),
+    ackedBy: row.acked_by ? names.get(row.acked_by) || null : null,
+    ackedLabel: row.acked_at ? momentLabel(row.acked_at, timeZone) : null,
+    triageState: row.category === null ? (triageStates.get(row.id) ?? null) : null,
     judgment: judged.get(row.id) ?? null,
   }));
 }
@@ -454,8 +483,9 @@ export async function loadPublications(
       ? // The oldest first: its time has been running the longest.
         list.is("category", null).eq("active", true).order("available_on", { ascending: true })
       : view === "conferir"
-        ? // The AI's word chosen for a check: the oldest first, its time has been running the longest.
-          list.eq("review_due", true).eq("active", true).order("available_on", { ascending: true })
+        ? // ONE's triage that waits for a person's awareness (0104), and the AI's word chosen for a check (0035): the
+          // oldest first, its time has been running the longest.
+          list.or("ack_owed.eq.true,review_due.eq.true").eq("active", true).order("available_on", { ascending: true })
         : view === "triadas"
           ? list.not("category", "is", null).eq("active", true).order("triaged_at", { ascending: false })
           : // What a court took back: the ones somebody had triaged and nobody saw yet first, then the latest.
@@ -476,7 +506,7 @@ export async function loadPublications(
     await Promise.all([
       shown.order("id", { ascending: true }).range(from, from + PUBLICATIONS_SHOWN),
       count().is("category", null).eq("active", true),
-      count().eq("review_due", true).eq("active", true),
+      count().or("ack_owed.eq.true,review_due.eq.true").eq("active", true),
       count().not("category", "is", null).eq("active", true),
       count().eq("active", false),
       supabase
@@ -643,6 +673,36 @@ export async function findPublications(
     teamOf(supabase, firmId),
   ]);
   if (rows.error) throw new Error("publications could not be searched");
+  const raw = (rows.data ?? []) as unknown as Row[];
+  return {
+    rows: await toRows(supabase, firmId, raw.slice(0, PUBLICATIONS_SHOWN), team.names, timeZone),
+    more: raw.length > PUBLICATIONS_SHOWN,
+  };
+}
+
+/**
+ * The publications of a case's lawsuits, the newest first, as the card of the case shows them (0104): the same rows
+ * the firm's list reads, with what ONE did of each and the awareness it owes, so a case is worked where it is. The
+ * latest few are shown, and the screen says when there are more. A read that fails throws.
+ */
+export async function loadCasePublications(
+  supabase: SupabaseClient,
+  firmId: string,
+  caseId: string,
+  timeZone: string | null | undefined,
+): Promise<{ rows: PublicationRow[]; more: boolean }> {
+  const [rows, team] = await Promise.all([
+    supabase
+      .from("publications")
+      .select(COLUMNS)
+      .eq("org_id", firmId)
+      .eq("case_id", caseId)
+      .order("available_on", { ascending: false })
+      .order("id", { ascending: true })
+      .limit(PUBLICATIONS_SHOWN + 1),
+    teamOf(supabase, firmId),
+  ]);
+  if (rows.error) throw new Error("the publications of the case could not be read");
   const raw = (rows.data ?? []) as unknown as Row[];
   return {
     rows: await toRows(supabase, firmId, raw.slice(0, PUBLICATIONS_SHOWN), team.names, timeZone),

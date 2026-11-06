@@ -2,9 +2,10 @@ import "server-only";
 
 import { djenClient } from "@/lib/courts/djen";
 import type { Sweep } from "@/lib/jobs/schedule";
+import { tellPublicationAcks } from "@/lib/publications/ack-notices";
 import { captureNext, prepareDjenCaptures } from "@/lib/publications/capture";
 import { readingReadyKinds, readNext, settlePublicationReadings } from "@/lib/publications/reading-work";
-import { triageNext, triageReady } from "@/lib/publications/triage-work";
+import { queuePublicationTriage, triageNext, triageReady } from "@/lib/publications/triage-work";
 
 /**
  * How many registrations one round of the capture reads: the next round, five
@@ -59,6 +60,8 @@ export const publicationSweeps: Sweep[] = [
         // The DJEN limited the calls or did not answer: the next registration would only meet the same.
         if (outcome === "retry") break;
       }
+      // What arrived is triaged by ONE right after, not at the next beat (0104).
+      if (Object.keys(outcomes).length > 0) await queuePublicationTriage();
       return outcomes;
     },
   },
@@ -123,5 +126,16 @@ export const publicationSweeps: Sweep[] = [
       }
       return outcomes;
     },
+  },
+  /**
+   * The bell of the awareness of ONE's triage (migration 0104), recomputed from the data on every pass: each
+   * publication ONE triaged that nobody said they are aware of is told to who it waits on once, and again once a day
+   * after the setting's hours, until somebody says it. Written by key: two servers at once write nothing twice.
+   */
+  {
+    key: "publication-acks",
+    when: { every: 5 },
+    whileUsed: true,
+    run: async (service, until) => ({ ...(await tellPublicationAcks(service, until)) }),
   },
 ];

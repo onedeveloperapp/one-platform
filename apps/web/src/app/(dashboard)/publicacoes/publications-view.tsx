@@ -5,56 +5,32 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 
-import {
-  Alert,
-  Box,
-  Button,
-  Card,
-  CardContent,
-  CircularProgress,
-  Dialog,
-  DialogContent,
-  Grid,
-  TextField,
-  Typography,
-} from "@mui/material";
+import { Alert, Box, Button, Card, CardContent, Collapse, Grid, TextField, Typography } from "@mui/material";
 
-import DeadlineDialog from "@/components/deadlines/deadline-dialog";
-import HearingDialog from "@/components/hearings/hearing-dialog";
-import DialogHeader from "@/components/product/dialog-header";
+import CollapsibleCard from "@/components/product/collapsible-card";
 import EmptyState from "@/components/product/empty-state";
 import { StatTile } from "@/components/product/home-tiles";
 import ModuleScope from "@/components/product/module-scope";
 import PageHeader from "@/components/product/page-header";
 import StateLine from "@/components/product/state-line";
 import StatusChip, { type StatusTone } from "@/components/product/status-chip";
-import type { TileTone } from "@/components/product/tile-tone";
+import { TILE_TONE, type TileTone } from "@/components/product/tile-tone";
+import PublicationCard, { CATEGORY_LOOK } from "@/components/publications/publication-card";
 import NiDocumentCheck from "@/icons/nexture/ni-document-check";
 import NiDocumentCross from "@/icons/nexture/ni-document-cross";
 import NiInbox from "@/icons/nexture/ni-inbox";
+import NiInfoSquare from "@/icons/nexture/ni-info-square";
 import NiShieldCheck from "@/icons/nexture/ni-shield-check";
 import NiUsers from "@/icons/nexture/ni-users";
-import { caseLabel } from "@/lib/cases/cases";
-import { STATUS_KEY as DEADLINE_STATUS_KEY } from "@/lib/deadlines/deadlines";
 import type { DeadlineAct } from "@/lib/deadlines/facts";
 import type { Colleague } from "@/lib/hearings/facts";
-import {
-  type CourtZones,
-  isHearingZone,
-  momentIn,
-  STATUS_KEY as HEARING_STATUS_KEY,
-  ZONE_KEY,
-} from "@/lib/hearings/hearings";
+import type { CourtZones } from "@/lib/hearings/hearings";
 import { type PageScope, scopeCrumbs } from "@/lib/modules/offer";
 import {
-  acknowledgePublicationCancel,
-  readPublication,
   readPublicationProgress,
   requestPublicationsCapture,
   searchPublications,
   setFirmAiTriage,
-  setPublicationJudgment,
-  triagePublication,
 } from "@/lib/publications/actions";
 import type {
   AiTriage,
@@ -64,15 +40,7 @@ import type {
   PublicationsData,
   StoppedRow,
 } from "@/lib/publications/facts";
-import {
-  countsNow,
-  type HeldList,
-  holdList,
-  type Said,
-  triagedInList,
-  withSaid,
-  withSeen,
-} from "@/lib/publications/list-state";
+import { countsNow, type HeldList, holdList, triagedInList, withSaid, withSeen } from "@/lib/publications/list-state";
 import {
   captureErrorKey,
   type CaptureHealth,
@@ -81,15 +49,16 @@ import {
   HEALTH_KEY,
   isUnsureReading,
   PUBLICATION_CATEGORIES,
-  type PublicationCategory,
   publicationErrorKey,
   PUBLICATIONS_SHOWN,
   publicationsAddress,
   type PublicationView,
+  type ReadingState,
   readingState,
   VIEW_COUNT,
 } from "@/lib/publications/publications";
-import { readingAdviceKey, readingOnCard, readingReasonKey, readingStatusKey } from "@/lib/publications/reading-words";
+import { readingOnCard } from "@/lib/publications/reading-words";
+import { cn } from "@/lib/utils";
 import { formatDayBr } from "@flyee/rules/person";
 
 export type PublicationsState =
@@ -158,16 +127,6 @@ const HEALTH_TONE: Record<CaptureHealth, StatusTone> = {
   late: "attention",
   incomplete: "attention",
   failed: "attention",
-};
-
-/** A deadline is what nobody may miss: it takes the accent the app uses for "look at this". */
-const CATEGORY_TONE: Record<PublicationCategory, StatusTone> = {
-  prazo: "attention",
-  audiencia: "attention",
-  decisao: "primary",
-  pagamento: "positive",
-  ciencia: "neutral",
-  outro: "neutral",
 };
 
 /**
@@ -255,11 +214,6 @@ function PublicationsScreen({ state, onReadAgain }: { state: PublicationsState; 
       (data.stopped.length > 0 ||
         data.captures.some((capture) => capture.health === "failed" && capture.error === "djen_invalid_registration")),
   );
-  // The words each state takes, named here: a call that reads a message is handed its key and nothing else.
-  const readingWarningKey =
-    reading === "failing" ? "publications-reading-warning-failing" : "publications-reading-warning-late";
-  // What a reading left out is said by each reading that left it, right below.
-  const warnsOfReading = reading === "failing" || reading === "late";
   const nothingKey = off
     ? "publications-nothing-off"
     : unsure
@@ -433,74 +387,21 @@ function PublicationsScreen({ state, onReadAgain }: { state: PublicationsState; 
         </Alert>
       ) : null}
 
-      {ready && data && off && total > 0 ? (
-        <Alert severity="info" className="neutral bg-background-paper/60!">
-          {t("publications-capture-off")}
-        </Alert>
+      {/*
+        How far the reading of the gazette went, in one card before the list (a list with nothing new means something
+        only when the reading is up to date): its state on its head, and the registrations, what a reading left out
+        and the readings that stopped inside it, open by itself when the team has something to put right there.
+      */}
+      {ready && data && total > 0 && (data.captures.length > 0 || data.stopped.length > 0 || reading === "none") ? (
+        <ReadingCard
+          captures={data.captures}
+          stopped={data.stopped}
+          off={off}
+          reading={reading}
+          leftOut={leftOut}
+          teamFixes={teamFixes}
+        />
       ) : null}
-
-      {/* What the list below may be missing is said before it, never behind it. */}
-      {ready && data && ready.captureOn && warnsOfReading ? (
-        <Alert severity="warning" className="neutral bg-background-paper/60!">
-          {t(readingWarningKey)}
-        </Alert>
-      ) : null}
-      {ready && data && total > 0 && reading === "none" ? (
-        <Alert
-          severity="warning"
-          className="neutral bg-background-paper/60!"
-          action={
-            <Button color="inherit" size="small" href="/settings/team" LinkComponent={Link}>
-              {t("publications-no-registration-action")}
-            </Button>
-          }
-        >
-          {t("publications-reading-warning-none")}
-        </Alert>
-      ) : null}
-      {leftOut.map((capture) => (
-        <Alert key={capture.id} severity="warning" className="neutral bg-background-paper/60!">
-          {t("publications-reading-left-out", {
-            count: capture.leftOut,
-            when: capture.leftOutLabel ?? "",
-            uf: capture.uf,
-            number: capture.number,
-          })}
-          {/* Which ones, as far as each could be told apart: what a person opens at the DJEN itself. */}
-          {capture.leftOutItems.length > 0 ? (
-            <Box component="ul" className="m-0 mt-2 flex list-none flex-col gap-1 p-0">
-              {capture.leftOutItems.map((item, index) => (
-                <Box component="li" key={index} className="flex flex-wrap items-center gap-x-3">
-                  <Typography variant="body2" component="span">
-                    {[
-                      item.court,
-                      item.day ? t("publication-available-on", { day: formatDayBr(item.day) ?? item.day }) : null,
-                    ]
-                      .filter(Boolean)
-                      .join(" · ") || t("publications-left-out-unknown")}
-                  </Typography>
-                  {item.certificateUrl ? (
-                    <Button
-                      variant="text"
-                      color="inherit"
-                      size="small"
-                      href={item.certificateUrl}
-                      target="_blank"
-                      rel="noopener noreferrer nofollow"
-                    >
-                      {t("publication-certificate")}
-                    </Button>
-                  ) : (
-                    <Typography variant="body2" component="span">
-                      {t("publications-left-out-no-hash")}
-                    </Typography>
-                  )}
-                </Box>
-              ))}
-            </Box>
-          ) : null}
-        </Alert>
-      ))}
 
       {ready && data && total === 0 && reading === "none" && !data.hasRegistrations ? (
         <EmptyState
@@ -528,7 +429,7 @@ function PublicationsScreen({ state, onReadAgain }: { state: PublicationsState; 
             {(Object.keys(VIEW_TILE) as PublicationView[])
               .filter((view) => view !== "conferir" || showsReview)
               .map((view) => (
-                <Grid key={view} size={{ xs: 12, sm: showsReview ? 6 : 4, lg: showsReview ? 3 : 4 }}>
+                <Grid key={view} size={{ xs: showsReview ? 6 : 4, lg: showsReview ? 3 : 4 }}>
                   <StatTile
                     onClick={() => {
                       const searching = Boolean(found);
@@ -547,68 +448,75 @@ function PublicationsScreen({ state, onReadAgain }: { state: PublicationsState; 
                 </Grid>
               ))}
           </Grid>
-
-          <Card component="section" aria-labelledby="publications-search">
-            <CardContent className="flex flex-col gap-3">
-              <Typography id="publications-search" variant="subtitle2" component="h2" className="mb-0">
-                {t("publications-search-title")}
-              </Typography>
-              <Box
-                component="form"
-                className="flex flex-wrap items-start gap-3"
-                onSubmit={(event: React.FormEvent) => {
-                  event.preventDefault();
-                  search();
-                }}
-              >
-                <TextField
-                  size="small"
-                  label={t("publications-search-label")}
-                  value={typed}
-                  onChange={(event) => setTyped(event.target.value.slice(0, 40))}
-                  error={Boolean(searchError)}
-                  helperText={searchError ?? t("publications-search-help")}
-                  className="min-w-64 flex-1"
-                  slotProps={{ htmlInput: { inputMode: "numeric", autoComplete: "off" } }}
-                />
-                <Button type="submit" variant="outlined" color="grey" disabled={searching || typed.trim() === ""}>
-                  {t("publications-search-action")}
-                </Button>
-                {found ? (
-                  <Button variant="text" color="grey" onClick={clearSearch}>
-                    {t("publications-search-clear")}
-                  </Button>
-                ) : null}
-              </Box>
-              {found ? (
-                <Typography variant="body2" className="text-text-secondary" role="status">
-                  {[
-                    t("publications-search-results", { count: found.rows.length }),
-                    found.more ? t("publications-search-more", { count: PUBLICATIONS_SHOWN }) : null,
-                  ]
-                    .filter(Boolean)
-                    .join(" ")}
-                </Typography>
-              ) : null}
-            </CardContent>
-          </Card>
         </>
       ) : null}
 
-      {ready && data && (data.captures.length > 0 || data.stopped.length > 0) ? (
-        <ReadingCard captures={data.captures} stopped={data.stopped} off={off} />
+      {/* Where nothing was published yet, the reading is said under what the empty list says. */}
+      {ready && data && total === 0 && (data.captures.length > 0 || data.stopped.length > 0) ? (
+        <ReadingCard
+          captures={data.captures}
+          stopped={data.stopped}
+          off={off}
+          reading={reading}
+          leftOut={leftOut}
+          teamFixes={teamFixes}
+        />
       ) : null}
 
       {ready && data && total > 0 ? (
-        <>
+        <Box component="section" aria-labelledby="publications-list" className="flex flex-col gap-4">
+          {/* The list's head: which list it is, the search of a lawsuit's publications, and what the answers mean. */}
+          <Box className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+            <Box className="flex min-w-0 flex-col gap-1">
+              <Typography id="publications-list" variant="h5" component="h2" className="mb-0">
+                {found ? t("publications-search-found-title") : t(VIEW_TILE[ready.view].label)}
+              </Typography>
+              <Typography variant="body2" className="text-text-secondary" role={found ? "status" : undefined}>
+                {found
+                  ? [
+                      t("publications-search-results", { count: found.rows.length }),
+                      found.more ? t("publications-search-more", { count: PUBLICATIONS_SHOWN }) : null,
+                    ]
+                      .filter(Boolean)
+                      .join(" ")
+                  : t(VIEW_TILE[ready.view].hint)}
+              </Typography>
+            </Box>
+            <Box
+              component="form"
+              role="search"
+              aria-label={t("publications-search-title")}
+              className="flex flex-none flex-wrap items-start gap-2"
+              onSubmit={(event: React.FormEvent) => {
+                event.preventDefault();
+                search();
+              }}
+            >
+              <TextField
+                size="small"
+                label={t("publications-search-label")}
+                value={typed}
+                onChange={(event) => setTyped(event.target.value.slice(0, 40))}
+                error={Boolean(searchError)}
+                helperText={searchError ?? undefined}
+                className="w-full sm:w-72"
+                slotProps={{ htmlInput: { inputMode: "numeric", autoComplete: "off" } }}
+              />
+              <Button type="submit" variant="outlined" color="grey" disabled={searching || typed.trim() === ""}>
+                {t("publications-search-action")}
+              </Button>
+              {found ? (
+                <Button variant="text" color="grey" onClick={clearSearch}>
+                  {t("publications-search-clear")}
+                </Button>
+              ) : null}
+            </Box>
+          </Box>
+
           {!ready.mayTriage ? (
             <Typography variant="body2" className="text-text-secondary">
               {t("publications-read-only")}
             </Typography>
-          ) : null}
-
-          {data.aiTriage.sampled.length > 0 ? (
-            <AiTriageCard aiTriage={data.aiTriage} mayDecide={ready.mayDecideAi} onChanged={onReadAgain} />
           ) : null}
 
           {ready.mayTriage && rows.some((row) => row.active) ? <CategoryLegend /> : null}
@@ -691,22 +599,81 @@ function PublicationsScreen({ state, onReadAgain }: { state: PublicationsState; 
               )}
             </Box>
           ) : null}
-        </>
+
+          {/* How the firm lets the AI triage: a setting of the firm's, after the work of the day. */}
+          {data.aiTriage.sampled.length > 0 ? (
+            <AiTriageCard aiTriage={data.aiTriage} mayDecide={ready.mayDecideAi} onChanged={onReadAgain} />
+          ) : null}
+        </Box>
       ) : null}
     </Box>
   );
 }
 
-/** How far the reading of the gazette went, per registration at the bar: what makes "nothing new" mean something. */
-function ReadingCard({ captures, stopped, off }: { captures: CaptureRow[]; stopped: StoppedRow[]; off: boolean }) {
+/** What the reading as a whole says on the card's head: its words and its tone. */
+const READING_CHIP: Record<ReadingState, { key: string; tone: StatusTone }> = {
+  none: { key: "publications-reading-chip-none", tone: "attention" },
+  failing: { key: "publication-capture-failed", tone: "attention" },
+  late: { key: "publication-capture-late", tone: "attention" },
+  incomplete: { key: "publication-capture-incomplete", tone: "attention" },
+  pending: { key: "publication-capture-waiting", tone: "info" },
+  ok: { key: "publication-capture-ok", tone: "positive" },
+};
+
+/**
+ * How far the reading of the gazette went, in one card: what makes "nothing new" mean something. Closed, its head
+ * says where the reading stands and one line of why; open, each registration with how far it was read, what a
+ * reading left out (each one at the DJEN by its certificate) and the readings that stopped, with the way to the team.
+ * It opens by itself when the team has something to put right there; a reading that is only late is ONE's own work,
+ * said and never asked of anybody.
+ */
+function ReadingCard({
+  captures,
+  stopped,
+  off,
+  reading,
+  leftOut,
+  teamFixes,
+}: {
+  captures: CaptureRow[];
+  stopped: StoppedRow[];
+  off: boolean;
+  reading: ReadingState;
+  leftOut: CaptureRow[];
+  teamFixes: boolean;
+}) {
   const t = useTranslations("product");
+  const chip = off
+    ? { key: "publication-capture-off", tone: "neutral" as const }
+    : stopped.length > 0 && (reading === "ok" || reading === "pending")
+      ? { key: "publications-reading-stopped-chip", tone: "attention" as const }
+      : READING_CHIP[reading];
+  const summary = off
+    ? t("publications-capture-off")
+    : reading === "failing"
+      ? t("publications-reading-warning-failing")
+      : reading === "late"
+        ? t("publications-reading-warning-late")
+        : reading === "none"
+          ? t("publications-reading-warning-none")
+          : leftOut.length > 0
+            ? t("publications-reading-summary-left-out")
+            : stopped.length > 0
+              ? t("publications-reading-summary-stopped", { count: stopped.length })
+              : reading === "pending"
+                ? t("publications-reading-summary-pending")
+                : t("publications-reading-summary-ok", { count: captures.length });
   return (
-    // `#leitura` is where the home leads a person who has a reading of the firm's to put right.
-    <Card component="section" id="leitura" aria-labelledby="publications-reading" className="scroll-mt-24">
-      <CardContent className="flex flex-col gap-3">
-        <Typography id="publications-reading" variant="h5" component="h2" className="mb-0">
-          {t("publications-reading-title")}
-        </Typography>
+    <CollapsibleCard
+      id="publications-reading"
+      anchor="leitura"
+      title={t("publications-reading-title")}
+      chip={<StatusChip tone={chip.tone} label={t(chip.key)} />}
+      summary={summary}
+      defaultOpen={!off && (teamFixes || leftOut.length > 0 || reading === "none")}
+      bodyClassName="gap-3"
+    >
+      {captures.length > 0 ? (
         <Box component="ul" className="m-0 flex list-none flex-col p-0">
           {captures.map((capture) => {
             const read = [
@@ -755,52 +722,102 @@ function ReadingCard({ captures, stopped, off }: { captures: CaptureRow[]; stopp
             );
           })}
         </Box>
-        {/* A reading that stopped is never quiet: the courts go on addressing that lawyer. */}
-        {stopped.length > 0 ? (
-          <Box className="border-grey-100 flex flex-col gap-2 border-t pt-3">
-            <Typography variant="subtitle2" component="h3" className="mb-0">
-              {t("publications-reading-stopped-title")}
-            </Typography>
-            <Typography variant="body2" className="text-text-secondary">
-              {t("publications-reading-stopped-body")}
-            </Typography>
-            <Box component="ul" className="m-0 flex list-none flex-col p-0">
-              {stopped.map((reading) => (
-                <Box component="li" key={reading.id} className="flex flex-wrap items-center gap-3 py-2">
-                  <Box className="flex min-w-0 flex-1 flex-col">
-                    <Typography variant="body1" className="font-semibold">
-                      {[t("publications-reading-oab", { uf: reading.uf, number: reading.number }), reading.lawyer]
-                        .filter(Boolean)
-                        .join(" · ")}
+      ) : null}
+
+      {/* What a reading left out, as far as each could be told apart: what a person opens at the DJEN itself. */}
+      {leftOut.map((capture) => (
+        <Box
+          key={capture.id}
+          className="border-accent-3/30 bg-accent-3-light/5 flex flex-col gap-2 rounded-2xl border p-3"
+        >
+          <StateLine tone="attention">
+            {t("publications-reading-left-out", {
+              count: capture.leftOut,
+              when: capture.leftOutLabel ?? "",
+              uf: capture.uf,
+              number: capture.number,
+            })}
+          </StateLine>
+          {capture.leftOutItems.length > 0 ? (
+            <Box component="ul" className="m-0 flex list-none flex-col gap-1 p-0 pl-7">
+              {capture.leftOutItems.map((item, index) => (
+                <Box component="li" key={index} className="flex flex-wrap items-center gap-x-3">
+                  <Typography variant="body2" component="span">
+                    {[
+                      item.court,
+                      item.day ? t("publication-available-on", { day: formatDayBr(item.day) ?? item.day }) : null,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ") || t("publications-left-out-unknown")}
+                  </Typography>
+                  {item.certificateUrl ? (
+                    <Button
+                      variant="text"
+                      color="primary"
+                      size="small"
+                      href={item.certificateUrl}
+                      target="_blank"
+                      rel="noopener noreferrer nofollow"
+                    >
+                      {t("publication-certificate")}
+                    </Button>
+                  ) : (
+                    <Typography variant="body2" component="span" className="text-text-secondary">
+                      {t("publications-left-out-no-hash")}
                     </Typography>
-                    <Typography variant="body2" className="text-text-secondary">
-                      {[
-                        reading.stoppedLabel
-                          ? t("publications-reading-stopped-when", { when: reading.stoppedLabel })
-                          : null,
-                        reading.readThrough
-                          ? t("publications-reading-through", {
-                              day: formatDayBr(reading.readThrough) ?? reading.readThrough,
-                            })
-                          : t("publications-reading-never"),
-                      ]
-                        .filter(Boolean)
-                        .join(" · ")}
-                    </Typography>
-                  </Box>
-                  <StatusChip tone="attention" label={t("publications-reading-stopped-chip")} />
+                  )}
                 </Box>
               ))}
             </Box>
-            <Box className="-ml-2">
-              <Button component={Link} href="/settings/team" variant="text" color="primary" size="small">
-                {t("publications-reading-stopped-team")}
-              </Button>
-            </Box>
+          ) : null}
+        </Box>
+      ))}
+
+      {/* A reading that stopped is never quiet: the courts go on addressing that lawyer. */}
+      {stopped.length > 0 ? (
+        <Box className="border-grey-100 flex flex-col gap-2 border-t pt-3">
+          <Typography variant="subtitle2" component="h3" className="mb-0">
+            {t("publications-reading-stopped-title")}
+          </Typography>
+          <Typography variant="body2" className="text-text-secondary">
+            {t("publications-reading-stopped-body")}
+          </Typography>
+          <Box component="ul" className="m-0 flex list-none flex-col p-0">
+            {stopped.map((row) => (
+              <Box component="li" key={row.id} className="flex flex-wrap items-center gap-3 py-2">
+                <Box className="flex min-w-0 flex-1 flex-col">
+                  <Typography variant="body1" className="font-semibold">
+                    {[t("publications-reading-oab", { uf: row.uf, number: row.number }), row.lawyer]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </Typography>
+                  <Typography variant="body2" className="text-text-secondary">
+                    {[
+                      row.stoppedLabel ? t("publications-reading-stopped-when", { when: row.stoppedLabel }) : null,
+                      row.readThrough
+                        ? t("publications-reading-through", { day: formatDayBr(row.readThrough) ?? row.readThrough })
+                        : t("publications-reading-never"),
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </Typography>
+                </Box>
+                <StatusChip tone="attention" label={t("publications-reading-stopped-chip")} />
+              </Box>
+            ))}
           </Box>
-        ) : null}
-      </CardContent>
-    </Card>
+        </Box>
+      ) : null}
+
+      {/* The team is where a registration is put right: a reading that stopped, one the DJEN refuses, or none at all. */}
+      {teamFixes || reading === "none" ? (
+        <Box className="-ml-2">
+          <Button component={Link} href="/settings/team" variant="text" color="primary" size="small">
+            {reading === "none" ? t("publications-no-registration-action") : t("publications-reading-stopped-team")}
+          </Button>
+        </Box>
+      ) : null}
+    </CollapsibleCard>
   );
 }
 
@@ -879,23 +896,52 @@ function AiTriageCard({
 
 function CategoryLegend() {
   const t = useTranslations("product");
+  const [open, setOpen] = useState(false);
   return (
-    <Box component="section" aria-labelledby="publications-legend" className="flex flex-col gap-2">
-      <Typography id="publications-legend" variant="body2" component="h2" className="text-text-secondary mb-0">
-        {t("publications-legend-title")}
-      </Typography>
-      <Box component="dl" className="m-0 grid grid-cols-1 gap-x-6 gap-y-1 sm:grid-cols-2 lg:grid-cols-3">
-        {PUBLICATION_CATEGORIES.map((category) => (
-          <Box key={category} className="flex flex-wrap gap-x-1">
-            <Typography component="dt" variant="body2" className="font-semibold">
-              {t(CATEGORY_KEY[category])}
-            </Typography>
-            <Typography component="dd" variant="body2" className="text-text-secondary m-0">
-              {t(CATEGORY_HINT_KEY[category])}
-            </Typography>
-          </Box>
-        ))}
+    <Box className="flex flex-col gap-2">
+      <Box className="-ml-2">
+        <Button
+          variant="text"
+          color="grey"
+          size="small"
+          startIcon={<NiInfoSquare size="small" />}
+          aria-expanded={open}
+          aria-controls="publications-legend"
+          onClick={() => setOpen((now) => !now)}
+        >
+          {t("publications-legend-title")}
+        </Button>
       </Box>
+      <Collapse in={open} unmountOnExit>
+        <Box
+          id="publications-legend"
+          component="dl"
+          className="bg-grey-25 m-0 grid grid-cols-1 gap-x-6 gap-y-2 rounded-2xl p-4 sm:grid-cols-2 lg:grid-cols-3"
+        >
+          {PUBLICATION_CATEGORIES.map((category) => (
+            <Box key={category} className="flex flex-row items-start gap-2">
+              <Box
+                aria-hidden
+                className={cn(
+                  "flex h-7 w-7 flex-none items-center justify-center rounded-lg",
+                  TILE_TONE[CATEGORY_LOOK[category].tone].bg,
+                  TILE_TONE[CATEGORY_LOOK[category].tone].text,
+                )}
+              >
+                {CATEGORY_LOOK[category].icon}
+              </Box>
+              <Box className="flex min-w-0 flex-col">
+                <Typography component="dt" variant="body2" className="font-semibold">
+                  {t(CATEGORY_KEY[category])}
+                </Typography>
+                <Typography component="dd" variant="body2" className="text-text-secondary m-0">
+                  {t(CATEGORY_HINT_KEY[category])}
+                </Typography>
+              </Box>
+            </Box>
+          ))}
+        </Box>
+      </Collapse>
     </Box>
   );
 }
@@ -937,678 +983,4 @@ function newestProgress(
     next[id] = entry;
   }
   return next;
-}
-
-/**
- * One publication: where it comes from, the case it belongs to, the start
- * and the end of its text, and the six answers. The text is a court's: it is
- * rendered as plain text, never as markup. What the person says of it shows
- * on the spot and stays there, so a wrong click is one more click to undo.
- */
-function PublicationCard({
-  row,
-  progress,
-  acts,
-  colleagues,
-  courtZones,
-  mayTriage,
-  said,
-  seen,
-  onSaid,
-  onSeen,
-}: {
-  row: PublicationRow;
-  /** What ONE recorded of it since the list was read, while ONE reads it. */
-  progress: PublicationProgress | null;
-  acts: readonly DeadlineAct[];
-  colleagues: readonly Colleague[];
-  courtZones: Readonly<Record<string, CourtZones>>;
-  mayTriage: boolean;
-  /** What the person said of it since the list was read: kept by the screen, so it is one word wherever it shows. */
-  said: Said | null;
-  /** The person said they saw its cancelling since the list was read. */
-  seen: boolean;
-  onSaid: (said: Said) => void;
-  onSeen: () => void;
-}) {
-  const t = useTranslations("product");
-  const [pending, startTransition] = useTransition();
-  const [changing, setChanging] = useState(false);
-  const [note, setNote] = useState((said ? said.note : row.note) ?? "");
-  const [noteOpen, setNoteOpen] = useState(Boolean(said ? said.note : row.note));
-  const [error, setError] = useState<string | null>(null);
-  const [full, setFull] = useState<{ text: string | null; truncated: boolean; failed: boolean } | null>(null);
-  /** The form of a deadline counted from this publication, open; and what came of the last one sent. */
-  const [counting, setCounting] = useState(false);
-  const [counted, setCounted] = useState<string | null>(null);
-  /** The form of a hearing written from this publication, open; and whether one was written since the list was read. */
-  const [scheduling, setScheduling] = useState(false);
-  const [scheduled, setScheduled] = useState(false);
-  /** The reading in course of the whole text: one that was closed meanwhile shows nothing when it arrives. */
-  const reading = useRef(0);
-  const changeButton = useRef<HTMLButtonElement | null>(null);
-  const moveFocus = useRef(false);
-  /**
-   * Of a decision, whether it is the lawsuit's judgment (0096): what was read with the list, then what the triage
-   * answered (the app's reading of its words) or the person said; `asking` while the person corrects it.
-   */
-  const [judgment, setJudgment] = useState(row.judgment);
-  const [judgmentAsked, setJudgmentAsked] = useState(false);
-
-  const category = said ? said.category : row.category;
-  const savedNote = said ? said.note : row.note;
-  const deadlines = progress?.deadlines ?? row.deadlines;
-  const hearings = progress?.hearings ?? row.hearings;
-  /** What ONE read of what the publication set, or is reading now. */
-  const readingNow = row.active
-    ? readingOnCard(category, progress?.readings ?? row.readings, said?.reading ?? null, said?.at, progress?.readAt)
-    : null;
-  const leftToPerson = readingNow?.status === "unread" || readingNow?.status === "failed";
-  /** What ONE left to a person was done since (a deadline, whatever became of it; a hearing, or its word): nothing more is asked. */
-  const doneSince =
-    readingNow?.kind === "deadline"
-      ? deadlines.length > 0 || (progress?.anyDeadline ?? row.anyDeadline) || Boolean(counted)
-      : hearings.length > 0 || (progress?.hearingSettled ?? row.hearingSettled) || scheduled;
-  const readingWords =
-    readingNow && !(leftToPerson && doneSince)
-      ? t(readingStatusKey(readingNow), {
-          reason: t(readingReasonKey(readingNow.reason)),
-          advice: t(readingAdviceKey(readingNow.kind, readingNow.reason)),
-        })
-      : null;
-  /** What ONE recorded from the publication stays where it is after its triage changed, and the card says so. */
-  const staysWords = [
-    category !== "prazo" && deadlines.some((deadline) => deadline.auto) ? t("publication-deadline-stays") : null,
-    category !== "audiencia" && hearings.some((hearing) => hearing.auto && hearing.status === "scheduled")
-      ? t("publication-hearing-stays")
-      : null,
-  ].filter(Boolean);
-  const controls = mayTriage && row.active && (category === null || changing);
-
-  // The answers leave the screen once one is given: the focus goes to what stands in their place.
-  useEffect(() => {
-    if (moveFocus.current && !controls) {
-      moveFocus.current = false;
-      changeButton.current?.focus();
-    }
-  }, [controls, category]);
-
-  const triage = (chosen: PublicationCategory) =>
-    startTransition(async () => {
-      setError(null);
-      try {
-        const kept = note.trim() || null;
-        const result = await triagePublication({ publicationId: row.id, category: chosen, note: kept });
-        if (!result.ok) {
-          setError(t(publicationErrorKey(result.code)));
-          return;
-        }
-        moveFocus.current = true;
-        onSaid({ category: chosen, note: kept, reading: result.reading ?? null, at: Date.now() });
-        setChanging(false);
-        // A decision: the app read its words, and asks the person only when they say nothing clear.
-        if (chosen === "decisao") {
-          setJudgment(typeof result.judgment === "boolean" ? { value: result.judgment, source: "rule" } : null);
-          setJudgmentAsked(result.judgment === null);
-        }
-        // ONE reads what the publication set (0040): the card says so, and the form stays one click away.
-        if (result.reading) return;
-        // A publication that sets a time is counted right away, unless one of its deadlines already is.
-        if (chosen === "prazo" && deadlines.length === 0 && !counted) setCounting(true);
-        // One that sets a hearing of a lawsuit of the firm is written in the agenda right away, the same way.
-        if (chosen === "audiencia" && row.proceedingId && hearings.length === 0 && !scheduled) setScheduling(true);
-      } catch {
-        setError(t("publication-error-failed"));
-      }
-    });
-
-  const sayJudgment = (value: boolean) =>
-    startTransition(async () => {
-      setError(null);
-      try {
-        const result = await setPublicationJudgment(row.id, value);
-        if (!result.ok) {
-          setError(t(publicationErrorKey(result.code)));
-          return;
-        }
-        setJudgment({ value, source: "person" });
-        setJudgmentAsked(false);
-      } catch {
-        setError(t("publication-error-failed"));
-      }
-    });
-
-  const acknowledge = () =>
-    startTransition(async () => {
-      setError(null);
-      try {
-        const result = await acknowledgePublicationCancel(row.id);
-        if (result.ok) onSeen();
-        else setError(t(publicationErrorKey(result.code)));
-      } catch {
-        setError(t("publication-error-failed"));
-      }
-    });
-
-  const readAll = async () => {
-    const mine = reading.current + 1;
-    reading.current = mine;
-    setFull({ text: null, truncated: false, failed: false });
-    let next: { text: string | null; truncated: boolean; failed: boolean };
-    try {
-      const result = await readPublication(row.id);
-      next = result.ok
-        ? { text: result.text, truncated: result.truncated, failed: false }
-        : { text: null, truncated: false, failed: true };
-    } catch {
-      next = { text: null, truncated: false, failed: true };
-    }
-    // Closed, or asked again, while it was on its way: this answer is nobody's.
-    if (reading.current === mine) setFull(next);
-  };
-  const closeFull = () => {
-    reading.current += 1;
-    setFull(null);
-  };
-
-  const headline = [row.court, row.kind, row.documentType].filter(Boolean).join(" · ");
-  const titleId = `publication-${row.id}`;
-  const answers = (
-    <TriageAnswers
-      current={category}
-      pending={pending}
-      note={note}
-      noteOpen={noteOpen}
-      noteChanged={(note.trim() || null) !== (savedNote ?? null)}
-      onNote={setNote}
-      onOpenNote={() => setNoteOpen(true)}
-      onChoose={triage}
-      onKeep={category !== null ? () => setChanging(false) : undefined}
-      error={error}
-    />
-  );
-
-  return (
-    <Card component="article" aria-labelledby={titleId}>
-      <CardContent className="flex flex-col gap-3">
-        <Box className="flex flex-wrap items-start gap-3">
-          <Box className="flex min-w-0 flex-1 flex-col gap-1">
-            <Typography id={titleId} variant="subtitle2" component="h3" className="mb-0">
-              {headline}
-            </Typography>
-            <Typography variant="body2" className="text-text-secondary">
-              {[
-                t("publication-available-on", { day: formatDayBr(row.availableOn) ?? row.availableOn }),
-                t("publication-case-number", { number: row.cnj }),
-                row.unit,
-                row.className,
-              ]
-                .filter(Boolean)
-                .join(" · ")}
-            </Typography>
-          </Box>
-          {!row.active ? <StatusChip tone="danger" label={t("publication-cancelled")} /> : null}
-          {category ? <StatusChip tone={CATEGORY_TONE[category]} label={t(CATEGORY_KEY[category])} /> : null}
-        </Box>
-
-        <Box className="flex flex-wrap items-center gap-x-4 gap-y-1">
-          {row.caseId ? (
-            <Button
-              variant="text"
-              color="primary"
-              size="small"
-              href={`/casos/${row.caseId}`}
-              LinkComponent={Link}
-              className="-ml-2"
-            >
-              {row.caseSeq !== null
-                ? t("publication-open-case", { label: caseLabel(row.caseSeq) })
-                : t("publication-open-case-plain")}
-            </Button>
-          ) : (
-            <Typography variant="body2" className="text-text-secondary">
-              {t("publication-no-case")}
-            </Typography>
-          )}
-          {row.lawyers.length > 0 ? (
-            <Typography variant="body2" className="text-text-secondary">
-              {t("publication-addressed-to", { names: row.lawyers.join(", ") })}
-            </Typography>
-          ) : null}
-        </Box>
-
-        {!row.active ? (
-          <Alert
-            severity="warning"
-            className="neutral bg-background-paper/60!"
-            action={
-              row.cancelUnseen && !seen && mayTriage ? (
-                <Button color="inherit" size="small" onClick={acknowledge} disabled={pending}>
-                  {t("publication-cancel-seen-action")}
-                </Button>
-              ) : undefined
-            }
-          >
-            {[
-              row.cancelUnseen && !seen && category
-                ? t("publication-cancel-unseen", { category: t(CATEGORY_KEY[category]) })
-                : null,
-              row.cancelReason ? t("publication-cancel-reason", { reason: row.cancelReason }) : null,
-              row.cancelledLabel ? t("publication-cancelled-at", { when: row.cancelledLabel }) : null,
-            ]
-              .filter(Boolean)
-              .join(" ") || t("publication-cancelled")}
-          </Alert>
-        ) : null}
-
-        <Box className="flex flex-col gap-1">
-          <Typography variant="body1" className="break-words">
-            {row.head || t("publication-no-text")}
-          </Typography>
-          {row.tail ? (
-            <>
-              <Typography variant="body2" className="text-text-secondary" aria-hidden>
-                {t("publication-text-gap")}
-              </Typography>
-              <Typography variant="body1" className="break-words">
-                {row.tail}
-              </Typography>
-            </>
-          ) : null}
-          {row.truncated ? (
-            <Typography variant="body2" className="text-text-secondary">
-              {t("publication-truncated")}
-            </Typography>
-          ) : null}
-        </Box>
-
-        {readingWords && leftToPerson ? (
-          <Alert severity="warning" className="neutral bg-background-paper/60!">
-            {readingWords}
-          </Alert>
-        ) : readingWords ? (
-          <Typography variant="body2" className="text-text-secondary" role="status">
-            {readingWords}
-          </Typography>
-        ) : null}
-        {staysWords.length > 0 ? (
-          <Typography variant="body2" className="text-text-secondary">
-            {staysWords.join(" ")}
-          </Typography>
-        ) : null}
-
-        {category === "decisao" && row.active ? (
-          judgment && !judgmentAsked ? (
-            <StateLine
-              tone={judgment.source === "person" ? "done" : "info"}
-              action={
-                mayTriage ? (
-                  <Button
-                    variant="text"
-                    color="grey"
-                    size="small"
-                    disabled={pending}
-                    onClick={() => setJudgmentAsked(true)}
-                  >
-                    {t("publication-judgment-change")}
-                  </Button>
-                ) : undefined
-              }
-            >
-              {t(judgmentWordsKey(judgment))}
-            </StateLine>
-          ) : (
-            <StateLine
-              tone="attention"
-              action={
-                mayTriage ? (
-                  <Box className="flex flex-wrap gap-2">
-                    <Button
-                      variant="outlined"
-                      color="grey"
-                      size="small"
-                      disabled={pending}
-                      onClick={() => sayJudgment(true)}
-                    >
-                      {t("publication-judgment-yes")}
-                    </Button>
-                    <Button
-                      variant="outlined"
-                      color="grey"
-                      size="small"
-                      disabled={pending}
-                      onClick={() => sayJudgment(false)}
-                    >
-                      {t("publication-judgment-no")}
-                    </Button>
-                  </Box>
-                ) : undefined
-              }
-            >
-              {t("publication-judgment-ask")}
-            </StateLine>
-          )
-        ) : null}
-
-        {hearings.length > 0 || scheduled ? (
-          <Box className="flex flex-col gap-1" role="status">
-            {hearings.map((hearing) => {
-              const when = momentIn(hearing.startsAt, hearing.timeZone);
-              // Brasília goes unsaid, as on the hearing's own card.
-              const zoneWords =
-                hearing.timeZone !== "America/Sao_Paulo" && isHearingZone(hearing.timeZone)
-                  ? t(ZONE_KEY[hearing.timeZone])
-                  : null;
-              return (
-                <Typography key={hearing.id} variant="body2">
-                  {t("publication-hearing", {
-                    day: when.day,
-                    time: when.time,
-                    status: t(HEARING_STATUS_KEY[hearing.status]),
-                  })}
-                  {zoneWords ? ` · ${zoneWords}` : ""}
-                </Typography>
-              );
-            })}
-            {scheduled && hearings.length === 0 ? (
-              <Typography variant="body2">{t("hearing-scheduled-notice")}</Typography>
-            ) : null}
-          </Box>
-        ) : null}
-
-        {deadlines.length > 0 || counted ? (
-          <Box className="flex flex-col gap-1" role="status">
-            {deadlines.map((deadline) => (
-              <Typography key={deadline.id} variant="body2">
-                {deadline.urgentOn
-                  ? t("publication-deadline", {
-                      title: deadline.title,
-                      day: formatDayBr(deadline.urgentOn) ?? deadline.urgentOn,
-                      status: t(DEADLINE_STATUS_KEY[deadline.status]),
-                    })
-                  : t("publication-deadline-counting", { title: deadline.title })}
-              </Typography>
-            ))}
-            {counted ? <Typography variant="body2">{counted}</Typography> : null}
-          </Box>
-        ) : null}
-
-        <Box className="flex flex-wrap gap-2">
-          {mayTriage && row.active ? (
-            <Button variant="outlined" color="grey" size="small" onClick={() => setCounting(true)}>
-              {t("publication-deadline-action")}
-            </Button>
-          ) : null}
-          {deadlines.length > 0 ? (
-            <Button variant="text" color="grey" size="small" href="/prazos" LinkComponent={Link}>
-              {t("publication-deadline-see")}
-            </Button>
-          ) : null}
-          {mayTriage && row.active && row.proceedingId && category === "audiencia" ? (
-            <Button variant="outlined" color="grey" size="small" onClick={() => setScheduling(true)}>
-              {t("publication-hearing-action")}
-            </Button>
-          ) : null}
-          {hearings.length > 0 || scheduled ? (
-            <Button variant="text" color="grey" size="small" href="/agenda" LinkComponent={Link}>
-              {t("publication-hearing-see")}
-            </Button>
-          ) : null}
-          {row.tail || row.truncated ? (
-            <Button variant="outlined" color="grey" size="small" onClick={readAll}>
-              {t("publication-read-all")}
-            </Button>
-          ) : null}
-          {row.link ? (
-            <Button
-              variant="text"
-              color="grey"
-              size="small"
-              href={row.link}
-              target="_blank"
-              rel="noopener noreferrer nofollow"
-            >
-              {t("publication-open-court")}
-            </Button>
-          ) : null}
-          <Button
-            variant="text"
-            color="grey"
-            size="small"
-            href={row.certificateUrl}
-            target="_blank"
-            rel="noopener noreferrer nofollow"
-          >
-            {t("publication-certificate")}
-          </Button>
-        </Box>
-
-        {row.byAi && row.reviewDue && !said && category && !controls && row.active ? (
-          <Alert
-            severity="info"
-            className="neutral bg-background-paper/60!"
-            action={
-              mayTriage ? (
-                <Button color="inherit" size="small" disabled={pending} onClick={() => triage(category)}>
-                  {t("publication-by-ai-confirm")}
-                </Button>
-              ) : undefined
-            }
-          >
-            {t("publication-by-ai-review", { category: t(CATEGORY_KEY[category]) })}
-          </Alert>
-        ) : null}
-
-        {category && !controls ? (
-          <Box className="border-grey-100 flex flex-wrap items-center gap-3 border-t pt-3">
-            <Typography variant="body2" className="text-text-secondary min-w-0 flex-1" role="status">
-              {[
-                said
-                  ? t("publication-triage-done", { category: t(CATEGORY_KEY[category]) })
-                  : row.byAi && row.triagedLabel
-                    ? // What ONE classified may be wrong, until a person checked it.
-                      row.reviewedBy
-                      ? t("publication-by-ai", { when: row.triagedLabel })
-                      : [t("publication-by-ai", { when: row.triagedLabel }), t("publication-one-may-err")].join(" · ")
-                    : row.triagedBy && row.triagedLabel
-                      ? t("publication-triaged-by", { name: row.triagedBy, when: row.triagedLabel })
-                      : row.triagedLabel
-                        ? t("publication-triaged-at", { when: row.triagedLabel })
-                        : null,
-                !said && row.reviewedBy && row.reviewedLabel
-                  ? t("publication-reviewed-by", { name: row.reviewedBy, when: row.reviewedLabel })
-                  : null,
-                savedNote,
-              ]
-                .filter(Boolean)
-                .join(" · ")}
-            </Typography>
-            {mayTriage && row.active ? (
-              <Button ref={changeButton} variant="text" color="grey" size="small" onClick={() => setChanging(true)}>
-                {t("publication-change")}
-              </Button>
-            ) : null}
-          </Box>
-        ) : null}
-
-        {controls && !full ? <Box className="border-grey-100 border-t pt-3">{answers}</Box> : null}
-        {!controls && error ? (
-          <Alert severity="error" className="neutral bg-background-paper/60!">
-            {error}
-          </Alert>
-        ) : null}
-      </CardContent>
-
-      {scheduling && row.proceedingId ? (
-        <HearingDialog
-          subject={{
-            proceedingId: row.proceedingId,
-            lawsuitLabel: [row.caseSeq !== null ? caseLabel(row.caseSeq) : null, row.cnj, row.court]
-              .filter(Boolean)
-              .join(" · "),
-            publicationId: row.id,
-            zones: row.court ? (courtZones[row.court] ?? null) : null,
-          }}
-          colleagues={colleagues}
-          onClose={() => setScheduling(false)}
-          onSaved={() => {
-            setScheduling(false);
-            setScheduled(true);
-          }}
-        />
-      ) : null}
-
-      {counting ? (
-        <DeadlineDialog
-          subject={{
-            kind: "publication",
-            publicationId: row.id,
-            availableOn: row.availableOn,
-            proceedingKind: row.proceedingKind,
-          }}
-          existing={deadlines.map((deadline) => deadline.title)}
-          acts={acts}
-          onClose={() => setCounting(false)}
-          onSaved={(saved) => {
-            setCounting(false);
-            setCounted(
-              saved.dueOn
-                ? t("deadline-proposed-notice", { day: formatDayBr(saved.dueOn) ?? saved.dueOn })
-                : t("deadline-proposed-notice-counting"),
-            );
-          }}
-        />
-      ) : null}
-
-      {full ? (
-        <Dialog open onClose={closeFull} aria-labelledby={`${titleId}-full`} maxWidth="md" fullWidth>
-          <DialogHeader
-            id={`${titleId}-full`}
-            title={headline}
-            onClose={closeFull}
-            closeLabel={t("publication-close")}
-          />
-          <DialogContent className="flex flex-col gap-4">
-            {full.failed ? (
-              <Alert severity="error" className="neutral bg-background-paper/60!">
-                {t("publication-read-all-error")}
-              </Alert>
-            ) : full.text === null ? (
-              <Box className="flex justify-center py-10">
-                <CircularProgress aria-label={t("publication-read-all-loading")} />
-              </Box>
-            ) : (
-              <>
-                {full.truncated ? (
-                  <Alert severity="info" className="neutral bg-background-paper/60!">
-                    {t("publication-truncated")}
-                  </Alert>
-                ) : null}
-                <Typography variant="body1" component="div" className="break-words whitespace-pre-line">
-                  {full.text}
-                </Typography>
-              </>
-            )}
-            {/* Who read the whole text says what it is right there. */}
-            {controls ? <Box className="border-grey-100 border-t pt-3">{answers}</Box> : null}
-          </DialogContent>
-        </Dialog>
-      ) : null}
-    </Card>
-  );
-}
-
-/**
- * The six answers, with the note that may go with one. The note is written
- * before the answer is chosen, because choosing is what saves; on a
- * publication already triaged, the note alone is saved with the word it has.
- */
-function TriageAnswers({
-  current,
-  pending,
-  note,
-  noteOpen,
-  noteChanged,
-  onNote,
-  onOpenNote,
-  onChoose,
-  onKeep,
-  error,
-}: {
-  current: PublicationCategory | null;
-  pending: boolean;
-  note: string;
-  noteOpen: boolean;
-  noteChanged: boolean;
-  onNote: (value: string) => void;
-  onOpenNote: () => void;
-  onChoose: (category: PublicationCategory) => void;
-  /** Leaves the publication as it is: only when it already has a word. */
-  onKeep?: () => void;
-  error: string | null;
-}) {
-  const t = useTranslations("product");
-  return (
-    <Box className="flex flex-col gap-3">
-      {noteOpen ? (
-        <TextField
-          size="small"
-          label={t("publication-note-label")}
-          helperText={t("publication-note-help")}
-          value={note}
-          onChange={(event) => onNote(event.target.value.slice(0, 1000))}
-          disabled={pending}
-          fullWidth
-        />
-      ) : null}
-      <Typography variant="body2" className="text-text-secondary">
-        {t("publication-triage-question")}
-      </Typography>
-      <Box className="flex flex-wrap gap-2" role="group" aria-label={t("publication-triage-question")}>
-        {PUBLICATION_CATEGORIES.map((category) => (
-          <Button
-            key={category}
-            variant={current === category ? "contained" : "outlined"}
-            color={current === category ? "primary" : "grey"}
-            size="small"
-            aria-pressed={current === category}
-            disabled={pending}
-            onClick={() => onChoose(category)}
-          >
-            {t(CATEGORY_KEY[category])}
-          </Button>
-        ))}
-      </Box>
-      <Box className="flex flex-wrap gap-2">
-        {!noteOpen ? (
-          <Button variant="text" color="grey" size="small" disabled={pending} onClick={onOpenNote}>
-            {t("publication-note-add")}
-          </Button>
-        ) : null}
-        {current !== null && noteOpen && noteChanged ? (
-          <Button variant="outlined" color="grey" size="small" disabled={pending} onClick={() => onChoose(current)}>
-            {t("publication-note-save")}
-          </Button>
-        ) : null}
-        {onKeep ? (
-          <Button variant="text" color="grey" size="small" disabled={pending} onClick={onKeep}>
-            {t("publication-change-cancel")}
-          </Button>
-        ) : null}
-      </Box>
-      {error ? (
-        <Alert severity="error" className="neutral bg-background-paper/60!">
-          {error}
-        </Alert>
-      ) : null}
-    </Box>
-  );
-}
-
-/** What a card says of the word on a decision being the judgment (0096): the app's reading, or a person's answer. */
-function judgmentWordsKey(judgment: { value: boolean; source: "rule" | "person" }): string {
-  if (judgment.source === "person") {
-    return judgment.value ? "publication-judgment-person-yes" : "publication-judgment-person-no";
-  }
-  return judgment.value ? "publication-judgment-rule-yes" : "publication-judgment-rule-no";
 }

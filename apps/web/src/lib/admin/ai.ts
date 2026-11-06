@@ -469,7 +469,8 @@ export const TASK_OUTPUT_KEYS: Record<string, readonly string[]> = {
   ],
   "caso.relato.transcricao": ["texto"],
   "caso.relato.cronologia": ["cronologia", "perguntas"],
-  "publicacao.triagem": ["categoria", "urgente", "resumo"],
+  // Since 0104 the database also reads how sure the AI is: only an answer it is sure of is the triage.
+  "publicacao.triagem": ["resumo", "categoria", "certeza", "urgente"],
   "caso.peca.minuta": ["texto", "observacoes"],
   // Read by the database, which takes each only where the publication's words say it (0040).
   "publicacao.prazo": ["ha_prazo", "dias", "contagem", "a_partir", "ato", "trecho"],

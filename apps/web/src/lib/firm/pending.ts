@@ -1,6 +1,7 @@
 import { decisionItems, type WaitingDecisions } from "@/lib/ai/decisions";
 import { waitingHref, waitingKey, waitingTagKey, waitPlaceOf } from "@/lib/cases/advance";
 import { type FilingAttention, filingAttentionItems, type FilingViewer } from "@/lib/firm/filing-attention";
+import { type AckViewer, publicationAckItems, type PublicationAcks } from "@/lib/firm/publication-acks";
 import { type FirmToday, type TodayNeed, todayNeeds, type TodayViewer } from "@/lib/firm/today";
 import { formatCnj } from "@flyee/rules/cnj";
 
@@ -365,6 +366,8 @@ export function pendingGroups(
   decisions: WaitingDecisions | null = null,
   /** What ONE's filing waits on a person for (0102); null when it could not be read. */
   filing: { attention: FilingAttention; viewer: FilingViewer } | null = null,
+  /** The awareness of ONE's triage of the publications owed (0104); null when it could not be read. */
+  acks: { acks: PublicationAcks; viewer: AckViewer } | null = null,
 ): PendingGroup[] {
   const groups: Record<PendingGroupKey, PendingItem[]> = { late: [], today: [], one: [], review: [] };
   const needs = withDecisions(todayNeeds(today, viewer), decisions);
@@ -593,6 +596,13 @@ export function pendingGroups(
   // filing that came back (0102).
   if (filing) {
     groups.one.push(...filingAttentionItems(filing.attention, filing.viewer, now));
+  }
+  // ONE triaged a publication and the lawyer it was addressed to has not said they are aware of it (0104): late past
+  // the setting's hours.
+  if (acks) {
+    const items = publicationAckItems(acks.acks, acks.viewer);
+    groups.late.push(...items.late);
+    groups.one.push(...items.one);
   }
 
   // Every other need of the home, in the home's own order, in its group (the deadlines, hearings and papers

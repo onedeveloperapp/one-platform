@@ -117,6 +117,12 @@ type Publication = {
   availableOn: string;
   judgment: boolean | null;
   readings: { kind: string; status: string }[];
+  /** ONE triaged it and nobody said yet that they are aware of it (0104). */
+  ackOwed?: boolean;
+  /** Of one nobody triaged: ONE is triaging it, or left it to a person (0104). */
+  triageState?: "working" | "left" | null;
+  /** The lawyers it was addressed to, by name: whose awareness it waits for. */
+  lawyers?: string[];
 };
 type Complaint = { id: string; outcome: string; answerDueOn: string | null };
 type Interview = { status: string; inChat: boolean; position: number; total: number; done: number } | null;
@@ -946,7 +952,21 @@ export function caseNow(input: CaseNowInput): CaseNow {
         );
       }
     }
-    const untriaged = input.publications.filter((publication) => publication.category === null).length;
+    // ONE triages what the court publishes (0104): what it is triaging is its work; what it left is a person's.
+    const notTriaged = input.publications.filter((publication) => publication.category === null);
+    const triaging = notTriaged.filter((publication) => publication.triageState === "working").length;
+    if (triaging > 0) {
+      working.push(
+        item({
+          id: "publications:triaging",
+          owner: "one",
+          tone: "waiting",
+          text: { key: "case-now-publications-triaging", values: { count: triaging } },
+          section: "publications",
+        }),
+      );
+    }
+    const untriaged = notTriaged.length - triaging;
     if (untriaged > 0) {
       // With no hearing set and none triaged before, what the court published may be the hearing it just marked: once
       // a person says so, ONE writes it in the agenda and the client is told (the owner's test, 2026-11-05).
@@ -963,7 +983,28 @@ export function caseNow(input: CaseNowInput): CaseNow {
             key: mayBeHearing ? "case-now-publications-untriaged-hearing" : "case-now-publications-untriaged",
             values: { count: untriaged },
           },
-          href: "/publicacoes",
+          section: "publications",
+        }),
+      );
+    }
+    // What ONE triaged waits for the awareness of the lawyer it was addressed to (0104).
+    const unacknowledged = input.publications.filter((publication) => publication.ackOwed === true);
+    if (unacknowledged.length > 0) {
+      const names = [...new Set(unacknowledged.flatMap((publication) => publication.lawyers ?? []))];
+      blocking.push(
+        item({
+          id: "publications:ack",
+          owner: "firm",
+          actor: "lawyer",
+          tone: "attention",
+          text:
+            names.length > 0
+              ? {
+                  key: "case-now-publications-ack",
+                  values: { count: unacknowledged.length, names: names.join(", ") },
+                }
+              : { key: "case-now-publications-ack-anyone", values: { count: unacknowledged.length } },
+          section: "publications",
         }),
       );
     }
@@ -1153,6 +1194,7 @@ export const SECTION_ANCHOR: Record<CaseSection, string> = {
   proceedings: "case-proceedings",
   deadlines: "case-deadlines",
   hearings: "case-hearings",
+  publications: "case-publications",
   drafts: "case-drafts",
   filing: "case-filing",
   link: "case-link",
@@ -1212,6 +1254,7 @@ export function sectionOfEvent(kind: string): CaseSection | null {
   if (kind.startsWith("filing_")) return "filing";
   if (kind.startsWith("deadline_")) return "deadlines";
   if (kind.startsWith("hearing_")) return "hearings";
+  if (kind.startsWith("publication_")) return "publications";
   if (kind.startsWith("client_link")) return "link";
   if (kind.startsWith("notices_")) return "notices";
   if (kind.startsWith("complaint_")) return "complaints";

@@ -28,6 +28,8 @@ const notices = (copy: BellCopy): Record<keyof BellCopy, BellText> => ({
   partnerEndedByPartner: copy.partnerEndedByPartner("Viagens Teste"),
   partnerEndedByFirm: copy.partnerEndedByFirm("Souza Advogados"),
   paxUnagreedDeparture: copy.paxUnagreedDeparture("Lara Teste", "06/11/2026 08:30"),
+  publicationTriaged: copy.publicationTriaged("uma audiência", "do caso nº 12"),
+  publicationAckLate: copy.publicationAckLate("um prazo", "", 4),
   supportAccess: copy.supportAccess("Ana", "pagamento duplicado", 30),
 });
 

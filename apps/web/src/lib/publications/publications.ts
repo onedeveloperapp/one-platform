@@ -109,6 +109,9 @@ export const PUBLICATION_LIST_COLUMNS = [
   "reviewed_by",
   "reviewed_at",
   "hearing_settled_at",
+  "ack_owed",
+  "acked_by",
+  "acked_at",
 ] as const;
 
 /** The answers of the database a screen of publications has words for; anything else is "failed". */

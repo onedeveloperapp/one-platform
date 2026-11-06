@@ -104,6 +104,22 @@ const ptBR = {
     body: `${name} voa em ${when} e ainda não concordou no link. O ONE só acompanha o voo de quem concordou: envie o link antes da viagem.`,
   }),
 
+  /**
+   * ONE triaged a publication by itself (migration 0104): the lawyer it was addressed to (or, with none of the firm,
+   * who triages) is asked to say they are aware of it. `what` is what ONE said it is, in words ("uma audiência"),
+   * and `where` the case it is of ("do caso nº 12"), or empty.
+   */
+  publicationTriaged: (what: string, where: string): BellText => ({
+    title: "O ONE triou uma publicação",
+    body: `O ONE triou como ${what} uma publicação${where ? ` ${where}` : ""}. Confira e confirme que está ciente. O ONE pode errar.`,
+  }),
+
+  /** The awareness of a triage ONE made still waits past the setting's hours: said again once a day. */
+  publicationAckLate: (what: string, where: string, hours: number): BellText => ({
+    title: "Falta a sua ciência de uma publicação",
+    body: `O ONE triou como ${what} uma publicação${where ? ` ${where}` : ""} há mais de ${hours} horas, e ninguém confirmou que está ciente.`,
+  }),
+
   /** Support opened the account. `operator` is the name of who did, when known. */
   supportAccess: (operator: string | null, reason: string, minutes: number): BellText => ({
     title: "Acesso de suporte à sua conta",

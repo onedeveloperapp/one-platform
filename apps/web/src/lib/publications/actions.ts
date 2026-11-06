@@ -256,6 +256,26 @@ export async function acknowledgePublicationCancel(publicationId: string): Promi
 }
 
 /**
+ * A person says they are aware of the triage ONE made of a publication (migration 0104): the lawyer it was addressed
+ * to, or anybody of the firm who triages. To say ONE got it wrong, the person triages it themselves.
+ */
+export async function acknowledgePublication(
+  publicationId: string,
+  caseId: string | null = null,
+): Promise<PublicationResult> {
+  const context = await getMemberContext();
+  if (!context?.firm) return { ok: false, code: "failed" };
+  if (!isId(publicationId)) return { ok: false, code: "not_found" };
+  const { data, error } = await context.supabase.rpc("acknowledge_publication", { target_publication: publicationId });
+  const result = fold(data, error);
+  if (result.ok) {
+    refresh();
+    if (isId(caseId)) revalidatePath(`/casos/${caseId}`);
+  }
+  return result;
+}
+
+/**
  * The whole text of a publication, as plain text, read under the person's
  * own session: one of another firm is not found.
  */
