@@ -21,6 +21,9 @@ export async function readCaseList(
     target_limit: query.pageSize,
     target_offset: query.page * query.pageSize,
     target_module: query.module,
+    target_sort: query.sort ?? null,
+    target_incident: query.incident ?? null,
+    target_airline: query.airline ?? null,
   });
   if (error) return null;
   const page = caseListOf(data);

@@ -155,7 +155,8 @@ where proceeding_id = '10300000-0000-4000-8000-000000000003';
 select is(
   pg_temp.ana() -> 'counts',
   '{"all": 6, "going": 4, "open": 2, "preparing": 1, "filed": 1, "ended": 2, "documentos": 2, "cliente-terminou": 1,
-    "cronologia": 1, "reclamacao": 1, "pecas": 1, "andamento": 1, "vara-civel": 0, "agencia": 0}'::jsonb,
+    "cronologia": 1, "reclamacao": 1, "pecas": 1, "andamento": 1, "vara-civel": 0, "agencia": 0,
+    "novos-mes": 6, "ajuizados-mes": 0, "encerrados-mes": 2}'::jsonb,
   'the list counts the firm''s cases under every filter, as the home counts what waits'
 );
 select ok(
@@ -163,7 +164,7 @@ select ok(
   'with no filter the list shows every case still going, the most recently changed first'
 );
 select is(
-  (select jsonb_agg(row.value - 'id' - 'updated_at' order by row.ordinality)
+  (select jsonb_agg(row.value - 'id' - 'updated_at' - 'created_at' order by row.ordinality)
    from jsonb_array_elements(pg_temp.ana() -> 'rows') with ordinality as row where row.ordinality in (1, 4)),
   '[{"seq": 1, "client": "João da Silva", "module": "direito-do-passageiro", "incident": "delay", "airline_iata": "G3", "flight_date": "2026-07-20", "status": "intake",
      "to_review": 1, "client_finished": true, "chronology_contested": false, "complaint_overdue": false,

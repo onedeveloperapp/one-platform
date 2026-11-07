@@ -49,6 +49,12 @@
       "use": "A counter as a tile: tinted icon band (h-[4.5rem]) + label + value in h5, four across. `href` makes it a link; `onClick`+`pressed` make it a real filter button with aria-pressed. Port of dashboard-analytics-stats. A filter row is THIS, never a hand-written Box."
     },
     {
+      "name": "NumberCard",
+      "from": "@/components/product/number-card",
+      "props": "icon (size medium), tone, label, value (already written: countText), comparison? ({ delta: '+9%' | null, same: 'igual', hoped, text: 'vs 1 a 7 de outubro: 287' }), hint?, onClick+pressed | href | neither",
+      "use": "A list's big number with what it was in the same span before (the screen pattern after ADVBox, approved by the owner on 2026-11-07): the icon of what it counts beside a short label, the number, and under it the move and what it is compared with, the card opening the list it counts. Compare only with the same span (the same days of the month before, the end of the same day): a few days against a whole month is a false move. The move is green only when it is the one the card hopes for (more cases filed); any other move is grey, never red. The numbers and moves come from `lib/numbers/compare.ts` (compared, deltaText, isHoped, countText). Two across on a phone, the icon hidden there. The home's tiles stay StatTile."
+    },
+    {
       "name": "QuickActionTile",
       "from": "@/components/product/home-tiles",
       "props": "href?, icon, tone, title, description?, eyebrow?, outlined?, badge?, label?",
@@ -173,6 +179,12 @@
       "from": "@/components/data-grid/data-table",
       "props": "rows, columns, loading, header?, actions?, filters?, noRowsOverlay, noResultsOverlay, onQuickFilterChange?, initialColumnVisibility?, enableExport?, server?{total,page,pageSize,onPageChange,onSearchChange}",
       "use": "The app's ONE table, and only when the job really is scan/compare/manage many rows. Put the page title in `header` and the primary action in `actions` — those slots render empty otherwise. Imports the community DataGrid: pinnedColumns needs the wrapper switched to @mui/x-data-grid-premium (installed and licensed). A list that outgrows what a browser should carry (the firm's cases) passes `server`: `rows` is then one page, paging and the search are asked of the caller, the grid sorts and filters nothing by itself, and `enableExport` stays off."
+    },
+    {
+      "name": "ListBar",
+      "from": "@/components/product/list-bar",
+      "props": "label, viewsTitle, views[{key, label, count?, group}], view, onView, search?{label, placeholder, value, onChange}, filter?{label, active, content, clearLabel, onClear}, sort?{label, options, value, onChange}, exporting?{label, onExport, busy?}, more?{label, actions: QuickAction[]}, chips?[{key, label, onRemove}]",
+      "use": "The same bar on every list (the screen pattern after ADVBox, approved by the owner on 2026-11-07): the ready views with how many each holds, grouped in its menu; the list's search (waits for the person to stop typing; the page asks the server in the request's body); \"Filtrar\" (a panel of the list's own filters, which narrow every count and every view as the module does); \"Ordenar\"; \"Exportar\" only where the list really exports; at the right what the list keeps out of sight (opening a record by hand, an import); under it each filter in force as a chip. Above a DataTable, pass `hideToolbar` to the table. A list that is learned once is known everywhere: never a list with its own bar of another shape."
     },
     {
       "name": "OnboardingChecklist / ActivationProgress / SetupWizard",

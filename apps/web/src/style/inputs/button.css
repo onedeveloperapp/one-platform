@@ -1800,12 +1800,15 @@
 }
 
 /* A switch's base is drawn over its track at the track's height: at 44px its
-   thumb fell out of the track. The label around it is the switch's target. */
+   thumb fell out of the track. The label around it is the switch's target.
+   A state said as a badge (StatusChip: a button drawn as a span, role
+   "presentation") is no control and keeps its own height: at 44px every
+   badge of a list grew into a tall box on a phone. */
 @media (pointer: coarse), (max-width: 600px) {
   #main-content button,
   #main-content [role="button"],
-  #main-content .MuiButtonBase-root:not(.MuiSwitch-switchBase),
-  #main-content .MuiButton-root,
+  #main-content .MuiButtonBase-root:not(.MuiSwitch-switchBase):not([role="presentation"]),
+  #main-content .MuiButton-root:not([role="presentation"]),
   #main-content .MuiIconButton-root,
   #main-content .MuiAccordionSummary-root {
     min-height: 44px;

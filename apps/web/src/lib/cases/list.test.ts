@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import { CASE_STATUSES, CLIENT_STAGES, STATUS_GROUPS } from "@/lib/cases/cases";
 import {
   CASE_FILTERS,
+  CASE_SORTS,
   caseListOf,
   caseListQuery,
   DEFAULT_PAGE_SIZE,
@@ -15,8 +16,8 @@ import {
 } from "@/lib/cases/list";
 
 const ROOT = path.resolve(__dirname, "../../../../..");
-// The latest definition of `firm_cases` (0033, redefined with the cases from an agency in 0075).
-const MIGRATION = fs.readFileSync(path.join(ROOT, "packages/db/migrations/0075_module_offer.sql"), "utf8");
+// The latest definition of `firm_cases` (0033, 0075, 0078, redefined with the list bar of phase 0 in 0108).
+const MIGRATION = fs.readFileSync(path.join(ROOT, "packages/db/migrations/0108_case_list_bar.sql"), "utf8");
 
 /** The quoted names of a list of the migration, from the text that opens it to the parenthesis that closes it. */
 function listed(opening: string, from = 0): string[] {
@@ -34,8 +35,20 @@ describe("what the list asks of the database", () => {
       module: null,
       page: 3,
       pageSize: 50,
+      sort: "recent",
+      incident: null,
+      airline: null,
     });
-    const nothing = { filter: null, search: "", module: null, page: 0, pageSize: DEFAULT_PAGE_SIZE };
+    const nothing = {
+      filter: null,
+      search: "",
+      module: null,
+      page: 0,
+      pageSize: DEFAULT_PAGE_SIZE,
+      sort: "recent",
+      incident: null,
+      airline: null,
+    };
     for (const input of [null, undefined, "x", 7, [], {}, { filter: "tudo", search: 9, page: -1, pageSize: 7 }]) {
       expect(caseListQuery(input), JSON.stringify(input)).toEqual(nothing);
     }
@@ -45,11 +58,24 @@ describe("what the list asks of the database", () => {
     // A module's area asks its own cases; what is not a module's key asks every module's.
     expect(caseListQuery({ module: "direito-do-passageiro" }).module).toBe("direito-do-passageiro");
     for (const module of ["../x", "X", 7, "", "a"]) expect(caseListQuery({ module }).module).toBeNull();
+    // The order and the list's own filters: what the database takes, and nothing else.
+    expect(caseListQuery({ sort: "oldest", incident: "baggage_lost", airline: "g3" })).toMatchObject({
+      sort: "oldest",
+      incident: "baggage_lost",
+      airline: "G3",
+    });
+    expect(caseListQuery({ sort: "alfabetica", incident: "Atraso", airline: "Gol Linhas" })).toMatchObject({
+      sort: "recent",
+      incident: null,
+      airline: null,
+    });
   });
 
   it("names the filters, the stages of each and the sizes of a page as the database has them", () => {
     // The filters `firm_cases` accepts are the ones the list has.
     expect(listed("wanted not in (").sort()).toEqual([...CASE_FILTERS].sort());
+    // And the orders it accepts are the ones the list offers.
+    expect(listed("sort_by not in (").sort()).toEqual([...CASE_SORTS].sort());
     // Each group of stages, as the function filters and counts it.
     const group = (name: string) => {
       const filtered = MIGRATION.indexOf(`when wanted = '${name}' then fl.status`);
@@ -140,6 +166,9 @@ describe("the database's answer, as the list reads it", () => {
       andamento: 1,
       "vara-civel": 0,
       agencia: 0,
+      "novos-mes": 0,
+      "ajuizados-mes": 0,
+      "encerrados-mes": 0,
     });
   });
 

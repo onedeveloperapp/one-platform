@@ -2,29 +2,31 @@
 
 import { type CasesState, GROUP_TONE } from "../cases-types";
 import NewCaseDialog from "./new-case-dialog";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { Alert, Box, Button, Grid, Typography } from "@mui/material";
+import { Alert, Box, Button, Grid, MenuItem, TextField, Typography } from "@mui/material";
 import type { GridColDef, GridRenderCellParams } from "@mui/x-data-grid";
 
 import DataTable from "@/components/data-grid/data-table";
 import EmptyState from "@/components/product/empty-state";
-import { StatTile } from "@/components/product/home-tiles";
+import ListBar, { type ListChip, type ListView } from "@/components/product/list-bar";
 import ModuleIcon from "@/components/product/module-icon";
 import ModuleScope from "@/components/product/module-scope";
+import NumberCard from "@/components/product/number-card";
 import PageHeader from "@/components/product/page-header";
 import { ProgressBar } from "@/components/product/progress-steps";
 import StatusChip from "@/components/product/status-chip";
 import type { TileTone } from "@/components/product/tile-tone";
 import NiArchive from "@/icons/nexture/ni-archive";
+import NiArrowInUp from "@/icons/nexture/ni-arrow-in-up";
 import NiBuilding from "@/icons/nexture/ni-building";
 import NiDocumentFull from "@/icons/nexture/ni-document-full";
 import NiFlag from "@/icons/nexture/ni-flag";
 import NiFolder from "@/icons/nexture/ni-folder";
 import NiFolderCheck from "@/icons/nexture/ni-folder-check";
+import NiFolderPlus from "@/icons/nexture/ni-folder-plus";
 import NiMicrophone from "@/icons/nexture/ni-microphone";
 import NiPaperclip from "@/icons/nexture/ni-paperclip";
 import NiPen from "@/icons/nexture/ni-pen";
@@ -34,16 +36,21 @@ import NiUsers from "@/icons/nexture/ni-users";
 import { caseLabel, groupOf, STATUS_KEY } from "@/lib/cases/cases";
 import { JOURNEY_STEP_KEY, JOURNEY_STEPS, stepOf } from "@/lib/cases/journey";
 import {
+  CASE_SORTS,
   type CaseFilter,
   type CaseListPage,
   type CaseListQuery,
   type CaseListRow,
+  type CaseSort,
   DEFAULT_PAGE_SIZE,
+  isCaseSort,
   lastPage,
   PAGE_SIZES,
 } from "@/lib/cases/list";
 import { listFirmCases } from "@/lib/cases/list-actions";
-import { caseKindLabelKey } from "@/lib/modules/registry";
+import { type CaseCardKey, caseCards, spanText } from "@/lib/cases/numbers";
+import { caseKindLabelKey, caseKindsOf, firmCaseKinds } from "@/lib/modules/registry";
+import { countText, deltaText, isHoped } from "@/lib/numbers/compare";
 import { formatDayBr } from "@flyee/rules/person";
 
 const FILTER_TILE: Record<CaseFilter, { label: string; hint: string; tone: TileTone; icon: React.ReactNode }> = {
@@ -119,11 +126,34 @@ const FILTER_TILE: Record<CaseFilter, { label: string; hint: string; tone: TileT
     tone: "accent-1",
     icon: <NiBuilding size="large" />,
   },
+  "novos-mes": {
+    label: "cases-filter-new-month",
+    hint: "cases-filter-new-month-hint",
+    tone: "accent-1",
+    icon: <NiFolderPlus size="large" />,
+  },
+  "ajuizados-mes": {
+    label: "cases-filter-filed-month",
+    hint: "cases-filter-filed-month-hint",
+    tone: "accent-4",
+    icon: <NiScale size="large" />,
+  },
+  "encerrados-mes": {
+    label: "cases-filter-ended-month",
+    hint: "cases-filter-ended-month-hint",
+    tone: "secondary",
+    icon: <NiArchive size="large" />,
+  },
 };
 
-/** The tiles every day shows, and the ones that appear only when something of theirs waits. */
-const STANDING_TILES: readonly CaseFilter[] = ["open", "preparing", "filed", "ended", "documentos", "cliente-terminou"];
-const EXCEPTION_TILES: readonly CaseFilter[] = [
+/**
+ * The ready views of the list, by group (the screen pattern of phase 0): the cases still going, what happened in the
+ * month, each stage, and what waits for the firm, the last ones listed only while something of theirs waits.
+ */
+const MONTH_VIEWS: readonly CaseFilter[] = ["novos-mes", "ajuizados-mes", "encerrados-mes"];
+const STAGE_VIEWS: readonly CaseFilter[] = ["open", "preparing", "filed", "ended"];
+const STANDING_WAITS: readonly CaseFilter[] = ["documentos", "cliente-terminou"];
+const EXCEPTION_WAITS: readonly CaseFilter[] = [
   "cronologia",
   "reclamacao",
   "pecas",
@@ -131,6 +161,44 @@ const EXCEPTION_TILES: readonly CaseFilter[] = [
   "vara-civel",
   "agencia",
 ];
+/** The view of the cases still going, the list's own (no filter). */
+const GOING = "going";
+
+/** The cards above the list: what each counts, with its icon and tint. */
+const CARD: Record<CaseCardKey, { label: string; hint: string; tone: TileTone; icon: React.ReactNode }> = {
+  going: {
+    label: "cases-number-going",
+    hint: "cases-number-going-hint",
+    tone: "primary",
+    icon: <NiFolder size="medium" />,
+  },
+  opened: {
+    label: "cases-number-opened",
+    hint: "cases-number-opened-hint",
+    tone: "accent-1",
+    icon: <NiFolderPlus size="medium" />,
+  },
+  filed: {
+    label: "cases-number-filed",
+    hint: "cases-number-filed-hint",
+    tone: "accent-4",
+    icon: <NiScale size="medium" />,
+  },
+  ended: {
+    label: "cases-number-ended",
+    hint: "cases-number-ended-hint",
+    tone: "secondary",
+    icon: <NiArchive size="medium" />,
+  },
+};
+
+/** The words of each order of the list. */
+const SORT_KEY: Record<CaseSort, string> = {
+  recent: "cases-sort-recent",
+  oldest: "cases-sort-oldest",
+  newest: "cases-sort-newest",
+  first: "cases-sort-first",
+};
 
 type Ready = Extract<CasesState, { kind: "ready" }>;
 
@@ -214,6 +282,9 @@ function CasesList({ ready, embedded }: { ready: Ready; embedded: boolean }) {
     module: scope?.module.key ?? null,
     page: 0,
     pageSize: DEFAULT_PAGE_SIZE,
+    sort: "recent",
+    incident: null,
+    airline: null,
   });
   const [loading, setLoading] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -401,24 +472,57 @@ function CasesList({ ready, embedded }: { ready: Ready; embedded: boolean }) {
   const searching = query.search !== "";
   const setFilter = (next: CaseFilter | null) => void load({ ...current.current, filter: next, page: 0 });
 
-  const newCase = ready.supportVisit ? undefined : (
-    <Button variant="contained" onClick={() => setCreating(true)}>
-      {t("cases-new")}
-    </Button>
-  );
   // A firm that arrives with lawsuits already in court brings them from a spreadsheet, never one by one: a module's
   // portfolio, so offered under the module whose lawsuits the spreadsheet holds.
   const mayImport = ready.canImport && !ready.supportVisit && Boolean(scope?.importable);
-  // A filter of what only a module has (the cases its partner sent) is offered under that module.
-  const tiles = [
-    ...STANDING_TILES,
-    ...EXCEPTION_TILES.filter(
-      (key) => (key !== "agencia" || scope?.partner) && (list.counts[key] > 0 || filter === key),
-    ),
-  ];
   const hasCases = list.counts.all > 0;
 
-  // Why the table is empty says what to do next: another search, another filter, or the cases that ended.
+  // The views, by group; a wait of the firm is listed while something of it waits (or it is the view in force), and
+  // the cases a partner sent only under the module that has partners.
+  const viewOf = (key: CaseFilter, group: string): ListView => ({
+    key,
+    label: t(FILTER_TILE[key].label),
+    count: countText(list.counts[key]),
+    group,
+  });
+  const views: ListView[] = [
+    { key: GOING, label: t("cases-view-going"), count: countText(list.counts.going), group: "going" },
+    ...MONTH_VIEWS.map((key) => viewOf(key, "month")),
+    ...STAGE_VIEWS.map((key) => viewOf(key, "stage")),
+    ...STANDING_WAITS.map((key) => viewOf(key, "waits")),
+    ...EXCEPTION_WAITS.filter(
+      (key) => (key !== "agencia" || scope?.partner) && (list.counts[key] > 0 || filter === key),
+    ).map((key) => viewOf(key, "waits")),
+  ];
+
+  // What the list's own filters offer: the kinds of problem of the module (or of the firm's modules) and the airlines.
+  const kinds = scope ? caseKindsOf(scope.module.key) : firmCaseKinds(ready.modules.map((module) => module.key));
+  const kindName = (key: string) => t(caseKindLabelKey(key) ?? "case-incident-other");
+  const chips: ListChip[] = [
+    ...(query.incident
+      ? [
+          {
+            key: "incident",
+            label: kindName(query.incident),
+            onRemove: () => void load({ ...current.current, incident: null, page: 0 }),
+          },
+        ]
+      : []),
+    ...(query.airline
+      ? [
+          {
+            key: "airline",
+            label: airlineName.get(query.airline) ?? query.airline,
+            onRemove: () => void load({ ...current.current, airline: null, page: 0 }),
+          },
+        ]
+      : []),
+  ];
+
+  const numbers = list.numbers;
+  const cards = numbers ? caseCards(numbers) : [];
+
+  // Why the table is empty says what to do next: another search, another view, or the cases that ended.
   const nothing = searching ? (
     <EmptyState
       icon={<NiFolder size="large" />}
@@ -426,12 +530,15 @@ function CasesList({ ready, embedded }: { ready: Ready; embedded: boolean }) {
       description={t(filter ? "cases-search-empty-filter-body" : "cases-search-empty-body")}
       action={filter ? { label: t("cases-search-everywhere"), onClick: () => setFilter(null) } : undefined}
     />
-  ) : filter ? (
+  ) : filter || query.incident || query.airline ? (
     <EmptyState
       icon={<NiFolder size="large" />}
       title={t("cases-filter-empty-title")}
       description={t("cases-filter-empty-body")}
-      action={{ label: t("cases-filter-clear"), onClick: () => setFilter(null) }}
+      action={{
+        label: t("cases-filter-clear"),
+        onClick: () => void load({ ...current.current, filter: null, incident: null, airline: null, page: 0 }),
+      }}
     />
   ) : (
     <EmptyState
@@ -469,7 +576,6 @@ function CasesList({ ready, embedded }: { ready: Ready; embedded: boolean }) {
                 : [{ label: t("cases-home"), href: "/inicio" }, { label: t("cases-title") }]
             }
             description={scope ? t("cases-description-module", { module: scope.module.name }) : t("cases-description")}
-            action={hasCases ? newCase : undefined}
           />
           <ModuleScope path="/casos" modules={ready.modules} current={scope?.module.key ?? null} />
         </>
@@ -504,21 +610,30 @@ function CasesList({ ready, embedded }: { ready: Ready; embedded: boolean }) {
 
       {hasCases && (
         <>
-          <Grid container spacing={2.5}>
-            {tiles.map((key) => (
-              <Grid key={key} size={{ xs: 12, sm: 6, lg: 2 }}>
-                <StatTile
-                  onClick={() => setFilter(filter === key ? null : key)}
-                  pressed={filter === key}
-                  icon={FILTER_TILE[key].icon}
-                  tone={FILTER_TILE[key].tone}
-                  label={t(FILTER_TILE[key].label)}
-                  hint={t(FILTER_TILE[key].hint)}
-                  value={list.counts[key]}
-                />
-              </Grid>
-            ))}
-          </Grid>
+          {/* The numbers of the list, each beside the same days of the month before, each opening the list it counts. */}
+          {numbers && (
+            <Grid container spacing={2.5}>
+              {cards.map((card) => (
+                <Grid key={card.key} size={{ xs: 6, lg: 3 }}>
+                  <NumberCard
+                    icon={CARD[card.key].icon}
+                    tone={CARD[card.key].tone}
+                    label={t(CARD[card.key].label)}
+                    hint={t(CARD[card.key].hint)}
+                    value={countText(card.value)}
+                    comparison={{
+                      delta: deltaText(card.compared),
+                      same: t("cases-number-same"),
+                      hoped: isHoped(card.compared, card.hope),
+                      text: t("cases-number-vs", { span: spanText(numbers, card.span), value: countText(card.before) }),
+                    }}
+                    onClick={() => setFilter(card.view)}
+                    pressed={!searching && filter === card.view}
+                  />
+                </Grid>
+              ))}
+            </Grid>
+          )}
 
           {failed && (
             <Alert
@@ -534,6 +649,113 @@ function CasesList({ ready, embedded }: { ready: Ready; embedded: boolean }) {
             </Alert>
           )}
 
+          <Box className="flex flex-col gap-2">
+            <ListBar
+              label={t("cases-bar-label")}
+              viewsTitle={t("cases-views-title")}
+              views={views}
+              view={filter ?? GOING}
+              onView={(key) => setFilter(key === GOING ? null : (key as CaseFilter))}
+              search={{
+                label: t("cases-search-label"),
+                placeholder: t("cases-bar-search"),
+                value: query.search,
+                onChange: (text) => {
+                  if (text === current.current.search) return;
+                  void load({ ...current.current, search: text, page: 0 });
+                },
+              }}
+              filter={{
+                label: t("cases-bar-filter"),
+                active: (query.incident ? 1 : 0) + (query.airline ? 1 : 0),
+                clearLabel: t("cases-bar-filter-clear"),
+                onClear: () => void load({ ...current.current, incident: null, airline: null, page: 0 }),
+                content: (
+                  <>
+                    <TextField
+                      select
+                      fullWidth
+                      size="small"
+                      id="cases-filter-kind"
+                      label={t("cases-bar-filter-kind")}
+                      value={query.incident ?? ""}
+                      onChange={(event) =>
+                        void load({ ...current.current, incident: event.target.value || null, page: 0 })
+                      }
+                      slotProps={{ select: { displayEmpty: true }, inputLabel: { shrink: true } }}
+                    >
+                      <MenuItem value="">{t("cases-bar-filter-any-kind")}</MenuItem>
+                      {kinds.map((kind) => (
+                        <MenuItem key={kind.key} value={kind.key}>
+                          {t(kind.labelKey)}
+                        </MenuItem>
+                      ))}
+                    </TextField>
+                    <TextField
+                      select
+                      fullWidth
+                      size="small"
+                      id="cases-filter-airline"
+                      label={t("cases-bar-filter-airline")}
+                      value={query.airline ?? ""}
+                      onChange={(event) =>
+                        void load({ ...current.current, airline: event.target.value || null, page: 0 })
+                      }
+                      slotProps={{ select: { displayEmpty: true }, inputLabel: { shrink: true } }}
+                    >
+                      <MenuItem value="">{t("cases-bar-filter-any-airline")}</MenuItem>
+                      {ready.airlines.map((airline) => (
+                        <MenuItem key={airline.iata} value={airline.iata}>
+                          {airline.name}
+                        </MenuItem>
+                      ))}
+                    </TextField>
+                  </>
+                ),
+              }}
+              sort={{
+                label: t("cases-bar-sort"),
+                options: CASE_SORTS.map((key) => ({ key, label: t(SORT_KEY[key]) })),
+                value: query.sort ?? "recent",
+                onChange: (key) => {
+                  if (isCaseSort(key)) void load({ ...current.current, sort: key, page: 0 });
+                },
+              }}
+              more={
+                ready.supportVisit
+                  ? undefined
+                  : {
+                      label: t("cases-bar-more"),
+                      actions: [
+                        {
+                          key: "by-hand",
+                          label: t("cases-empty-by-hand"),
+                          icon: <NiFolderPlus size="medium" />,
+                          onClick: () => setCreating(true),
+                        },
+                        ...(mayImport
+                          ? [
+                              {
+                                key: "import",
+                                label: t("cases-import"),
+                                icon: <NiArrowInUp size="medium" />,
+                                onClick: () => router.push("/casos/importar"),
+                              },
+                            ]
+                          : []),
+                      ],
+                    }
+              }
+              chips={chips}
+            />
+            {searching && !loading ? (
+              <Typography variant="body2" role="status" className="text-text-secondary px-1">
+                {t("cases-found", { count: list.total })}.{" "}
+                {filter ? t("cases-search-in-filter", { filter: t(FILTER_TILE[filter].label) }) : t("cases-search-all")}
+              </Typography>
+            ) : null}
+          </Box>
+
           <DataTable
             rows={list.rows}
             columns={columns}
@@ -541,9 +763,9 @@ function CasesList({ ready, embedded }: { ready: Ready; embedded: boolean }) {
             onRowClick={(row) => router.push(`/casos/${row.id}`)}
             // The list is the server's, a page at a time: an export here would be of the page alone.
             enableExport={false}
+            hideToolbar
             pageSize={query.pageSize}
             pageSizeOptions={[...PAGE_SIZES]}
-            labels={{ search: t("cases-search-label") }}
             server={{
               total: list.total,
               page: query.page,
@@ -553,39 +775,9 @@ function CasesList({ ready, embedded }: { ready: Ready; embedded: boolean }) {
                 if (page === now.page && pageSize === now.pageSize) return;
                 void load({ ...now, pageSize, page: pageSize === now.pageSize ? page : 0 });
               },
-              onSearchChange: (text) => {
-                if (text === current.current.search) return;
-                void load({ ...current.current, search: text, page: 0 });
-              },
+              // The search is the bar's.
+              onSearchChange: () => undefined,
             }}
-            header={
-              <Box className="flex flex-col gap-1">
-                <Typography variant="body2" className="text-text-secondary">
-                  {searching
-                    ? filter
-                      ? t("cases-search-in-filter", { filter: t(FILTER_TILE[filter].label) })
-                      : t("cases-search-all")
-                    : filter
-                      ? t(FILTER_TILE[filter].hint)
-                      : t("cases-showing-going")}
-                </Typography>
-                {searching && !loading ? (
-                  <Typography variant="body2" role="status">
-                    {t("cases-found", { count: list.total })}
-                  </Typography>
-                ) : null}
-              </Box>
-            }
-            actions={
-              <>
-                {mayImport ? (
-                  <Button variant="outlined" color="grey" href="/casos/importar" LinkComponent={Link}>
-                    {t("cases-import")}
-                  </Button>
-                ) : null}
-                {newCase}
-              </>
-            }
             noRowsOverlay={nothing}
           />
         </>

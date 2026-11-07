@@ -19,7 +19,10 @@ export type CaseFilter =
   | "pecas"
   | "andamento"
   | "vara-civel"
-  | "agencia";
+  | "agencia"
+  | "novos-mes"
+  | "ajuizados-mes"
+  | "encerrados-mes";
 
 export const CASE_FILTERS: readonly CaseFilter[] = [
   "open",
@@ -34,6 +37,9 @@ export const CASE_FILTERS: readonly CaseFilter[] = [
   "andamento",
   "vara-civel",
   "agencia",
+  "novos-mes",
+  "ajuizados-mes",
+  "encerrados-mes",
 ];
 
 export const isCaseFilter = (value: unknown): value is CaseFilter =>
@@ -80,11 +86,41 @@ export type CaseListRow = {
 /** How many cases the firm has under each filter, in all, and still going. */
 export type CaseCounts = Record<CaseFilter | "all" | "going", number>;
 
+/**
+ * The numbers of the cards above the list (0108), each beside what it was in the same days of the month before:
+ * the cases going now and at the end of the same day of the month before; the ones opened, filed and ended from
+ * the first of this month to today, and from the first of the month before to the same day of it. The days are
+ * Brasília's, as the database counts them.
+ */
+export type CaseNumbers = {
+  going: number;
+  goingBefore: number;
+  opened: number;
+  openedBefore: number;
+  filed: number;
+  filedBefore: number;
+  ended: number;
+  endedBefore: number;
+  /** This month so far: its first day and today. */
+  since: string;
+  until: string;
+  /** The same days of the month before. */
+  beforeSince: string;
+  beforeUntil: string;
+};
+
+/** The orders the list offers: the latest change first (the usual one), the oldest change, the newest case, the oldest case. */
+export type CaseSort = "recent" | "oldest" | "newest" | "first";
+export const CASE_SORTS: readonly CaseSort[] = ["recent", "oldest", "newest", "first"];
+export const isCaseSort = (value: unknown): value is CaseSort => (CASE_SORTS as readonly unknown[]).includes(value);
+
 export type CaseListPage = {
   rows: CaseListRow[];
   /** How many cases match what was asked, on every page. */
   total: number;
   counts: CaseCounts;
+  /** The numbers of the cards; null when the database did not say them (one before 0108). */
+  numbers: CaseNumbers | null;
 };
 
 /** The sizes of a page the list offers; the database serves no more than the largest. */
@@ -102,6 +138,11 @@ export type CaseListQuery = {
   /** The page, from zero. */
   page: number;
   pageSize: number;
+  /** The order of the list; the latest change first when left out. */
+  sort?: CaseSort;
+  /** Only the cases of this kind of problem, and of this airline (its IATA code): they narrow every count too. */
+  incident?: string | null;
+  airline?: string | null;
 };
 
 /** A query from whatever was handed: a server action is a public endpoint. */
@@ -115,6 +156,13 @@ export function caseListQuery(input: unknown): CaseListQuery {
     module: typeof value.module === "string" && /^[a-z][a-z0-9-]{2,40}$/.test(value.module) ? value.module : null,
     page: Math.min(whole(value.page), 100_000),
     pageSize: PAGE_SIZES.includes(whole(value.pageSize)) ? whole(value.pageSize) : DEFAULT_PAGE_SIZE,
+    sort: isCaseSort(value.sort) ? value.sort : "recent",
+    incident:
+      typeof value.incident === "string" && /^[a-z][a-z0-9_-]{1,40}$/.test(value.incident) ? value.incident : null,
+    airline:
+      typeof value.airline === "string" && /^[A-Za-z0-9]{2,3}$/.test(value.airline)
+        ? value.airline.toUpperCase()
+        : null,
   };
 }
 
@@ -163,7 +211,31 @@ export function caseListOf(raw: unknown): CaseListPage | null {
       },
     ];
   });
-  return { rows, total: count(answer.total), counts };
+  return { rows, total: count(answer.total), counts, numbers: caseNumbersOf(answer.numbers) };
+}
+
+const DAY = /^\d{4}-\d{2}-\d{2}$/;
+
+/** The numbers of the cards as the database said them; null when they are not whole. */
+export function caseNumbersOf(raw: unknown): CaseNumbers | null {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return null;
+  const value = raw as Record<string, unknown>;
+  const days = [value.since, value.until, value.before_since, value.before_until];
+  if (!days.every((day) => typeof day === "string" && DAY.test(day))) return null;
+  return {
+    going: count(value.going),
+    goingBefore: count(value.going_before),
+    opened: count(value.new),
+    openedBefore: count(value.new_before),
+    filed: count(value.filed),
+    filedBefore: count(value.filed_before),
+    ended: count(value.ended),
+    endedBefore: count(value.ended_before),
+    since: value.since as string,
+    until: value.until as string,
+    beforeSince: value.before_since as string,
+    beforeUntil: value.before_until as string,
+  };
 }
 
 /** How many cases a tile says: the ones under its filter. */

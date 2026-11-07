@@ -314,6 +314,7 @@ export default function DataTable<R extends GridValidRowModel>({
   initialColumnVisibility,
   enableExport = true,
   server,
+  hideToolbar = false,
 }: {
   rows: readonly R[];
   columns: GridColDef<R>[];
@@ -351,6 +352,11 @@ export default function DataTable<R extends GridValidRowModel>({
    * with it, since the export would be of the page alone.
    */
   server?: DataTableServer;
+  /**
+   * The list has its own bar above it (`ListBar`, the screen pattern of phase 0): the grid shows no toolbar, and
+   * the bar's search reaches the server through the page.
+   */
+  hideToolbar?: boolean;
 }) {
   const locale = useLocale();
   const localeText = GRID_LOCALES[locale];
@@ -403,7 +409,7 @@ export default function DataTable<R extends GridValidRowModel>({
       pagination
       pageSizeOptions={pageSizeOptions}
       hideFooterSelectedRowCount
-      showToolbar
+      showToolbar={!hideToolbar}
       className={cn("full-page border-none", onRowClick && "[&_.MuiDataGrid-row]:cursor-pointer")}
       onRowClick={
         onRowClick
