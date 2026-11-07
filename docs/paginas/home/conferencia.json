@@ -1,0 +1,72 @@
+{
+  "format_version": 1,
+  "page": "home",
+  "type": "landing",
+  "audited_at": "2026-11-07T20:10:29.893Z",
+  "url": "http://localhost:3122/",
+  "input_kind": "url",
+  "full_reading": true,
+  "summary": {
+    "ok": 5,
+    "atencao": 2,
+    "nao_conferido": 0
+  },
+  "items": [
+    {
+      "id": "supplier_identified",
+      "label": "Quem vende identificado",
+      "weight": "lei",
+      "status": "atencao",
+      "detail": "Não achei na página: o CNPJ ou o CPF de quem vende, o endereço físico.",
+      "fix": "Mostre no rodapé o nome da empresa, o CNPJ (ou o CPF), o endereço e um contato."
+    },
+    {
+      "id": "legal_lines",
+      "label": "As linhas legais",
+      "weight": "lei",
+      "status": "atencao",
+      "detail": "Não achei na página: o caminho do arrependimento ou do reembolso.",
+      "fix": "Inclua os links da política de privacidade e dos termos, e o caminho do arrependimento ou do reembolso."
+    },
+    {
+      "id": "cta_first_screen",
+      "label": "O botão principal na primeira tela do celular",
+      "weight": "venda",
+      "status": "ok",
+      "detail": "\"Entrar na lista de espera\" aparece na primeira tela do celular.",
+      "fix": null
+    },
+    {
+      "id": "sticky_cta_long_page",
+      "label": "Barra fixa numa página longa",
+      "weight": "venda",
+      "status": "ok",
+      "detail": "Há uma barra fixa com \"Entrar na lista de espera\", que aparece depois de rolar.",
+      "fix": null
+    },
+    {
+      "id": "h1_present",
+      "label": "Um título principal (h1)",
+      "weight": "acesso",
+      "status": "ok",
+      "detail": "O título principal está marcado: \"Automação com IA no contencioso de massa, do primeiro contato ao prot…\".",
+      "fix": null
+    },
+    {
+      "id": "reduced_motion",
+      "label": "A regra de menos movimento",
+      "weight": "acesso",
+      "status": "ok",
+      "detail": "A página tem a regra de menos movimento.",
+      "fix": null
+    },
+    {
+      "id": "images_alt",
+      "label": "Imagens com texto alternativo",
+      "weight": "acesso",
+      "status": "ok",
+      "detail": "Todas as imagens têm texto alternativo.",
+      "fix": null
+    }
+  ]
+}

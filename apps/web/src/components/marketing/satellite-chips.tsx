@@ -167,6 +167,42 @@ export function RingChip({
   );
 }
 
+/**
+ * A message the product sent, as a card: who sent it with the family's icon,
+ * the words, and when. The floating assistant card of a layered hero; the hue
+ * rides on the icon's disc and the words keep text colours.
+ */
+export function MessageChip({
+  author,
+  text,
+  meta,
+  icon,
+  tone = "accent-2",
+}: {
+  author: string;
+  text: string;
+  meta?: string;
+  icon: React.ReactNode;
+  tone?: Tone;
+}) {
+  const hue = TONE[tone];
+  return (
+    <div className={cn(CHIP_BASE, "flex max-w-72 items-start gap-3")}>
+      <span
+        aria-hidden
+        className={cn("flex h-9 w-9 flex-none items-center justify-center rounded-full", hue.softBg, hue.text)}
+      >
+        {icon}
+      </span>
+      <div className="flex min-w-0 flex-col gap-1">
+        <p className="text-text-primary text-xs font-bold">{author}</p>
+        <p className="text-text-primary text-sm leading-5">{text}</p>
+        {meta && <p className="text-text-secondary text-xs">{meta}</p>}
+      </div>
+    </div>
+  );
+}
+
 /** Mono status line with a live dot — the instrument/terminal mood. */
 export function ReadoutChip({ text, tone = "accent-4" }: { text: string; tone?: Tone }) {
   const hue = TONE[tone];

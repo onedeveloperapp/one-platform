@@ -1,0 +1,45 @@
+{
+  "format_version": 1,
+  "name": "home",
+  "type": "landing",
+  "created_at": "2026-11-07",
+  "url": "/",
+  "language": "pt-BR",
+  "product": {
+    "name": "ONE",
+    "what": "Software de automação com IA para escritórios de contencioso de massa: atende o cliente no WhatsApp do escritório, confere os documentos, escreve a peça, conta os prazos e monta o pacote do protocolo, e o escritório escolhe o que uma pessoa revisa."
+  },
+  "audience": "Sócios e equipes de escritórios de advocacia de contencioso de massa no Brasil.",
+  "main_purchase": null,
+  "cta_text": "Entrar na lista de espera",
+  "secondary_cta_text": "Falar com a gente",
+  "decline_text": null,
+  "offer": {
+    "price": null,
+    "reference_price": null,
+    "recurrence": null,
+    "renewal_price": null,
+    "guarantee_days": null,
+    "deadline": null,
+    "plans": null,
+    "recommended_plan": null,
+    "trial_days": null,
+    "cancellation": null
+  },
+  "payment": {
+    "one_click": null,
+    "provider": null
+  },
+  "api": {
+    "docs_url": null,
+    "rate_limit": null
+  },
+  "notes": [
+    "Modelo principal: juridiq-pagina-de-vendas (estrutura, mecânica e efeito visual), na marca do ONE. Nada de texto, imagem, logo, cor ou código do Juridiq.",
+    "O ONE ainda não vende: o estágio do site é a lista de espera (platform_settings launch). O chamado principal segue o estágio, igual ao do menu: 'Entrar na lista de espera', e 'Criar a conta do escritório' quando o site abrir.",
+    "Sem promoção, sem preço publicado, sem teste grátis, sem clientes para citar: a faixa da promoção, a janela da promoção, os números de uso, os depoimentos e os planos ficam de fora. A pergunta do preço está nas perguntas frequentes.",
+    "As telas são desenhadas com tokens e levam a legenda 'Telas com dados de exemplo', o equivalente à etiqueta de exemplo fictício do modelo.",
+    "O site vende o núcleo do ONE (a automação dos casos com IA), nunca uma aplicação: o primeiro módulo aparece numa linha só, nas perguntas frequentes (.claude/rules/marketing.md).",
+    "Quem vende aparece no rodapé pelo cadastro da plataforma (platform_settings legal_entity): nome, CNPJ e cidade. O endereço completo depende desse cadastro."
+  ]
+}

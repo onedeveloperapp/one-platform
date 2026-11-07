@@ -1,3 +1,6 @@
+import { Button } from "@mui/material";
+
+import Link from "@/components/marketing/locale-link";
 import Reveal from "@/components/marketing/reveal";
 import Section from "@/components/marketing/section";
 import SectionHeader from "@/components/marketing/section-header";
@@ -33,6 +36,8 @@ export default function FeatureGrid({
   subtitle,
   features,
   variant = "card",
+  background = "default",
+  cta,
 }: {
   id?: string;
   /** The section's key in the measurement (`section_view`). */
@@ -42,11 +47,15 @@ export default function FeatureGrid({
   subtitle?: string;
   features: Feature[];
   variant?: "card" | "tinted";
+  /** The section's surface: "paper" sets the chapter apart from the ones around it. */
+  background?: "default" | "paper";
+  /** The page's primary action repeated verbatim under the cards, centred: it closes a long chapter. */
+  cta?: { label: string; href: string };
 }) {
   // Three cards (or six) stand three abreast from md and stack below it: two columns would leave the last alone on its row.
   const columns = features.length % 3 === 0 ? "md:grid-cols-3" : "sm:grid-cols-2 lg:grid-cols-3";
   return (
-    <Section id={id} track={track}>
+    <Section id={id} track={track} background={background}>
       <SectionHeader eyebrow={eyebrow} title={title} subtitle={subtitle} />
       <Reveal stagger={0.08} className={cn("grid grid-cols-1 gap-6", columns)}>
         {features.map((feature, index) => {
@@ -90,6 +99,21 @@ export default function FeatureGrid({
           );
         })}
       </Reveal>
+      {cta && (
+        <div className="mt-10 flex justify-center">
+          <Button
+            size="large"
+            variant="contained"
+            color="primary"
+            href={cta.href}
+            LinkComponent={Link}
+            data-track="cta_click"
+            data-track-cta-id={`${track ?? "features"}_primary`}
+          >
+            {cta.label}
+          </Button>
+        </div>
+      )}
     </Section>
   );
 }

@@ -131,7 +131,8 @@ export default function SupportWidget({ support }: { support?: SupportChannels }
 
   return (
     <ClickAwayListener onClickAway={() => setOpen(false)}>
-      <Box className={cn("fixed right-5 bottom-5 z-50 flex flex-col items-end gap-3")}>
+      {/* data-support-widget: a bar fixed at the foot of a phone (<StickyCta>) leaves this corner free while it is here. */}
+      <Box data-support-widget className={cn("fixed right-5 bottom-5 z-50 flex flex-col items-end gap-3")}>
         <Fade in={open} unmountOnExit>
           <Card className="shadow-darker-sm! flex w-72 flex-col gap-1 p-2">
             {channels.map((channel) =>
