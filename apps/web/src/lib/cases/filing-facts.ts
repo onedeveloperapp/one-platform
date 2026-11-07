@@ -390,6 +390,8 @@ export type QueuedFiling = {
   status: "requested" | "ready" | "failed";
   files: number;
   requestedLabel: string;
+  /** When it was asked for, as the database wrote it: what the queue is ordered by. */
+  requestedAt: string;
   /** What keeps its lawsuit from being filed now: the package waits for it before it is filed. */
   blocker: string | null;
   /** Where the court's system takes the files signed: how ONE's signature of them stands. */
@@ -460,6 +462,7 @@ export async function loadFilingQueue(
         status: row.status,
         files: many(row.filing_package_items).length,
         requestedLabel: momentLabel(row.requested_at, timeZone),
+        requestedAt: row.requested_at,
         blocker: blockers.get(row.proceeding_id) ?? null,
         signature: (SIGNATURE_STATUSES as readonly string[]).includes(row.signature_status ?? "")
           ? (row.signature_status as FilingSignature["status"])

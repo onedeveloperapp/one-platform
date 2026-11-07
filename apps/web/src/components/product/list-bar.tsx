@@ -24,7 +24,6 @@ import NiChevronDownSmall from "@/icons/nexture/ni-chevron-down-small";
 import NiFilter from "@/icons/nexture/ni-filter";
 import NiListNumber from "@/icons/nexture/ni-list-number";
 import NiSearch from "@/icons/nexture/ni-search";
-import { cn } from "@/lib/utils";
 
 /** A ready view of the list: its name, how many it holds, and the group it is listed under in the menu. */
 export type ListView = { key: string; label: string; count?: string; group: string };
@@ -66,7 +65,8 @@ export default function ListBar({
   views: ListView[];
   view: string;
   onView: (key: string) => void;
-  search?: { label: string; placeholder: string; value: string; onChange: (text: string) => void };
+  /** The search of the list; `numeric` opens a phone's keyboard of digits, for a list searched by a number. */
+  search?: { label: string; placeholder: string; value: string; onChange: (text: string) => void; numeric?: boolean };
   /** "Filtrar": the fields of the list's filters, in a panel under the button. */
   filter?: { label: string; active: number; content: ReactNode; clearLabel: string; onClear: () => void };
   /** "Ordenar": the orders the list offers. */
@@ -260,11 +260,13 @@ function ListSearch({
   placeholder,
   value,
   onChange,
+  numeric,
 }: {
   label: string;
   placeholder: string;
   value: string;
   onChange: (text: string) => void;
+  numeric?: boolean;
 }) {
   const [text, setText] = useState(value);
   const told = useRef(value);
@@ -293,9 +295,15 @@ function ListSearch({
       value={text}
       onChange={(event) => setText(event.target.value.slice(0, 120))}
       placeholder={placeholder}
-      className={cn("min-w-48 flex-[1_1_16rem] sm:max-w-80")}
+      // The theme gives a form control a margin under it, for its helper text: a field of a bar has none.
+      className="mb-0! min-w-48 flex-[1_1_16rem] sm:max-w-80"
       slotProps={{
-        htmlInput: { "aria-label": label, type: "search", autoComplete: "off" },
+        htmlInput: {
+          "aria-label": label,
+          type: "search",
+          autoComplete: "off",
+          ...(numeric ? { inputMode: "numeric" as const } : {}),
+        },
         input: {
           startAdornment: (
             <InputAdornment position="start">

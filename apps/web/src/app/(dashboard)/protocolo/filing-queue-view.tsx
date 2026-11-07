@@ -3,20 +3,39 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
+import { type ReactNode, useMemo, useState } from "react";
 
-import { Alert, Box, Button, Card, CardContent, Typography } from "@mui/material";
+import { Alert, Box, Button, Card, CardContent, Grid, MenuItem, TextField, Typography } from "@mui/material";
 
 import EmptyState from "@/components/product/empty-state";
-import MetricBars from "@/components/product/metric-bars";
+import ListBar, { type ListChip, type ListView } from "@/components/product/list-bar";
 import ModuleScope from "@/components/product/module-scope";
+import NumberCard from "@/components/product/number-card";
 import PageHeader from "@/components/product/page-header";
 import StatusChip, { type StatusTone } from "@/components/product/status-chip";
+import type { TileTone } from "@/components/product/tile-tone";
+import NiClock from "@/icons/nexture/ni-clock";
+import NiExclamationHexagon from "@/icons/nexture/ni-exclamation-hexagon";
+import NiLock from "@/icons/nexture/ni-lock";
 import NiScale from "@/icons/nexture/ni-scale";
 import NiUsers from "@/icons/nexture/ni-users";
 import { caseLabel } from "@/lib/cases/cases";
 import { PACKAGE_STATUS_KEY, QUEUE_SHOWN } from "@/lib/cases/filing";
 import type { QueuedFiling } from "@/lib/cases/filing-facts";
+import {
+  isQueueSort,
+  isQueueView,
+  QUEUE_SORTS,
+  QUEUE_VIEWS,
+  queueCounts,
+  queueFacets,
+  queueGroups,
+  queueRows,
+  type QueueSort,
+  type QueueView,
+} from "@/lib/cases/filing-queue";
 import { type PageScope, scopeCrumbs } from "@/lib/modules/offer";
+import { countText } from "@/lib/numbers/compare";
 
 export type FilingQueueState =
   | {
@@ -31,6 +50,8 @@ export type FilingQueueState =
       lawyer: boolean;
       /** The modules of the firm, and the one the page is under (0078). */
       scope: PageScope;
+      /** The view the page opens on (`?ver=`), so a line elsewhere may lead to the packages ready to file. */
+      view: QueueView;
     }
   | { kind: "no-firm" }
   | { kind: "unavailable" }
@@ -55,31 +76,64 @@ const KIND_KEY: Record<"juizado" | "comum", string> = {
   comum: "case-proceeding-kind-comum",
 };
 
+const SORT_KEY: Record<QueueSort, string> = {
+  oldest: "filing-queue-sort-oldest",
+  newest: "filing-queue-sort-newest",
+};
+
+/** The views a card counts, with its icon and tint: what is to file, being built, held, and what failed. */
+const CARD: Record<Exclude<QueueView, "todos">, { tone: TileTone; icon: ReactNode }> = {
+  prontos: { tone: "primary", icon: <NiScale size="medium" /> },
+  montagem: { tone: "accent-1", icon: <NiClock size="medium" /> },
+  impedidos: { tone: "accent-4", icon: <NiLock size="medium" /> },
+  falha: { tone: "accent-3", icon: <NiExclamationHexagon size="medium" /> },
+};
+
 /**
- * The firm's filing queue. A lawyer comes here to know what is ready to be
- * filed and where: the packages are grouped by court and system, because a
- * lawyer files a run of them in one system with one login, and each one
- * opens its case, where the files are downloaded in order and the receipt
- * is attached. Success is an empty queue. A handful of groups, each a short
- * list, so it is a column of cards and never a table.
+ * The firm's filing queue. A lawyer comes here to know what is ready to be filed and where: the cards say how many
+ * packages are ready, being built, held by something of their case and not built, each opening the list it counts;
+ * the bar of every list of ONE finds a client, a case or a comarca and keeps to a court or a system; the packages
+ * are grouped by court and system, because a lawyer files a run of them in one system with one login, and each one
+ * opens its case, where the files are downloaded in order and the receipt is attached. Success is an empty queue.
+ * The queue is read whole (at most `QUEUE_SHOWN`), so the bar decides in the browser and never asks again.
  */
 export default function FilingQueueView({ state }: { state: FilingQueueState }) {
   const t = useTranslations("product");
   const router = useRouter();
   const ready = state.kind === "ready" ? state : null;
 
-  // One group per court and system, the ones with something ready to file first.
-  const groups = new Map<string, QueuedFiling[]>();
-  for (const row of ready?.rows ?? []) {
-    const key = `${row.court}|${row.system}`;
-    groups.set(key, [...(groups.get(key) ?? []), row]);
-  }
-  const ordered = [...groups.entries()].sort(
-    ([, a], [, b]) =>
-      Number(b.some((row) => row.status === "ready")) - Number(a.some((row) => row.status === "ready")) ||
-      a[0].court.localeCompare(b[0].court),
+  const [view, setView] = useState<QueueView>(ready?.view ?? "todos");
+  const [search, setSearch] = useState("");
+  const [court, setCourt] = useState<string | null>(null);
+  const [system, setSystem] = useState<string | null>(null);
+  const [sort, setSort] = useState<QueueSort>("oldest");
+
+  const rows = useMemo(() => ready?.rows ?? [], [ready]);
+  const facets = useMemo(() => queueFacets(rows), [rows]);
+  const counts = useMemo(() => queueCounts(rows, { search, court, system }), [rows, search, court, system]);
+  const groups = useMemo(
+    () => queueGroups(queueRows(rows, { view, search, court, system, sort })),
+    [rows, view, search, court, system, sort],
   );
-  const count = (status: QueuedFiling["status"]) => (ready?.rows ?? []).filter((row) => row.status === status).length;
+  const systemName = (key: string) => t(SYSTEM_KEY[key] ?? "case-system-outro");
+  const narrowed = Boolean(search.trim()) || court !== null || system !== null;
+
+  const views: ListView[] = QUEUE_VIEWS.map((key) => ({
+    key,
+    label: t(`filing-queue-view-${key}`),
+    count: countText(counts[key]),
+    group: key === "todos" ? "all" : "state",
+  }));
+  const chips: ListChip[] = [
+    ...(court !== null ? [{ key: "court", label: court, onRemove: () => setCourt(null) }] : []),
+    ...(system !== null ? [{ key: "system", label: systemName(system), onRemove: () => setSystem(null) }] : []),
+  ];
+  const showAll = () => {
+    setView("todos");
+    setSearch("");
+    setCourt(null);
+    setSystem(null);
+  };
 
   return (
     <Box className="flex flex-col gap-6">
@@ -132,30 +186,22 @@ export default function FilingQueueView({ state }: { state: FilingQueueState }) 
 
       {ready && ready.rows.length > 0 ? (
         <>
-          <Card component="section" aria-labelledby="filing-queue-counts">
-            <CardContent className="flex flex-col gap-4">
-              <Typography id="filing-queue-counts" variant="h5" component="h2" className="mb-0">
-                {t("filing-queue-counts", { count: ready.rows.length })}
-              </Typography>
-              <MetricBars
-                items={[
-                  { key: "ready", label: t("filing-queue-count-ready"), value: count("ready"), tone: "attention" },
-                  {
-                    key: "requested",
-                    label: t("filing-queue-count-requested"),
-                    value: count("requested"),
-                    tone: "primary",
-                  },
-                  { key: "failed", label: t("filing-queue-count-failed"), value: count("failed"), tone: "secondary" },
-                ]}
-              />
-              {!ready.lawyer ? (
-                <Typography variant="body2" className="text-text-secondary">
-                  {t("filing-queue-not-lawyer")}
-                </Typography>
-              ) : null}
-            </CardContent>
-          </Card>
+          {/* How many packages each state holds, under the search and the filters; each opens the list it counts. */}
+          <Grid container spacing={2.5}>
+            {(Object.keys(CARD) as (keyof typeof CARD)[]).map((key) => (
+              <Grid key={key} size={{ xs: 6, lg: 3 }}>
+                <NumberCard
+                  icon={CARD[key].icon}
+                  tone={CARD[key].tone}
+                  label={t(`filing-queue-view-${key}`)}
+                  hint={t(`filing-queue-view-${key}-hint`)}
+                  value={countText(counts[key])}
+                  onClick={() => setView(view === key ? "todos" : key)}
+                  pressed={view === key}
+                />
+              </Grid>
+            ))}
+          </Grid>
 
           {ready.truncated ? (
             <Alert severity="info" className="neutral bg-background-paper/60!">
@@ -163,14 +209,107 @@ export default function FilingQueueView({ state }: { state: FilingQueueState }) 
             </Alert>
           ) : null}
 
-          {ordered.map(([key, rows]) => (
-            <Card component="section" key={key} aria-labelledby={`filing-group-${key}`}>
+          <Box className="flex flex-col gap-2">
+            <ListBar
+              label={t("filing-queue-bar-label")}
+              viewsTitle={t("list-views-title")}
+              views={views}
+              view={view}
+              onView={(key) => {
+                if (isQueueView(key)) setView(key);
+              }}
+              search={{
+                label: t("filing-queue-search-label"),
+                placeholder: t("list-bar-search"),
+                value: search,
+                onChange: setSearch,
+              }}
+              filter={{
+                label: t("list-bar-filter"),
+                active: (court !== null ? 1 : 0) + (system !== null ? 1 : 0),
+                clearLabel: t("list-bar-filter-clear"),
+                onClear: () => {
+                  setCourt(null);
+                  setSystem(null);
+                },
+                content: (
+                  <>
+                    <TextField
+                      select
+                      fullWidth
+                      size="small"
+                      id="filing-queue-filter-court"
+                      label={t("filing-queue-filter-court")}
+                      value={court ?? ""}
+                      onChange={(event) => setCourt(event.target.value || null)}
+                      slotProps={{ select: { displayEmpty: true }, inputLabel: { shrink: true } }}
+                    >
+                      <MenuItem value="">{t("filing-queue-filter-any-court")}</MenuItem>
+                      {facets.courts.map((item) => (
+                        <MenuItem key={item} value={item}>
+                          {item}
+                        </MenuItem>
+                      ))}
+                    </TextField>
+                    <TextField
+                      select
+                      fullWidth
+                      size="small"
+                      id="filing-queue-filter-system"
+                      label={t("filing-queue-filter-system")}
+                      value={system ?? ""}
+                      onChange={(event) => setSystem(event.target.value || null)}
+                      slotProps={{ select: { displayEmpty: true }, inputLabel: { shrink: true } }}
+                    >
+                      <MenuItem value="">{t("filing-queue-filter-any-system")}</MenuItem>
+                      {facets.systems.map((item) => (
+                        <MenuItem key={item} value={item}>
+                          {systemName(item)}
+                        </MenuItem>
+                      ))}
+                    </TextField>
+                  </>
+                ),
+              }}
+              sort={{
+                label: t("list-bar-sort"),
+                options: QUEUE_SORTS.map((key) => ({ key, label: t(SORT_KEY[key]) })),
+                value: sort,
+                onChange: (key) => {
+                  if (isQueueSort(key)) setSort(key);
+                },
+              }}
+              chips={chips}
+            />
+            {narrowed ? (
+              <Typography variant="body2" role="status" className="text-text-secondary px-1">
+                {t("filing-queue-found", { count: counts[view] })}
+              </Typography>
+            ) : null}
+            {!ready.lawyer ? (
+              <Typography variant="body2" className="text-text-secondary px-1">
+                {t("filing-queue-not-lawyer")}
+              </Typography>
+            ) : null}
+          </Box>
+
+          {groups.length === 0 ? (
+            <EmptyState
+              icon={<NiScale size="large" />}
+              title={t("filing-queue-view-empty-title")}
+              description={t("filing-queue-view-empty-body")}
+              action={{ label: t("filing-queue-view-empty-action"), onClick: showAll }}
+            />
+          ) : null}
+
+          {groups.map((group) => (
+            <Card component="section" key={group.key} aria-labelledby={`filing-group-${group.key}`}>
               <CardContent className="flex flex-col gap-3">
-                <Typography id={`filing-group-${key}`} variant="h5" component="h2" className="mb-0">
-                  {[rows[0].court, t(SYSTEM_KEY[rows[0].system] ?? "case-system-outro")].join(" · ")}
+                <Typography id={`filing-group-${group.key}`} variant="h5" component="h2" className="mb-0">
+                  {[group.court, systemName(group.system)].join(" · ")}
                 </Typography>
                 <Box component="ul" className="m-0 flex list-none flex-col p-0">
-                  {rows.map((row) => (
+                  {group.rows.map((row) => (
                     <Box
                       component="li"
                       key={row.id}
@@ -195,7 +334,7 @@ export default function FilingQueueView({ state }: { state: FilingQueueState }) 
                               ? null
                               : row.signature === "signed"
                                 ? t("filing-queue-signed")
-                                : !ready?.cloudSigning
+                                : !ready.cloudSigning
                                   ? null
                                   : row.signature === "waiting"
                                     ? t("filing-queue-signature-waiting")
@@ -207,7 +346,12 @@ export default function FilingQueueView({ state }: { state: FilingQueueState }) 
                             .join(" · ")}
                         </Typography>
                       </Box>
-                      <StatusChip tone={STATUS_TONE[row.status]} label={t(PACKAGE_STATUS_KEY[row.status])} />
+                      {/* A package something of its case holds is never said ready: it waits for that first. */}
+                      {row.blocker && row.status !== "failed" ? (
+                        <StatusChip tone="attention" label={t("filing-queue-view-impedidos")} />
+                      ) : (
+                        <StatusChip tone={STATUS_TONE[row.status]} label={t(PACKAGE_STATUS_KEY[row.status])} />
+                      )}
                       <Button
                         variant={row.status === "ready" && !row.blocker ? "contained" : "outlined"}
                         color={row.status === "ready" && !row.blocker ? "primary" : "grey"}

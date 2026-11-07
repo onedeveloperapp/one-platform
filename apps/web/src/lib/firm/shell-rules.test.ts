@@ -454,7 +454,7 @@ describe("what needs somebody today", () => {
       ["approvals", 1, "/aprovacoes"],
       ["moved", 4, "/casos?ver=andamento"],
       ["drafts", 5, "/casos?ver=pecas"],
-      ["filings", 2, "/protocolo"],
+      ["filings", 2, "/protocolo?ver=prontos"],
       ["clients", 2, "/casos?ver=cliente-terminou"],
       ["civil", 1, "/casos?ver=vara-civel"],
       ["documents", 6, "/casos?ver=documentos"],

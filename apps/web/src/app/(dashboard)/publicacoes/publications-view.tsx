@@ -5,12 +5,13 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 
-import { Alert, Box, Button, Card, CardContent, Collapse, Grid, TextField, Typography } from "@mui/material";
+import { Alert, Box, Button, Card, CardContent, Collapse, Grid, Typography } from "@mui/material";
 
 import CollapsibleCard from "@/components/product/collapsible-card";
 import EmptyState from "@/components/product/empty-state";
-import { StatTile } from "@/components/product/home-tiles";
+import ListBar, { type ListView } from "@/components/product/list-bar";
 import ModuleScope from "@/components/product/module-scope";
+import NumberCard from "@/components/product/number-card";
 import PageHeader from "@/components/product/page-header";
 import StateLine from "@/components/product/state-line";
 import StatusChip, { type StatusTone } from "@/components/product/status-chip";
@@ -20,12 +21,14 @@ import NiDocumentCheck from "@/icons/nexture/ni-document-check";
 import NiDocumentCross from "@/icons/nexture/ni-document-cross";
 import NiInbox from "@/icons/nexture/ni-inbox";
 import NiInfoSquare from "@/icons/nexture/ni-info-square";
+import NiRefresh from "@/icons/nexture/ni-refresh";
 import NiShieldCheck from "@/icons/nexture/ni-shield-check";
 import NiUsers from "@/icons/nexture/ni-users";
 import type { DeadlineAct } from "@/lib/deadlines/facts";
 import type { Colleague } from "@/lib/hearings/facts";
 import type { CourtZones } from "@/lib/hearings/hearings";
 import { type PageScope, scopeCrumbs } from "@/lib/modules/offer";
+import { countText } from "@/lib/numbers/compare";
 import {
   readPublicationProgress,
   requestPublicationsCapture,
@@ -55,6 +58,7 @@ import {
   type PublicationView,
   type ReadingState,
   readingState,
+  searchedCnj,
   VIEW_COUNT,
 } from "@/lib/publications/publications";
 import { readingOnCard } from "@/lib/publications/reading-words";
@@ -90,25 +94,25 @@ const VIEW_TILE: Record<PublicationView, { label: string; hint: string; tone: Ti
     label: "publications-view-untriaged",
     hint: "publications-view-untriaged-hint",
     tone: "accent-3",
-    icon: <NiInbox size="large" />,
+    icon: <NiInbox size="medium" />,
   },
   conferir: {
     label: "publications-view-review",
     hint: "publications-view-review-hint",
     tone: "accent-4",
-    icon: <NiShieldCheck size="large" />,
+    icon: <NiShieldCheck size="medium" />,
   },
   triadas: {
     label: "publications-view-triaged",
     hint: "publications-view-triaged-hint",
     tone: "primary",
-    icon: <NiDocumentCheck size="large" />,
+    icon: <NiDocumentCheck size="medium" />,
   },
   canceladas: {
     label: "publications-view-cancelled",
     hint: "publications-view-cancelled-hint",
     tone: "secondary",
-    icon: <NiDocumentCross size="large" />,
+    icon: <NiDocumentCross size="medium" />,
   },
 };
 
@@ -244,31 +248,65 @@ function PublicationsScreen({ state, onReadAgain }: { state: PublicationsState; 
       }
     });
 
-  const search = () =>
+  /** Which search is the latest: an answer of an older one, arriving late, is never shown over it. */
+  const searchTurn = useRef(0);
+  const search = (text: string) => {
+    const turn = ++searchTurn.current;
     startSearching(async () => {
       setSearchError(null);
       try {
-        const result = await searchPublications(typed);
+        const result = await searchPublications(text);
+        if (turn !== searchTurn.current) return;
         if (result.ok) setFound({ rows: result.rows, more: result.more });
         else setSearchError(t(publicationErrorKey(result.code)));
       } catch {
-        setSearchError(t("publication-error-failed"));
+        if (turn === searchTurn.current) setSearchError(t("publication-error-failed"));
       }
     });
+  };
   const clearSearch = () => {
+    searchTurn.current += 1;
     setFound(null);
     setTyped("");
     setSearchError(null);
   };
+  /**
+   * What the bar's search hands over once the person stops typing: nothing clears the search; a number too short to
+   * be a lawsuit's waits for more digits, said under the bar, and asks nothing; anything else is searched.
+   */
+  const searchTyped = (text: string) => {
+    setTyped(text);
+    if (!text) {
+      clearSearch();
+      return;
+    }
+    if (!searchedCnj(text)) {
+      searchTurn.current += 1;
+      setFound(null);
+      setSearchError(null);
+      return;
+    }
+    search(text);
+  };
 
   const mayAsk = Boolean(ready?.mayTriage && ready.captureOn && data?.hasRegistrations);
-  const readNow = mayAsk ? (
-    <Button variant="outlined" color="grey" onClick={askForReading} disabled={asking}>
-      {t("publications-capture-now")}
-    </Button>
-  ) : undefined;
   const counts = data ? countsNow(list) : null;
   const rows = found ? found.rows : list.rows;
+  const shownViews = (Object.keys(VIEW_TILE) as PublicationView[]).filter((view) => view !== "conferir" || showsReview);
+  const views: ListView[] = shownViews.map((view) => ({
+    key: view,
+    label: t(VIEW_TILE[view].label),
+    count: counts ? countText(counts[VIEW_COUNT[view]]) : undefined,
+    group: view === "por-triar" || view === "conferir" ? "work" : "done",
+  }));
+  /** A list opened from a card or the bar; the one on the screen, asked for again, is read again from its start. */
+  const openView = (view: PublicationView) => {
+    if (!ready || !data) return;
+    const wasSearching = Boolean(found);
+    clearSearch();
+    if (view !== ready.view || data.page > 0) router.push(publicationsAddress(view, 0, module));
+    else if (!wasSearching) onReadAgain();
+  };
   /**
    * What the screen knows of each publication since the list was read: what ONE read of it, its deadlines and
    * hearings, and what a person did by hand. The list is held while the person works it, so every read of the
@@ -336,7 +374,6 @@ function PublicationsScreen({ state, onReadAgain }: { state: PublicationsState; 
         title={t("publications-title")}
         crumbs={scopeCrumbs(t("approvals-home"), t("publications-title"), ready?.scope.current ?? null)}
         description={ready ? t("publications-description") : undefined}
-        action={total > 0 ? readNow : undefined}
       />
       {ready ? (
         <ModuleScope
@@ -423,32 +460,23 @@ function PublicationsScreen({ state, onReadAgain }: { state: PublicationsState; 
       ) : null}
 
       {ready && data && counts && total > 0 ? (
-        <>
-          <Grid container spacing={2.5}>
-            {/* What to check shows when there is something of it, or the AI's word is a firm's triage somewhere. */}
-            {(Object.keys(VIEW_TILE) as PublicationView[])
-              .filter((view) => view !== "conferir" || showsReview)
-              .map((view) => (
-                <Grid key={view} size={{ xs: showsReview ? 6 : 4, lg: showsReview ? 3 : 4 }}>
-                  <StatTile
-                    onClick={() => {
-                      const searching = Boolean(found);
-                      clearSearch();
-                      // The list already on the screen, asked for again, is read again from its start.
-                      if (view !== ready.view || data.page > 0) router.push(publicationsAddress(view, 0, module));
-                      else if (!searching) onReadAgain();
-                    }}
-                    pressed={!found && ready.view === view}
-                    icon={VIEW_TILE[view].icon}
-                    tone={VIEW_TILE[view].tone}
-                    label={t(VIEW_TILE[view].label)}
-                    hint={t(VIEW_TILE[view].hint)}
-                    value={counts[VIEW_COUNT[view]]}
-                  />
-                </Grid>
-              ))}
-          </Grid>
-        </>
+        // How many each list holds, each opening the list it counts; what to check shows when there is something of
+        // it, or the AI's word is a firm's triage somewhere.
+        <Grid container spacing={2.5}>
+          {shownViews.map((view) => (
+            <Grid key={view} size={{ xs: 6, lg: showsReview ? 3 : 4 }}>
+              <NumberCard
+                onClick={() => openView(view)}
+                pressed={!found && ready.view === view}
+                icon={VIEW_TILE[view].icon}
+                tone={VIEW_TILE[view].tone}
+                label={t(VIEW_TILE[view].label)}
+                hint={t(VIEW_TILE[view].hint)}
+                value={countText(counts[VIEW_COUNT[view]])}
+              />
+            </Grid>
+          ))}
+        </Grid>
       ) : null}
 
       {/* Where nothing was published yet, the reading is said under what the empty list says. */}
@@ -465,9 +493,62 @@ function PublicationsScreen({ state, onReadAgain }: { state: PublicationsState; 
 
       {ready && data && total > 0 ? (
         <Box component="section" aria-labelledby="publications-list" className="flex flex-col gap-4">
-          {/* The list's head: which list it is, the search of a lawsuit's publications, and what the answers mean. */}
-          <Box className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-            <Box className="flex min-w-0 flex-col gap-1">
+          {/*
+            The bar of every list: the lists with how many each holds, the search of a lawsuit's publications by its
+            number, and the reading of the DJEN asked now among the list's actions. Under it, what the search found or
+            waits for, then which list this is and what the answers mean.
+          */}
+          <Box className="flex flex-col gap-2">
+            <ListBar
+              label={t("publications-bar-label")}
+              viewsTitle={t("list-views-title")}
+              views={views}
+              view={ready.view}
+              onView={(key) => {
+                const view = shownViews.find((item) => item === key);
+                if (view) openView(view);
+              }}
+              search={{
+                label: t("publications-search-title"),
+                placeholder: t("publications-bar-search"),
+                value: typed,
+                numeric: true,
+                onChange: searchTyped,
+              }}
+              more={
+                mayAsk
+                  ? {
+                      label: t("list-bar-more"),
+                      actions: [
+                        {
+                          key: "read-now",
+                          label: t("publications-capture-now-long"),
+                          icon: <NiRefresh size="medium" />,
+                          onClick: askForReading,
+                          disabled: asking,
+                        },
+                      ],
+                    }
+                  : undefined
+              }
+            />
+            {searchError ? (
+              <Typography variant="body2" role="alert" className="text-error px-1">
+                {searchError}
+              </Typography>
+            ) : typed && !searchedCnj(typed) ? (
+              <Typography variant="body2" role="status" className="text-text-secondary px-1">
+                {t("publications-search-short")}
+              </Typography>
+            ) : searching ? (
+              <Typography variant="body2" role="status" className="text-text-secondary px-1">
+                {t("publications-search-busy")}
+              </Typography>
+            ) : null}
+          </Box>
+
+          <Box className="flex flex-wrap items-start justify-between gap-3">
+            <Box className="flex min-w-0 flex-1 flex-col gap-1">
               <Typography id="publications-list" variant="h5" component="h2" className="mb-0">
                 {found ? t("publications-search-found-title") : t(VIEW_TILE[ready.view].label)}
               </Typography>
@@ -482,35 +563,11 @@ function PublicationsScreen({ state, onReadAgain }: { state: PublicationsState; 
                   : t(VIEW_TILE[ready.view].hint)}
               </Typography>
             </Box>
-            <Box
-              component="form"
-              role="search"
-              aria-label={t("publications-search-title")}
-              className="flex flex-none flex-wrap items-start gap-2"
-              onSubmit={(event: React.FormEvent) => {
-                event.preventDefault();
-                search();
-              }}
-            >
-              <TextField
-                size="small"
-                label={t("publications-search-label")}
-                value={typed}
-                onChange={(event) => setTyped(event.target.value.slice(0, 40))}
-                error={Boolean(searchError)}
-                helperText={searchError ?? undefined}
-                className="w-full sm:w-72"
-                slotProps={{ htmlInput: { inputMode: "numeric", autoComplete: "off" } }}
-              />
-              <Button type="submit" variant="outlined" color="grey" disabled={searching || typed.trim() === ""}>
-                {t("publications-search-action")}
+            {found ? (
+              <Button variant="text" color="grey" onClick={clearSearch}>
+                {t("publications-search-clear")}
               </Button>
-              {found ? (
-                <Button variant="text" color="grey" onClick={clearSearch}>
-                  {t("publications-search-clear")}
-                </Button>
-              ) : null}
-            </Box>
+            ) : null}
           </Box>
 
           {!ready.mayTriage ? (

@@ -353,7 +353,7 @@ export function todayNeeds(today: FirmToday, viewer: TodayViewer = EVERYTHING): 
     { key: "approvals", count: today.approvalsMine, href: "/aprovacoes" },
     { key: "moved", count: today.movementsNew + today.trackingFailed, href: "/casos?ver=andamento" },
     { key: "drafts", count: today.draftsWaiting, href: "/casos?ver=pecas" },
-    { key: "filings", count: today.filingsReady, href: "/protocolo" },
+    { key: "filings", count: today.filingsReady, href: "/protocolo?ver=prontos" },
     { key: "clients", count: today.clientsFinished, href: "/casos?ver=cliente-terminou" },
     { key: "civil", count: today.civilCourtDeclined, href: "/casos?ver=vara-civel" },
     { key: "documents", count: today.documentsToReview, href: "/casos?ver=documentos" },

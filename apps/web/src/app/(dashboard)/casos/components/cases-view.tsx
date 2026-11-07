@@ -652,13 +652,13 @@ function CasesList({ ready, embedded }: { ready: Ready; embedded: boolean }) {
           <Box className="flex flex-col gap-2">
             <ListBar
               label={t("cases-bar-label")}
-              viewsTitle={t("cases-views-title")}
+              viewsTitle={t("list-views-title")}
               views={views}
               view={filter ?? GOING}
               onView={(key) => setFilter(key === GOING ? null : (key as CaseFilter))}
               search={{
                 label: t("cases-search-label"),
-                placeholder: t("cases-bar-search"),
+                placeholder: t("list-bar-search"),
                 value: query.search,
                 onChange: (text) => {
                   if (text === current.current.search) return;
@@ -666,9 +666,9 @@ function CasesList({ ready, embedded }: { ready: Ready; embedded: boolean }) {
                 },
               }}
               filter={{
-                label: t("cases-bar-filter"),
+                label: t("list-bar-filter"),
                 active: (query.incident ? 1 : 0) + (query.airline ? 1 : 0),
-                clearLabel: t("cases-bar-filter-clear"),
+                clearLabel: t("list-bar-filter-clear"),
                 onClear: () => void load({ ...current.current, incident: null, airline: null, page: 0 }),
                 content: (
                   <>
@@ -714,7 +714,7 @@ function CasesList({ ready, embedded }: { ready: Ready; embedded: boolean }) {
                 ),
               }}
               sort={{
-                label: t("cases-bar-sort"),
+                label: t("list-bar-sort"),
                 options: CASE_SORTS.map((key) => ({ key, label: t(SORT_KEY[key]) })),
                 value: query.sort ?? "recent",
                 onChange: (key) => {
@@ -725,7 +725,7 @@ function CasesList({ ready, embedded }: { ready: Ready; embedded: boolean }) {
                 ready.supportVisit
                   ? undefined
                   : {
-                      label: t("cases-bar-more"),
+                      label: t("list-bar-more"),
                       actions: [
                         {
                           key: "by-hand",
