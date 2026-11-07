@@ -3,7 +3,7 @@ import { createContext, type PropsWithChildren, useContext, useEffect, useState 
 
 import { DEFAULTS } from "@/config";
 import { useMenu } from "@/hooks/use-menu";
-import { MenuShowState } from "@/types";
+import { MenuShowState, MenuType } from "@/types";
 
 type LayoutContextType = ReturnType<typeof useLayoutContextValue>;
 
@@ -23,6 +23,13 @@ function useLayoutContextValue() {
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  // The rail of icons on a screen wide enough for it; on a phone, where the menu opens over the page on request
+  // and a tooltip has no pointer to show it, the list with each item's name.
+  const { showMobileButton, setMenuType } = leftMenu;
+  useEffect(() => {
+    setMenuType(showMobileButton ? MenuType.SingleLayer : DEFAULTS.leftMenuType);
+  }, [showMobileButton, setMenuType]);
 
   // Return initial state during SSR
   if (!mounted) {

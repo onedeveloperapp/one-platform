@@ -4,9 +4,11 @@
 
 @layer utilities {
   /* A card has a hairline and a soft drop, as on MedChina's clinical-source
-     home: the line draws its edge where the shadow is faint. */
+     home: the line draws its edge where the shadow is faint. Its corners are
+     rounded-2xl (16px) since the owner's choice of 2026-11-07; they were
+     rounded-3xl (24px). */
   .MuiCard-root {
-    @apply bg-background-paper border-grey-100 rounded-3xl border border-solid px-3 py-3 shadow-sm!;
+    @apply bg-background-paper border-grey-100 rounded-2xl border border-solid px-3 py-3 shadow-sm!;
   }
 
   .MuiCardContent-root {

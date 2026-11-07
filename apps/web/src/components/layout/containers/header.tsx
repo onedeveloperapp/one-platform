@@ -10,6 +10,7 @@ import { useTranslations } from "use-intl";
 import { Box, Button, Typography } from "@mui/material";
 
 import { useLayoutContext } from "@/components/layout/layout-context";
+import { GlobalSearchButton, GlobalSearchField } from "@/components/layout/search/global-search";
 import { useViewer } from "@/components/layout/viewer-context";
 import Logo from "@/components/logo/logo";
 import ModuleIcon from "@/components/product/module-icon";
@@ -56,6 +57,8 @@ export default function Header() {
   const viewer = useViewer();
   // What waits for somebody is the firm's; who is held on the security screen sees it once they pass.
   const showPending = Boolean(viewer?.hasFirm) && !viewer?.owesSecondFactor;
+  // The search finds the firm's cases: for somebody of a firm, once past the second factor.
+  const showSearch = showPending && !viewer?.partner;
 
   const [mounted, setMounted] = useState(false);
 
@@ -123,8 +126,11 @@ export default function Header() {
           <PartnerModules viewer={viewer} />
         </Box>
 
+        {showSearch ? <GlobalSearchField /> : null}
+
         {/* Right buttons */}
         <Box className="ml-auto flex flex-row sm:gap-1">
+          {showSearch ? <GlobalSearchButton /> : null}
           {showPending ? <PendingCenter /> : null}
           <Notifications />
         </Box>

@@ -138,10 +138,11 @@ export const PrimaryItem = memo(function PrimaryItem({ item, onSelect, isActive,
           )}
           startIcon={
             item.icon && (
+              // 20px in a 40px target, in the proportion of ADVBox's rail (the owner, 2026-11-07).
               <NextureIcons
                 variant={selected ? "contained" : "outlined"}
                 icon={item.icon}
-                size={24}
+                size={20}
                 className={cn(
                   "transition-transform group-hover:scale-[0.85]",
                   (selected || isActive) && "scale-[0.85]",

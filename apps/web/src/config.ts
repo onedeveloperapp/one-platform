@@ -12,7 +12,10 @@ export const DEFAULTS = {
   // The shell's layout is the product's, not a person's: no screen offers the
   // template's layout switches, so nothing of it is kept in the browser.
   contentType: ContentType.Fluid,
-  leftMenuType: MenuType.SingleLayer,
+  // The menu is a thin rail of icons, each named in a tooltip and to assistive technology, as ADVBox's (the
+  // owner, 2026-11-07): the page keeps its width. On a phone the menu that opens is the list with the names
+  // (`layout-context.tsx`), since a tooltip needs a pointer.
+  leftMenuType: MenuType.Minimal,
   leftMenuWidth: {
     [MenuType.Minimal]: { primary: 60, secondary: 240 },
     [MenuType.Comfort]: { primary: 116, secondary: 240 },
