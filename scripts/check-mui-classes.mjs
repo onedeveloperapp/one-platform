@@ -145,8 +145,7 @@ const ACCEPTED = [
   },
 ];
 
-const acceptedBy = (file, selector) =>
-  ACCEPTED.find((rule) => file === rule.file && rule.match.test(selector));
+const acceptedBy = (file, selector) => ACCEPTED.find((rule) => file === rule.file && rule.match.test(selector));
 
 /**
  * `color{X}` and `size{X}` legitimately grow past the manifest: a theme that
@@ -195,6 +194,27 @@ function collectAppVariants(files, manifests) {
     }
   }
   return byComponent;
+}
+
+/**
+ * A second guard, met twice on 2026-11-07: Tailwind 4 writes the important
+ * modifier right after the class (`shadow-sm!`). A space before it (`shadow-sm !`),
+ * which VS Code's own CSS formatter writes when it formats a file on save,
+ * makes Tailwind refuse the whole stylesheet: every style of the app goes in
+ * development and the production build fails.
+ */
+function looseImportant(files) {
+  const found = [];
+  for (const file of files) {
+    readFileSync(file, "utf8")
+      .split(/\r?\n/)
+      .forEach((line, i) => {
+        if (/@apply\b/.test(line) && /(^|\s)!(?=[\s;]|$)/.test(line)) {
+          found.push(`${relative(ROOT, file).split(sep).join("/")}:${i + 1}  ${line.trim()}`);
+        }
+      });
+  }
+  return found;
 }
 
 function main() {
@@ -293,7 +313,17 @@ Unrecognised, but not the composed-class shape (likely a slot from a package who
     }
   }
 
-  process.exit(findings.length ? 1 : 0);
+  const loose = looseImportant(files);
+  if (loose.length) {
+    console.error(`\nTailwind important modifier with a space before it, in ${loose.length} line(s):\n`);
+    for (const at of loose) console.error(`  ${at}`);
+    console.error(
+      "\nWrite it right after the class (shadow-sm!). VS Code's CSS formatter adds the space when it" +
+        "\nformats a stylesheet on save; with it Tailwind refuses the file and the app loses every style.\n",
+    );
+  }
+
+  process.exit(findings.length || loose.length ? 1 : 0);
 }
 
 main();

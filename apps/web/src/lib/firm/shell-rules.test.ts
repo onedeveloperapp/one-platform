@@ -124,23 +124,28 @@ describe("the menu by role", () => {
   it("lists ONE's modules under Módulos, each where it stands for the firm", () => {
     const group = visibleItems(leftMenuItems, viewer()).find((item) => item.id === "modulos");
     expect(group?.children?.map((child) => [child.id, child.href, child.tag ?? null, child.text ?? null])).toEqual([
-      ["modulos-todos", "/modulos", null, null],
       ["modulo-direito-do-passageiro", "/modulos/direito-do-passageiro", null, "Direito do Passageiro"],
       ["modulo-direito-previdenciario", "/modulos#direito-previdenciario", "soon", "Direito Previdenciário"],
     ]);
+    // The overview of the modules is the group's own page, beside the submenu's title, never one of its items.
+    expect(group?.href).toBe("/modulos");
     // Each module with its own icon; one the firm did not contract carries the lock.
-    expect(group?.children?.[1].icon).toBe("NiPlane");
+    expect(group?.children?.[0].icon).toBe("NiPlane");
     const locked = visibleItems(
       leftMenuItems,
       viewer({
         moduleMenu: [{ key: "direito-trabalhista", name: "Direito Trabalhista", icon: null, state: "locked" }],
       }),
     ).find((item) => item.id === "modulos");
-    expect(locked?.children?.[1]).toMatchObject({
+    expect(locked?.children?.[0]).toMatchObject({
       tag: "locked",
       href: "/modulos#direito-trabalhista",
       icon: "NiPuzzle",
     });
+    // With no module read, Módulos is still its own page, a plain item.
+    const bare = visibleItems(leftMenuItems, viewer({ moduleMenu: [] })).find((item) => item.id === "modulos");
+    expect(bare).toMatchObject({ href: "/modulos" });
+    expect(bare?.children).toBeUndefined();
     // Nobody of no firm, and nobody of a partner, has the firm's modules in the menu.
     expect(ids(visibleItems(leftMenuItems, operator))).not.toContain("modulos");
     expect(ids(visibleItems(leftMenuItems, viewer({ hasFirm: false, partner: true })))).not.toContain("modulos");
@@ -150,7 +155,11 @@ describe("the menu by role", () => {
     for (const item of [...leftMenuItems, ...leftMenuBottomItems]) {
       expect(dashboard[item.label], item.label).toBeTruthy();
       for (const child of item.children ?? []) expect(dashboard[child.label], child.label).toBeTruthy();
+      // The link to a group's own page beside its submenu's title: its own words, or "Todos".
+      if (item.overviewLabel) expect(dashboard[item.overviewLabel], item.overviewLabel).toBeTruthy();
     }
+    expect(dashboard["menu-all"]).toBeTruthy();
+    expect(dashboard["menu-overview-aria"]).toBeTruthy();
   });
 });
 

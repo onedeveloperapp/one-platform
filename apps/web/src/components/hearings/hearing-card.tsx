@@ -20,7 +20,7 @@ import {
   Typography,
 } from "@mui/material";
 
-import HearingDialog from "@/components/hearings/hearing-dialog";
+import HearingPanel from "@/components/hearings/hearing-panel";
 import DialogHeader from "@/components/product/dialog-header";
 import StatusChip, { type StatusTone } from "@/components/product/status-chip";
 import { caseLabel } from "@/lib/cases/cases";
@@ -254,7 +254,7 @@ export default function HearingCard({
   const dialogs = (
     <>
       {asking === "edit" ? (
-        <HearingDialog
+        <HearingPanel
           editing={row}
           colleagues={colleagues}
           onClose={() => setAsking(null)}

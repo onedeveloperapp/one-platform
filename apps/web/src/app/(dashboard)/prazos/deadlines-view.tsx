@@ -8,7 +8,7 @@ import { useCallback, useState } from "react";
 import { Alert, Box, Button, Card, CardContent, Grid, Typography } from "@mui/material";
 
 import DeadlineCard from "@/components/deadlines/deadline-card";
-import DeadlineDialog from "@/components/deadlines/deadline-dialog";
+import DeadlinePanel from "@/components/deadlines/deadline-panel";
 import EmptyState from "@/components/product/empty-state";
 import { StatTile } from "@/components/product/home-tiles";
 import ModuleScope from "@/components/product/module-scope";
@@ -386,7 +386,7 @@ function UntimedCard({
         ) : null}
       </CardContent>
       {counting ? (
-        <DeadlineDialog
+        <DeadlinePanel
           subject={{
             kind: "publication",
             publicationId: counting.id,

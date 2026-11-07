@@ -8,7 +8,7 @@ import { Box, Paper, Typography } from "@mui/material";
 import { useLayoutContext } from "@/components/layout/layout-context";
 import PlanIndicator from "@/components/layout/menu/plan-indicator";
 import { PrimaryItem } from "@/components/layout/menu/primary-item";
-import { SecondaryItem } from "@/components/layout/menu/secondary-item";
+import { OverviewLink, SecondaryItem } from "@/components/layout/menu/secondary-item";
 import { useViewer } from "@/components/layout/viewer-context";
 import { DEFAULTS } from "@/config";
 import { visibleItems } from "@/lib/firm/menu";
@@ -122,7 +122,7 @@ export default function LeftMenu() {
     <nav
       id="primary-navigation"
       aria-label={t("menu-navigation")}
-      className="bg-background-paper shadow-darker-xs fixed z-10 mt-20 flex h-[calc(100%-5rem)] flex-row rounded-r-3xl"
+      className="bg-background-paper shadow-darker-xs fixed z-10 mt-20 flex h-[calc(100%-5rem)] flex-row rounded-r-2xl"
     >
       <Box
         className={cn(
@@ -238,9 +238,13 @@ export default function LeftMenu() {
                   ) : (
                     <>
                       {activeItem?.label && (
-                        <Typography variant="h6" className={"text-primary mb-4 px-2.5"}>
-                          {t(activeItem?.label)}
-                        </Typography>
+                        // The group's own page is the subtle link beside its title ("Todos"), never an item below.
+                        <Box className="mb-4 flex items-baseline justify-between gap-3 px-2.5">
+                          <Typography variant="h6" className="text-primary">
+                            {t(activeItem.label)}
+                          </Typography>
+                          {activeItem.href ? <OverviewLink item={activeItem} /> : null}
+                        </Box>
                       )}
                       {/* The "compare plans" CTA that used to sit here was
                           unreachable by customers: this panel only renders for

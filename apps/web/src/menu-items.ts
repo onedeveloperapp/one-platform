@@ -5,31 +5,23 @@ import { MODULES } from "@/lib/modules/registry";
 import { MenuItem } from "@/types";
 
 /**
- * The modules of ONE as the firm's menu lists them (0075, 0078): the overview of all of them, then each module in
- * the catalog's order. One the firm contracted opens its area; one still to come says "Em breve", and one out that
- * the firm did not contract carries a lock, both leading to where the overview says what each is.
+ * The modules of ONE as the firm's menu lists them (0075, 0078), in the catalog's order; the overview of all of
+ * them is the "Todos" beside the submenu's title, never an item of it. One the firm contracted opens its area; one
+ * still to come says "Em breve", and one out that the firm did not contract carries a lock, both leading to where
+ * the overview says what each is.
  */
 export function moduleMenuItems(entries: readonly ModuleMenuEntry[]): MenuItem[] {
-  return [
-    {
-      id: "modulos-todos",
-      icon: "NiPuzzle",
-      label: "menu-modulos-all",
-      href: "/modulos",
-      exact: true,
-    },
-    ...entries.map(
-      (entry): MenuItem => ({
-        id: `modulo-${entry.key}`,
-        // The catalog's name (a name the set does not have is drawn as the generic module icon, by the item).
-        icon: (entry.icon ?? GENERIC_MODULE_ICON) as IconName,
-        label: "menu-modulos",
-        text: entry.name,
-        href: entry.state === "contracted" ? `/modulos/${entry.key}` : `/modulos#${entry.key}`,
-        tag: entry.state === "contracted" ? undefined : entry.state,
-      }),
-    ),
-  ];
+  return entries.map(
+    (entry): MenuItem => ({
+      id: `modulo-${entry.key}`,
+      // The catalog's name (a name the set does not have is drawn as the generic module icon, by the item).
+      icon: (entry.icon ?? GENERIC_MODULE_ICON) as IconName,
+      label: "menu-modulos",
+      text: entry.name,
+      href: entry.state === "contracted" ? `/modulos/${entry.key}` : `/modulos#${entry.key}`,
+      tag: entry.state === "contracted" ? undefined : entry.state,
+    }),
+  );
 }
 
 /**
@@ -158,15 +150,10 @@ export const leftMenuItems: MenuItem[] = [
     description: "menu-admin-description",
     color: "text-primary",
     href: "/admin",
+    // The consoles' overview is the subtle link beside the submenu's title, as every group's own page.
+    overviewLabel: "menu-admin-overview",
     canAccess: { operator: true },
     children: [
-      {
-        id: "admin-overview",
-        icon: "NiDashboard",
-        label: "menu-admin-overview",
-        href: "/admin",
-        description: "menu-admin-overview-description",
-      },
       {
         id: "admin-firms",
         icon: "NiBriefcase",

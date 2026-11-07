@@ -9,6 +9,7 @@ import { useTranslations } from "use-intl";
 
 import { Box, Button, Typography } from "@mui/material";
 
+import AddMenu from "@/components/layout/add/add-menu";
 import { useLayoutContext } from "@/components/layout/layout-context";
 import { GlobalSearchButton, GlobalSearchField } from "@/components/layout/search/global-search";
 import { useViewer } from "@/components/layout/viewer-context";
@@ -89,15 +90,15 @@ export default function Header() {
   }
 
   return (
-    <Box className="mui-fixed fixed z-20 h-20 w-full" component="header">
+    <Box className="mui-fixed fixed z-20 h-16 w-full" component="header">
       <Box
         className={cn(
-          "bg-background-paper flex h-full w-full flex-none flex-row items-center rounded-br-3xl sm:h-20",
+          "bg-background-paper flex h-full w-full flex-none flex-row items-center rounded-br-2xl sm:h-20",
           leftShowBackdrop && "pointer-events-none",
         )}
         style={{ padding: `0 var(--main-padding)` }}
       >
-        <Box className="bg-background-paper shadow-darker-xs absolute inset-0 -z-10 rounded-b-3xl"></Box>
+        <Box className="bg-background-paper shadow-darker-xs absolute inset-0 -z-10 rounded-b-2xl"></Box>
         {/* Left menu button */}
         <Button
           variant="text"
@@ -128,9 +129,10 @@ export default function Header() {
 
         {showSearch ? <GlobalSearchField /> : null}
 
-        {/* Right buttons */}
-        <Box className="ml-auto flex flex-row sm:gap-1">
+        {/* Right buttons: what may be added (the firm's, once past the second factor), then what waits. */}
+        <Box className="ml-auto flex flex-row items-center sm:gap-1">
           {showSearch ? <GlobalSearchButton /> : null}
+          {showSearch ? <AddMenu /> : null}
           {showPending ? <PendingCenter /> : null}
           <Notifications />
         </Box>

@@ -37,7 +37,7 @@ export default function ModulesQuickAccess({ offer, inHero = false }: { offer: M
       <Box component="nav" aria-label={t("modules-quick-title")} className="w-full">
         <Box component="ul" className="m-0 flex list-none flex-wrap justify-center gap-3 p-0">
           {cards.map(({ module, state }) => (
-            <Box component="li" key={module.key} className="w-full sm:w-60">
+            <Box component="li" key={module.key} className="w-full sm:w-64">
               <QuickActionTile
                 outlined
                 href={state === "contracted" ? `/modulos/${module.key}` : `/modulos#${module.key}`}

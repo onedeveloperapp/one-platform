@@ -17,8 +17,8 @@ import {
   Typography,
 } from "@mui/material";
 
-import DeadlineDialog from "@/components/deadlines/deadline-dialog";
-import HearingDialog from "@/components/hearings/hearing-dialog";
+import DeadlinePanel from "@/components/deadlines/deadline-panel";
+import HearingPanel from "@/components/hearings/hearing-panel";
 import DialogHeader from "@/components/product/dialog-header";
 import QuickActions, { type QuickAction } from "@/components/product/quick-actions";
 import StateLine from "@/components/product/state-line";
@@ -693,7 +693,7 @@ export default function PublicationCard({
       </CardContent>
 
       {scheduling && row.proceedingId ? (
-        <HearingDialog
+        <HearingPanel
           subject={{
             proceedingId: row.proceedingId,
             lawsuitLabel: [row.caseSeq !== null ? caseLabel(row.caseSeq) : null, row.cnj, row.court]
@@ -712,7 +712,7 @@ export default function PublicationCard({
       ) : null}
 
       {counting ? (
-        <DeadlineDialog
+        <DeadlinePanel
           subject={{
             kind: "publication",
             publicationId: row.id,

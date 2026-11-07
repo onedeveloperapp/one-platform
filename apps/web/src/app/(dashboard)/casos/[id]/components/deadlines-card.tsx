@@ -8,7 +8,7 @@ import { useState } from "react";
 import { Alert, Box, Button, Typography } from "@mui/material";
 
 import DeadlineCard from "@/components/deadlines/deadline-card";
-import DeadlineDialog from "@/components/deadlines/deadline-dialog";
+import DeadlinePanel from "@/components/deadlines/deadline-panel";
 import CollapsibleCard from "@/components/product/collapsible-card";
 import StatusChip from "@/components/product/status-chip";
 import { opensOnArrival } from "@/lib/cases/sections";
@@ -185,7 +185,7 @@ export default function DeadlinesCard({
       ) : null}
 
       {adding ? (
-        <DeadlineDialog
+        <DeadlinePanel
           subject={{ kind: "lawsuit", proceedingId: adding.id, proceedingKind: adding.kind }}
           acts={state.deadlineActs}
           onClose={() => setAdding(null)}

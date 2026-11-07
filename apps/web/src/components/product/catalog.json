@@ -79,6 +79,12 @@
       "use": "A lifecycle state as a NAMED badge: a module version (rascunho, publicada, retirada), a meeting, a roadmap item, a subscription, a lead. The template's tiny pastel button rendered as a span (no focus, reads as text). The tone tints the badge and the word is always text-primary, because the pastel label in the tone itself fails contrast on this palette. Never colour alone, never an outlined Chip for a state."
     },
     {
+      "name": "CornerTag",
+      "from": "@/components/product/corner-tag",
+      "props": "label? (a word or two) | icon? (a mark in place of the words, as a lock), tone? (the StatusChip tones), placement? (icon | edge), className?",
+      "use": "A short state that floats over the corner of what it marks, as the count on the bell of the header (the owner, 2026-11-07): a menu item still to come (\"Em breve\"), a lock on what the account did not contract, a \"Novo\" on a tab. It takes no room of the words beside it, so a name keeps its line: an inline chip beside a name in a narrow column broke the module names of the menu into two lines. `icon` floats it off the top right corner of an icon, inside a `relative` wrapper of the icon; `edge` over the top edge of a wide element, near its right corner. Drawn for the eye only: the element it marks says the same in its own name (\"Direito Previdenciário, Em breve\"). Where the state already has a line of its own (a tile's eyebrow), keep it there; a state the person must act on is a StatusChip in view, never a tag over a corner."
+    },
+    {
       "name": "CardTitle",
       "from": "@/components/product/card-title",
       "props": "id, icon, tone? (TileTone), title, description?, chip? (a StatusChip), actions? (QuickActions), as? (h2 | h3)",
@@ -101,6 +107,12 @@
       "from": "@/components/product/outcome-dialog",
       "props": "open, tone? (done | info), title, lines[{key, icon, text}], closeLabel, onClose",
       "use": "What an act a person just did changed, said whole and in front of them (the owner, 2026-11-03): an answer that binds them (an agreement given or taken back), a decision others will act on. A large icon on its tint, the title in the person's words ('Acordo registrado'), one consequence a line with its icon (what ONE follows now, where the alerts go, how to change one's mind), and one button ('Entendi'). A line of Alert at the top of the page was read past by the passenger who agreed: an act whose consequences the person must understand is confirmed here, never in an Alert or a toast. Not for the routine save of a form (the field's own state says it) nor for the beat between setup steps (StepCelebrationDialog)."
+    },
+    {
+      "name": "SidePanel",
+      "from": "@/components/product/side-panel",
+      "props": "onClose, closeLabel, title, description?, icon?, tone? (TileTone), busy?, onSubmit? (the body and the foot are one form), actions? (the foot's buttons, the main one first), note? (one quiet line at the right of the foot), open? (true), children",
+      "use": "Where every registration is made (the screen pattern after ADVBox, approved by the owner on 2026-11-07): a panel that slides in at the right of the page, the page staying behind it under a veil, 540px wide and the whole screen on a phone. The head says what is made (the icon of its family on its tint, its name, one line of what happens to it), the body is the form and scrolls, the foot keeps the main button first and \"Cancelar\" in reach however long the form is. It opens with the focus on its first field, does not close by the veil or Escape while `busy`, and a form opened with nothing to be of yet (the \"Adicionar\" of the top) asks for it first, in the body (`DeadlinePanel` and `HearingPanel` take `lead`). Never a centered dialog for a registration, nor a page of its own; a confirmation of a consequence is an `OutcomeDialog` and a question with a consequence a `ConfirmActionDialog`."
     },
     {
       "name": "HomeHero",

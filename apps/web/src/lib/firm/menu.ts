@@ -86,6 +86,7 @@ export function canAccess(access: MenuAccess | undefined, viewer: MenuViewer | n
 
 type AccessNode = {
   canAccess?: MenuAccess;
+  href?: string;
   children?: AccessNode[];
   childrenFor?: (viewer: MenuViewer | null) => AccessNode[];
 };
@@ -96,7 +97,8 @@ type AccessNode = {
  * the operator's group are the operator's without each one repeating it. A
  * group whose children depend on who is looking (`childrenFor`: the firm's
  * modules) has them made for the viewer first; one left with no child at all
- * is not shown.
+ * is its own page alone, or is not shown when it has none (its page is the
+ * subtle link beside its submenu's title, never one of its children).
  */
 export function visibleItems<Item extends AccessNode>(
   items: readonly Item[],
@@ -109,7 +111,9 @@ export function visibleItems<Item extends AccessNode>(
       const children = item.childrenFor ? (item.childrenFor(viewer) as Item[]) : (item.children as Item[] | undefined);
       if (!children) return [item];
       const shown = visibleItems(children, viewer, item.canAccess ?? inherited);
-      if (item.childrenFor && shown.length === 0) return [];
+      if (item.childrenFor && shown.length === 0) {
+        return item.href ? [{ ...item, children: undefined, childrenFor: undefined } as Item] : [];
+      }
       return [{ ...item, children: shown, childrenFor: undefined } as Item];
     });
 }

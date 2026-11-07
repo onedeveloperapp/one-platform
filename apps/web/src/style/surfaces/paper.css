@@ -4,7 +4,7 @@
 
 @layer utilities {
   .MuiPaper-rounded {
-    @apply rounded-3xl;
+    @apply rounded-xl;
   }
 
   .MuiPaper-root,

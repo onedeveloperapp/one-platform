@@ -8,7 +8,7 @@ import { useState } from "react";
 import { Alert, Box, Button, Typography } from "@mui/material";
 
 import HearingCard from "@/components/hearings/hearing-card";
-import HearingDialog from "@/components/hearings/hearing-dialog";
+import HearingPanel from "@/components/hearings/hearing-panel";
 import CollapsibleCard from "@/components/product/collapsible-card";
 import StatusChip from "@/components/product/status-chip";
 import { opensOnArrival } from "@/lib/cases/sections";
@@ -172,7 +172,7 @@ export default function HearingsCard({
       ) : null}
 
       {adding ? (
-        <HearingDialog
+        <HearingPanel
           subject={{
             proceedingId: adding.id,
             lawsuitLabel: lawsuitLabel(adding),

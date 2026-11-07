@@ -16,10 +16,12 @@ export const DEFAULTS = {
   // owner, 2026-11-07): the page keeps its width. On a phone the menu that opens is the list with the names
   // (`layout-context.tsx`), since a tooltip needs a pointer.
   leftMenuType: MenuType.Minimal,
+  // The submenu and the phone's list fit the longest name of a module on one line ("Direito Previdenciário", 144px
+  // at the items' 14px), a little room to spare (the owner, 2026-11-07: a name broken in two lines read badly).
   leftMenuWidth: {
-    [MenuType.Minimal]: { primary: 60, secondary: 240 },
+    [MenuType.Minimal]: { primary: 60, secondary: 264 },
     [MenuType.Comfort]: { primary: 116, secondary: 240 },
-    [MenuType.SingleLayer]: { primary: 280, secondary: 0 },
+    [MenuType.SingleLayer]: { primary: 300, secondary: 0 },
   },
   transitionDuration: 150,
 };

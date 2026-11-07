@@ -8,7 +8,7 @@ import { useCallback, useState } from "react";
 import { Alert, Box, Button, Card, CardContent, Grid, Typography } from "@mui/material";
 
 import HearingCard from "@/components/hearings/hearing-card";
-import HearingDialog from "@/components/hearings/hearing-dialog";
+import HearingPanel from "@/components/hearings/hearing-panel";
 import ConfirmActionDialog from "@/components/product/confirm-action-dialog";
 import EmptyState from "@/components/product/empty-state";
 import { StatTile } from "@/components/product/home-tiles";
@@ -474,7 +474,7 @@ function UnwrittenCard({
         ) : null}
       </CardContent>
       {writing && writing.proceedingId ? (
-        <HearingDialog
+        <HearingPanel
           subject={{
             proceedingId: writing.proceedingId,
             lawsuitLabel: [writing.caseSeq !== null ? caseLabel(writing.caseSeq) : null, writing.cnj, writing.court]

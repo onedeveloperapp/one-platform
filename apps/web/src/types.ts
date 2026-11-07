@@ -32,6 +32,12 @@ export type MenuItem = {
   text?: string;
   /** What the item says beside its name: a module still to come, or one the firm did not contract. */
   tag?: "soon" | "locked";
+  /**
+   * The words of the subtle link to the item's own page (`href`) beside the title of its submenu, when it has one
+   * (a message key; "Todos" when left out). The page a group opens on is never an item of its own submenu (the
+   * owner, 2026-11-07): "Todos os módulos" was one, and took a line of the submenu.
+   */
+  overviewLabel?: string;
   /** The item is the page at its address only, never the pages under it (the overview of the modules). */
   exact?: boolean;
   /** Who the item is for (`lib/firm/menu.ts`). Left out: anybody of a firm. */

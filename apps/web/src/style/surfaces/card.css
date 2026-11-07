@@ -5,10 +5,12 @@
 @layer utilities {
   /* A card has a hairline and a soft drop, as on MedChina's clinical-source
      home: the line draws its edge where the shadow is faint. Its corners are
-     rounded-2xl (16px) since the owner's choice of 2026-11-07; they were
-     rounded-3xl (24px). */
+     rounded-xl (12px) since the owner's choice of 2026-11-07; they were
+     rounded-3xl (24px). Tailwind's important modifier goes right after the
+     class (shadow-sm!): with a space before it Tailwind refuses the rule and
+     every style of the app goes. */
   .MuiCard-root {
-    @apply bg-background-paper border-grey-100 rounded-2xl border border-solid px-3 py-3 shadow-sm!;
+    @apply bg-background-paper border-grey-100 rounded-xl border border-solid px-3 py-3 shadow-sm!;
   }
 
   .MuiCardContent-root {

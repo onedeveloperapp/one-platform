@@ -60,3 +60,10 @@ function isTypingTarget(target: unknown): boolean {
   const tag = typeof element.tagName === "string" ? element.tagName.toUpperCase() : "";
   return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || element.isContentEditable === true;
 }
+
+/**
+ * The setups lead nowhere else before they end (apps/web/CLAUDE.md): on them the top offers neither the search nor
+ * "Adicionar".
+ */
+export const isSetupPath = (pathname: string): boolean =>
+  pathname === "/configurar" || pathname.startsWith("/configurar/");

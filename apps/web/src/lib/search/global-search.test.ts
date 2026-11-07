@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { CaseListRow } from "@/lib/cases/list";
-import { caseHits, isSearchShortcut, SEARCH_HITS, searchable } from "@/lib/search/global-search";
+import { caseHits, isSearchShortcut, isSetupPath, SEARCH_HITS, searchable } from "@/lib/search/global-search";
 
 const row = (seq: number, client = `Cliente ${seq}`): CaseListRow => ({
   id: `case-${seq}`,
@@ -81,5 +81,14 @@ describe("isSearchShortcut", () => {
     expect(isSearchShortcut(key("k"))).toBe(false);
     expect(isSearchShortcut(key("/", { ctrlKey: true }))).toBe(false);
     expect(isSearchShortcut(key("k", { ctrlKey: true, altKey: true }))).toBe(false);
+  });
+});
+
+describe("isSetupPath", () => {
+  it("is the firm's setup, a module's and a person's, and nothing else", () => {
+    expect(isSetupPath("/configurar")).toBe(true);
+    expect(isSetupPath("/configurar/direito-do-passageiro")).toBe(true);
+    expect(isSetupPath("/configuracoes")).toBe(false);
+    expect(isSetupPath("/casos")).toBe(false);
   });
 });

@@ -18,7 +18,7 @@ import {
 } from "@mui/material";
 
 import DeadlineCount from "@/components/deadlines/deadline-count";
-import DeadlineDialog from "@/components/deadlines/deadline-dialog";
+import DeadlinePanel from "@/components/deadlines/deadline-panel";
 import DialogHeader from "@/components/product/dialog-header";
 import StatusChip, { type StatusTone } from "@/components/product/status-chip";
 import { caseLabel } from "@/lib/cases/cases";
@@ -482,7 +482,7 @@ export default function DeadlineCard({
         />
       ) : null}
       {asking?.kind === "edit" ? (
-        <DeadlineDialog
+        <DeadlinePanel
           editing={{
             deadlineId: row.id,
             title: row.title,

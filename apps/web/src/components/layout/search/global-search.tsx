@@ -6,18 +6,15 @@ import { useEffect, useRef, useState } from "react";
 
 import { Autocomplete, Box, Button, Dialog, InputAdornment, TextField, Typography } from "@mui/material";
 
+import { useCaseSearch } from "@/components/layout/search/use-case-search";
 import NiCross from "@/icons/nexture/ni-cross";
 import NiSearch from "@/icons/nexture/ni-search";
 import { STATUS_KEY } from "@/lib/cases/cases";
-import { listFirmCases } from "@/lib/cases/list-actions";
-import { caseHits, isSearchShortcut, SEARCH_DELAY_MS, searchable, type SearchHit } from "@/lib/search/global-search";
-
-type Found = { kind: "idle" } | { kind: "loading" } | { kind: "ready"; hits: SearchHit[] } | { kind: "error" };
+import { isSearchShortcut, isSetupPath, searchable, type SearchHit } from "@/lib/search/global-search";
 
 /**
  * The field of the search: what is typed is asked of the database a moment after the last key, in the request's
- * body, and the cases found are listed under it, each opening its case. An answer to an older question is never
- * the list's.
+ * body (`useCaseSearch`), and the cases found are listed under it, each opening its case.
  */
 function SearchField({ autoFocus = false, onDone }: { autoFocus?: boolean; onDone?: () => void }) {
   const t = useTranslations("dashboard");
@@ -26,28 +23,7 @@ function SearchField({ autoFocus = false, onDone }: { autoFocus?: boolean; onDon
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [text, setText] = useState("");
   const [open, setOpen] = useState(false);
-  const [found, setFound] = useState<Found>({ kind: "idle" });
-  const asked = useRef(0);
-
-  useEffect(() => {
-    const turn = (asked.current += 1);
-    if (!searchable(text)) {
-      setFound({ kind: "idle" });
-      return;
-    }
-    setFound({ kind: "loading" });
-    const timer = window.setTimeout(async () => {
-      let answer: Awaited<ReturnType<typeof listFirmCases>>;
-      try {
-        answer = await listFirmCases({ filter: null, search: text, module: null, page: 0, pageSize: 25 });
-      } catch {
-        answer = { ok: false };
-      }
-      if (turn !== asked.current) return;
-      setFound(answer.ok ? { kind: "ready", hits: caseHits(answer.page.rows) } : { kind: "error" });
-    }, SEARCH_DELAY_MS);
-    return () => window.clearTimeout(timer);
-  }, [text]);
+  const found = useCaseSearch(text);
 
   // "/" or Ctrl+K from anywhere on the screen brings the person here.
   useEffect(() => {
@@ -151,13 +127,10 @@ function SearchField({ autoFocus = false, onDone }: { autoFocus?: boolean; onDon
   );
 }
 
-/** The setups lead nowhere else before they end (apps/web/CLAUDE.md): no search on them. */
-const onSetup = (pathname: string) => pathname.startsWith("/configurar");
-
 /** The search at the top of every screen of the firm, on a wide screen: the field itself, in the header's middle. */
 export function GlobalSearchField() {
   const pathname = usePathname();
-  if (onSetup(pathname)) return null;
+  if (isSetupPath(pathname)) return null;
   return (
     <Box className="hidden min-w-0 flex-1 justify-center px-4 md:flex">
       <Box className="w-full max-w-[32rem]">
@@ -172,7 +145,7 @@ export function GlobalSearchButton() {
   const t = useTranslations("dashboard");
   const pathname = usePathname();
   const [phoneOpen, setPhoneOpen] = useState(false);
-  if (onSetup(pathname)) return null;
+  if (isSetupPath(pathname)) return null;
   return (
     <>
       <Button
