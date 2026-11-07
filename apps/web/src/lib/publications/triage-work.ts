@@ -7,6 +7,7 @@ import { tellPublicationAcks } from "@/lib/publications/ack-notices";
 import { TRIAGE_TASK, triageBriefing, triageFailure, triageText } from "@/lib/publications/publications";
 import { queuePublicationReading } from "@/lib/publications/reading-work";
 import { createServiceClient } from "@flyee/auth/service";
+import { judgmentOf } from "@flyee/rules/judgment";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 /**
@@ -16,9 +17,10 @@ import type { SupabaseClient } from "@supabase/supabase-js";
  * whole text nobody triaged, is the publication's triage, and the lawyer it
  * was addressed to is asked to say they are aware of it; anything else is
  * kept beside the publication, out of the firm's sight, for a person to
- * triage. What follows a triage ONE made (the reading of a deadline or a
- * hearing, the bell of the awareness, the client's notices) is asked for
- * right after.
+ * triage. What follows a triage ONE made is done right after, as after a
+ * person's: whether a decision is the lawsuit's judgment (0107), then the
+ * reading of a deadline or a hearing, the bell of the awareness and the
+ * client's notices.
  *
  * Nothing here says what the model answered: the worker names the run, and
  * the database reads the run's own answer. Only ids leave this file.
@@ -110,6 +112,22 @@ const followTriageHere: TriageFollow = async (publicationId, orgId) => {
 };
 
 /**
+ * Whether a publication ONE just triaged is the lawsuit's judgment, read by the same rule a person's triage goes
+ * through (`@flyee/rules/judgment`): what its type and its words say clearly is kept by the database, which keeps it
+ * only of a decision ONE triaged that nobody said a word on (0107) and answers anything else with a refusal that
+ * changes nothing. Words that say nothing clear leave the question to a person, as before.
+ */
+async function judgeTriagedDecision(service: SupabaseClient, row: PublicationToTriage): Promise<void> {
+  const reading = judgmentOf({ documentType: row.document_type, text: row.body });
+  if (reading === null) return;
+  const { error } = await service.rpc("record_publication_judgment_rule", {
+    target_publication: row.publication_id,
+    target_judgment: reading,
+  });
+  if (error) throw new Error(`record_publication_judgment_rule failed: ${error.message}`);
+}
+
+/**
  * Publications just arrived (the DJEN's capture, the test court): ONE triages them right after the answer, instead
  * of at the next sweep, so a hearing the court marked reaches the agenda and the client while it is still ahead.
  * Never waited for; where no model can be asked here, nothing is claimed.
@@ -156,7 +174,11 @@ export async function triageClaimedPublication(
     // whether the AI's answer is now the publication's triage.
     const answer = (recorded ?? {}) as { code?: string; applied?: boolean };
     const code = OUTCOMES.find((known) => known === String(answer.code ?? "")) ?? "not_held";
-    if (code === "done" && answer.applied === true) await follow(row.publication_id, row.org_id);
+    if (code === "done" && answer.applied === true) {
+      // Before what follows, so the case never asks a person what the decision's own words already say.
+      await judgeTriagedDecision(service, row);
+      await follow(row.publication_id, row.org_id);
+    }
     return code;
   };
   /** A failure, said as what it says of the publication: a try of its own, or nothing at all. */

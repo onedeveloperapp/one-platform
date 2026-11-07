@@ -34,6 +34,24 @@ vi.mock("server-only", () => ({}));
 vi.mock("next/server", () => ({ after: () => undefined }));
 vi.mock("@flyee/jobs", () => ({ sendEvent: async () => ({ sent: false, hint: "no job runner in this test" }) }));
 
+/** The model: the fake provider answers from the schema, unless a test tells it what to answer instead. */
+const model = vi.hoisted(() => ({
+  answer: null as null | ((fromSchema: Record<string, unknown>) => unknown),
+}));
+
+vi.mock("@flyee/ai/fake", async (original) => {
+  const real = await original<typeof import("@flyee/ai/fake")>();
+  class ToldProvider extends real.FakeChatProvider {
+    override async generateStructured(
+      ...args: Parameters<InstanceType<typeof real.FakeChatProvider>["generateStructured"]>
+    ): Promise<unknown> {
+      const fromSchema = await super.generateStructured(...args);
+      return model.answer ? model.answer(fromSchema as Record<string, unknown>) : fromSchema;
+    }
+  }
+  return { ...real, FakeChatProvider: ToldProvider };
+});
+
 const DB_URL = process.env.ONE_EMBEDDED_DB_URL ?? "";
 
 type Row = Record<string, unknown>;
@@ -782,5 +800,58 @@ describe.skipIf(!DB_URL)("the DJEN, read by the worker against the database", ()
     expect(after).toMatchObject({ ack_owed: false, acked_by: ANA, category: "prazo" });
     const left = await call(asAna(), "firm_publication_acks", { target_org: FIRM });
     expect((left.items as Row[]).some((row) => row.publication_id === String(publication.id))).toBe(false);
+  });
+
+  it("has ONE say whether a decision it triaged is the judgment, as a person's triage does", async () => {
+    const { claimPublicationTriage, triageClaimedPublication } = await import("@/lib/publications/triage-work");
+    const waiting = await sql.unsafe(
+      `select id from public.publications
+       where org_id = $1 and category is null and ai_category is null and active and not truncated
+       order by captured_at limit 2`,
+      [FIRM],
+    );
+    expect(waiting).toHaveLength(2);
+    const [clear, unclear] = waiting.map((row) => String(row.id));
+    // What the court published: a judgment that says it is one, and a decision whose words say nothing clear.
+    await sql.unsafe(
+      `update public.publications set document_type = 'Sentença',
+         body = 'SENTENÇA. Dispensado o relatório. Julgo procedente o pedido.' where id = $1`,
+      [clear],
+    );
+    await sql.unsafe(
+      `update public.publications set document_type = null, body = 'Vistos. Intimem-se.' where id = $1`,
+      [unclear],
+    );
+    // The model says each is a decision, and is sure of it.
+    model.answer = (fromSchema) => ({ ...fromSchema, categoria: "decisao", certeza: "alta" });
+    try {
+      for (const id of [clear, unclear]) {
+        const held = await claimPublicationTriage(backend() as never, 1, id);
+        expect(held).toHaveLength(1);
+        expect(await triageClaimedPublication(backend() as never, held[0], async () => undefined)).toBe("done");
+      }
+    } finally {
+      model.answer = null;
+    }
+    const judged = await sql.unsafe(
+      `select id, category, ai_applied, triaged_by, judgment, judgment_source
+       from public.publications where id in ($1, $2)`,
+      [clear, unclear],
+    );
+    const byId = new Map(judged.map((row) => [String(row.id), row]));
+    expect(byId.get(clear)).toMatchObject({
+      category: "decisao",
+      ai_applied: true,
+      triaged_by: null,
+      judgment: true,
+      judgment_source: "rule",
+    });
+    // Words that say nothing clear leave the question to a person, as before.
+    expect(byId.get(unclear)).toMatchObject({
+      category: "decisao",
+      ai_applied: true,
+      judgment: null,
+      judgment_source: null,
+    });
   });
 });
