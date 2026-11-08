@@ -122,7 +122,7 @@ export default function ListBar({
           anchorEl={viewsAnchor}
           open={Boolean(viewsAnchor)}
           onClose={() => setViewsAnchor(null)}
-          slotProps={{ paper: { className: "mt-1 w-80 max-w-[calc(100vw-2rem)]" }, list: { "aria-label": viewsTitle } }}
+          slotProps={{ paper: { className: "mt-1 w-96 max-w-[calc(100vw-2rem)]" }, list: { "aria-label": viewsTitle } }}
         >
           <ListSubheader className="bg-transparent text-xs leading-8 font-extrabold tracking-wider uppercase">
             {viewsTitle}
@@ -141,7 +141,8 @@ export default function ListBar({
                 <Box component="span" aria-hidden className="text-primary flex w-4 flex-none justify-center">
                   {item.key === view ? <NiCheck size="small" /> : null}
                 </Box>
-                <span className="min-w-0 flex-1 truncate">{item.label}</span>
+                {/* A view's name is read whole: what tells two apart may be its last word ("há mais de 30 dias"). */}
+                <span className="min-w-0 flex-1 whitespace-normal">{item.label}</span>
                 {item.count !== undefined ? (
                   <span className="text-text-secondary text-sm font-semibold tabular-nums">{item.count}</span>
                 ) : null}

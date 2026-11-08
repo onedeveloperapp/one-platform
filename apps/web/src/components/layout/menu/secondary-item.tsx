@@ -116,10 +116,9 @@ export function SecondaryItem({ item, indent = 0, openedAccordions, setOpenedAcc
   // An icon named by data (a module's, from the catalog) that the set does not have is drawn as the generic one.
   const icon: IconName | undefined =
     item.icon && !Object.prototype.hasOwnProperty.call(IconMap, item.icon) ? "NiPuzzle" : item.icon;
-  // What the item is called: a module's name is data, every other item's words are the catalog's. Off the top right
-  // corner of its icon, as the count on the bell, a module still to come says so and one the firm did not contract
-  // carries a lock (said to a screen reader in the item's own name): the tag floats, so the name keeps its line (the
-  // owner, 2026-11-07).
+  // What the item is called: a module's name is data, every other item's words are the catalog's. Over the item's top
+  // edge, at its right end (the owner, 2026-11-08), a module still to come says so and one the firm did not contract
+  // carries a lock (said to a screen reader in the item's own name): the tag floats, so the name keeps its line.
   const label = item.text ?? t(item.label);
   const tagWords = item.tag === "soon" ? t("menu-tag-soon") : item.tag === "locked" ? t("menu-tag-locked") : null;
   const tag: ComponentProps<typeof CornerTag> | null =
@@ -145,15 +144,12 @@ export function SecondaryItem({ item, indent = 0, openedAccordions, setOpenedAcc
         )}
         startIcon={
           icon && (
-            <span className="relative inline-flex">
-              <NextureIcons
-                variant={isActive ? "contained" : "outlined"}
-                icon={icon}
-                size={indent === 0 ? "large" : "medium"}
-                className={cn("transition-transform group-hover:scale-[0.85]", isActive && "scale-[0.85]")}
-              />
-              {tag ? <CornerTag {...tag} /> : null}
-            </span>
+            <NextureIcons
+              variant={isActive ? "contained" : "outlined"}
+              icon={icon}
+              size={indent === 0 ? "large" : "medium"}
+              className={cn("transition-transform group-hover:scale-[0.85]", isActive && "scale-[0.85]")}
+            />
           )
         }
         aria-label={tagWords ? `${label}, ${tagWords}` : label}
@@ -163,7 +159,7 @@ export function SecondaryItem({ item, indent = 0, openedAccordions, setOpenedAcc
       >
         {/* One line always: a name longer than the menu ends in an ellipsis, said whole in the item's name. */}
         <span className="min-w-0 truncate">{label}</span>
-        {tag && !icon ? <CornerTag {...tag} placement="edge" /> : null}
+        {tag ? <CornerTag {...tag} placement="edge" /> : null}
       </Button>
     );
   }

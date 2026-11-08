@@ -17,8 +17,8 @@ const TINT: Record<StatusTone, string> = {
 
 /**
  * Where the tag floats. `icon`: off the top right corner of an icon, overlapping it a little, as the count on the
- * bell of the header (a menu item's icon, a tile's). `edge`: over the top edge of a wide element, near its right
- * corner (a card, a tab).
+ * bell of the header (a tile's icon). `edge`: over the top edge of a wide element, near its right corner (a menu
+ * item, a card, a tab).
  */
 const PLACEMENT = {
   // Its foot on the icon's top line and its start over the icon's corner, so the words beside the icon stay clear.

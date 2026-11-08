@@ -64,27 +64,28 @@ export default function LeftMenu() {
   }, [activeItem?.id, selectedPrimary.current?.id, setLeftShowBackdrop, leftShowBackdrop]);
 
   useEffect(() => {
-    const resetCallback = () => {
-      if (selectedPrimary.current) {
-        setActiveItem(selectedPrimary.current);
-        if (!selectedPrimary.current.children || !selectedPrimary.current.children.length) {
-          hideLeftSecondary();
-        }
-      }
-    };
-
-    onResetLeft(resetCallback);
+    // Back to the item of the page, also on a page no item names, where the group just closed marks nothing.
+    onResetLeft(() => setActiveItem(selectedPrimary.current));
 
     return () => {
       onResetLeft(() => {});
     };
-  }, [onResetLeft, hideLeftSecondary]);
+  }, [onResetLeft]);
+
+  const submenuOpen =
+    Boolean(activeItem?.children?.length) && leftSecondaryCurrent !== MenuShowState.Hide && leftMenuWidth.secondary > 0;
 
   const handleSelectPrimaryItem = (item: MenuItem) => {
-    setActiveItem(item);
     if (item.children && item.children.length > 0) {
-      showLeftSecondary();
+      // Its icon opens the submenu over the page, and the same icon closes it.
+      if (submenuOpen && activeItem?.id === item.id) {
+        resetLeftMenu();
+      } else {
+        setActiveItem(item);
+        showLeftSecondary();
+      }
     } else {
+      setActiveItem(item);
       // close all opened accordions
       // if the item is the same as the current path, hide the secondary menu and reset the left menu
       if (isPathMatch(pathname, item.href || "")) {
@@ -114,6 +115,13 @@ export default function LeftMenu() {
   }, [activeItem, hideLeftSecondary, leftSecondaryCurrent]);
 
   const leftSecondaryDefaultWidth = useMemo(() => DEFAULTS.leftMenuWidth[leftMenuType].secondary, [leftMenuType]);
+
+  // A link followed closes the submenu at once, also one that stays on the path (/modulos#...), which the reset of a
+  // new path never sees. One opened in another tab leaves it as it was.
+  const closeAfterLink = (event: React.MouseEvent<HTMLElement>) => {
+    if (event.metaKey || event.ctrlKey || event.shiftKey) return;
+    if ((event.target as HTMLElement).closest("a")) resetLeftMenu();
+  };
 
   // No screen supplies its own secondary menu content today; the slot stays so
   // a future screen can, without changing the menu's layout logic.
@@ -162,6 +170,7 @@ export default function LeftMenu() {
                   key={`left-menu-primary-item-${leftMenuType}-${item.id}`}
                   onSelect={(item) => handleSelectPrimaryItem(item)}
                   isActive={activeItem?.id === item.id}
+                  expanded={submenuOpen && activeItem?.id === item.id}
                   menuType={leftMenuType}
                 />
               ) : (
@@ -187,6 +196,7 @@ export default function LeftMenu() {
                   key={`left-menu-bottom-item-${leftMenuType}-${item.id}`}
                   onSelect={(item) => handleSelectPrimaryItem(item)}
                   isActive={activeItem?.id === item.id}
+                  expanded={submenuOpen && activeItem?.id === item.id}
                   menuType={leftMenuType}
                 />
               ) : (
@@ -209,17 +219,10 @@ export default function LeftMenu() {
             "shadow-line-left flex h-full shrink-0 grow-0 overflow-x-hidden transition-all duration-(--layout-duration)",
             leftShowBackdrop && "z-20",
           )}
-          style={{
-            width:
-              activeItem?.children &&
-              activeItem?.children.length > 0 &&
-              leftSecondaryCurrent !== MenuShowState.Hide &&
-              leftMenuWidth.secondary > 0
-                ? `${leftMenuWidth.secondary}px`
-                : 0,
-          }}
+          style={{ width: submenuOpen ? `${leftMenuWidth.secondary}px` : 0 }}
         >
-          <Box className="h-full w-full">
+          {/* Closed, its links are out of reach of the keyboard and of a screen reader, not only of the eye. */}
+          <Box className="h-full w-full" inert={!submenuOpen} onClick={closeAfterLink}>
             <Paper elevation={0} className="outline-line h-full w-full rounded-4xl py-8 outline -outline-offset-1">
               <Box className="relative h-full w-full overflow-x-hidden">
                 <Box

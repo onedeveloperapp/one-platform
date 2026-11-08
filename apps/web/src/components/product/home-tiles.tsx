@@ -64,7 +64,7 @@ export function QuickActionTile({
     >
       <Box
         aria-hidden
-        className={cn("flex w-16 flex-none items-center justify-center rounded-2xl", style.bg, style.text)}
+        className={cn("flex w-16 flex-none items-center justify-center rounded-xl", style.bg, style.text)}
       >
         {icon}
       </Box>

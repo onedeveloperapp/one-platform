@@ -14,7 +14,8 @@ function useLayoutContextValue() {
 
   const leftMenu = useMenu({
     primaryBreakpoint: "md",
-    secondaryBreakpoint: "xl",
+    // No width keeps a submenu open: it opens over the page on its icon and closes once a page is reached (the
+    // owner, 2026-11-08), so it never covers what the person came to read.
     defaultMenuType: DEFAULTS.leftMenuType,
     menuDefaultWidth: DEFAULTS.leftMenuWidth,
   });

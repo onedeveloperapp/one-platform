@@ -16,15 +16,15 @@ import {
 } from "@/lib/cases/list";
 
 const ROOT = path.resolve(__dirname, "../../../../..");
-// The latest definition of `firm_cases` (0033, 0075, 0078, redefined with the list bar of phase 0 in 0108).
-const MIGRATION = fs.readFileSync(path.join(ROOT, "packages/db/migrations/0108_case_list_bar.sql"), "utf8");
+// The latest definition of `firm_cases` (0033, 0075, 0078, 0108, redefined with the court's views in 0110).
+const MIGRATION = fs.readFileSync(path.join(ROOT, "packages/db/migrations/0110_controladoria.sql"), "utf8");
 
 /** The quoted names of a list of the migration, from the text that opens it to the parenthesis that closes it. */
 function listed(opening: string, from = 0): string[] {
   const start = MIGRATION.indexOf(opening, from);
   expect(start, opening).toBeGreaterThan(-1);
   const body = MIGRATION.slice(start + opening.length, MIGRATION.indexOf(")", start + opening.length));
-  return [...body.matchAll(/'([a-z-]+)'/g)].map((match) => match[1]);
+  return [...body.matchAll(/'([a-z0-9-]+)'/g)].map((match) => match[1]);
 }
 
 describe("what the list asks of the database", () => {
@@ -97,8 +97,9 @@ describe("what the list asks of the database", () => {
     // "The client finished" counts while the case still waits on the client.
     expect(listed("f.case_id is not null and c.status in (").sort()).toEqual([...CLIENT_STAGES].sort());
     // The largest page the list offers is the most the database serves.
+    expect(MIGRATION).toContain(`greatest(coalesce(target_limit, ${DEFAULT_PAGE_SIZE}), 1)`);
     expect(MIGRATION).toContain(
-      `least(greatest(coalesce(target_limit, ${DEFAULT_PAGE_SIZE}), 1), ${Math.max(...PAGE_SIZES)})`,
+      `greatest(${Math.max(...PAGE_SIZES)}, coalesce(nullif(current_setting('one.case_export_page', true), '')::integer, ${Math.max(...PAGE_SIZES)}))`,
     );
     expect(PAGE_SIZES).toContain(DEFAULT_PAGE_SIZE);
   });
@@ -145,7 +146,8 @@ describe("the database's answer, as the list reads it", () => {
         courtMoved: true,
         civilRefused: false,
         agency: null,
-        // What the case's lawsuits show in court is read beside the list (`withCourtMarks`), never from its answer.
+        movedAt: null,
+        cnjs: [],
         court: null,
       },
     ]);
@@ -169,6 +171,34 @@ describe("the database's answer, as the list reads it", () => {
       "novos-mes": 0,
       "ajuizados-mes": 0,
       "encerrados-mes": 0,
+      "arquivados-mes": 0,
+      "mov-hoje": 0,
+      "mov-7": 0,
+      "mov-30": 0,
+      "parado-30": 0,
+      "parado-45": 0,
+      "parado-90": 0,
+      "nunca-capturados": 0,
+    });
+  });
+
+  it("reads what the row says of the court: when it moved, the lawsuits' numbers and the step they show", () => {
+    const page = caseListOf({
+      rows: [
+        {
+          ...row,
+          moved_at: "2026-11-08T12:00:00+00:00",
+          cnjs: ["00051016820998090051", 7],
+          court: { held: true, decided: false, paid: "sim" },
+        },
+      ],
+      total: 1,
+      counts,
+    });
+    expect(page?.rows[0]).toMatchObject({
+      movedAt: "2026-11-08T12:00:00+00:00",
+      cnjs: ["00051016820998090051"],
+      court: { held: true, decided: false, paid: false },
     });
   });
 

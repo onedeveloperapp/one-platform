@@ -22,7 +22,25 @@ export type CaseFilter =
   | "agencia"
   | "novos-mes"
   | "ajuizados-mes"
-  | "encerrados-mes";
+  | "encerrados-mes"
+  | "arquivados-mes"
+  | CourtView;
+
+/**
+ * The court's views (0110): the cases whose lawsuits moved today, in the last 7 and 30 days; the cases in court quiet
+ * for more than 30, 45 and 90 days (the last thing a lawsuit ONE read did); and the ones with a lawsuit no source ever
+ * read.
+ */
+export type CourtView = (typeof COURT_VIEWS)[number];
+export const COURT_VIEWS = [
+  "mov-hoje",
+  "mov-7",
+  "mov-30",
+  "parado-30",
+  "parado-45",
+  "parado-90",
+  "nunca-capturados",
+] as const;
 
 export const CASE_FILTERS: readonly CaseFilter[] = [
   "open",
@@ -40,6 +58,8 @@ export const CASE_FILTERS: readonly CaseFilter[] = [
   "novos-mes",
   "ajuizados-mes",
   "encerrados-mes",
+  "arquivados-mes",
+  ...COURT_VIEWS,
 ];
 
 export const isCaseFilter = (value: unknown): value is CaseFilter =>
@@ -76,6 +96,10 @@ export type CaseListRow = {
   civilRefused: boolean;
   /** The partner agency the case came from (0071, 0075); null for a case of the firm's own. */
   agency: string | null;
+  /** When a lawsuit of the case in court last moved (0110); null when none did. */
+  movedAt: string | null;
+  /** The numbers of its lawsuits in court, 20 digits each (0110). */
+  cnjs: string[];
   /**
    * For a case in court, what its lawsuits show (a hearing held, a decision and a payment published): the step of
    * its way the list shows. Null before the court, or when it could not be read.
@@ -101,6 +125,9 @@ export type CaseNumbers = {
   filedBefore: number;
   ended: number;
   endedBefore: number;
+  /** The cases that went to court and ended (0110), the word the market uses beside the ones filed. */
+  archived: number;
+  archivedBefore: number;
   /** This month so far: its first day and today. */
   since: string;
   until: string;
@@ -207,11 +234,20 @@ export function caseListOf(raw: unknown): CaseListPage | null {
         courtMoved: row.court_moved === true,
         civilRefused: row.civil_refused === true,
         agency: typeof row.agency === "string" && row.agency !== "" ? row.agency : null,
-        court: null,
+        movedAt: typeof row.moved_at === "string" ? row.moved_at : null,
+        cnjs: Array.isArray(row.cnjs) ? row.cnjs.filter((cnj): cnj is string => typeof cnj === "string") : [],
+        court: courtMarksOf(row.court),
       },
     ];
   });
   return { rows, total: count(answer.total), counts, numbers: caseNumbersOf(answer.numbers) };
+}
+
+/** What a case's lawsuits show in court, as the row carries it (0110); null for a case out of court. */
+function courtMarksOf(raw: unknown): CourtMarks | null {
+  if (typeof raw !== "object" || raw === null) return null;
+  const marks = raw as Record<string, unknown>;
+  return { held: marks.held === true, decided: marks.decided === true, paid: marks.paid === true };
 }
 
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
@@ -231,6 +267,8 @@ export function caseNumbersOf(raw: unknown): CaseNumbers | null {
     filedBefore: count(value.filed_before),
     ended: count(value.ended),
     endedBefore: count(value.ended_before),
+    archived: count(value.archived),
+    archivedBefore: count(value.archived_before),
     since: value.since as string,
     until: value.until as string,
     beforeSince: value.before_since as string,

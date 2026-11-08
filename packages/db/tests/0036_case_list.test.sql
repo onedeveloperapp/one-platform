@@ -156,7 +156,8 @@ select is(
   pg_temp.ana() -> 'counts',
   '{"all": 6, "going": 4, "open": 2, "preparing": 1, "filed": 1, "ended": 2, "documentos": 2, "cliente-terminou": 1,
     "cronologia": 1, "reclamacao": 1, "pecas": 1, "andamento": 1, "vara-civel": 0, "agencia": 0,
-    "novos-mes": 6, "ajuizados-mes": 0, "encerrados-mes": 2}'::jsonb,
+    "novos-mes": 6, "ajuizados-mes": 0, "encerrados-mes": 2, "arquivados-mes": 0,
+    "mov-hoje": 0, "mov-7": 0, "mov-30": 0, "parado-30": 0, "parado-45": 0, "parado-90": 0, "nunca-capturados": 1}'::jsonb,
   'the list counts the firm''s cases under every filter, as the home counts what waits'
 );
 select ok(
@@ -168,10 +169,12 @@ select is(
    from jsonb_array_elements(pg_temp.ana() -> 'rows') with ordinality as row where row.ordinality in (1, 4)),
   '[{"seq": 1, "client": "João da Silva", "module": "direito-do-passageiro", "incident": "delay", "airline_iata": "G3", "flight_date": "2026-07-20", "status": "intake",
      "to_review": 1, "client_finished": true, "chronology_contested": false, "complaint_overdue": false,
-     "piece_waiting": false, "court_moved": false, "civil_refused": false, "agency": null},
+     "piece_waiting": false, "court_moved": false, "civil_refused": false, "agency": null,
+     "moved_at": null, "court": null, "cnjs": []},
     {"seq": 5, "client": "Carla Responsável", "module": "direito-do-passageiro", "incident": "overbooking", "airline_iata": null, "flight_date": null, "status": "documents",
      "to_review": 0, "client_finished": false, "chronology_contested": false, "complaint_overdue": false,
-     "piece_waiting": false, "court_moved": false, "civil_refused": false, "agency": null}]'::jsonb,
+     "piece_waiting": false, "court_moved": false, "civil_refused": false, "agency": null,
+     "moved_at": null, "court": null, "cnjs": []}]'::jsonb,
   'each case says who it is of and what waits in it; a case of a minor alone is named by who answers for her'
 );
 

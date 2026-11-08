@@ -4,6 +4,7 @@ import type { AirlineOption, CasesScope, CasesState, NewCasePrefill } from "./ca
 import { cookies } from "next/headers";
 
 import { phoneForField } from "@/lib/cases/cases";
+import { canExportCases } from "@/lib/cases/export";
 import { DEFAULT_PAGE_SIZE, isCaseFilter } from "@/lib/cases/list";
 import { readCaseList } from "@/lib/cases/list-read";
 import { canImportPortfolio } from "@/lib/import/who";
@@ -68,14 +69,16 @@ export async function loadCases(params: { ver?: string; conversa?: string; modul
     }
   }
 
+  const supportVisit = cookieStore.has(IMPERSONATION_MARKER_COOKIE);
   return {
     kind: "ready",
     list,
     airlines: (airlines.data ?? []) as AirlineOption[],
     filter,
     prefill,
-    supportVisit: cookieStore.has(IMPERSONATION_MARKER_COOKIE),
+    supportVisit,
     canImport: canImportPortfolio(context.firm.firmFunction),
+    canExport: !supportVisit && canExportCases(context.firm.role, context.firm.firmFunction),
     scope,
     modules,
   };

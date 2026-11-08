@@ -13,11 +13,20 @@ type Props = {
   item: MenuItem;
   onSelect: (item: MenuItem) => void;
   isActive: boolean;
+  /** Its submenu is open now. `isActive` also holds on a page of the group with the submenu closed. */
+  expanded?: boolean;
   menuType: MenuType;
   className?: string;
 };
 
-export const PrimaryItem = memo(function PrimaryItem({ item, onSelect, isActive, menuType, className }: Props) {
+export const PrimaryItem = memo(function PrimaryItem({
+  item,
+  onSelect,
+  isActive,
+  expanded = false,
+  menuType,
+  className,
+}: Props) {
   const t = useTranslations("dashboard");
 
   const pathname = usePathname();
@@ -120,7 +129,8 @@ export const PrimaryItem = memo(function PrimaryItem({ item, onSelect, isActive,
         open={tooltipOpen}
         onClose={() => setTooltipOpen(false)}
         onOpen={() => setTooltipOpen(true)}
-        title={t(item.label)}
+        // The open submenu says the same name in its title, and the tooltip would sit over its first item.
+        title={expanded ? "" : t(item.label)}
         placement="right"
         arrow
         slotProps={{ tooltip: { className: cn("large", selected && "text-primary") } }}
@@ -152,6 +162,7 @@ export const PrimaryItem = memo(function PrimaryItem({ item, onSelect, isActive,
           }
           aria-label={t(item.label)}
           aria-current={selected ? "page" : undefined}
+          aria-expanded={item.children?.length ? expanded : undefined}
           {...(item.isExternalLink
             ? {
                 component: NextLink,

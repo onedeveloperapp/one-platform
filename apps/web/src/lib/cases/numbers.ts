@@ -6,7 +6,7 @@ import { type Compared, compared, type Hope } from "@/lib/numbers/compare";
  * same days of the month before, and the view of the list it counts, so a card opens the very list whose count it
  * shows. Pure.
  */
-export type CaseCardKey = "going" | "opened" | "filed" | "ended";
+export type CaseCardKey = "going" | "opened" | "filed" | "ended" | "archived";
 
 export type CaseCard = {
   key: CaseCardKey;
@@ -35,6 +35,25 @@ export function caseCards(numbers: CaseNumbers): CaseCard[] {
     card("opened", "novos-mes", numbers.opened, numbers.openedBefore, "up", "days"),
     card("filed", "ajuizados-mes", numbers.filed, numbers.filedBefore, "up", "days"),
     card("ended", "encerrados-mes", numbers.ended, numbers.endedBefore, null, "days"),
+  ];
+}
+
+/** The numbers of the controladoria (phase 1): the stock, and the cases opened, filed and archived in the month. */
+export function oversightCards(numbers: CaseNumbers): CaseCard[] {
+  const [going, opened, filed] = caseCards(numbers);
+  return [
+    going,
+    opened,
+    filed,
+    {
+      key: "archived",
+      view: "arquivados-mes",
+      value: numbers.archived,
+      before: numbers.archivedBefore,
+      compared: compared(numbers.archived, numbers.archivedBefore),
+      hope: null,
+      span: "days",
+    },
   ];
 }
 

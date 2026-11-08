@@ -12,6 +12,7 @@ export default function MenuBackdrop() {
   };
 
   return (
-    <>{leftShowBackdrop && <div className="absolute inset-0 top-0 left-0 z-0" onClick={() => handleOnClick()}></div>}</>
+    // Fixed: the page scrolls under the menu, and a click anywhere on it closes the submenu, below the first screen too.
+    <>{leftShowBackdrop && <div className="fixed inset-0 z-0" onClick={() => handleOnClick()}></div>}</>
   );
 }

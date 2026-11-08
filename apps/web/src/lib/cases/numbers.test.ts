@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { caseListOf, type CaseNumbers, caseNumbersOf } from "@/lib/cases/list";
-import { caseCards, dayMonthText, spanText } from "@/lib/cases/numbers";
+import { caseCards, dayMonthText, oversightCards, spanText } from "@/lib/cases/numbers";
 
 const numbers: CaseNumbers = {
   going: 1284,
@@ -12,6 +12,8 @@ const numbers: CaseNumbers = {
   filedBefore: 287,
   ended: 9,
   endedBefore: 9,
+  archived: 6,
+  archivedBefore: 8,
   since: "2026-11-01",
   until: "2026-11-07",
   beforeSince: "2026-10-01",
@@ -32,6 +34,20 @@ describe("caseCards", () => {
 
   it("hopes only for more cases opened and filed, never for a stock nor for cases ended", () => {
     expect(caseCards(numbers).map((card) => card.hope)).toEqual([null, "up", "up", null]);
+  });
+});
+
+describe("oversightCards", () => {
+  it("are the stock, and the cases opened, filed and archived in the month, each opening the list it counts", () => {
+    const cards = oversightCards(numbers);
+    expect(cards.map((card) => [card.key, card.view, card.value, card.before])).toEqual([
+      ["going", null, 1284, 1231],
+      ["opened", "novos-mes", 40, 52],
+      ["filed", "ajuizados-mes", 312, 287],
+      ["archived", "arquivados-mes", 6, 8],
+    ]);
+    // Fewer archived is neither good nor bad by itself: a card hopes for no move of it.
+    expect(cards[3]).toMatchObject({ hope: null, span: "days", compared: { move: "down" } });
   });
 });
 

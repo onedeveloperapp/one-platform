@@ -2,6 +2,7 @@
 
 import { type CasesState, GROUP_TONE } from "../cases-types";
 import NewCaseDialog from "./new-case-dialog";
+import { useCaseExport } from "./use-case-export";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -29,11 +30,13 @@ import NiFolderCheck from "@/icons/nexture/ni-folder-check";
 import NiFolderPlus from "@/icons/nexture/ni-folder-plus";
 import NiMicrophone from "@/icons/nexture/ni-microphone";
 import NiPaperclip from "@/icons/nexture/ni-paperclip";
+import NiPause from "@/icons/nexture/ni-pause";
 import NiPen from "@/icons/nexture/ni-pen";
 import NiScale from "@/icons/nexture/ni-scale";
 import NiTimeline from "@/icons/nexture/ni-timeline";
 import NiUsers from "@/icons/nexture/ni-users";
 import { caseLabel, groupOf, STATUS_KEY } from "@/lib/cases/cases";
+import type { ExportWords } from "@/lib/cases/export";
 import { JOURNEY_STEP_KEY, JOURNEY_STEPS, stepOf } from "@/lib/cases/journey";
 import {
   CASE_SORTS,
@@ -42,6 +45,7 @@ import {
   type CaseListQuery,
   type CaseListRow,
   type CaseSort,
+  COURT_VIEWS,
   DEFAULT_PAGE_SIZE,
   isCaseSort,
   lastPage,
@@ -144,13 +148,62 @@ const FILTER_TILE: Record<CaseFilter, { label: string; hint: string; tone: TileT
     tone: "secondary",
     icon: <NiArchive size="large" />,
   },
+  "arquivados-mes": {
+    label: "cases-filter-archived-month",
+    hint: "cases-filter-archived-month-hint",
+    tone: "secondary",
+    icon: <NiArchive size="large" />,
+  },
+  "mov-hoje": {
+    label: "cases-filter-moved-today",
+    hint: "cases-filter-moved-today-hint",
+    tone: "accent-1",
+    icon: <NiTimeline size="large" />,
+  },
+  "mov-7": {
+    label: "cases-filter-moved-7",
+    hint: "cases-filter-moved-7-hint",
+    tone: "accent-1",
+    icon: <NiTimeline size="large" />,
+  },
+  "mov-30": {
+    label: "cases-filter-moved-30",
+    hint: "cases-filter-moved-30-hint",
+    tone: "accent-1",
+    icon: <NiTimeline size="large" />,
+  },
+  "parado-30": {
+    label: "cases-filter-quiet-30",
+    hint: "cases-filter-quiet-30-hint",
+    tone: "accent-3",
+    icon: <NiPause size="large" />,
+  },
+  "parado-45": {
+    label: "cases-filter-quiet-45",
+    hint: "cases-filter-quiet-45-hint",
+    tone: "accent-3",
+    icon: <NiPause size="large" />,
+  },
+  "parado-90": {
+    label: "cases-filter-quiet-90",
+    hint: "cases-filter-quiet-90-hint",
+    tone: "accent-3",
+    icon: <NiPause size="large" />,
+  },
+  "nunca-capturados": {
+    label: "cases-filter-never-read",
+    hint: "cases-filter-never-read-hint",
+    tone: "accent-4",
+    icon: <NiFlag size="large" />,
+  },
 };
 
 /**
  * The ready views of the list, by group (the screen pattern of phase 0): the cases still going, what happened in the
- * month, each stage, and what waits for the firm, the last ones listed only while something of theirs waits.
+ * month, each stage, the court's (0110, while the firm has a case in court), and what waits for the firm, the last
+ * ones listed only while something of theirs waits.
  */
-const MONTH_VIEWS: readonly CaseFilter[] = ["novos-mes", "ajuizados-mes", "encerrados-mes"];
+const MONTH_VIEWS: readonly CaseFilter[] = ["novos-mes", "ajuizados-mes", "arquivados-mes", "encerrados-mes"];
 const STAGE_VIEWS: readonly CaseFilter[] = ["open", "preparing", "filed", "ended"];
 const STANDING_WAITS: readonly CaseFilter[] = ["documentos", "cliente-terminou"];
 const EXCEPTION_WAITS: readonly CaseFilter[] = [
@@ -190,6 +243,12 @@ const CARD: Record<CaseCardKey, { label: string; hint: string; tone: TileTone; i
     tone: "secondary",
     icon: <NiArchive size="medium" />,
   },
+  archived: {
+    label: "cases-number-archived",
+    hint: "cases-number-archived-hint",
+    tone: "secondary",
+    icon: <NiArchive size="medium" />,
+  },
 };
 
 /** The words of each order of the list. */
@@ -212,7 +271,19 @@ type Ready = Extract<CasesState, { kind: "ready" }>;
  * page at a time: the database counts, filters and searches (`firm_cases`),
  * so the numbers are right for a firm of any size.
  */
-export default function CasesView({ state, embedded = false }: { state: CasesState; embedded?: boolean }) {
+export default function CasesView({
+  state,
+  embedded = false,
+  heading,
+  hideNumbers = false,
+}: {
+  state: CasesState;
+  embedded?: boolean;
+  /** The list's own head where it is part of another page: its title and one line. */
+  heading?: { title: string; body: string };
+  /** The numbers above the list are the other page's. */
+  hideNumbers?: boolean;
+}) {
   const t = useTranslations("product");
   const router = useRouter();
 
@@ -223,6 +294,8 @@ export default function CasesView({ state, embedded = false }: { state: CasesSta
         key={`${state.scope?.module.key ?? "all"}:${state.filter ?? "going"}`}
         ready={state}
         embedded={embedded}
+        heading={heading}
+        hideNumbers={hideNumbers}
       />
     );
   return (
@@ -270,7 +343,17 @@ export default function CasesView({ state, embedded = false }: { state: CasesSta
  * what only that module has (its partner's filter, its portfolio from a spreadsheet, its kinds of problem); for
  * every module of a firm that has more than one, each row names its module.
  */
-function CasesList({ ready, embedded }: { ready: Ready; embedded: boolean }) {
+function CasesList({
+  ready,
+  embedded,
+  heading,
+  hideNumbers,
+}: {
+  ready: Ready;
+  embedded: boolean;
+  heading?: { title: string; body: string };
+  hideNumbers: boolean;
+}) {
   const t = useTranslations("product");
   const router = useRouter();
   const scope = ready.scope;
@@ -470,6 +553,39 @@ function CasesList({ ready, embedded }: { ready: Ready; embedded: boolean }) {
 
   const { filter } = query;
   const searching = query.search !== "";
+
+  // "Exportar" takes the list as it stands (its view, search, filters and order), for who may.
+  const exportWords: ExportWords = {
+    titles: {
+      case: t("cases-column-case"),
+      client: t("cases-column-client"),
+      module: t("cases-column-module"),
+      kind: t("cases-export-kind"),
+      agency: t("cases-export-agency"),
+      airline: t("cases-export-airline"),
+      flightDate: t("cases-export-flight-date"),
+      status: t("cases-export-status"),
+      step: t("cases-export-step"),
+      lawsuits: t("cases-export-lawsuits"),
+      movedAt: t("cases-export-moved-at"),
+      updatedAt: t("cases-export-updated-at"),
+    },
+    moduleName: (key) => moduleOfRow.get(key)?.name ?? "",
+    kindName: (key) => t(caseKindLabelKey(key) ?? "case-incident-other"),
+    airlineName: (iata) => airlineName.get(iata) ?? iata,
+    statusName: (status) => t(STATUS_KEY[status]),
+    stepName: (step) => t(JOURNEY_STEP_KEY[step]),
+  };
+  const exporter = useCaseExport({
+    query: () => current.current,
+    total: list.total,
+    words: exportWords,
+    namesModule: !scope && ready.modules.length > 1,
+    fileName: () => {
+      const view = current.current.filter ? t(FILTER_TILE[current.current.filter].label) : t("cases-view-going");
+      return `${t("cases-title")} ${view} ${new Date().toISOString().slice(0, 10)}`;
+    },
+  });
   const setFilter = (next: CaseFilter | null) => void load({ ...current.current, filter: next, page: 0 });
 
   // A firm that arrives with lawsuits already in court brings them from a spreadsheet, never one by one: a module's
@@ -489,6 +605,9 @@ function CasesList({ ready, embedded }: { ready: Ready; embedded: boolean }) {
     { key: GOING, label: t("cases-view-going"), count: countText(list.counts.going), group: "going" },
     ...MONTH_VIEWS.map((key) => viewOf(key, "month")),
     ...STAGE_VIEWS.map((key) => viewOf(key, "stage")),
+    ...(list.counts.filed > 0 || (COURT_VIEWS as readonly CaseFilter[]).includes(filter as CaseFilter)
+      ? COURT_VIEWS.map((key) => viewOf(key, "court"))
+      : []),
     ...STANDING_WAITS.map((key) => viewOf(key, "waits")),
     ...EXCEPTION_WAITS.filter(
       (key) => (key !== "agencia" || scope?.partner) && (list.counts[key] > 0 || filter === key),
@@ -555,10 +674,10 @@ function CasesList({ ready, embedded }: { ready: Ready; embedded: boolean }) {
         <Box className="flex flex-wrap items-end justify-between gap-3">
           <Box className="flex flex-col gap-1">
             <Typography id="module-cases" variant="h5" component="h2" className="mb-0">
-              {t("module-area-cases-title")}
+              {heading?.title ?? t("module-area-cases-title")}
             </Typography>
             <Typography variant="body2" className="text-text-secondary">
-              {t("module-area-cases-body", { module: scope?.module.name ?? "" })}
+              {heading?.body ?? t("module-area-cases-body", { module: scope?.module.name ?? "" })}
             </Typography>
           </Box>
         </Box>
@@ -611,7 +730,7 @@ function CasesList({ ready, embedded }: { ready: Ready; embedded: boolean }) {
       {hasCases && (
         <>
           {/* The numbers of the list, each beside the same days of the month before, each opening the list it counts. */}
-          {numbers && (
+          {numbers && !hideNumbers && (
             <Grid container spacing={2.5}>
               {cards.map((card) => (
                 <Grid key={card.key} size={{ xs: 6, lg: 3 }}>
@@ -721,6 +840,15 @@ function CasesList({ ready, embedded }: { ready: Ready; embedded: boolean }) {
                   if (isCaseSort(key)) void load({ ...current.current, sort: key, page: 0 });
                 },
               }}
+              exporting={
+                ready.canExport
+                  ? {
+                      label: t("list-bar-export"),
+                      onExport: () => void exporter.run(),
+                      busy: exporter.progress !== null || list.total === 0,
+                    }
+                  : undefined
+              }
               more={
                 ready.supportVisit
                   ? undefined
@@ -748,6 +876,24 @@ function CasesList({ ready, embedded }: { ready: Ready; embedded: boolean }) {
               }
               chips={chips}
             />
+            {exporter.progress ? (
+              <Typography variant="body2" role="status" className="text-text-secondary px-1">
+                {t("cases-export-progress", {
+                  done: countText(exporter.progress.done),
+                  total: countText(exporter.progress.total),
+                })}
+              </Typography>
+            ) : null}
+            {exporter.note ? (
+              <Alert
+                severity={exporter.note.severity}
+                role="status"
+                className="neutral bg-background-paper/60!"
+                onClose={exporter.clearNote}
+              >
+                {exporter.note.text}
+              </Alert>
+            ) : null}
             {searching && !loading ? (
               <Typography variant="body2" role="status" className="text-text-secondary px-1">
                 {t("cases-found", { count: list.total })}.{" "}

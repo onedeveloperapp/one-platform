@@ -63,6 +63,15 @@ export const leftMenuItems: MenuItem[] = [
     href: "/casos",
   },
   {
+    id: "controladoria",
+    icon: "NiChartBar",
+    label: "menu-controladoria",
+    description: "menu-controladoria-description",
+    color: "text-primary",
+    href: "/controladoria",
+    canAccess: { oversees: true },
+  },
+  {
     id: "atendimento",
     icon: "NiMessages",
     label: "menu-atendimento",

@@ -1,20 +1,14 @@
 "use client";
 import Footer from "./footer";
-import { usePathname } from "next/navigation";
 import { PropsWithChildren, useEffect, useMemo, useState } from "react";
 
 import { useLayoutContext } from "@/components/layout/layout-context";
 import { DEFAULTS } from "@/config";
-import { isPathMatch } from "@/lib/utils";
-import { leftMenuItems } from "@/menu-items";
-import { leftMenuBottomItems } from "@/menu-items";
 import { MenuShowState } from "@/types";
-import { MenuItem } from "@/types";
 
 export default function Main({ children }: PropsWithChildren) {
-  const { leftPrimaryCurrent, leftSecondaryCurrent, leftMenuWidth } = useLayoutContext();
+  const { leftPrimaryCurrent, leftMenuWidth } = useLayoutContext();
   const [mounted, setMounted] = useState(false);
-  const pathname = usePathname();
 
   useEffect(() => {
     setMounted(true);
@@ -33,30 +27,8 @@ export default function Main({ children }: PropsWithChildren) {
     return () => window.clearTimeout(timer);
   }, []);
 
-  const [activeItem, setActiveItem] = useState<MenuItem | undefined>(undefined);
-
-  useEffect(() => {
-    let selectedMenu = leftMenuItems.find((item) => item.href && isPathMatch(pathname, item.href));
-    if (!selectedMenu && leftMenuBottomItems) {
-      selectedMenu = leftMenuBottomItems.find((item) => item.href && isPathMatch(pathname, item.href));
-    }
-    setActiveItem(selectedMenu);
-  }, [pathname]);
-
-  const [mainPaddingLeft] = useMemo(() => {
-    if (!mounted) return [0];
-
-    let mainPaddingLeft = 0;
-
-    if (leftPrimaryCurrent === MenuShowState.Show) {
-      mainPaddingLeft += leftMenuWidth.primary;
-    }
-    if (leftSecondaryCurrent === MenuShowState.Show && activeItem?.children && leftMenuWidth.secondary > 0) {
-      mainPaddingLeft += leftMenuWidth.secondary;
-    }
-
-    return [mainPaddingLeft];
-  }, [leftPrimaryCurrent, leftSecondaryCurrent, leftMenuWidth, mounted, activeItem]);
+  // The page sits beside the rail only: a submenu opens over it for a moment and takes no room of it.
+  const mainPaddingLeft = mounted && leftPrimaryCurrent === MenuShowState.Show ? leftMenuWidth.primary : 0;
 
   const styles = useMemo(
     () => ({

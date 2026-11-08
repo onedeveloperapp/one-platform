@@ -48,6 +48,15 @@ describe("the menu by role", () => {
     expect(canAccess({ manager: true }, viewer({ role: "member", firmFunction: "socio" }))).toBe(false);
   });
 
+  it("shows what reads the firm as a whole to a partner, the controladoria and who manages the firm", () => {
+    const oversees = { oversees: true };
+    expect(canAccess(oversees, viewer({ role: "member", firmFunction: "socio" }))).toBe(true);
+    expect(canAccess(oversees, viewer({ role: "member", firmFunction: "controladoria" }))).toBe(true);
+    expect(canAccess(oversees, viewer({ role: "admin", firmFunction: "atendimento" }))).toBe(true);
+    expect(canAccess(oversees, viewer({ role: "member", firmFunction: "advogado" }))).toBe(false);
+    expect(canAccess(oversees, viewer({ role: "member", firmFunction: "atendimento" }))).toBe(false);
+  });
+
   it("shows an item of some functions to those functions only", () => {
     const access = { functions: ["socio", "advogado"] as const };
     expect(canAccess(access, viewer({ firmFunction: "advogado" }))).toBe(true);
@@ -107,6 +116,7 @@ describe("the menu by role", () => {
       "inicio",
       "modulos",
       "casos",
+      "controladoria",
       "atendimento",
       "protocolo",
       "publicacoes",

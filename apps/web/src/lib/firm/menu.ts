@@ -1,4 +1,4 @@
-import { type FirmFunction, isManager, type OrgRole } from "@/lib/firm/roles";
+import { type FirmFunction, isManager, type OrgRole, overseesFirm } from "@/lib/firm/roles";
 import type { ModuleCard, ModuleMenuEntry } from "@/lib/modules/offer";
 
 /**
@@ -57,6 +57,8 @@ export type MenuAccess = {
   manager?: boolean;
   /** Only these functions of the firm. */
   functions?: readonly FirmFunction[];
+  /** Only who reads the firm's numbers as a whole: a partner, the controladoria, or who manages the firm. */
+  oversees?: boolean;
   /** Only a firm (or a partner) that works in this product module (lib/modules/registry.ts). */
   module?: string;
   /** Only somebody of a partner (0069): the partner's area. */
@@ -79,6 +81,7 @@ export function canAccess(access: MenuAccess | undefined, viewer: MenuViewer | n
   if (access?.partner) return false;
   if (!viewer.hasFirm) return access?.withoutFirm === true;
   if (access?.manager && !isManager(viewer.role)) return false;
+  if (access?.oversees && !overseesFirm(viewer.role, viewer.firmFunction)) return false;
   if (access?.functions && !(viewer.firmFunction && access.functions.includes(viewer.firmFunction))) return false;
   if (access?.module && !viewer.modules.includes(access.module)) return false;
   return true;

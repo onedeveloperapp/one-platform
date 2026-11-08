@@ -51,6 +51,12 @@ export const isInvitableRole = (value: unknown): value is InvitableRole =>
 /** Who manages the firm account: the owner and the admins. */
 export const isManager = (role: OrgRole | null | undefined): boolean => role === "owner" || role === "admin";
 
+/** Who reads the firm's numbers as a whole (the controladoria, phase 1): a partner, the controladoria, or who manages it. */
+export const overseesFirm = (
+  role: OrgRole | null | undefined,
+  firmFunction: FirmFunction | null | undefined,
+): boolean => isManager(role) || firmFunction === "socio" || firmFunction === "controladoria";
+
 /** The 27 states of the bar, as `oab_registrations.uf` accepts them. */
 export const OAB_STATES = [
   "AC",
