@@ -109,6 +109,12 @@
       "use": "What a card keeps out of sight, one click away (the owner, 2026-11-03): a request already fulfilled that may be made again (another copy of a document that arrived and serves, a boarding pass, a new link), or what a person seldom needs. An icon button with its name on hover (with `text`, words beside the icon, for a person who would not find an icon alone: a client on a phone) opening a menu, each action with its icon. What the card asks for now stays a button of its own, in view, on the line it is about: never hide in here the only way to do the card's pending job, nor a right the person must find in plain sight (withdrawing an agreement, deleting their data)."
     },
     {
+      "name": "PageSkeleton",
+      "from": "@/components/product/page-skeleton",
+      "props": "shape? (list | record | home | cards | split | setup), numbers?, rows?, cards?",
+      "use": "The page that is loading, drawn in the shape it will have (the screen pattern after ADVBox, approved by the owner on 2026-11-07): its title block, then its form in grey blocks inside the very cards and spacing the page uses, so nothing jumps when the content arrives. `list`: the cards of numbers (`numbers`), the bar and the rows (`rows`; `cards` when each row is a card of its own); `record`: a record's top and its cards in two columns; `home`; `split`: a list beside what is open of it; `setup`: the rail of steps beside the step; `cards`: a few cards, for any other page. Said once to assistive technology as loading, a slow pulse that is still for whoever asks for less motion. Each route's `loading.tsx` renders it in its page's shape, and the group's own catches the rest; never a spinner in the middle of the screen."
+    },
+    {
       "name": "AtWorkNotice",
       "from": "@/components/product/at-work-notice",
       "props": "open, long, title, text, steps[{key, state: done | doing | next, label, detail}], footer?, continueLabel, waitLabel, onContinue, onWaitMore, className?",

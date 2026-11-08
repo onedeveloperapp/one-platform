@@ -7,12 +7,12 @@ import { Suspense, useEffect } from "react";
 import AnnouncementBanner from "@/components/layout/announcements/announcement-banner";
 import ContentWrapper from "@/components/layout/containers/content-wrapper";
 import Header from "@/components/layout/containers/header";
-import Loading from "@/components/layout/containers/loading-screen";
 import Main from "@/components/layout/containers/main";
 import ImpersonationBanner from "@/components/layout/impersonation/impersonation-banner";
 import LeftMenu from "@/components/layout/menu/left-menu";
 import MenuBackdrop from "@/components/layout/menu/menu-backdrop";
 import { ViewerProvider } from "@/components/layout/viewer-context";
+import PageSkeleton from "@/components/product/page-skeleton";
 import SupportWidget from "@/components/support/support-widget";
 import { shellHold } from "@/lib/firm/gate-rules";
 import type { MenuViewer } from "@/lib/firm/menu";
@@ -57,7 +57,9 @@ export default function DashboardShell({
       <Main>
         <ContentWrapper>
           <AnnouncementBanner />
-          <Suspense fallback={<Loading />}>{holdAt ? <Loading /> : children}</Suspense>
+          {/* A page still on its way is drawn in its shape, in the page's own place, never a spinner over the menu;
+              who is being sent to their setup sees the setup's shape. */}
+          <Suspense fallback={<PageSkeleton />}>{holdAt ? <PageSkeleton shape="setup" /> : children}</Suspense>
         </ContentWrapper>
       </Main>
       <MenuBackdrop />

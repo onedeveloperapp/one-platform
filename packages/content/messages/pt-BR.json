@@ -638,6 +638,7 @@
     "field-email": "Informe um e-mail válido",
     "not-configured": "Supabase não está configurado.",
     "skip-to-content": "Ir para o conteúdo principal",
+    "page-loading": "Carregando a página",
     "product-error-title": "Não foi possível abrir esta área",
     "product-error-body": "Seus dados não foram apagados. Tente novamente; se o problema continuar, use a Ajuda.",
     "not-found-title": "Página não encontrada",

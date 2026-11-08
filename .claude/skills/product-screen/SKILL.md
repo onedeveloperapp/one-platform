@@ -152,6 +152,7 @@ Distilled from the gamification research — most of it is a WARNING:
 - **Persist digits, not masks**: run `onlyDigits()` (`@flyee/fields`) before writing to the DB; validate in Yup with the same package's validators (`.test("cpf", t(...), isValidCpf)`) so UI and schema agree.
 - **Inline, translated feedback**: each field takes `invalidMessage` (product namespace) and flags complete-but-invalid values as the user types — never only on submit.
 - Respect the loading and error states — skeletons that reserve space (no layout shift), errors that say what to do next.
+- **A page that is loading is drawn in its shape, in its own place.** Every route of the signed-in area has a loading state in the form of the page it leads to (a list: its number cards, its bar and its rows; a record: its top and its cards in their columns; a home; a list beside what is open of it; a setup: the rail beside the step), with the same cards and spacing as the real page, said once to assistive technology and still for whoever asks for less motion. Never a spinner in the middle of the screen, nor one over the header and menu: it says nothing of what is coming, and the frame of the app is already there. In this template: `PageSkeleton` in each route's `loading.tsx`, the group's own `loading.tsx` catching the rest. Failure this prevents: every page of the signed-in area opened on one spinner fixed over the whole screen, menu included.
 
 ## Component conformance (check BEFORE writing markup)
 
