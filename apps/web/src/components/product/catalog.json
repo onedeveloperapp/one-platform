@@ -109,6 +109,12 @@
       "use": "What a card keeps out of sight, one click away (the owner, 2026-11-03): a request already fulfilled that may be made again (another copy of a document that arrived and serves, a boarding pass, a new link), or what a person seldom needs. An icon button with its name on hover (with `text`, words beside the icon, for a person who would not find an icon alone: a client on a phone) opening a menu, each action with its icon. What the card asks for now stays a button of its own, in view, on the line it is about: never hide in here the only way to do the card's pending job, nor a right the person must find in plain sight (withdrawing an agreement, deleting their data)."
     },
     {
+      "name": "AtWorkNotice",
+      "from": "@/components/product/at-work-notice",
+      "props": "open, long, title, text, steps[{key, state: done | doing | next, label, detail}], footer?, continueLabel, waitLabel, onContinue, onWaitMore, className?",
+      "use": "The notice that holds a record's screen while the product works on that record (the screen pattern after ADVBox, approved by the owner on 2026-11-07): over the page under a veil, a turning ring with the product's mark, the title of what it is doing, one line of what happens (the screen comes back by itself, read again), the steps (done green with a check, under way amber with how long, what always follows grey) and when it started. Nothing closes it while the work is short; from about two minutes on (`long`) it says the work takes longer than usual and offers 'Continuar sem esperar' (focused) and 'Esperar mais'. It holds only for the product's own work, never a wait on a person, the client or a court; the screen that mounts it decides that, remembers per tab what the person went on without, and keeps it closed while the person types in a field or has another window open (the case: `casos/[id]/components/case-at-work.tsx` over `lib/cases/one-at-work.ts`). Not for the outcome of an act (OutcomeDialog) nor for a way of steps said in a card (ProgressNow)."
+    },
+    {
       "name": "OutcomeDialog",
       "from": "@/components/product/outcome-dialog",
       "props": "open, tone? (done | info), title, lines[{key, icon, text}], closeLabel, onClose",

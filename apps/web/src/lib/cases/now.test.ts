@@ -173,6 +173,32 @@ describe("caseNow", () => {
     expect(now.holder).toBe("firm");
   });
 
+  it("says ONE files the package itself, and that a sending tried again later waits on the court", () => {
+    const filing = (submission: { status: string; attempts?: number; retryAfter?: string | null }) =>
+      caseNow(
+        base({
+          status: "drafting",
+          proceedings: [planned],
+          drafts: [{ id: "dr", proceedingId: "lw", status: "issued", work: null }],
+          filings: [
+            {
+              id: "fp",
+              proceedingId: "lw",
+              system: "projudi",
+              status: "ready",
+              blocker: null,
+              signature: { takesSigned: true, status: "signed" },
+              byOne: { channel: "mni", blocker: null, submission },
+            },
+          ],
+        }),
+      ).working.find((line) => line.id === "filing:fp");
+    expect(filing({ status: "sending" })).toMatchObject({ owner: "one", text: { key: "case-now-filing-one" } });
+    expect(filing({ status: "sending" })?.outside).toBeUndefined();
+    expect(filing({ status: "owed", attempts: 2, retryAfter: "2026-11-05T16:00:00Z" })?.outside).toBe(true);
+    expect(filing({ status: "owed", attempts: 2, retryAfter: "2026-11-05T14:00:00Z" })?.outside).toBeUndefined();
+  });
+
   it("says the system the firm approves while ONE writes the piece, and the platform's own waits as the platform's", () => {
     const now = caseNow(
       base({

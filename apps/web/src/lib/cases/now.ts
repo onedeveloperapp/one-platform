@@ -46,6 +46,11 @@ export type NowItem = {
   fields: string[] | null;
   /** ONE's work that took longer than it should: still ONE's, said as late, and not asked about every few seconds. */
   slow: boolean;
+  /**
+   * ONE's work that waits on somebody outside it (a court out of reach, tried again at a later time): still ONE's,
+   * but never a reason to hold the screen while the court takes its time.
+   */
+  outside?: boolean;
 };
 
 /** Who the case is with now. */
@@ -107,7 +112,11 @@ type Filing = {
   blocker: string | null;
   signature: { takesSigned: boolean; status: "due" | "waiting" | "signed" | "failed" | null };
   /** ONE filing it itself (0101): through which channel, what keeps it from doing so, and what came of its sending. */
-  byOne?: { channel: string | null; blocker: string | null; submission: { status: string } | null } | null;
+  byOne?: {
+    channel: string | null;
+    blocker: string | null;
+    submission: { status: string; attempts?: number; retryAfter?: string | null } | null;
+  } | null;
 };
 type Deadline = { id: string; status: string; overdue: boolean; review: boolean };
 type Hearing = { id: string; status: string; startsAt: string; timeZone: string };
@@ -863,6 +872,13 @@ export function caseNow(input: CaseNowInput): CaseNow {
               }),
             );
           } else if (byOne?.channel && (sent !== null || byOne.blocker === null)) {
+            // A sending the court did not take is tried again at a later time: ONE waits on the court then.
+            const retry = byOne.submission;
+            const outside =
+              sent === "owed" &&
+              (retry?.attempts ?? 0) > 0 &&
+              Boolean(retry?.retryAfter) &&
+              Date.parse(retry?.retryAfter ?? "") > Date.parse(input.now);
             working.push(
               item({
                 id: `filing:${filing.id}`,
@@ -870,6 +886,7 @@ export function caseNow(input: CaseNowInput): CaseNow {
                 tone: "waiting",
                 text: { key: "case-now-filing-one", values: { kind, system: where } },
                 section: "filing",
+                ...(outside ? { outside: true } : {}),
               }),
             );
           } else {

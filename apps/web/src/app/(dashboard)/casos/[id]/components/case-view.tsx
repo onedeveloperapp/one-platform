@@ -2,6 +2,7 @@
 
 import { GROUP_TONE } from "../../cases-types";
 import type { CaseState } from "../case-types";
+import CaseAtWork from "./case-at-work";
 import ClientLinkCard from "./client-link-card";
 import ComplaintCard from "./complaint-card";
 import DeadlinesCard from "./deadlines-card";
@@ -434,6 +435,10 @@ export default function CaseView({ state: read }: { state: CaseState }) {
 
       {/* Where the case stands, who it is with, what ONE is doing now and what holds it: said once, here. */}
       <JourneyCard state={state} journey={facts.journey} now={facts.now} live={live} onJudgment={onJudgment} />
+
+      {/* While ONE works on the case, its actions wait: the notice says what ONE is doing, and the screen comes back
+          by itself, read again, when it ends (the screen pattern after ADVBox). */}
+      <CaseAtWork caseId={state.case.id} working={facts.now.working} events={state.events} />
 
       {/* Each card opens by itself when the case's stage is about it or something in it waits for the firm, and
           closes once that is done; the person may open or close every one at once to read the whole case. */}
