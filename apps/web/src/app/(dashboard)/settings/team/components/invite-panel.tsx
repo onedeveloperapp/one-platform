@@ -12,9 +12,6 @@ import {
   Box,
   Button,
   Checkbox,
-  Dialog,
-  DialogActions,
-  DialogContent,
   FormControl,
   FormControlLabel,
   FormHelperText,
@@ -25,9 +22,10 @@ import {
   Typography,
 } from "@mui/material";
 
-import DialogHeader from "@/components/product/dialog-header";
 import InvitationLink from "@/components/product/invitation-link";
+import SidePanel from "@/components/product/side-panel";
 import { useEmailReady } from "@/components/product/use-email-ready";
+import NiUserPlus from "@/icons/nexture/ni-user-plus";
 import { inviteToFirm } from "@/lib/firm/actions";
 import { FIRM_FUNCTIONS, type FirmFunction, FUNCTION_HINT_KEY, FUNCTION_LABEL_KEY } from "@/lib/firm/roles";
 
@@ -42,9 +40,10 @@ type Sent = { email: string; url: string; emailed: boolean; chosen: boolean };
  * offered only where ONE can send one; once the invitation exists the fields
  * stay as they were sent, and its link shows under them with what became of
  * the e-mail, so the manager can always send it by hand too. The invitation
- * exists either way.
+ * exists either way. It is the side panel every registration opens in (the
+ * screen pattern after ADVBox, 2026-11-07), opened by "Novo" of the team list.
  */
-export default function InviteDialog({
+export default function InvitePanel({
   firmName,
   mayInviteAdmin,
   onClose,
@@ -122,177 +121,179 @@ export default function InviteDialog({
         : { severity: "warning" as const, text: t("team-invite-not-emailed", { email: sent.email }) };
 
   return (
-    <Dialog open onClose={busy ? undefined : onClose} maxWidth="sm" fullWidth aria-labelledby="team-invite-dialog">
-      <DialogHeader
-        id="team-invite-dialog"
-        title={t("team-invite-title", { firm: firmName })}
-        onClose={onClose}
-        closeLabel={t("team-close")}
-      />
-
-      <Box component="form" noValidate onSubmit={formik.handleSubmit}>
-        <DialogContent>
-          <Box className="flex flex-col gap-4">
-            <FormControl className="outlined" variant="standard" error={Boolean(emailError)}>
-              <FormLabel component="label" htmlFor="team-invite-email">
-                {t("team-invite-email")}
-              </FormLabel>
-              <Input
-                id="team-invite-email"
-                name="email"
-                type="email"
-                autoComplete="off"
-                autoFocus
-                value={formik.values.email}
-                onChange={formik.handleChange}
-                onBlur={formik.handleBlur}
-                readOnly={sent !== null}
-                disabled={busy}
-                aria-describedby="team-invite-email-help"
-              />
-              <FormHelperText id="team-invite-email-help">{emailError ?? t("team-invite-email-help")}</FormHelperText>
-            </FormControl>
-
-            <FormControl component="fieldset">
-              <FormLabel component="legend" id="team-invite-function" className="mb-1">
-                {t("team-invite-function")}
-              </FormLabel>
-              <RadioGroup
-                aria-labelledby="team-invite-function"
-                name="firmFunction"
-                value={formik.values.firmFunction}
-                onChange={formik.handleChange}
-              >
-                {FIRM_FUNCTIONS.map((option) => (
-                  <FormControlLabel
-                    key={option}
-                    value={option}
-                    disabled={locked}
-                    control={<Radio size="small" />}
-                    className="items-start py-1"
-                    label={
-                      <Box className="flex flex-col pt-0.5">
-                        <Typography variant="body1" component="span" className="font-semibold">
-                          {t(FUNCTION_LABEL_KEY[option])}
-                        </Typography>
-                        <Typography variant="body2" component="span" className="text-text-secondary">
-                          {t(FUNCTION_HINT_KEY[option])}
-                        </Typography>
-                      </Box>
-                    }
-                  />
-                ))}
-              </RadioGroup>
-            </FormControl>
-
-            {mayInviteAdmin && (
-              <FormControlLabel
-                className="items-start"
-                control={
-                  <Checkbox
-                    size="small"
-                    name="admin"
-                    checked={formik.values.admin}
-                    onChange={formik.handleChange}
-                    disabled={locked}
-                  />
-                }
-                label={
-                  <Box className="flex flex-col pt-0.5">
-                    <Typography variant="body1" component="span" className="font-semibold">
-                      {t("team-invite-admin")}
-                    </Typography>
-                    <Typography variant="body2" component="span" className="text-text-secondary">
-                      {t("team-invite-admin-help")}
-                    </Typography>
-                  </Box>
-                }
-              />
-            )}
-
-            {errorCode && !sent && (
-              <Alert
-                severity="error"
-                className="neutral bg-background-paper/60!"
-                action={
-                  errorCode === "second_factor_required" ? (
-                    <Button color="inherit" size="small" component={Link} href="/settings/security">
-                      {t("team-second-factor-open")}
-                    </Button>
-                  ) : undefined
-                }
-              >
-                {t(teamErrorKey(errorCode))}
-              </Alert>
-            )}
-
-            {emailOk === false && !sent && (
-              <Typography variant="body2" className="text-text-secondary">
-                {t("team-invite-email-off")}
-              </Typography>
-            )}
-
-            {sent && outcome ? (
-              <>
-                <Alert severity={outcome.severity} className="neutral bg-background-paper/60!" role="status">
-                  {outcome.text}
-                </Alert>
-                <InvitationLink
-                  id="team-invite-link"
-                  label={t("team-invite-link")}
-                  link={sent.url}
-                  copied={copied}
-                  onCopy={() => void copy()}
-                  copyLabel={t("team-invite-link-copy")}
-                  copyAgainLabel={t("team-invite-link-copy-again")}
-                  copiedHelp={t("team-invite-link-copied")}
-                  help={t("team-invite-link-help")}
-                />
-                <Typography variant="body2" className="text-text-secondary">
-                  {t("team-invite-next")}
-                </Typography>
-              </>
-            ) : null}
-          </Box>
-        </DialogContent>
-        <DialogActions className="flex-wrap gap-2">
-          {sent ? (
-            <Button variant="contained" onClick={onClose}>
-              {t("team-done")}
-            </Button>
-          ) : (
-            <>
-              <Button variant="text" color="grey" onClick={onClose} disabled={busy}>
-                {t("team-cancel")}
-              </Button>
+    <SidePanel
+      onClose={onClose}
+      closeLabel={t("team-close")}
+      icon={<NiUserPlus size="medium" />}
+      tone="primary"
+      busy={busy}
+      title={t("team-invite-title", { firm: firmName })}
+      description={t("team-invite-panel-description")}
+      onSubmit={() => {
+        if (!sent) void formik.submitForm();
+      }}
+      actions={
+        sent ? (
+          <Button variant="contained" onClick={onClose}>
+            {t("team-done")}
+          </Button>
+        ) : (
+          <>
+            {/* The main way first: by e-mail where ONE sends one, else the link, which then is the form's own. */}
+            {emailOk ? (
               <Button
-                type={emailOk ? "button" : "submit"}
-                variant={emailOk ? "outlined" : "contained"}
-                color={emailOk ? "grey" : "primary"}
+                type="submit"
+                variant="contained"
                 onClick={() => {
-                  if (emailOk) send("link");
-                  else deliver.current = "link";
+                  deliver.current = "email";
                 }}
                 disabled={busy}
               >
-                {busy && deliver.current === "link" ? t("team-working") : t("team-invite-copy-link")}
+                {busy && deliver.current === "email" ? t("team-working") : t("team-invite-email-send")}
               </Button>
-              {emailOk ? (
-                <Button
-                  type="submit"
-                  variant="contained"
-                  onClick={() => {
-                    deliver.current = "email";
-                  }}
-                  disabled={busy}
-                >
-                  {busy && deliver.current === "email" ? t("team-working") : t("team-invite-email-send")}
-                </Button>
-              ) : null}
-            </>
+            ) : null}
+            <Button
+              type={emailOk ? "button" : "submit"}
+              variant={emailOk ? "outlined" : "contained"}
+              color={emailOk ? "grey" : "primary"}
+              onClick={() => {
+                if (emailOk) send("link");
+                else deliver.current = "link";
+              }}
+              disabled={busy}
+            >
+              {busy && deliver.current === "link" ? t("team-working") : t("team-invite-copy-link")}
+            </Button>
+            <Button variant="text" color="grey" onClick={onClose} disabled={busy}>
+              {t("team-cancel")}
+            </Button>
+          </>
+        )
+      }
+    >
+      <>
+        <Box className="flex flex-col gap-4">
+          <FormControl className="outlined" variant="standard" error={Boolean(emailError)}>
+            <FormLabel component="label" htmlFor="team-invite-email">
+              {t("team-invite-email")}
+            </FormLabel>
+            <Input
+              id="team-invite-email"
+              name="email"
+              type="email"
+              autoComplete="off"
+              value={formik.values.email}
+              onChange={formik.handleChange}
+              onBlur={formik.handleBlur}
+              readOnly={sent !== null}
+              disabled={busy}
+              aria-describedby="team-invite-email-help"
+            />
+            <FormHelperText id="team-invite-email-help">{emailError ?? t("team-invite-email-help")}</FormHelperText>
+          </FormControl>
+
+          <FormControl component="fieldset">
+            <FormLabel component="legend" id="team-invite-function" className="mb-1">
+              {t("team-invite-function")}
+            </FormLabel>
+            <RadioGroup
+              aria-labelledby="team-invite-function"
+              name="firmFunction"
+              value={formik.values.firmFunction}
+              onChange={formik.handleChange}
+            >
+              {FIRM_FUNCTIONS.map((option) => (
+                <FormControlLabel
+                  key={option}
+                  value={option}
+                  disabled={locked}
+                  control={<Radio size="small" />}
+                  className="items-start py-1"
+                  label={
+                    <Box className="flex flex-col pt-0.5">
+                      <Typography variant="body1" component="span" className="font-semibold">
+                        {t(FUNCTION_LABEL_KEY[option])}
+                      </Typography>
+                      <Typography variant="body2" component="span" className="text-text-secondary">
+                        {t(FUNCTION_HINT_KEY[option])}
+                      </Typography>
+                    </Box>
+                  }
+                />
+              ))}
+            </RadioGroup>
+          </FormControl>
+
+          {mayInviteAdmin && (
+            <FormControlLabel
+              className="items-start"
+              control={
+                <Checkbox
+                  size="small"
+                  name="admin"
+                  checked={formik.values.admin}
+                  onChange={formik.handleChange}
+                  disabled={locked}
+                />
+              }
+              label={
+                <Box className="flex flex-col pt-0.5">
+                  <Typography variant="body1" component="span" className="font-semibold">
+                    {t("team-invite-admin")}
+                  </Typography>
+                  <Typography variant="body2" component="span" className="text-text-secondary">
+                    {t("team-invite-admin-help")}
+                  </Typography>
+                </Box>
+              }
+            />
           )}
-        </DialogActions>
-      </Box>
-    </Dialog>
+
+          {errorCode && !sent && (
+            <Alert
+              severity="error"
+              className="neutral bg-background-paper/60!"
+              action={
+                errorCode === "second_factor_required" ? (
+                  <Button color="inherit" size="small" component={Link} href="/settings/security">
+                    {t("team-second-factor-open")}
+                  </Button>
+                ) : undefined
+              }
+            >
+              {t(teamErrorKey(errorCode))}
+            </Alert>
+          )}
+
+          {emailOk === false && !sent && (
+            <Typography variant="body2" className="text-text-secondary">
+              {t("team-invite-email-off")}
+            </Typography>
+          )}
+
+          {sent && outcome ? (
+            <>
+              <Alert severity={outcome.severity} className="neutral bg-background-paper/60!" role="status">
+                {outcome.text}
+              </Alert>
+              <InvitationLink
+                id="team-invite-link"
+                label={t("team-invite-link")}
+                link={sent.url}
+                copied={copied}
+                onCopy={() => void copy()}
+                copyLabel={t("team-invite-link-copy")}
+                copyAgainLabel={t("team-invite-link-copy-again")}
+                copiedHelp={t("team-invite-link-copied")}
+                help={t("team-invite-link-help")}
+              />
+              <Typography variant="body2" className="text-text-secondary">
+                {t("team-invite-next")}
+              </Typography>
+            </>
+          ) : null}
+        </Box>
+      </>
+    </SidePanel>
   );
 }

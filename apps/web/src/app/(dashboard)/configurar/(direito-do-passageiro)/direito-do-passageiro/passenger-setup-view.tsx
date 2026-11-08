@@ -9,7 +9,7 @@ import { useState } from "react";
 
 import { Alert, Box, Button, Grid, TextField, Typography } from "@mui/material";
 
-import PartnerInviteDialog from "@/components/partners/partner-invite-dialog";
+import PartnerInvitePanel from "@/components/partners/partner-invite-panel";
 import { QuickActionTile } from "@/components/product/home-tiles";
 import ModuleIcon from "@/components/product/module-icon";
 import PageHeader from "@/components/product/page-header";
@@ -528,7 +528,7 @@ function PassengerSetupFlow({ state }: { state: Extract<PassengerSetupState, { k
       ) : null}
 
       {invitingAgency ? (
-        <PartnerInviteDialog
+        <PartnerInvitePanel
           mode="agency"
           module={PASSENGER_MODULE}
           title={t("partners-invite-title")}

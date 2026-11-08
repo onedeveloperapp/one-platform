@@ -523,7 +523,7 @@ export function pendingGroups(
   if (unlistedConversations > 0) {
     groups.one.push({
       id: "conversations:more",
-      href: "/atendimento",
+      href: "/atendimento?ver=chamou",
       tag: { key: "pending-tag-conversation" },
       label: { key: "pending-conversations-more", values: { count: unlistedConversations } },
       count: unlistedConversations,

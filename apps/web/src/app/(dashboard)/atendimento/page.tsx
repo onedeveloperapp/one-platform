@@ -3,44 +3,29 @@ import { cookies } from "next/headers";
 
 import { mayDecide, momentLabel } from "@/lib/ai/approvals";
 import { phonesOfWaId } from "@/lib/cases/cases";
-import { CONVERSATION_TASK } from "@/lib/conversations/agent";
 import { type WaitingReply, waitingReplyOf } from "@/lib/conversations/reply";
 import { isFirmFunction } from "@/lib/firm/roles";
 import { getMemberContext } from "@/lib/member/context";
 import { pageScopeOf } from "@/lib/modules/offer";
 import { isSimulatorOn } from "@/lib/whatsapp/config";
 import {
-  contactName,
-  CONVERSATIONS_SHOWN,
   type ConversationSummary,
   type InboxState,
-  isWaiting,
   MESSAGES_SHOWN,
   type MessageStatus,
-  phoneLabel,
   type TemplateOption,
   type ThreadEvent,
   type ThreadMessage,
 } from "@/lib/whatsapp/conversations";
+import { isInboxView, sortOfParam } from "@/lib/whatsapp/inbox-list";
+import {
+  CONVERSATION_COLUMNS,
+  type ConversationRow,
+  readInboxBase,
+  readInboxRows,
+  summarize,
+} from "@/lib/whatsapp/inbox-read";
 import { IMPERSONATION_MARKER_COOKIE } from "@flyee/auth";
-import { isWindowOpen } from "@flyee/whatsapp/rules";
-
-type NumberRow = { id: string; provider: string; status: string; waba_id: string };
-
-type ConversationRow = {
-  id: string;
-  number_id: string;
-  contact_wa_id: string;
-  contact_name: string | null;
-  saved_name: string | null;
-  last_inbound_at: string | null;
-  last_message_at: string | null;
-  last_message_preview: string | null;
-  last_message_direction: string | null;
-  unread_count: number;
-  agent: string;
-  called_reason: string | null;
-};
 
 type MessageRow = {
   id: string;
@@ -80,22 +65,6 @@ type TemplateRow = {
 
 type TeamRow = { user_id: string; display_name: string | null; email: string | null };
 
-/** An answer of ONE that waits for a person (0048), with the conversation it is of. */
-type WaitingRow = {
-  id: string;
-  approver_functions: string[] | null;
-  created_at: string;
-  ai_runs:
-    | { output: unknown; subject_type: string | null; subject_id: string | null }
-    | { output: unknown; subject_type: string | null; subject_id: string | null }[]
-    | null;
-};
-
-/** How many answers of ONE that wait the inbox reads to mark its conversations: one waits per conversation. */
-const WAITING_READ = 100;
-const CONVERSATION_COLUMNS =
-  "id, number_id, contact_wa_id, contact_name, saved_name, last_inbound_at, last_message_at, last_message_preview, last_message_direction, unread_count, agent, called_reason";
-
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 const STATUSES: readonly MessageStatus[] = ["received", "queued", "sending", "sent", "delivered", "read", "failed"];
@@ -107,7 +76,10 @@ const STATUSES: readonly MessageStatus[] = ["received", "queued", "sending", "se
  * (`reserve_wa_send`, migration 0019); the page only tells the screen what it
  * will answer, so the composer never offers what would be refused.
  */
-async function loadInbox(selectedId: string | null, modulo: string | undefined): Promise<InboxState> {
+async function loadInbox(
+  selectedId: string | null,
+  params: { modulo: string | undefined; ver: string | undefined; ordem: string | undefined },
+): Promise<InboxState> {
   const context = await getMemberContext();
   if (!context) return { kind: "unavailable" };
   if (!context.firm) return { kind: "no-firm" };
@@ -115,100 +87,24 @@ async function loadInbox(selectedId: string | null, modulo: string | undefined):
   const firm = context.firm;
   const { supabase } = context;
   // `?modulo=` keeps the inbox to the conversations of one module (0078): the ones whose contact is somebody of a
-  // case of it, named first by the database. A conversation of nobody's case yet is in the firm's inbox only.
-  const scope = pageScopeOf(context.catalog, context.modules, modulo);
+  // case of it. A conversation of nobody's case yet is in the firm's inbox only.
+  const scope = pageScopeOf(context.catalog, context.modules, params.modulo);
   const module = scope.current?.key ?? null;
-  const ofModule = module
-    ? await supabase.rpc("firm_module_conversations", {
-        target_org: firm.id,
-        target_module: module,
-        target_limit: CONVERSATIONS_SHOWN,
-      })
-    : null;
-  if (ofModule?.error) return { kind: "error" };
-  const moduleIds = ofModule
-    ? (Array.isArray(ofModule.data) ? ofModule.data : []).filter((id): id is string => typeof id === "string")
-    : null;
-  const conversationsQuery = supabase
-    .from("wa_conversations")
-    .select(CONVERSATION_COLUMNS)
-    .eq("org_id", firm.id)
-    .order("last_message_at", { ascending: false, nullsFirst: false })
-    .limit(CONVERSATIONS_SHOWN);
-  // The hours are written here, on the person's own clock, and handed over as text.
+  // The view and the order of the list are in the address (`?ver=`, `?ordem=`), so a link of the home opens the
+  // view it counts and a conversation opened from a view keeps it. A search is never there (0109).
+  const view = isInboxView(params.ver) ? params.ver : "todas";
+  const sort = sortOfParam(params.ordem);
   const timeZone = context.profile.timezone;
-  const reference = new Date();
 
-  const [numbers, conversations, optouts, windowEnd, waitingAnswers, cookieStore] = await Promise.all([
-    supabase.from("wa_numbers").select("id, provider, status, waba_id").eq("org_id", firm.id),
-    moduleIds ? conversationsQuery.in("id", moduleIds) : conversationsQuery,
-    supabase.from("wa_optouts").select("contact_wa_id").eq("org_id", firm.id),
-    // How long the window is belongs to the database's settings, which a
-    // person does not read: asking when a window opened now would close gives its length.
-    supabase.rpc("wa_window_closes_at", { last_inbound: reference.toISOString() }),
-    // The answers of ONE that wait for a person's "Enviar" (0048): one per conversation at most.
-    supabase
-      .from("approvals")
-      .select("id, approver_functions, created_at, ai_runs(output, subject_type, subject_id)")
-      .eq("org_id", firm.id)
-      .eq("status", "pending")
-      .eq("task", CONVERSATION_TASK)
-      .order("created_at", { ascending: false })
-      .limit(WAITING_READ),
+  const [base, found, cookieStore] = await Promise.all([
+    readInboxBase(supabase, firm.id, timeZone),
+    readInboxRows(supabase, firm.id, { view, sort, search: "", module }),
     cookies(),
   ]);
-  if (numbers.error || conversations.error || optouts.error || windowEnd.error || waitingAnswers.error)
-    return { kind: "error" };
+  if (!base || !found) return { kind: "error" };
+  const { numberOf, waitingOf, numbers: numberRows } = base;
 
-  const waitingOf = new Map<string, WaitingRow>();
-  for (const row of (waitingAnswers.data ?? []) as WaitingRow[]) {
-    const run = Array.isArray(row.ai_runs) ? (row.ai_runs[0] ?? null) : row.ai_runs;
-    if (run?.subject_type === "wa_conversation" && run.subject_id && !waitingOf.has(run.subject_id))
-      waitingOf.set(run.subject_id, row);
-  }
-
-  const windowMs = Date.parse(String(windowEnd.data)) - reference.getTime();
-  if (!Number.isFinite(windowMs) || windowMs <= 0) return { kind: "error" };
-
-  const numberRows = (numbers.data ?? []) as NumberRow[];
-  const numberOf = new Map(numberRows.map((row) => [row.id, row]));
-  const stopped = new Set(((optouts.data ?? []) as { contact_wa_id: string }[]).map((row) => row.contact_wa_id));
-
-  const summarize = (row: ConversationRow): ConversationSummary => {
-    const number = numberOf.get(row.number_id);
-    const open = isWindowOpen(row.last_inbound_at, reference.getTime(), windowMs);
-    return {
-      id: row.id,
-      numberId: row.number_id,
-      contact: row.contact_wa_id,
-      name: contactName({ savedName: row.saved_name, contactName: row.contact_name, contact: row.contact_wa_id }),
-      phoneLabel: phoneLabel(row.contact_wa_id),
-      preview: row.last_message_preview,
-      lastDirection:
-        row.last_message_direction === "in" || row.last_message_direction === "out" ? row.last_message_direction : null,
-      waiting: isWaiting({
-        lastDirection: row.last_message_direction,
-        lastInboundAt: row.last_inbound_at,
-        lastMessageAt: row.last_message_at,
-      }),
-      lastLabel: row.last_message_at ? momentLabel(row.last_message_at, timeZone) : null,
-      unread: row.unread_count,
-      windowOpen: open,
-      windowClosesLabel:
-        open && row.last_inbound_at
-          ? momentLabel(new Date(Date.parse(row.last_inbound_at) + windowMs).toISOString(), timeZone)
-          : null,
-      optedOut: stopped.has(row.contact_wa_id),
-      numberActive: number?.status === "active",
-      simulated: number?.provider === "simulator",
-      test: number?.provider === "test",
-      agent: row.agent === "person" ? "person" : "one",
-      calledReason: row.called_reason,
-      replyWaiting: waitingOf.has(row.id),
-    };
-  };
-
-  const list = ((conversations.data ?? []) as ConversationRow[]).map(summarize);
+  const list = found.rows.map((row) => summarize(base, row));
 
   let chosen: ConversationSummary | null = null;
   let messages: ThreadMessage[] = [];
@@ -229,7 +125,7 @@ async function loadInbox(selectedId: string | null, modulo: string | undefined):
         .eq("org_id", firm.id)
         .maybeSingle();
       if (error) return { kind: "error" };
-      chosen = row ? summarize(row as ConversationRow) : null;
+      chosen = row ? summarize(base, row as ConversationRow) : null;
     }
   }
 
@@ -364,6 +260,10 @@ async function loadInbox(selectedId: string | null, modulo: string | undefined):
     me: { role: firm.role, firmFunction: firm.firmFunction },
     whatsapp: active.length > 0 ? "active" : numberRows.length > 0 ? "disconnected" : "none",
     conversations: list,
+    total: found.total,
+    counts: found.counts,
+    view,
+    sort,
     selected: chosen ? { conversation: chosen, messages, olderHidden, cases: personCases, events, waitingReply } : null,
     templates,
     supportVisit: cookieStore.has(IMPERSONATION_MARKER_COOKIE),
@@ -375,12 +275,22 @@ async function loadInbox(selectedId: string | null, modulo: string | undefined):
 export default async function InboxPage({
   searchParams,
 }: {
-  searchParams: Promise<{ c?: string | string[]; modulo?: string | string[] }>;
+  searchParams: Promise<{
+    c?: string | string[];
+    modulo?: string | string[];
+    ver?: string | string[];
+    ordem?: string | string[];
+  }>;
 }) {
-  const { c, modulo } = await searchParams;
+  const { c, modulo, ver, ordem } = await searchParams;
+  const one = (value: string | string[] | undefined) => (typeof value === "string" ? value : undefined);
   return (
     <InboxView
-      state={await loadInbox(typeof c === "string" ? c : null, typeof modulo === "string" ? modulo : undefined)}
+      state={await loadInbox(typeof c === "string" ? c : null, {
+        modulo: one(modulo),
+        ver: one(ver),
+        ordem: one(ordem),
+      })}
     />
   );
 }

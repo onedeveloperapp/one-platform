@@ -38,6 +38,8 @@ export type LibrarySource = {
   /** Checked by ONE, for every firm (0045): read here, kept by the operator. */
   platform: boolean;
   verifiedBy: string | null;
+  /** When it was checked, for the list to order by. */
+  verifiedAt: string;
   verifiedLabel: string;
   retiredReason: string | null;
   retiredLabel: string | null;
@@ -74,6 +76,8 @@ export type LibraryTemplate = {
   usedByOne: boolean;
   /** ONE saved it from a document the firm sent, and no person of the firm saved it since (0079): ONE may err. */
   preparedByOne: boolean;
+  /** When it last changed, for the list to order by. */
+  updatedAt: string;
   updatedLabel: string;
   updatedBy: string | null;
   /** How many distinct sources its text cites, and how many of them the library does not answer for: a paper's none, since no gate reads it. */
@@ -255,6 +259,7 @@ export async function loadSetupPapers(
     provisional: row.org_id === null && row.provisional === true,
     usedByOne: used,
     preparedByOne: row.org_id !== null && row.prepared_by_one === true,
+    updatedAt: row.updated_at,
     updatedLabel: momentLabel(row.updated_at, timeZone),
     updatedBy: null,
     cited: 0,
@@ -350,6 +355,7 @@ export async function loadLibrary(
       provisional: template.org_id === null && template.provisional === true,
       usedByOne: used.has(template.id),
       preparedByOne: template.org_id !== null && template.prepared_by_one === true,
+      updatedAt: template.updated_at,
       updatedLabel: momentLabel(template.updated_at, timeZone),
       // Who of the platform wrote a model of the platform is the operator's, never the firm's to read.
       updatedBy: template.org_id !== null && template.updated_by ? names.get(template.updated_by) || null : null,
@@ -375,6 +381,7 @@ export async function loadLibrary(
               status: source.status,
               platform: source.org_id === null,
               verifiedBy: source.org_id !== null && source.verified_by ? names.get(source.verified_by) || null : null,
+              verifiedAt: source.verified_at,
               verifiedLabel: momentLabel(source.verified_at, timeZone),
               retiredReason: source.retired_reason,
               retiredLabel: source.retired_at ? momentLabel(source.retired_at, timeZone) : null,

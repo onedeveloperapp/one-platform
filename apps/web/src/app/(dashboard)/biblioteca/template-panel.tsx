@@ -10,8 +10,6 @@ import {
   Button,
   Checkbox,
   CircularProgress,
-  Dialog,
-  DialogContent,
   FormControlLabel,
   MenuItem,
   TextField,
@@ -19,8 +17,9 @@ import {
 } from "@mui/material";
 
 import ConfirmActionDialog from "@/components/product/confirm-action-dialog";
-import DialogHeader from "@/components/product/dialog-header";
+import SidePanel from "@/components/product/side-panel";
 import WordDownloadButton from "@/components/product/word-download-button";
+import NiDocumentFull from "@/icons/nexture/ni-document-full";
 import {
   DRAFT_MARK_KEY,
   DRAFT_MARKS,
@@ -85,11 +84,13 @@ function defaultKey(writes: ModelDocument, kind: Kind): string {
  * that kind, or the paper it sends clients to sign), and its text, with the
  * marks the platform fills in with the facts of a lawsuit or of a client.
  * The text of a model already there, and whether it is the default now, are
- * read when the dialog opens, and the dialog never closes over what nobody
+ * read when the panel opens, and the panel never closes over what nobody
  * saved without asking. A model made the default of a kind says which one
  * stops being it. Opened by the library and by the firm's setup, which asks
  * for a paper by name (a fee contract, the firm's own power of attorney) and
- * makes it the default the firm sends.
+ * makes it the default the firm sends. It is the side panel every registration
+ * opens in (the screen pattern after ADVBox, 2026-11-07), in its wide form: a
+ * model's text is read and written as a page, not as a column.
  *
  * A new model may start from a document the firm already uses (0067,
  * 0079): the person sends it from the top of the dialog (or chose it before
@@ -102,7 +103,7 @@ function defaultKey(writes: ModelDocument, kind: Kind): string {
  * made before. What ONE prepared, untouched, is no work to lose: the dialog
  * closes over it without asking, and it waits in the library.
  */
-export default function TemplateDialog({
+export default function TemplatePanel({
   template,
   copyOf,
   defaults,
@@ -299,22 +300,42 @@ export default function TemplateDialog({
     });
 
   return (
-    <Dialog open onClose={close} aria-labelledby="library-template-dialog" maxWidth="lg" fullWidth>
-      <DialogHeader
-        id="library-template-dialog"
-        title={t(
-          template
-            ? "library-template-dialog-edit"
-            : copying
-              ? "library-template-dialog-copy"
-              : importId || imported || initialFile
-                ? "library-template-dialog-import"
-                : "library-template-dialog-new",
-        )}
-        onClose={close}
-        closeLabel={t("library-close")}
-      />
-      <DialogContent className="flex flex-col gap-4 pt-2!">
+    <SidePanel
+      wide
+      onClose={close}
+      closeLabel={t("library-close")}
+      icon={<NiDocumentFull size="medium" />}
+      tone="secondary"
+      busy={pending}
+      title={t(
+        template
+          ? "library-template-dialog-edit"
+          : copying
+            ? "library-template-dialog-copy"
+            : importId || imported || initialFile
+              ? "library-template-dialog-import"
+              : "library-template-dialog-new",
+      )}
+      description={t(paper ? "library-template-panel-paper" : "library-template-panel-piece")}
+      actions={
+        <>
+          {/* What ONE prepared is saved as it came, too: reading it is the person's part. */}
+          <Button variant="contained" disabled={locked || !complete || !(changed || imported)} onClick={save}>
+            {t("library-save")}
+          </Button>
+          <Button variant="text" color="grey" disabled={pending} onClick={close}>
+            {t("library-cancel")}
+          </Button>
+          {/* The text as it is on the screen, saved or not: what ONE prepared included, to be read in Word. */}
+          <WordDownloadButton
+            name={name.trim() || t("word-download-fallback")}
+            text={body ?? ""}
+            disabled={locked || !(body ?? "").trim()}
+          />
+        </>
+      }
+    >
+      <>
         {mayImport ? (
           <ImportPanel
             importId={importId}
@@ -337,7 +358,6 @@ export default function TemplateDialog({
             onChange={(event) => setName(event.target.value.slice(0, 120))}
             disabled={locked}
             className="min-w-64 flex-1"
-            autoFocus={!template && !importId && !initialFile}
           />
           <TextField
             select
@@ -438,22 +458,7 @@ export default function TemplateDialog({
           </>
         ) : null}
         <Refusal code={errorCode} />
-        <Box className="flex flex-wrap gap-2">
-          {/* What ONE prepared is saved as it came, too: reading it is the person's part. */}
-          <Button variant="contained" disabled={locked || !complete || !(changed || imported)} onClick={save}>
-            {t("library-save")}
-          </Button>
-          <Button variant="text" color="grey" disabled={pending} onClick={close}>
-            {t("library-cancel")}
-          </Button>
-          {/* The text as it is on the screen, saved or not: what ONE prepared included, to be read in Word. */}
-          <WordDownloadButton
-            name={name.trim() || t("word-download-fallback")}
-            text={body ?? ""}
-            disabled={locked || !(body ?? "").trim()}
-          />
-        </Box>
-      </DialogContent>
+      </>
 
       {leaving ? (
         <ConfirmActionDialog
@@ -472,6 +477,6 @@ export default function TemplateDialog({
           onClose={() => setLeaving(false)}
         />
       ) : null}
-    </Dialog>
+    </SidePanel>
   );
 }

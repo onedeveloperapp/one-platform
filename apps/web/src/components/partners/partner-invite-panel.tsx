@@ -9,9 +9,6 @@ import {
   Alert,
   Box,
   Button,
-  Dialog,
-  DialogActions,
-  DialogContent,
   FormControl,
   FormControlLabel,
   FormHelperText,
@@ -22,9 +19,11 @@ import {
   Typography,
 } from "@mui/material";
 
-import DialogHeader from "@/components/product/dialog-header";
 import InvitationLink from "@/components/product/invitation-link";
+import SidePanel from "@/components/product/side-panel";
 import { useEmailReady } from "@/components/product/use-email-ready";
+import NiBuilding from "@/icons/nexture/ni-building";
+import NiUserPlus from "@/icons/nexture/ni-user-plus";
 import { inviteAgency, invitePartnerColleague, type PartnerInviteResult } from "@/lib/partners/actions";
 import { partnerErrorKey } from "@/lib/partners/partner";
 
@@ -38,10 +37,11 @@ type Sent = { email: string; url: string; emailed: boolean; chosen: boolean };
  * 2026-11-03: the result on a screen of its own read as a second dialog): the fields, then "Copiar link" or
  * "Enviar por e-mail", the second offered only where ONE can send one; once the invitation exists the fields stay
  * as they were sent, and its link shows under them with what became of the e-mail, so the inviter can always send
- * it by hand too. The invitation exists either way.
- * Kept beside the closest shape of the app, the invitation to a firm's team (`settings/team/invite-dialog.tsx`).
+ * it by hand too. The invitation exists either way. It is the side panel every registration opens in (the screen
+ * pattern after ADVBox, 2026-11-07), from the lists' "Novo" and in place in a setup's step.
+ * Kept beside the closest shape of the app, the invitation to a firm's team (`settings/team/invite-panel.tsx`).
  */
-export default function PartnerInviteDialog({
+export default function PartnerInvitePanel({
   mode,
   module,
   title,
@@ -124,6 +124,8 @@ export default function PartnerInviteDialog({
   };
 
   const busy = formik.isSubmitting;
+  // What the panel says of the invitation, under its title.
+  const panelKey = mode === "agency" ? "partners-invite-panel-agency" : "partners-invite-panel-colleague";
   // Once the invitation exists the fields say what it was sent with, and change no more.
   const locked = busy || sent !== null;
   const nameError = formik.touched.name ? formik.errors.name : undefined;
@@ -141,153 +143,159 @@ export default function PartnerInviteDialog({
         : { severity: "warning" as const, text: t("partners-invite-not-emailed", { email: sent.email }) };
 
   return (
-    <Dialog open onClose={busy ? undefined : onClose} maxWidth="sm" fullWidth aria-labelledby="partner-invite-dialog">
-      <DialogHeader id="partner-invite-dialog" title={title} onClose={onClose} closeLabel={t("partners-close")} />
-
-      <Box component="form" noValidate onSubmit={formik.handleSubmit}>
-        <DialogContent>
-          <Box className="flex flex-col gap-4">
-            {mode === "agency" && (
-              <Typography variant="body2" className="text-text-secondary">
-                {t("partners-privacy")}
-              </Typography>
-            )}
-            {mode === "agency" && (
-              <FormControl className="outlined" variant="standard" error={Boolean(nameError)}>
-                <FormLabel component="label" htmlFor="partner-invite-name">
-                  {t("partners-invite-name")}
-                </FormLabel>
-                <Input
-                  id="partner-invite-name"
-                  name="name"
-                  autoComplete="off"
-                  autoFocus
-                  value={formik.values.name}
-                  onChange={formik.handleChange}
-                  onBlur={formik.handleBlur}
-                  readOnly={sent !== null}
-                  disabled={busy}
-                  aria-describedby="partner-invite-name-help"
-                />
-                <FormHelperText id="partner-invite-name-help">{nameError ?? " "}</FormHelperText>
-              </FormControl>
-            )}
-            <FormControl className="outlined" variant="standard" error={Boolean(emailError)}>
-              <FormLabel component="label" htmlFor="partner-invite-email">
-                {mode === "agency" ? t("partners-invite-email") : t("partner-team-invite-email")}
+    <SidePanel
+      onClose={onClose}
+      closeLabel={t("partners-close")}
+      icon={mode === "agency" ? <NiBuilding size="medium" /> : <NiUserPlus size="medium" />}
+      tone={mode === "agency" ? "secondary" : "primary"}
+      busy={busy}
+      title={title}
+      description={t(panelKey)}
+      onSubmit={() => {
+        if (!sent) void formik.submitForm();
+      }}
+      actions={
+        sent ? (
+          <Button variant="contained" onClick={onClose}>
+            {t("partners-done")}
+          </Button>
+        ) : (
+          <>
+            {/* The main way first: by e-mail where ONE sends one, else the link, which then is the form's own. */}
+            {emailOk ? (
+              <Button
+                type="submit"
+                variant="contained"
+                onClick={() => {
+                  deliver.current = "email";
+                }}
+                disabled={busy}
+              >
+                {busy && deliver.current === "email" ? t("partners-sending") : t("partners-invite-email-send")}
+              </Button>
+            ) : null}
+            <Button
+              type={emailOk ? "button" : "submit"}
+              variant={emailOk ? "outlined" : "contained"}
+              color={emailOk ? "grey" : "primary"}
+              onClick={() => {
+                if (emailOk) send("link");
+                else deliver.current = "link";
+              }}
+              disabled={busy}
+            >
+              {busy && deliver.current === "link" ? t("partners-sending") : t("partners-invite-copy-link")}
+            </Button>
+            <Button variant="text" color="grey" onClick={onClose} disabled={busy}>
+              {t("partners-cancel")}
+            </Button>
+          </>
+        )
+      }
+    >
+      <>
+        <Box className="flex flex-col gap-4">
+          {mode === "agency" && (
+            <Typography variant="body2" className="text-text-secondary">
+              {t("partners-privacy")}
+            </Typography>
+          )}
+          {mode === "agency" && (
+            <FormControl className="outlined" variant="standard" error={Boolean(nameError)}>
+              <FormLabel component="label" htmlFor="partner-invite-name">
+                {t("partners-invite-name")}
               </FormLabel>
               <Input
-                id="partner-invite-email"
-                name="email"
-                type="email"
+                id="partner-invite-name"
+                name="name"
                 autoComplete="off"
-                autoFocus={mode === "colleague"}
-                value={formik.values.email}
+                value={formik.values.name}
                 onChange={formik.handleChange}
                 onBlur={formik.handleBlur}
                 readOnly={sent !== null}
                 disabled={busy}
-                aria-describedby="partner-invite-email-help"
+                aria-describedby="partner-invite-name-help"
               />
-              <FormHelperText id="partner-invite-email-help">
-                {emailError ??
-                  (mode === "agency" ? t("partners-invite-email-help") : t("partner-team-invite-email-help"))}
-              </FormHelperText>
+              <FormHelperText id="partner-invite-name-help">{nameError ?? " "}</FormHelperText>
             </FormControl>
-            {mode === "colleague" && mayInviteAdmin && (
-              <FormControl component="fieldset">
-                <FormLabel component="legend" id="partner-invite-role" className="mb-1">
-                  {t("partner-team-invite-role")}
-                </FormLabel>
-                <RadioGroup
-                  aria-labelledby="partner-invite-role"
-                  name="admin"
-                  value={formik.values.admin}
-                  onChange={formik.handleChange}
-                >
-                  <FormControlLabel
-                    value="member"
-                    disabled={locked}
-                    control={<Radio size="small" />}
-                    label={t("partner-team-invite-member")}
-                  />
-                  <FormControlLabel
-                    value="admin"
-                    disabled={locked}
-                    control={<Radio size="small" />}
-                    label={t("partner-team-invite-admin")}
-                  />
-                </RadioGroup>
-              </FormControl>
-            )}
-            {emailOk === false && !sent && (
-              <Typography variant="body2" className="text-text-secondary">
-                {t("partners-invite-email-off")}
-              </Typography>
-            )}
-            {errorCode && !sent && (
-              <Alert severity="error" className="neutral bg-background-paper/60!">
-                {t(partnerErrorKey(errorCode))}
-              </Alert>
-            )}
-            {sent && outcome ? (
-              <>
-                <Alert severity={outcome.severity} className="neutral bg-background-paper/60!" role="status">
-                  {outcome.text}
-                </Alert>
-                <InvitationLink
-                  id="partner-invite-link"
-                  label={t("partners-invite-link")}
-                  link={sent.url}
-                  copied={copied}
-                  onCopy={() => void copy()}
-                  copyLabel={t("partners-invite-copy")}
-                  copyAgainLabel={t("partners-invite-copy-again")}
-                  copiedHelp={t("partners-invite-copied")}
-                  help={t("partners-invite-link-help")}
-                />
-              </>
-            ) : null}
-          </Box>
-        </DialogContent>
-        <DialogActions className="flex-wrap gap-2">
-          {sent ? (
-            <Button variant="contained" onClick={onClose}>
-              {t("partners-done")}
-            </Button>
-          ) : (
-            <>
-              <Button variant="text" color="grey" onClick={onClose} disabled={busy}>
-                {t("partners-cancel")}
-              </Button>
-              <Button
-                type={emailOk ? "button" : "submit"}
-                variant={emailOk ? "outlined" : "contained"}
-                color={emailOk ? "grey" : "primary"}
-                onClick={() => {
-                  if (emailOk) send("link");
-                  else deliver.current = "link";
-                }}
-                disabled={busy}
-              >
-                {busy && deliver.current === "link" ? t("partners-sending") : t("partners-invite-copy-link")}
-              </Button>
-              {emailOk ? (
-                <Button
-                  type="submit"
-                  variant="contained"
-                  onClick={() => {
-                    deliver.current = "email";
-                  }}
-                  disabled={busy}
-                >
-                  {busy && deliver.current === "email" ? t("partners-sending") : t("partners-invite-email-send")}
-                </Button>
-              ) : null}
-            </>
           )}
-        </DialogActions>
-      </Box>
-    </Dialog>
+          <FormControl className="outlined" variant="standard" error={Boolean(emailError)}>
+            <FormLabel component="label" htmlFor="partner-invite-email">
+              {mode === "agency" ? t("partners-invite-email") : t("partner-team-invite-email")}
+            </FormLabel>
+            <Input
+              id="partner-invite-email"
+              name="email"
+              type="email"
+              autoComplete="off"
+              value={formik.values.email}
+              onChange={formik.handleChange}
+              onBlur={formik.handleBlur}
+              readOnly={sent !== null}
+              disabled={busy}
+              aria-describedby="partner-invite-email-help"
+            />
+            <FormHelperText id="partner-invite-email-help">
+              {emailError ??
+                (mode === "agency" ? t("partners-invite-email-help") : t("partner-team-invite-email-help"))}
+            </FormHelperText>
+          </FormControl>
+          {mode === "colleague" && mayInviteAdmin && (
+            <FormControl component="fieldset">
+              <FormLabel component="legend" id="partner-invite-role" className="mb-1">
+                {t("partner-team-invite-role")}
+              </FormLabel>
+              <RadioGroup
+                aria-labelledby="partner-invite-role"
+                name="admin"
+                value={formik.values.admin}
+                onChange={formik.handleChange}
+              >
+                <FormControlLabel
+                  value="member"
+                  disabled={locked}
+                  control={<Radio size="small" />}
+                  label={t("partner-team-invite-member")}
+                />
+                <FormControlLabel
+                  value="admin"
+                  disabled={locked}
+                  control={<Radio size="small" />}
+                  label={t("partner-team-invite-admin")}
+                />
+              </RadioGroup>
+            </FormControl>
+          )}
+          {emailOk === false && !sent && (
+            <Typography variant="body2" className="text-text-secondary">
+              {t("partners-invite-email-off")}
+            </Typography>
+          )}
+          {errorCode && !sent && (
+            <Alert severity="error" className="neutral bg-background-paper/60!">
+              {t(partnerErrorKey(errorCode))}
+            </Alert>
+          )}
+          {sent && outcome ? (
+            <>
+              <Alert severity={outcome.severity} className="neutral bg-background-paper/60!" role="status">
+                {outcome.text}
+              </Alert>
+              <InvitationLink
+                id="partner-invite-link"
+                label={t("partners-invite-link")}
+                link={sent.url}
+                copied={copied}
+                onCopy={() => void copy()}
+                copyLabel={t("partners-invite-copy")}
+                copyAgainLabel={t("partners-invite-copy-again")}
+                copiedHelp={t("partners-invite-copied")}
+                help={t("partners-invite-link-help")}
+              />
+            </>
+          ) : null}
+        </Box>
+      </>
+    </SidePanel>
   );
 }

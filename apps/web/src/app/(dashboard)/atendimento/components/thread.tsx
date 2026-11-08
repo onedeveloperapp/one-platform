@@ -3,15 +3,23 @@
 import Composer from "./composer";
 import OptOutDialog from "./optout-dialog";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useEffect, useRef, useState } from "react";
 
 import { Alert, Box, Button, Card, CardContent, Typography } from "@mui/material";
 
 import WaitingReplyForm, { type ReplyOutcome } from "@/components/conversations/waiting-reply";
+import CardTitle from "@/components/product/card-title";
 import MessageBubble from "@/components/product/message-bubble";
+import QuickActions, { type QuickAction } from "@/components/product/quick-actions";
 import StatusChip from "@/components/product/status-chip";
 import NiArrowLeft from "@/icons/nexture/ni-arrow-left";
+import NiBriefcase from "@/icons/nexture/ni-briefcase";
+import NiFolderPlus from "@/icons/nexture/ni-folder-plus";
+import NiMessageCheck from "@/icons/nexture/ni-message-check";
+import NiMessageCross from "@/icons/nexture/ni-message-cross";
+import NiUser from "@/icons/nexture/ni-user";
 import { caseLabel } from "@/lib/cases/cases";
 import { notSentKey, type ReplyBlock, replyBlock, type WaitingReply } from "@/lib/conversations/reply";
 import type { FirmFunction, OrgRole } from "@/lib/firm/roles";
@@ -53,6 +61,7 @@ export default function Thread({
   supportVisit,
   manager,
   module = null,
+  backHref,
   onChanged,
 }: {
   conversation: ConversationSummary;
@@ -71,9 +80,12 @@ export default function Thread({
   manager: boolean;
   /** The module the inbox is under (0078): the way back and a new case stay under it. */
   module?: string | null;
+  /** The way back to the list on a phone: the inbox under the view and the order it was opened from. */
+  backHref?: string;
   onChanged: () => void;
 }) {
   const t = useTranslations("product");
+  const router = useRouter();
   const log = useRef<HTMLDivElement | null>(null);
   const [optOut, setOptOut] = useState<"record" | "remove" | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -136,6 +148,48 @@ export default function Thread({
     optedOut: conversation.optedOut,
   });
 
+  // What the conversation keeps one click away: the person's other cases, a case opened by hand (ONE opens one at
+  // the person's yes: by hand is the exception), and the person's request to stop, recorded or taken back.
+  const latestCase = cases[0] ?? null;
+  const optOutActions: QuickAction[] = conversation.optedOut
+    ? mayRemoveOptOut(me.role, me.firmFunction)
+      ? [
+          {
+            key: "optout-remove",
+            label: t("inbox-optout-remove"),
+            icon: <NiMessageCheck size="small" />,
+            onClick: () => setOptOut("remove"),
+          },
+        ]
+      : []
+    : [
+        {
+          key: "optout-record",
+          label: t("inbox-optout-record"),
+          icon: <NiMessageCross size="small" />,
+          onClick: () => setOptOut("record"),
+        },
+      ];
+  const more: QuickAction[] = [
+    ...cases.slice(1, 3).map((item) => ({
+      key: `case-${item.id}`,
+      label: t("inbox-case-open", { label: caseLabel(item.seq) }),
+      icon: <NiBriefcase size="small" />,
+      onClick: () => router.push(`/casos/${item.id}`),
+    })),
+    ...(supportVisit
+      ? []
+      : [
+          {
+            key: "new-case",
+            label: t("inbox-case-new"),
+            icon: <NiFolderPlus size="small" />,
+            onClick: () => router.push(scopedHref("/casos", module, { conversa: conversation.id })),
+          },
+          ...optOutActions,
+        ]),
+  ];
+
   const open = async (fileId: string) => {
     setMediaError(false);
     const link = await openMedia(fileId);
@@ -150,9 +204,9 @@ export default function Thread({
   return (
     <Card component="section" aria-labelledby="inbox-thread">
       <CardContent className="flex flex-col gap-4">
-        <Box className="flex flex-col gap-2">
+        <Box className="flex flex-col gap-3">
           <Button
-            href={scopedHref("/atendimento", module)}
+            href={backHref ?? scopedHref("/atendimento", module)}
             LinkComponent={Link}
             variant="text"
             color="grey"
@@ -162,32 +216,33 @@ export default function Thread({
           >
             {t("inbox-back")}
           </Button>
-          <Box className="flex flex-col gap-1 md:flex-row md:items-start md:justify-between md:gap-4">
-            <Box className="flex min-w-0 flex-col">
-              <Typography id="inbox-thread" variant="h5" component="h2" className="mb-0 truncate">
-                {conversation.name}
-              </Typography>
-              <Typography variant="body2" className="text-text-secondary">
-                {conversation.phoneLabel}
-              </Typography>
-            </Box>
-            <Box className="flex flex-row flex-wrap gap-1.5">
-              {!conversation.numberActive ? (
+          <CardTitle
+            id="inbox-thread"
+            icon={<NiUser size="medium" />}
+            title={conversation.name}
+            description={conversation.phoneLabel}
+            chip={
+              !conversation.numberActive ? (
                 <StatusChip label={t("inbox-number-off")} tone="attention" />
               ) : conversation.windowOpen && conversation.windowClosesLabel ? (
                 <StatusChip label={t("inbox-window-open", { when: conversation.windowClosesLabel })} tone="positive" />
               ) : (
                 <StatusChip label={t("inbox-window-closed")} tone="neutral" />
-              )}
-              {conversation.optedOut ? <StatusChip label={t("inbox-opted-out")} tone="attention" /> : null}
-              {conversation.test ? <StatusChip label={t("inbox-test-chip")} tone="info" /> : null}
-            </Box>
-          </Box>
+              )
+            }
+            actions={
+              more.length > 0 ? (
+                <QuickActions label={t("inbox-thread-more", { name: conversation.name })} actions={more} />
+              ) : null
+            }
+          />
           <Box className="flex flex-row flex-wrap items-center gap-2">
             <StatusChip
               label={conversation.agent === "one" ? t("inbox-agent-one") : t("inbox-agent-person")}
               tone={conversation.agent === "one" ? "primary" : "neutral"}
             />
+            {conversation.optedOut ? <StatusChip label={t("inbox-opted-out")} tone="attention" /> : null}
+            {conversation.test ? <StatusChip label={t("inbox-test-chip")} tone="info" /> : null}
             {!supportVisit ? (
               conversation.agent === "one" ? (
                 <Button
@@ -211,6 +266,18 @@ export default function Thread({
                 </Button>
               )
             ) : null}
+            {latestCase ? (
+              <Button
+                href={`/casos/${latestCase.id}`}
+                LinkComponent={Link}
+                variant="outlined"
+                color="grey"
+                size="small"
+                startIcon={<NiBriefcase size="small" />}
+              >
+                {t("inbox-case-open", { label: caseLabel(latestCase.seq) })}
+              </Button>
+            ) : null}
           </Box>
           {conversation.calledReason ? (
             <Alert severity="warning" className="neutral bg-background-paper/60!">
@@ -222,30 +289,6 @@ export default function Thread({
               {t("inbox-agent-error")}
             </Alert>
           ) : null}
-          <Box className="flex flex-row flex-wrap gap-2">
-            {cases.slice(0, 3).map((item) => (
-              <Button
-                key={item.id}
-                href={`/casos/${item.id}`}
-                LinkComponent={Link}
-                variant="outlined"
-                color="grey"
-                size="small"
-              >
-                {t("inbox-case-open", { label: caseLabel(item.seq) })}
-              </Button>
-            ))}
-            {!supportVisit && (
-              <Button
-                href={scopedHref("/casos", module, { conversa: conversation.id })}
-                LinkComponent={Link}
-                variant="text"
-                size="small"
-              >
-                {t("inbox-case-new")}
-              </Button>
-            )}
-          </Box>
         </Box>
 
         <Box
@@ -422,22 +465,6 @@ export default function Thread({
           manager={manager}
           onSent={onChanged}
         />
-
-        {!supportVisit ? (
-          <Box className="flex flex-row flex-wrap gap-2">
-            {conversation.optedOut ? (
-              mayRemoveOptOut(me.role, me.firmFunction) ? (
-                <Button variant="text" color="grey" size="small" onClick={() => setOptOut("remove")}>
-                  {t("inbox-optout-remove")}
-                </Button>
-              ) : null
-            ) : (
-              <Button variant="text" color="grey" size="small" onClick={() => setOptOut("record")}>
-                {t("inbox-optout-record")}
-              </Button>
-            )}
-          </Box>
-        ) : null}
       </CardContent>
 
       {optOut ? (

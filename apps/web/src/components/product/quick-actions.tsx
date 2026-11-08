@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode, useId, useState } from "react";
+import { type ReactNode, useId, useRef, useState } from "react";
 
 import { Button, ListItemIcon, ListItemText, Menu, MenuItem, Tooltip } from "@mui/material";
 
@@ -46,6 +46,9 @@ export default function QuickActions({
 }) {
   const id = useId();
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
+  // The action chosen runs once the menu finished closing: a panel it opens keeps the focus on its first field,
+  // which the menu would otherwise take back to its button.
+  const picked = useRef<QuickAction | null>(null);
   const open = anchor !== null;
   if (actions.length === 0) return null;
   return (
@@ -73,14 +76,23 @@ export default function QuickActions({
         onClose={() => setAnchor(null)}
         anchorOrigin={{ vertical: "bottom", horizontal: align }}
         transformOrigin={{ vertical: "top", horizontal: align }}
+        slotProps={{
+          transition: {
+            onExited: () => {
+              const action = picked.current;
+              picked.current = null;
+              action?.onClick();
+            },
+          },
+        }}
       >
         {actions.map((action) => (
           <MenuItem
             key={action.key}
             disabled={action.disabled}
             onClick={() => {
+              picked.current = action;
               setAnchor(null);
-              action.onClick();
             }}
           >
             {action.icon ? <ListItemIcon className="text-text-secondary">{action.icon}</ListItemIcon> : null}

@@ -6,29 +6,86 @@ import Thread from "./thread";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { useEffect, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useRef, useState, useTransition } from "react";
 
-import { Alert, Box, Button } from "@mui/material";
+import { Alert, Box, Button, Grid } from "@mui/material";
 
 import EmptyState from "@/components/product/empty-state";
+import ListBar, { type ListView } from "@/components/product/list-bar";
 import ModuleScope from "@/components/product/module-scope";
+import NumberCard from "@/components/product/number-card";
 import PageHeader from "@/components/product/page-header";
+import type { TileTone } from "@/components/product/tile-tone";
+import NiMessageDots from "@/icons/nexture/ni-message-dots";
 import NiMessages from "@/icons/nexture/ni-messages";
 import NiPlug from "@/icons/nexture/ni-plug";
+import NiSendUpRight from "@/icons/nexture/ni-send-up-right";
+import NiStopwatch from "@/icons/nexture/ni-stopwatch";
+import NiUser from "@/icons/nexture/ni-user";
 import NiUsers from "@/icons/nexture/ni-users";
 import { isManager } from "@/lib/firm/roles";
 import { scopeCrumbs } from "@/lib/modules/offer";
+import { countText } from "@/lib/numbers/compare";
 import { cn } from "@/lib/utils";
-import type { InboxState } from "@/lib/whatsapp/conversations";
+import type { ConversationSummary, InboxState } from "@/lib/whatsapp/conversations";
+import { searchInbox } from "@/lib/whatsapp/inbox-actions";
+import {
+  conversationHref,
+  INBOX_CARDS,
+  INBOX_SORTS,
+  INBOX_VIEWS,
+  type InboxCounts,
+  inboxHref,
+  type InboxSort,
+  type InboxView as InboxViewKey,
+  inboxViewGroup,
+  isInboxSort,
+  isInboxView,
+} from "@/lib/whatsapp/inbox-list";
 
 /** How often the screen asks again for what arrived, while it is in front of somebody. */
 const REFRESH_MS = 10_000;
 
+/** The numbers above the list, each the view it counts. */
+const CARD: Record<(typeof INBOX_CARDS)[number], { icon: ReactNode; tone: TileTone }> = {
+  fechando: { icon: <NiStopwatch size="medium" />, tone: "accent-3" },
+  esperando: { icon: <NiMessageDots size="medium" />, tone: "primary" },
+  chamou: { icon: <NiUser size="medium" />, tone: "accent-2" },
+  resposta: { icon: <NiSendUpRight size="medium" />, tone: "secondary" },
+};
+
+/** The empty state of a view that waits says the good news; any other says the view holds nothing. */
+const EMPTY_TITLE: Partial<Record<InboxViewKey, string>> = {
+  esperando: "inbox-empty-esperando",
+  fechando: "inbox-empty-fechando",
+  chamou: "inbox-empty-chamou",
+  resposta: "inbox-empty-resposta",
+};
+
+/** What a search found: the list under it, for the view and the order it was made in. */
+type Searched = {
+  text: string;
+  view: InboxViewKey;
+  sort: InboxSort;
+  conversations: ConversationSummary[];
+  total: number;
+  counts: InboxCounts;
+};
+
 /**
  * The firm's conversations. Somebody comes here to answer the people who
  * wrote to the firm, before the 24 hours each message opens run out. Success
- * is nobody left waiting. So it is the list of who wrote, most recent first,
- * beside the one conversation being answered: never a table of messages.
+ * is nobody left waiting. So it is the list of who wrote beside the one
+ * conversation being answered: never a table of messages.
+ *
+ * The list is of the screen pattern (phase 0, migration 0109): four cards of
+ * numbers of what waits (the windows closing, who waits for an answer, where
+ * ONE called a person, ONE's answers to send), each the view it counts; the
+ * bar with the ready views, counted over every conversation of the firm, the
+ * search (a name or a number, in the request's body) and the order (who
+ * waits the longest first). The view and the order are in the address, so a
+ * link of the home opens the view it counts. No "Novo": a conversation starts
+ * with the person or with ONE.
  */
 export default function InboxView({ state }: { state: InboxState }) {
   const t = useTranslations("product");
@@ -119,7 +176,7 @@ export default function InboxView({ state }: { state: InboxState }) {
             </Alert>
           ) : null}
 
-          {ready.conversations.length === 0 && !selected ? (
+          {ready.counts.todas === 0 && !selected ? (
             <EmptyState
               icon={<NiMessages size="large" />}
               title={t("inbox-empty-title")}
@@ -131,44 +188,10 @@ export default function InboxView({ state }: { state: InboxState }) {
               }
             />
           ) : (
-            <Box className="flex flex-col gap-5 lg:flex-row lg:items-start">
-              <Box className={cn("w-full flex-none lg:block lg:w-96", selected ? "hidden" : "block")}>
-                <ConversationList
-                  conversations={ready.conversations}
-                  selectedId={selected?.conversation.id ?? null}
-                  module={ready.scope.current?.key ?? null}
-                />
-              </Box>
-              <Box className={cn("min-w-0 flex-1 lg:block", selected ? "block" : "hidden")}>
-                {selected ? (
-                  <Thread
-                    key={selected.conversation.id}
-                    conversation={selected.conversation}
-                    messages={selected.messages}
-                    olderHidden={selected.olderHidden}
-                    cases={selected.cases}
-                    events={selected.events}
-                    waitingReply={selected.waitingReply}
-                    templates={ready.templates}
-                    me={ready.me}
-                    firmName={ready.firm.name}
-                    supportVisit={ready.supportVisit}
-                    manager={manager}
-                    module={ready.scope.current?.key ?? null}
-                    onChanged={refresh}
-                  />
-                ) : (
-                  <EmptyState
-                    icon={<NiMessages size="large" />}
-                    title={t("inbox-choose-title")}
-                    description={t("inbox-choose-body")}
-                  />
-                )}
-              </Box>
-            </Box>
+            <InboxList ready={ready} manager={manager} onChanged={refresh} />
           )}
 
-          {showSimulator && ready.simulatorNumberId && (simulating || ready.conversations.length > 0 || selected) ? (
+          {showSimulator && ready.simulatorNumberId && (simulating || ready.counts.todas > 0 || selected) ? (
             <SimulatorCard
               numberId={ready.simulatorNumberId}
               conversation={selected?.conversation.simulated ? selected.conversation : null}
@@ -178,5 +201,219 @@ export default function InboxView({ state }: { state: InboxState }) {
         </>
       ) : null}
     </Box>
+  );
+}
+
+type Ready = Extract<InboxState, { kind: "ready" }>;
+
+/**
+ * The cards, the bar, the list of the view and the conversation open beside it. The view and the order go in the
+ * address (the page reads them again); a search is asked of the server in the request's body, and read again each
+ * time the page is, under the view and the order it was made in, the newest answer winning.
+ */
+function InboxList({ ready, manager, onChanged }: { ready: Ready; manager: boolean; onChanged: () => void }) {
+  const t = useTranslations("product");
+  const router = useRouter();
+  const selected = ready.selected;
+  const module = ready.scope.current?.key ?? null;
+  const [routing, startRouting] = useTransition();
+  // The view and the order the person asked for, shown at once while the page reads them.
+  const [view, setView] = useState<InboxViewKey>(ready.view);
+  const [sort, setSort] = useState<InboxSort>(ready.sort);
+  useEffect(() => setView(ready.view), [ready.view]);
+  useEffect(() => setSort(ready.sort), [ready.sort]);
+
+  const [search, setSearch] = useState("");
+  const [searched, setSearched] = useState<Searched | null>(null);
+  const [searchBusy, setSearchBusy] = useState(false);
+  const [searchFailed, setSearchFailed] = useState(false);
+  /** What was asked last: an answer to an older question is not the list's. */
+  const asked = useRef(0);
+
+  const runSearch = useCallback(
+    async (text: string, forView: InboxViewKey, forSort: InboxSort) => {
+      const turn = (asked.current += 1);
+      if (text.trim() === "") {
+        setSearched(null);
+        setSearchBusy(false);
+        setSearchFailed(false);
+        return;
+      }
+      setSearchBusy(true);
+      let answer: Awaited<ReturnType<typeof searchInbox>>;
+      try {
+        answer = await searchInbox({ view: forView, sort: forSort, search: text, module });
+      } catch {
+        answer = { ok: false };
+      }
+      if (turn !== asked.current) return;
+      setSearchBusy(false);
+      if (!answer.ok) {
+        setSearchFailed(true);
+        return;
+      }
+      setSearchFailed(false);
+      setSearched({ text, view: forView, sort: forSort, ...answer.list });
+    },
+    [module],
+  );
+
+  // The page was read again (the screen's own refresh, a conversation opened, a message sent): a search in course
+  // is asked again too, under the view and the order the page now has.
+  const firstList = useRef(ready.conversations);
+  useEffect(() => {
+    if (firstList.current === ready.conversations) return;
+    firstList.current = ready.conversations;
+    if (search.trim() !== "") void runSearch(search, ready.view, ready.sort);
+  }, [ready.conversations, ready.view, ready.sort, search, runSearch]);
+
+  const go = (next: { view: InboxViewKey; sort: InboxSort }) => {
+    setView(next.view);
+    setSort(next.sort);
+    const query = { ...next, module };
+    startRouting(() => {
+      router.replace(selected ? conversationHref(selected.conversation.id, query) : inboxHref(query), {
+        scroll: false,
+      });
+    });
+    if (search.trim() !== "") void runSearch(search, next.view, next.sort);
+  };
+
+  const onSearch = (text: string) => {
+    setSearch(text);
+    void runSearch(text, view, sort);
+  };
+
+  // A search is the list once its answer is for what the bar now shows; the page's list otherwise.
+  const searching = search.trim() !== "";
+  const current = searching && searched && searched.view === view && searched.sort === sort ? searched : null;
+  const conversations = searching ? (current?.conversations ?? []) : ready.conversations;
+  const total = searching ? (current?.total ?? 0) : ready.total;
+  const counts = current?.counts ?? ready.counts;
+  // While the page reads another view, or a search is on its way, the list shown is not yet the bar's.
+  const stale = routing || view !== ready.view || sort !== ready.sort || (searching && (!current || searchBusy));
+
+  const views: ListView[] = INBOX_VIEWS.map((key) => ({
+    key,
+    label: t(`inbox-view-${key}`),
+    count: countText(counts[key]),
+    group: inboxViewGroup(key),
+  }));
+
+  const emptyKey = searching ? "inbox-search-empty-title" : (EMPTY_TITLE[view] ?? "inbox-empty-view");
+
+  return (
+    <>
+      <Grid container spacing={2.5} className={cn(selected ? "hidden lg:flex" : "flex")}>
+        {INBOX_CARDS.map((key) => (
+          <Grid key={key} size={{ xs: 6, md: 3 }}>
+            <NumberCard
+              icon={CARD[key].icon}
+              tone={CARD[key].tone}
+              label={t(`inbox-view-${key}`)}
+              hint={t(`inbox-card-${key}-hint`)}
+              value={countText(counts[key])}
+              onClick={() => go({ view: view === key ? "todas" : key, sort })}
+              pressed={view === key}
+            />
+          </Grid>
+        ))}
+      </Grid>
+
+      <Box className={cn(selected ? "hidden lg:block" : "block")}>
+        <ListBar
+          label={t("inbox-bar-label")}
+          viewsTitle={t("list-views-title")}
+          views={views}
+          view={view}
+          onView={(key) => {
+            if (isInboxView(key)) go({ view: key, sort });
+          }}
+          search={{
+            label: t("inbox-search-label"),
+            placeholder: t("list-bar-search"),
+            value: search,
+            onChange: onSearch,
+          }}
+          sort={{
+            label: t("list-bar-sort"),
+            options: INBOX_SORTS.map((key) => ({ key, label: t(`inbox-sort-${key}`) })),
+            value: sort,
+            onChange: (key) => {
+              if (isInboxSort(key)) go({ view, sort: key });
+            },
+          }}
+        />
+      </Box>
+
+      {searchFailed ? (
+        <Alert
+          severity="error"
+          className={cn("neutral bg-background-paper/60!", selected ? "hidden lg:flex" : "flex")}
+          action={
+            <Button color="inherit" size="small" onClick={() => void runSearch(search, view, sort)}>
+              {t("inbox-retry")}
+            </Button>
+          }
+        >
+          {t("inbox-search-failed")}
+        </Alert>
+      ) : null}
+
+      <Box className="flex flex-col gap-5 lg:flex-row lg:items-start">
+        <Box className={cn("w-full flex-none lg:block lg:w-96", selected ? "hidden" : "block")}>
+          <ConversationList
+            title={searching ? t("inbox-search-title") : t(`inbox-view-${view}`)}
+            conversations={conversations}
+            total={total}
+            sort={sort}
+            searching={searching}
+            stale={stale}
+            selectedId={selected?.conversation.id ?? null}
+            hrefOf={(id) => conversationHref(id, { view: ready.view, sort: ready.sort, module })}
+            empty={
+              stale
+                ? null
+                : {
+                    title: t(emptyKey),
+                    description: searching ? t("inbox-search-empty-body") : t("inbox-empty-view-body"),
+                    action: searching
+                      ? { label: t("inbox-search-clear"), onClick: () => onSearch("") }
+                      : view !== "todas"
+                        ? { label: t("inbox-view-all"), onClick: () => go({ view: "todas", sort }) }
+                        : undefined,
+                  }
+            }
+          />
+        </Box>
+        <Box className={cn("min-w-0 flex-1 lg:block", selected ? "block" : "hidden")}>
+          {selected ? (
+            <Thread
+              key={selected.conversation.id}
+              conversation={selected.conversation}
+              messages={selected.messages}
+              olderHidden={selected.olderHidden}
+              cases={selected.cases}
+              events={selected.events}
+              waitingReply={selected.waitingReply}
+              templates={ready.templates}
+              me={ready.me}
+              firmName={ready.firm.name}
+              supportVisit={ready.supportVisit}
+              manager={manager}
+              module={module}
+              backHref={inboxHref({ view: ready.view, sort: ready.sort, module })}
+              onChanged={onChanged}
+            />
+          ) : (
+            <EmptyState
+              icon={<NiMessages size="large" />}
+              title={t("inbox-choose-title")}
+              description={t("inbox-choose-body")}
+            />
+          )}
+        </Box>
+      </Box>
+    </>
   );
 }

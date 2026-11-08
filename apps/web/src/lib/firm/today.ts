@@ -322,7 +322,7 @@ export function todayNeeds(today: FirmToday, viewer: TodayViewer = EVERYTHING): 
       { key: "overdue", count: today.deadlinesOverdue, href: "/prazos?ver=vencidos" },
       viewer.worksDeadlines,
     ),
-    { key: "closing", count: today.conversationsClosing, href: "/atendimento" },
+    { key: "closing", count: today.conversationsClosing, href: "/atendimento?ver=fechando" },
     ...deadlines({ key: "due", count: today.deadlinesSoon, href: "/prazos?ver=proximos" }, viewer.worksDeadlines),
     ...deadlines({ key: "hearings", count: today.hearingsSoon, href: "/agenda" }, viewer.worksDeadlines),
     // Anybody of the firm records a client's WhatsApp or agreement: the client of a hearing coming is told then.
@@ -340,7 +340,7 @@ export function todayNeeds(today: FirmToday, viewer: TodayViewer = EVERYTHING): 
     {
       key: "waiting",
       count: Math.max(today.conversationsWaiting - today.conversationsClosing, 0),
-      href: "/atendimento",
+      href: "/atendimento?ver=esperando",
     },
     ...published,
     ...deadlines({ key: "recheck", count: today.deadlinesReview, href: "/prazos?ver=rever" }, viewer.worksDeadlines),
@@ -359,7 +359,7 @@ export function todayNeeds(today: FirmToday, viewer: TodayViewer = EVERYTHING): 
     { key: "documents", count: today.documentsToReview, href: "/casos?ver=documentos" },
     { key: "contested", count: today.chronologiesContested, href: "/casos?ver=cronologia" },
     { key: "complaints", count: today.complaintsOverdue, href: "/casos?ver=reclamacao" },
-    { key: "failed", count: today.sendsFailed, href: "/atendimento" },
+    { key: "failed", count: today.sendsFailed, href: "/atendimento?ver=falhou" },
     { key: "queue", count: Math.max(today.approvalsWaiting - today.approvalsMine, 0), href: "/aprovacoes" },
   ];
   return needs.filter((need) => need.count > 0);

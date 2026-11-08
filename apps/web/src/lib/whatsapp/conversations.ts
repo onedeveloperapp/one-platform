@@ -2,6 +2,7 @@ import { DOCUMENT_KIND_KEY, type DocumentKind } from "@/lib/cases/cases";
 import type { WaitingReply } from "@/lib/conversations/reply";
 import type { FirmFunction, OrgRole } from "@/lib/firm/roles";
 import type { PageScope } from "@/lib/modules/offer";
+import type { InboxCounts, InboxSort, InboxView } from "@/lib/whatsapp/inbox-list";
 
 /**
  * The firm's conversations as the screens read them (migration 0019): types
@@ -144,7 +145,14 @@ export type InboxData = {
   firm: { id: string; name: string };
   me: { role: OrgRole; firmFunction: FirmFunction };
   whatsapp: WhatsAppState;
+  /** The conversations of the view the page was asked for (`?ver=`), in its order (`?ordem=`), at most `CONVERSATIONS_SHOWN`. */
   conversations: ConversationSummary[];
+  /** How many conversations the view holds, beyond the ones shown. */
+  total: number;
+  /** How many each view holds, over every conversation of the firm (or of the module). */
+  counts: InboxCounts;
+  view: InboxView;
+  sort: InboxSort;
   selected: {
     conversation: ConversationSummary;
     messages: ThreadMessage[];

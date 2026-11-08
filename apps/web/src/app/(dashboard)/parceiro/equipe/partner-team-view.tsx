@@ -18,7 +18,7 @@ import {
   Typography,
 } from "@mui/material";
 
-import PartnerInviteDialog from "@/components/partners/partner-invite-dialog";
+import PartnerInvitePanel from "@/components/partners/partner-invite-panel";
 import ConfirmActionDialog from "@/components/product/confirm-action-dialog";
 import PageHeader from "@/components/product/page-header";
 import StatusChip from "@/components/product/status-chip";
@@ -245,7 +245,7 @@ export default function PartnerTeamView({
       )}
 
       {partner && inviting && (
-        <PartnerInviteDialog
+        <PartnerInvitePanel
           mode="colleague"
           title={t("partner-team-invite-title", { partner: partner.name })}
           mayInviteAdmin={owner}

@@ -40,7 +40,9 @@ export default function CardTitle({
 }) {
   return (
     <Box className="flex flex-col gap-2">
-      <Box className="flex flex-row items-center gap-3">
+      {/* A long chip never squeezes the title into a column of syllables: when both do not fit, the chip and the
+          actions go to the next line, at the right. */}
+      <Box className="flex flex-row flex-wrap items-center gap-x-3 gap-y-2">
         <span
           aria-hidden
           className={cn(
@@ -51,11 +53,11 @@ export default function CardTitle({
         >
           {icon}
         </span>
-        <Typography id={id} variant="h5" component={as} className="mb-0 min-w-0 flex-1 break-words">
+        <Typography id={id} variant="h5" component={as} className="mb-0 min-w-40 flex-1 break-words">
           {title}
         </Typography>
         {chip || actions ? (
-          <Box className="flex flex-none flex-row items-center gap-1">
+          <Box className="ml-auto flex max-w-full flex-none flex-row items-center gap-1">
             {chip}
             {actions}
           </Box>

@@ -440,11 +440,11 @@ describe("what needs somebody today", () => {
     });
     expect(needs.map((need) => [need.key, need.count, need.href])).toEqual([
       ["overdue", 1, "/prazos?ver=vencidos"],
-      ["closing", 2, "/atendimento"],
+      ["closing", 2, "/atendimento?ver=fechando"],
       ["due", 2, "/prazos?ver=proximos"],
       ["confirm", 3, "/prazos"],
       ["untimed", 2, "/prazos#sem-prazo"],
-      ["waiting", 3, "/atendimento"],
+      ["waiting", 3, "/atendimento?ver=esperando"],
       ["cancelled", 1, "/publicacoes?ver=canceladas"],
       ["publications", 9, "/publicacoes"],
       ["checks", 2, "/publicacoes?ver=conferir"],
@@ -460,7 +460,7 @@ describe("what needs somebody today", () => {
       ["documents", 6, "/casos?ver=documentos"],
       ["contested", 1, "/casos?ver=cronologia"],
       ["complaints", 4, "/casos?ver=reclamacao"],
-      ["failed", 3, "/atendimento"],
+      ["failed", 3, "/atendimento?ver=falhou"],
     ]);
     expect(somethingForMe(needs)).toBe(true);
   });

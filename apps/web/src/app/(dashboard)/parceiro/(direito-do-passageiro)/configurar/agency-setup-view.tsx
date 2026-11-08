@@ -19,7 +19,7 @@ import {
   Typography,
 } from "@mui/material";
 
-import PartnerInviteDialog from "@/components/partners/partner-invite-dialog";
+import PartnerInvitePanel from "@/components/partners/partner-invite-panel";
 import PageHeader from "@/components/product/page-header";
 import SecondFactorPrompt from "@/components/product/second-factor-prompt";
 import SetupWizard, { type WizardStep } from "@/components/product/setup-wizard";
@@ -512,7 +512,7 @@ function AgencySetupFlow({ state }: { state: Extract<AgencySetupState, { kind: "
         completeLabel={t("setup-finish")}
       />
       {inviting ? (
-        <PartnerInviteDialog
+        <PartnerInvitePanel
           mode="colleague"
           title={t("partner-team-invite-title", { partner: agency.name })}
           mayInviteAdmin={agency.owner}

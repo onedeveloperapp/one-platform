@@ -1,7 +1,7 @@
 "use client";
 
 import { refusalWords } from "../biblioteca/import-panel";
-import TemplateDialog from "../biblioteca/template-dialog";
+import TemplatePanel from "../biblioteca/template-panel";
 import ConnectCard from "../settings/connections/components/connect-card";
 import NoticesCard from "../settings/connections/components/notices-card";
 import SignatureAccountCard from "../settings/connections/components/signature-account-card";
@@ -938,7 +938,7 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
         completeLabel={t("setup-finish")}
       />
       {paperForm ? (
-        <TemplateDialog
+        <TemplatePanel
           template={paperForm.template}
           copyOf={paperForm.copyOf}
           // The firm's default of the paper, which the one saved here takes the place of.

@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode, useId, useRef } from "react";
+import { type ReactNode, useEffect, useId, useRef } from "react";
 
 import { Box, Drawer, IconButton, Typography } from "@mui/material";
 
@@ -33,6 +33,7 @@ export default function SidePanel({
   onSubmit,
   actions,
   note,
+  wide = false,
   children,
 }: {
   open?: boolean;
@@ -51,6 +52,11 @@ export default function SidePanel({
   actions?: ReactNode;
   /** One quiet line at the right of the foot. */
   note?: ReactNode;
+  /**
+   * A registration whose body is a long text a person reads and writes (a model of the library): the panel is wider,
+   * so its lines are a page's and not a column's. Every other registration keeps the panel's own width.
+   */
+  wide?: boolean;
   children: ReactNode;
 }) {
   const titleId = useId();
@@ -59,12 +65,28 @@ export default function SidePanel({
   const focusFirstField = () => {
     const body = bodyRef.current;
     if (!body || body.contains(document.activeElement)) return;
-    body
-      .querySelector<HTMLElement>(
-        'input:not([type="hidden"]):not([disabled]), textarea:not([disabled]), [role="combobox"]:not([aria-disabled="true"])',
-      )
-      ?.focus();
+    // A file chooser kept out of sight (a document sent from a button), or a field that is only read, is never the
+    // field the person starts on.
+    const field = body.querySelector<HTMLElement>(
+      'input:not([type="hidden"]):not([type="file"]):not([hidden]):not([disabled]):not([readonly]), textarea:not([disabled]):not([readonly]), [role="combobox"]:not([aria-disabled="true"])',
+    );
+    // A choice among options starts on the one chosen, as the keyboard does when it enters the group.
+    const chosen =
+      field instanceof HTMLInputElement && field.type === "radio" && field.name
+        ? body.querySelector<HTMLElement>(`input[type="radio"][name="${CSS.escape(field.name)}"]:checked`)
+        : null;
+    (chosen ?? field)?.focus();
   };
+  // A panel mounted already open slides in with no transition of its own (the drawer runs its entrance only when
+  // `open` changes after it mounted), so the end of the entrance never comes: the panel looks for its first field
+  // once it is on the page, too. Whichever comes first wins; the other finds the focus already inside.
+  const focusLater = useRef(focusFirstField);
+  focusLater.current = focusFirstField;
+  useEffect(() => {
+    if (!open) return;
+    const timer = window.setTimeout(() => focusLater.current(), 120);
+    return () => window.clearTimeout(timer);
+  }, [open]);
   const inner = (
     <>
       {/* Room above the first field, whose floating label would be cut by the scroll's edge. */}
@@ -90,7 +112,10 @@ export default function SidePanel({
       onClose={busy ? undefined : onClose}
       slotProps={{
         paper: {
-          className: "flex w-full max-w-full flex-col max-sm:rounded-none! sm:w-[33.75rem]",
+          className: cn(
+            "flex w-full max-w-full flex-col max-sm:rounded-none!",
+            wide ? "sm:w-[33.75rem] md:w-[48rem]" : "sm:w-[33.75rem]",
+          ),
           role: "dialog",
           "aria-modal": true,
           "aria-labelledby": titleId,

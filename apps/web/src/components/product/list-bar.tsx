@@ -10,6 +10,8 @@ import {
   Chip,
   Divider,
   InputAdornment,
+  ListItemIcon,
+  ListItemText,
   ListSubheader,
   Menu,
   MenuItem,
@@ -23,6 +25,7 @@ import NiCheck from "@/icons/nexture/ni-check";
 import NiChevronDownSmall from "@/icons/nexture/ni-chevron-down-small";
 import NiFilter from "@/icons/nexture/ni-filter";
 import NiListNumber from "@/icons/nexture/ni-list-number";
+import NiPlus from "@/icons/nexture/ni-plus";
 import NiSearch from "@/icons/nexture/ni-search";
 
 /** A ready view of the list: its name, how many it holds, and the group it is listed under in the menu. */
@@ -31,14 +34,21 @@ export type ListView = { key: string; label: string; count?: string; group: stri
 /** A filter in force, said beside the bar, with the way to take it off. */
 export type ListChip = { key: string; label: string; onRemove: () => void };
 
+/**
+ * "Novo": what a person registers in this list, at the bar's right. One kind is one button; several are one button
+ * that opens the menu of them, the one that starts from a document first.
+ */
+export type ListCreate = { label: string; onClick?: () => void; actions?: QuickAction[]; disabled?: boolean };
+
 /** How long the search waits after the last key before it asks again. */
 const SEARCH_DELAY_MS = 400;
 
 /**
  * The same bar on every list of ONE (the screen pattern after ADVBox, approved by the owner on 2026-11-07): the
  * ready views with how many each holds ("Todos os casos 1.284"), the search of the list, "Filtrar", "Ordenar",
- * "Exportar" and, at the right, what the list keeps out of sight ("Mais ações"); under it, each filter in force,
- * one click from being taken off. Whoever learns one list knows them all.
+ * "Exportar" and, at the right, "Novo" where a person registers here and what the list keeps out of sight ("Mais
+ * ações"); under it, each filter in force, one click from being taken off. Whoever learns one list knows them all.
+ * A list of what ONE makes by itself (the cases) has no "Novo": making one by hand is the exception, in "Mais ações".
  *
  * Every piece but the views is optional: a list offers only what it really does (an "Exportar" that exports
  * nothing is never shown). The search waits for the person to stop typing and hands the words to the page, which
@@ -55,6 +65,7 @@ export default function ListBar({
   filter,
   sort,
   exporting,
+  create,
   more,
   chips,
 }: {
@@ -72,11 +83,18 @@ export default function ListBar({
   /** "Ordenar": the orders the list offers. */
   sort?: { label: string; options: { key: string; label: string }[]; value: string; onChange: (key: string) => void };
   exporting?: { label: string; onExport: () => void; busy?: boolean };
+  create?: ListCreate;
   more?: { label: string; actions: QuickAction[] };
   chips?: ListChip[];
 }) {
   const id = useId();
   const [viewsAnchor, setViewsAnchor] = useState<HTMLElement | null>(null);
+  const [createAnchor, setCreateAnchor] = useState<HTMLElement | null>(null);
+  // What "Novo" opens runs once its menu finished closing, so the panel keeps the focus on its first field.
+  const createPicked = useRef<QuickAction | null>(null);
+  // One kind is the button itself; a menu of one would be a click for nothing.
+  const createMenu = create?.actions && create.actions.length > 1 ? create.actions : null;
+  const createOne = create && !createMenu ? (create.onClick ?? create.actions?.[0]?.onClick) : undefined;
   const [sortAnchor, setSortAnchor] = useState<HTMLElement | null>(null);
   const [filterAnchor, setFilterAnchor] = useState<HTMLElement | null>(null);
   const current = views.find((item) => item.key === view) ?? views[0];
@@ -237,6 +255,58 @@ export default function ListBar({
         ) : null}
 
         <Box className="flex-1" />
+        {create && (createMenu || createOne) ? (
+          <>
+            <Button
+              variant="contained"
+              disabled={create.disabled}
+              startIcon={<NiPlus size="medium" />}
+              endIcon={createMenu ? <NiChevronDownSmall size="small" /> : undefined}
+              aria-haspopup={createMenu ? "menu" : undefined}
+              aria-expanded={createAnchor ? true : undefined}
+              aria-controls={createAnchor ? `${id}-create` : undefined}
+              onClick={(event) => (createMenu ? setCreateAnchor(event.currentTarget) : createOne?.())}
+            >
+              {create.label}
+            </Button>
+            {createMenu ? (
+              <Menu
+                id={`${id}-create`}
+                anchorEl={createAnchor}
+                open={Boolean(createAnchor)}
+                onClose={() => setCreateAnchor(null)}
+                anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+                transformOrigin={{ vertical: "top", horizontal: "right" }}
+                slotProps={{
+                  paper: { className: "mt-1" },
+                  list: { "aria-label": create.label },
+                  transition: {
+                    onExited: () => {
+                      const action = createPicked.current;
+                      createPicked.current = null;
+                      action?.onClick();
+                    },
+                  },
+                }}
+              >
+                {createMenu.map((action) => (
+                  <MenuItem
+                    key={action.key}
+                    disabled={action.disabled}
+                    className="gap-2 rounded-lg"
+                    onClick={() => {
+                      createPicked.current = action;
+                      setCreateAnchor(null);
+                    }}
+                  >
+                    {action.icon ? <ListItemIcon className="text-text-secondary">{action.icon}</ListItemIcon> : null}
+                    <ListItemText>{action.label}</ListItemText>
+                  </MenuItem>
+                ))}
+              </Menu>
+            ) : null}
+          </>
+        ) : null}
         {more ? <QuickActions label={more.label} actions={more.actions} /> : null}
       </Box>
 
