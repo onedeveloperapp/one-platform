@@ -6,7 +6,7 @@ import { cookies } from "next/headers";
 import { phoneForField } from "@/lib/cases/cases";
 import { canExportCases } from "@/lib/cases/export";
 import { DEFAULT_PAGE_SIZE, isCaseFilter } from "@/lib/cases/list";
-import { readCaseList } from "@/lib/cases/list-read";
+import { readCaseList, readCaseStock } from "@/lib/cases/list-read";
 import { canImportPortfolio } from "@/lib/import/who";
 import { getMemberContext } from "@/lib/member/context";
 import { pageScopeOf } from "@/lib/modules/offer";
@@ -38,7 +38,7 @@ export async function loadCases(params: { ver?: string; conversa?: string; modul
       }
     : null;
 
-  const [list, airlines, cookieStore] = await Promise.all([
+  const [list, stock, airlines, cookieStore] = await Promise.all([
     readCaseList(supabase, firm, {
       filter,
       search: "",
@@ -46,6 +46,8 @@ export async function loadCases(params: { ver?: string; conversa?: string; modul
       page: 0,
       pageSize: DEFAULT_PAGE_SIZE,
     }),
+    // Who has the cases and the stagnant ones, counted for the views of the list (0111): one read a load.
+    readCaseStock(supabase, firm, { module: current?.key ?? null }),
     supabase.from("airlines").select("iata, name").eq("active", true).order("name"),
     cookies(),
   ]);
@@ -73,6 +75,7 @@ export async function loadCases(params: { ver?: string; conversa?: string; modul
   return {
     kind: "ready",
     list,
+    stock,
     airlines: (airlines.data ?? []) as AirlineOption[],
     filter,
     prefill,

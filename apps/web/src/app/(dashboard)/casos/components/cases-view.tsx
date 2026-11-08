@@ -48,14 +48,26 @@ import {
   COURT_VIEWS,
   DEFAULT_PAGE_SIZE,
   isCaseSort,
+  isStandingView,
   lastPage,
   PAGE_SIZES,
+  STANDING_VIEWS,
 } from "@/lib/cases/list";
-import { listFirmCases } from "@/lib/cases/list-actions";
+import { listFirmCases, readFirmCaseStock } from "@/lib/cases/list-actions";
 import { type CaseCardKey, caseCards, spanText } from "@/lib/cases/numbers";
+import { type CaseStock, type Holder, isHolder, reasonKey, standingCounts, stockKey } from "@/lib/cases/standing";
 import { caseKindLabelKey, caseKindsOf, firmCaseKinds } from "@/lib/modules/registry";
 import { countText, deltaText, isHoped } from "@/lib/numbers/compare";
 import { formatDayBr } from "@flyee/rules/person";
+
+/** Who has the case, in a word of the list. */
+const HOLDER_WORD: Record<Holder, string> = {
+  firm: "standing-holder-firm",
+  client: "standing-holder-client",
+  one: "standing-holder-one",
+  court: "standing-holder-court",
+  platform: "standing-holder-platform",
+};
 
 const FILTER_TILE: Record<CaseFilter, { label: string; hint: string; tone: TileTone; icon: React.ReactNode }> = {
   open: {
@@ -195,6 +207,42 @@ const FILTER_TILE: Record<CaseFilter, { label: string; hint: string; tone: TileT
     hint: "cases-filter-never-read-hint",
     tone: "accent-4",
     icon: <NiFlag size="large" />,
+  },
+  "com-escritorio": {
+    label: "cases-filter-with-firm",
+    hint: "cases-filter-with-firm-hint",
+    tone: "accent-3",
+    icon: <NiUsers size="large" />,
+  },
+  "com-cliente": {
+    label: "cases-filter-with-client",
+    hint: "cases-filter-with-client-hint",
+    tone: "accent-1",
+    icon: <NiUsers size="large" />,
+  },
+  "com-one": {
+    label: "cases-filter-with-one",
+    hint: "cases-filter-with-one-hint",
+    tone: "primary",
+    icon: <NiFolder size="large" />,
+  },
+  "no-tribunal": {
+    label: "cases-filter-in-court",
+    hint: "cases-filter-in-court-hint",
+    tone: "accent-4",
+    icon: <NiScale size="large" />,
+  },
+  "com-plataforma": {
+    label: "cases-filter-with-platform",
+    hint: "cases-filter-with-platform-hint",
+    tone: "secondary",
+    icon: <NiFolder size="large" />,
+  },
+  estagnados: {
+    label: "cases-filter-stagnant",
+    hint: "cases-filter-stagnant-hint",
+    tone: "accent-3",
+    icon: <NiPause size="large" />,
   },
 };
 
@@ -359,6 +407,12 @@ function CasesList({
   const scope = ready.scope;
   const [creating, setCreating] = useState(Boolean(ready.prefill));
   const [list, setList] = useState<CaseListPage>(ready.list);
+  // Who has the cases and the stagnant ones, as the stock of the list's scope and filters says (0111), with the scope
+  // it was read under; null while it is read again, or when the database did not say it (the views then show no count).
+  const [stock, setStock] = useState<{ key: string; value: CaseStock | null }>(() => ({
+    key: stockKey({ module: scope?.module.key ?? null, incident: null, airline: null }),
+    value: ready.stock,
+  }));
   const [query, setQuery] = useState<CaseListQuery>({
     filter: ready.filter,
     search: "",
@@ -374,35 +428,57 @@ function CasesList({
   /** What was asked last: an answer to an older question is not the list's. */
   const asked = useRef(0);
   const current = useRef(query);
+  /** The scope the stock was last asked for, and which ask is the latest: an older answer is not the stock's. */
+  const stockAsked = useRef({ key: stock.key, turn: 0 });
 
-  const load = useCallback(async (next: CaseListQuery) => {
-    const turn = (asked.current += 1);
-    current.current = next;
-    setQuery(next);
-    setLoading(true);
-    setFailed(false);
-    let answer: Awaited<ReturnType<typeof listFirmCases>>;
+  const loadStock = useCallback(async (next: CaseListQuery) => {
+    const key = stockKey(next);
+    const turn = (stockAsked.current.turn += 1);
+    stockAsked.current.key = key;
+    setStock({ key, value: null });
+    let answer: Awaited<ReturnType<typeof readFirmCaseStock>>;
     try {
-      answer = await listFirmCases(next);
+      answer = await readFirmCaseStock({ module: next.module, incident: next.incident, airline: next.airline });
     } catch {
       answer = { ok: false };
     }
-    if (turn !== asked.current) return;
-    if (!answer.ok) {
-      setLoading(false);
-      setFailed(true);
-      return;
-    }
-    // The page asked for is past the end (the list got shorter meanwhile): its last page is read instead. A page
-    // within the list is shown as it came, even with nothing this screen can show in it.
-    const last = lastPage(answer.page.total, next.pageSize);
-    if (answer.page.rows.length === 0 && next.page > last) {
-      void load({ ...next, page: last });
-      return;
-    }
-    setLoading(false);
-    setList(answer.page);
+    if (turn !== stockAsked.current.turn) return;
+    setStock({ key, value: answer.ok ? answer.stock : null });
   }, []);
+
+  const load = useCallback(
+    async (next: CaseListQuery) => {
+      const turn = (asked.current += 1);
+      current.current = next;
+      setQuery(next);
+      setLoading(true);
+      setFailed(false);
+      // The views of who has the case count the stock of the list's scope and filters, read again only when they change.
+      if (stockKey(next) !== stockAsked.current.key) void loadStock(next);
+      let answer: Awaited<ReturnType<typeof listFirmCases>>;
+      try {
+        answer = await listFirmCases(next);
+      } catch {
+        answer = { ok: false };
+      }
+      if (turn !== asked.current) return;
+      if (!answer.ok) {
+        setLoading(false);
+        setFailed(true);
+        return;
+      }
+      // The page asked for is past the end (the list got shorter meanwhile): its last page is read instead. A page
+      // within the list is shown as it came, even with nothing this screen can show in it.
+      const last = lastPage(answer.page.total, next.pageSize);
+      if (answer.page.rows.length === 0 && next.page > last) {
+        void load({ ...next, page: last });
+        return;
+      }
+      setLoading(false);
+      setList(answer.page);
+    },
+    [loadStock],
+  );
 
   // The server read the list again (somebody asked the page to refresh): what the person is looking at is
   // read again too, under the filter, the search and the page they are on.
@@ -411,7 +487,8 @@ function CasesList({
     if (firstList.current === ready.list) return;
     firstList.current = ready.list;
     void load(current.current);
-  }, [ready.list, load]);
+    void loadStock(current.current);
+  }, [ready.list, load, loadStock]);
 
   const airlineName = useMemo(
     () => new Map(ready.airlines.map((airline) => [airline.iata, airline.name])),
@@ -529,23 +606,44 @@ function CasesList({
         },
       },
       {
-        field: "toReview",
-        headerName: t("cases-column-waiting"),
-        minWidth: 180,
-        flex: 1,
-        renderCell: (params: GridRenderCellParams<CaseListRow, number>) => (
-          <Box className="flex h-full flex-col justify-center">
-            {params.row.toReview > 0 && (
-              <Typography variant="body2">{t("cases-waiting-documents", { count: params.row.toReview })}</Typography>
-            )}
-            {params.row.clientFinished && <Typography variant="body2">{t("cases-waiting-client-finished")}</Typography>}
-            {params.row.chronologyContested && <Typography variant="body2">{t("cases-waiting-chronology")}</Typography>}
-            {params.row.complaintOverdue && <Typography variant="body2">{t("cases-waiting-complaint")}</Typography>}
-            {params.row.pieceWaiting && <Typography variant="body2">{t("cases-waiting-piece")}</Typography>}
-            {params.row.courtMoved && <Typography variant="body2">{t("cases-waiting-moved")}</Typography>}
-            {params.row.civilRefused && <Typography variant="body2">{t("cases-waiting-civil")}</Typography>}
+        // How long the case is at its step (0111, `estoque-v1`), and whether it stagnated there.
+        field: "stepDays",
+        headerName: t("cases-column-step-days"),
+        minWidth: 120,
+        flex: 0.6,
+        renderCell: (params: GridRenderCellParams<CaseListRow, number | null>) => (
+          <Box className="flex h-full flex-col items-start justify-center gap-1">
+            {params.row.stepDays !== null ? (
+              <Typography variant="body2" className="tabular-nums">
+                {t("cases-step-days", { count: params.row.stepDays })}
+              </Typography>
+            ) : null}
+            {params.row.stagnant ? <StatusChip tone="attention" label={t("cases-stagnant")} /> : null}
           </Box>
         ),
+      },
+      {
+        // Who has the case and why, as the top of the case says it (0111).
+        field: "holder",
+        headerName: t("cases-column-holder"),
+        minWidth: 200,
+        flex: 1.1,
+        renderCell: (params: GridRenderCellParams<CaseListRow, string | null>) => {
+          const holder = isHolder(params.row.holder) ? params.row.holder : null;
+          const reason = reasonKey(params.row.holder, params.row.why);
+          return (
+            <Box className="flex h-full min-w-0 flex-col justify-center">
+              <Typography variant="body2" className="truncate font-semibold">
+                {holder ? t(HOLDER_WORD[holder]) : t("cases-holder-ended")}
+              </Typography>
+              {reason ? (
+                <Typography variant="body2" className="text-text-secondary truncate">
+                  {t(reason)}
+                </Typography>
+              ) : null}
+            </Box>
+          );
+        },
       },
     ],
     [t, airlineName, moduleOfRow, namesModule],
@@ -569,7 +667,17 @@ function CasesList({
       lawsuits: t("cases-export-lawsuits"),
       movedAt: t("cases-export-moved-at"),
       updatedAt: t("cases-export-updated-at"),
+      holder: t("cases-column-holder"),
+      why: t("cases-export-why"),
+      stepDays: t("cases-column-step-days"),
+      stagnant: t("cases-stagnant"),
     },
+    holderName: (holder) => (isHolder(holder) ? t(HOLDER_WORD[holder]) : t("cases-holder-ended")),
+    reasonName: (holder, why) => {
+      const key = reasonKey(holder, why);
+      return key ? t(key) : null;
+    },
+    yes: t("cases-export-yes"),
     moduleName: (key) => moduleOfRow.get(key)?.name ?? "",
     kindName: (key) => t(caseKindLabelKey(key) ?? "case-incident-other"),
     airlineName: (iata) => airlineName.get(iata) ?? iata,
@@ -595,16 +703,21 @@ function CasesList({
 
   // The views, by group; a wait of the firm is listed while something of it waits (or it is the view in force), and
   // the cases a partner sent only under the module that has partners.
-  const viewOf = (key: CaseFilter, group: string): ListView => ({
-    key,
-    label: t(FILTER_TILE[key].label),
-    count: countText(list.counts[key]),
-    group,
-  });
+  const standing = stock.value ? standingCounts(stock.value) : null;
+  const countFor = (key: CaseFilter): number | null =>
+    isStandingView(key) ? (standing ? standing[key] : null) : list.counts[key];
+  const viewOf = (key: CaseFilter, group: string): ListView => {
+    const count = countFor(key);
+    return { key, label: t(FILTER_TILE[key].label), count: count === null ? undefined : countText(count), group };
+  };
   const views: ListView[] = [
     { key: GOING, label: t("cases-view-going"), count: countText(list.counts.going), group: "going" },
     ...MONTH_VIEWS.map((key) => viewOf(key, "month")),
     ...STAGE_VIEWS.map((key) => viewOf(key, "stage")),
+    // Who has the case, and the stagnant ones (0111); one with no case is listed only while it is the view.
+    ...STANDING_VIEWS.filter(
+      (key) => key === "com-escritorio" || key === "estagnados" || (countFor(key) ?? 0) > 0 || filter === key,
+    ).map((key) => viewOf(key, "standing")),
     ...(list.counts.filed > 0 || (COURT_VIEWS as readonly CaseFilter[]).includes(filter as CaseFilter)
       ? COURT_VIEWS.map((key) => viewOf(key, "court"))
       : []),

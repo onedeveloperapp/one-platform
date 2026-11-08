@@ -1,47 +1,46 @@
 import type { Metadata } from "next";
 import { getLocale, getTranslations } from "next-intl/server";
 
-import { CaseStageChart, ClientChat, ClientLinkPanel } from "@/components/marketing/case-media";
+import BentoGrid from "@/components/marketing/bento-grid";
+import CaseDemo, { type CaseDemoWords } from "@/components/marketing/case-demo";
 import Cta from "@/components/marketing/cta";
 import Faq from "@/components/marketing/faq";
-import FeatureGrid from "@/components/marketing/feature-grid";
 import FeatureRows from "@/components/marketing/feature-row";
-import {
-  AutonomyPanel,
-  CaseScreen,
-  DeadlineCalendar,
-  ModelImportPanel,
-  ModelMark,
-  PortfolioImportPanel,
-} from "@/components/marketing/firm-screens";
+import { AutonomyPanel, ModelImportPanel, ModelMark, PortfolioImportPanel } from "@/components/marketing/firm-screens";
 import Hero from "@/components/marketing/hero";
-import PhoneFrame from "@/components/marketing/phone-frame";
-import ProductComposition from "@/components/marketing/product-composition";
-import ProductFrame from "@/components/marketing/product-frame";
-import { KpiChip, MessageChip, RingChip } from "@/components/marketing/satellite-chips";
+import {
+  ConversationFigure,
+  DeadlineFigure,
+  DocumentsFigure,
+  PackageFigure,
+} from "@/components/marketing/product-figures";
 import Showcase from "@/components/marketing/showcase";
 import SourceRadar from "@/components/marketing/source-radar";
 import StickyCta from "@/components/marketing/sticky-cta";
 import TypingLine from "@/components/marketing/typing-line";
 import NiAnnouncement from "@/icons/nexture/ni-announcement";
-import NiBook from "@/icons/nexture/ni-book";
 import NiBriefcase from "@/icons/nexture/ni-briefcase";
 import NiCalendar from "@/icons/nexture/ni-calendar";
 import NiCalendarClock from "@/icons/nexture/ni-calendar-clock";
 import NiDocumentCheck from "@/icons/nexture/ni-document-check";
+import NiDocumentFull from "@/icons/nexture/ni-document-full";
+import NiFolder from "@/icons/nexture/ni-folder";
 import NiFolderCheck from "@/icons/nexture/ni-folder-check";
-import NiHome from "@/icons/nexture/ni-home";
 import NiMessageCheck from "@/icons/nexture/ni-message-check";
-import NiMessages from "@/icons/nexture/ni-messages";
-import NiMicrophone from "@/icons/nexture/ni-microphone";
+import NiMessageDots from "@/icons/nexture/ni-message-dots";
+import NiMoney from "@/icons/nexture/ni-money";
 import NiPaperclip from "@/icons/nexture/ni-paperclip";
 import NiPen from "@/icons/nexture/ni-pen";
 import NiPulse from "@/icons/nexture/ni-pulse";
+import NiRobot from "@/icons/nexture/ni-robot";
+import NiScale from "@/icons/nexture/ni-scale";
+import NiSendRight from "@/icons/nexture/ni-send-right";
 import NiShieldCheck from "@/icons/nexture/ni-shield-check";
-import NiSparkle from "@/icons/nexture/ni-sparkle";
-import NiUser from "@/icons/nexture/ni-user";
+import NiSlider from "@/icons/nexture/ni-slider";
 import NiUserCheck from "@/icons/nexture/ni-user-check";
 import NiUsers from "@/icons/nexture/ni-users";
+import { JOURNEY_STEP_KEY, type JourneyStepId } from "@/lib/cases/journey";
+import { fileLine } from "@/lib/conversations/agent";
 import { getLaunchStage, primaryCtaFor } from "@/lib/launch";
 import { publicPageMetadata } from "@/lib/seo";
 
@@ -57,23 +56,36 @@ export async function generateMetadata(): Promise<Metadata> {
 /** The court systems ONE builds a filing package for, and the national gazette it reads: names, not logos. */
 const SYSTEMS = ["Projudi", "eproc", "PJe", "e-SAJ", "DJEN"];
 
-/** The cases of the example board, by stage, and the pieces of its week (illustrative data). */
-const STAGES = [14, 22, 9, 17, 24];
-const PIECES = { approved: 7, review: 3, writing: 2 };
+/** The way of a case on the top of the scene, with the icons the case screen gives each step (journey-card.tsx). */
+const SCENE_STEPS: { id: JourneyStepId; icon: React.ReactNode }[] = [
+  { id: "intake", icon: <NiMessageDots size="small" /> },
+  { id: "documents", icon: <NiFolder size="small" /> },
+  { id: "signature", icon: <NiPen size="small" /> },
+  { id: "drafting", icon: <NiDocumentFull size="small" /> },
+  { id: "filing", icon: <NiSendRight size="small" /> },
+  { id: "hearing", icon: <NiCalendar size="small" /> },
+  { id: "judgment", icon: <NiScale size="small" /> },
+  { id: "payment", icon: <NiMoney size="small" /> },
+];
+
+/** When the client of the scene sent her identity, and when ONE answered: the check takes seconds. */
+const SCENE_TIME = "09:41";
+/** The file the client sent, as WhatsApp names a photo. */
+const SCENE_FILE = "identidade.jpg";
+/** When the client of the conversation asked, late at night, and ONE answered. */
+const CHAT_TIME = "23:41";
 
 /**
- * The example deadline: made available on the DJEN on Wed 4 Nov 2026,
- * published on Thu 5, counted from Fri 6 in business days (CPC, art. 224;
- * Resolução CNJ 455/2022), the holiday of 20 Nov left out: fifteen business
- * days end on Fri 27 Nov. November 2026 starts on a Sunday.
+ * Each decision of the control panel by the product's own name, with the ways the catalog lets a firm choose for it
+ * (`autonomy_decisions`: auto, sampled, approval), and the one the example firm chose.
  */
-const DEADLINE_MARKS = {
-  4: "available",
-  5: "published",
-  ...Object.fromEntries([6, 9, 10, 11, 12, 13, 16, 17, 18, 19, 23, 24, 25, 26].map((day) => [day, "counted"])),
-  20: "holiday",
-  27: "last",
-} as const;
+const AUTONOMY_ROWS = [
+  { key: "autonomy-document-check", modes: ["auto", "sampled", "approval"], mode: "auto" },
+  { key: "autonomy-reply-client", modes: ["auto", "sampled", "approval"], mode: "sampled" },
+  { key: "autonomy-deadline-confirm", modes: ["auto", "approval"], mode: "approval" },
+  { key: "autonomy-piece-text", modes: ["auto", "approval"], mode: "approval" },
+  { key: "autonomy-send-signature-papers", modes: ["auto", "approval"], mode: "auto" },
+] as const;
 
 /** The lines of the example spreadsheet: lawsuits of a year to come (2099), with their check digits. */
 const IMPORT_ROWS = [
@@ -85,28 +97,25 @@ const IMPORT_ROWS = [
 ] as const;
 
 /**
- * The public home of ONE: a sales page in the structure, the mechanics and the
- * visual effect of the analysed model of a legal software's page (the
- * conversion-pages app's `juridiq-pagina-de-vendas`, 2026-11-07), in ONE's
- * own brand, words and screens (docs/DESIGN.md, "Reference blueprint"; the
- * plan is docs/paginas/home/plano.md). It sells ONE's core, the AI automation
- * of a mass-litigation firm's cases, never one of its applications: the deep
- * top with the case as the firm follows it; the client's question answered on
- * the firm's WhatsApp; what ONE follows after the filing; the day to day of a
- * case; what the firm lets ONE decide alone, on the deep band; how a firm
- * arrives without starting over; the firm's questions (the one place the
- * first module is named); the closing call. The screens are drawn with tokens
- * and say they carry example data; nothing here is a metric, a client's logo,
- * a testimonial, a price or a promotion, because there is none yet. The
- * primary action follows the launch stage, as the header's does.
+ * The public home of ONE: a sales page in the structure, the mechanics and the visual effect of the analysed model
+ * of a legal software's page (the conversion-pages app's `juridiq-pagina-de-vendas`), in ONE's own brand, words and
+ * screens (docs/DESIGN.md, "Reference blueprint"; the plan is docs/paginas/home/plano.md). It sells ONE's core, the
+ * AI automation of a mass-litigation firm's cases, never one of its applications: the deep top with ONE checking
+ * a paper a client sent, drawn with the product's own components; the client's question answered on the firm's
+ * WhatsApp; what ONE follows after the filing; the day to day of a case as one grid; what the firm lets ONE decide
+ * alone, on the deep band; how a firm arrives without starting over; the firm's questions (the one place the first
+ * module is named); the closing call. Every figure carries invented data and says so; nothing here is a metric, a
+ * client's logo, a testimonial, a price or a promotion, because there is none yet. The primary action follows the
+ * launch stage, as the header's does.
  */
 export default async function Home() {
-  const [t, stage] = await Promise.all([getTranslations("marketing"), getLaunchStage()]);
+  const [t, p, stage] = await Promise.all([getTranslations("marketing"), getTranslations("product"), getLaunchStage()]);
   const action = primaryCtaFor(stage);
   const primary = { label: t(action.labelKey), href: action.href };
   const contact = { label: t("one-home-cta-contact"), href: "/contato" };
   const waitlist = stage === "waitlist";
   const sample = t("one-home-sample");
+  const client = t("one-home-demo-client");
 
   const faq = [1, 2, 3, 4, 5, 6, 7, 8, ...(waitlist ? [9] : [])].map((n) => ({
     id: String(n),
@@ -114,100 +123,73 @@ export default async function Home() {
     answer: t(`one-home-faq-${n}-answer`),
   }));
 
+  // The top of a case and the conversation with its client, in the product's own words.
+  const scene: CaseDemoWords = {
+    label: t("one-home-demo-label"),
+    sample,
+    pauseLabel: t("one-home-demo-pause"),
+    playLabel: t("one-home-demo-play"),
+    title: p("journey-title"),
+    steps: SCENE_STEPS.map((step, index) => ({
+      key: step.id,
+      label: p(JOURNEY_STEP_KEY[step.id]),
+      state: index === 0 ? "done" : index === 1 ? "current" : "next",
+      icon: step.icon,
+    })),
+    stateWords: {
+      done: p("journey-state-done"),
+      current: p("journey-state-current"),
+      next: p("journey-state-next"),
+      stopped: p("journey-state-stopped"),
+    },
+    workingTitle: p("case-now-title-working"),
+    workingLine: p("case-now-checking-one", { document: p("case-now-document-identity"), name: client }),
+    workingSince: p("case-now-since", { time: SCENE_TIME }),
+    recentTitle: p("case-now-title-recent"),
+    recent: {
+      key: "document-accepted",
+      icon: <NiPaperclip size="small" />,
+      tone: "secondary",
+      title: p("case-event-document-accepted"),
+      when: p("case-now-ago-now"),
+      facts: [p("case-actor-ai")],
+    },
+    client: {
+      sideLabel: p("inbox-said-person", { name: client }),
+      kind: p("inbox-kind-image"),
+      open: p("inbox-media-open-named", { name: SCENE_FILE }),
+      time: SCENE_TIME,
+      by: p("inbox-by-client"),
+    },
+    reply: {
+      sideLabel: p("inbox-said-firm"),
+      // The very words ONE sends for a paper it accepted.
+      text: fileLine({ kind: "paper", paper: "identity", status: "accepted", reason: null }),
+      time: SCENE_TIME,
+      by: p("inbox-by-one"),
+      status: p("inbox-status-delivered"),
+    },
+  };
+
+  const modeWords: Record<"auto" | "sampled" | "approval", string> = {
+    auto: t("one-home-autonomy-mode-auto"),
+    sampled: t("one-home-autonomy-mode-sampled"),
+    approval: t("one-home-autonomy-mode-person"),
+  };
+
   return (
     <>
       <Hero
         tone="deep"
         track="hero"
-        badge={{ label: t("one-home-badge"), icon: <NiSparkle size="small" /> }}
+        badge={{ label: t("one-home-badge") }}
         title={t.rich("one-home-title", { em: (chunks) => <em>{chunks}</em> })}
         subtitle={t("one-home-subtitle")}
         primaryCta={primary}
         secondaryCta={contact}
         note={waitlist ? t("one-home-note-waitlist") : undefined}
         strip={{ label: t("one-home-systems-label"), items: SYSTEMS }}
-        media={
-          <figure className="m-0 flex flex-col gap-3">
-            <ProductComposition
-              frame={
-                <ProductFrame glow>
-                  <CaseScreen
-                    rail={[
-                      <NiBriefcase key="cases" size="small" />,
-                      <NiMessages key="chats" size="small" />,
-                      <NiCalendar key="agenda" size="small" />,
-                      <NiAnnouncement key="publications" size="small" />,
-                      <NiBook key="library" size="small" />,
-                    ]}
-                    search={t("one-home-screen-search")}
-                    crumb={t("one-home-screen-crumb")}
-                    client={t("one-home-screen-client")}
-                    stage={t("one-home-screen-stage")}
-                    carried={t("one-home-screen-carried")}
-                    journey={t("one-home-screen-journey")}
-                    steps={[1, 2, 3, 4, 5, 6].map((n) => t(`one-home-screen-step-${n}`))}
-                    current={3}
-                    stepCount={t("one-home-screen-step-count")}
-                    lines={[
-                      {
-                        label: t("one-home-screen-now-label"),
-                        text: t("one-home-screen-now"),
-                        when: t("one-home-screen-now-when"),
-                        tone: "primary",
-                      },
-                      { label: t("one-home-screen-next-label"), text: t("one-home-screen-next"), tone: "accent-4" },
-                      {
-                        label: t("one-home-screen-done-label"),
-                        text: t("one-home-screen-done"),
-                        when: t("one-home-screen-done-when"),
-                        tone: "accent-1",
-                      },
-                    ]}
-                    docsTitle={t("one-home-screen-docs")}
-                    docs={[
-                      { label: t("one-home-screen-doc-identity"), state: t("one-home-screen-doc-accepted") },
-                      { label: t("one-home-screen-doc-address"), state: t("one-home-screen-doc-accepted") },
-                      { label: t("one-home-screen-doc-account"), state: t("one-home-screen-doc-confirmed") },
-                      { label: t("one-home-screen-doc-power"), state: t("one-home-screen-doc-signed") },
-                    ]}
-                    mayErr={t("one-home-screen-may-err")}
-                  />
-                </ProductFrame>
-              }
-              satellites={[
-                {
-                  position: "top-right",
-                  rotate: 2,
-                  float: true,
-                  children: (
-                    <MessageChip
-                      author={t("one-home-hero-message-author")}
-                      text={t("one-home-hero-message-text")}
-                      meta={t("one-home-hero-message-meta")}
-                      icon={<NiMessageCheck size="small" />}
-                      tone="accent-2"
-                    />
-                  ),
-                },
-                {
-                  position: "bottom-left",
-                  rotate: -2,
-                  float: true,
-                  floatDelay: 0.8,
-                  children: (
-                    <KpiChip
-                      label={t("one-home-hero-deadline-label")}
-                      value={t("one-home-hero-deadline-value")}
-                      delta={t("one-home-hero-deadline-delta")}
-                      tone="accent-1"
-                    />
-                  ),
-                },
-              ]}
-            />
-            <figcaption className="text-text-secondary text-center text-xs md:mt-6">{sample}</figcaption>
-          </figure>
-        }
+        media={<CaseDemo words={scene} />}
       />
 
       <Showcase
@@ -239,19 +221,12 @@ export default async function Home() {
         ]}
         caption={sample}
         media={
-          <PhoneFrame time="23:41">
-            {/* A client asks how the case stands late at night, and ONE answers at once from the case's own record. */}
-            <ClientChat
-              firm={t("one-home-chat-firm")}
-              status={t("one-home-chat-status")}
-              inputLabel={t("one-home-chat-input")}
-              messages={[
-                { from: "client", text: t("one-home-chat-question"), time: "23:41" },
-                { from: "firm", text: t("one-home-chat-answer"), time: "23:41" },
-                { from: "firm", text: t("one-home-chat-signature"), time: "23:41", link: t("one-home-chat-link") },
-              ]}
-            />
-          </PhoneFrame>
+          <ConversationFigure
+            label={t("one-home-chat-label")}
+            question={t("one-home-chat-question")}
+            answer={t("one-home-chat-answer")}
+            time={CHAT_TIME}
+          />
         }
       />
 
@@ -273,7 +248,7 @@ export default async function Home() {
         media={
           <SourceRadar
             label={t("one-home-radar-label")}
-            sample={t("one-home-radar-sample")}
+            sample={sample}
             pauseLabel={t("one-home-autoplay-pause")}
             playLabel={t("one-home-autoplay-play")}
             gotoLabels={[1, 2, 3, 4, 5].map((n) => t("one-home-radar-goto", { n }))}
@@ -295,145 +270,41 @@ export default async function Home() {
         }
       />
 
-      <FeatureRows
+      <BentoGrid
         track="case"
-        start="media"
         title={t("one-home-work-title")}
         subtitle={t("one-home-work-subtitle")}
+        caption={sample}
+        cta={primary}
         items={[
           {
-            title: t("one-home-link-title"),
-            body: t("one-home-link-body"),
-            bullets: [t("one-home-link-point-1"), t("one-home-link-point-2"), t("one-home-link-point-3")],
+            featured: true,
+            bleed: true,
+            title: t("one-home-bento-documents-title"),
+            body: t("one-home-bento-documents-body"),
+            figure: <DocumentsFigure label={t("one-home-bento-documents-label")} />,
+          },
+          {
+            title: t("one-home-bento-signature-title"),
+            body: t("one-home-bento-signature-body"),
+            icon: <NiPen />,
             tone: "accent-1",
-            cta: { ...primary, variant: "primary" },
-            caption: sample,
-            media: (
-              <ClientLinkPanel
-                firm={t("one-home-chat-firm")}
-                label={t("one-home-link-panel-label")}
-                value={t("one-home-link-panel-value")}
-                caption={t("one-home-link-panel-case")}
-                documentsLabel={t("one-home-link-panel-docs")}
-                documents={[
-                  { icon: <NiUser size="medium" />, label: t("one-home-doc-identity") },
-                  { icon: <NiHome size="medium" />, label: t("one-home-doc-address") },
-                  { icon: <NiPaperclip size="medium" />, label: t("one-home-doc-evidence") },
-                  { icon: <NiPen size="medium" />, label: t("one-home-doc-signature") },
-                  { icon: <NiMicrophone size="medium" />, label: t("one-home-doc-account") },
-                ]}
-              />
-            ),
           },
           {
-            title: t("one-home-court-title"),
-            body: t("one-home-court-body"),
-            bullets: [t("one-home-court-point-1"), t("one-home-court-point-2"), t("one-home-court-point-3")],
-            tone: "accent-4",
-            cta: { ...contact, variant: "secondary" },
-            caption: sample,
-            media: (
-              <ProductComposition
-                className="mx-auto w-full max-w-lg md:my-8"
-                frame={
-                  <CaseStageChart
-                    title={t("one-home-board-title")}
-                    total={t("one-home-board-total", { count: STAGES.reduce((sum, value) => sum + value, 0) })}
-                    highlight={3}
-                    stages={[
-                      { label: t("one-home-board-stage-intake"), value: STAGES[0] },
-                      { label: t("one-home-board-stage-documents"), value: STAGES[1] },
-                      { label: t("one-home-board-stage-signature"), value: STAGES[2] },
-                      { label: t("one-home-board-stage-drafting"), value: STAGES[3] },
-                      { label: t("one-home-board-stage-filed"), value: STAGES[4] },
-                    ]}
-                  />
-                }
-                satellites={[
-                  {
-                    position: "top-right",
-                    rotate: 2,
-                    children: (
-                      <RingChip
-                        label={t("one-home-board-pieces")}
-                        total={String(PIECES.approved + PIECES.review + PIECES.writing)}
-                        parts={[
-                          { label: t("one-home-board-pieces-approved"), value: PIECES.approved, tone: "primary" },
-                          { label: t("one-home-board-pieces-review"), value: PIECES.review, tone: "accent-4" },
-                          { label: t("one-home-board-pieces-writing"), value: PIECES.writing, tone: "secondary" },
-                        ]}
-                      />
-                    ),
-                  },
-                  {
-                    // Over the first bar, clear of the stage names along the card's foot.
-                    position: "left",
-                    rotate: -2,
-                    children: (
-                      <KpiChip
-                        label={t("one-home-board-package-label")}
-                        value={t("one-home-board-package-value")}
-                        delta={t("one-home-board-package-delta")}
-                        tone="accent-4"
-                      />
-                    ),
-                  },
-                ]}
-              />
-            ),
+            title: t("one-home-bento-package-title"),
+            body: t("one-home-bento-package-body"),
+            figure: <PackageFigure label={t("one-home-bento-package-label")} />,
           },
           {
-            title: t("one-home-deadline-title"),
-            body: t("one-home-deadline-body"),
-            bullets: [t("one-home-deadline-point-1"), t("one-home-deadline-point-2"), t("one-home-deadline-point-3")],
-            tone: "accent-1",
-            caption: sample,
-            media: (
-              <DeadlineCalendar
-                act={t("one-home-deadline-act")}
-                term={t("one-home-deadline-term")}
-                due={t("one-home-deadline-due")}
-                month={t("one-home-deadline-month")}
-                weekdays={t("one-home-deadline-weekdays").split(",")}
-                firstWeekday={0}
-                days={30}
-                marks={DEADLINE_MARKS}
-                legend={{
-                  counted: t("one-home-deadline-legend-counted"),
-                  holiday: t("one-home-deadline-legend-holiday"),
-                  last: t("one-home-deadline-legend-last"),
-                }}
-                note={t("one-home-deadline-note")}
-              />
-            ),
-          },
-        ]}
-      />
-
-      <FeatureGrid
-        track="more"
-        variant="tinted"
-        background="paper"
-        title={t("one-home-more-title")}
-        cta={primary}
-        features={[
-          {
-            icon: <NiPen size="large" />,
-            tone: "accent-1",
-            title: t("one-home-more-signature-title"),
-            description: t("one-home-more-signature-body"),
-          },
-          {
-            icon: <NiCalendar size="large" />,
-            tone: "accent-4",
-            title: t("one-home-more-hearings-title"),
-            description: t("one-home-more-hearings-body"),
-          },
-          {
-            icon: <NiFolderCheck size="large" />,
+            title: t("one-home-bento-dossier-title"),
+            body: t("one-home-bento-dossier-body"),
+            icon: <NiFolderCheck />,
             tone: "secondary",
-            title: t("one-home-more-dossier-title"),
-            description: t("one-home-more-dossier-body"),
+          },
+          {
+            title: t("one-home-bento-deadline-title"),
+            body: t("one-home-bento-deadline-body"),
+            figure: <DeadlineFigure label={t("one-home-bento-deadline-label")} />,
           },
         ]}
       />
@@ -452,27 +323,19 @@ export default async function Home() {
             <TypingLine
               label={t("one-home-typing-label")}
               listLabel={t("one-home-typing-list")}
-              icon={<NiSparkle size="medium" />}
+              icon={<NiRobot size="medium" />}
               phrases={[1, 2, 3, 4, 5].map((n) => t(`one-home-typing-${n}`))}
               pauseLabel={t("one-home-autoplay-pause")}
               playLabel={t("one-home-autoplay-play")}
             />
             <AutonomyPanel
-              title={t("one-home-autonomy-title")}
-              modes={[
-                t("one-home-autonomy-mode-auto"),
-                t("one-home-autonomy-mode-sampled"),
-                t("one-home-autonomy-mode-person"),
-              ]}
-              rows={(
-                [
-                  [1, 0],
-                  [2, 0],
-                  [3, 1],
-                  [4, 2],
-                  [5, 0],
-                ] as const
-              ).map(([n, mode]) => ({ label: t(`one-home-autonomy-row-${n}`), mode }))}
+              title={p("autonomy-title")}
+              icon={<NiSlider size="small" />}
+              rows={AUTONOMY_ROWS.map((row) => ({
+                label: p(row.key),
+                modes: row.modes.map((mode) => modeWords[mode]),
+                mode: (row.modes as readonly string[]).indexOf(row.mode),
+              }))}
               footer={t("one-home-autonomy-footer")}
             />
           </div>
@@ -481,7 +344,6 @@ export default async function Home() {
 
       <FeatureRows
         track="arrive"
-        decor="grid"
         title={t("one-home-arrive-title")}
         subtitle={t("one-home-arrive-subtitle")}
         items={[
@@ -500,7 +362,7 @@ export default async function Home() {
                 modelBadge={t("one-home-models-badge")}
                 text={t.rich("one-home-models-text", { m: (chunks) => <ModelMark>{chunks}</ModelMark> })}
                 checks={[t("one-home-models-check-1"), t("one-home-models-check-2")]}
-                mayErr={t("one-home-screen-may-err")}
+                mayErr={t("one-home-may-err")}
               />
             ),
           },

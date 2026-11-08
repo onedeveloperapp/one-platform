@@ -2,11 +2,12 @@
 
 import CasesView from "../casos/components/cases-view";
 import type { ControladoriaState } from "./load-controladoria";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { type ReactNode, useTransition } from "react";
 
-import { Alert, Box, Button, Card, CardContent, Grid, Typography } from "@mui/material";
+import { Alert, Box, Button, Card, CardContent, Grid, List, ListItem, ListItemButton, Typography } from "@mui/material";
 
 import CardTitle from "@/components/product/card-title";
 import EmptyState from "@/components/product/empty-state";
@@ -25,9 +26,10 @@ import NiRefresh from "@/icons/nexture/ni-refresh";
 import NiScale from "@/icons/nexture/ni-scale";
 import NiTimeline from "@/icons/nexture/ni-timeline";
 import NiUsers from "@/icons/nexture/ni-users";
-import { JOURNEY_STEP_KEY, OPEN_STEPS } from "@/lib/cases/journey";
+import { JOURNEY_STEP_KEY, type JourneyStepId } from "@/lib/cases/journey";
 import type { CaseFilter, CourtView } from "@/lib/cases/list";
 import { type CaseCardKey, oversightCards, spanText } from "@/lib/cases/numbers";
+import { type Holder, HOLDER_VIEW, HOLDERS, stockSteps } from "@/lib/cases/standing";
 import { scopedHref } from "@/lib/modules/offer";
 import { countText, deltaText, isHoped } from "@/lib/numbers/compare";
 
@@ -102,6 +104,21 @@ const COURT_CARD: Record<CourtView, { label: string; hint: string; tone: TileTon
     tone: "accent-3",
     icon: <NiPause size="medium" />,
   },
+};
+
+/** Who has the cases, by the name of the view each opens. */
+/** The words of each step of the stock: the way's, but a case paid and not archived yet is at its last one. */
+const STOCK_STEP_KEY: Record<JourneyStepId, string> = {
+  ...JOURNEY_STEP_KEY,
+  closed: "controladoria-stock-step-closing",
+};
+
+const HOLDER_VIEW_LABEL: Record<Holder, string> = {
+  firm: "cases-filter-with-firm",
+  client: "cases-filter-with-client",
+  one: "cases-filter-with-one",
+  court: "cases-filter-in-court",
+  platform: "cases-filter-with-platform",
 };
 
 /** What moved first, then what was never read, then what is quiet. */
@@ -228,9 +245,9 @@ export default function ControladoriaView({ state }: { state: ControladoriaState
             </Grid>
           ) : null}
 
-          {ready.journey ? (
+          {ready.stock ? (
             <Grid container spacing={2.5}>
-              <Grid size={{ xs: 12, lg: ready.byModule ? 7 : 12 }}>
+              <Grid size={{ xs: 12, lg: 7 }}>
                 <Card component="section" aria-labelledby="controladoria-stock" className="h-full">
                   <CardContent className="flex flex-col gap-4">
                     <CardTitle
@@ -241,18 +258,75 @@ export default function ControladoriaView({ state }: { state: ControladoriaState
                     />
                     <MetricBars
                       spacing="dense"
-                      items={OPEN_STEPS.map((step) => ({
-                        key: step,
-                        label: t(JOURNEY_STEP_KEY[step]),
-                        value: ready.journey?.steps[step] ?? 0,
-                      }))}
+                      items={stockSteps(ready.stock).map((step) => {
+                        const row = ready.stock?.steps.find((item) => item.step === step);
+                        const days =
+                          row && row.cases > 0
+                            ? t("controladoria-stock-step-days", { median: row.medianDays, oldest: row.oldestDays })
+                            : null;
+                        const stalled =
+                          row && row.stagnant > 0
+                            ? t("controladoria-stock-step-stagnant", { count: row.stagnant, limit: row.limit ?? 0 })
+                            : null;
+                        return {
+                          key: step,
+                          label: t(STOCK_STEP_KEY[step]),
+                          value: row?.cases ?? 0,
+                          tone: row && row.stagnant > 0 ? ("attention" as const) : ("primary" as const),
+                          hint: [days, stalled].filter(Boolean).join(" · ") || undefined,
+                        };
+                      })}
                     />
                   </CardContent>
                 </Card>
               </Grid>
-              {ready.byModule ? (
-                <Grid size={{ xs: 12, lg: 5 }}>
-                  <Card component="section" aria-labelledby="controladoria-modules" className="h-full">
+              <Grid size={{ xs: 12, lg: 5 }} className="flex flex-col gap-5">
+                <Card component="section" aria-labelledby="controladoria-holders">
+                  <CardContent className="flex flex-col gap-3">
+                    <CardTitle
+                      id="controladoria-holders"
+                      icon={<NiUsers size="medium" />}
+                      tone="accent-3"
+                      title={t("controladoria-holders-title")}
+                      description={t("controladoria-holders-body")}
+                    />
+                    <List disablePadding className="-mx-2">
+                      {[
+                        ...HOLDERS.filter(
+                          (holder) => holder !== "platform" || (ready.stock?.holders.platform ?? 0) > 0,
+                        ).map((holder) => ({
+                          key: holder,
+                          label: t(HOLDER_VIEW_LABEL[holder]),
+                          value: ready.stock?.holders[holder] ?? 0,
+                          view: HOLDER_VIEW[holder],
+                        })),
+                        {
+                          key: "stagnant",
+                          label: t("cases-filter-stagnant"),
+                          value: ready.stock?.stagnant ?? 0,
+                          view: "estagnados" as CaseFilter,
+                        },
+                      ].map((item) => (
+                        <ListItem key={item.key} disablePadding>
+                          <ListItemButton
+                            href={hrefOf(item.view)}
+                            LinkComponent={Link}
+                            className="flex items-center gap-3 rounded-xl px-2 py-1.5"
+                          >
+                            <Typography variant="body2" component="span" className="min-w-0 flex-1 truncate">
+                              {item.label}
+                            </Typography>
+                            <Typography variant="body2" component="span" className="font-semibold tabular-nums">
+                              {countText(item.value)}
+                            </Typography>
+                          </ListItemButton>
+                        </ListItem>
+                      ))}
+                    </List>
+                  </CardContent>
+                </Card>
+                {ready.byModule ? (
+                  <Card component="section" aria-labelledby="controladoria-modules">
                     <CardContent className="flex flex-col gap-4">
                       <CardTitle
                         id="controladoria-modules"
@@ -271,8 +345,8 @@ export default function ControladoriaView({ state }: { state: ControladoriaState
                       />
                     </CardContent>
                   </Card>
-                </Grid>
-              ) : null}
+                ) : null}
+              </Grid>
             </Grid>
           ) : (
             <Alert severity="warning" className="neutral bg-background-paper/60!">

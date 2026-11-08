@@ -1,6 +1,15 @@
 import { createRequire } from "node:module";
 import path from "node:path";
 
+import {
+  chooseKey,
+  compileSelect,
+  type EmbeddedFilter,
+  FOREIGN_KEYS_SQL,
+  type ForeignKey,
+  parseSelect,
+} from "@/lib/testing/embedded-select";
+
 /**
  * What a test of the app's own code against the embedded database stands on
  * (`npm run test:db:roundtrip`): the connection, and a stand-in for the
@@ -82,6 +91,18 @@ export function standIn(sql: Sql, options: { bucket?: Map<string, Uint8Array> } 
     return signature;
   }
 
+  const keys = new Map<string, ForeignKey[]>();
+  /** The foreign key an embedded resource goes by, read from the catalog once a pair of tables. */
+  async function keyOf(parent: string, relation: string, hint: string | null): Promise<ForeignKey> {
+    const pair = `${parent}/${relation}`;
+    let found = keys.get(pair);
+    if (!found) {
+      found = (await sql.unsafe(FOREIGN_KEYS_SQL, [parent, relation])) as unknown as ForeignKey[];
+      keys.set(pair, found);
+    }
+    return chooseKey(found, parent, hint);
+  }
+
   const asText = (value: unknown, type: string): string | null => {
     if (value === null || value === undefined) return null;
     // An array as Postgres reads one: each element quoted, so a text with a comma or a space stays one element.
@@ -124,76 +145,180 @@ export function standIn(sql: Sql, options: { bucket?: Map<string, Uint8Array> } 
           return { data: null, error: { code: failure.code, message: failure.message ?? "failed" } };
         }
       },
+      /** What the session is, as the app reads it: the level of its second factor, from its claims. */
+      auth: {
+        mfa: {
+          async getAuthenticatorAssuranceLevel() {
+            const level = claims.aal === "aal2" ? "aal2" : "aal1";
+            return { data: { currentLevel: level, nextLevel: level }, error: null };
+          },
+        },
+      },
       from(table: string) {
         let columns = "*";
-        let ordering = "";
+        const orders: string[] = [];
         let limiting = "";
+        let offsetting = "";
         // `select("id", { count: "exact", head: true })`: the count of the rows, and no row.
         let counting = false;
-        // Each clause with its values, one "?" a value.
+        // Each clause of the table's own columns with its values, one "?" a value; and the ones on an embedded
+        // resource ("ai_runs.subject_id"), which filter that resource.
         const filters: { clause: string; values: string[] }[] = [];
-        const run = () => {
+        const embedded: EmbeddedFilter[] = [];
+        const run = async () => {
           const values: string[] = [];
-          const where = filters.map((filter) =>
-            filter.values.reduce((clause, value) => {
-              values.push(value);
-              return clause.replace("?", `$${values.length}`);
-            }, filter.clause),
-          );
-          const filtered = `from public.${table}${where.length ? ` where ${where.join(" and ")}` : ""}`;
+          let projection = columns;
+          const conditions: string[] = [];
+          if (/[()!:]/.test(columns)) {
+            const compiled = await compileSelect({
+              table,
+              nodes: parseSelect(columns),
+              filters: embedded,
+              keyOf,
+              values,
+            });
+            projection = compiled.projection;
+            conditions.push(...compiled.conditions);
+          }
+          for (const item of filters) {
+            conditions.push(
+              item.values.reduce((clause, value) => {
+                values.push(value);
+                return clause.replace("?", `$${values.length}`);
+              }, item.clause),
+            );
+          }
+          const filtered = `from public.${table} t0${conditions.length ? ` where ${conditions.join(" and ")}` : ""}`;
+          const ordering = orders.length ? ` order by ${orders.join(", ")}` : "";
           return as((transaction) =>
             transaction.unsafe(
               counting
                 ? `select count(*)::int as count ${filtered}`
-                : `select ${columns} ${filtered}${ordering}${limiting}`,
+                : `select ${projection} ${filtered}${ordering}${limiting}${offsetting}`,
               values,
             ),
           );
         };
+        /** PostgREST's `column.operator.value` of an `or`, as far as the app writes it. */
+        const orPart = (part: string): { clause: string; values: string[] } => {
+          const matched = /^([a-z_]+)\.(eq|neq|is)\.(.+)$/.exec(part.trim());
+          if (!matched) throw new Error(`the stand-in reads only column.eq|neq|is.value: ${part}`);
+          const [, column, operator, value] = matched;
+          if (operator === "is") return { clause: `t0.${column} is ${value === "null" ? "null" : value}`, values: [] };
+          return { clause: `t0.${column}::text ${operator === "eq" ? "=" : "<>"} ?::text`, values: [value] };
+        };
         const builder = {
+          /** A filter on a column of the table, or of an embedded resource ("ai_runs.subject_id"). */
+          where(column: string, clause: (qualified: string) => string, values: string[] = []) {
+            const dot = column.lastIndexOf(".");
+            if (dot > 0) {
+              const name = column.slice(dot + 1);
+              embedded.push({ path: column.slice(0, dot), clause: (alias) => clause(`${alias}.${name}`), values });
+            } else filters.push({ clause: clause(`t0.${column}`), values });
+            return builder;
+          },
           select(wanted: string, options: { count?: "exact"; head?: boolean } = {}) {
-            columns = wanted;
+            columns = wanted.trim() === "" ? "*" : wanted;
             counting = options.count === "exact" && options.head === true;
             return builder;
           },
           eq(column: string, value: unknown) {
-            filters.push({ clause: `${column}::text = ?::text`, values: [String(value)] });
-            return builder;
+            return builder.where(column, (qualified) => `${qualified}::text = ?::text`, [String(value)]);
+          },
+          neq(column: string, value: unknown) {
+            return builder.where(column, (qualified) => `${qualified}::text <> ?::text`, [String(value)]);
+          },
+          gt(column: string, value: unknown) {
+            return builder.where(column, (qualified) => `${qualified} > ?`, [String(value)]);
+          },
+          gte(column: string, value: unknown) {
+            return builder.where(column, (qualified) => `${qualified} >= ?`, [String(value)]);
+          },
+          lt(column: string, value: unknown) {
+            return builder.where(column, (qualified) => `${qualified} < ?`, [String(value)]);
+          },
+          lte(column: string, value: unknown) {
+            return builder.where(column, (qualified) => `${qualified} <= ?`, [String(value)]);
+          },
+          like(column: string, value: unknown) {
+            return builder.where(column, (qualified) => `${qualified} like ?`, [String(value)]);
+          },
+          ilike(column: string, value: unknown) {
+            return builder.where(column, (qualified) => `${qualified} ilike ?`, [String(value)]);
           },
           in(column: string, values: unknown[]) {
-            filters.push({
-              clause: `${column}::text = any(string_to_array(?::text, ','))`,
-              values: [values.map(String).join(",")],
-            });
-            return builder;
+            return builder.where(column, (qualified) => `${qualified}::text = any(string_to_array(?::text, ','))`, [
+              values.map(String).join(","),
+            ]);
           },
-          is(column: string, value: null) {
-            filters.push({ clause: `${column} is ${value === null ? "null" : "not null"}`, values: [] });
-            return builder;
+          is(column: string, value: null | boolean) {
+            return builder.where(column, (qualified) => `${qualified} is ${value === null ? "null" : String(value)}`);
           },
-          /** PostgREST's `or`, as far as the app writes it: `column.eq.value`, a comma between each. */
+          not(column: string, operator: string, value: unknown) {
+            if (operator === "is") {
+              return builder.where(
+                column,
+                (qualified) => `${qualified} is not ${value === null ? "null" : String(value)}`,
+              );
+            }
+            if (operator === "eq") return builder.neq(column, value);
+            throw new Error(`the stand-in reads not(column, "is" | "eq"): ${operator}`);
+          },
+          filter(column: string, operator: string, value: unknown) {
+            switch (operator) {
+              case "eq":
+                return builder.eq(column, value);
+              case "neq":
+                return builder.neq(column, value);
+              case "gt":
+                return builder.gt(column, value);
+              case "gte":
+                return builder.gte(column, value);
+              case "lt":
+                return builder.lt(column, value);
+              case "lte":
+                return builder.lte(column, value);
+              default:
+                throw new Error(`the stand-in reads filter(column, eq|neq|gt|gte|lt|lte): ${operator}`);
+            }
+          },
           or(expression: string) {
-            const parts = expression.split(",").map((part) => /^([a-z_]+)\.eq\.(.+)$/.exec(part.trim()));
-            if (parts.some((part) => part === null))
-              throw new Error(`the stand-in reads only column.eq.value: ${expression}`);
-            const matched = parts as RegExpExecArray[];
+            const parts = expression.split(",").map(orPart);
             filters.push({
-              clause: `(${matched.map((part) => `${part[1]}::text = ?::text`).join(" or ")})`,
-              values: matched.map((part) => part[2]),
+              clause: `(${parts.map((part) => part.clause).join(" or ")})`,
+              values: parts.flatMap((part) => part.values),
             });
             return builder;
           },
-          order(column: string, options: { ascending?: boolean } = {}) {
-            ordering = ` order by ${column} ${options.ascending === false ? "desc" : "asc"}`;
+          order(column: string, options: { ascending?: boolean; nullsFirst?: boolean; foreignTable?: string } = {}) {
+            // The order of an embedded resource's rows is the stand-in's own; the parent's rows keep theirs.
+            if (options.foreignTable || column.includes(".")) return builder;
+            const direction = options.ascending === false ? "desc" : "asc";
+            const nulls = options.nullsFirst === undefined ? "" : options.nullsFirst ? " nulls first" : " nulls last";
+            orders.push(`t0.${column} ${direction}${nulls}`);
             return builder;
           },
           limit(count: number) {
             limiting = ` limit ${Math.max(Number(count) || 0, 0)}`;
             return builder;
           },
+          range(from: number, to: number) {
+            offsetting = ` offset ${Math.max(Number(from) || 0, 0)}`;
+            limiting = ` limit ${Math.max((Number(to) || 0) - (Number(from) || 0) + 1, 0)}`;
+            return builder;
+          },
           async maybeSingle(): Promise<{ data: Row | null; error: Failure | null }> {
             try {
               return { data: (await run())[0] ?? null, error: null };
+            } catch (error) {
+              return { data: null, error: { message: String(error) } };
+            }
+          },
+          async single(): Promise<{ data: Row | null; error: Failure | null }> {
+            try {
+              const rows = await run();
+              if (rows.length !== 1) return { data: null, error: { code: "PGRST116", message: "not one row" } };
+              return { data: rows[0], error: null };
             } catch (error) {
               return { data: null, error: { message: String(error) } };
             }

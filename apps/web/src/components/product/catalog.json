@@ -165,7 +165,7 @@
     {
       "name": "ActivityCards",
       "from": "@/components/product/activity-cards",
-      "props": "id, title, items[{key, icon (size small), tone, title, when, facts?: string[], action?{onClick? | href?}}]",
+      "props": "id, title, items[{key, icon (size small), tone, title, when, facts?: string[], action?{onClick? | href?}}], titleAs?: h3 (default) | div (in a page's demonstration of the product, whose words must not enter the outline)",
       "use": "What the product did by itself a moment ago (the few latest things, not a history): one compact outlined card each, three across from a laptop on, the whole card the way to see it (a chevron, no button): the icon of what it is about on its family tint, what it did, and under it one quiet line with when and the facts (how many times, a detail, the AI only when it was the AI). Group the same kind of thing into one card with its count. For a long history where the order is the meaning, the Timeline de atividade template."
     },
     {

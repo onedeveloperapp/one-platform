@@ -41,8 +41,8 @@ export default function Hero({
   /**
    * "deep": the top of the page on the deep band (center layout only): the copy
    * in the contrast text, the second part of the title (`<em>`) in a gradient
-   * from the primary to the secondary, a slow wash of both behind it, and the
-   * deep band ending halfway down the media, so the product's screen sits
+   * from the primary to the secondary, and the deep band ending halfway down
+   * the media, so the product's screen sits
    * across the edge between the dark top and the light page.
    */
   tone?: "default" | "deep";
@@ -288,9 +288,10 @@ export default function Hero({
  * The deep band of a deep hero, drawn from the media's wrapper so it ends
  * where the media is: it reaches up past the section's top and out past both
  * sides (the section clips it) and stops a little below the middle of the
- * media, so the screen sits half on the dark top and half on the page. The
- * wash of the primary and the secondary drifts above the copy (`mkt-aurora`,
- * style/layout/marketing-motion.css), and stands still for reduced motion.
+ * media, so the screen sits half on the dark top and half on the page. A flat
+ * band: the wash of colour that drifted behind the copy until 2026-11-08 said
+ * nothing the band does not (the list of defaults of the sales-page skill,
+ * "mancha desfocada"), so it went.
  */
 function DeepBackdrop() {
   return (
@@ -299,19 +300,6 @@ function DeepBackdrop() {
       className="bg-background-deep pointer-events-none absolute -inset-x-[100vw] -top-[200vh] -z-10"
       // Where the band ends: a little below the middle of the media (a layout fact of this one shape, not a token).
       style={{ bottom: "42%" }}
-    >
-      <div
-        className="absolute bottom-0 left-1/2 -translate-x-1/2 overflow-hidden"
-        style={{ height: "min(62rem, 180vh)", width: "min(90rem, 180vw)" }}
-      >
-        <div
-          className="mkt-aurora absolute inset-0"
-          style={{
-            background:
-              "radial-gradient(38% 42% at 28% 62%, hsl(var(--primary) / 0.42), transparent 70%), radial-gradient(32% 38% at 74% 48%, hsl(var(--secondary) / 0.2), transparent 70%), radial-gradient(50% 30% at 50% 100%, hsl(var(--primary) / 0.25), transparent 75%)",
-          }}
-        />
-      </div>
-    </div>
+    />
   );
 }

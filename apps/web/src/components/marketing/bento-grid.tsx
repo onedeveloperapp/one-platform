@@ -1,3 +1,6 @@
+import { Button } from "@mui/material";
+
+import Link from "@/components/marketing/locale-link";
 import Reveal from "@/components/marketing/reveal";
 import Section from "@/components/marketing/section";
 import SectionHeader from "@/components/marketing/section-header";
@@ -5,73 +8,126 @@ import { TONE, type Tone, toneAt } from "@/components/marketing/tone";
 import { cn } from "@/lib/utils";
 
 export type BentoItem = {
+  /** One to four words: what the cell is about. */
   title: string;
+  /** One sentence at most, at the page's text size. */
   body: string;
-  /** Icon node or small visual (chart, mini ProductFrame) rendered above the text. */
-  visual?: React.ReactNode;
-  /** Featured cells span 2 columns on desktop — give the strongest 1–2 features the room. */
+  /**
+   * What shows the idea at a glance, under the words: a screen of the product (cut to the one control), an
+   * object it makes, a number with its origin. Leave it out for a phrase cell, whose words are the figure.
+   */
+  figure?: React.ReactNode;
+  /** The icon of what a phrase cell says, on its family's tint. */
+  icon?: React.ReactNode;
+  /** The cell that leads: twice as wide from a laptop on, and first on a phone. One per grid. */
   featured?: boolean;
-  /** Harmonic hue for this cell (icon chip + hover wash). Defaults to a rotation. */
+  /**
+   * The figure runs past the cell's bottom edge, which cuts its last few pixels: a screen leaving the cell rather
+   * than a window boxed inside it. Only for a figure whose foot is padding, never its words or its buttons.
+   */
+  bleed?: boolean;
+  /** Harmonic hue for this cell's icon. Defaults to a rotation. */
   tone?: Tone;
 };
 
 /**
- * Asymmetric feature bento — breaks the monotony of equal 3-card grids by
- * giving hierarchy to features: featured cells are wider and carry a visual.
- * Keep 4–6 cells; more belongs in FeatureRows or a plain grid.
+ * A grid of the features of one chapter, read as one figure (the demonstration guide of the sales-page skill,
+ * "a grade de recursos"): one cell leads, wider; a third to a half of the cells show a screen, the others an
+ * object, a number or a phrase; neighbours differ; the words are short and always in the same place, above the
+ * figure. Every cell has the same radius and spacing, and nothing in it moves by itself. On a phone the cells
+ * stack, the leading one first. Count the cells before choosing it: five fill two rows of three with the leader.
+ *
+ * It replaces a long zig-zag of rows (image left, then right, then left again) and a row of three equal cards,
+ * both habits of a page nobody planned. `cta` repeats the page's primary action under the grid.
  */
 export default function BentoGrid({
   id,
+  track,
   eyebrow,
   title,
   subtitle,
   items,
+  caption,
+  cta,
   background,
-  decor,
 }: {
   id?: string;
+  /** The section's key in the measurement (`section_view`). */
+  track?: string;
   eyebrow?: string;
   title: string;
   subtitle?: string;
   items: BentoItem[];
+  /** One line under the grid, as under any screen of the page: whose data the screens carry. */
+  caption?: string;
+  cta?: { label: string; href: string };
   background?: React.ComponentProps<typeof Section>["background"];
-  decor?: React.ComponentProps<typeof Section>["decor"];
 }) {
   return (
-    <Section id={id} background={background} decor={decor}>
+    <Section id={id} track={track} background={background}>
       <SectionHeader eyebrow={eyebrow} title={title} subtitle={subtitle} />
-      <Reveal stagger={0.08} className="grid gap-4 md:grid-cols-3">
+      <Reveal stagger={0.08} className="grid grid-cols-1 gap-4 md:grid-cols-3">
         {items.map((item, index) => {
           const tone = TONE[item.tone ?? toneAt(index)];
           return (
             <div
               key={item.title}
               className={cn(
-                "group border-grey-100 bg-background-paper relative flex flex-col gap-4 overflow-hidden rounded-3xl border p-7 transition-colors duration-300",
+                "border-grey-100 bg-background-paper flex min-w-0 flex-col gap-6 rounded-3xl border p-6 md:p-7",
                 item.featured && "md:col-span-2",
+                item.bleed && "overflow-hidden",
               )}
-              style={{ ["--bento-tone" as string]: `var(${tone.cssVar})` }}
             >
-              {item.visual && <div className={cn("min-h-24", tone.text)}>{item.visual}</div>}
-              <div>
-                <h3 className="text-text-primary font-heading text-xl font-bold">{item.title}</h3>
-                <p className="text-text-secondary mt-2 leading-6">{item.body}</p>
+              {/* The words are always on top, in the same place in every cell. */}
+              <div className="flex flex-col gap-2">
+                <h3
+                  className={cn(
+                    "text-text-primary font-heading font-bold",
+                    // A phrase cell is its words: a large phrase fills the cell a figure fills in the others.
+                    item.figure ? "text-xl" : "text-display-md",
+                  )}
+                >
+                  {item.title}
+                </h3>
+                <p className={cn("text-text-secondary", item.figure ? "leading-6" : "text-lg leading-7")}>
+                  {item.body}
+                </p>
               </div>
-              {/* Corner wash in the cell's own hue — quiet until touched. */}
-              <div
-                aria-hidden
-                className="pointer-events-none absolute -top-16 -right-16 h-40 w-40 rounded-full opacity-0 transition-opacity duration-500 group-hover:opacity-100"
-                style={{ background: "radial-gradient(circle, hsl(var(--bento-tone) / 0.14), transparent 70%)" }}
-              />
-              <div
-                aria-hidden
-                className="absolute inset-0 rounded-3xl border border-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100"
-                style={{ borderColor: "hsl(var(--bento-tone) / 0.35)" }}
-              />
+              {item.figure ? (
+                <div className={cn("mt-auto min-w-0", item.bleed && "-mb-10 md:-mb-11")}>{item.figure}</div>
+              ) : item.icon ? (
+                // A phrase cell keeps its icon at its foot, so a row of cells of different heights has nothing empty.
+                <span
+                  aria-hidden
+                  className={cn(
+                    "mt-auto flex h-14 w-14 items-center justify-center rounded-2xl [&_svg]:h-7 [&_svg]:w-7",
+                    tone.softBg,
+                    tone.text,
+                  )}
+                >
+                  {item.icon}
+                </span>
+              ) : null}
             </div>
           );
         })}
       </Reveal>
+      {caption ? <p className="text-text-secondary mt-4 text-center text-xs">{caption}</p> : null}
+      {cta ? (
+        <div className="mt-10 flex justify-center">
+          <Button
+            size="large"
+            variant="contained"
+            color="primary"
+            href={cta.href}
+            LinkComponent={Link}
+            data-track="cta_click"
+            data-track-cta-id={`${track ?? "bento"}_primary`}
+          >
+            {cta.label}
+          </Button>
+        </div>
+      ) : null}
     </Section>
   );
 }

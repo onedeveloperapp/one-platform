@@ -1,6 +1,7 @@
 import "server-only";
 
 import { caseListOf, type CaseListPage, type CaseListQuery } from "@/lib/cases/list";
+import { type CaseStock, caseStockOf } from "@/lib/cases/standing";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 /**
@@ -51,4 +52,24 @@ export async function readCaseExportPage(
   });
   if (error) return null;
   return caseListOf(data);
+}
+
+/**
+ * The firm's stock (`firm_case_stock`, 0111) under the list's scope and its own filters (the module, the kind of
+ * problem, the airline; never the search nor the view): who has the cases and how many stagnated, which the views of
+ * who has the case count, and each step's days. Null when the database did not answer one.
+ */
+export async function readCaseStock(
+  supabase: SupabaseClient,
+  orgId: string,
+  query: Pick<CaseListQuery, "module" | "incident" | "airline">,
+): Promise<CaseStock | null> {
+  const { data, error } = await supabase.rpc("firm_case_stock", {
+    target_org: orgId,
+    target_module: query.module,
+    target_incident: query.incident ?? null,
+    target_airline: query.airline ?? null,
+  });
+  if (error) return null;
+  return caseStockOf(data);
 }

@@ -16,8 +16,8 @@ import {
 } from "@/lib/cases/list";
 
 const ROOT = path.resolve(__dirname, "../../../../..");
-// The latest definition of `firm_cases` (0033, 0075, 0078, 0108, redefined with the court's views in 0110).
-const MIGRATION = fs.readFileSync(path.join(ROOT, "packages/db/migrations/0110_controladoria.sql"), "utf8");
+// The latest definition of `firm_cases` (0033, 0075, 0078, 0108, 0110, redefined with who has each case in 0111).
+const MIGRATION = fs.readFileSync(path.join(ROOT, "packages/db/migrations/0111_case_standing.sql"), "utf8");
 
 /** The quoted names of a list of the migration, from the text that opens it to the parenthesis that closes it. */
 function listed(opening: string, from = 0): string[] {
@@ -148,6 +148,12 @@ describe("the database's answer, as the list reads it", () => {
         agency: null,
         movedAt: null,
         cnjs: [],
+        holder: null,
+        why: null,
+        step: null,
+        stepSince: null,
+        stepDays: null,
+        stagnant: false,
         court: null,
       },
     ]);
@@ -179,6 +185,12 @@ describe("the database's answer, as the list reads it", () => {
       "parado-45": 0,
       "parado-90": 0,
       "nunca-capturados": 0,
+      "com-escritorio": 0,
+      "com-cliente": 0,
+      "com-one": 0,
+      "no-tribunal": 0,
+      "com-plataforma": 0,
+      estagnados: 0,
     });
   });
 

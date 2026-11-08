@@ -2,12 +2,12 @@
   "format_version": 1,
   "page": "home",
   "type": "landing",
-  "audited_at": "2026-11-07T20:10:29.893Z",
+  "audited_at": "2026-11-08T19:08:14.125Z",
   "url": "http://localhost:3122/",
   "input_kind": "url",
   "full_reading": true,
   "summary": {
-    "ok": 5,
+    "ok": 16,
     "atencao": 2,
     "nao_conferido": 0
   },
@@ -29,11 +29,51 @@
       "fix": "Inclua os links da política de privacidade e dos termos, e o caminho do arrependimento ou do reembolso."
     },
     {
+      "id": "placeholder_data",
+      "label": "Nenhum dado de exemplo esquecido",
+      "weight": "lei",
+      "status": "ok",
+      "detail": "Nenhum dado de exemplo esquecido no texto da página.",
+      "fix": null
+    },
+    {
+      "id": "demo_honest",
+      "label": "A demonstração marcada e com a etiqueta",
+      "weight": "lei",
+      "status": "ok",
+      "detail": "A cena está marcada, com texto alternativo e a etiqueta de exemplo.",
+      "fix": null
+    },
+    {
+      "id": "ai_defaults",
+      "label": "Os vícios de IA",
+      "weight": "confianca",
+      "status": "ok",
+      "detail": "Só aparecem os padrões escolhidos de propósito.",
+      "fix": null
+    },
+    {
+      "id": "off_brand",
+      "label": "As cores e as letras da marca",
+      "weight": "confianca",
+      "status": "ok",
+      "detail": "As cores com matiz e as letras da página estão na marca.",
+      "fix": null
+    },
+    {
       "id": "cta_first_screen",
       "label": "O botão principal na primeira tela do celular",
       "weight": "venda",
       "status": "ok",
       "detail": "\"Entrar na lista de espera\" aparece na primeira tela do celular.",
+      "fix": null
+    },
+    {
+      "id": "cta_consistent",
+      "label": "Os mesmos chamados em toda a página",
+      "weight": "venda",
+      "status": "ok",
+      "detail": "Os chamados da página têm dois textos.",
       "fix": null
     },
     {
@@ -45,11 +85,27 @@
       "fix": null
     },
     {
+      "id": "controls_fit",
+      "label": "O texto cabe nos botões",
+      "weight": "venda",
+      "status": "ok",
+      "detail": "O texto cabe em todos os botões, no computador e no celular.",
+      "fix": null
+    },
+    {
       "id": "h1_present",
       "label": "Um título principal (h1)",
       "weight": "acesso",
       "status": "ok",
       "detail": "O título principal está marcado: \"Automação com IA no contencioso de massa, do primeiro contato ao prot…\".",
+      "fix": null
+    },
+    {
+      "id": "demo_film",
+      "label": "A cena filmada",
+      "weight": "acesso",
+      "status": "ok",
+      "detail": "A cena foi filmada no computador e no celular, e fica parada com menos movimento. Abra as folhas de quadros para ler o resto.",
       "fix": null
     },
     {
@@ -61,6 +117,38 @@
       "fix": null
     },
     {
+      "id": "mobile_fits",
+      "label": "Nada passa da largura do celular",
+      "weight": "acesso",
+      "status": "ok",
+      "detail": "Nada passa da largura do celular.",
+      "fix": null
+    },
+    {
+      "id": "text_legible",
+      "label": "Texto legível no celular",
+      "weight": "acesso",
+      "status": "ok",
+      "detail": "No celular, 14% do texto fica abaixo de 12 px, e nenhum preço ou botão.",
+      "fix": null
+    },
+    {
+      "id": "tap_targets",
+      "label": "Botões e links fáceis de tocar",
+      "weight": "acesso",
+      "status": "ok",
+      "detail": "Os 32 alvos de toque têm ao menos 24 px, ou espaço em volta.",
+      "fix": null
+    },
+    {
+      "id": "contrast_ok",
+      "label": "O contraste do texto",
+      "weight": "acesso",
+      "status": "ok",
+      "detail": "Os 52 pares de texto e fundo medidos passam. 6 ficaram de fora por estarem sobre imagem ou degradê: olhe nas fotos.",
+      "fix": null
+    },
+    {
       "id": "images_alt",
       "label": "Imagens com texto alternativo",
       "weight": "acesso",
@@ -68,5 +156,13 @@
       "detail": "Todas as imagens têm texto alternativo.",
       "fix": null
     }
-  ]
+  ],
+  "film": {
+    "sheets": [
+      "docs/paginas/home/filme/desktop.jpg",
+      "docs/paginas/home/filme/mobile.jpg",
+      "docs/paginas/home/filme/reduced.jpg"
+    ],
+    "error": null
+  }
 }

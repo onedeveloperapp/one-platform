@@ -24,12 +24,19 @@ const words: ExportWords = {
     lawsuits: "Processos",
     movedAt: "Último movimento",
     updatedAt: "Atualizado em",
+    holder: "Com quem está",
+    why: "Por quê",
+    stepDays: "Na etapa há",
+    stagnant: "Estagnado",
   },
   moduleName: (key) => `módulo ${key}`,
   kindName: (key) => `tipo ${key}`,
   airlineName: (iata) => `companhia ${iata}`,
   statusName: (status) => `situação ${status}`,
   stepName: (step) => `etapa ${step}`,
+  holderName: (holder) => `com ${holder ?? "ninguém"}`,
+  reasonName: (holder, why) => (why ? `${holder} por ${why}` : null),
+  yes: "Sim",
 };
 
 const row: CaseListRow = {
@@ -53,6 +60,12 @@ const row: CaseListRow = {
   movedAt: "2026-11-08T03:10:00Z",
   cnjs: ["00051016820998090051", "00051025320998090051"],
   court: { held: true, decided: false, paid: false },
+  holder: "court",
+  why: null,
+  step: "judgment",
+  stepSince: "2026-10-01T12:00:00Z",
+  stepDays: 38,
+  stagnant: false,
 };
 
 describe("who is offered the spreadsheet", () => {
@@ -88,7 +101,24 @@ describe("a case as a line of the sheet", () => {
   });
 
   it("says the same things the list says, in the order of the columns", () => {
-    expect(exportColumns(words, true).map((column) => column.title)).toEqual(Object.values(words.titles));
+    expect(exportColumns(words, true).map((column) => column.title)).toEqual([
+      "Caso",
+      "Cliente",
+      "Módulo",
+      "Problema",
+      "Agência",
+      "Companhia",
+      "Data do voo",
+      "Situação",
+      "Etapa",
+      "Na etapa há",
+      "Estagnado",
+      "Com quem está",
+      "Por quê",
+      "Processos",
+      "Último movimento",
+      "Atualizado em",
+    ]);
     expect(exportLine(row, words, true)).toEqual([
       41,
       "Paula Teste",
@@ -99,6 +129,10 @@ describe("a case as a line of the sheet", () => {
       "2026-10-07",
       "situação filed",
       "etapa judgment",
+      38,
+      null,
+      "com court",
+      null,
       "0005101-68.2099.8.09.0051, 0005102-53.2099.8.09.0051",
       "2026-11-08 00:10",
       "2026-11-08 09:30",
@@ -115,14 +149,27 @@ describe("a case as a line of the sheet", () => {
 
   it("leaves empty what the case does not have", () => {
     const line = exportLine(
-      { ...row, incident: null, airline: null, agency: null, cnjs: [], movedAt: null, court: null, status: "drafting" },
+      {
+        ...row,
+        incident: null,
+        airline: null,
+        agency: null,
+        cnjs: [],
+        movedAt: null,
+        court: null,
+        status: "drafting",
+        holder: "firm",
+        why: "piece_review",
+        stepDays: 20,
+        stagnant: true,
+      },
       words,
       false,
     );
     expect(line[2]).toBeNull();
     expect(line[3]).toBeNull();
     expect(line[4]).toBeNull();
-    expect(line[8]).toBeNull();
-    expect(line[9]).toBeNull();
+    expect(line.slice(7, 12)).toEqual(["etapa drafting", 20, "Sim", "com firm", "firm por piece_review"]);
+    expect(line[12]).toBeNull();
   });
 });

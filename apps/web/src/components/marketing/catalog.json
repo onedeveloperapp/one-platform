@@ -108,8 +108,8 @@
       "name": "Hero",
       "file": "hero.tsx",
       "funnel": "attention + value proposition",
-      "props": "layout: center|split, decor: glow|grid|none, media (evidence slot), eyebrow, title (string or rich node — t.rich with <em> renders the two-tone headline), subtitle, primaryCta (unless action), secondaryCta{label, href, icon?}, action? (replaces the buttons with the conversion itself, e.g. the waitlist form), note?, highlights?: string[] (reassurance chips row, split only), strip?: {label, items: string[]} (center layout only: a labelled row of names under the note, e.g. the AIs the apps run on), tone: default|deep (center layout: the top on the deep band, the copy in the contrast text, the <em> of the title in a gradient of primary-light into secondary-light, a slow wash of both that rests after six half cycles, and the band ending a little below the middle of the media so the screen sits across the edge into the light page), badge?: {label, icon?} (a pill over the title: a fact, never a claim the page cannot show)",
-      "use": "owns the page <h1> AND the page's one orchestrated motion moment: the entrance is CSS keyed on data-hero (style/layout/marketing-motion.css), copy line by line, then the media, then the satellites of a composition, starting with the first paint; a server component (no script of its own); split + <ProductFrame glow> is the committed direction for product-heavy pages; media is required in practice (premium bar #1); tone=\"deep\" + a wide <ProductComposition> around a drawn screen is the home's top (the sales-page model of 2026-11-07); its buttons carry data-hero-actions, which <StickyCta> watches"
+      "props": "layout: center|split, decor: glow|grid|none, media (evidence slot), eyebrow, title (string or rich node — t.rich with <em> renders the two-tone headline), subtitle, primaryCta (unless action), secondaryCta{label, href, icon?}, action? (replaces the buttons with the conversion itself, e.g. the waitlist form), note?, highlights?: string[] (reassurance chips row, split only), strip?: {label, items: string[]} (center layout only: a labelled row of names under the note, e.g. the AIs the apps run on), tone: default|deep (center layout: the top on the deep band, the copy in the contrast text, the <em> of the title in a gradient of primary-light into secondary-light, and the band ending a little below the middle of the media so the screen sits across the edge into the light page), badge?: {label, icon?} (a pill over the title: a fact, never a claim the page cannot show)",
+      "use": "owns the page <h1> AND the page's one orchestrated motion moment: the entrance is CSS keyed on data-hero (style/layout/marketing-motion.css), copy line by line, then the media, then the satellites of a composition, starting with the first paint; a server component (no script of its own); split + <ProductFrame glow> is the committed direction for product-heavy pages; media is required in practice (premium bar #1); tone=\"deep\" + <CaseDemo> (the product's own components with fixed data) is the home's top (the sales-page model of 2026-11-07, reviewed 2026-11-08); its buttons carry data-hero-actions, which <StickyCta> watches"
     },
     {
       "name": "ProductFrame",
@@ -133,11 +133,25 @@
       "use": "ONE's product evidence drawn with tokens until its screens can be captured: a client's conversation on the firm's WhatsApp, answered by ONE (inside PhoneFrame), the client's link with the papers it gathered (a feature row's grey panel), the firm's cases by stage (a container: columns when the card is wide, a row per stage when it is narrow); every word from the marketing namespace, invented people only, and the page says the data is an example in a caption"
     },
     {
+      "name": "CaseDemo",
+      "file": "case-demo.tsx",
+      "role": "evidence",
+      "props": "words: CaseDemoWords {label, sample, pauseLabel, playLabel, title, steps, stateWords, workingTitle, workingLine, workingSince, recentTitle, recent (ActivityItem), client {sideLabel, kind, open, time, by}, reply {sideLabel, text, time, by, status}}",
+      "use": "the home's demonstration: the top of a case drawn with the product's ProgressSteps, StateLine, ActivityCards and MessageBubble, and one action (ONE checks the identity a client sent on WhatsApp, accepts it and answers her with fileLine's words); opens on its result (the cover), plays only on screen, four passes then rests, pause beside its 'Exemplo fictício' tag, data-demo + role=img, inert inside, no heading; the words come from the product namespace so the scene changes when the product does"
+    },
+    {
+      "name": "ProductFigures",
+      "file": "product-figures.tsx",
+      "role": "evidence",
+      "props": "DocumentsFigure{label} · PackageFigure{label} · DeadlineFigure{label} · ConversationFigure{label, question, answer, time}",
+      "use": "server components that draw one thing the product does with its own components and fixed data: the client's documents on the link with the photo measured too dark (StateLine, the link's alert), the filing package named by planFiling, a deadline counted by prazo-v1 and told by DeadlineCount, a question answered by ONE in the firm's conversation (MessageBubble); each a picture (role=img, inert inside, no heading), the caption beside it says the data are invented"
+    },
+    {
       "name": "FirmScreens",
       "file": "firm-screens.tsx",
       "role": "evidence",
-      "props": "CaseScreen{rail, search, crumb, client, stage, carried, journey, steps, current, stepCount, lines: {label, text, when?, tone}[], docsTitle, docs: {label, state}[], mayErr} · DeadlineCalendar{act, term, due, month, weekdays, firstWeekday, days, marks: {day: available|published|counted|holiday|last}, legend, note} · AutonomyPanel{title, modes: [3], rows: {label, mode: 0|1|2}[], footer} · ModelImportPanel{fileName, fileMeta, step, modelTitle, modelBadge, text (rich, marks in <ModelMark>), checks, mayErr} · PortfolioImportPanel{fileName, fileMeta, columns: [3], rows: {number, client, result, kind: open|known|unread}[], summary}",
-      "use": "the firm's side of ONE drawn with tokens until its screens can be captured: the case as the firm follows it (the frame of the deep hero, inside <ProductFrame glow>), a deadline counted over the court's calendar, what the firm lets ONE decide alone, the model ONE makes of the firm's own document, the portfolio from a spreadsheet; every word from the marketing namespace, invented people and lawsuits of 2099 only, a caption beside each saying the data is an example; what ONE generates carries its 'may err' line"
+      "props": "AutonomyPanel{title, icon, rows: {label, modes: string[] (only the ways the product allows that decision), mode (index)}[], footer} · ModelImportPanel{fileName, fileMeta, step, modelTitle, modelBadge, text (rich, marks in <ModelMark>), checks, mayErr} · PortfolioImportPanel{fileName, fileMeta, columns: [3], rows: {number, client, result, kind: open|known|unread}[], summary}",
+      "use": "the firm's side of ONE drawn with tokens where the product's own components cannot stand alone on a public page: what the firm lets ONE decide alone (each decision by its product name, with the modes the catalog autonomy_decisions allows it), the model ONE makes of the firm's own document, the portfolio from a spreadsheet; invented people and lawsuits of 2099 only, a caption beside each saying the data is an example; what ONE generates carries its 'may err' line. Prefer CaseDemo and ProductFigures, which ARE the product's components"
     },
     {
       "name": "DataVizPlaceholder",
@@ -164,8 +178,8 @@
       "name": "BentoGrid",
       "file": "bento-grid.tsx",
       "funnel": "desire (secondary)",
-      "props": "items: {title, body, visual?, featured?, tone} — 4–7 cells",
-      "use": "asymmetric grid; featured cells span 2 columns and carry a visual; breaks equal-card monotony; the seven trails of the home fill three rows (two featured)"
+      "props": "id?, track?, eyebrow?, title, subtitle?, items: {title (1-4 words), body (one sentence), figure? (a screen cut to its control, an object, a number with its origin), icon? (a phrase cell: its icon at the foot), featured? (one leader, 2 columns), bleed? (the figure runs past the cell's bottom edge, cut only in its padding), tone?}[], caption? (whose data the figures carry), cta?, background?",
+      "use": "a chapter of features read as ONE figure (the demonstration guide's grid): one leader, a third to a half of the cells a screen, the rest an object or a phrase, neighbours different, the words always on top; five cells fill two rows of three with the leader; on a phone the cells stack, the leader first; replaces a zig-zag of rows and a row of three equal cards. The home's day-to-day chapter: the client's documents (leader, bleeding), the power of attorney, the filing package, the dossier, the deadline"
     },
     {
       "name": "StatBand",
@@ -214,7 +228,7 @@
       "file": "cta.tsx",
       "funnel": "recovery",
       "props": "title, subtitle, cta, secondaryCta? (deep and deep-panel: a second action; panel: a text link beside the button), points?: string[] (deep only), kicker?, decor: none|orbit|mesh|dots, variant: panel|deep|deep-panel",
-      "use": "last conversion opportunity as a bordered console panel with primary glow + optional mono kicker; repeats the primary CTA verbatim; decor=\"orbit\" is the classic closer; variant=\"deep-panel\" is the deep band in a rounded panel with rays from the bottom left and a glow of the primary at the top right (the home's blueprint)"
+      "use": "last conversion opportunity as a bordered console panel with primary glow + optional mono kicker; repeats the primary CTA verbatim; decor=\"orbit\" is the classic closer; variant=\"deep-panel\" is the deep band in a plain rounded panel, no glow and no rays (the home's closer since the review of 2026-11-08)"
     },
     {
       "name": "Reveal",
@@ -242,7 +256,7 @@
       "file": "sticky-cta.tsx",
       "role": "conversion",
       "props": "label, href",
-      "use": "the page's primary action fixed at the foot of a phone's screen (md:hidden) from the moment the hero's buttons (data-hero-actions) leave the screen upward and to the end of the page, same label (as the sales-page model does); adds its own height of the deep band after the footer so it never covers the site's last line; leaves room for the support button; inert while hidden"
+      "use": "the page's primary action on a solid surface (nothing blurred behind it), fixed at the foot of a phone's screen (md:hidden) from the moment the hero's buttons (data-hero-actions) leave the screen upward and to the end of the page, same label (as the sales-page model does); adds its own height of the deep band after the footer so it never covers the site's last line; leaves room for the support button; inert while hidden"
     },
     {
       "name": "AutoplayButton",

@@ -77,10 +77,10 @@ export default function Header() {
         style={{ padding: `0 var(--main-padding)` }}
       >
         <Box className="flex h-full flex-row items-center gap-6">
-          <Link href="/inicio">
+          <Link href="/inicio" className="flex shrink-0 items-center">
             <Logo
-              classNameFull="ml-2 hidden h-[54px] w-auto md:block"
-              classNameMobile="ml-2 h-[54px] w-auto md:hidden"
+              classNameFull="ml-2 hidden h-[50px] w-auto md:block"
+              classNameMobile="ml-2 h-[50px] w-auto md:hidden"
             />
           </Link>
           <PartnerModules viewer={viewer} />
@@ -116,11 +116,12 @@ export default function Header() {
           startIcon={<NiMenuSplit size={24} />}
         />
         <Box className="flex h-full flex-row items-center gap-6">
-          {/* Logo — 2× the 27px default, sized against the 80px header. */}
-          <Link href="/inicio">
+          {/* Logo: 50px tall (the owner, 2026-11-08). The link lays it out as a flex item, so the mark alone (a phone)
+              is no inline image sitting on a line's baseline, with the line's descent under it pushing it up. */}
+          <Link href="/inicio" className="flex shrink-0 items-center">
             <Logo
-              classNameFull="ml-2 hidden h-[54px] w-auto md:block"
-              classNameMobile="ml-2 h-[54px] w-auto md:hidden"
+              classNameFull="ml-2 hidden h-[50px] w-auto md:block"
+              classNameMobile="ml-2 h-[50px] w-auto md:hidden"
             />
           </Link>
 

@@ -3,6 +3,7 @@ import { type WaitActor, waitingKey, type WaitOwner, waitPlaceOf } from "@/lib/c
 import {
   type CaseStatus,
   DOCUMENT_KIND_KEY,
+  type DocumentKind,
   isDocumentKind,
   type LinkOwed,
   type Missing,
@@ -188,7 +189,24 @@ const FILING_SENT_KEY: Record<"refused" | "failed" | "unknown" | "filed", string
   filed: "case-now-filing-one-unnumbered",
 };
 
-const documentWord = (kind: string) => (isDocumentKind(kind) ? DOCUMENT_KIND_KEY[kind] : "case-now-document");
+/**
+ * A document named inside a sentence ("o documento de identidade"): the label of its kind starts with a capital and
+ * reads as a title, so the top has its own words for the middle of a sentence.
+ */
+const DOCUMENT_PHRASE_KEY: Record<DocumentKind, string> = {
+  identity: "case-now-document-identity",
+  address_proof: "case-now-document-address-proof",
+  ticket: "case-now-document-ticket",
+  boarding_pass: "case-now-document-boarding-pass",
+  receipt: "case-now-document-receipt",
+  evidence: "case-now-document-evidence",
+  power_of_attorney: "case-now-document-power-of-attorney",
+  contract: "case-now-document-contract",
+  petition: "case-now-document-petition",
+  other: "case-now-document",
+};
+
+const documentWord = (kind: string) => (isDocumentKind(kind) ? DOCUMENT_PHRASE_KEY[kind] : "case-now-document");
 
 const item = (fields: Partial<NowItem> & Pick<NowItem, "id" | "owner" | "tone" | "text">): NowItem => ({
   actor: null,

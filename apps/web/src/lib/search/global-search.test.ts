@@ -23,6 +23,12 @@ const row = (seq: number, client = `Cliente ${seq}`): CaseListRow => ({
   agency: null,
   movedAt: null,
   cnjs: [],
+  holder: "client",
+  why: "lacks",
+  step: "intake",
+  stepSince: null,
+  stepDays: null,
+  stagnant: false,
   court: null,
 });
 

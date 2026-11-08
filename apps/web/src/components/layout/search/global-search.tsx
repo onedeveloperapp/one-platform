@@ -91,6 +91,9 @@ function SearchField({ autoFocus = false, onDone }: { autoFocus?: boolean; onDon
           {...params}
           inputRef={inputRef}
           autoFocus={autoFocus}
+          // The theme gives a form control a margin under it, for its helper text: the search has none, and that
+          // margin left it above the middle of the header's row.
+          className="mb-0!"
           size="small"
           placeholder={t("search-placeholder")}
           slotProps={{

@@ -34,11 +34,112 @@
     "docs_url": null,
     "rate_limit": null
   },
+  "visual": {
+    "direction": "A marca do ONE como está no código, o azul do logo com o ciano, Urbanist nos títulos, Mulish no texto e cantos arredondados, com a faixa escura no topo e no controle, e o próprio produto no lugar de ilustração: a cena do topo e as figuras são os componentes do ONE com dados fictícios.",
+    "chosen": [
+      "texto_degrade"
+    ]
+  },
+  "brand": {
+    "colors": [
+      "#1074C6 primária (o azul do logo)",
+      "#1D8FED primária clara",
+      "#00C0EB secundária (o ciano do logo)",
+      "#303030 faixa escura",
+      "#FFFFFF superfície",
+      "#48433D texto",
+      "#726C65 texto secundário",
+      "#AE59F8 acento 1",
+      "#ED45CE acento 2",
+      "#F57072 acento 3",
+      "#F5AB56 acento 4",
+      "#C92C4E erro, só para risco e falha"
+    ],
+    "fonts": [
+      "Urbanist (títulos)",
+      "Mulish (texto)",
+      "JetBrains Mono (código)"
+    ],
+    "source": "packages/design-tokens/css/blue.css (paleta theme-blue, provisória) e css/common.css, convertidos de HSL; as letras em apps/web/src/app/layout.tsx (next/font) e docs/DESIGN.md"
+  },
+  "demo": {
+    "kind": "componentes",
+    "shows": "O topo de um caso no ONE (Andamento do caso), com a conversa da cliente no WhatsApp do escritório sobre a borda do painel.",
+    "action": "O ONE confere a identidade que a cliente mandou pelo WhatsApp.",
+    "result": "O documento aparece aceito em \"O que o ONE fez há pouco\", e a resposta do ONE fica na conversa, entregue.",
+    "left_out": "O menu, a busca e os outros cartões do caso, a linha de quem está com o caso, as etapas depois do protocolo, a lista de documentos e o resto da conversa. Nenhum número de uso, logo de cliente ou depoimento.",
+    "real_today": "O topo do caso é o de casos/[id]/components/journey-card.tsx (ProgressSteps, StateLine e ActivityCards de components/product), com as palavras de lib/cases/journey.ts e lib/cases/now.ts (case-now-checking-one). A foto mandada na conversa entra no caso pela migração 0050_conversation_files e é conferida pela IA na tarefa caso.documento.conferencia (0024), que o ONE decide sozinho por padrão (a decisão document_check do catálogo autonomy_decisions, semeada na 0024). A resposta é a de fileLine em lib/conversations/agent.ts, mostrada como em /atendimento (MessageBubble, autor ONE, Entregue).",
+    "sample_data": true,
+    "animated": true,
+    "selector": "[data-demo]"
+  },
+  "claims": [
+    {
+      "text": "Em construção com um escritório piloto",
+      "origin": "CLAUDE.md: o produto está em construção (M3) e é testado com o escritório piloto (as caminhadas de 2026-10-21 em diante); docs/PRODUCT.md"
+    },
+    {
+      "text": "Feito para os sistemas dos tribunais: Projudi, eproc, PJe, e-SAJ",
+      "origin": "court_systems (0021, semeada de uma amostra do DJEN; 0027 Projudi do TJGO; 0036 eproc do TJSP e do TJSC, PJe do TJCE) e a decisão do protocolo assistido por sistema (CLAUDE.md, Product decisions). São nomes de sistemas, sem logo."
+    },
+    {
+      "text": "DJEN",
+      "origin": "As publicações lidas pela OAB de cada advogado no Diário de Justiça Eletrônico Nacional (0028, @flyee/courts/providers/djen)."
+    },
+    {
+      "text": "Entrar na lista não custa nada",
+      "origin": "O estágio do site é a lista de espera (platform_settings launch) e nenhum preço foi publicado (offer.price nulo; a cobrança do ONE é do M3)."
+    },
+    {
+      "text": "Mariana Souza, 09:41, identidade.jpg (a cena do topo)",
+      "origin": "Exemplo fictício, com a etiqueta ao lado da cena."
+    },
+    {
+      "text": "23:41 (a pergunta da cliente e a resposta do ONE)",
+      "origin": "Exemplo fictício, com a etiqueta embaixo da conversa."
+    },
+    {
+      "text": "Processos de 2099, 12/11 às 14h, vence em 27/11 (os exemplos do radar)",
+      "origin": "Exemplo fictício, com a etiqueta no cartão; números de processo de um ano por vir, com os dígitos verificadores."
+    },
+    {
+      "text": "Vence em 27/11/2026: 15 dias úteis, disponibilizada no DJEN em 04/11/2026, publicada em 05/11/2026, o primeiro em 06/11/2026, sem contar 20/11/2026",
+      "origin": "Calculado na página pela regra do produto (prazo-v1, @flyee/rules/deadlines) sobre um exemplo fictício de Goiânia; 20/11 é feriado nacional pela Lei 14.759/2023; o calendário do TJGO de 2026 (0034) não tem outro dia de novembro."
+    },
+    {
+      "text": "01-peticao-inicial.pdf a 05-cartao-de-embarque.pdf, Projudi, Pronto para protocolar",
+      "origin": "Nomes e ordem dados na página pela regra do pacote (planFiling, @flyee/courts/filing) a um exemplo fictício; o limite de 6 MB do Projudi do TJGO vem de court_systems (0027)."
+    },
+    {
+      "text": "As cinco decisões do painel de controle e os modos de cada uma",
+      "origin": "O catálogo autonomy_decisions: aceitar documentos (0024) e responder o cliente (0048) aceitam três modos; prazos (0034), texto da peça (0029) e procuração (0054) aceitam dois. Os nomes são os de /settings/autonomia; as escolhas do painel são de um escritório fictício."
+    },
+    {
+      "text": "Um sócio muda cada decisão com o segundo fator",
+      "origin": "set_firm_autonomy pede um sócio com o segundo fator (migração 0016, teste pgTAP 0045); num escritório sem sócio, quem gerencia a conta (decides_for_firm, 0078)."
+    },
+    {
+      "text": "caso 128 (frases do ONE agora)",
+      "origin": "Exemplo fictício, com a etiqueta embaixo do painel."
+    },
+    {
+      "text": "carteira.xlsx com 1.240 linhas: 1.198 abrem caso, 37 já estão no ONE, 5 não lidas; Procuração do escritório.docx; os nomes dos clientes",
+      "origin": "Exemplo fictício, com a etiqueta embaixo de cada tela; 1.198 + 37 + 5 = 1.240; números de processo de 2099 (o último com dígitos que não conferem, de propósito)."
+    },
+    {
+      "text": "O primeiro módulo, em teste com um escritório piloto, cuida das ações de passageiros contra companhias aéreas",
+      "origin": "CLAUDE.md, Product decisions (o módulo Direito do Passageiro) e o escritório piloto."
+    },
+    {
+      "text": "O preço ainda não foi publicado",
+      "origin": "offer.price nulo; a assinatura do ONE (Asaas, BRL) é do M3 e não tem plano com preço."
+    }
+  ],
   "notes": [
     "Modelo principal: juridiq-pagina-de-vendas (estrutura, mecânica e efeito visual), na marca do ONE. Nada de texto, imagem, logo, cor ou código do Juridiq.",
     "O ONE ainda não vende: o estágio do site é a lista de espera (platform_settings launch). O chamado principal segue o estágio, igual ao do menu: 'Entrar na lista de espera', e 'Criar a conta do escritório' quando o site abrir.",
     "Sem promoção, sem preço publicado, sem teste grátis, sem clientes para citar: a faixa da promoção, a janela da promoção, os números de uso, os depoimentos e os planos ficam de fora. A pergunta do preço está nas perguntas frequentes.",
-    "As telas são desenhadas com tokens e levam a legenda 'Telas com dados de exemplo', o equivalente à etiqueta de exemplo fictício do modelo.",
+    "A cena do topo e as figuras da grade de recursos são componentes do produto com dados fixos (components/marketing/case-demo.tsx e product-figures.tsx): o link do cliente com a medida da foto (0043), o pacote de protocolo (planFiling), o prazo contado (prazo-v1 com DeadlineCount) e a conversa (MessageBubble). O painel de autonomia e as duas telas de chegada continuam desenhados com tokens (firm-screens.tsx). Toda figura leva a etiqueta 'Exemplo fictício'.",
     "O site vende o núcleo do ONE (a automação dos casos com IA), nunca uma aplicação: o primeiro módulo aparece numa linha só, nas perguntas frequentes (.claude/rules/marketing.md).",
     "Quem vende aparece no rodapé pelo cadastro da plataforma (platform_settings legal_entity): nome, CNPJ e cidade. O endereço completo depende desse cadastro."
   ]

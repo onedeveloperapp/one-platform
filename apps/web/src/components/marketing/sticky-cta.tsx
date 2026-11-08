@@ -43,7 +43,7 @@ export default function StickyCta({ label, href }: { label: string; href: string
         inert={!pastHero}
         aria-hidden={!pastHero}
         className={cn(
-          "border-grey-100 bg-background-paper/95 shadow-darker-md fixed bottom-3 left-3 z-40 rounded-2xl border p-2 backdrop-blur-md md:hidden",
+          "border-grey-100 bg-background-paper shadow-darker-md fixed bottom-3 left-3 z-40 rounded-2xl border p-2 md:hidden",
           beside ? "right-19" : "right-3",
           "motion-safe:transition-[transform,opacity] motion-safe:duration-200",
           pastHero ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-[150%] opacity-0",

@@ -74,10 +74,7 @@ export default function MarketingHeader({ navCta }: { navCta: { label: string; h
             "flex h-12 w-full flex-row items-center justify-between md:h-14",
             deep && "rounded-2xl border px-3 md:px-4",
             deep && "motion-safe:transition-[background-color,border-color,box-shadow] motion-safe:duration-200",
-            deep &&
-              (floating
-                ? "bg-background-deep/90 border-text-contrast/10 shadow-darker-md backdrop-blur-md"
-                : "border-transparent"),
+            deep && (floating ? "bg-background-deep border-text-contrast/10 shadow-darker-md" : "border-transparent"),
           )}
         >
           <Link href="/" aria-label={t("nav-home")} className="flex items-center">

@@ -1,6 +1,7 @@
 import type { StatusTone } from "@/components/product/status-chip";
 import type { StatusGroup } from "@/lib/cases/cases";
 import type { CaseFilter, CaseListPage } from "@/lib/cases/list";
+import type { CaseStock } from "@/lib/cases/standing";
 import type { ModuleCard } from "@/lib/modules/offer";
 
 /** The tint of each stage's badge: what waits on the client, what the firm works on, what is in court, what ended. */
@@ -27,6 +28,11 @@ export type CasesState =
       kind: "ready";
       /** The first page of the list, as the database counted, filtered and paged it (`firm_cases`). */
       list: CaseListPage;
+      /**
+       * The stock of the list's scope (`firm_case_stock`, 0111): who has the cases and the stagnant ones, which the
+       * views of who has the case count. Null when the database did not say it.
+       */
+      stock: CaseStock | null;
       airlines: AirlineOption[];
       /** The filter the address asked for (`?ver=`), which the first page was read under. */
       filter: CaseFilter | null;

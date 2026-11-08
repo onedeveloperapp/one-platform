@@ -24,7 +24,24 @@ export type CaseFilter =
   | "ajuizados-mes"
   | "encerrados-mes"
   | "arquivados-mes"
-  | CourtView;
+  | CourtView
+  | StandingView;
+
+/**
+ * Who has the case (0111): the firm, the client, ONE, the court, the platform of ONE; and the cases at a step for
+ * longer than the setting says of it (`estoque-v1`).
+ */
+export type StandingView = (typeof STANDING_VIEWS)[number];
+export const STANDING_VIEWS = [
+  "com-escritorio",
+  "com-cliente",
+  "com-one",
+  "no-tribunal",
+  "com-plataforma",
+  "estagnados",
+] as const;
+export const isStandingView = (value: unknown): value is StandingView =>
+  (STANDING_VIEWS as readonly unknown[]).includes(value);
 
 /**
  * The court's views (0110): the cases whose lawsuits moved today, in the last 7 and 30 days; the cases in court quiet
@@ -60,6 +77,7 @@ export const CASE_FILTERS: readonly CaseFilter[] = [
   "encerrados-mes",
   "arquivados-mes",
   ...COURT_VIEWS,
+  ...STANDING_VIEWS,
 ];
 
 export const isCaseFilter = (value: unknown): value is CaseFilter =>
@@ -100,6 +118,14 @@ export type CaseListRow = {
   movedAt: string | null;
   /** The numbers of its lawsuits in court, 20 digits each (0110). */
   cnjs: string[];
+  /** Who has the case and why, as the top of the case says it (0111); null for a case that ended. */
+  holder: string | null;
+  why: string | null;
+  /** The step of its way, since when, how many days (of Brasília) and whether it stagnated (`estoque-v1`). */
+  step: string | null;
+  stepSince: string | null;
+  stepDays: number | null;
+  stagnant: boolean;
   /**
    * For a case in court, what its lawsuits show (a hearing held, a decision and a payment published): the step of
    * its way the list shows. Null before the court, or when it could not be read.
@@ -236,6 +262,12 @@ export function caseListOf(raw: unknown): CaseListPage | null {
         agency: typeof row.agency === "string" && row.agency !== "" ? row.agency : null,
         movedAt: typeof row.moved_at === "string" ? row.moved_at : null,
         cnjs: Array.isArray(row.cnjs) ? row.cnjs.filter((cnj): cnj is string => typeof cnj === "string") : [],
+        holder: typeof row.holder === "string" ? row.holder : null,
+        why: typeof row.why === "string" ? row.why : null,
+        step: typeof row.step === "string" ? row.step : null,
+        stepSince: typeof row.step_since === "string" ? row.step_since : null,
+        stepDays: typeof row.step_days === "number" && Number.isFinite(row.step_days) ? row.step_days : null,
+        stagnant: row.stagnant === true,
         court: courtMarksOf(row.court),
       },
     ];

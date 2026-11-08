@@ -36,11 +36,25 @@ export type ActivityItem = {
  * history where the order is the meaning). Neither gives each of the few latest things a card of its own that says
  * what it was about at a glance, which is the job here.
  */
-export default function ActivityCards({ id, title, items }: { id: string; title: string; items: ActivityItem[] }) {
+export default function ActivityCards({
+  id,
+  title,
+  items,
+  titleAs = "h3",
+}: {
+  id: string;
+  title: string;
+  items: ActivityItem[];
+  /**
+   * The title's element: a heading of the screen by default; "div" where the cards are shown as a picture of the
+   * product (a page's demonstration), whose words must not enter the page's outline.
+   */
+  titleAs?: "h3" | "div";
+}) {
   if (items.length === 0) return null;
   return (
     <Box component="section" aria-labelledby={id} className="flex flex-col gap-2">
-      <Typography id={id} variant="subtitle2" component="h3" className="mb-0">
+      <Typography id={id} variant="subtitle2" component={titleAs} className="mb-0">
         {title}
       </Typography>
       <Box component="ul" className="m-0 grid list-none grid-cols-1 gap-2 p-0 sm:grid-cols-2 lg:grid-cols-3">

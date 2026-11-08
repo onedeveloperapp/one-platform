@@ -13,8 +13,8 @@ import NiCheck from "@/icons/nexture/ni-check";
  * - "deep": full-bleed deep band with the orbit ambient, light CTA button,
  *   optional demo link and reassurance points.
  * - "deep-panel": the same deep surface as a rounded panel inside the
- *   container, a primary glow in one corner and rays from the other (the
- *   home's closing panel since its blueprint of 2026-10-26).
+ *   container, plain (the home's closing panel; its glow and rays went in
+ *   the review of 2026-11-08, as decoration that said nothing).
  * The button label must repeat the page's final CTA verbatim.
  */
 export default function Cta({
@@ -91,15 +91,7 @@ export default function Cta({
     return (
       <Section decor={decor} track={track}>
         <Reveal>
-          <div className="bg-background-deep text-text-contrast relative isolate overflow-hidden rounded-4xl px-6 py-14 md:px-14 md:py-20">
-            <div
-              aria-hidden
-              className="pointer-events-none absolute inset-0 -z-10"
-              style={{
-                background: "radial-gradient(45% 70% at 92% 0%, hsl(var(--primary) / 0.55), transparent 70%)",
-              }}
-            />
-            <Rays />
+          <div className="bg-background-deep text-text-contrast relative overflow-hidden rounded-4xl px-6 py-14 md:px-14 md:py-20">
             {deepContent}
           </div>
         </Reveal>
@@ -157,45 +149,5 @@ export default function Cta({
         </div>
       </Reveal>
     </Section>
-  );
-}
-
-/** How many rays fan out of the panel's corner, and the angles they span. */
-const RAYS = 24;
-const RAY_FROM = 4;
-const RAY_TO = 86;
-
-/**
- * Fine rays fanning out of the bottom corner of the deep panel, fading
- * toward their ends: texture for the dark surface, drawn in the contrast
- * text at a low alpha so it follows the theme.
- */
-function Rays() {
-  const lines = Array.from({ length: RAYS }, (_, index) => {
-    const angle = ((RAY_FROM + ((RAY_TO - RAY_FROM) * index) / (RAYS - 1)) * Math.PI) / 180;
-    return { x: (200 * Math.cos(angle)).toFixed(1), y: (200 - 200 * Math.sin(angle)).toFixed(1) };
-  });
-  return (
-    <svg
-      aria-hidden
-      viewBox="0 0 200 200"
-      className="pointer-events-none absolute bottom-0 left-0 -z-10 h-72 w-72 md:h-96 md:w-96"
-      style={{
-        maskImage: "radial-gradient(circle at 0% 100%, black 15%, transparent 72%)",
-        WebkitMaskImage: "radial-gradient(circle at 0% 100%, black 15%, transparent 72%)",
-      }}
-    >
-      {lines.map((line, index) => (
-        <line
-          key={index}
-          x1="0"
-          y1="200"
-          x2={line.x}
-          y2={line.y}
-          stroke="hsl(var(--text-contrast) / 0.22)"
-          strokeWidth="0.6"
-        />
-      ))}
-    </svg>
   );
 }

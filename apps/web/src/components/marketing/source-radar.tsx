@@ -116,7 +116,7 @@ export default function SourceRadar({
       <div
         aria-hidden
         className="relative mx-auto aspect-square w-full max-w-64"
-        style={{ "--sweep-cycle": `${cycle}s` } as React.CSSProperties}
+        style={{ "--sweep-cycle": `${cycle}s`, "--sweep-turns": items.length } as React.CSSProperties}
       >
         {[100, 72, 44].map((size) => (
           <span
@@ -194,7 +194,7 @@ export default function SourceRadar({
                 setRunning(false);
                 setIndex(dot);
               }}
-              className="flex h-6 items-center px-1"
+              className="flex h-6 min-w-6 items-center justify-center"
             >
               <span
                 aria-hidden

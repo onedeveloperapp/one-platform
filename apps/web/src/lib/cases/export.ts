@@ -45,6 +45,11 @@ export type ExportWords = {
   airlineName: (iata: string) => string;
   statusName: (status: CaseStatus) => string;
   stepName: (step: JourneyStepId) => string;
+  /** Who has the case, and why, in the list's words. */
+  holderName: (holder: string | null) => string;
+  reasonName: (holder: string | null, why: string | null) => string | null;
+  /** The word of a column that says yes (a case stagnated). */
+  yes: string;
 };
 
 export type ExportColumnKey =
@@ -59,7 +64,11 @@ export type ExportColumnKey =
   | "step"
   | "lawsuits"
   | "movedAt"
-  | "updatedAt";
+  | "updatedAt"
+  | "holder"
+  | "why"
+  | "stepDays"
+  | "stagnant";
 
 const COLUMNS: { key: ExportColumnKey; kind?: XlsxColumn["kind"]; width: number }[] = [
   { key: "case", kind: "number", width: 8 },
@@ -71,6 +80,10 @@ const COLUMNS: { key: ExportColumnKey; kind?: XlsxColumn["kind"]; width: number 
   { key: "flightDate", kind: "date", width: 12 },
   { key: "status", width: 18 },
   { key: "step", width: 14 },
+  { key: "stepDays", kind: "number", width: 10 },
+  { key: "stagnant", width: 11 },
+  { key: "holder", width: 18 },
+  { key: "why", width: 30 },
   { key: "lawsuits", width: 28 },
   { key: "movedAt", kind: "moment", width: 17 },
   { key: "updatedAt", kind: "moment", width: 17 },
@@ -114,6 +127,10 @@ export function exportLine(row: CaseListRow, words: ExportWords, namesModule: bo
     flightDate: row.flightDate,
     status: words.statusName(row.status),
     step: step ? words.stepName(step) : null,
+    stepDays: row.stepDays,
+    stagnant: row.stagnant ? words.yes : null,
+    holder: words.holderName(row.holder),
+    why: words.reasonName(row.holder, row.why),
     lawsuits: row.cnjs.map((cnj) => formatCnj(cnj) ?? cnj).join(", ") || null,
     movedAt: brasiliaMoment(row.movedAt),
     updatedAt: brasiliaMoment(row.updatedAt),

@@ -1,7 +1,8 @@
 "use server";
 
 import { type CaseListPage, caseListQuery } from "@/lib/cases/list";
-import { readCaseList } from "@/lib/cases/list-read";
+import { readCaseList, readCaseStock } from "@/lib/cases/list-read";
+import type { CaseStock } from "@/lib/cases/standing";
 import { getMemberContext } from "@/lib/member/context";
 
 /**
@@ -15,4 +16,15 @@ export async function listFirmCases(input: unknown): Promise<{ ok: true; page: C
   if (!context?.firm) return { ok: false };
   const page = await readCaseList(context.supabase, context.firm.id, caseListQuery(input));
   return page ? { ok: true, page } : { ok: false };
+}
+
+/**
+ * The stock of the list's scope (migration 0111), read again when the person changes the module, the kind of problem
+ * or the airline: what the views of who has the case count.
+ */
+export async function readFirmCaseStock(input: unknown): Promise<{ ok: true; stock: CaseStock } | { ok: false }> {
+  const context = await getMemberContext();
+  if (!context?.firm) return { ok: false };
+  const stock = await readCaseStock(context.supabase, context.firm.id, caseListQuery(input));
+  return stock ? { ok: true, stock } : { ok: false };
 }
