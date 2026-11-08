@@ -323,12 +323,15 @@ export default function CasesView({
   state,
   embedded = false,
   heading,
+  headingAction,
   hideNumbers = false,
 }: {
   state: CasesState;
   embedded?: boolean;
   /** The list's own head where it is part of another page: its title and one line. */
   heading?: { title: string; body: string };
+  /** What the other page puts beside that head (the controladoria's switch between the list and the board). */
+  headingAction?: React.ReactNode;
   /** The numbers above the list are the other page's. */
   hideNumbers?: boolean;
 }) {
@@ -343,6 +346,7 @@ export default function CasesView({
         ready={state}
         embedded={embedded}
         heading={heading}
+        headingAction={headingAction}
         hideNumbers={hideNumbers}
       />
     );
@@ -395,11 +399,13 @@ function CasesList({
   ready,
   embedded,
   heading,
+  headingAction,
   hideNumbers,
 }: {
   ready: Ready;
   embedded: boolean;
   heading?: { title: string; body: string };
+  headingAction?: React.ReactNode;
   hideNumbers: boolean;
 }) {
   const t = useTranslations("product");
@@ -793,6 +799,7 @@ function CasesList({
               {heading?.body ?? t("module-area-cases-body", { module: scope?.module.name ?? "" })}
             </Typography>
           </Box>
+          {headingAction}
         </Box>
       ) : (
         <>

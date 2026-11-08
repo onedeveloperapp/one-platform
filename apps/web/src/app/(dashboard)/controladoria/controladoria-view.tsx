@@ -1,13 +1,27 @@
 "use client";
 
 import CasesView from "../casos/components/cases-view";
+import CaseBoard from "./case-board";
 import type { ControladoriaState } from "./load-controladoria";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { type ReactNode, useTransition } from "react";
+import { type ReactNode, useState, useTransition } from "react";
 
-import { Alert, Box, Button, Card, CardContent, Grid, List, ListItem, ListItemButton, Typography } from "@mui/material";
+import {
+  Alert,
+  Box,
+  Button,
+  Card,
+  CardContent,
+  Grid,
+  List,
+  ListItem,
+  ListItemButton,
+  ToggleButton,
+  ToggleButtonGroup,
+  Typography,
+} from "@mui/material";
 
 import CardTitle from "@/components/product/card-title";
 import EmptyState from "@/components/product/empty-state";
@@ -148,6 +162,29 @@ export default function ControladoriaView({ state }: { state: ControladoriaState
   const numbers = ready?.cases.list.numbers ?? null;
   const counts = ready?.cases.list.counts ?? null;
   const hrefOf = (view: CaseFilter | null) => `${scopedHref("/controladoria", module, { ver: view })}#lista`;
+
+  // The cases as a list (with the bar's views) or as the board by step. A number of the page opens the list under it,
+  // so arriving at another view shows the list again.
+  const [mode, setMode] = useState<"list" | "board">("list");
+  const [modeFor, setModeFor] = useState(ready?.cases.filter ?? null);
+  if ((ready?.cases.filter ?? null) !== modeFor) {
+    setModeFor(ready?.cases.filter ?? null);
+    setMode("list");
+  }
+  const modeSwitch = (
+    <ToggleButtonGroup
+      exclusive
+      size="small"
+      value={mode}
+      aria-label={t("controladoria-cases-as")}
+      onChange={(_, value: "list" | "board" | null) => {
+        if (value) setMode(value);
+      }}
+    >
+      <ToggleButton value="list">{t("controladoria-cases-list")}</ToggleButton>
+      <ToggleButton value="board">{t("controladoria-cases-board")}</ToggleButton>
+    </ToggleButtonGroup>
+  );
 
   return (
     <Box className="flex flex-col gap-6">
@@ -386,12 +423,36 @@ export default function ControladoriaView({ state }: { state: ControladoriaState
           </Box>
 
           <Box id="lista" className="scroll-mt-24">
-            <CasesView
-              state={ready.cases}
-              embedded
-              hideNumbers
-              heading={{ title: t("controladoria-list-title"), body: t("controladoria-list-body") }}
-            />
+            {mode === "list" ? (
+              <CasesView
+                state={ready.cases}
+                embedded
+                hideNumbers
+                heading={{ title: t("controladoria-list-title"), body: t("controladoria-list-body") }}
+                headingAction={modeSwitch}
+              />
+            ) : (
+              <Box component="section" aria-labelledby="controladoria-board" className="flex flex-col gap-6">
+                <Box className="flex flex-wrap items-end justify-between gap-3">
+                  <Box className="flex flex-col gap-1">
+                    <Typography id="controladoria-board" variant="h5" component="h2" className="mb-0">
+                      {t("controladoria-board-title")}
+                    </Typography>
+                    <Typography variant="body2" className="text-text-secondary">
+                      {t("controladoria-board-body")}
+                    </Typography>
+                  </Box>
+                  {modeSwitch}
+                </Box>
+                {ready.board ? (
+                  <CaseBoard columns={ready.board} module={module} />
+                ) : (
+                  <Alert severity="warning" className="neutral bg-background-paper/60!">
+                    {t("controladoria-board-unread")}
+                  </Alert>
+                )}
+              </Box>
+            )}
           </Box>
         </>
       ) : null}

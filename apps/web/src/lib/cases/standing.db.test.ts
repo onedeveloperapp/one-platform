@@ -2,6 +2,7 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { ADVANCE_WAITING, WAIT_PLACE } from "@/lib/cases/advance";
+import { caseBoardOf } from "@/lib/cases/board";
 import { caseStockOf, HOLDER_VIEW, HOLDERS, standingCounts } from "@/lib/cases/standing";
 import { connect, DB_URL, type Row, type Sql, standIn } from "@/lib/testing/embedded-db";
 import { isStagnant, STAGNANT_DAYS, stepDays } from "@flyee/rules/stock";
@@ -332,6 +333,26 @@ describe.skipIf(!DB_URL)("who has each case: the controladoria and the top of th
     }
     expect(counts.estagnados).toBe(rows.filter((row) => row.stagnant === true).length);
     expect(stock.total).toBe(rows.length);
+  });
+
+  it("puts each case on the board at the step and with whom the list says", async () => {
+    const rows = await listed();
+    const board = caseBoardOf(await call(as(), "firm_case_board", { target_org: FIRM, target_limit: 50 }));
+    expect(board).not.toBeNull();
+    if (!board) return;
+    const going = [...rows.values()].filter((row) => row.holder);
+    expect(board.reduce((sum, column) => sum + column.cases, 0)).toBe(going.length);
+    for (const column of board) {
+      for (const item of column.items) {
+        const row = rows.get(item.id);
+        expect(row?.step, `the step of case ${item.seq}`).toBe(column.step);
+        expect(row?.holder, `who has case ${item.seq}`).toBe(item.holder);
+        expect(row?.step_days, `the days of case ${item.seq}`).toBe(item.days);
+        expect(row?.stagnant, `case ${item.seq} stagnant`).toBe(item.stagnant);
+      }
+      const days = column.items.map((item) => item.days);
+      expect(days, `the longest at ${column.step} first`).toEqual([...days].sort((a, b) => b - a));
+    }
   });
 
   it("counts the days at a step and the stagnant cases by the rule of the stock", async () => {

@@ -4,7 +4,8 @@ import type { CasesState } from "../casos/cases-types";
 import { loadCases } from "../casos/load-cases";
 
 import { momentLabel } from "@/lib/ai/approvals";
-import { readCaseStock } from "@/lib/cases/list-read";
+import { BOARD_PAGE, type BoardColumn } from "@/lib/cases/board";
+import { readCaseBoard, readCaseStock } from "@/lib/cases/list-read";
 import type { CaseStock } from "@/lib/cases/standing";
 import { isCourtTrackingOn } from "@/lib/courts/tracking";
 import { overseesFirm } from "@/lib/firm/roles";
@@ -21,6 +22,11 @@ export type ControladoriaState =
        * and who has the cases, by the rule of the top of the case. Null when the database did not say.
        */
       stock: CaseStock | null;
+      /**
+       * The board by step (`firm_case_board`, 0112): each column with its first cases, the longest at the step first.
+       * Null when the database did not say it.
+       */
+      board: BoardColumn[] | null;
       /** The cases going in each module, for a firm with more than one and no module chosen. */
       byModule: { module: ModuleCard; going: number }[] | null;
       /** When this page was read, on the person's clock. */
@@ -50,8 +56,9 @@ export async function loadControladoria(params: { ver?: string; modulo?: string 
   const { modules, current } = pageScopeOf(context.catalog, context.modules, params.modulo);
   // The stock of the page's scope is the list's own (`loadCases` reads it once); each module's, for the card of the
   // modules, only where there is more than one and none was chosen.
-  const [cases, perModule] = await Promise.all([
+  const [cases, board, perModule] = await Promise.all([
     loadCases({ ver: params.ver, modulo: params.modulo }),
+    readCaseBoard(supabase, firm, { module: current?.key ?? null, limit: BOARD_PAGE }),
     !current && modules.length > 1
       ? Promise.all(modules.map((module) => readCaseStock(supabase, firm, { module: module.key })))
       : Promise.resolve(null),
@@ -61,6 +68,7 @@ export async function loadControladoria(params: { ver?: string; modulo?: string 
     kind: "ready",
     cases,
     stock: cases.stock,
+    board,
     byModule: perModule
       ? modules.flatMap((module, at) => {
           const read = perModule[at];

@@ -1,5 +1,6 @@
 import "server-only";
 
+import { type BoardColumn, caseBoardOf } from "@/lib/cases/board";
 import { caseListOf, type CaseListPage, type CaseListQuery } from "@/lib/cases/list";
 import { type CaseStock, caseStockOf } from "@/lib/cases/standing";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -72,4 +73,24 @@ export async function readCaseStock(
   });
   if (error) return null;
   return caseStockOf(data);
+}
+
+/**
+ * The board of the controladoria by step (`firm_case_board`, 0112): every column with its first cases, or, for one
+ * step and from a position, that column's next cases. Null when the database did not answer one.
+ */
+export async function readCaseBoard(
+  supabase: SupabaseClient,
+  orgId: string,
+  query: { module: string | null; step?: string | null; offset?: number; limit?: number },
+): Promise<BoardColumn[] | null> {
+  const { data, error } = await supabase.rpc("firm_case_board", {
+    target_org: orgId,
+    target_module: query.module,
+    target_step: query.step ?? null,
+    target_offset: query.offset ?? 0,
+    target_limit: query.limit ?? null,
+  });
+  if (error) return null;
+  return caseBoardOf(data);
 }
