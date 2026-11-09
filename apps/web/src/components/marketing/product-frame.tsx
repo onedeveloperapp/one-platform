@@ -10,11 +10,14 @@ import { cn } from "@/lib/utils";
 export default function ProductFrame({
   className,
   glow = false,
+  address,
   children,
 }: {
   className?: string;
   /** Primary-tinted halo behind the frame — the expensive-product hero treatment. */
   glow?: boolean;
+  /** What the address bar says, in place of its blank bar: a drawn screen's "Exemplo fictício" tag, on the figure itself. */
+  address?: string;
   children?: React.ReactNode;
 }) {
   const frame = (
@@ -29,7 +32,11 @@ export default function ProductFrame({
         <span className="bg-grey-200 h-2.5 w-2.5 rounded-full" />
         <span className="bg-grey-200 h-2.5 w-2.5 rounded-full" />
         <span className="bg-grey-200 h-2.5 w-2.5 rounded-full" />
-        <span className="bg-grey-50 mx-auto h-4 w-1/3 rounded-full" />
+        {address ? (
+          <span className="bg-grey-50 text-text-secondary mx-auto rounded-full px-4 py-0.5 text-xs">{address}</span>
+        ) : (
+          <span className="bg-grey-50 mx-auto h-4 w-1/3 rounded-full" />
+        )}
       </div>
 
       {children ?? <PlaceholderApp />}

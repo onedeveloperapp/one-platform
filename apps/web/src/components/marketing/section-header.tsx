@@ -33,7 +33,8 @@ export default function SectionHeader({
       )}
     >
       {eyebrow && <p className="text-primary font-eyebrow tracking-eyebrow text-xs uppercase">{eyebrow}</p>}
-      <Heading className="font-display text-display-lg text-text-primary font-extrabold">{title}</Heading>
+      {/* Balanced: a title that needs two lines never leaves one word alone on the last. */}
+      <Heading className="font-display text-display-lg text-text-primary font-extrabold text-balance">{title}</Heading>
       {subtitle && <p className="text-text-secondary text-lg leading-6">{subtitle}</p>}
     </div>
   );

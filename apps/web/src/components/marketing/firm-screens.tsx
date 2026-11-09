@@ -8,9 +8,9 @@ import { cn } from "@/lib/utils";
  * The firm's side of ONE drawn with tokens, where the product's own components
  * cannot stand alone on a public page: what the firm lets ONE decide alone,
  * the model ONE makes of a document the firm already uses, and the portfolio
- * brought from a spreadsheet. The case, the client's documents, the package and
- * the deadline are drawn with the product's own components instead
- * (case-demo.tsx, product-figures.tsx). Every word is passed in, the product's
+ * brought from a spreadsheet. The firm's window, the client's documents, the
+ * petition, the package and the deadline are objects of their own
+ * (firm-window.tsx, product-figures.tsx). Every word is passed in, the product's
  * own where the product has them, and every person and number is invented;
  * the page says so in a caption beside each screen.
  *
@@ -122,7 +122,8 @@ export function ModelImportPanel({
   modelBadge: string;
   /** The model's text, its marks in <ModelMark>. */
   text: React.ReactNode;
-  checks: string[];
+  /** What ONE checked of the model; a figure with little to read leaves them out. */
+  checks?: string[];
   mayErr: string;
 }) {
   return (
@@ -151,14 +152,16 @@ export function ModelImportPanel({
           </span>
         </div>
         <p className="text-text-primary text-sm leading-7">{text}</p>
-        <ul className="border-grey-100 flex flex-col gap-2 border-t pt-4">
-          {checks.map((check) => (
-            <li key={check} className="text-text-primary flex items-start gap-2 text-xs leading-5">
-              <NiCheck size="tiny" className="text-secondary-dark dark:text-secondary mt-0.5 flex-none" />
-              {check}
-            </li>
-          ))}
-        </ul>
+        {checks && checks.length > 0 ? (
+          <ul className="border-grey-100 flex flex-col gap-2 border-t pt-4">
+            {checks.map((check) => (
+              <li key={check} className="text-text-primary flex items-start gap-2 text-xs leading-5">
+                <NiCheck size="tiny" className="text-secondary-dark dark:text-secondary mt-0.5 flex-none" />
+                {check}
+              </li>
+            ))}
+          </ul>
+        ) : null}
         <p className="text-text-secondary flex items-center gap-1.5 text-xs">
           <NiRobot size="tiny" className="flex-none" />
           {mayErr}

@@ -85,7 +85,9 @@ export default function FeatureRows({
                     {item.eyebrow}
                   </p>
                 )}
-                <h3 className="font-display text-display-md text-text-primary font-extrabold">{item.title}</h3>
+                <h3 className="font-display text-display-md text-text-primary font-extrabold text-balance">
+                  {item.title}
+                </h3>
                 <p className="text-text-secondary mt-3 leading-7">{item.body}</p>
                 {item.bullets && item.bullets.length > 0 && (
                   <ul className="mt-5 flex flex-col gap-2.5">

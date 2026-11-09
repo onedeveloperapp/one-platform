@@ -109,14 +109,14 @@
       "file": "hero.tsx",
       "funnel": "attention + value proposition",
       "props": "layout: center|split, decor: glow|grid|none, media (evidence slot), eyebrow, title (string or rich node — t.rich with <em> renders the two-tone headline), subtitle, primaryCta (unless action), secondaryCta{label, href, icon?}, action? (replaces the buttons with the conversion itself, e.g. the waitlist form), note?, highlights?: string[] (reassurance chips row, split only), strip?: {label, items: string[]} (center layout only: a labelled row of names under the note, e.g. the AIs the apps run on), tone: default|deep (center layout: the top on the deep band, the copy in the contrast text, the <em> of the title in a gradient of primary-light into secondary-light, and the band ending a little below the middle of the media so the screen sits across the edge into the light page), badge?: {label, icon?} (a pill over the title: a fact, never a claim the page cannot show)",
-      "use": "owns the page <h1> AND the page's one orchestrated motion moment: the entrance is CSS keyed on data-hero (style/layout/marketing-motion.css), copy line by line, then the media, then the satellites of a composition, starting with the first paint; a server component (no script of its own); split + <ProductFrame glow> is the committed direction for product-heavy pages; media is required in practice (premium bar #1); tone=\"deep\" + <CaseDemo> (the product's own components with fixed data) is the home's top (the sales-page model of 2026-11-07, reviewed 2026-11-08); its buttons carry data-hero-actions, which <StickyCta> watches"
+      "use": "owns the page <h1> AND the page's one orchestrated motion moment: the entrance is CSS keyed on data-hero (style/layout/marketing-motion.css), copy line by line, then the media, then the satellites of a composition, starting with the first paint; a server component (no script of its own); split + <ProductFrame glow> is the committed direction for product-heavy pages; media is required in practice (premium bar #1); tone=\"deep\" + <ProductComposition> over <FirmWindow> is the home's top (the sales-page model, redone 2026-11-08): the title's two parts on two lines, the media at the content's width across the band's edge; its buttons carry data-hero-actions, which <StickyCta> watches"
     },
     {
       "name": "ProductFrame",
       "file": "product-frame.tsx",
       "role": "evidence",
-      "props": "glow, children (real screenshot via next/image)",
-      "use": "browser chrome for REAL product screenshots; token wireframe placeholder without children; glow = primary halo, the expensive-product hero treatment"
+      "props": "glow, address? (what the address bar says in place of its blank bar: a drawn screen's 'Exemplo fictício' tag, on the figure itself), children (real screenshot via next/image, or a drawn screen)",
+      "use": "browser chrome for REAL product screenshots and drawn screens; token wireframe placeholder without children; glow = primary halo, the expensive-product hero treatment"
     },
     {
       "name": "PhoneFrame",
@@ -133,25 +133,32 @@
       "use": "ONE's product evidence drawn with tokens until its screens can be captured: a client's conversation on the firm's WhatsApp, answered by ONE (inside PhoneFrame), the client's link with the papers it gathered (a feature row's grey panel), the firm's cases by stage (a container: columns when the card is wide, a row per stage when it is narrow); every word from the marketing namespace, invented people only, and the page says the data is an example in a caption"
     },
     {
-      "name": "CaseDemo",
-      "file": "case-demo.tsx",
+      "name": "FirmWindow",
+      "file": "firm-window.tsx",
       "role": "evidence",
-      "props": "words: CaseDemoWords {label, sample, pauseLabel, playLabel, title, steps, stateWords, workingTitle, workingLine, workingSince, recentTitle, recent (ActivityItem), client {sideLabel, kind, open, time, by}, reply {sideLabel, text, time, by, status}}",
-      "use": "the home's demonstration: the top of a case drawn with the product's ProgressSteps, StateLine, ActivityCards and MessageBubble, and one action (ONE checks the identity a client sent on WhatsApp, accepts it and answers her with fileLine's words); opens on its result (the cover), plays only on screen, four passes then rests, pause beside its 'Exemplo fictício' tag, data-demo + role=img, inert inside, no heading; the words come from the product namespace so the scene changes when the product does"
+      "props": "label, sample (the tag on the address bar), search, add, numbers: {icon, tone, label, value, delta?}[], boardTitle, columns: {key, label, total, cases: {seq, client, days, holder, holderTone}[]}[], pendingTitle, pending: {title, items: {icon, tone, text}[]}[]",
+      "use": "the whole system at a glance, the frame of the home's <ProductComposition>: the firm's rail of icons, the search, the month's numbers, the cases on the board by step and what asks a person today; a replica drawn for who never saw the product, every part standing for a screen it has; data-demo + role=img, no heading; on a phone a drawing of its own (no rail, two columns of the board, no panel beside it). Its data are EXAMPLE_WINDOW of product-examples.ts"
+    },
+    {
+      "name": "PhoneStage",
+      "file": "phone-stage.tsx",
+      "funnel": "desire",
+      "props": "eyebrow?, title, subtitle?, phone (a <PhoneFrame> marked as a picture by whoever passes it), caption?, left: {icon, tone, title, body}[], right: {icon, tone, title, body}[], background?, id, track",
+      "use": "the pain answered in the object it happens in: a large phone in the centre, two short dark cards on each side, the client's own words as the title; on a phone the phone comes first and the cards follow it. Use when the phone must lead and the words stay beside it; <Showcase> pairs a whole chapter of copy with its evidence"
     },
     {
       "name": "ProductFigures",
       "file": "product-figures.tsx",
       "role": "evidence",
-      "props": "DocumentsFigure{label} · PackageFigure{label} · DeadlineFigure{label} · ConversationFigure{label, question, answer, time}",
-      "use": "server components that draw one thing the product does with its own components and fixed data: the client's documents on the link with the photo measured too dark (StateLine, the link's alert), the filing package named by planFiling, a deadline counted by prazo-v1 and told by DeadlineCount, a question answered by ONE in the firm's conversation (MessageBubble); each a picture (role=img, inert inside, no heading), the caption beside it says the data are invented"
+      "props": "DocumentsFigure{label} · PieceFigure{label, heading, badge, gap, sourcesTitle, sources, sourceState} · CalendarFigure{label, published, counted, holiday} · PackageFigure{label}",
+      "use": "server components that draw one object recognized before a word is read, for a feature row: two photos of a client's papers (one accepted, one too dark, sent back), a sheet of a petition with what it cites checked, the month a deadline ends in as prazo-v1 counted it (calendarMonthOf), a folder with the files planFiling named; each a picture (role=img, no heading), the caption beside it says the data are invented; a figure without its letters must still be the object"
     },
     {
       "name": "FirmScreens",
       "file": "firm-screens.tsx",
       "role": "evidence",
       "props": "AutonomyPanel{title, icon, rows: {label, modes: string[] (only the ways the product allows that decision), mode (index)}[], footer} · ModelImportPanel{fileName, fileMeta, step, modelTitle, modelBadge, text (rich, marks in <ModelMark>), checks, mayErr} · PortfolioImportPanel{fileName, fileMeta, columns: [3], rows: {number, client, result, kind: open|known|unread}[], summary}",
-      "use": "the firm's side of ONE drawn with tokens where the product's own components cannot stand alone on a public page: what the firm lets ONE decide alone (each decision by its product name, with the modes the catalog autonomy_decisions allows it), the model ONE makes of the firm's own document, the portfolio from a spreadsheet; invented people and lawsuits of 2099 only, a caption beside each saying the data is an example; what ONE generates carries its 'may err' line. Prefer CaseDemo and ProductFigures, which ARE the product's components"
+      "use": "the firm's side of ONE drawn with tokens: what the firm lets ONE decide alone (each decision by its product name, with the modes the catalog autonomy_decisions allows it), the model ONE makes of the firm's own document, the portfolio from a spreadsheet; invented people and lawsuits of 2099 only, a caption beside each saying the data is an example; what ONE generates carries its 'may err' line"
     },
     {
       "name": "DataVizPlaceholder",
@@ -179,7 +186,7 @@
       "file": "bento-grid.tsx",
       "funnel": "desire (secondary)",
       "props": "id?, track?, eyebrow?, title, subtitle?, items: {title (1-4 words), body (one sentence), figure? (a screen cut to its control, an object, a number with its origin), icon? (a phrase cell: its icon at the foot), featured? (one leader, 2 columns), bleed? (the figure runs past the cell's bottom edge, cut only in its padding), tone?}[], caption? (whose data the figures carry), cta?, background?",
-      "use": "a chapter of features read as ONE figure (the demonstration guide's grid): one leader, a third to a half of the cells a screen, the rest an object or a phrase, neighbours different, the words always on top; five cells fill two rows of three with the leader; on a phone the cells stack, the leader first; replaces a zig-zag of rows and a row of three equal cards. The home's day-to-day chapter: the client's documents (leader, bleeding), the power of attorney, the filing package, the dossier, the deadline"
+      "use": "a chapter of features read as ONE figure (the demonstration guide's grid): one leader, a third to a half of the cells a screen, the rest an object or a phrase, neighbours different, the words always on top; five cells fill two rows of three with the leader; on a phone the cells stack, the leader first. Only when the owner or the model asks for a grid: the guide's first choice is a <FeatureRows> of large figures, which is what the home's day-to-day chapter became on 2026-11-08 (a grid of cells with text read as cards full of text)"
     },
     {
       "name": "StatBand",

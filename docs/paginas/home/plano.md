@@ -11,33 +11,67 @@ Escrito em 2026-11-08. Onde fica: o endereço principal do produto, ou o destino
 | para quem é a página, em uma frase | Sócios e equipes de escritórios de advocacia de contencioso de massa no Brasil. |
 | o texto do botão principal | Entrar na lista de espera |
 | o texto do segundo chamado, se houver | Falar com a gente |
-| a direção visual, em uma frase que diga o que torna a página deste produto | A marca do ONE como está no código, o azul do logo com o ciano, Urbanist nos títulos, Mulish no texto e cantos arredondados, com a faixa escura no topo e no controle, e o próprio produto no lugar de ilustração: a cena do topo e as figuras são os componentes do ONE com dados fictícios. |
-| de onde vem a demonstração: componentes reais do projeto, tela real ou réplica | componentes |
+| a direção visual, em uma frase que diga o que torna a página deste produto | O efeito do modelo do Juridiq na marca do ONE: topo escuro de alto contraste, com a luz do azul e do ciano da marca atrás do título e um halo atrás da janela, parte do título em degradê do azul do logo para o ciano e a janela grande do sistema logo abaixo, e depois uma sequência de objetos grandes (o telefone, o radar, os documentos, a petição, o calendário, a pasta do protocolo) com pouco texto ao lado, em Urbanist e Mulish, cantos arredondados, dados fictícios e etiquetados. |
+| o título da página, escolhido entre as opções de headline.options | Você advoga. O ONE faz o resto. |
+| as figuras: o objeto que cada seção mostra, em figures | [object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object] |
+| de onde vem a figura principal: uma versão desenhada para a página (replica), a tela real (tela) ou os componentes do projeto (componentes) | replica |
 | o endereço da página para a conferência | / |
 
 Os campos em [a decidir] são perguntados numa mensagem só, cada decisão com uma sugestão que um sim aceita.
 
+## O título
+
+Escolhido: Você advoga. O ONE faz o resto.
+
+As opções pensadas:
+
+- Você advoga. O ONE faz o resto.
+- Enquanto sua equipe advoga, o ONE toca o resto do caso
+- Cada caso do escritório andando, sem ninguém precisar empurrar
+- Chega de advogado preso em trabalho repetido
+- Oi, alguma novidade do meu caso?
+- Automação com IA no contencioso de massa, do primeiro contato ao protocolo
+
+As formas e os testes estão no app, em references/principios.md, seção 17: em voz alta, trocando o nome, a palavra de dentro e a imagem.
+
 ## A direção visual
 
-A marca do ONE como está no código, o azul do logo com o ciano, Urbanist nos títulos, Mulish no texto e cantos arredondados, com a faixa escura no topo e no controle, e o próprio produto no lugar de ilustração: a cena do topo e as figuras são os componentes do ONE com dados fictícios.
+O efeito do modelo do Juridiq na marca do ONE: topo escuro de alto contraste, com a luz do azul e do ciano da marca atrás do título e um halo atrás da janela, parte do título em degradê do azul do logo para o ciano e a janela grande do sistema logo abaixo, e depois uma sequência de objetos grandes (o telefone, o radar, os documentos, a petição, o calendário, a pasta do protocolo) com pouco texto ao lado, em Urbanist e Mulish, cantos arredondados, dados fictícios e etiquetados.
 
 - A marca: #1074C6 primária (o azul do logo), #1D8FED primária clara, #00C0EB secundária (o ciano do logo), #303030 faixa escura, #FFFFFF superfície, #48433D texto, #726C65 texto secundário, #AE59F8 acento 1, #ED45CE acento 2, #F57072 acento 3, #F5AB56 acento 4, #C92C4E erro, só para risco e falha; Urbanist (títulos), Mulish (texto), JetBrains Mono (código) (de packages/design-tokens/css/blue.css (paleta theme-blue, provisória) e css/common.css, convertidos de HSL; as letras em apps/web/src/app/layout.tsx (next/font) e docs/DESIGN.md).
-- Escolhido de propósito da lista de vícios: texto_degrade.
+- Escolhido de propósito da lista de vícios: texto_degrade, tres_cartoes_iguais, mancha_desfocada.
 
-## A demonstração
+## A figura principal
 
 | O quê | Valor |
 |---|---|
-| de onde vem a imagem (componentes, tela ou replica) | componentes |
-| o objeto em foco | O topo de um caso no ONE (Andamento do caso), com a conversa da cliente no WhatsApp do escritório sobre a borda do painel. |
-| a única ação | O ONE confere a identidade que a cliente mandou pelo WhatsApp. |
-| o que muda e fica na tela | O documento aparece aceito em "O que o ONE fez há pouco", e a resposta do ONE fica na conversa, entregue. |
-| o que fica de fora | O menu, a busca e os outros cartões do caso, a linha de quem está com o caso, as etapas depois do protocolo, a lista de documentos e o resto da conversa. Nenhum número de uso, logo de cliente ou depoimento. |
-| onde cada coisa mostrada existe no produto | O topo do caso é o de casos/[id]/components/journey-card.tsx (ProgressSteps, StateLine e ActivityCards de components/product), com as palavras de lib/cases/journey.ts e lib/cases/now.ts (case-now-checking-one). A foto mandada na conversa entra no caso pela migração 0050_conversation_files e é conferida pela IA na tarefa caso.documento.conferencia (0024), que o ONE decide sozinho por padrão (a decisão document_check do catálogo autonomy_decisions, semeada na 0024). A resposta é a de fileLine em lib/conversations/agent.ts, mostrada como em /atendimento (MessageBubble, autor ONE, Entregue). |
+| de onde vem a imagem (replica, tela ou componentes) | replica |
+| o objeto em foco | A janela do escritório no ONE: o menu de ícones, a busca, quatro números do mês, os casos num quadro por etapa e as pendências do dia, com dois cartões soltos sobre as bordas. |
+| a única ação | [a decidir] |
+| o que muda e fica na tela | Os casos do escritório, cada um numa etapa e com quem está, e ao lado só o que precisa de uma pessoa hoje. |
+| o que fica de fora | A tela de um caso aberto, a barra de etapas e a lista de eventos, que só quem usa reconhece; os cartões e as colunas além de Audiência. Nenhum número de uso, logo de cliente ou depoimento. |
+| onde cada coisa mostrada existe no produto | O menu de ícones é MenuType.Minimal (apps/web/src/menu-items.ts); a busca é components/layout/search/global-search.tsx; os quatro números são os de /casos e /controladoria (cases-number-*, firm_cases, migração 0108); o quadro por etapa é controladoria/case-board.tsx (firm_case_board, migração 0112), com os dias na etapa e quem está com o caso (case_standing, migração 0111); as pendências são components/layout/pending/pending-center.tsx (firm_pending, migração 0044). O cartão 'O ONE agora' são as palavras de lib/cases/now.ts (a peça escrita pelo ONE, caso.peca.minuta, migração 0029). O cartão do prazo é a contagem de prazo-v1 (product-examples.ts). |
 | os dados são inventados para a cena | sim |
 | o seletor da cena na página | [data-demo] |
 
-A ordem de preferência, as medidas e o que conferir estão no app, em references/demonstracao.md. A cena mostra só o que o produto faz hoje.
+A ordem de preferência, as medidas e o que conferir estão no app, em references/demonstracao.md. Ela se entende sem ler e mostra só o que o produto faz hoje.
+
+## As figuras
+
+| Seção | O que se vê | O que se entende sem ler | Marca na página |
+|---|---|---|---|
+| O topo | a janela grande do sistema, com menu de ícones, números, quadro de casos por etapa e pendências, e dois cartões soltos sobre as bordas | existe um sistema inteiro aqui, com os casos do escritório andando | `data-figura="janela-do-sistema"` |
+| Atendimento | um telefone grande no centro, com a conversa no visual de um aplicativo de mensagens, e dois cartões escuros de cada lado | o cliente pergunta e recebe a resposta no celular | `data-figura="telefone-conversa"` |
+| Depois do protocolo | um radar escuro com o ponteiro que gira e pontos acesos, e um cartão de movimentação embaixo | alguém está vigiando os processos pelo escritório | `data-figura="radar-processos"` |
+| O dia a dia: documentos | duas fotos de documento sobrepostas: uma aceita, com a marca de conferido, e uma escura, com o aviso e o botão de tirar outra | o documento bom passa e a foto ruim volta para o cliente | `data-figura="documentos-conferidos"` |
+| O dia a dia: a peça | uma folha de petição com as linhas de texto e um trecho marcado para completar, e a lista das citações conferidas sobre a borda | a petição já vem escrita e o que ela cita está conferido | `data-figura="peticao-escrita"` |
+| O dia a dia: prazos | o calendário do mês, com os dias contados pintados, o feriado marcado e o último dia em destaque | o prazo foi contado e termina naquele dia | `data-figura="calendario-prazo"` |
+| O dia a dia: o protocolo | uma pasta aberta com os arquivos em PDF numerados na ordem | o pacote do protocolo está pronto, em ordem | `data-figura="pasta-protocolo"` |
+| Controle | um painel de seletores, um por decisão, com um deles marcado em cada linha, e um campo que digita sozinho | o escritório regula o que o sistema decide sozinho | `data-figura="painel-autonomia"` |
+| Chegar ao ONE: o modelo | o arquivo Word do escritório, ligado a uma folha de modelo com os campos marcados em cor | o documento que o escritório já usa vira modelo | `data-figura="modelo-do-escritorio"` |
+| Chegar ao ONE: a carteira | uma planilha de processos, com uma marca colorida do que acontece em cada linha | a carteira entra por planilha e cada linha é conferida | `data-figura="planilha-carteira"` |
+
+Sem as letras, cada uma continua sendo um objeto. O guia está no app, em references/demonstracao.md.
 
 ## Os números e as urgências
 
@@ -47,11 +81,13 @@ A ordem de preferência, as medidas e o que conferir estão no app, em reference
 | Feito para os sistemas dos tribunais: Projudi, eproc, PJe, e-SAJ | court_systems (0021, semeada de uma amostra do DJEN; 0027 Projudi do TJGO; 0036 eproc do TJSP e do TJSC, PJe do TJCE) e a decisão do protocolo assistido por sistema (CLAUDE.md, Product decisions). São nomes de sistemas, sem logo. |
 | DJEN | As publicações lidas pela OAB de cada advogado no Diário de Justiça Eletrônico Nacional (0028, @flyee/courts/providers/djen). |
 | Entrar na lista não custa nada | O estágio do site é a lista de espera (platform_settings launch) e nenhum preço foi publicado (offer.price nulo; a cobrança do ONE é do M3). |
-| Mariana Souza, 09:41, identidade.jpg (a cena do topo) | Exemplo fictício, com a etiqueta ao lado da cena. |
-| 23:41 (a pergunta da cliente e a resposta do ONE) | Exemplo fictício, com a etiqueta embaixo da conversa. |
+| Os números da janela do topo: 1.284 em andamento, +4%, 96 novos, 41 ajuizados, 18 arquivados, os totais de cada coluna, os dias na etapa, os casos 128, 131 e os outros, e os nomes dos clientes | Exemplo fictício, em EXAMPLE_WINDOW de product-examples.ts, com a etiqueta embaixo da janela. |
+| Hoje às 14h (as pendências da janela) e o caso 128 (o cartão O ONE agora) | Exemplo fictício, com a etiqueta embaixo da janela. |
+| 23:41 e 23:42 (a conversa do telefone) e Mariana | Exemplo fictício, com a etiqueta embaixo do telefone. |
 | Processos de 2099, 12/11 às 14h, vence em 27/11 (os exemplos do radar) | Exemplo fictício, com a etiqueta no cartão; números de processo de um ano por vir, com os dígitos verificadores. |
-| Vence em 27/11/2026: 15 dias úteis, disponibilizada no DJEN em 04/11/2026, publicada em 05/11/2026, o primeiro em 06/11/2026, sem contar 20/11/2026 | Calculado na página pela regra do produto (prazo-v1, @flyee/rules/deadlines) sobre um exemplo fictício de Goiânia; 20/11 é feriado nacional pela Lei 14.759/2023; o calendário do TJGO de 2026 (0034) não tem outro dia de novembro. |
-| 01-peticao-inicial.pdf a 05-cartao-de-embarque.pdf, Projudi, Pronto para protocolar | Nomes e ordem dados na página pela regra do pacote (planFiling, @flyee/courts/filing) a um exemplo fictício; o limite de 6 MB do Projudi do TJGO vem de court_systems (0027). |
+| Novembro de 2026, vence em 27/11/2026, 15 dias úteis, feriado de 20/11 (o calendário e o cartão do topo) | Calculado na página pela regra do produto (prazo-v1, @flyee/rules/deadlines) sobre um exemplo fictício de Goiânia, disponibilizado no DJEN em 04/11/2026; 20/11 é feriado nacional pela Lei 14.759/2023; o calendário do TJGO de 2026 (0034) não tem outro dia de novembro. Um teste segura as palavras contra a regra (product-examples.test.ts). |
+| 01-peticao-inicial.pdf a 05-comprovante-de-gastos.pdf, Projudi, Pronto para protocolar | Nomes e ordem dados na página pela regra do pacote (planFiling, @flyee/courts/filing) a um exemplo fictício; o limite de 6 MB do Projudi do TJGO vem de court_systems (0027). |
+| Lei nº 8.078, art. 14; Lei nº 9.099, art. 3º; Constituição Federal, art. 5º (as citações da petição) | Fontes semeadas na biblioteca da plataforma (migração 0045_platform_library), conferidas nas páginas oficiais em 2026-10-22; a trava de citação é o gate da peça (migração 0029). |
 | As cinco decisões do painel de controle e os modos de cada uma | O catálogo autonomy_decisions: aceitar documentos (0024) e responder o cliente (0048) aceitam três modos; prazos (0034), texto da peça (0029) e procuração (0054) aceitam dois. Os nomes são os de /settings/autonomia; as escolhas do painel são de um escritório fictício. |
 | Um sócio muda cada decisão com o segundo fator | set_firm_autonomy pede um sócio com o segundo fator (migração 0016, teste pgTAP 0045); num escritório sem sócio, quem gerencia a conta (decides_for_firm, 0078). |
 | caso 128 (frases do ONE agora) | Exemplo fictício, com a etiqueta embaixo do painel. |
@@ -62,10 +98,10 @@ A ordem de preferência, as medidas e o que conferir estão no app, em reference
 ## As seções, na ordem
 
 1. A faixa de cima, só com uma promoção de verdade: o que é, até quando e um chamado
-2. O topo: para quem é e o resultado no título, uma frase com o que o produto faz, o chamado principal e o secundário, a linha de condições embaixo, uma prova curta e o produto, de verdade, embaixo ou ao lado
-3. O produto funcionando: os componentes reais com dados fixos, a tela real, um vídeo curto ou uma réplica simplificada, nessa ordem, só com o que ele faz hoje e com os dados de exemplo marcados como fictícios
-4. A dor nas palavras do cliente, em três ou quatro cartões, e a frase que liga a dor à solução
-5. Os recursos do dia a dia, um por bloco, com o resultado no título e a tela ao lado; numa grade, um bloco lidera e nem todo bloco é tela
+2. O topo: um título que promete o que muda para quem chegou e se diz em voz alta, uma frase com o que o produto faz, o chamado principal e o secundário, a linha de condições embaixo, uma prova curta e, embaixo ou ao lado, a figura grande do produto
+3. O produto funcionando: uma figura que se entende sem ler, ou uma cena curta, só com o que ele faz hoje e com os dados de exemplo marcados como fictícios
+4. A dor nas palavras do cliente: a frase dele como título, um objeto grande que mostra o problema resolvido, como um telefone com a conversa, três ou quatro cartões curtos e a frase que liga a dor à solução
+5. Os recursos do dia a dia, de três a cinco, uma linha por recurso: o resultado no título, até duas linhas de apoio e uma figura grande ao lado, alternando os lados; os menores terminam em até três cartões curtos
 6. A diferença: por que este produto e não uma alternativa genérica
 7. A história de uso: um cliente de exemplo, do primeiro contato ao resultado, passo a passo
 8. As integrações, com o que depende do plano escrito
@@ -96,8 +132,10 @@ Eventos: `page_view`, `section_view`, `cta_click`, `demo_request`, `trial_start`
 ## Conferir à mão, lendo o código
 
 - [ ] Os números da página têm origem: clientes, horas economizadas, volume de uso
-- [ ] A demonstração mostra só o que o produto faz hoje, e os dados inventados para ela levam a etiqueta
-- [ ] A página tem a cara deste produto: a direção visual do plano aparece nela, e nenhum vício da lista ficou sem ser escolha
+- [ ] O título passa nos testes de references/principios.md, seção 17: em voz alta, trocando o nome, a palavra de dentro e a imagem
+- [ ] Sem as letras, cada figura continua sendo um objeto, e nenhuma seção de recurso ficou só com caixas
+- [ ] As figuras mostram só o que o produto faz hoje, e os dados inventados para elas levam a etiqueta
+- [ ] A página tem a cara deste produto, e o efeito visual do modelo escolhido aparece nela
 - [ ] A duração da demonstração é a mesma no topo, nos chamados e na agenda
 - [ ] Os exemplos de código e as telas batem com o produto e com a documentação
 - [ ] As regras da promoção são as mesmas na faixa, na seção, na janela, nos planos e nas perguntas frequentes
@@ -106,6 +144,10 @@ Eventos: `page_view`, `section_view`, `cta_click`, `demo_request`, `trial_start`
 
 ## A conferência automática
 
+- O título promete em vez de nomear a categoria (`title_promises`)
+- As figuras não pedem leitura (`figures_seen`)
+- Cartões que se leem de relance (`cards_short`)
+- Nenhum cartão com um buraco (`cards_no_holes`)
 - O botão principal na primeira tela do celular (`cta_first_screen`)
 - Os mesmos chamados em toda a página (`cta_consistent`)
 - Um título principal (h1) (`h1_present`)
@@ -139,5 +181,5 @@ Eventos: `page_view`, `section_view`, `cta_click`, `demo_request`, `trial_start`
 
 ## Modelos deste tipo
 
-- Juridiq: a página de vendas de um software jurídico (vista em 2026-11-07): demonstração e teste no topo, com a linha de condições embaixo; a janela da promoção abre na metade da página, nunca na chegada, com recusa visível; barra fixa no celular quando o botão do topo sai da tela; demonstrações animadas com a etiqueta de exemplo fictício e botão de pausa; perguntas frequentes com as objeções de quem troca de sistema.
+- Juridiq: a página de vendas de um software jurídico (vista em 2026-11-07): cada seção tem um objeto que se entende sem ler: a janela grande do sistema, o telefone, o radar, as colagens de telas; demonstração e teste no topo, com a linha de condições embaixo; a janela da promoção abre na metade da página, nunca na chegada, com recusa visível; barra fixa no celular quando o botão do topo sai da tela; demonstrações animadas com a etiqueta de exemplo fictício e botão de pausa; perguntas frequentes com as objeções de quem troca de sistema.
 - JuriChat: a página de vendas do atendimento por WhatsApp (vista em 2026-11-07): as dores do dia a dia em quatro cartões antes da solução; a história de uma cliente em quatro passos, numa conversa presa na tela; os painéis do atendente e do gestor com números de exemplo; o que depende do plano escrito junto do recurso; o teste em destaque no topo e os 7 dias escritos nos planos.

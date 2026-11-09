@@ -14,6 +14,18 @@
   "cta_text": "Entrar na lista de espera",
   "secondary_cta_text": "Falar com a gente",
   "decline_text": null,
+  "headline": {
+    "options": [
+      "Você advoga. O ONE faz o resto.",
+      "Enquanto sua equipe advoga, o ONE toca o resto do caso",
+      "Cada caso do escritório andando, sem ninguém precisar empurrar",
+      "Chega de advogado preso em trabalho repetido",
+      "Oi, alguma novidade do meu caso?",
+      "Automação com IA no contencioso de massa, do primeiro contato ao protocolo"
+    ],
+    "chosen": "Você advoga. O ONE faz o resto.",
+    "why": "Em voz alta é uma frase de conversa; a primeira metade fala com o advogado e a segunda diz o que muda, no desenho do modelo (a primeira parte em branco, a segunda em cor). Com o nome de um sistema de gestão no lugar ela deixa de ser verdade, porque um sistema de gestão guarda o trabalho e não o faz. Nenhuma palavra de dentro. A última opção era o título anterior: é nome de categoria e reprova nos testes 1 e 3 da seção 17."
+  },
   "offer": {
     "price": null,
     "reference_price": null,
@@ -35,9 +47,11 @@
     "rate_limit": null
   },
   "visual": {
-    "direction": "A marca do ONE como está no código, o azul do logo com o ciano, Urbanist nos títulos, Mulish no texto e cantos arredondados, com a faixa escura no topo e no controle, e o próprio produto no lugar de ilustração: a cena do topo e as figuras são os componentes do ONE com dados fictícios.",
+    "direction": "O efeito do modelo do Juridiq na marca do ONE: topo escuro de alto contraste, com a luz do azul e do ciano da marca atrás do título e um halo atrás da janela, parte do título em degradê do azul do logo para o ciano e a janela grande do sistema logo abaixo, e depois uma sequência de objetos grandes (o telefone, o radar, os documentos, a petição, o calendário, a pasta do protocolo) com pouco texto ao lado, em Urbanist e Mulish, cantos arredondados, dados fictícios e etiquetados.",
     "chosen": [
-      "texto_degrade"
+      "texto_degrade",
+      "tres_cartoes_iguais",
+      "mancha_desfocada"
     ]
   },
   "brand": {
@@ -63,16 +77,78 @@
     "source": "packages/design-tokens/css/blue.css (paleta theme-blue, provisória) e css/common.css, convertidos de HSL; as letras em apps/web/src/app/layout.tsx (next/font) e docs/DESIGN.md"
   },
   "demo": {
-    "kind": "componentes",
-    "shows": "O topo de um caso no ONE (Andamento do caso), com a conversa da cliente no WhatsApp do escritório sobre a borda do painel.",
-    "action": "O ONE confere a identidade que a cliente mandou pelo WhatsApp.",
-    "result": "O documento aparece aceito em \"O que o ONE fez há pouco\", e a resposta do ONE fica na conversa, entregue.",
-    "left_out": "O menu, a busca e os outros cartões do caso, a linha de quem está com o caso, as etapas depois do protocolo, a lista de documentos e o resto da conversa. Nenhum número de uso, logo de cliente ou depoimento.",
-    "real_today": "O topo do caso é o de casos/[id]/components/journey-card.tsx (ProgressSteps, StateLine e ActivityCards de components/product), com as palavras de lib/cases/journey.ts e lib/cases/now.ts (case-now-checking-one). A foto mandada na conversa entra no caso pela migração 0050_conversation_files e é conferida pela IA na tarefa caso.documento.conferencia (0024), que o ONE decide sozinho por padrão (a decisão document_check do catálogo autonomy_decisions, semeada na 0024). A resposta é a de fileLine em lib/conversations/agent.ts, mostrada como em /atendimento (MessageBubble, autor ONE, Entregue).",
+    "kind": "replica",
+    "shows": "A janela do escritório no ONE: o menu de ícones, a busca, quatro números do mês, os casos num quadro por etapa e as pendências do dia, com dois cartões soltos sobre as bordas.",
+    "action": "",
+    "result": "Os casos do escritório, cada um numa etapa e com quem está, e ao lado só o que precisa de uma pessoa hoje.",
+    "left_out": "A tela de um caso aberto, a barra de etapas e a lista de eventos, que só quem usa reconhece; os cartões e as colunas além de Audiência. Nenhum número de uso, logo de cliente ou depoimento.",
+    "real_today": "O menu de ícones é MenuType.Minimal (apps/web/src/menu-items.ts); a busca é components/layout/search/global-search.tsx; os quatro números são os de /casos e /controladoria (cases-number-*, firm_cases, migração 0108); o quadro por etapa é controladoria/case-board.tsx (firm_case_board, migração 0112), com os dias na etapa e quem está com o caso (case_standing, migração 0111); as pendências são components/layout/pending/pending-center.tsx (firm_pending, migração 0044). O cartão 'O ONE agora' são as palavras de lib/cases/now.ts (a peça escrita pelo ONE, caso.peca.minuta, migração 0029). O cartão do prazo é a contagem de prazo-v1 (product-examples.ts).",
     "sample_data": true,
-    "animated": true,
+    "animated": false,
     "selector": "[data-demo]"
   },
+  "figures": [
+    {
+      "name": "janela-do-sistema",
+      "section": "O topo",
+      "object": "a janela grande do sistema, com menu de ícones, números, quadro de casos por etapa e pendências, e dois cartões soltos sobre as bordas",
+      "says": "existe um sistema inteiro aqui, com os casos do escritório andando"
+    },
+    {
+      "name": "telefone-conversa",
+      "section": "Atendimento",
+      "object": "um telefone grande no centro, com a conversa no visual de um aplicativo de mensagens, e dois cartões escuros de cada lado",
+      "says": "o cliente pergunta e recebe a resposta no celular"
+    },
+    {
+      "name": "radar-processos",
+      "section": "Depois do protocolo",
+      "object": "um radar escuro com o ponteiro que gira e pontos acesos, e um cartão de movimentação embaixo",
+      "says": "alguém está vigiando os processos pelo escritório"
+    },
+    {
+      "name": "documentos-conferidos",
+      "section": "O dia a dia: documentos",
+      "object": "duas fotos de documento sobrepostas: uma aceita, com a marca de conferido, e uma escura, com o aviso e o botão de tirar outra",
+      "says": "o documento bom passa e a foto ruim volta para o cliente"
+    },
+    {
+      "name": "peticao-escrita",
+      "section": "O dia a dia: a peça",
+      "object": "uma folha de petição com as linhas de texto e um trecho marcado para completar, e a lista das citações conferidas sobre a borda",
+      "says": "a petição já vem escrita e o que ela cita está conferido"
+    },
+    {
+      "name": "calendario-prazo",
+      "section": "O dia a dia: prazos",
+      "object": "o calendário do mês, com os dias contados pintados, o feriado marcado e o último dia em destaque",
+      "says": "o prazo foi contado e termina naquele dia"
+    },
+    {
+      "name": "pasta-protocolo",
+      "section": "O dia a dia: o protocolo",
+      "object": "uma pasta aberta com os arquivos em PDF numerados na ordem",
+      "says": "o pacote do protocolo está pronto, em ordem"
+    },
+    {
+      "name": "painel-autonomia",
+      "section": "Controle",
+      "object": "um painel de seletores, um por decisão, com um deles marcado em cada linha, e um campo que digita sozinho",
+      "says": "o escritório regula o que o sistema decide sozinho"
+    },
+    {
+      "name": "modelo-do-escritorio",
+      "section": "Chegar ao ONE: o modelo",
+      "object": "o arquivo Word do escritório, ligado a uma folha de modelo com os campos marcados em cor",
+      "says": "o documento que o escritório já usa vira modelo"
+    },
+    {
+      "name": "planilha-carteira",
+      "section": "Chegar ao ONE: a carteira",
+      "object": "uma planilha de processos, com uma marca colorida do que acontece em cada linha",
+      "says": "a carteira entra por planilha e cada linha é conferida"
+    }
+  ],
   "claims": [
     {
       "text": "Em construção com um escritório piloto",
@@ -91,24 +167,32 @@
       "origin": "O estágio do site é a lista de espera (platform_settings launch) e nenhum preço foi publicado (offer.price nulo; a cobrança do ONE é do M3)."
     },
     {
-      "text": "Mariana Souza, 09:41, identidade.jpg (a cena do topo)",
-      "origin": "Exemplo fictício, com a etiqueta ao lado da cena."
+      "text": "Os números da janela do topo: 1.284 em andamento, +4%, 96 novos, 41 ajuizados, 18 arquivados, os totais de cada coluna, os dias na etapa, os casos 128, 131 e os outros, e os nomes dos clientes",
+      "origin": "Exemplo fictício, em EXAMPLE_WINDOW de product-examples.ts, com a etiqueta embaixo da janela."
     },
     {
-      "text": "23:41 (a pergunta da cliente e a resposta do ONE)",
-      "origin": "Exemplo fictício, com a etiqueta embaixo da conversa."
+      "text": "Hoje às 14h (as pendências da janela) e o caso 128 (o cartão O ONE agora)",
+      "origin": "Exemplo fictício, com a etiqueta embaixo da janela."
+    },
+    {
+      "text": "23:41 e 23:42 (a conversa do telefone) e Mariana",
+      "origin": "Exemplo fictício, com a etiqueta embaixo do telefone."
     },
     {
       "text": "Processos de 2099, 12/11 às 14h, vence em 27/11 (os exemplos do radar)",
       "origin": "Exemplo fictício, com a etiqueta no cartão; números de processo de um ano por vir, com os dígitos verificadores."
     },
     {
-      "text": "Vence em 27/11/2026: 15 dias úteis, disponibilizada no DJEN em 04/11/2026, publicada em 05/11/2026, o primeiro em 06/11/2026, sem contar 20/11/2026",
-      "origin": "Calculado na página pela regra do produto (prazo-v1, @flyee/rules/deadlines) sobre um exemplo fictício de Goiânia; 20/11 é feriado nacional pela Lei 14.759/2023; o calendário do TJGO de 2026 (0034) não tem outro dia de novembro."
+      "text": "Novembro de 2026, vence em 27/11/2026, 15 dias úteis, feriado de 20/11 (o calendário e o cartão do topo)",
+      "origin": "Calculado na página pela regra do produto (prazo-v1, @flyee/rules/deadlines) sobre um exemplo fictício de Goiânia, disponibilizado no DJEN em 04/11/2026; 20/11 é feriado nacional pela Lei 14.759/2023; o calendário do TJGO de 2026 (0034) não tem outro dia de novembro. Um teste segura as palavras contra a regra (product-examples.test.ts)."
     },
     {
-      "text": "01-peticao-inicial.pdf a 05-cartao-de-embarque.pdf, Projudi, Pronto para protocolar",
+      "text": "01-peticao-inicial.pdf a 05-comprovante-de-gastos.pdf, Projudi, Pronto para protocolar",
       "origin": "Nomes e ordem dados na página pela regra do pacote (planFiling, @flyee/courts/filing) a um exemplo fictício; o limite de 6 MB do Projudi do TJGO vem de court_systems (0027)."
+    },
+    {
+      "text": "Lei nº 8.078, art. 14; Lei nº 9.099, art. 3º; Constituição Federal, art. 5º (as citações da petição)",
+      "origin": "Fontes semeadas na biblioteca da plataforma (migração 0045_platform_library), conferidas nas páginas oficiais em 2026-10-22; a trava de citação é o gate da peça (migração 0029)."
     },
     {
       "text": "As cinco decisões do painel de controle e os modos de cada uma",
@@ -137,10 +221,11 @@
   ],
   "notes": [
     "Modelo principal: juridiq-pagina-de-vendas (estrutura, mecânica e efeito visual), na marca do ONE. Nada de texto, imagem, logo, cor ou código do Juridiq.",
+    "Refeita em 2026-11-08 a pedido do integrante, que viu a página no ar: título que ninguém diria, a cena do topo (um pedaço de interface que confundia), o atendimento só com texto e cartões cheios de texto. A cena (case-demo.tsx) e as figuras montadas com componentes da tela saíram por isso, e a figura do topo passou de componentes para réplica, como manda a seção 2 de demonstracao.md.",
     "O ONE ainda não vende: o estágio do site é a lista de espera (platform_settings launch). O chamado principal segue o estágio, igual ao do menu: 'Entrar na lista de espera', e 'Criar a conta do escritório' quando o site abrir.",
     "Sem promoção, sem preço publicado, sem teste grátis, sem clientes para citar: a faixa da promoção, a janela da promoção, os números de uso, os depoimentos e os planos ficam de fora. A pergunta do preço está nas perguntas frequentes.",
-    "A cena do topo e as figuras da grade de recursos são componentes do produto com dados fixos (components/marketing/case-demo.tsx e product-figures.tsx): o link do cliente com a medida da foto (0043), o pacote de protocolo (planFiling), o prazo contado (prazo-v1 com DeadlineCount) e a conversa (MessageBubble). O painel de autonomia e as duas telas de chegada continuam desenhados com tokens (firm-screens.tsx). Toda figura leva a etiqueta 'Exemplo fictício'.",
-    "O site vende o núcleo do ONE (a automação dos casos com IA), nunca uma aplicação: o primeiro módulo aparece numa linha só, nas perguntas frequentes (.claude/rules/marketing.md).",
-    "Quem vende aparece no rodapé pelo cadastro da plataforma (platform_settings legal_entity): nome, CNPJ e cidade. O endereço completo depende desse cadastro."
+    "O site vende o núcleo do ONE (a automação dos casos com IA), nunca uma aplicação: o primeiro módulo aparece numa linha só, nas perguntas frequentes (.claude/rules/marketing.md). Por isso as figuras novas não mostram voo nem cartão de embarque.",
+    "Quem vende aparece no rodapé pelo cadastro da plataforma (platform_settings legal_entity): nome, CNPJ e cidade. O endereço completo depende desse cadastro.",
+    "O integrante pediu de volta o brilho do topo em 2026-11-08: a luz atrás do título e o halo da janela, que a revisão anterior tinha tirado por causa da lista de vícios. Fica como escolha registrada em visual.chosen."
   ]
 }

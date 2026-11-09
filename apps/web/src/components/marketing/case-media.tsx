@@ -1,3 +1,4 @@
+import Reveal from "@/components/marketing/reveal";
 import NiBriefcase from "@/icons/nexture/ni-briefcase";
 import NiLink from "@/icons/nexture/ni-link";
 import NiSendRight from "@/icons/nexture/ni-send-right";
@@ -48,9 +49,10 @@ export function ClientChat({
           <p className="text-text-secondary text-xs">{status}</p>
         </div>
       </div>
-      <ol className="bg-grey-25 flex flex-col gap-2 px-3 py-4">
+      {/* The messages arrive one after the other when the phone reaches the screen; they are all there without motion. */}
+      <Reveal stagger={0.45} className="bg-grey-25 flex flex-col gap-2 px-3 py-4">
         {messages.map((message, index) => (
-          <li
+          <div
             key={index}
             className={cn(
               "flex flex-col gap-1.5 rounded-2xl px-3 py-2 text-sm leading-5 shadow-2xs",
@@ -70,9 +72,9 @@ export function ClientChat({
             <span className={cn("self-end text-xs", message.from === "firm" && "text-text-secondary")}>
               {message.time}
             </span>
-          </li>
+          </div>
         ))}
-      </ol>
+      </Reveal>
       <div aria-hidden className="flex items-center gap-2 px-3 py-3">
         <span className="border-grey-100 text-text-secondary flex-1 rounded-full border px-4 py-2 text-xs">
           {inputLabel}

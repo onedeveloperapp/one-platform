@@ -41,8 +41,8 @@ export default function Hero({
   /**
    * "deep": the top of the page on the deep band (center layout only): the copy
    * in the contrast text, the second part of the title (`<em>`) in a gradient
-   * from the primary to the secondary, and the deep band ending halfway down
-   * the media, so the product's screen sits
+   * from the primary to the secondary, a slow wash of both behind it, and the
+   * deep band ending halfway down the media, so the product's screen sits
    * across the edge between the dark top and the light page.
    */
   tone?: "default" | "deep";
@@ -192,8 +192,9 @@ export default function Hero({
     <Section
       spacing="default"
       decor={deep ? "none" : decor}
-      // isolate: the deep backdrop sits at -z-10 inside this section, over the page's own background.
-      className={cn("overflow-hidden", deep && "isolate")}
+      // isolate: the deep backdrop sits at -z-10 inside this section, over the page's own background. Less room over the
+      // copy on the deep band, so the product's window starts inside the first screen.
+      className={cn("overflow-hidden", deep && "isolate pt-8 md:pt-10")}
       track={track}
     >
       <div data-hero style={entrance} className="flex flex-col items-center">
@@ -225,7 +226,8 @@ export default function Hero({
             className={cn(
               "font-display text-display-xl max-w-5xl font-extrabold text-balance [&_em]:not-italic",
               deep
-                ? "text-text-contrast [&_em]:from-primary-light [&_em]:to-secondary-light [&_em]:bg-linear-to-r [&_em]:[box-decoration-break:clone] [&_em]:bg-clip-text [&_em]:text-transparent"
+                ? // The title in two parts, each on its line: what the first says in white, what changes in the gradient.
+                  "text-text-contrast [&_em]:from-primary-light [&_em]:to-secondary-light [&_em]:block [&_em]:bg-linear-to-r [&_em]:[box-decoration-break:clone] [&_em]:bg-clip-text [&_em]:text-transparent"
                 : "text-text-primary [&_em]:text-primary",
             )}
           >
@@ -234,8 +236,8 @@ export default function Hero({
 
           <p
             className={cn(
-              "max-w-2xl text-lg leading-6 md:text-xl md:leading-7",
-              deep ? "text-text-contrast/75" : "text-text-secondary",
+              "text-lg leading-6 text-balance md:text-xl md:leading-7",
+              deep ? "text-text-contrast/75 max-w-3xl" : "text-text-secondary max-w-2xl",
             )}
           >
             {subtitle}
@@ -247,7 +249,7 @@ export default function Hero({
             strip.items.length > 0 &&
             (deep ? (
               // The names under a spaced capital label, both quiet: who the product works with, never a client's logo.
-              <div className="mt-4 flex flex-col items-center gap-3">
+              <div className="mt-2 flex flex-col items-center gap-2">
                 <p className="text-text-contrast/60 font-eyebrow tracking-eyebrow text-xs uppercase">{strip.label}</p>
                 <ul className="flex flex-row flex-wrap items-center justify-center gap-x-8 gap-y-2">
                   {strip.items.map((item) => (
@@ -272,7 +274,8 @@ export default function Hero({
         </div>
 
         {media && (
-          <div className={cn("relative mt-12 w-full", deep ? "max-w-5xl md:mt-16" : "mt-10 max-w-4xl")}>
+          // On the deep band the media takes the content's width: the whole product, large, right under the copy.
+          <div className={cn("relative w-full", deep ? "mt-10" : "mt-10 max-w-4xl")}>
             {deep && <DeepBackdrop />}
             <div data-hero-media className="w-full">
               {media}
@@ -288,10 +291,9 @@ export default function Hero({
  * The deep band of a deep hero, drawn from the media's wrapper so it ends
  * where the media is: it reaches up past the section's top and out past both
  * sides (the section clips it) and stops a little below the middle of the
- * media, so the screen sits half on the dark top and half on the page. A flat
- * band: the wash of colour that drifted behind the copy until 2026-11-08 said
- * nothing the band does not (the list of defaults of the sales-page skill,
- * "mancha desfocada"), so it went.
+ * media, so the screen sits half on the dark top and half on the page. The
+ * wash of the primary and the secondary drifts above the copy (`mkt-aurora`,
+ * style/layout/marketing-motion.css), and stands still for reduced motion.
  */
 function DeepBackdrop() {
   return (
@@ -300,6 +302,19 @@ function DeepBackdrop() {
       className="bg-background-deep pointer-events-none absolute -inset-x-[100vw] -top-[200vh] -z-10"
       // Where the band ends: a little below the middle of the media (a layout fact of this one shape, not a token).
       style={{ bottom: "42%" }}
-    />
+    >
+      <div
+        className="absolute bottom-0 left-1/2 -translate-x-1/2 overflow-hidden"
+        style={{ height: "min(62rem, 180vh)", width: "min(90rem, 180vw)" }}
+      >
+        <div
+          className="mkt-aurora absolute inset-0"
+          style={{
+            background:
+              "radial-gradient(38% 42% at 28% 62%, hsl(var(--primary) / 0.42), transparent 70%), radial-gradient(32% 38% at 74% 48%, hsl(var(--secondary) / 0.2), transparent 70%), radial-gradient(50% 30% at 50% 100%, hsl(var(--primary) / 0.25), transparent 75%)",
+          }}
+        />
+      </div>
+    </div>
   );
 }

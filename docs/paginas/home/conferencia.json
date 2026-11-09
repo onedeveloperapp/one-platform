@@ -2,12 +2,12 @@
   "format_version": 1,
   "page": "home",
   "type": "landing",
-  "audited_at": "2026-11-08T19:08:14.125Z",
-  "url": "http://localhost:3122/",
+  "audited_at": "2026-11-09T01:09:56.338Z",
+  "url": "http://localhost:3993/",
   "input_kind": "url",
   "full_reading": true,
   "summary": {
-    "ok": 16,
+    "ok": 21,
     "atencao": 2,
     "nao_conferido": 0
   },
@@ -27,6 +27,14 @@
       "status": "atencao",
       "detail": "Não achei na página: o caminho do arrependimento ou do reembolso.",
       "fix": "Inclua os links da política de privacidade e dos termos, e o caminho do arrependimento ou do reembolso."
+    },
+    {
+      "id": "claims_have_origin",
+      "label": "Os números e as urgências têm origem",
+      "weight": "lei",
+      "status": "ok",
+      "detail": "O número da página tem a origem registrada.",
+      "fix": null
     },
     {
       "id": "placeholder_data",
@@ -58,6 +66,38 @@
       "weight": "confianca",
       "status": "ok",
       "detail": "As cores com matiz e as letras da página estão na marca.",
+      "fix": null
+    },
+    {
+      "id": "title_promises",
+      "label": "O título promete em vez de nomear a categoria",
+      "weight": "venda",
+      "status": "ok",
+      "detail": "O título não abre com o nome da categoria. Leia em voz alta: só um ouvido diz se alguém falaria assim.",
+      "fix": null
+    },
+    {
+      "id": "figures_seen",
+      "label": "As figuras não pedem leitura",
+      "weight": "venda",
+      "status": "ok",
+      "detail": "Nenhuma figura pede leitura longa. Abra a página sem letras: só o olho diz se cada uma ainda é um objeto.",
+      "fix": null
+    },
+    {
+      "id": "cards_short",
+      "label": "Cartões que se leem de relance",
+      "weight": "venda",
+      "status": "ok",
+      "detail": "Os 16 cartões pedem até 32 palavras de leitura.",
+      "fix": null
+    },
+    {
+      "id": "cards_no_holes",
+      "label": "Nenhum cartão com um buraco",
+      "weight": "venda",
+      "status": "ok",
+      "detail": "Nenhum cartão alto tem um buraco no meio.",
       "fix": null
     },
     {
@@ -97,7 +137,7 @@
       "label": "Um título principal (h1)",
       "weight": "acesso",
       "status": "ok",
-      "detail": "O título principal está marcado: \"Automação com IA no contencioso de massa, do primeiro contato ao prot…\".",
+      "detail": "O título principal está marcado: \"Você advoga. O ONE faz o resto.\".",
       "fix": null
     },
     {
@@ -129,7 +169,7 @@
       "label": "Texto legível no celular",
       "weight": "acesso",
       "status": "ok",
-      "detail": "No celular, 14% do texto fica abaixo de 12 px, e nenhum preço ou botão.",
+      "detail": "No celular, 20% do texto fica abaixo de 12 px, e nenhum preço ou botão.",
       "fix": null
     },
     {
@@ -137,7 +177,7 @@
       "label": "Botões e links fáceis de tocar",
       "weight": "acesso",
       "status": "ok",
-      "detail": "Os 32 alvos de toque têm ao menos 24 px, ou espaço em volta.",
+      "detail": "Os 27 alvos de toque têm ao menos 24 px, ou espaço em volta.",
       "fix": null
     },
     {
@@ -145,7 +185,7 @@
       "label": "O contraste do texto",
       "weight": "acesso",
       "status": "ok",
-      "detail": "Os 52 pares de texto e fundo medidos passam. 6 ficaram de fora por estarem sobre imagem ou degradê: olhe nas fotos.",
+      "detail": "Os 39 pares de texto e fundo medidos passam. 9 ficaram de fora por estarem sobre imagem ou degradê: olhe nas fotos.",
       "fix": null
     },
     {
@@ -164,5 +204,6 @@
       "docs/paginas/home/filme/reduced.jpg"
     ],
     "error": null
-  }
+  },
+  "not_checked": "A conferência mede regras. Ela não vê se a página se entende nem se o texto vende: isso se responde olhando as fotos."
 }

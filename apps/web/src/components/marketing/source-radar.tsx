@@ -115,23 +115,24 @@ export default function SourceRadar({
     >
       <div
         aria-hidden
-        className="relative mx-auto aspect-square w-full max-w-64"
+        // A dark disc: it reads as a radar before a word is read, under either mode.
+        className="bg-background-deep relative mx-auto aspect-square w-full max-w-80 overflow-hidden rounded-full"
         style={{ "--sweep-cycle": `${cycle}s`, "--sweep-turns": items.length } as React.CSSProperties}
       >
         {[100, 72, 44].map((size) => (
           <span
             key={size}
-            className="border-grey-100 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full border"
+            className="border-text-contrast/15 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full border"
             style={{ width: `${size}%`, height: `${size}%` }}
           />
         ))}
-        <span className="bg-grey-100 absolute top-0 bottom-0 left-1/2 w-px" />
-        <span className="bg-grey-100 absolute top-1/2 right-0 left-0 h-px" />
+        <span className="bg-text-contrast/15 absolute top-0 bottom-0 left-1/2 w-px" />
+        <span className="bg-text-contrast/15 absolute top-1/2 right-0 left-0 h-px" />
         <span
           data-running={running}
           className="mkt-sweep absolute inset-0 rounded-full"
           style={{
-            background: "conic-gradient(from 0deg, transparent 0deg 290deg, hsl(var(--primary) / 0.32) 360deg)",
+            background: "conic-gradient(from 0deg, transparent 0deg 290deg, hsl(var(--secondary) / 0.45) 360deg)",
           }}
         />
         {BLIPS.slice(0, items.length).map((blip, blipIndex) => (
@@ -152,7 +153,7 @@ export default function SourceRadar({
             }
           />
         ))}
-        <span className="bg-primary absolute top-1/2 left-1/2 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full" />
+        <span className="bg-secondary absolute top-1/2 left-1/2 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full" />
       </div>
 
       <div

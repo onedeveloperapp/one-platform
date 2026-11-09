@@ -27,6 +27,22 @@
 }
 
 /*
+  The deep top of a hero (`<Hero tone="deep">`): a wash of the primary and the
+  secondary that drifts on an 8s cycle. Six half cycles, alternate, so it ends
+  where it started and the page is still once it has been read; reduced motion
+  leaves it still from the start. Transform only.
+*/
+@keyframes mkt-aurora {
+  from {
+    transform: translate3d(-3%, 0, 0) scale(1);
+  }
+
+  to {
+    transform: translate3d(3%, 4%, 0) scale(1.08);
+  }
+}
+
+/*
   The radar of <SourceRadar>: one turn per example it shows, as many turns as
   it has examples (--sweep-turns), and only while the examples change by
   themselves (data-running), which ends after that one pass or at the
@@ -54,6 +70,10 @@
 
 @layer components {
   @media (prefers-reduced-motion: no-preference) {
+    .mkt-aurora {
+      animation: mkt-aurora 8s ease-in-out 6 alternate;
+    }
+
     .mkt-sweep[data-running="true"] {
       animation: mkt-sweep var(--sweep-cycle, 6s) linear var(--sweep-turns, 5);
     }
