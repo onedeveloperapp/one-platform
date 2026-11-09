@@ -48,6 +48,10 @@ A work that writes a file (an issued version, the PDF of a piece, the copy made 
 
 A worker takes a file back when it believes nothing names it, and it may be wrong: the store's answer to the step that made the file somebody's document can get lost on the way. So the store is the one that knows. `FileStore.discard` rejects when the file was not forgotten (the store did not answer, or something names the file after all; `discard_file` answers `in_use` for a file any table names, migration `0029_drafts`), and the bytes of a file that is still on record are never removed. Bytes left with no record are the upkeep's to remove; a record left with no bytes would be a document nobody can open.
 
+## A table
+
+`writeTablePdf(document)` (`table-pdf.ts`) writes a list as a PDF to read or to print: A4 lying down, the title and what the list is on the first page, the titles of the columns repeated and each page numbered. Nothing of a row is cut: a cell wraps as far as it needs, a row stays whole on its page, and only a row taller than a page goes on over the next. It needs nothing of a server, so it runs in the person's browser; what the standard fonts write is in `pdf-text.ts`, apart from `text-pdf.ts`, which carries `sharp` and the verification mark. A letter outside Latin-1 keeps its base letter and what has no plain form reads "?" (`closestText`): a list is read, not signed, and a name is never shown shorter as if it were whole. 2,000 lines of the list of cases take about 2.5 seconds and 1 MB.
+
 ## A document of text
 
 `renderTextPdf(document)` (`text-pdf.ts`) lays plain blocks (a title, headings, paragraphs, lists, pairs of a label and its value) on A4 pages with the standard fonts: what the dossier of a case and the approved piece of a lawsuit are made of. It decides nothing of the content, gives the same bytes for the same input, and leaves the foot of each page free for the verification mark.

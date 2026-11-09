@@ -7,6 +7,8 @@ import {
   exportColumns,
   exportLine,
   type ExportWords,
+  pdfColumns,
+  pdfLine,
 } from "@/lib/cases/export";
 import type { CaseListRow } from "@/lib/cases/list";
 
@@ -38,6 +40,8 @@ const words: ExportWords = {
   holderName: (holder) => `com ${holder ?? "ninguém"}`,
   reasonName: (holder, why) => (why ? `${holder} por ${why}` : null),
   yes: "Sim",
+  flightTitle: "Voo",
+  daysName: (days) => `${days} dias`,
 };
 
 const row: CaseListRow = {
@@ -180,5 +184,86 @@ describe("a case as a line of the sheet", () => {
     expect(line[4]).toBeNull();
     expect(line.slice(7, 12)).toEqual(["etapa drafting", 20, "Sim", "com firm", "firm por piece_review"]);
     expect(line[12]).toBeNull();
+  });
+});
+
+describe("a case as a line of the PDF", () => {
+  it("has the columns the list has, the module's only when the firm has more than one", () => {
+    const titles = [
+      "Caso",
+      "Cliente",
+      "Problema",
+      "Voo",
+      "Etapa",
+      "Na etapa há",
+      "Com quem está",
+      "Processos",
+      "Último movimento",
+    ];
+    expect(pdfColumns(words, false).map((column) => column.title)).toEqual(titles);
+    expect(pdfColumns(words, true).map((column) => column.title)).toEqual([
+      ...titles.slice(0, 2),
+      "Módulo",
+      ...titles.slice(2),
+    ]);
+    expect(pdfLine(row, words, false)).toHaveLength(titles.length);
+    expect(pdfLine(row, words, true)).toHaveLength(titles.length + 1);
+  });
+
+  it("gives a case's label and a lawsuit's number the width they need on one line, beside the module's column too", () => {
+    const columns = pdfColumns(words, true);
+    const shares = columns.reduce((sum, column) => sum + column.share, 0);
+    const width = (title: string) => ((columns.find((column) => column.title === title)?.share ?? 0) / shares) * 777.89;
+    // The page's width, less the margins, is 777.89 points. At 8 points, with 8 of padding, a lawsuit's number takes
+    // about 108, "#123456" about 39, and "Estagnado" in bold about 47.
+    expect(width("Processos")).toBeGreaterThanOrEqual(108);
+    expect(width("Caso")).toBeGreaterThanOrEqual(39);
+    expect(width("Na etapa há")).toBeGreaterThanOrEqual(47);
+  });
+
+  it("says what it is above and its detail under it, each lawsuit on a line of its own", () => {
+    expect(pdfLine(row, words, false)).toEqual([
+      "#41",
+      [{ text: "Paula Teste" }],
+      [{ text: "tipo delay" }, { text: "Agência Sol Teste", soft: true }],
+      [{ text: "companhia LA" }, { text: "07/10/2026", soft: true }],
+      [{ text: "situação filed" }, { text: "etapa judgment", soft: true }],
+      [{ text: "38 dias" }],
+      [{ text: "com court", strong: true }],
+      [{ text: "0005101-68.2099.8.09.0051" }, { text: "0005102-53.2099.8.09.0051" }],
+      "08/11/2026",
+    ]);
+  });
+
+  it("marks a test case and a stagnant one in words, and leaves out what the case does not have", () => {
+    const line = pdfLine(
+      {
+        ...row,
+        isTest: true,
+        stagnant: true,
+        holder: "client",
+        why: "lacks",
+        incident: null,
+        agency: null,
+        airline: null,
+        flightDate: null,
+        cnjs: [],
+        movedAt: null,
+        court: null,
+        status: "intake",
+      },
+      words,
+      false,
+    );
+    expect(line[1]).toEqual([{ text: "Paula Teste" }, { text: "Teste", soft: true }]);
+    expect(line[2]).toEqual([]);
+    expect(line[3]).toEqual([]);
+    expect(line[5]).toEqual([{ text: "38 dias" }, { text: "Estagnado", strong: true }]);
+    expect(line[6]).toEqual([
+      { text: "com client", strong: true },
+      { text: "client por lacks", soft: true },
+    ]);
+    expect(line[7]).toEqual([]);
+    expect(line[8]).toBeNull();
   });
 });

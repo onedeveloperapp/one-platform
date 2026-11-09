@@ -1,14 +1,20 @@
-import type { CaseStatus } from "@/lib/cases/cases";
+import { caseLabel, type CaseStatus } from "@/lib/cases/cases";
 import { type JourneyStepId, stepOf } from "@/lib/cases/journey";
 import type { CaseListRow } from "@/lib/cases/list";
 import type { XlsxCell, XlsxColumn } from "@/lib/export/xlsx-write";
 import { type FirmFunction, type OrgRole, overseesFirm } from "@/lib/firm/roles";
+import type { TableCell, TableColumn } from "@flyee/documents/table-pdf";
 import { formatCnj } from "@flyee/rules/cnj";
+import { formatDayBr } from "@flyee/rules/person";
 
 /**
- * The list of cases as a spreadsheet (phase 1, migration 0110). Pure: who is offered it, what the database answered
- * of beginning one, and each case as a line of the sheet, by the same words and the same step the list shows.
+ * The list of cases as a spreadsheet (phase 1, migration 0110) or a PDF (0115). Pure: who is offered it, what the
+ * database answered of beginning one, and each case as a line of the file, by the same words and the same step the
+ * list shows.
  */
+
+/** What the list is taken to: a workbook holds it all, a PDF is to read or to print and holds fewer lines. */
+export type ExportFormat = "xlsx" | "pdf";
 
 /** Who is offered "Exportar": a partner, the controladoria, or who manages the firm (`may_export_cases` decides). */
 export const canExportCases = (role: OrgRole, firmFunction: FirmFunction): boolean => overseesFirm(role, firmFunction);
@@ -50,6 +56,9 @@ export type ExportWords = {
   reasonName: (holder: string | null, why: string | null) => string | null;
   /** The word of a column that says yes (a case stagnated). */
   yes: string;
+  /** The PDF's own: the title of the flight's column, and how long a case is at its step. */
+  flightTitle: string;
+  daysName: (days: number) => string;
 };
 
 export type ExportColumnKey =
@@ -139,4 +148,76 @@ export function exportLine(row: CaseListRow, words: ExportWords, namesModule: bo
     updatedAt: brasiliaMoment(row.updatedAt),
   };
   return COLUMNS.filter((column) => namesModule || column.key !== "module").map((column) => cells[column.key]);
+}
+
+type PdfColumnKey =
+  | "case"
+  | "client"
+  | "module"
+  | "kind"
+  | "flight"
+  | "step"
+  | "stepDays"
+  | "holder"
+  | "lawsuits"
+  | "movedAt";
+
+/**
+ * The PDF's columns: what the list shows, since a page holds fewer than a sheet. The shares keep a case's label and a
+ * lawsuit's number on one line, also beside the module's column.
+ */
+const PDF_COLUMNS: { key: PdfColumnKey; share: number }[] = [
+  { key: "case", share: 6 },
+  { key: "client", share: 16 },
+  { key: "module", share: 10 },
+  { key: "kind", share: 10 },
+  { key: "flight", share: 10 },
+  { key: "step", share: 11 },
+  { key: "stepDays", share: 8 },
+  { key: "holder", share: 17 },
+  { key: "lawsuits", share: 16 },
+  { key: "movedAt", share: 8 },
+];
+
+/** The day of a moment on the clock of Brasília, as the screens write a day. */
+const brasiliaDay = (iso: string | null): string | null => {
+  const moment = brasiliaMoment(iso);
+  return moment ? formatDayBr(moment.slice(0, 10)) : null;
+};
+
+/** The columns of the PDF: the module's only when the firm has more than one. */
+export function pdfColumns(words: ExportWords, namesModule: boolean): TableColumn[] {
+  return PDF_COLUMNS.filter((column) => namesModule || column.key !== "module").map((column) => ({
+    title: column.key === "flight" ? words.flightTitle : words.titles[column.key],
+    share: column.share,
+  }));
+}
+
+/** A case as a line of the PDF, in the order of `pdfColumns`: what it is above, its detail under it. */
+export function pdfLine(row: CaseListRow, words: ExportWords, namesModule: boolean): TableCell[] {
+  const step = stepOf(row.status, row.court ?? { held: false, decided: false, paid: false });
+  const reason = words.reasonName(row.holder, row.why);
+  const flightDay = row.flightDate ? formatDayBr(row.flightDate) : null;
+  const cells: Record<PdfColumnKey, TableCell> = {
+    case: caseLabel(row.seq),
+    client: [{ text: row.client }, ...(row.isTest ? [{ text: words.titles.test, soft: true }] : [])],
+    module: words.moduleName(row.module),
+    kind: [
+      ...(row.incident ? [{ text: words.kindName(row.incident) }] : []),
+      ...(row.agency ? [{ text: row.agency, soft: true }] : []),
+    ],
+    flight: [
+      ...(row.airline ? [{ text: words.airlineName(row.airline) }] : []),
+      ...(flightDay ? [{ text: flightDay, soft: true }] : []),
+    ],
+    step: [{ text: words.statusName(row.status) }, ...(step ? [{ text: words.stepName(step), soft: true }] : [])],
+    stepDays: [
+      ...(row.stepDays !== null ? [{ text: words.daysName(row.stepDays) }] : []),
+      ...(row.stagnant ? [{ text: words.titles.stagnant, strong: true }] : []),
+    ],
+    holder: [{ text: words.holderName(row.holder), strong: true }, ...(reason ? [{ text: reason, soft: true }] : [])],
+    lawsuits: row.cnjs.map((cnj) => ({ text: formatCnj(cnj) ?? cnj })),
+    movedAt: brasiliaDay(row.movedAt),
+  };
+  return PDF_COLUMNS.filter((column) => namesModule || column.key !== "module").map((column) => cells[column.key]);
 }

@@ -2,7 +2,7 @@
 
 import { type CasesState, GROUP_TONE } from "../cases-types";
 import NewCaseDialog from "./new-case-dialog";
-import { useCaseExport } from "./use-case-export";
+import { EXPORT_PROGRESS, useCaseExport } from "./use-case-export";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -23,6 +23,7 @@ import type { TileTone } from "@/components/product/tile-tone";
 import NiArchive from "@/icons/nexture/ni-archive";
 import NiArrowInUp from "@/icons/nexture/ni-arrow-in-up";
 import NiBuilding from "@/icons/nexture/ni-building";
+import NiDocumentChart from "@/icons/nexture/ni-document-chart";
 import NiDocumentFull from "@/icons/nexture/ni-document-full";
 import NiFlag from "@/icons/nexture/ni-flag";
 import NiFolder from "@/icons/nexture/ni-folder";
@@ -694,20 +695,46 @@ function CasesList({
       return key ? t(key) : null;
     },
     yes: t("cases-export-yes"),
+    flightTitle: t("cases-column-flight"),
+    daysName: (days) => t("cases-step-days", { count: days }),
     moduleName: (key) => moduleOfRow.get(key)?.name ?? "",
     kindName: (key) => t(caseKindLabelKey(key) ?? "case-incident-other"),
     airlineName: (iata) => airlineName.get(iata) ?? iata,
     statusName: (status) => t(STATUS_KEY[status]),
     stepName: (step) => t(JOURNEY_STEP_KEY[step]),
   };
+  const viewName = () => {
+    const view = current.current.filter;
+    return view ? t(FILTER_TILE[view].label) : t("cases-view-going");
+  };
   const exporter = useCaseExport({
     query: () => current.current,
     total: list.total,
     words: exportWords,
     namesModule: !scope && ready.modules.length > 1,
-    fileName: () => {
-      const view = current.current.filter ? t(FILTER_TILE[current.current.filter].label) : t("cases-view-going");
-      return `${t("cases-title")} ${view} ${new Date().toISOString().slice(0, 10)}`;
+    fileName: () => `${t("cases-title")} ${viewName()} ${new Date().toISOString().slice(0, 10)}`,
+    pdf: {
+      title: () => `${t("cases-title")} · ${viewName()}`,
+      author: ready.firmName,
+      facts: (count, made) => {
+        const now = current.current;
+        const chosen = [
+          now.incident ? kindName(now.incident) : null,
+          now.airline ? (airlineName.get(now.airline) ?? now.airline) : null,
+        ].filter((item): item is string => item !== null);
+        const narrowed = [
+          chosen.length > 0 ? t("cases-export-pdf-filters", { filters: chosen.join(", ") }) : null,
+          now.search !== "" ? t("cases-export-pdf-searched") : null,
+          now.tests === false ? t("cases-export-pdf-no-tests") : null,
+        ].filter((item): item is string => item !== null);
+        const howMany = t("cases-export-pdf-count", { count });
+        const when = t("cases-export-pdf-made", made);
+        return [
+          [ready.firmName, scope?.module.name].filter(Boolean).join(" · "),
+          [howMany, when].join(" · "),
+          ...(narrowed.length > 0 ? [narrowed.join(" · ")] : []),
+        ];
+      },
     },
   });
   const setFilter = (next: CaseFilter | null) => void load({ ...current.current, filter: next, page: 0 });
@@ -974,7 +1001,20 @@ function CasesList({
                 ready.canExport
                   ? {
                       label: t("list-bar-export"),
-                      onExport: () => void exporter.run(),
+                      formats: [
+                        {
+                          key: "xlsx",
+                          label: t("cases-export-xlsx"),
+                          icon: <NiDocumentChart size="medium" />,
+                          onClick: () => void exporter.run("xlsx"),
+                        },
+                        {
+                          key: "pdf",
+                          label: t("cases-export-pdf"),
+                          icon: <NiDocumentFull size="medium" />,
+                          onClick: () => void exporter.run("pdf"),
+                        },
+                      ],
                       busy: exporter.progress !== null || list.total === 0,
                     }
                   : undefined
@@ -1008,7 +1048,7 @@ function CasesList({
             />
             {exporter.progress ? (
               <Typography variant="body2" role="status" className="text-text-secondary px-1">
-                {t("cases-export-progress", {
+                {t(EXPORT_PROGRESS[exporter.progress.format], {
                   done: countText(exporter.progress.done),
                   total: countText(exporter.progress.total),
                 })}

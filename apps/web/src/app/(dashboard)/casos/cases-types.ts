@@ -43,8 +43,10 @@ export type CasesState =
       supportVisit: boolean;
       /** The person is of a function that brings the firm's portfolio from a spreadsheet. */
       canImport: boolean;
-      /** The person takes the list to a spreadsheet (0110): a partner, the controladoria or who manages the firm. */
+      /** The person takes the list to a spreadsheet or a PDF (0110): a partner, the controladoria or who manages the firm. */
       canExport: boolean;
+      /** The firm's name, which a PDF of the list says. */
+      firmName: string;
       /** The module the list is of (a module's area, or `?modulo=`); null for every module of the firm. */
       scope: CasesScope | null;
       /** The modules the firm contracted, for the choice above the list and the module of each row. */

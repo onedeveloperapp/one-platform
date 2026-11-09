@@ -1,16 +1,16 @@
 "use server";
 
-import { type ExportBegun, exportBegunOf } from "@/lib/cases/export";
+import { type ExportBegun, exportBegunOf, type ExportFormat } from "@/lib/cases/export";
 import { type CaseListPage, caseListQuery } from "@/lib/cases/list";
 import { readCaseExportPage } from "@/lib/cases/list-read";
 import { getMemberContext } from "@/lib/member/context";
 
 /**
- * The list of cases taken to a spreadsheet (migration 0110), under the person's own session: the database says who
- * may, keeps it on the record and counts the day's. The words searched travel in the request's body and are kept
- * nowhere: the record says only that a search narrowed the list.
+ * The list of cases taken to a spreadsheet or a PDF (migrations 0110 and 0115), under the person's own session: the
+ * database says who may and how many lines the format holds, keeps it on the record and counts the day's. The words
+ * searched travel in the request's body and are kept nowhere: the record says only that a search narrowed the list.
  */
-export async function beginCaseExport(input: unknown, rows: number): Promise<ExportBegun> {
+export async function beginCaseExport(input: unknown, rows: number, format: ExportFormat): Promise<ExportBegun> {
   const context = await getMemberContext();
   if (!context?.firm) return { ok: false, code: "failed" };
   const query = caseListQuery(input);
@@ -20,7 +20,7 @@ export async function beginCaseExport(input: unknown, rows: number): Promise<Exp
     target_module: query.module,
     target_searched: query.search !== "",
     target_rows: Number.isInteger(rows) && rows >= 0 ? rows : 0,
-    target_format: "xlsx",
+    target_format: format === "pdf" ? "pdf" : "xlsx",
   });
   return error ? { ok: false, code: "failed" } : exportBegunOf(data);
 }

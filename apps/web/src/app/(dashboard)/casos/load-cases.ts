@@ -91,6 +91,7 @@ export async function loadCases(params: {
     supportVisit,
     canImport: canImportPortfolio(context.firm.firmFunction),
     canExport: !supportVisit && canExportCases(context.firm.role, context.firm.firmFunction),
+    firmName: context.firm.name,
     scope,
     modules,
   };

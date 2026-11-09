@@ -15,14 +15,16 @@
     "./files": "./src/files.ts",
     "./stamp": "./src/stamp.ts",
     "./normalize": "./src/normalize.ts",
+    "./pdf-text": "./src/pdf-text.ts",
     "./text-pdf": "./src/text-pdf.ts",
+    "./table-pdf": "./src/table-pdf.ts",
     "./quality": "./src/quality.ts",
     "./quality-fixtures": "./src/quality.fixtures.ts",
     "./fake": "./src/fake.ts",
     "./cms": "./src/cms.ts"
   },
   "scripts": {
-    "test": "node --experimental-strip-types --test src/documents.test.ts src/normalize.test.ts src/text-pdf.test.ts src/quality.test.ts src/cms.test.ts",
+    "test": "node --experimental-strip-types --test src/documents.test.ts src/normalize.test.ts src/text-pdf.test.ts src/table-pdf.test.ts src/quality.test.ts src/cms.test.ts",
     "bench": "node --expose-gc --experimental-strip-types scripts/normalization-bench.ts",
     "quality": "node --experimental-strip-types scripts/quality-table.ts"
   },

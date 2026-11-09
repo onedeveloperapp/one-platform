@@ -82,7 +82,8 @@ export default function ListBar({
   filter?: { label: string; active: number; content: ReactNode; clearLabel: string; onClear: () => void };
   /** "Ordenar": the orders the list offers. */
   sort?: { label: string; options: { key: string; label: string }[]; value: string; onChange: (key: string) => void };
-  exporting?: { label: string; onExport: () => void; busy?: boolean };
+  /** "Exportar": one format is one button, several a menu of them. */
+  exporting?: { label: string; onExport?: () => void; formats?: QuickAction[]; busy?: boolean };
   create?: ListCreate;
   more?: { label: string; actions: QuickAction[] };
   chips?: ListChip[];
@@ -94,6 +95,7 @@ export default function ListBar({
   const createPicked = useRef<QuickAction | null>(null);
   // One kind is the button itself; a menu of one would be a click for nothing.
   const createMenu = create?.actions && create.actions.length > 1 ? create.actions : null;
+  const [exportAnchor, setExportAnchor] = useState<HTMLElement | null>(null);
   const createOne = create && !createMenu ? (create.onClick ?? create.actions?.[0]?.onClick) : undefined;
   const [sortAnchor, setSortAnchor] = useState<HTMLElement | null>(null);
   const [filterAnchor, setFilterAnchor] = useState<HTMLElement | null>(null);
@@ -244,15 +246,45 @@ export default function ListBar({
         ) : null}
 
         {exporting ? (
-          <Button
-            variant="text"
-            color="grey"
-            disabled={exporting.busy}
-            onClick={exporting.onExport}
-            startIcon={<NiArrowInDown size="medium" />}
-          >
-            {exporting.label}
-          </Button>
+          <>
+            <Button
+              variant="text"
+              color="grey"
+              disabled={exporting.busy}
+              startIcon={<NiArrowInDown size="medium" />}
+              endIcon={exporting.formats ? <NiChevronDownSmall size="small" /> : undefined}
+              aria-haspopup={exporting.formats ? "menu" : undefined}
+              aria-expanded={exportAnchor ? true : undefined}
+              aria-controls={exportAnchor ? `${id}-export` : undefined}
+              onClick={(event) => (exporting.formats ? setExportAnchor(event.currentTarget) : exporting.onExport?.())}
+            >
+              {exporting.label}
+            </Button>
+            {exporting.formats ? (
+              <Menu
+                id={`${id}-export`}
+                anchorEl={exportAnchor}
+                open={Boolean(exportAnchor)}
+                onClose={() => setExportAnchor(null)}
+                slotProps={{ paper: { className: "mt-1" }, list: { "aria-label": exporting.label } }}
+              >
+                {exporting.formats.map((format) => (
+                  <MenuItem
+                    key={format.key}
+                    disabled={format.disabled}
+                    className="gap-2 rounded-lg"
+                    onClick={() => {
+                      setExportAnchor(null);
+                      format.onClick();
+                    }}
+                  >
+                    {format.icon ? <ListItemIcon className="text-text-secondary">{format.icon}</ListItemIcon> : null}
+                    <ListItemText>{format.label}</ListItemText>
+                  </MenuItem>
+                ))}
+              </Menu>
+            ) : null}
+          </>
         ) : null}
 
         <Box className="flex-1" />
