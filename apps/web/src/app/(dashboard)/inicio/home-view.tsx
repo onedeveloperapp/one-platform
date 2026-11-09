@@ -14,6 +14,7 @@ import HomeHero, { type HeroOrnament } from "@/components/product/home-hero";
 import { StatTile } from "@/components/product/home-tiles";
 import ModulesQuickAccess from "@/components/product/modules-quick-access";
 import OnboardingChecklistCard from "@/components/product/onboarding-checklist-card";
+import OneWorkLine from "@/components/product/one-work-line";
 import PageHeader from "@/components/product/page-header";
 import type { TileTone } from "@/components/product/tile-tone";
 import { useLiveRead } from "@/components/product/use-live-read";
@@ -47,6 +48,7 @@ import { homeTiles, type PendingGroup, sayPending, withDecisions } from "@/lib/f
 import { type FirmToday, somethingForMe, type TodayNeed, todayNeeds } from "@/lib/firm/today";
 import type { ModuleOffer } from "@/lib/modules/offer";
 import type { ActivationFacts } from "@/lib/onboarding";
+import type { OneWorkTotals } from "@/lib/one-work/work";
 import type { FlowKey, OnboardingStateRow, OnboardingStep } from "@flyee/onboarding";
 
 /**
@@ -92,6 +94,8 @@ export type HomeState =
        * progress; null when it could not be read.
        */
       progress: CasesProgress | null;
+      /** What ONE did for the firm this month (0120, 0121), for its line; null when it could not be read. */
+      oneWork: OneWorkTotals | null;
       /** The mark of what the home shows (0096, `firm_pulse`): what it follows while open; null when unreadable. */
       pulse: string | null;
       /** The decisions that wait, each placed where it is decided; null when unread (then counted as before). */
@@ -418,6 +422,9 @@ export default function HomeView({ state }: { state: HomeState }) {
           {ready.modules ? <ModulesQuickAccess offer={ready.modules} inHero /> : null}
         </HomeHero>
       ) : null}
+
+      {/* What ONE did for the firm this month, the argument of the renewal: the same total its page shows. */}
+      {ready?.oneWork ? <OneWorkLine totals={ready.oneWork} href="/trabalho-do-one" /> : null}
 
       {state.kind === "unavailable" ? (
         <Alert severity="info" className="neutral bg-background-paper/60!">

@@ -76,8 +76,30 @@ function nativeDir() {
   return dir;
 }
 
+/**
+ * Where the server looks for its extensions: the folder that holds `plpgsql.control`, which every build ships. The
+ * Windows build keeps it in `share/extension`, the Linux one in `share/postgresql/extension`; any other is searched.
+ */
+function extensionDirOf(native) {
+  for (const candidate of [
+    path.join(native, "share", "extension"),
+    path.join(native, "share", "postgresql", "extension"),
+  ]) {
+    if (fs.existsSync(path.join(candidate, "plpgsql.control"))) return candidate;
+  }
+  const pending = [native];
+  while (pending.length > 0) {
+    const dir = pending.shift();
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (entry.isFile() && entry.name === "plpgsql.control") return dir;
+      if (entry.isDirectory() && !entry.isSymbolicLink()) pending.push(path.join(dir, entry.name));
+    }
+  }
+  throw new Error(`No folder of extensions (plpgsql.control) under ${native}`);
+}
+
 async function ensurePgTap() {
-  const extensionDir = path.join(nativeDir(), "share", "extension");
+  const extensionDir = extensionDirOf(nativeDir());
   if (fs.existsSync(path.join(extensionDir, "pgtap.control"))) return;
 
   console.log(`Downloading pgTAP ${PGTAP_VERSION} from PGXN (first run only)...`);

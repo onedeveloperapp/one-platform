@@ -71,6 +71,15 @@ export const leftMenuItems: MenuItem[] = [
     href: "/controladoria",
     canAccess: { oversees: true },
   },
+  // What ONE did for the firm each month (0120, 0121): the tasks and the hours are the whole firm's.
+  {
+    id: "trabalho-do-one",
+    icon: "NiRobot",
+    label: "menu-trabalho-do-one",
+    description: "menu-trabalho-do-one-description",
+    color: "text-primary",
+    href: "/trabalho-do-one",
+  },
   {
     id: "atendimento",
     icon: "NiMessages",

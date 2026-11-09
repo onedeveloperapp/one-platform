@@ -20,6 +20,8 @@ import { getMemberContext } from "@/lib/member/context";
 import { readModuleSetups } from "@/lib/modules/module-setups-read";
 import { readModuleOffer } from "@/lib/modules/offer-read";
 import { getActivationFacts, isSetupAnswered, onboardingFlowKey, waitsFirstCase } from "@/lib/onboarding";
+import { readOneWork } from "@/lib/one-work/read";
+import { brasiliaMonth, monthTotals } from "@/lib/one-work/work";
 import { IMPERSONATION_MARKER_COOKIE } from "@flyee/auth";
 import { getOnboardingState } from "@flyee/onboarding";
 
@@ -97,6 +99,7 @@ async function loadHome(): Promise<
     filing,
     cloudSigning,
     acks,
+    oneWork,
   ] = await Promise.all([
     context.supabase.rpc("firm_today", { target_org: firm.id }),
     context.supabase.rpc("firm_pending", { target_org: firm.id }),
@@ -142,6 +145,8 @@ async function loadHome(): Promise<
     context.supabase
       .rpc("firm_publication_acks", { target_org: firm.id })
       .then(({ data, error }) => (error ? null : readPublicationAcks(data))),
+    // What ONE did for the firm this month (0120, 0121), the line that leads to its page; unread, the line hides.
+    readOneWork(context.supabase, firm.id, brasiliaMonth(), brasiliaMonth(), null).catch(() => null),
   ]);
   if (manager && facts && !isSetupAnswered(facts)) return { kind: "setup", setup: await loadSetupState(context) };
   // Read failures owe nothing: a registration that could not be read is never said to be missing.
@@ -214,6 +219,7 @@ async function loadHome(): Promise<
     modules,
     progress: stock ? { stock, ended: recent ? recent.counts.ended : null, recent: recent ? recent.rows : [] } : null,
     pulse,
+    oneWork: oneWork ? monthTotals(oneWork, brasiliaMonth()) : null,
   };
 }
 

@@ -7,6 +7,8 @@ import { canImportPortfolio } from "@/lib/import/who";
 import { getMemberContext } from "@/lib/member/context";
 import { readModuleOffer } from "@/lib/modules/offer-read";
 import { moduleOf } from "@/lib/modules/registry";
+import { readOneWork } from "@/lib/one-work/read";
+import { brasiliaMonth, monthTotals } from "@/lib/one-work/work";
 import { testChatCardOf } from "@/lib/test-chat/test-chat";
 
 type Params = { params: Promise<{ modulo: string }> };
@@ -49,7 +51,7 @@ async function loadArea(key: string): Promise<ModuleAreaState> {
   const definition = moduleOf(key);
   const manager = isManager(context.firm.role);
   const importer = canImportPortfolio(context.firm.firmFunction);
-  const [stock, recent, testChat] = await Promise.all([
+  const [stock, recent, testChat, oneWork] = await Promise.all([
     // Where the module's cases are, by the rule of the top of the case (0111), as the home and the controladoria count
     // them, and the latest few in progress (`firm_cases`, the latest moved first).
     readCaseStock(context.supabase, context.firm.id, { module: key }).catch(() => null),
@@ -66,6 +68,8 @@ async function loadArea(key: string): Promise<ModuleAreaState> {
           () => null,
         )
       : Promise.resolve(null),
+    // What ONE did in the module's cases this month (0120, 0121), the line that leads to its page; unread, it hides.
+    readOneWork(context.supabase, context.firm.id, brasiliaMonth(), brasiliaMonth(), key).catch(() => null),
   ]);
 
   // What only this module has: the places its definition names, the import to who brings a portfolio.
@@ -94,6 +98,7 @@ async function loadArea(key: string): Promise<ModuleAreaState> {
     module: contracted,
     shortcuts,
     progress: stock && recent ? { stock, ended: recent.counts.ended, recent: recent.rows } : null,
+    oneWork: oneWork ? monthTotals(oneWork, brasiliaMonth()) : null,
   };
 }
 

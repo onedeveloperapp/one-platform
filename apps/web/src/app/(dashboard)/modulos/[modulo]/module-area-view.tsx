@@ -9,6 +9,7 @@ import CasesProgressCard, { type CasesProgress } from "@/components/cases/cases-
 import EmptyState from "@/components/product/empty-state";
 import { QuickActionTile } from "@/components/product/home-tiles";
 import ModuleIcon from "@/components/product/module-icon";
+import OneWorkLine from "@/components/product/one-work-line";
 import PageHeader from "@/components/product/page-header";
 import StatusChip from "@/components/product/status-chip";
 import { TILE_TONE, type TileTone } from "@/components/product/tile-tone";
@@ -22,6 +23,7 @@ import NiPuzzle from "@/icons/nexture/ni-puzzle";
 import NiScale from "@/icons/nexture/ni-scale";
 import type { ComingModule, ContractedModule, LockedModule } from "@/lib/modules/offer";
 import { scopedHref } from "@/lib/modules/offer";
+import type { OneWorkTotals } from "@/lib/one-work/work";
 import { cn } from "@/lib/utils";
 
 /** A place only this module has (its definition's `firmArea`, or the test chat), as the area offers it. */
@@ -39,6 +41,8 @@ export type ModuleAreaState =
        * is `/casos` under the module, which the card opens); null when it could not be read.
        */
       progress: CasesProgress | null;
+      /** What ONE did in the module's cases this month (0120, 0121), for its line; null when it could not be read. */
+      oneWork: OneWorkTotals | null;
     }
   | { kind: "soon"; module: ComingModule }
   | { kind: "locked"; module: LockedModule }
@@ -206,6 +210,10 @@ function Area({ state }: { state: Extract<ModuleAreaState, { kind: "ready" }> })
             .join(" · ")}
         </Typography>
       </Box>
+
+      {state.oneWork ? (
+        <OneWorkLine totals={state.oneWork} href={scopedHref("/trabalho-do-one", module.key)} scope="module" />
+      ) : null}
 
       <Box component="section" aria-labelledby="module-quick" className="flex flex-col gap-4">
         <Box className="flex flex-col gap-1">

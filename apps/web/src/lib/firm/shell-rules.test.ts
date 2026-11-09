@@ -105,6 +105,8 @@ describe("the menu by role", () => {
       "inicio",
       "modulos",
       "casos",
+      // What ONE did is the whole firm's to read (0120 to 0122); the money in it is who decides for the firm's.
+      "trabalho-do-one",
       "atendimento",
       "protocolo",
       "publicacoes",
@@ -117,6 +119,7 @@ describe("the menu by role", () => {
       "modulos",
       "casos",
       "controladoria",
+      "trabalho-do-one",
       "atendimento",
       "protocolo",
       "publicacoes",

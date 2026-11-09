@@ -305,6 +305,13 @@ insert into public.civil_court_answers (org_id, case_id, party_id, person_id, ac
 insert into public.closing_goals (org_id, starts_on, ends_on, target) values
   ('b1000000-0000-4000-8000-00000000000a', date '2026-11-01', date '2026-11-30', 10),
   ('b1000000-0000-4000-8000-00000000000b', date '2026-11-01', date '2026-11-30', 20);
+-- The estimates of ONE's work of each firm (0120): read only by who decides for it.
+insert into public.firm_one_work_minutes (org_id, kind, minutes) values
+  ('b1000000-0000-4000-8000-00000000000a', 'texto_peca', 45),
+  ('b1000000-0000-4000-8000-00000000000b', 'foto_pdf', 2);
+insert into public.firm_one_work_cost (org_id, hour_cents) values
+  ('b1000000-0000-4000-8000-00000000000a', 15000),
+  ('b1000000-0000-4000-8000-00000000000b', 20000);
 insert into public.firm_autonomy (org_id, decision, mode) values
   ('b1000000-0000-4000-8000-00000000000a', 'document_check', 'approval'),
   ('b1000000-0000-4000-8000-00000000000b', 'piece_text', 'approval');
@@ -485,7 +492,7 @@ select is(
     'consent_acceptances',
     'deadlines', 'djen_captures', 'dossiers', 'draft_templates', 'entitlement_grants', 'files', 'filing_package_items', 'filing_packages',
     'filing_receipts', 'filing_submissions', 'firm_autonomy', 'firm_calendars',
-    'firm_claim_defaults', 'firm_invitations', 'firm_modules', 'firm_notice_kinds', 'firm_signers', 'flight_alerts', 'flight_checks', 'flight_segments', 'hearings', 'import_batches', 'import_rows', 'invoices',
+    'firm_claim_defaults', 'firm_invitations', 'firm_modules', 'firm_notice_kinds', 'firm_one_work_cost', 'firm_one_work_minutes', 'firm_signers', 'flight_alerts', 'flight_checks', 'flight_segments', 'hearings', 'import_batches', 'import_rows', 'invoices',
     'issued_documents', 'lawyer_signature_uses', 'legal_sources', 'memberships',
     'movements', 'notice_optins', 'notice_stops', 'onboarding_state', 'partner_invitations', 'partner_links', 'pax_firm_clauses',
     'people',
@@ -704,7 +711,7 @@ select is(
     'consent_acceptances',
     'deadlines', 'djen_captures', 'dossiers', 'draft_templates', 'entitlement_grants', 'files', 'filing_package_items', 'filing_packages',
     'filing_receipts', 'filing_submissions', 'firm_autonomy', 'firm_calendars',
-    'firm_claim_defaults', 'firm_invitations', 'firm_modules', 'firm_notice_kinds', 'firm_signers', 'flight_alerts', 'flight_checks', 'flight_segments', 'hearings', 'import_batches', 'import_rows', 'invoices',
+    'firm_claim_defaults', 'firm_invitations', 'firm_modules', 'firm_notice_kinds', 'firm_one_work_cost', 'firm_one_work_minutes', 'firm_signers', 'flight_alerts', 'flight_checks', 'flight_segments', 'hearings', 'import_batches', 'import_rows', 'invoices',
     'issued_documents', 'lawyer_signature_uses', 'legal_sources', 'memberships',
     'movements', 'notice_optins', 'notice_stops', 'onboarding_state', 'partner_invitations', 'partner_links', 'pax_firm_clauses',
     'people',

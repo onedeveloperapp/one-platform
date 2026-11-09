@@ -38,6 +38,8 @@ jobs:
     timeout-minutes: 45
     env:
       NEXT_TELEMETRY_DISABLED: "1"
+      # The type check of the app holds more than Node's default heap: the first run on a push ran out of it.
+      NODE_OPTIONS: --max-old-space-size=6144
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
