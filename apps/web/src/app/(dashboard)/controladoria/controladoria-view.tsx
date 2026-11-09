@@ -3,10 +3,11 @@
 import CaseBoard from "./case-board";
 import GoalsCard from "./goals-card";
 import type { ControladoriaState } from "./load-controladoria";
+import PortfolioPanel from "./portfolio-panel";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { type ReactNode, useTransition } from "react";
+import { type ReactNode, useState, useTransition } from "react";
 
 import { Alert, Box, Button, Card, CardContent, Grid, List, ListItem, ListItemButton, Typography } from "@mui/material";
 
@@ -18,6 +19,7 @@ import NumberCard from "@/components/product/number-card";
 import PageHeader from "@/components/product/page-header";
 import type { TileTone } from "@/components/product/tile-tone";
 import NiArchive from "@/icons/nexture/ni-archive";
+import NiArrowInDown from "@/icons/nexture/ni-arrow-in-down";
 import NiChartBar from "@/icons/nexture/ni-chart-bar";
 import NiFlag from "@/icons/nexture/ni-flag";
 import NiFolder from "@/icons/nexture/ni-folder";
@@ -144,6 +146,7 @@ export default function ControladoriaView({ state }: { state: ControladoriaState
   const t = useTranslations("product");
   const router = useRouter();
   const [refreshing, startRefresh] = useTransition();
+  const [taking, setTaking] = useState(false);
 
   const ready = state.kind === "ready" ? state : null;
   const module = ready?.module?.key ?? null;
@@ -165,16 +168,30 @@ export default function ControladoriaView({ state }: { state: ControladoriaState
         action={
           ready ? (
             <Box className="flex flex-col items-end gap-1">
-              <Button
-                variant="outlined"
-                color="grey"
-                size="small"
-                disabled={refreshing}
-                startIcon={<NiRefresh size="small" />}
-                onClick={() => startRefresh(() => router.refresh())}
-              >
-                {t("controladoria-refresh")}
-              </Button>
+              <Box className="flex flex-wrap justify-end gap-2">
+                {/* Taking what is the firm's is a right it must find in plain sight, never kept in a menu. */}
+                {ready.takesPortfolio ? (
+                  <Button
+                    variant="outlined"
+                    color="grey"
+                    size="small"
+                    startIcon={<NiArrowInDown size="small" />}
+                    onClick={() => setTaking(true)}
+                  >
+                    {t("portfolio-action")}
+                  </Button>
+                ) : null}
+                <Button
+                  variant="outlined"
+                  color="grey"
+                  size="small"
+                  disabled={refreshing}
+                  startIcon={<NiRefresh size="small" />}
+                  onClick={() => startRefresh(() => router.refresh())}
+                >
+                  {t("controladoria-refresh")}
+                </Button>
+              </Box>
               <Typography variant="caption" role="status" className="text-text-secondary">
                 {t("controladoria-read-at", { when: ready.readLabel })}
               </Typography>
@@ -411,6 +428,17 @@ export default function ControladoriaView({ state }: { state: ControladoriaState
           </Grid>
 
           <GoalsCard goals={ready.goals} modules={ready.modules} scope={ready.module} />
+
+          {ready.takesPortfolio ? (
+            <PortfolioPanel
+              open={taking}
+              onClose={() => setTaking(false)}
+              firm={ready.firmName}
+              tests={ready.testCases.counted}
+              testsLeftOut={ready.testCases.state === "left-out" ? ready.testCases.count : 0}
+              factor={ready.factor}
+            />
+          ) : null}
         </>
       ) : null}
     </Box>

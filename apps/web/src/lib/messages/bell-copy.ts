@@ -77,6 +77,12 @@ const ptBR = {
     body: `O período pago de ${plan} vai até ${date}. Para continuar depois dessa data, faça uma nova compra em Cobrança.`,
   }),
 
+  /** Somebody took the firm's whole portfolio (migration 0117): told to the others who decide or manage it. */
+  portfolioTaken: (person: string): BellText => ({
+    title: "A carteira do escritório foi levada",
+    body: `${person} gerou o arquivo com a carteira inteira, com os dados pessoais de todos os clientes. Se você não esperava por isso, fale com essa pessoa.`,
+  }),
+
   /** A travel agency accepted the firm's invitation (migration 0069): told to who manages the firm. */
   partnerJoined: (partner: string): BellText => ({
     title: "Agência parceira conectada",

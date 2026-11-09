@@ -1,6 +1,6 @@
 import { caseLabel, type CaseStatus } from "@/lib/cases/cases";
-import { type JourneyStepId, stepOf } from "@/lib/cases/journey";
-import type { CaseListRow } from "@/lib/cases/list";
+import type { JourneyStepId } from "@/lib/cases/journey";
+import { type CaseListRow, stepOfRow } from "@/lib/cases/list";
 import type { XlsxCell, XlsxColumn } from "@/lib/export/xlsx-write";
 import { type FirmFunction, type OrgRole, overseesFirm } from "@/lib/firm/roles";
 import type { TableCell, TableColumn } from "@flyee/documents/table-pdf";
@@ -127,7 +127,7 @@ export function exportColumns(words: ExportWords, namesModule: boolean): XlsxCol
 
 /** A case as a line of the sheet, in the order of `exportColumns`. */
 export function exportLine(row: CaseListRow, words: ExportWords, namesModule: boolean): XlsxCell[] {
-  const step = stepOf(row.status, row.court ?? { held: false, decided: false, paid: false });
+  const step = stepOfRow(row);
   const cells: Record<ExportColumnKey, XlsxCell> = {
     case: row.seq,
     client: row.client,
@@ -195,7 +195,7 @@ export function pdfColumns(words: ExportWords, namesModule: boolean): TableColum
 
 /** A case as a line of the PDF, in the order of `pdfColumns`: what it is above, its detail under it. */
 export function pdfLine(row: CaseListRow, words: ExportWords, namesModule: boolean): TableCell[] {
-  const step = stepOf(row.status, row.court ?? { held: false, decided: false, paid: false });
+  const step = stepOfRow(row);
   const reason = words.reasonName(row.holder, row.why);
   const flightDay = row.flightDate ? formatDayBr(row.flightDate) : null;
   const cells: Record<PdfColumnKey, TableCell> = {

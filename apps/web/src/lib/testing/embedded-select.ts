@@ -9,7 +9,7 @@
 
 export type SelectNode =
   | { kind: "all" }
-  | { kind: "column"; name: string; key: string }
+  | { kind: "column"; name: string; key: string; arrow: "->" | "->>" | null; field: string | null; cast: string | null }
   | { kind: "embed"; relation: string; key: string; hint: string | null; inner: boolean; children: SelectNode[] };
 
 /** Splits a select list at its top-level commas. */
@@ -30,17 +30,27 @@ function splitTop(text: string): string[] {
 }
 
 const NAME = /^[a-z_][a-z0-9_]*$/;
+/** A column as PostgREST reads it: `column`, `alias:column`, `column::type`, `column->field`, `column->>field`. */
+const COLUMN = /^(?:([a-z_][a-z0-9_]*):)?([a-z_][a-z0-9_]*)(?:(->>?)([a-z_][a-z0-9_]*))?(?:::([a-z_][a-z0-9_]*))?$/;
 
-/** A select list as PostgREST reads it: columns, `alias:column`, `*`, and `relation(!hint|!inner)(...)`. */
+/** A select list as PostgREST reads it: its columns (`COLUMN`), `*`, and `relation(!hint|!inner)(...)`. */
 export function parseSelect(text: string): SelectNode[] {
   return splitTop(text.replace(/\s+/g, " ")).map((part): SelectNode => {
     if (part === "*") return { kind: "all" };
     const open = part.indexOf("(");
     if (open < 0) {
-      const [alias, column] = part.includes(":") ? part.split(":") : [part, part];
-      const name = column.trim();
-      if (!NAME.test(name)) throw new Error(`the stand-in does not read the column ${part}`);
-      return { kind: "column", name, key: alias.trim() };
+      const match = COLUMN.exec(part.replace(/\s/g, ""));
+      if (!match) throw new Error(`the stand-in does not read the column ${part}`);
+      const [, alias, name, arrow, field, cast] = match;
+      return {
+        kind: "column",
+        name,
+        // Named as PostgREST names it: its alias, else the field a JSON path reads, else the column, whatever its cast.
+        key: alias ?? field ?? name,
+        arrow: (arrow as "->" | "->>" | undefined) ?? null,
+        field: field ?? null,
+        cast: cast ?? null,
+      };
     }
     if (!part.endsWith(")")) throw new Error(`the stand-in does not read ${part}`);
     let head = part.slice(0, open).trim();
@@ -134,6 +144,12 @@ async function joinOf(state: Compile, parent: { table: string; alias: string }, 
   return { alias, on: on.join(" and "), single: pointsOut || key.uniqueFrom };
 }
 
+/** A column of a row as SQL reads it, with its JSON path and its cast. */
+function columnSql(alias: string, node: SelectNode & { kind: "column" }): string {
+  const read = node.arrow ? `${alias}.${node.name}${node.arrow}'${node.field}'` : `${alias}.${node.name}`;
+  return node.cast ? `(${read})::${node.cast}` : read;
+}
+
 /** The filters the select's caller wrote on this resource (`path` is its key, or a nested key joined by dots). */
 function filtersOn(state: Compile, path: string, alias: string): string[] {
   return state.filters
@@ -153,7 +169,7 @@ async function rowJson(
   let all = false;
   for (const node of nodes) {
     if (node.kind === "all") all = true;
-    else if (node.kind === "column") pairs.push(`'${node.key}', ${alias}.${node.name}`);
+    else if (node.kind === "column") pairs.push(`'${node.key}', ${columnSql(alias, node)}`);
     else pairs.push(`'${node.key}', (${await embedSql(state, { table, alias }, node, `${path}.${node.key}`)})`);
   }
   const built = pairs.length > 0 ? `jsonb_build_object(${pairs.join(", ")})` : "'{}'::jsonb";
@@ -193,7 +209,7 @@ export async function compileSelect(input: {
   const conditions: string[] = [];
   for (const node of input.nodes) {
     if (node.kind === "all") columns.push("t0.*");
-    else if (node.kind === "column") columns.push(`t0.${node.name} as "${node.key}"`);
+    else if (node.kind === "column") columns.push(`${columnSql("t0", node)} as "${node.key}"`);
     else {
       columns.push(`(${await embedSql(state, parent, node, node.key)}) as "${node.key}"`);
       if (node.inner) {

@@ -171,6 +171,7 @@ describe("a case as a line of the sheet", () => {
         movedAt: null,
         court: null,
         status: "drafting",
+        step: "drafting",
         holder: "firm",
         why: "piece_review",
         stepDays: 20,
@@ -184,6 +185,16 @@ describe("a case as a line of the sheet", () => {
     expect(line[4]).toBeNull();
     expect(line.slice(7, 12)).toEqual(["etapa drafting", 20, "Sim", "com firm", "firm por piece_review"]);
     expect(line[12]).toBeNull();
+  });
+
+  it("says the step the top of the case says, as the list and the board do, and not one read from its stage", () => {
+    // A paper waits to be signed while ONE moved the case on: the top says the signature, the stage says the piece.
+    const line = exportLine({ ...row, status: "drafting", step: "signature", court: null }, words, false);
+    expect(line).toContain("etapa signature");
+    expect(line).not.toContain("etapa drafting");
+    // A case that ended has no step on its row: where its stage left it.
+    const ended = exportLine({ ...row, status: "closed", step: null, court: null }, words, false);
+    expect(ended).toContain("etapa closed");
   });
 });
 

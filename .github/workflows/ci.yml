@@ -1,7 +1,9 @@
 name: CI
 
-# The checks every pull request must pass, with no secrets and no deploy.
-# Deploying stays in deploy.yml, on manual dispatch.
+# The checks every pull request and every push to main run, with no secrets and
+# no deploy. The work goes straight to main (2026-11-09), so a push runs them
+# beside the deploy of deploy.yml, which does not wait for them: a failure shows
+# up in minutes without slowing a publish. A newer push cancels the run before it.
 #
 # Two jobs, side by side:
 #   verify    the app: harness, lint, types, unit tests, message catalog, the
@@ -12,6 +14,15 @@ name: CI
 #             Docker and no Supabase project.
 on:
   pull_request:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+      - ".claude/**"
+      - ".agents/**"
+      - ".codex/**"
+      - "attachments/**"
   workflow_dispatch:
 
 permissions:
@@ -46,7 +57,7 @@ jobs:
 
   database:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -61,5 +72,5 @@ jobs:
           key: db-embedded-${{ runner.os }}-${{ hashFiles('scripts/db-embedded/run.mjs') }}
       - run: npm ci
       - run: npm run test:db:embedded
-      # The app's own code against the migrated database: a conversation in and out through the simulator.
+      # The app's own code against the migrated database, one file at a time.
       - run: npm run test:db:roundtrip

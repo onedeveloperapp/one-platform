@@ -1,7 +1,67 @@
+import { strFromU8, unzipSync } from "fflate";
 import { describe, expect, it } from "vitest";
 
-import { columnName, excelSerial, sheetName, writeXlsx } from "@/lib/export/xlsx-write";
+import { columnName, excelSerial, sheetName, writeWorkbook, writeXlsx } from "@/lib/export/xlsx-write";
 import { readXlsx } from "@/lib/import/xlsx";
+
+describe("a workbook of several sheets", () => {
+  const parts = (bytes: Uint8Array) =>
+    Object.fromEntries(Object.entries(unzipSync(bytes)).map(([name, part]) => [name, strFromU8(part)]));
+
+  it("writes each sheet under its own name, in order, the first being what opens", () => {
+    const bytes = writeWorkbook([
+      { sheet: "Sobre este arquivo", columns: [{ title: "Carteira" }], rows: [["Lima Advocacia"]], plain: true },
+      {
+        sheet: "Clientes",
+        columns: [{ title: "Nome" }, { title: "Casos", kind: "number" }],
+        rows: [["Maria Teste", 2]],
+      },
+      { sheet: "Ações", columns: [{ title: "Número" }], rows: [] },
+    ]);
+    const files = parts(bytes);
+    expect(
+      [...files["xl/workbook.xml"].matchAll(/<sheet name="([^"]+)" sheetId="(\d)" r:id="rId(\d)"/g)].map((m) =>
+        m.slice(1),
+      ),
+    ).toEqual([
+      ["Sobre este arquivo", "1", "1"],
+      ["Clientes", "2", "2"],
+      ["Ações", "3", "3"],
+    ]);
+    for (const at of [1, 2, 3]) {
+      expect(files["[Content_Types].xml"]).toContain(`/xl/worksheets/sheet${at}.xml`);
+      expect(files["xl/_rels/workbook.xml.rels"]).toContain(`Id="rId${at}"`);
+    }
+    expect(files["xl/_rels/workbook.xml.rels"]).toContain('Id="rId4"');
+    expect(files["xl/worksheets/sheet2.xml"]).toContain("Maria Teste");
+    expect(files["xl/worksheets/sheet2.xml"]).toContain("<v>2</v>");
+    // A sheet that only says something takes no filter; the others do, an empty one included.
+    expect(files["xl/worksheets/sheet1.xml"]).not.toContain("autoFilter");
+    expect(files["xl/worksheets/sheet3.xml"]).toContain('<autoFilter ref="A1:A1"/>');
+    // What the import reads back is the first sheet.
+    expect(readXlsx(bytes)).toMatchObject({
+      ok: true,
+      table: { headers: ["Carteira"], rows: [["Lima Advocacia"]] },
+    });
+  });
+
+  it("never gives two sheets one name, which Excel refuses, whatever their case", () => {
+    const files = parts(
+      writeWorkbook([
+        { sheet: "Casos", columns: [], rows: [] },
+        { sheet: "casos", columns: [], rows: [] },
+        { sheet: "x".repeat(40), columns: [], rows: [] },
+        { sheet: "x".repeat(40), columns: [], rows: [] },
+      ]),
+    );
+    expect([...files["xl/workbook.xml"].matchAll(/<sheet name="([^"]+)"/g)].map((match) => match[1])).toEqual([
+      "Casos",
+      "casos 2",
+      "x".repeat(31),
+      `${"x".repeat(29)} 2`,
+    ]);
+  });
+});
 
 describe("what the writer writes", () => {
   it("names the columns as Excel does", () => {

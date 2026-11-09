@@ -2,8 +2,8 @@ import { strToU8, zipSync } from "fflate";
 
 /**
  * A table written as an Excel workbook (.xlsx), in the person's browser: the project's own writer, with no paid
- * component (phase 1 of the plan of the controladoria). One sheet, its first line the titles in bold and frozen,
- * with Excel's filter on them; a text as a text (never read as a formula, whatever it starts with), a number as a
+ * component (phase 1 of the plan of the controladoria). A sheet or several, the first line of each the titles in bold
+ * and frozen, with Excel's filter on them; a text as a text (never read as a formula, whatever it starts with), a number as a
  * number, a day and a moment as Excel's own dates, so a column sorts and filters as what it is. Pure: it answers the
  * bytes of the file. `readXlsx` (`lib/import/xlsx.ts`) reads back what this writes.
  */
@@ -95,18 +95,38 @@ export function sheetName(name: string): string {
 const STYLES = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><numFmts count="2"><numFmt numFmtId="164" formatCode="dd/mm/yyyy"/><numFmt numFmtId="165" formatCode="dd/mm/yyyy hh:mm"/></numFmts><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="4"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/><xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="165" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`;
 
-const CONTENT_TYPES = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>`;
+const contentTypes = (sheets: number) => `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>${Array.from(
+  { length: sheets },
+  (_, at) =>
+    `<Override PartName="/xl/worksheets/sheet${at + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`,
+).join(
+  "",
+)}<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>`;
 
 const ROOT_RELS = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`;
 
-const WORKBOOK_RELS = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`;
+const workbookRels = (sheets: number) => `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${Array.from(
+  { length: sheets },
+  (_, at) =>
+    `<Relationship Id="rId${at + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${at + 1}.xml"/>`,
+).join(
+  "",
+)}<Relationship Id="rId${sheets + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`;
 
-/** The bytes of a workbook of one sheet. */
-export function writeXlsx(input: { sheet: string; columns: XlsxColumn[]; rows: XlsxCell[][] }): Uint8Array {
-  const { columns, rows } = input;
+/** One sheet of a workbook: its name, its columns (the first line, in bold and frozen) and its rows. */
+export type XlsxSheet = {
+  sheet: string;
+  columns: XlsxColumn[];
+  rows: XlsxCell[][];
+  /** A sheet that only says something (what the file is) takes no filter on its first line. */
+  plain?: boolean;
+};
+
+/** The XML of one sheet. */
+function sheetXml({ columns, rows, plain }: XlsxSheet): string {
   // A hundred thousand lines of a dozen cells each: each column's letters and kind are worked out once.
   const letters = columns.map((_, at) => columnName(at));
   const kinds = columns.map((column) => column.kind ?? "text");
@@ -125,21 +145,45 @@ export function writeXlsx(input: { sheet: string; columns: XlsxColumn[]; rows: X
   const widths = columns
     .map((column, at) => `<col min="${at + 1}" max="${at + 1}" width="${column.width ?? 16}" customWidth="1"/>`)
     .join("");
-  const sheet = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><sheetFormatPr defaultRowHeight="15"/>${
     widths ? `<cols>${widths}</cols>` : ""
-  }<sheetData>${lines.join("")}</sheetData><autoFilter ref="A1:${lastColumn}${rows.length + 1}"/></worksheet>`;
+  }<sheetData>${lines.join("")}</sheetData>${plain ? "" : `<autoFilter ref="A1:${lastColumn}${rows.length + 1}"/>`}</worksheet>`;
+}
+
+/** Names Excel takes for all the sheets of a workbook: it refuses two alike, whatever their case. */
+function sheetNames(sheets: XlsxSheet[]): string[] {
+  const taken = new Set<string>();
+  return sheets.map((item) => {
+    const name = sheetName(item.sheet);
+    let unique = name;
+    for (let turn = 2; taken.has(unique.toLowerCase()); turn += 1) {
+      unique = `${name.slice(0, 31 - String(turn).length - 1)} ${turn}`;
+    }
+    taken.add(unique.toLowerCase());
+    return unique;
+  });
+}
+
+/** The bytes of a workbook of several sheets, in their order. */
+export function writeWorkbook(sheets: XlsxSheet[]): Uint8Array {
+  const names = sheetNames(sheets);
   const workbook = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="${escapeXml(sheetName(input.sheet))}" sheetId="1" r:id="rId1"/></sheets></workbook>`;
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>${names
+    .map((name, at) => `<sheet name="${escapeXml(name)}" sheetId="${at + 1}" r:id="rId${at + 1}"/>`)
+    .join("")}</sheets></workbook>`;
   return zipSync(
     {
-      "[Content_Types].xml": strToU8(CONTENT_TYPES),
+      "[Content_Types].xml": strToU8(contentTypes(sheets.length)),
       "_rels/.rels": strToU8(ROOT_RELS),
       "xl/workbook.xml": strToU8(workbook),
-      "xl/_rels/workbook.xml.rels": strToU8(WORKBOOK_RELS),
+      "xl/_rels/workbook.xml.rels": strToU8(workbookRels(sheets.length)),
       "xl/styles.xml": strToU8(STYLES),
-      "xl/worksheets/sheet1.xml": strToU8(sheet),
+      ...Object.fromEntries(sheets.map((item, at) => [`xl/worksheets/sheet${at + 1}.xml`, strToU8(sheetXml(item))])),
     },
     { level: 1 },
   );
 }
+
+/** The bytes of a workbook of one sheet. */
+export const writeXlsx = (input: XlsxSheet): Uint8Array => writeWorkbook([input]);

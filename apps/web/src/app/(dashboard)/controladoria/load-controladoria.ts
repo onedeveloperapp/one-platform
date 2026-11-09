@@ -1,5 +1,7 @@
 import "server-only";
 
+import { cookies } from "next/headers";
+
 import { momentLabel } from "@/lib/ai/approvals";
 import { BOARD_PAGE, type BoardColumn } from "@/lib/cases/board";
 import type { CaseCounts, CaseNumbers } from "@/lib/cases/list";
@@ -12,6 +14,7 @@ import { isCourtTrackingOn } from "@/lib/courts/tracking";
 import { overseesFirm } from "@/lib/firm/roles";
 import { getMemberContext } from "@/lib/member/context";
 import { type ModuleCard, pageScopeOf } from "@/lib/modules/offer";
+import { IMPERSONATION_MARKER_COOKIE } from "@flyee/auth";
 
 export type ControladoriaState =
   | {
@@ -43,6 +46,12 @@ export type ControladoriaState =
       readLabel: string;
       /** Whether this environment reads the courts (`COURT_TRACKING`); the test court is read anywhere. */
       courtRead: boolean;
+      /** The firm's name, which the file of the whole portfolio says. */
+      firmName: string;
+      /** Whether the person may take the whole portfolio (0117): who decides for the firm, never a support visit. */
+      takesPortfolio: boolean;
+      /** Where the session's second factor stands, which the whole portfolio asks. */
+      factor: "ok" | "challenge" | "missing";
     }
   | { kind: "not-allowed" }
   | { kind: "no-firm" }
@@ -72,7 +81,7 @@ export async function loadControladoria(params: { modulo?: string; testes?: stri
   // The numbers and counts of the list (one row of it), the stock and the board of the page's scope; each module's
   // stock, for the card of the modules, only where there is more than one and none was chosen.
   const module = current?.key ?? null;
-  const [list, stock, board, goals, perModule] = await Promise.all([
+  const [list, stock, board, goals, perModule, decides, assurance, cookieStore] = await Promise.all([
     readCaseList(supabase, firm, { filter: null, search: "", module, page: 0, pageSize: 1, tests }),
     readCaseStock(supabase, firm, { module, tests }),
     readCaseBoard(supabase, firm, { module: current?.key ?? null, limit: BOARD_PAGE, tests }),
@@ -80,6 +89,9 @@ export async function loadControladoria(params: { modulo?: string; testes?: stri
     !current && modules.length > 1
       ? Promise.all(modules.map((module) => readCaseStock(supabase, firm, { module: module.key, tests })))
       : Promise.resolve(null),
+    supabase.rpc("decides_for_firm", { target_org: firm }),
+    supabase.auth.mfa.getAuthenticatorAssuranceLevel(),
+    cookies(),
   ]);
   if (!list) return { kind: "error" };
   return {
@@ -100,5 +112,9 @@ export async function loadControladoria(params: { modulo?: string; testes?: stri
       : null,
     readLabel: momentLabel(new Date().toISOString(), context.profile.timezone),
     courtRead: isCourtTrackingOn(),
+    firmName: context.firm.name,
+    takesPortfolio: !decides.error && decides.data === true && !cookieStore.has(IMPERSONATION_MARKER_COOKIE),
+    factor:
+      assurance.data?.currentLevel === "aal2" ? "ok" : assurance.data?.nextLevel === "aal2" ? "challenge" : "missing",
   };
 }
