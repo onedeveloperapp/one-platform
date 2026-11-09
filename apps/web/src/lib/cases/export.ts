@@ -55,6 +55,7 @@ export type ExportWords = {
 export type ExportColumnKey =
   | "case"
   | "client"
+  | "test"
   | "module"
   | "kind"
   | "agency"
@@ -87,6 +88,7 @@ const COLUMNS: { key: ExportColumnKey; kind?: XlsxColumn["kind"]; width: number 
   { key: "lawsuits", width: 28 },
   { key: "movedAt", kind: "moment", width: 17 },
   { key: "updatedAt", kind: "moment", width: 17 },
+  { key: "test", width: 8 },
 ];
 
 const BRASILIA = new Intl.DateTimeFormat("sv-SE", {
@@ -120,6 +122,7 @@ export function exportLine(row: CaseListRow, words: ExportWords, namesModule: bo
   const cells: Record<ExportColumnKey, XlsxCell> = {
     case: row.seq,
     client: row.client,
+    test: row.isTest ? words.yes : null,
     module: words.moduleName(row.module),
     kind: row.incident ? words.kindName(row.incident) : null,
     agency: row.agency,

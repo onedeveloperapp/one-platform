@@ -281,7 +281,7 @@ select is(
     'cases.airline_iata',
     'cases.module',
     'client_consents.term_id',
-    'client_notices.kind',
+    'client_notices.kind', 'closing_goals.module_key',
     'consent_acceptances.term_id',
     'filing_package_items.file_id',
     'filing_package_items.signed_file_id',

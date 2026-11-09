@@ -301,6 +301,10 @@ insert into public.civil_court_answers (org_id, case_id, party_id, person_id, ac
    'a2000000-0000-4000-8000-00000000000a', true, 'Aceito que a minha ação seja proposta na vara cível, com custas.', 1, 'client'),
   ('b1000000-0000-4000-8000-00000000000b', 'a3000000-0000-4000-8000-00000000000b', 'a4000000-0000-4000-8000-00000000000b',
    'a2000000-0000-4000-8000-00000000000b', false, 'Aceito que a minha ação seja proposta na vara cível, com custas.', 1, 'client');
+-- A closing goal of each firm (0113).
+insert into public.closing_goals (org_id, starts_on, ends_on, target) values
+  ('b1000000-0000-4000-8000-00000000000a', date '2026-11-01', date '2026-11-30', 10),
+  ('b1000000-0000-4000-8000-00000000000b', date '2026-11-01', date '2026-11-30', 20);
 insert into public.firm_autonomy (org_id, decision, mode) values
   ('b1000000-0000-4000-8000-00000000000a', 'document_check', 'approval'),
   ('b1000000-0000-4000-8000-00000000000b', 'piece_text', 'approval');
@@ -477,7 +481,7 @@ select is(
     'admin_complaints', 'ai_runs', 'approvals', 'audit_events', 'billing_operations', 'case_advances', 'case_documents',
     'case_draft_citations', 'case_draft_versions', 'case_drafts', 'case_events', 'case_interview_answers', 'case_interviews',
     'case_papers', 'case_parties', 'case_statements',
-    'case_weather', 'cases', 'certificate_inventory', 'civil_court_answers', 'client_consents', 'client_links', 'client_notices', 'connections',
+    'case_weather', 'cases', 'certificate_inventory', 'civil_court_answers', 'client_consents', 'client_links', 'client_notices', 'closing_goals', 'connections',
     'consent_acceptances',
     'deadlines', 'djen_captures', 'dossiers', 'draft_templates', 'entitlement_grants', 'files', 'filing_package_items', 'filing_packages',
     'filing_receipts', 'filing_submissions', 'firm_autonomy', 'firm_calendars',
@@ -654,7 +658,7 @@ select is(
     'admin_complaints', 'ai_runs', 'approvals', 'case_advances', 'case_documents', 'case_draft_citations', 'case_draft_versions',
     'case_drafts', 'case_events', 'case_interview_answers', 'case_interviews', 'case_papers', 'case_parties', 'case_statements',
     'case_weather', 'cases', 'certificate_inventory', 'civil_court_answers', 'client_consents',
-    'client_links', 'client_notices',
+    'client_links', 'client_notices', 'closing_goals',
     'consent_acceptances', 'deadlines', 'djen_captures', 'dossiers', 'draft_templates', 'entitlement_grants', 'files',
     'filing_package_items', 'filing_packages',
     'filing_receipts', 'filing_submissions', 'firm_autonomy', 'firm_calendars', 'firm_claim_defaults', 'firm_modules', 'firm_notice_kinds', 'firm_signers', 'flight_alerts', 'flight_checks', 'flight_segments', 'hearings', 'import_batches',
@@ -696,7 +700,7 @@ select is(
     'admin_complaints', 'ai_runs', 'approvals', 'audit_events', 'billing_operations', 'case_advances', 'case_documents',
     'case_draft_citations', 'case_draft_versions', 'case_drafts', 'case_events', 'case_interview_answers', 'case_interviews',
     'case_papers', 'case_parties', 'case_statements',
-    'case_weather', 'cases', 'certificate_inventory', 'civil_court_answers', 'client_consents', 'client_links', 'client_notices', 'connections',
+    'case_weather', 'cases', 'certificate_inventory', 'civil_court_answers', 'client_consents', 'client_links', 'client_notices', 'closing_goals', 'connections',
     'consent_acceptances',
     'deadlines', 'djen_captures', 'dossiers', 'draft_templates', 'entitlement_grants', 'files', 'filing_package_items', 'filing_packages',
     'filing_receipts', 'filing_submissions', 'firm_autonomy', 'firm_calendars',

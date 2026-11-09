@@ -49,6 +49,7 @@ export async function readFirmCaseBoardColumn(
     step,
     offset,
     limit: BOARD_PAGE,
+    tests: value.tests !== false,
   });
   if (!columns) return { ok: false };
   return { ok: true, column: columns.find((column) => column.step === step) ?? null };

@@ -16,8 +16,8 @@ import {
 } from "@/lib/cases/list";
 
 const ROOT = path.resolve(__dirname, "../../../../..");
-// The latest definition of `firm_cases` (0033, 0075, 0078, 0108, 0110, redefined with who has each case in 0111).
-const MIGRATION = fs.readFileSync(path.join(ROOT, "packages/db/migrations/0111_case_standing.sql"), "utf8");
+// The latest definition of `firm_cases` (0033, 0075, 0078, 0108, 0110, 0111, redefined with the test cases in 0114).
+const MIGRATION = fs.readFileSync(path.join(ROOT, "packages/db/migrations/0114_test_cases.sql"), "utf8");
 
 /** The quoted names of a list of the migration, from the text that opens it to the parenthesis that closes it. */
 function listed(opening: string, from = 0): string[] {
@@ -38,6 +38,7 @@ describe("what the list asks of the database", () => {
       sort: "recent",
       incident: null,
       airline: null,
+      tests: true,
     });
     const nothing = {
       filter: null,
@@ -48,6 +49,7 @@ describe("what the list asks of the database", () => {
       sort: "recent",
       incident: null,
       airline: null,
+      tests: true,
     };
     for (const input of [null, undefined, "x", 7, [], {}, { filter: "tudo", search: 9, page: -1, pageSize: 7 }]) {
       expect(caseListQuery(input), JSON.stringify(input)).toEqual(nothing);
@@ -58,6 +60,9 @@ describe("what the list asks of the database", () => {
     // A module's area asks its own cases; what is not a module's key asks every module's.
     expect(caseListQuery({ module: "direito-do-passageiro" }).module).toBe("direito-do-passageiro");
     for (const module of ["../x", "X", 7, "", "a"]) expect(caseListQuery({ module }).module).toBeNull();
+    // The test cases count unless the page asked otherwise (0114).
+    expect(caseListQuery({ tests: false }).tests).toBe(false);
+    expect(caseListQuery({ tests: "nao" }).tests).toBe(true);
     // The order and the list's own filters: what the database takes, and nothing else.
     expect(caseListQuery({ sort: "oldest", incident: "baggage_lost", airline: "g3" })).toMatchObject({
       sort: "oldest",
@@ -146,6 +151,7 @@ describe("the database's answer, as the list reads it", () => {
         courtMoved: true,
         civilRefused: false,
         agency: null,
+        isTest: false,
         movedAt: null,
         cnjs: [],
         holder: null,

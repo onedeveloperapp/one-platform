@@ -28,6 +28,8 @@ export type CasesState =
       kind: "ready";
       /** The first page of the list, as the database counted, filtered and paged it (`firm_cases`). */
       list: CaseListPage;
+      /** Whether the page reads the test cases too (0114): every page does, but where the controladoria left them out. */
+      tests: boolean;
       /**
        * The stock of the list's scope (`firm_case_stock`, 0111): who has the cases and the stagnant ones, which the
        * views of who has the case count. Null when the database did not say it.

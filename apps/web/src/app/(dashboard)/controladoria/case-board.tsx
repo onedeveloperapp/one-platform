@@ -33,7 +33,16 @@ const HOLDER_WORD: Record<Holder, string> = {
  * at the step first, each opening its case. Nobody drags a card: ONE carries a case from one step to the next. A column
  * reads its next cases on "Mostrar mais"; the board is read again with the page ("Atualizar").
  */
-export default function CaseBoard({ columns, module }: { columns: BoardColumn[]; module: string | null }) {
+export default function CaseBoard({
+  columns,
+  module,
+  tests,
+}: {
+  columns: BoardColumn[];
+  module: string | null;
+  /** Whether the test cases count, as the page read them (0114). */
+  tests: boolean;
+}) {
   const t = useTranslations("product");
   const [shown, setShown] = useState(() => boardColumns(columns));
   // The page read the board again ("Atualizar"): the columns start over from what it read.
@@ -50,7 +59,7 @@ export default function CaseBoard({ columns, module }: { columns: BoardColumn[];
     setFailed(null);
     let answer: Awaited<ReturnType<typeof readFirmCaseBoardColumn>>;
     try {
-      answer = await readFirmCaseBoardColumn({ module, step: column.step, offset: column.items.length });
+      answer = await readFirmCaseBoardColumn({ module, step: column.step, offset: column.items.length, tests });
     } catch {
       answer = { ok: false };
     }
@@ -125,9 +134,10 @@ export default function CaseBoard({ columns, module }: { columns: BoardColumn[];
                           {isHolder(item.holder) ? t(HOLDER_WORD[item.holder]) : t("cases-holder-ended")}
                           {reason ? ` · ${t(reason)}` : ""}
                         </Typography>
-                        {item.stagnant ? (
-                          <Box className="pt-0.5">
-                            <StatusChip tone="attention" label={t("cases-stagnant")} />
+                        {item.stagnant || item.isTest ? (
+                          <Box className="flex flex-wrap gap-1 pt-0.5">
+                            {item.stagnant ? <StatusChip tone="attention" label={t("cases-stagnant")} /> : null}
+                            {item.isTest ? <StatusChip tone="neutral" label={t("cases-test-mark")} /> : null}
                           </Box>
                         ) : null}
                       </ButtonBase>

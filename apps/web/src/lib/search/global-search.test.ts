@@ -21,6 +21,7 @@ const row = (seq: number, client = `Cliente ${seq}`): CaseListRow => ({
   courtMoved: false,
   civilRefused: false,
   agency: null,
+  isTest: false,
   movedAt: null,
   cnjs: [],
   holder: "client",

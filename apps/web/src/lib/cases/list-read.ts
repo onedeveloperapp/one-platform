@@ -26,6 +26,7 @@ export async function readCaseList(
     target_sort: query.sort ?? null,
     target_incident: query.incident ?? null,
     target_airline: query.airline ?? null,
+    target_tests: query.tests ?? true,
   });
   if (error) return null;
   return caseListOf(data);
@@ -50,6 +51,7 @@ export async function readCaseExportPage(
     target_sort: query.sort ?? null,
     target_incident: query.incident ?? null,
     target_airline: query.airline ?? null,
+    target_tests: query.tests ?? true,
   });
   if (error) return null;
   return caseListOf(data);
@@ -63,13 +65,14 @@ export async function readCaseExportPage(
 export async function readCaseStock(
   supabase: SupabaseClient,
   orgId: string,
-  query: Pick<CaseListQuery, "module" | "incident" | "airline">,
+  query: Pick<CaseListQuery, "module" | "incident" | "airline" | "tests">,
 ): Promise<CaseStock | null> {
   const { data, error } = await supabase.rpc("firm_case_stock", {
     target_org: orgId,
     target_module: query.module,
     target_incident: query.incident ?? null,
     target_airline: query.airline ?? null,
+    target_tests: query.tests ?? true,
   });
   if (error) return null;
   return caseStockOf(data);
@@ -82,7 +85,7 @@ export async function readCaseStock(
 export async function readCaseBoard(
   supabase: SupabaseClient,
   orgId: string,
-  query: { module: string | null; step?: string | null; offset?: number; limit?: number },
+  query: { module: string | null; step?: string | null; offset?: number; limit?: number; tests?: boolean },
 ): Promise<BoardColumn[] | null> {
   const { data, error } = await supabase.rpc("firm_case_board", {
     target_org: orgId,
@@ -90,6 +93,7 @@ export async function readCaseBoard(
     target_step: query.step ?? null,
     target_offset: query.offset ?? 0,
     target_limit: query.limit ?? null,
+    target_tests: query.tests ?? true,
   });
   if (error) return null;
   return caseBoardOf(data);

@@ -15,6 +15,8 @@ export type BoardItem = {
   seq: number;
   /** The first adult claimant, else who answers for a minor; empty when the case has nobody yet. */
   client: string;
+  /** A case of the test chat (0114), marked on its card. */
+  isTest: boolean;
   holder: string | null;
   why: string | null;
   /** Whole days of Brasília at the step. */
@@ -46,6 +48,7 @@ function itemOf(raw: unknown): BoardItem[] {
       id: item.id,
       seq: item.seq,
       client: typeof item.client === "string" ? item.client : "",
+      isTest: item.is_test === true,
       holder: typeof item.holder === "string" ? item.holder : null,
       why: typeof item.why === "string" ? item.why : null,
       days: whole(item.days),

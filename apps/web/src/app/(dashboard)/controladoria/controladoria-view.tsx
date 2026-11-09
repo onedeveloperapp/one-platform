@@ -2,6 +2,7 @@
 
 import CasesView from "../casos/components/cases-view";
 import CaseBoard from "./case-board";
+import GoalsCard from "./goals-card";
 import type { ControladoriaState } from "./load-controladoria";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -127,6 +128,12 @@ const STOCK_STEP_KEY: Record<JourneyStepId, string> = {
   closed: "controladoria-stock-step-closing",
 };
 
+/** What the page says of test cases it holds with real ones (0114), and the one click that changes it. */
+const TESTS_LINE = {
+  "left-out": { line: "controladoria-tests-left-out", action: "controladoria-tests-include" },
+  included: { line: "controladoria-tests-included", action: "controladoria-tests-exclude" },
+};
+
 const HOLDER_VIEW_LABEL: Record<Holder, string> = {
   firm: "cases-filter-with-firm",
   client: "cases-filter-with-client",
@@ -161,7 +168,9 @@ export default function ControladoriaView({ state }: { state: ControladoriaState
   const module = ready?.cases.scope?.module.key ?? null;
   const numbers = ready?.cases.list.numbers ?? null;
   const counts = ready?.cases.list.counts ?? null;
-  const hrefOf = (view: CaseFilter | null) => `${scopedHref("/controladoria", module, { ver: view })}#lista`;
+  // The test cases asked in stay asked in through the page's links (0114).
+  const testes = ready?.testCases.state === "included" ? "1" : null;
+  const hrefOf = (view: CaseFilter | null) => `${scopedHref("/controladoria", module, { ver: view, testes })}#lista`;
 
   // The cases as a list (with the bar's views) or as the board by step. A number of the page opens the list under it,
   // so arriving at another view shows the list again.
@@ -250,7 +259,34 @@ export default function ControladoriaView({ state }: { state: ControladoriaState
 
       {ready ? (
         <>
-          <ModuleScope path="/controladoria" modules={ready.cases.modules} current={module} />
+          <ModuleScope path="/controladoria" modules={ready.cases.modules} current={module} keep={{ testes }} />
+
+          {ready.testCases.state === "only" ? (
+            <Alert severity="info" className="neutral bg-background-paper/60!">
+              {t("controladoria-tests-only", { count: ready.testCases.count })}
+            </Alert>
+          ) : null}
+          {ready.testCases.state === "left-out" || ready.testCases.state === "included" ? (
+            <Alert
+              severity="info"
+              className="neutral bg-background-paper/60!"
+              action={
+                <Button
+                  component={Link}
+                  href={scopedHref("/controladoria", module, {
+                    ver: ready.cases.filter,
+                    testes: ready.testCases.counted ? null : "1",
+                  })}
+                  color="inherit"
+                  size="small"
+                >
+                  {t(TESTS_LINE[ready.testCases.state].action)}
+                </Button>
+              }
+            >
+              {t(TESTS_LINE[ready.testCases.state].line, { count: ready.testCases.count })}
+            </Alert>
+          ) : null}
 
           {numbers ? (
             <Grid container spacing={2.5}>
@@ -422,6 +458,8 @@ export default function ControladoriaView({ state }: { state: ControladoriaState
             )}
           </Box>
 
+          <GoalsCard goals={ready.goals} modules={ready.cases.modules} scope={ready.cases.scope?.module ?? null} />
+
           <Box id="lista" className="scroll-mt-24">
             {mode === "list" ? (
               <CasesView
@@ -445,7 +483,7 @@ export default function ControladoriaView({ state }: { state: ControladoriaState
                   {modeSwitch}
                 </Box>
                 {ready.board ? (
-                  <CaseBoard columns={ready.board} module={module} />
+                  <CaseBoard columns={ready.board} module={module} tests={ready.testCases.counted} />
                 ) : (
                   <Alert severity="warning" className="neutral bg-background-paper/60!">
                     {t("controladoria-board-unread")}

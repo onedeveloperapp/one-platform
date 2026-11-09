@@ -201,11 +201,11 @@ select ok(
 );
 
 select ok(
-  has_function_privilege('authenticated', 'public.firm_cases(uuid, text, text, integer, integer, text, text, text, text)', 'execute')
-    and not has_function_privilege('anon', 'public.firm_cases(uuid, text, text, integer, integer, text, text, text, text)', 'execute')
+  has_function_privilege('authenticated', 'public.firm_cases(uuid, text, text, integer, integer, text, text, text, text, boolean)', 'execute')
+    and not has_function_privilege('anon', 'public.firm_cases(uuid, text, text, integer, integer, text, text, text, text, boolean)', 'execute')
     and not exists (
       select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-      where n.nspname = 'public' and p.proname = 'firm_cases' and p.pronargs <> 9
+      where n.nspname = 'public' and p.proname = 'firm_cases' and p.pronargs <> 10
     ),
   'one list of cases, read by the firm''s people and never by a visitor'
 );

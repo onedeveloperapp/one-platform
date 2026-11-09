@@ -13,5 +13,9 @@ export default async function ControladoriaPage({
 }) {
   const query = await searchParams;
   const one = (key: string) => (typeof query[key] === "string" ? (query[key] as string) : undefined);
-  return <ControladoriaView state={await loadControladoria({ ver: one("ver"), modulo: one("modulo") })} />;
+  return (
+    <ControladoriaView
+      state={await loadControladoria({ ver: one("ver"), modulo: one("modulo"), testes: one("testes") })}
+    />
+  );
 }

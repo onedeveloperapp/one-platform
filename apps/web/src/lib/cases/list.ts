@@ -116,6 +116,8 @@ export type CaseListRow = {
   agency: string | null;
   /** When a lawsuit of the case in court last moved (0110); null when none did. */
   movedAt: string | null;
+  /** A case of the test chat (0114), marked on its row. */
+  isTest: boolean;
   /** The numbers of its lawsuits in court, 20 digits each (0110). */
   cnjs: string[];
   /** Who has the case and why, as the top of the case says it (0111); null for a case that ended. */
@@ -196,6 +198,8 @@ export type CaseListQuery = {
   /** Only the cases of this kind of problem, and of this airline (its IATA code): they narrow every count too. */
   incident?: string | null;
   airline?: string | null;
+  /** Whether the test cases count (0114); every case when left out. */
+  tests?: boolean;
 };
 
 /** A query from whatever was handed: a server action is a public endpoint. */
@@ -216,6 +220,7 @@ export function caseListQuery(input: unknown): CaseListQuery {
       typeof value.airline === "string" && /^[A-Za-z0-9]{2,3}$/.test(value.airline)
         ? value.airline.toUpperCase()
         : null,
+    tests: value.tests !== false,
   };
 }
 
@@ -260,6 +265,7 @@ export function caseListOf(raw: unknown): CaseListPage | null {
         courtMoved: row.court_moved === true,
         civilRefused: row.civil_refused === true,
         agency: typeof row.agency === "string" && row.agency !== "" ? row.agency : null,
+        isTest: row.is_test === true,
         movedAt: typeof row.moved_at === "string" ? row.moved_at : null,
         cnjs: Array.isArray(row.cnjs) ? row.cnjs.filter((cnj): cnj is string => typeof cnj === "string") : [],
         holder: typeof row.holder === "string" ? row.holder : null,

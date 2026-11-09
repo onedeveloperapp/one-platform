@@ -74,6 +74,11 @@ const ANSWER_KEY: Record<string, string> = {
 };
 export const answerKey = (code: string): string => ANSWER_KEY[code] ?? "test-court-error-failed";
 
+/** How many days the test court leaves a lawsuit quiet (0114): each one past a mark of the controladoria (30, 45, 90). */
+export const QUIET_DAYS = [31, 46, 91] as const;
+export type QuietDays = (typeof QUIET_DAYS)[number];
+export const isQuietDays = (value: unknown): value is QuietDays => (QUIET_DAYS as readonly unknown[]).includes(value);
+
 export type TestCourtPackage = {
   id: string;
   proceedingId: string;

@@ -21,13 +21,20 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-
  * same for a firm with ten cases and for one that brought thousands of lawsuits from a spreadsheet. Under a module
  * (`modulo`, one the firm contracted) it lists that module's cases only, with what only that module has.
  */
-export async function loadCases(params: { ver?: string; conversa?: string; modulo?: string }): Promise<CasesState> {
+export async function loadCases(params: {
+  ver?: string;
+  conversa?: string;
+  modulo?: string;
+  /** Whether the test cases count (0114); every case when left out. */
+  tests?: boolean;
+}): Promise<CasesState> {
   const context = await getMemberContext();
   if (!context) return { kind: "unavailable" };
   if (!context.firm) return { kind: "no-firm" };
   const { supabase } = context;
   const firm = context.firm.id;
   const filter = isCaseFilter(params.ver) ? params.ver : null;
+  const tests = params.tests !== false;
   const { modules, current } = pageScopeOf(context.catalog, context.modules, params.modulo);
   const definition = current ? moduleOf(current.key) : null;
   const scope: CasesScope | null = current
@@ -45,9 +52,10 @@ export async function loadCases(params: { ver?: string; conversa?: string; modul
       module: current?.key ?? null,
       page: 0,
       pageSize: DEFAULT_PAGE_SIZE,
+      tests,
     }),
     // Who has the cases and the stagnant ones, counted for the views of the list (0111): one read a load.
-    readCaseStock(supabase, firm, { module: current?.key ?? null }),
+    readCaseStock(supabase, firm, { module: current?.key ?? null, tests }),
     supabase.from("airlines").select("iata, name").eq("active", true).order("name"),
     cookies(),
   ]);
@@ -75,6 +83,7 @@ export async function loadCases(params: { ver?: string; conversa?: string; modul
   return {
     kind: "ready",
     list,
+    tests,
     stock,
     airlines: (airlines.data ?? []) as AirlineOption[],
     filter,

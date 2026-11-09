@@ -139,8 +139,8 @@ export function standingCounts(stock: CaseStock): Record<StandingView, number> {
 }
 
 /** The scope a stock is read under (the module, the kind of problem, the airline), as one key: a new one reads it again. */
-export const stockKey = (query: Pick<CaseListQuery, "module" | "incident" | "airline">): string =>
-  [query.module ?? "", query.incident ?? "", query.airline ?? ""].join("|");
+export const stockKey = (query: Pick<CaseListQuery, "module" | "incident" | "airline" | "tests">): string =>
+  [query.module ?? "", query.incident ?? "", query.airline ?? "", query.tests === false ? "real" : "all"].join("|");
 
 /**
  * The steps the stock shows, in the order of the way: every step a case in progress may be at, and the last one only

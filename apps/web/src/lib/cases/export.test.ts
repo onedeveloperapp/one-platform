@@ -28,6 +28,7 @@ const words: ExportWords = {
     why: "Por quê",
     stepDays: "Na etapa há",
     stagnant: "Estagnado",
+    test: "Teste",
   },
   moduleName: (key) => `módulo ${key}`,
   kindName: (key) => `tipo ${key}`,
@@ -57,6 +58,7 @@ const row: CaseListRow = {
   courtMoved: false,
   civilRefused: false,
   agency: "Agência Sol Teste",
+  isTest: false,
   movedAt: "2026-11-08T03:10:00Z",
   cnjs: ["00051016820998090051", "00051025320998090051"],
   court: { held: true, decided: false, paid: false },
@@ -118,6 +120,7 @@ describe("a case as a line of the sheet", () => {
       "Processos",
       "Último movimento",
       "Atualizado em",
+      "Teste",
     ]);
     expect(exportLine(row, words, true)).toEqual([
       41,
@@ -136,7 +139,13 @@ describe("a case as a line of the sheet", () => {
       "0005101-68.2099.8.09.0051, 0005102-53.2099.8.09.0051",
       "2026-11-08 00:10",
       "2026-11-08 09:30",
+      null,
     ]);
+  });
+
+  it("says a test case is one in its own column", () => {
+    const line = exportLine({ ...row, isTest: true }, words, true);
+    expect(line.at(-1)).toBe("Sim");
   });
 
   it("leaves the module out when the firm has only one, in the titles and in the line alike", () => {

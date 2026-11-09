@@ -165,9 +165,9 @@ select ok(
   'with no filter the list shows every case still going, the most recently changed first'
 );
 select is(
-  -- Who has each case and how long it is at its step (0111) are 0112's.
+  -- Who has each case and how long it is at its step (0111) are 0112's, and whether it is a test (0114) is 0115's.
   (select jsonb_agg(row.value - 'id'::text - 'updated_at'::text - 'created_at'::text - 'holder'::text - 'why'::text
-     - 'step'::text - 'step_since'::text - 'step_days'::text - 'stagnant'::text order by row.ordinality)
+     - 'step'::text - 'step_since'::text - 'step_days'::text - 'stagnant'::text - 'is_test'::text order by row.ordinality)
    from jsonb_array_elements(pg_temp.ana() -> 'rows') with ordinality as row where row.ordinality in (1, 4)),
   '[{"seq": 1, "client": "João da Silva", "module": "direito-do-passageiro", "incident": "delay", "airline_iata": "G3", "flight_date": "2026-07-20", "status": "intake",
      "to_review": 1, "client_finished": true, "chronology_contested": false, "complaint_overdue": false,

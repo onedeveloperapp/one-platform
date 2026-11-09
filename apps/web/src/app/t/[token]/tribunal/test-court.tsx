@@ -10,12 +10,14 @@ import StatusChip from "@/components/product/status-chip";
 import NiArrowLeft from "@/icons/nexture/ni-arrow-left";
 import NiReceipt from "@/icons/nexture/ni-receipt";
 import NiScale from "@/icons/nexture/ni-scale";
-import { actTestCourt, readTestCourt, testCourtReceipt } from "@/lib/test-court/actions";
+import { actTestCourt, leaveTestLawsuitQuiet, readTestCourt, testCourtReceipt } from "@/lib/test-court/actions";
 import {
   answerKey,
   COURT_STEPS,
   type CourtStep,
   numberLabel,
+  QUIET_DAYS,
+  type QuietDays,
   STEP_KEY,
   stepOpen,
   stepWaits,
@@ -96,6 +98,24 @@ export default function TestCourt({ token, initial }: { token: string; initial: 
       } else {
         setNotice({ tone: "success", text: t("test-court-done-moved"), at: lawsuit.id });
       }
+      await refresh();
+    } catch {
+      setNotice({ tone: "error", text: t("test-court-error-failed"), at: lawsuit.id });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const leaveQuiet = async (lawsuit: TestCourtLawsuit, days: QuietDays) => {
+    setBusy(`${lawsuit.id}:quiet:${days}`);
+    setNotice(null);
+    try {
+      const answer = await leaveTestLawsuitQuiet(token, lawsuit.id, days);
+      setNotice(
+        answer.ok
+          ? { tone: "success", text: t("test-court-quiet-done", { days }), at: lawsuit.id }
+          : { tone: "error", text: t(answerKey(answer.code)), at: lawsuit.id },
+      );
       await refresh();
     } catch {
       setNotice({ tone: "error", text: t("test-court-error-failed"), at: lawsuit.id });
@@ -346,6 +366,34 @@ export default function TestCourt({ token, initial }: { token: string; initial: 
                         );
                       })}
                     </Box>
+                    {lawsuit.status === "filed" && !archived ? (
+                      <Box className="border-grey-100 flex flex-wrap items-center justify-between gap-2 border-t pt-2">
+                        <Box className="flex min-w-0 flex-1 basis-64 flex-col">
+                          <Typography variant="body2" className="font-medium">
+                            {t("test-court-quiet-title")}
+                          </Typography>
+                          <Typography variant="body2" className="text-text-secondary">
+                            {t("test-court-quiet-body")}
+                          </Typography>
+                        </Box>
+                        <Box className="flex flex-wrap gap-2">
+                          {QUIET_DAYS.map((days) => (
+                            <Button
+                              key={days}
+                              variant="outlined"
+                              color="grey"
+                              size="small"
+                              disabled={busy !== null}
+                              onClick={() => void leaveQuiet(lawsuit, days)}
+                            >
+                              {busy === `${lawsuit.id}:quiet:${days}`
+                                ? t("test-court-acting")
+                                : t("test-court-quiet-days", { days })}
+                            </Button>
+                          ))}
+                        </Box>
+                      </Box>
+                    ) : null}
                   </Box>
                 );
               })

@@ -3,6 +3,7 @@
 import { queuePublicationTriage } from "@/lib/publications/triage-work";
 import {
   isCourtStep,
+  isQuietDays,
   receiptBlocks,
   receiptDay,
   type TestCourtView,
@@ -70,6 +71,30 @@ export async function actTestCourt(token: string, proceedingId: string, step: st
     published: typeof answer.published === "string",
     hearingAt: typeof answer.hearing_at === "string" ? answer.hearing_at : undefined,
   };
+}
+
+/**
+ * The test court leaves a test lawsuit quiet for that many days (0114): its movements go back in time, so the marks of
+ * what is quiet on the controladoria can be seen.
+ */
+export async function leaveTestLawsuitQuiet(
+  token: string,
+  proceedingId: string,
+  days: number,
+): Promise<TestCourtAnswer> {
+  if (!TOKEN.test(String(token ?? "")) || !UUID.test(String(proceedingId ?? "")) || !isQuietDays(days)) {
+    return { ok: false, code: "not_found" };
+  }
+  const service = backendOrNull();
+  if (!service) return { ok: false, code: "unavailable" };
+  const { data, error } = await service.rpc("test_court_quiet", {
+    target_token: token,
+    target_proceeding: proceedingId,
+    target_days: days,
+  });
+  if (error) return { ok: false, code: "unavailable" };
+  const answer = (data ?? {}) as { ok?: boolean; code?: string };
+  return { ok: answer.ok === true, code: String(answer.code ?? "failed") };
 }
 
 /**

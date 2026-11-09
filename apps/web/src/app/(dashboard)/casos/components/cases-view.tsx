@@ -342,7 +342,7 @@ export default function CasesView({
   if (state.kind === "ready")
     return (
       <CasesList
-        key={`${state.scope?.module.key ?? "all"}:${state.filter ?? "going"}`}
+        key={`${state.scope?.module.key ?? "all"}:${state.filter ?? "going"}:${state.tests}`}
         ready={state}
         embedded={embedded}
         heading={heading}
@@ -416,7 +416,7 @@ function CasesList({
   // Who has the cases and the stagnant ones, as the stock of the list's scope and filters says (0111), with the scope
   // it was read under; null while it is read again, or when the database did not say it (the views then show no count).
   const [stock, setStock] = useState<{ key: string; value: CaseStock | null }>(() => ({
-    key: stockKey({ module: scope?.module.key ?? null, incident: null, airline: null }),
+    key: stockKey({ module: scope?.module.key ?? null, incident: null, airline: null, tests: ready.tests }),
     value: ready.stock,
   }));
   const [query, setQuery] = useState<CaseListQuery>({
@@ -428,6 +428,7 @@ function CasesList({
     sort: "recent",
     incident: null,
     airline: null,
+    tests: ready.tests,
   });
   const [loading, setLoading] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -444,7 +445,12 @@ function CasesList({
     setStock({ key, value: null });
     let answer: Awaited<ReturnType<typeof readFirmCaseStock>>;
     try {
-      answer = await readFirmCaseStock({ module: next.module, incident: next.incident, airline: next.airline });
+      answer = await readFirmCaseStock({
+        module: next.module,
+        incident: next.incident,
+        airline: next.airline,
+        tests: next.tests,
+      });
     } catch {
       answer = { ok: false };
     }
@@ -526,9 +532,12 @@ function CasesList({
         flex: 1.4,
         renderCell: (params: GridRenderCellParams<CaseListRow, string>) => (
           <Box className="flex h-full min-w-0 flex-col justify-center">
-            <Typography variant="body1" className="truncate font-medium">
-              {params.row.client || t("cases-no-client")}
-            </Typography>
+            <Box className="flex min-w-0 items-center gap-2">
+              <Typography variant="body1" className="truncate font-medium">
+                {params.row.client || t("cases-no-client")}
+              </Typography>
+              {params.row.isTest ? <StatusChip tone="neutral" label={t("cases-test-mark")} /> : null}
+            </Box>
             <Typography variant="body2" className="text-text-secondary truncate">
               {params.row.incident === null
                 ? (moduleOfRow.get(params.row.module)?.name ?? "")
@@ -677,6 +686,7 @@ function CasesList({
       why: t("cases-export-why"),
       stepDays: t("cases-column-step-days"),
       stagnant: t("cases-stagnant"),
+      test: t("cases-test-mark"),
     },
     holderName: (holder) => (isHolder(holder) ? t(HOLDER_WORD[holder]) : t("cases-holder-ended")),
     reasonName: (holder, why) => {

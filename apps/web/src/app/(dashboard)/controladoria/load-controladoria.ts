@@ -7,6 +7,9 @@ import { momentLabel } from "@/lib/ai/approvals";
 import { BOARD_PAGE, type BoardColumn } from "@/lib/cases/board";
 import { readCaseBoard, readCaseStock } from "@/lib/cases/list-read";
 import type { CaseStock } from "@/lib/cases/standing";
+import { testCaseFactsOf, testCasesAsked, type TestCaseScope, testCaseScope } from "@/lib/cases/test-cases";
+import type { ClosingGoals } from "@/lib/controladoria/goals";
+import { readClosingGoals } from "@/lib/controladoria/goals-read";
 import { isCourtTrackingOn } from "@/lib/courts/tracking";
 import { overseesFirm } from "@/lib/firm/roles";
 import { getMemberContext } from "@/lib/member/context";
@@ -27,6 +30,10 @@ export type ControladoriaState =
        * Null when the database did not say it.
        */
       board: BoardColumn[] | null;
+      /** The closing goals (`firm_closing_goals`, 0113), of the page's module or of every one; null when unread. */
+      goals: ClosingGoals | null;
+      /** Whether the page's numbers count the firm's test cases (0114), and how it says so. */
+      testCases: TestCaseScope;
       /** The cases going in each module, for a firm with more than one and no module chosen. */
       byModule: { module: ModuleCard; going: number }[] | null;
       /** When this page was read, on the person's clock. */
@@ -45,7 +52,11 @@ export type ControladoriaState =
  * page is theirs, and anybody else is told so, with nothing read for it. It is read when it opens and on
  * "Atualizar", and says when.
  */
-export async function loadControladoria(params: { ver?: string; modulo?: string }): Promise<ControladoriaState> {
+export async function loadControladoria(params: {
+  ver?: string;
+  modulo?: string;
+  testes?: string;
+}): Promise<ControladoriaState> {
   const context = await getMemberContext();
   if (!context) return { kind: "unavailable" };
   if (!context.firm) return { kind: "no-firm" };
@@ -54,13 +65,18 @@ export async function loadControladoria(params: { ver?: string; modulo?: string 
   const { supabase } = context;
   const firm = context.firm.id;
   const { modules, current } = pageScopeOf(context.catalog, context.modules, params.modulo);
+  // Whether the page counts the test cases decides every read after it (0114).
+  const facts = await supabase.rpc("firm_test_cases", { target_org: firm, target_module: current?.key ?? null });
+  const testCases = testCaseScope(facts.error ? null : testCaseFactsOf(facts.data), testCasesAsked(params.testes));
+  const tests = testCases.counted;
   // The stock of the page's scope is the list's own (`loadCases` reads it once); each module's, for the card of the
   // modules, only where there is more than one and none was chosen.
-  const [cases, board, perModule] = await Promise.all([
-    loadCases({ ver: params.ver, modulo: params.modulo }),
-    readCaseBoard(supabase, firm, { module: current?.key ?? null, limit: BOARD_PAGE }),
+  const [cases, board, goals, perModule] = await Promise.all([
+    loadCases({ ver: params.ver, modulo: params.modulo, tests }),
+    readCaseBoard(supabase, firm, { module: current?.key ?? null, limit: BOARD_PAGE, tests }),
+    readClosingGoals(supabase, firm, current?.key ?? null),
     !current && modules.length > 1
-      ? Promise.all(modules.map((module) => readCaseStock(supabase, firm, { module: module.key })))
+      ? Promise.all(modules.map((module) => readCaseStock(supabase, firm, { module: module.key, tests })))
       : Promise.resolve(null),
   ]);
   if (cases.kind !== "ready") return cases;
@@ -69,6 +85,8 @@ export async function loadControladoria(params: { ver?: string; modulo?: string 
     cases,
     stock: cases.stock,
     board,
+    goals,
+    testCases,
     byModule: perModule
       ? modules.flatMap((module, at) => {
           const read = perModule[at];
