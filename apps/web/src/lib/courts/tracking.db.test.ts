@@ -354,4 +354,48 @@ describe.skipIf(!DB_URL)("the course of a firm's lawsuits, read from the courts"
     const theirs = await loadCourseFacts(asRui() as never, FIRM, caseId, null);
     expect(Object.keys(theirs.byProceeding)).toEqual([]);
   });
+
+  it("pauses a reading that stops, says on the case when ONE tries again, and calls nobody until then", async () => {
+    const { readNext } = await import("@/lib/courts/tracking-work");
+    const { loadCourseFacts } = await import("@/lib/courts/course-facts");
+    const silent = new FakeProceedingSource("escavador");
+    silent.unreachable("1000234-88.2099.8.26.0100");
+    // Its last attempt: the source does not answer, and the reading is given up for now.
+    const [{ tries }] = await sql.unsafe(
+      `select coalesce((value ->> 'max_attempts')::int, 5) as tries from public.platform_settings where key = 'tracking'`,
+    );
+    await sql.unsafe(
+      `update public.proceeding_tracking set next_read_at = now(), work_attempts = $2 where proceeding_id = $1`,
+      [lawsuits.saoPaulo, Number(tries) - 1],
+    );
+    expect(await readNext(backend() as never, { projudi: null, aggregator: silent })).toBe("paused");
+    expect(await tracking(lawsuits.saoPaulo)).toMatchObject({ status: "paused" });
+
+    const facts = await loadCourseFacts(asAna() as never, FIRM, caseId, "America/Sao_Paulo");
+    expect(facts.byProceeding[lawsuits.saoPaulo]).toMatchObject({ status: "paused", asked: false });
+    expect(facts.byProceeding[lawsuits.saoPaulo].retryLabel).toBeTruthy();
+    const today = await asAna().rpc("firm_today", { target_org: FIRM });
+    expect((today.data as Row).tracking_failed).toBe(0);
+    // Before its week nothing reads it.
+    expect(await readNext(backend() as never, { projudi: null, aggregator: silent })).toBe("none");
+
+    // Its week past, ONE starts it over, and the source answers: the count starts over.
+    await sql.unsafe(
+      `update public.proceeding_tracking set retry_at = now() - interval '1 minute' where proceeding_id = $1`,
+      [lawsuits.saoPaulo],
+    );
+    const answering = new FakeProceedingSource("escavador");
+    answering.add({
+      number: "1000234-88.2099.8.26.0100",
+      unit: "São Paulo - 10ª Vara Cível",
+      status: "Ativo",
+      movements: [movement("sp-1", "2026-08-05T13:00:00.000Z", "Distribuído por sorteio")],
+    });
+    expect(await readNext(backend() as never, { projudi: null, aggregator: answering })).toBe("read");
+    const [after] = await sql.unsafe(
+      `select status, retry_rounds, retry_at from public.proceeding_tracking where proceeding_id = $1`,
+      [lawsuits.saoPaulo],
+    );
+    expect(after).toMatchObject({ status: "tracked", retry_rounds: 0, retry_at: null });
+  });
 });

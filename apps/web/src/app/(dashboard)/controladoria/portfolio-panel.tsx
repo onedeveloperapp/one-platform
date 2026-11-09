@@ -43,6 +43,7 @@ const GOES: Record<PortfolioSheet, string> = {
   casos: "portfolio-goes-casos",
   acoes: "portfolio-goes-acoes",
   prazos: "portfolio-goes-prazos",
+  audiencias: "portfolio-goes-audiencias",
   documentos: "portfolio-goes-documentos",
 };
 
@@ -50,7 +51,7 @@ type Progress = { sheet: PortfolioSheet; done: number; total: number; read: numb
 type Done = { counts: PortfolioCounts; file: string; left: number };
 
 /**
- * "Levar a carteira inteira" (migration 0117): says what the file holds and that it holds every client's personal data,
+ * "Levar a carteira inteira" (migrations 0117 and 0118): says what the file holds and that it holds every client's personal data,
  * asks the second factor where the session has not confirmed it, then reads every sheet a page at a time and writes the
  * workbook in the person's browser. Nothing is saved of a portfolio that could not be read whole, and the panel does
  * not close while it reads.

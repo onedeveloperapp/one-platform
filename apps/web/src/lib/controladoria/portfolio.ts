@@ -10,17 +10,24 @@ import {
 } from "@/lib/cases/cases";
 import { COUNTING_KEY, STATUS_KEY as DEADLINE_STATUS_KEY } from "@/lib/deadlines/deadlines";
 import type { XlsxCell, XlsxColumn, XlsxSheet } from "@/lib/export/xlsx-write";
+import {
+  KIND_KEY as HEARING_KIND_KEY,
+  MODE_KEY,
+  OUTCOME_KEY,
+  STATUS_KEY as HEARING_STATUS_KEY,
+  ZONE_KEY,
+} from "@/lib/hearings/hearings";
 import { caseKindLabelKey } from "@/lib/modules/registry";
 import { formatCnj } from "@flyee/rules/cnj";
 
 /**
- * "Levar a carteira inteira" (phase 1 of the plan of the controladoria, migration 0117): everything of the firm in one
- * workbook, for who decides for it. Pure: what the database answered, and each row as a line of its sheet, by the same
+ * "Levar a carteira inteira" (phase 1 of the plan of the controladoria, migrations 0117 and 0118, which added the
+ * hearings): everything of the firm in one workbook, for who decides for it. Pure: what the database answered, and each row as a line of its sheet, by the same
  * words the screens use. The file holds every client's personal data, and only the person's browser ever writes it.
  */
 
 /** The sheets of the file, in the order they are read and written. */
-export const PORTFOLIO_SHEETS = ["clientes", "casos", "acoes", "prazos", "documentos"] as const;
+export const PORTFOLIO_SHEETS = ["clientes", "casos", "acoes", "prazos", "audiencias", "documentos"] as const;
 export type PortfolioSheet = (typeof PORTFOLIO_SHEETS)[number];
 export const isPortfolioSheet = (value: unknown): value is PortfolioSheet =>
   (PORTFOLIO_SHEETS as readonly unknown[]).includes(value);
@@ -262,6 +269,28 @@ const COLUMNS: Record<PortfolioSheet, Column[]> = {
     { title: "portfolio-column-done", kind: "moment", width: 17, value: field("done_at") },
     { title: "portfolio-column-dismissed", width: 30, value: field("dismiss_reason") },
   ],
+  audiencias: [
+    { title: "cases-column-case", kind: "number", width: 8, value: (row) => caseCell(row.seq) },
+    { title: "portfolio-column-cnj", width: 28, value: (row) => formatCnj(text(row.cnj)) ?? text(row.cnj) },
+    { title: "case-proceeding-court", width: 10, value: field("court") },
+    { title: "hearing-field-kind", width: 30, value: (row, say) => named(HEARING_KIND_KEY, row.kind, say) },
+    // On the clock of the zone the hearing is said in, which the next column names.
+    { title: "portfolio-column-hearing-at", kind: "moment", width: 17, value: field("starts_at") },
+    { title: "hearing-field-zone", width: 26, value: (row, say) => named(ZONE_KEY, row.time_zone, say) },
+    { title: "hearing-field-mode", width: 24, value: (row, say) => named(MODE_KEY, row.mode, say) },
+    { title: "hearing-field-place", width: 28, value: field("place") },
+    { title: "portfolio-column-link", width: 34, value: field("link") },
+    { title: "hearing-field-attendee", width: 24, value: field("attendee") },
+    {
+      title: "portfolio-column-hearing-status",
+      width: 12,
+      value: (row, say) => named(HEARING_STATUS_KEY, row.status, say),
+    },
+    { title: "hearing-field-outcome", width: 16, value: (row, say) => named(OUTCOME_KEY, row.outcome, say) },
+    { title: "portfolio-column-outcome-note", width: 32, value: field("outcome_note") },
+    { title: "hearing-field-notes", width: 30, value: field("notes") },
+    { title: "portfolio-column-registered-one", width: 10, value: yes("created_auto") },
+  ],
   documentos: [
     { title: "cases-column-case", kind: "number", width: 8, value: (row) => caseCell(row.seq) },
     { title: "portfolio-column-person", width: 28, value: field("person") },
@@ -292,6 +321,7 @@ const SHEET_KEY: Record<PortfolioSheet, string> = {
   casos: "portfolio-sheet-casos",
   acoes: "portfolio-sheet-acoes",
   prazos: "portfolio-sheet-prazos",
+  audiencias: "portfolio-sheet-audiencias",
   documentos: "portfolio-sheet-documentos",
 };
 

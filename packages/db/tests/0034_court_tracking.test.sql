@@ -187,7 +187,8 @@ reset role;
 insert into res select 'after_missing', jsonb_build_object(
   'status', status, 'later', next_read_at > now() + interval '71 hours', 'read', checked_at is not null and read_at is null)
   from pg_temp.tracking_of('sp');
-update public.platform_settings set value = value || '{"max_attempts": 2}'::jsonb where key = 'tracking';
+-- With no weekly try left, a reading given up is a person's at once (0119's weekly tries have a test of their own).
+update public.platform_settings set value = value || '{"max_attempts": 2, "weekly_retries": 0}'::jsonb where key = 'tracking';
 update public.proceeding_tracking set next_read_at = now() where id = (select id from pg_temp.tracking_of('sp'));
 select pg_temp.as_backend();
 set local role service_role;

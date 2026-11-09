@@ -74,8 +74,12 @@ export default function CourtCourse({
   const state = (() => {
     if (test && view.status === "waiting") return t("course-test-waiting");
     if (!reader) return view.source === "projudi" || !facts.courtsOn ? t("course-off") : t("course-no-aggregator");
-    // A reading given up says so first: a request it held was answered by it.
+    // A reading given up says so first: a request it held was answered by it. One that stopped is ONE's to start over
+    // a week later (0119), and calls the firm only once those tries are spent.
     if (view.status === "failed") return t("course-failed");
+    if (view.status === "paused") {
+      return view.retryLabel ? t("course-paused", { when: view.retryLabel }) : t("course-paused-plain");
+    }
     if (view.asked) return t("course-asked");
     if (view.status === "waiting") return t("course-waiting");
     if (view.status === "not_found") {

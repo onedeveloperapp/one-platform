@@ -19,8 +19,8 @@ import { readXlsx } from "@/lib/import/xlsx";
 import { connect, DB_URL, type Sql, standIn } from "@/lib/testing/embedded-db";
 
 /**
- * "Levar a carteira inteira" from the database to the file, with the app's own rules against a real database (migration
- * 0117): a partner begins it, every sheet is read a page at a time as the screen reads it, the rows become lines by the
+ * "Levar a carteira inteira" from the database to the file, with the app's own rules against a real database (migrations
+ * 0117 and 0118): a partner begins it, every sheet is read a page at a time as the screen reads it, the rows become lines by the
  * screens' words and the workbook is written and read back. The test cases stay out with who is only in them, and
  * nothing is read of another firm. The screen's run is this same path in the browser.
  *
@@ -89,6 +89,9 @@ describe.skipIf(!DB_URL)("the whole portfolio, from the database to the file", (
       insert into public.deadlines (org_id, cnj, court, case_id, proceeding_id, title, trigger, trigger_on, days, counting, due_on) values
         ('${FIRM}', '00051016820998090051', 'TJGO', 'cc170000-0000-4000-8000-000000000001', 'fc170000-0000-4000-8000-000000000001',
          'Réplica à contestação', 'day', '2026-10-05', 15, 'business', '2026-10-26');
+      insert into public.hearings (org_id, case_id, proceeding_id, kind, starts_at, time_zone, mode, link, attendee_user_id, status) values
+        ('${FIRM}', 'cc170000-0000-4000-8000-000000000001', 'fc170000-0000-4000-8000-000000000001', 'conciliacao',
+         '2026-11-20 17:00+00', 'America/Sao_Paulo', 'videoconferencia', 'https://videoconferencia.teste.invalid/sala-1', '${ANA}', 'scheduled');
       insert into public.files (id, org_id, purpose, storage_path, name, declared_mime, declared_bytes, status, sha256, bytes, detected_mime, pages, expires_at, confirmed_at) values
         ('ac170000-0000-4000-8000-0000000000f1', '${FIRM}', 'client', 'org/${FIRM}/client/guardado', 'identidade-maria.pdf', 'application/pdf', 4000, 'stored', '${"a".repeat(64)}', 4000, 'application/pdf', 1, now() + interval '1 hour', now());
       insert into public.case_documents (org_id, case_id, party_id, file_id, kind, source, status) values
@@ -150,7 +153,7 @@ describe.skipIf(!DB_URL)("the whole portfolio, from the database to the file", (
 
   it("writes every sheet of the firm's own, with the words the screens use", async () => {
     const { begun, lines, bytes } = await take(true);
-    expect(begun.counts).toEqual({ clientes: 2, casos: 2, acoes: 1, prazos: 1, documentos: 1 });
+    expect(begun.counts).toEqual({ clientes: 2, casos: 2, acoes: 1, prazos: 1, audiencias: 1, documentos: 1 });
     // Each sheet read holds what was counted.
     for (const sheet of PORTFOLIO_SHEETS) expect(lines[sheet]).toHaveLength(begun.counts[sheet]);
 
@@ -164,7 +167,7 @@ describe.skipIf(!DB_URL)("the whole portfolio, from the database to the file", (
     expect(clients).toContain("Rua das Flores");
     expect(clients).toContain("#7");
     // Nothing of another firm, in any sheet.
-    for (const at of [2, 3, 4, 5, 6]) {
+    for (const at of [2, 3, 4, 5, 6, 7]) {
       expect(sheetText(bytes, at)).not.toContain("Rui Cliente");
       expect(sheetText(bytes, at)).not.toContain("123.456.789-09");
     }
@@ -173,7 +176,12 @@ describe.skipIf(!DB_URL)("the whole portfolio, from the database to the file", (
     expect(lawsuits).toContain("Ana Souza (OAB/GO 19171)");
     expect(lawsuits).toContain("<v>10500.5</v>");
     expect(sheetText(bytes, 5)).toContain("Réplica à contestação");
-    const documents = sheetText(bytes, 6);
+    const hearings = sheetText(bytes, 6);
+    expect(hearings).toContain(say("hearing-kind-conciliacao"));
+    expect(hearings).toContain("https://videoconferencia.teste.invalid/sala-1");
+    expect(hearings).toContain(say("hearing-zone-brasilia"));
+    expect(hearings).toContain("Ana Souza");
+    const documents = sheetText(bytes, 7);
     expect(documents).toContain("identidade-maria.pdf");
     expect(documents).toContain("a".repeat(64));
     // An index: never where the file is kept.
@@ -188,7 +196,7 @@ describe.skipIf(!DB_URL)("the whole portfolio, from the database to the file", (
 
   it("leaves the test cases out with who is only in them, and says so", async () => {
     const { begun, bytes } = await take(false);
-    expect(begun.counts).toEqual({ clientes: 1, casos: 1, acoes: 1, prazos: 1, documentos: 1 });
+    expect(begun.counts).toEqual({ clientes: 1, casos: 1, acoes: 1, prazos: 1, audiencias: 1, documentos: 1 });
     expect(sheetText(bytes, 2)).not.toContain("Teo Teste");
     expect(sheetText(bytes, 1)).toContain(say("portfolio-about-tests"));
   });

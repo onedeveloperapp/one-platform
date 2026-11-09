@@ -78,8 +78,17 @@ export function failureCode(error: unknown): string {
   return /^[a-z][a-z0-9_]{1,59}$/.test(code) ? code : "source_failed";
 }
 
-export type CourseStatus = "waiting" | "tracked" | "not_found" | "secret" | "failed" | "off";
-export const COURSE_STATUSES: readonly CourseStatus[] = ["waiting", "tracked", "not_found", "secret", "failed", "off"];
+/** `paused`: a reading that stopped, which ONE starts over a week later before it is `failed`, a person's (0119). */
+export type CourseStatus = "waiting" | "tracked" | "not_found" | "secret" | "paused" | "failed" | "off";
+export const COURSE_STATUSES: readonly CourseStatus[] = [
+  "waiting",
+  "tracked",
+  "not_found",
+  "secret",
+  "paused",
+  "failed",
+  "off",
+];
 export const isCourseStatus = (value: unknown): value is CourseStatus =>
   (COURSE_STATUSES as readonly unknown[]).includes(value);
 

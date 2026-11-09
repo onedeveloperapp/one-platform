@@ -19,7 +19,16 @@ import type { SupabaseClient } from "@supabase/supabase-js";
  * source: a lawsuit's number is all it is asked.
  */
 
-export type CourseOutcome = "read" | "secret" | "not_found" | "retry" | "release" | "failed" | "not_held" | "stopped";
+export type CourseOutcome =
+  | "read"
+  | "secret"
+  | "not_found"
+  | "retry"
+  | "release"
+  | "paused"
+  | "failed"
+  | "not_held"
+  | "stopped";
 
 type Claimed = {
   tracking_id: string;

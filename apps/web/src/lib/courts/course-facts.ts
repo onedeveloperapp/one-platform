@@ -44,6 +44,8 @@ export type CourseView = {
   checkedLabel: string | null;
   /** A person asked for a reading the source has not answered yet. */
   asked: boolean;
+  /** When ONE starts over a reading that stopped (0119), while it is paused. */
+  retryLabel: string | null;
   error: string | null;
   unit: string | null;
   courtStatus: string | null;
@@ -76,6 +78,7 @@ type TrackingRow = {
   seen_until: string | null;
   requested_at: string | null;
   work_error: string | null;
+  retry_at: string | null;
 };
 
 type MovementRow = {
@@ -103,7 +106,7 @@ export async function loadCourseFacts(
   const tracking = await supabase
     .from("proceeding_tracking")
     .select(
-      "proceeding_id, source, status, snapshot, vendor, movements_count, unseen_count, read_at, checked_at, seen_until, requested_at, work_error",
+      "proceeding_id, source, status, snapshot, vendor, movements_count, unseen_count, read_at, checked_at, seen_until, requested_at, work_error, retry_at",
     )
     .eq("org_id", firmId)
     .eq("case_id", caseId);
@@ -141,10 +144,12 @@ export async function loadCourseFacts(
       vendor: row.source === "aggregator" ? (row.vendor ?? text(snapshot.vendor)) : null,
       readLabel: label(row.read_at),
       checkedLabel: label(row.checked_at),
-      // A request the source has not answered yet; one given up is answered (the reading failed).
+      // A request the source has not answered yet; one given up is answered (the reading failed, or paused).
       asked:
         row.status !== "failed" &&
+        row.status !== "paused" &&
         Boolean(row.requested_at && (!row.checked_at || Date.parse(row.requested_at) > Date.parse(row.checked_at))),
+      retryLabel: row.status === "paused" ? label(row.retry_at) : null,
       error: row.work_error,
       unit: text(snapshot.unit),
       courtStatus: text(snapshot.status),

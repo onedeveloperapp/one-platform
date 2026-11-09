@@ -20,7 +20,7 @@ const line = (sheet: (typeof PORTFOLIO_SHEETS)[number], row: Record<string, unkn
 };
 
 describe("what the database answers of beginning a portfolio", () => {
-  const counts = { clientes: 3, casos: 2, acoes: 2, prazos: 2, documentos: 1 };
+  const counts = { clientes: 3, casos: 2, acoes: 2, prazos: 2, audiencias: 2, documentos: 1 };
 
   it("takes a whole answer", () => {
     expect(portfolioBegunOf({ ok: true, page: 2000, counts, left: 2 })).toEqual({
@@ -162,6 +162,45 @@ describe("each row as a line of its sheet", () => {
     });
   });
 
+  it("writes a hearing on the clock of its zone, with how, where, who goes and what came of it", () => {
+    expect(
+      line("audiencias", {
+        seq: 41,
+        cnj: "00051016820998090051",
+        court: "TJGO",
+        kind: "conciliacao",
+        starts_at: "2026-11-20 14:00",
+        time_zone: "America/Sao_Paulo",
+        mode: "videoconferencia",
+        link: "https://videoconferencia.teste.invalid/sala-1",
+        attendee: "Caio Lima",
+        status: "scheduled",
+        created_auto: true,
+      }),
+    ).toMatchObject({
+      "cases-column-case": 41,
+      "portfolio-column-cnj": "0005101-68.2099.8.09.0051",
+      "hearing-field-kind": "hearing-kind-conciliacao",
+      "portfolio-column-hearing-at": "2026-11-20 14:00",
+      "hearing-field-zone": "hearing-zone-brasilia",
+      "hearing-field-mode": "hearing-mode-videoconferencia",
+      "portfolio-column-link": "https://videoconferencia.teste.invalid/sala-1",
+      "hearing-field-attendee": "Caio Lima",
+      "portfolio-column-hearing-status": "hearing-status-scheduled",
+      "hearing-field-outcome": null,
+      "portfolio-column-registered-one": "cases-export-yes",
+    });
+    expect(
+      line("audiencias", { status: "held", outcome: "sem_acordo", outcome_note: "A ré não propôs acordo." }),
+    ).toMatchObject({
+      "hearing-field-outcome": "hearing-outcome-sem-acordo",
+      "portfolio-column-outcome-note": "A ré não propôs acordo.",
+      "portfolio-column-registered-one": null,
+    });
+    // A zone the app does not name yet is written as it came, never left out.
+    expect(line("audiencias", { time_zone: "America/Recife" })["hearing-field-zone"]).toBe("America/Recife");
+  });
+
   it("writes a document as an index, with no way to the file", () => {
     const document = line("documentos", {
       seq: 41,
@@ -198,7 +237,7 @@ describe("each row as a line of its sheet", () => {
 });
 
 describe("the file", () => {
-  const counts = { clientes: 3, casos: 2, acoes: 2, prazos: 2, documentos: 1 };
+  const counts = { clientes: 3, casos: 2, acoes: 2, prazos: 2, audiencias: 2, documentos: 1 };
   const about = (testsLeftOut: boolean) =>
     portfolioAbout({
       firm: "Lima Advocacia",
@@ -216,6 +255,7 @@ describe("the file", () => {
     const said = Object.fromEntries(sheet.rows.map((row) => [row[0], row[1]]));
     expect(said["portfolio-about-made"]).toContain("12:30");
     expect(said["portfolio-sheet-clientes"]).toBe("3");
+    expect(said["portfolio-sheet-audiencias"]).toBe("2");
     expect(said["portfolio-sheet-documentos"]).toBe("1");
     expect(said["portfolio-about-documents"]).toBe("portfolio-about-documents-body");
     expect(said["portfolio-about-care"]).toBe("portfolio-about-care-body");
@@ -230,7 +270,7 @@ describe("the file", () => {
   it("has what it is first, then each sheet in order with its lines", () => {
     const sheets = portfolioWorkbook({
       about: about(false),
-      lines: { clientes: [["Maria Teste"]], casos: [], acoes: [], prazos: [], documentos: [] },
+      lines: { clientes: [["Maria Teste"]], casos: [], acoes: [], prazos: [], audiencias: [], documentos: [] },
       say,
     });
     expect(sheets.map((sheet) => sheet.sheet)).toEqual([
@@ -239,6 +279,7 @@ describe("the file", () => {
       "portfolio-sheet-casos",
       "portfolio-sheet-acoes",
       "portfolio-sheet-prazos",
+      "portfolio-sheet-audiencias",
       "portfolio-sheet-documentos",
     ]);
     expect(sheets[1].rows).toEqual([["Maria Teste"]]);

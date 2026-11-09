@@ -171,7 +171,7 @@ reset role;
 
 select is(
   (select value -> 'counts' from res where key = 'begun'),
-  '{"clientes": 3, "casos": 2, "acoes": 2, "prazos": 2, "documentos": 2}'::jsonb,
+  '{"clientes": 3, "casos": 2, "acoes": 2, "prazos": 2, "audiencias": 0, "documentos": 2}'::jsonb,
   'it says how many rows each sheet holds, a document still being sent is no document yet'
 );
 select ok(
