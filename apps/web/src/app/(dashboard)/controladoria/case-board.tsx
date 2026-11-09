@@ -8,16 +8,10 @@ import { Box, Button, ButtonBase, Typography } from "@mui/material";
 
 import StatusChip from "@/components/product/status-chip";
 import { BOARD_PAGE, type BoardColumn, boardColumns, hiddenOf, withMore } from "@/lib/cases/board";
-import { JOURNEY_STEP_KEY, type JourneyStepId } from "@/lib/cases/journey";
+import type { JourneyStepId } from "@/lib/cases/journey";
 import { readFirmCaseBoardColumn } from "@/lib/cases/list-actions";
-import { type Holder, isHolder, reasonKey } from "@/lib/cases/standing";
+import { type CaseStock, type Holder, isHolder, reasonKey, STOCK_STEP_KEY } from "@/lib/cases/standing";
 import { countText } from "@/lib/numbers/compare";
-
-/** The words of each column: the way's, but a case paid and not archived yet is at its last one. */
-const COLUMN_KEY: Record<JourneyStepId, string> = {
-  ...JOURNEY_STEP_KEY,
-  closed: "controladoria-stock-step-closing",
-};
 
 /** Who has the case, in a word, as the list says it. */
 const HOLDER_WORD: Record<Holder, string> = {
@@ -29,19 +23,27 @@ const HOLDER_WORD: Record<Holder, string> = {
 };
 
 /**
- * The board of the controladoria by step (0112), only to look at: a column per step of the way, its cases the longest
- * at the step first, each opening its case. Nobody drags a card: ONE carries a case from one step to the next. A column
- * reads its next cases on "Mostrar mais"; the board is read again with the page ("Atualizar").
+ * The board of the controladoria by step (0112), only to look at: a column per step of the way, its head saying how
+ * many cases are there, how long they have been (the stock's median and oldest, 0111) and how many stagnated, its
+ * cases the longest at the step first, each opening its case. Nobody drags a card: ONE carries a case from one step to
+ * the next. A column reads its next cases on "Mostrar mais", and opens the list of its cases in `/casos` (0116), with
+ * its search, its order and "Exportar"; the board is read again with the page ("Atualizar").
  */
 export default function CaseBoard({
   columns,
+  stock,
   module,
   tests,
+  listOf,
 }: {
   columns: BoardColumn[];
+  /** Each step's days (its median and oldest); null when the stock could not be read, and the heads say no days. */
+  stock: CaseStock | null;
   module: string | null;
   /** Whether the test cases count, as the page read them (0114). */
   tests: boolean;
+  /** The list of a step's cases, with the page's cut. */
+  listOf: (step: JourneyStepId) => string;
 }) {
   const t = useTranslations("product");
   const [shown, setShown] = useState(() => boardColumns(columns));
@@ -81,6 +83,7 @@ export default function CaseBoard({
       {shown.map((column) => {
         const id = `controladoria-board-${column.step}`;
         const hidden = hiddenOf(column);
+        const days = stock?.steps.find((item) => item.step === column.step);
         return (
           <Box
             key={column.step}
@@ -91,14 +94,19 @@ export default function CaseBoard({
             <Box className="flex flex-col gap-0.5">
               <Box className="flex items-center justify-between gap-2">
                 <Typography id={id} variant="subtitle2" component="h3" className="mb-0">
-                  {t(COLUMN_KEY[column.step])}
+                  {t(STOCK_STEP_KEY[column.step])}
                 </Typography>
                 <Typography variant="body2" component="span" className="font-semibold tabular-nums">
                   {countText(column.cases)}
                 </Typography>
               </Box>
-              {column.stagnant > 0 ? (
+              {column.cases > 0 && days ? (
                 <Typography variant="caption" className="text-text-secondary">
+                  {t("controladoria-stock-step-days", { median: days.medianDays, oldest: days.oldestDays })}
+                </Typography>
+              ) : null}
+              {column.stagnant > 0 ? (
+                <Typography variant="caption" className="text-text-primary font-semibold">
                   {t("controladoria-stock-step-stagnant", { count: column.stagnant, limit: column.limit ?? 0 })}
                 </Typography>
               ) : null}
@@ -151,17 +159,35 @@ export default function CaseBoard({
               </Typography>
             )}
 
-            {hidden > 0 ? (
-              <Button
-                variant="text"
-                size="small"
-                color="grey"
-                className="self-start"
-                disabled={reading === column.step}
-                onClick={() => void more(column)}
-              >
-                {t("controladoria-board-more", { count: Math.min(hidden, BOARD_PAGE) })}
-              </Button>
+            {hidden > 0 || column.cases > 0 ? (
+              <Box className="mt-auto flex flex-col items-start gap-0.5">
+                {hidden > 0 ? (
+                  <Button
+                    variant="text"
+                    size="small"
+                    color="grey"
+                    disabled={reading === column.step}
+                    onClick={() => void more(column)}
+                  >
+                    {t("controladoria-board-more", { count: Math.min(hidden, BOARD_PAGE) })}
+                  </Button>
+                ) : null}
+                {column.cases > 0 ? (
+                  <Button
+                    component={Link}
+                    href={listOf(column.step)}
+                    variant="text"
+                    size="small"
+                    color="primary"
+                    aria-label={t("controladoria-board-list-label", {
+                      count: column.cases,
+                      step: t(STOCK_STEP_KEY[column.step]),
+                    })}
+                  >
+                    {t("controladoria-board-list")}
+                  </Button>
+                ) : null}
+              </Box>
             ) : null}
             {failed === column.step ? (
               <Typography variant="caption" role="status" className="text-text-secondary">

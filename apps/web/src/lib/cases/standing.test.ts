@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
-import { isStandingView, STANDING_VIEWS } from "@/lib/cases/list";
+import { isStandingView, isStepView, isStockView, STANDING_VIEWS, STEP_VIEWS, stepView } from "@/lib/cases/list";
 import {
   caseStockOf,
   HOLDER_VIEW,
@@ -12,6 +12,7 @@ import {
   reasonKey,
   REASONS,
   standingCounts,
+  stepCounts,
   stockKey,
   stockSteps,
 } from "@/lib/cases/standing";
@@ -101,6 +102,25 @@ describe("the views of who has the case", () => {
         }),
       ).sort(),
     ).toEqual([...STANDING_VIEWS].sort());
+  });
+
+  it("count each step as the stock counts it, so a step opens a list of the size it says (0116)", () => {
+    const counts = stepCounts({
+      steps: [
+        { step: "documents", cases: 4, stagnant: 1, medianDays: 3, oldestDays: 9, limit: 15 },
+        { step: "closed", cases: 2, stagnant: 0, medianDays: 1, oldestDays: 2, limit: 90 },
+      ],
+      holders: { firm: 0, client: 0, one: 0, court: 0, platform: 0 },
+      stagnant: 1,
+      total: 6,
+    });
+    expect(counts["etapa-documents"]).toBe(4);
+    expect(counts["etapa-closed"]).toBe(2);
+    expect(counts["etapa-intake"]).toBe(0);
+    expect(Object.keys(counts).sort()).toEqual([...STEP_VIEWS].sort());
+    expect(stepView("hearing")).toBe("etapa-hearing");
+    expect(STEP_VIEWS.every((view) => isStepView(view) && isStockView(view) && !isStandingView(view))).toBe(true);
+    expect(isStockView("estagnados") && !isStepView("estagnados")).toBe(true);
   });
 
   it("are told apart from the list's other views", () => {

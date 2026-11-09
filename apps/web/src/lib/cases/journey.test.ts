@@ -3,8 +3,6 @@ import {
   type CourtFacts,
   courtPublicationsOf,
   courtStep,
-  journeyCounts,
-  journeyGroupsOf,
   NO_COURT_FACTS,
   type StageMoment,
   stageMomentsOf,
@@ -208,40 +206,6 @@ describe("stageMomentsOf", () => {
       { from: "intake", to: "documents", at: "2026-11-02T10:00:00Z" },
       { from: null, to: "filed", at: "2026-11-02T12:00:00Z" },
     ]);
-  });
-});
-
-describe("journeyCounts", () => {
-  it("counts the cases in progress at each step, the ended ones apart", () => {
-    const groups = journeyGroupsOf([
-      { status: "documents", held: false, decided: false, paid: false, cases: 4 },
-      { status: "ready", held: false, decided: false, paid: false, cases: 2 },
-      { status: "filed", held: false, decided: false, paid: false, cases: 10 },
-      { status: "filed", held: true, decided: false, paid: false, cases: 6 },
-      { status: "filed", held: true, decided: true, paid: false, cases: 3 },
-      { status: "filed", held: true, decided: true, paid: true, cases: 1 },
-      { status: "closed", held: false, decided: false, paid: false, cases: 20 },
-      { status: "declined", held: false, decided: false, paid: false, cases: 5 },
-      { status: "nowhere", cases: 9 },
-    ]);
-    expect(groups).not.toBeNull();
-    const counts = journeyCounts(groups ?? []);
-    expect(counts.steps).toEqual({
-      intake: 0,
-      documents: 4,
-      signature: 0,
-      drafting: 0,
-      filing: 2,
-      hearing: 10,
-      judgment: 6,
-      payment: 4,
-    });
-    expect(counts.closed).toBe(20);
-    expect(counts.declined).toBe(5);
-  });
-
-  it("reads nothing of an answer that is not a list", () => {
-    expect(journeyGroupsOf({})).toBeNull();
   });
 });
 

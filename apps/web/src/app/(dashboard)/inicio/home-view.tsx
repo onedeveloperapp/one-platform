@@ -1,6 +1,5 @@
 "use client";
 
-import CasesJourneyCard, { type RecentCases } from "./cases-journey-card";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -8,6 +7,7 @@ import { useCallback } from "react";
 
 import { Alert, Box, Button, Grid, Typography } from "@mui/material";
 
+import CasesProgressCard, { type CasesProgress } from "@/components/cases/cases-progress-card";
 import AttentionList, { type AttentionGroup } from "@/components/product/attention-list";
 import EmptyState from "@/components/product/empty-state";
 import HomeHero, { type HeroOrnament } from "@/components/product/home-hero";
@@ -42,7 +42,6 @@ import NiUser from "@/icons/nexture/ni-user";
 import NiUserCross from "@/icons/nexture/ni-user-cross";
 import NiUsers from "@/icons/nexture/ni-users";
 import type { WaitingDecisions } from "@/lib/ai/decisions";
-import type { JourneyOverview } from "@/lib/cases/journey-read";
 import { readHomePulse } from "@/lib/cases/pulse-actions";
 import { homeTiles, type PendingGroup, sayPending, withDecisions } from "@/lib/firm/pending";
 import { type FirmToday, somethingForMe, type TodayNeed, todayNeeds } from "@/lib/firm/today";
@@ -88,10 +87,11 @@ export type HomeState =
       ownRegistrationMissing: boolean;
       /** ONE's modules for the firm (0075, 0078); null when they could not be read. */
       modules: ModuleOffer | null;
-      /** How many of the firm's cases are at each step of their way (0082); null when it could not be read. */
-      journey: JourneyOverview | null;
-      /** The latest cases in progress (`firm_cases`, the latest moved first); null when it could not be read. */
-      recent: RecentCases | null;
+      /**
+       * Where the firm's cases are along their way, by the rule of the top of the case (0111), with the latest few in
+       * progress; null when it could not be read.
+       */
+      progress: CasesProgress | null;
       /** The mark of what the home shows (0096, `firm_pulse`): what it follows while open; null when unreadable. */
       pulse: string | null;
       /** The decisions that wait, each placed where it is decided; null when unread (then counted as before). */
@@ -570,12 +570,8 @@ export default function HomeView({ state }: { state: HomeState }) {
           ) : null}
 
           {/* The whole portfolio after the day's work: shown once the firm has a case, of any stage. */}
-          {ready.journey &&
-          ready.journey.closed +
-            ready.journey.declined +
-            Object.values(ready.journey.steps).reduce((a, b) => a + b, 0) >
-            0 ? (
-            <CasesJourneyCard overview={ready.journey} recent={ready.recent} />
+          {ready.progress && ready.progress.stock.total + (ready.progress.ended ?? 0) > 0 ? (
+            <CasesProgressCard progress={ready.progress} description={t("journey-overview-body")} />
           ) : null}
         </>
       ) : null}

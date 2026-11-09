@@ -13,5 +13,16 @@ export default async function CasesPage({
 }) {
   const query = await searchParams;
   const one = (key: string) => (typeof query[key] === "string" ? (query[key] as string) : undefined);
-  return <CasesView state={await loadCases({ ver: one("ver"), conversa: one("conversa"), modulo: one("modulo") })} />;
+  // The controladoria leaves the test cases out of its numbers once the firm has real ones (0114): a number of it
+  // opens this list with the same cut (`?testes=fora`), so the list has the size the number says.
+  return (
+    <CasesView
+      state={await loadCases({
+        ver: one("ver"),
+        conversa: one("conversa"),
+        modulo: one("modulo"),
+        tests: one("testes") !== "fora",
+      })}
+    />
+  );
 }

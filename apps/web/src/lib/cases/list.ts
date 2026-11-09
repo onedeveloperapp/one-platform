@@ -1,5 +1,5 @@
 import { type CaseStatus, isCaseStatus, type StatusGroup } from "@/lib/cases/cases";
-import type { CourtMarks } from "@/lib/cases/journey";
+import { type CourtMarks, JOURNEY_STEPS, type JourneyStepId, stepOf } from "@/lib/cases/journey";
 import { caseKindLabelKey } from "@/lib/modules/registry";
 
 /**
@@ -25,7 +25,30 @@ export type CaseFilter =
   | "encerrados-mes"
   | "arquivados-mes"
   | CourtView
-  | StandingView;
+  | StandingView
+  | StepView;
+
+/**
+ * The cases at each step of their way (0116), by the rule of the top of the case (`case_standing`), the last one
+ * (`etapa-closed`) being a case whose money was released and nobody archived yet. The stock counts them, so a step of
+ * the home, of the controladoria's board or of a module's area opens a list of the size it says.
+ */
+export const STEP_VIEWS = [
+  "etapa-intake",
+  "etapa-documents",
+  "etapa-signature",
+  "etapa-drafting",
+  "etapa-filing",
+  "etapa-hearing",
+  "etapa-judgment",
+  "etapa-payment",
+  "etapa-closed",
+] as const satisfies readonly `etapa-${JourneyStepId}`[];
+export type StepView = (typeof STEP_VIEWS)[number];
+export const isStepView = (value: unknown): value is StepView => (STEP_VIEWS as readonly unknown[]).includes(value);
+/** The view of the list a step opens, and the step a view of a step lists. */
+export const stepView = (step: JourneyStepId): StepView => `etapa-${step}`;
+export const stepOfView = (view: StepView): JourneyStepId => view.slice("etapa-".length) as JourneyStepId;
 
 /**
  * Who has the case (0111): the firm, the client, ONE, the court, the platform of ONE; and the cases at a step for
@@ -78,7 +101,15 @@ export const CASE_FILTERS: readonly CaseFilter[] = [
   "arquivados-mes",
   ...COURT_VIEWS,
   ...STANDING_VIEWS,
+  ...STEP_VIEWS,
 ];
+
+/**
+ * The views the stock counts (who has the case, the stagnant ones, each step): the list never reads who has every
+ * case to count them, the stock does, once a load.
+ */
+export const isStockView = (value: unknown): value is StandingView | StepView =>
+  isStandingView(value) || isStepView(value);
 
 export const isCaseFilter = (value: unknown): value is CaseFilter =>
   (CASE_FILTERS as readonly unknown[]).includes(value);
@@ -134,6 +165,15 @@ export type CaseListRow = {
    */
   court: CourtMarks | null;
 };
+
+/**
+ * The step of its way a row is at: the one the top of the case says (0111), which the views of a step list and the
+ * stock counts; for a case that ended, where its stage and its lawsuits left it.
+ */
+export function stepOfRow(row: Pick<CaseListRow, "step" | "status" | "court">): JourneyStepId | null {
+  if ((JOURNEY_STEPS as readonly unknown[]).includes(row.step)) return row.step as JourneyStepId;
+  return stepOf(row.status, row.court ?? { held: false, decided: false, paid: false });
+}
 
 /** How many cases the firm has under each filter, in all, and still going. */
 export type CaseCounts = Record<CaseFilter | "all" | "going", number>;

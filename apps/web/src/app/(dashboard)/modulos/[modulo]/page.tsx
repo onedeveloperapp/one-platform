@@ -1,7 +1,7 @@
-import { loadCases } from "../../casos/load-cases";
 import ModuleAreaView, { type ModuleAreaState, type ModuleShortcut } from "./module-area-view";
 import type { Metadata } from "next";
 
+import { readCaseList, readCaseStock } from "@/lib/cases/list-read";
 import { isManager } from "@/lib/firm/roles";
 import { canImportPortfolio } from "@/lib/import/who";
 import { getMemberContext } from "@/lib/member/context";
@@ -11,6 +11,9 @@ import { testChatCardOf } from "@/lib/test-chat/test-chat";
 
 type Params = { params: Promise<{ modulo: string }> };
 
+/** How many of the module's latest cases in progress the area shows; the list of them all is one click further. */
+const RECENT_CASES = 5;
+
 export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const { modulo } = await params;
   const context = await getMemberContext();
@@ -19,8 +22,9 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
 }
 
 /**
- * /modulos/<key>: a module's own area (migration 0078). Somebody comes here to work one module: its lawsuits and
- * nothing of another module's, the module's share of the firm's work (its conversations, approvals, filings,
+ * /modulos/<key>: a module's own area (migration 0078). Somebody comes here to work one module: where its cases are
+ * and the latest of them, nothing of another module's (the list of them is `/casos` under the module, which the
+ * area opens and never repeats, 2026-11-09), the module's share of the firm's work (its conversations, approvals, filings,
  * deadlines, hearings and publications, each page under the module), and what only that module has (for the
  * passenger module, its partner agencies, the portfolio a firm brings from a spreadsheet, the Valor da Causa Pedido
  * and, while it is on, the test chat). A module the firm did not contract, or one still to come, says so, and the
@@ -45,8 +49,17 @@ async function loadArea(key: string): Promise<ModuleAreaState> {
   const definition = moduleOf(key);
   const manager = isManager(context.firm.role);
   const importer = canImportPortfolio(context.firm.firmFunction);
-  const [cases, testChat] = await Promise.all([
-    loadCases({ modulo: key }),
+  const [stock, recent, testChat] = await Promise.all([
+    // Where the module's cases are, by the rule of the top of the case (0111), as the home and the controladoria count
+    // them, and the latest few in progress (`firm_cases`, the latest moved first).
+    readCaseStock(context.supabase, context.firm.id, { module: key }).catch(() => null),
+    readCaseList(context.supabase, context.firm.id, {
+      filter: null,
+      search: "",
+      module: key,
+      page: 0,
+      pageSize: RECENT_CASES,
+    }).catch(() => null),
     definition?.testChat && manager
       ? context.supabase.rpc("test_chat_link", { target_org: context.firm.id }).then(
           ({ data, error }) => (error ? null : testChatCardOf(data)),
@@ -75,7 +88,13 @@ async function loadArea(key: string): Promise<ModuleAreaState> {
     });
   }
 
-  return { kind: "ready", firm: context.firm.name, module: contracted, shortcuts, cases };
+  return {
+    kind: "ready",
+    firm: context.firm.name,
+    module: contracted,
+    shortcuts,
+    progress: stock && recent ? { stock, ended: recent.counts.ended, recent: recent.rows } : null,
+  };
 }
 
 export default async function ModuleAreaPage({ params }: Params) {

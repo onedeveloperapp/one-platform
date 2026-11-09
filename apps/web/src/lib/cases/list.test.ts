@@ -17,7 +17,7 @@ import {
 
 const ROOT = path.resolve(__dirname, "../../../../..");
 // The latest definition of `firm_cases` (0033, 0075, 0078, 0108, 0110, 0111, redefined with the test cases in 0114).
-const MIGRATION = fs.readFileSync(path.join(ROOT, "packages/db/migrations/0114_test_cases.sql"), "utf8");
+const MIGRATION = fs.readFileSync(path.join(ROOT, "packages/db/migrations/0116_case_step_views.sql"), "utf8");
 
 /** The quoted names of a list of the migration, from the text that opens it to the parenthesis that closes it. */
 function listed(opening: string, from = 0): string[] {
@@ -197,6 +197,16 @@ describe("the database's answer, as the list reads it", () => {
       "no-tribunal": 0,
       "com-plataforma": 0,
       estagnados: 0,
+      // The steps are the stock's to count (0116): the list's counts say none of them.
+      "etapa-intake": 0,
+      "etapa-documents": 0,
+      "etapa-signature": 0,
+      "etapa-drafting": 0,
+      "etapa-filing": 0,
+      "etapa-hearing": 0,
+      "etapa-judgment": 0,
+      "etapa-payment": 0,
+      "etapa-closed": 0,
     });
   });
 

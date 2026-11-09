@@ -8,8 +8,7 @@ import { getTranslations } from "next-intl/server";
 
 import { readWaitingDecisions } from "@/lib/ai/decisions-read";
 import { cloudSigningOffered } from "@/lib/cases/filing-facts";
-import { readCaseJourney } from "@/lib/cases/journey-read";
-import { readCaseList } from "@/lib/cases/list-read";
+import { readCaseList, readCaseStock } from "@/lib/cases/list-read";
 import { firmPulseOf } from "@/lib/cases/pulse";
 import { readFilingAttention } from "@/lib/firm/filing-attention";
 import { attentionGroups, pendingGroups, readFirmPending } from "@/lib/firm/pending";
@@ -58,8 +57,9 @@ const RECENT_CASES = 5;
  * firm's list, which would say the work is manual (the owner, 2026-11-03).
  *
  * After what needs somebody today, where the firm's cases are along their
- * way (`firm_case_journey`, 0082): how many at each step, from the first
- * conversation to the payment, each a way to its list.
+ * way, by the rule of the top of the case (`firm_case_stock`, 0111), as the
+ * controladoria's board reads them: how many at each step, each opening the
+ * list of those cases (0116), so the list has the size the step says.
  *
  * Under the title, the quick access to ONE's modules (`product_modules`,
  * migrations 0075 and 0078): each module the firm contracted opens its own
@@ -90,7 +90,7 @@ async function loadHome(): Promise<
     assurance,
     cookieStore,
     moduleSetups,
-    journey,
+    stock,
     recent,
     pulse,
     decisions,
@@ -113,8 +113,9 @@ async function loadHome(): Promise<
     cookies(),
     // Each module the firm contracted that has a setup of its own (0081), for who manages the firm's list.
     manager ? readModuleSetups(context).catch(() => null) : Promise.resolve(null),
-    // Where the firm's cases are along their way (0082): a read that fails hides the card, and the home stands.
-    readCaseJourney(context.supabase, firm.id).catch(() => null),
+    // Where the firm's cases are along their way, by the rule of the top of the case (0111): a read that fails hides
+    // the card, and the home stands.
+    readCaseStock(context.supabase, firm.id, { module: null }).catch(() => null),
     // The latest cases in progress, each in a line with its way in small (the owner, 2026-11-03): the list's own
     // read (`firm_cases`, the latest moved first), whose failure leaves the card with its counts alone.
     readCaseList(context.supabase, firm.id, {
@@ -211,8 +212,7 @@ async function loadHome(): Promise<
     waitsFirstCase: waitsFirstCase(facts),
     ownRegistrationMissing: signsAtTheBar(firm.firmFunction) && !registered,
     modules,
-    journey,
-    recent: recent ? { rows: recent.rows } : null,
+    progress: stock ? { stock, ended: recent ? recent.counts.ended : null, recent: recent ? recent.rows : [] } : null,
     pulse,
   };
 }

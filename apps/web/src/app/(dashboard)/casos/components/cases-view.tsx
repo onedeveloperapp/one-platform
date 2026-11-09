@@ -38,7 +38,7 @@ import NiTimeline from "@/icons/nexture/ni-timeline";
 import NiUsers from "@/icons/nexture/ni-users";
 import { caseLabel, groupOf, STATUS_KEY } from "@/lib/cases/cases";
 import type { ExportWords } from "@/lib/cases/export";
-import { JOURNEY_STEP_KEY, JOURNEY_STEPS, stepOf } from "@/lib/cases/journey";
+import { JOURNEY_STEPS } from "@/lib/cases/journey";
 import {
   CASE_SORTS,
   type CaseFilter,
@@ -49,14 +49,29 @@ import {
   COURT_VIEWS,
   DEFAULT_PAGE_SIZE,
   isCaseSort,
-  isStandingView,
+  isStepView,
+  isStockView,
   lastPage,
   PAGE_SIZES,
   STANDING_VIEWS,
+  STEP_VIEWS,
+  stepOfRow,
+  stepOfView,
+  type StepView,
 } from "@/lib/cases/list";
 import { listFirmCases, readFirmCaseStock } from "@/lib/cases/list-actions";
 import { type CaseCardKey, caseCards, spanText } from "@/lib/cases/numbers";
-import { type CaseStock, type Holder, isHolder, reasonKey, standingCounts, stockKey } from "@/lib/cases/standing";
+import {
+  type CaseStock,
+  type Holder,
+  isHolder,
+  reasonKey,
+  standingCounts,
+  stepCounts,
+  STOCK_STEP_KEY,
+  stockKey,
+} from "@/lib/cases/standing";
+import { scopedHref } from "@/lib/modules/offer";
 import { caseKindLabelKey, caseKindsOf, firmCaseKinds } from "@/lib/modules/registry";
 import { countText, deltaText, isHoped } from "@/lib/numbers/compare";
 import { formatDayBr } from "@flyee/rules/person";
@@ -70,7 +85,10 @@ const HOLDER_WORD: Record<Holder, string> = {
   platform: "standing-holder-platform",
 };
 
-const FILTER_TILE: Record<CaseFilter, { label: string; hint: string; tone: TileTone; icon: React.ReactNode }> = {
+const FILTER_TILE: Record<
+  Exclude<CaseFilter, StepView>,
+  { label: string; hint: string; tone: TileTone; icon: React.ReactNode }
+> = {
   open: {
     label: "cases-filter-open",
     hint: "cases-filter-open-hint",
@@ -320,46 +338,22 @@ type Ready = Extract<CasesState, { kind: "ready" }>;
  * page at a time: the database counts, filters and searches (`firm_cases`),
  * so the numbers are right for a firm of any size.
  */
-export default function CasesView({
-  state,
-  embedded = false,
-  heading,
-  headingAction,
-  hideNumbers = false,
-}: {
-  state: CasesState;
-  embedded?: boolean;
-  /** The list's own head where it is part of another page: its title and one line. */
-  heading?: { title: string; body: string };
-  /** What the other page puts beside that head (the controladoria's switch between the list and the board). */
-  headingAction?: React.ReactNode;
-  /** The numbers above the list are the other page's. */
-  hideNumbers?: boolean;
-}) {
+export default function CasesView({ state }: { state: CasesState }) {
   const t = useTranslations("product");
   const router = useRouter();
 
   // Arriving by another address (`?ver=`, from a count of the home) starts the list again under its filter.
   if (state.kind === "ready")
     return (
-      <CasesList
-        key={`${state.scope?.module.key ?? "all"}:${state.filter ?? "going"}:${state.tests}`}
-        ready={state}
-        embedded={embedded}
-        heading={heading}
-        headingAction={headingAction}
-        hideNumbers={hideNumbers}
-      />
+      <CasesList key={`${state.scope?.module.key ?? "all"}:${state.filter ?? "going"}:${state.tests}`} ready={state} />
     );
   return (
     <Box className="flex flex-col gap-6">
-      {embedded ? null : (
-        <PageHeader
-          title={t("cases-title")}
-          crumbs={[{ label: t("cases-home"), href: "/inicio" }, { label: t("cases-title") }]}
-          description={t("cases-description")}
-        />
-      )}
+      <PageHeader
+        title={t("cases-title")}
+        crumbs={[{ label: t("cases-home"), href: "/inicio" }, { label: t("cases-title") }]}
+        description={t("cases-description")}
+      />
       {state.kind === "unavailable" && (
         <Alert severity="info" className="neutral bg-background-paper/60!">
           {t("settings-unavailable")}
@@ -391,24 +385,12 @@ export default function CasesView({
 }
 
 /**
- * The list itself. In a module's area (`embedded`) it is the area's list of its lawsuits, under the area's own
- * title; on `/casos` it is the page, with the choice of every module or one above it. Under a module it offers
- * what only that module has (its partner's filter, its portfolio from a spreadsheet, its kinds of problem); for
- * every module of a firm that has more than one, each row names its module.
+ * The list itself, the one list of the firm's cases (the controladoria, the home and a module's area each open it,
+ * never repeat it): the choice of every module or one above it. Under a module it offers what only that module has
+ * (its partner's filter, its portfolio from a spreadsheet, its kinds of problem); for every module of a firm that has
+ * more than one, each row names its module.
  */
-function CasesList({
-  ready,
-  embedded,
-  heading,
-  headingAction,
-  hideNumbers,
-}: {
-  ready: Ready;
-  embedded: boolean;
-  heading?: { title: string; body: string };
-  headingAction?: React.ReactNode;
-  hideNumbers: boolean;
-}) {
+function CasesList({ ready }: { ready: Ready }) {
   const t = useTranslations("product");
   const router = useRouter();
   const scope = ready.scope;
@@ -597,10 +579,10 @@ function CasesList({
         minWidth: 170,
         flex: 0.9,
         renderCell: (params: GridRenderCellParams<CaseListRow, CaseListRow["status"]>) => {
-          // Where the case is along its way, in small under its stage (the case's own screen shows it whole): in
-          // court, the step its lawsuits show.
+          // Where the case is along its way, in small under its stage (the case's own screen shows it whole): the
+          // step the top of the case says (0111), which the views of a step list and the home and the board count.
           const status = params.row.status;
-          const step = stepOf(status, params.row.court ?? { held: false, decided: false, paid: false });
+          const step = stepOfRow(params.row);
           const at = step ? JOURNEY_STEPS.indexOf(step) : -1;
           return (
             <Box className="flex h-full flex-col items-start justify-center gap-1.5">
@@ -611,7 +593,7 @@ function CasesList({
                   reached={at}
                   state={status === "closed" ? "done" : "progress"}
                   label={t("journey-bar-label", {
-                    label: t(JOURNEY_STEP_KEY[step]),
+                    label: t(STOCK_STEP_KEY[step]),
                     position: at + 1,
                     total: JOURNEY_STEPS.length,
                   })}
@@ -667,6 +649,9 @@ function CasesList({
 
   const { filter } = query;
   const searching = query.search !== "";
+  /** The name of a view: a step of the way by the step's own words (0116). */
+  const filterLabel = (key: CaseFilter): string =>
+    isStepView(key) ? t("cases-filter-step", { step: t(STOCK_STEP_KEY[stepOfView(key)]) }) : t(FILTER_TILE[key].label);
 
   // "Exportar" takes the list as it stands (its view, search, filters and order), for who may.
   const exportWords: ExportWords = {
@@ -701,11 +686,11 @@ function CasesList({
     kindName: (key) => t(caseKindLabelKey(key) ?? "case-incident-other"),
     airlineName: (iata) => airlineName.get(iata) ?? iata,
     statusName: (status) => t(STATUS_KEY[status]),
-    stepName: (step) => t(JOURNEY_STEP_KEY[step]),
+    stepName: (step) => t(STOCK_STEP_KEY[step]),
   };
   const viewName = () => {
     const view = current.current.filter;
-    return view ? t(FILTER_TILE[view].label) : t("cases-view-going");
+    return view ? filterLabel(view) : t("cases-view-going");
   };
   const exporter = useCaseExport({
     query: () => current.current,
@@ -746,12 +731,13 @@ function CasesList({
 
   // The views, by group; a wait of the firm is listed while something of it waits (or it is the view in force), and
   // the cases a partner sent only under the module that has partners.
-  const standing = stock.value ? standingCounts(stock.value) : null;
+  // Who has the case, the stagnant ones and each step are counted by the stock (0111, 0116), the rest by the list.
+  const fromStock = stock.value ? { ...standingCounts(stock.value), ...stepCounts(stock.value) } : null;
   const countFor = (key: CaseFilter): number | null =>
-    isStandingView(key) ? (standing ? standing[key] : null) : list.counts[key];
+    isStockView(key) ? (fromStock ? fromStock[key] : null) : list.counts[key];
   const viewOf = (key: CaseFilter, group: string): ListView => {
     const count = countFor(key);
-    return { key, label: t(FILTER_TILE[key].label), count: count === null ? undefined : countText(count), group };
+    return { key, label: filterLabel(key), count: count === null ? undefined : countText(count), group };
   };
   const views: ListView[] = [
     { key: GOING, label: t("cases-view-going"), count: countText(list.counts.going), group: "going" },
@@ -761,6 +747,8 @@ function CasesList({
     ...STANDING_VIEWS.filter(
       (key) => key === "com-escritorio" || key === "estagnados" || (countFor(key) ?? 0) > 0 || filter === key,
     ).map((key) => viewOf(key, "standing")),
+    // Each step of the way with a case at it (0116), as the home and the controladoria's board count it.
+    ...STEP_VIEWS.filter((key) => (countFor(key) ?? 0) > 0 || filter === key).map((key) => viewOf(key, "step")),
     ...(list.counts.filed > 0 || (COURT_VIEWS as readonly CaseFilter[]).includes(filter as CaseFilter)
       ? COURT_VIEWS.map((key) => viewOf(key, "court"))
       : []),
@@ -774,6 +762,17 @@ function CasesList({
   const kinds = scope ? caseKindsOf(scope.module.key) : firmCaseKinds(ready.modules.map((module) => module.key));
   const kindName = (key: string) => t(caseKindLabelKey(key) ?? "case-incident-other");
   const chips: ListChip[] = [
+    // The cut a number of the controladoria opened the list with (0114): its test cases left out, one click from back.
+    ...(ready.tests
+      ? []
+      : [
+          {
+            key: "tests",
+            label: t("cases-chip-no-tests"),
+            onRemove: () =>
+              router.push(scopedHref("/casos", scope?.module.key ?? null, { ver: current.current.filter })),
+          },
+        ]),
     ...(query.incident
       ? [
           {
@@ -826,36 +825,22 @@ function CasesList({
 
   return (
     <Box className="flex flex-col gap-6">
-      {embedded ? (
-        <Box className="flex flex-wrap items-end justify-between gap-3">
-          <Box className="flex flex-col gap-1">
-            <Typography id="module-cases" variant="h5" component="h2" className="mb-0">
-              {heading?.title ?? t("module-area-cases-title")}
-            </Typography>
-            <Typography variant="body2" className="text-text-secondary">
-              {heading?.body ?? t("module-area-cases-body", { module: scope?.module.name ?? "" })}
-            </Typography>
-          </Box>
-          {headingAction}
-        </Box>
-      ) : (
-        <>
-          <PageHeader
-            title={t("cases-title")}
-            crumbs={
-              scope
-                ? [
-                    { label: t("cases-home"), href: "/inicio" },
-                    { label: scope.module.name, href: `/modulos/${scope.module.key}` },
-                    { label: t("cases-title") },
-                  ]
-                : [{ label: t("cases-home"), href: "/inicio" }, { label: t("cases-title") }]
-            }
-            description={scope ? t("cases-description-module", { module: scope.module.name }) : t("cases-description")}
-          />
-          <ModuleScope path="/casos" modules={ready.modules} current={scope?.module.key ?? null} />
-        </>
-      )}
+      <>
+        <PageHeader
+          title={t("cases-title")}
+          crumbs={
+            scope
+              ? [
+                  { label: t("cases-home"), href: "/inicio" },
+                  { label: scope.module.name, href: `/modulos/${scope.module.key}` },
+                  { label: t("cases-title") },
+                ]
+              : [{ label: t("cases-home"), href: "/inicio" }, { label: t("cases-title") }]
+          }
+          description={scope ? t("cases-description-module", { module: scope.module.name }) : t("cases-description")}
+        />
+        <ModuleScope path="/casos" modules={ready.modules} current={scope?.module.key ?? null} />
+      </>
 
       {ready.supportVisit && (
         <Alert severity="info" className="neutral bg-background-paper/60!">
@@ -887,7 +872,7 @@ function CasesList({
       {hasCases && (
         <>
           {/* The numbers of the list, each beside the same days of the month before, each opening the list it counts. */}
-          {numbers && !hideNumbers && (
+          {numbers && (
             <Grid container spacing={2.5}>
               {cards.map((card) => (
                 <Grid key={card.key} size={{ xs: 6, lg: 3 }}>
@@ -1067,7 +1052,7 @@ function CasesList({
             {searching && !loading ? (
               <Typography variant="body2" role="status" className="text-text-secondary px-1">
                 {t("cases-found", { count: list.total })}.{" "}
-                {filter ? t("cases-search-in-filter", { filter: t(FILTER_TILE[filter].label) }) : t("cases-search-all")}
+                {filter ? t("cases-search-in-filter", { filter: filterLabel(filter) }) : t("cases-search-all")}
               </Typography>
             ) : null}
           </Box>

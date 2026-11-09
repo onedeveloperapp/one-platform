@@ -1,12 +1,11 @@
 "use client";
 
-import type { CasesState } from "../../casos/cases-types";
-import CasesView from "../../casos/components/cases-view";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 
 import { Alert, Box, Button, Grid, Typography } from "@mui/material";
 
+import CasesProgressCard, { type CasesProgress } from "@/components/cases/cases-progress-card";
 import EmptyState from "@/components/product/empty-state";
 import { QuickActionTile } from "@/components/product/home-tiles";
 import ModuleIcon from "@/components/product/module-icon";
@@ -35,8 +34,11 @@ export type ModuleAreaState =
       module: ContractedModule;
       /** What only this module has. */
       shortcuts: ModuleShortcut[];
-      /** The module's lawsuits, as `/casos` lists them under the module. */
-      cases: CasesState;
+      /**
+       * Where the module's cases are along their way and the latest few, as the home says the firm's (the list of them
+       * is `/casos` under the module, which the card opens); null when it could not be read.
+       */
+      progress: CasesProgress | null;
     }
   | { kind: "soon"; module: ComingModule }
   | { kind: "locked"; module: LockedModule }
@@ -93,10 +95,11 @@ const day = (value: string) =>
     : "";
 
 /**
- * A module's area. Somebody comes here to work one module and nothing of another: its lawsuits first of all (the
- * list of `/casos` under the module, with what only the module has), the way into the module's share of each page
- * of the firm's work, and the places only this module has. Success is finding the module's work in one place; the
- * firm's pages stay for who works every module at once (the controladoria, a partner).
+ * A module's area. Somebody comes here to work one module and nothing of another: the way into the module's share of
+ * each page of the firm's work and the places only this module has, then where the module's cases are and the latest
+ * of them (the same card as the home's, each step opening the list of `/casos` under the module: the area never
+ * repeats that list, 2026-11-09). Success is finding the module's work in one place; the firm's pages stay for who
+ * works every module at once (the controladoria, a partner).
  */
 export default function ModuleAreaView({ state }: { state: ModuleAreaState }) {
   const t = useTranslations("product");
@@ -239,15 +242,25 @@ function Area({ state }: { state: Extract<ModuleAreaState, { kind: "ready" }> })
         </Grid>
       </Box>
 
-      <Box component="section" aria-labelledby="module-cases" className="flex flex-col gap-4">
-        {/* The list names its section when it is read; a list that could not be read says so under this title. */}
-        {state.cases.kind === "ready" ? null : (
-          <Typography id="module-cases" variant="h5" component="h2" className="mb-0">
-            {t("module-area-cases-title")}
-          </Typography>
-        )}
-        <CasesView state={state.cases} embedded />
-      </Box>
+      {state.progress && state.progress.stock.total + (state.progress.ended ?? 0) > 0 ? (
+        <CasesProgressCard
+          progress={state.progress}
+          module={module.key}
+          description={t("module-area-cases-body", { module: module.name })}
+        />
+      ) : state.progress ? (
+        // No case of the module yet is ONE's wait, never the firm's task (the owner, 2026-11-03).
+        <EmptyState
+          icon={<ModuleIcon name={module.icon} />}
+          title={t("module-area-cases-empty-title")}
+          description={t("module-area-cases-empty-body", { module: module.name })}
+          action={{ label: t("cases-empty-what-one-does"), href: "/settings/autonomia" }}
+        />
+      ) : (
+        <Alert severity="error" className="neutral bg-background-paper/60!">
+          {t("module-area-cases-error")}
+        </Alert>
+      )}
     </Box>
   );
 }

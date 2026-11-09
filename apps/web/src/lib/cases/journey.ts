@@ -216,48 +216,9 @@ export function caseJourney(input: {
   return { steps: build(index, "current"), current, ended: null, reached: index };
 }
 
-/** One group of a firm's cases as the database counts them (`firm_case_journey`, 0082). */
-export type JourneyGroup = { status: CaseStatus } & CourtMarks & { cases: number };
-
-/** The database's answer, read; what is not a group is left out. */
-export function journeyGroupsOf(raw: unknown): JourneyGroup[] | null {
-  if (!Array.isArray(raw)) return null;
-  return raw.flatMap((item): JourneyGroup[] => {
-    const row = (item ?? {}) as Record<string, unknown>;
-    const cases = typeof row.cases === "number" ? row.cases : Number(row.cases);
-    if (!isCaseStatus(row.status) || !Number.isFinite(cases) || cases < 0) return [];
-    return [
-      { status: row.status, held: row.held === true, decided: row.decided === true, paid: row.paid === true, cases },
-    ];
-  });
-}
-
 /** The steps a case in progress may be at: every one but the end. */
 export const OPEN_STEPS = JOURNEY_STEPS.filter((id) => id !== "closed") as Exclude<JourneyStepId, "closed">[];
 export type OpenStepId = (typeof OPEN_STEPS)[number];
-
-/**
- * How many of a firm's cases in progress are at each step of the way, and how many ended (closed, or did not go
- * on). A case in court whose payment was published counts at the payment until somebody closes it.
- */
-export function journeyCounts(groups: JourneyGroup[]): {
-  steps: Record<OpenStepId, number>;
-  closed: number;
-  declined: number;
-} {
-  const steps = Object.fromEntries(OPEN_STEPS.map((id) => [id, 0])) as Record<OpenStepId, number>;
-  let closed = 0;
-  let declined = 0;
-  for (const group of groups) {
-    if (group.status === "closed") closed += group.cases;
-    else if (group.status === "declined") declined += group.cases;
-    else {
-      const step = stepOf(group.status, group) ?? "intake";
-      steps[step === "closed" ? "payment" : step] += group.cases;
-    }
-  }
-  return { steps, closed, declined };
-}
 
 // The `product` message keys, spelled out so the catalog check sees each one.
 

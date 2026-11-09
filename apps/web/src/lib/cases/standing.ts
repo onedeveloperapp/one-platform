@@ -1,5 +1,5 @@
-import { type JourneyStepId, OPEN_STEPS } from "@/lib/cases/journey";
-import type { CaseListQuery, StandingView } from "@/lib/cases/list";
+import { JOURNEY_STEP_KEY, type JourneyStepId, OPEN_STEPS } from "@/lib/cases/journey";
+import { type CaseListQuery, type StandingView, STEP_VIEWS, stepOfView, type StepView } from "@/lib/cases/list";
 
 /**
  * Who has each case of the list and why, as the database says it (`case_standing`, migration 0111: the rule of the
@@ -138,9 +138,27 @@ export function standingCounts(stock: CaseStock): Record<StandingView, number> {
   };
 }
 
+/**
+ * How many cases each view of a step lists (0116), from the same stock: each step's cases, by the rule of the top of
+ * the case, so a step opens a list of the size it says.
+ */
+export function stepCounts(stock: CaseStock): Record<StepView, number> {
+  const at = new Map(stock.steps.map((item) => [item.step, item.cases]));
+  return Object.fromEntries(STEP_VIEWS.map((view) => [view, at.get(stepOfView(view)) ?? 0])) as Record<
+    StepView,
+    number
+  >;
+}
+
 /** The scope a stock is read under (the module, the kind of problem, the airline), as one key: a new one reads it again. */
 export const stockKey = (query: Pick<CaseListQuery, "module" | "incident" | "airline" | "tests">): string =>
   [query.module ?? "", query.incident ?? "", query.airline ?? "", query.tests === false ? "real" : "all"].join("|");
+
+/** The words of each step the stock counts: the way's, but a case paid and not archived yet is at its last one. */
+export const STOCK_STEP_KEY: Record<JourneyStepId, string> = {
+  ...JOURNEY_STEP_KEY,
+  closed: "controladoria-stock-step-closing",
+};
 
 /**
  * The steps the stock shows, in the order of the way: every step a case in progress may be at, and the last one only
