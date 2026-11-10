@@ -101,4 +101,14 @@ describe("the receipt of a filing", () => {
     expect(written).toContain("1º Juizado Especial Cível da Comarca de Goiânia");
     expect(written).toContain("nenhum tribunal recebeu este processo");
   });
+
+  it("judges a lawsuit one way only, and releases nothing of a judgment that denied the claim (0130)", () => {
+    expect(stepOpen("sentenca_parcial", ["distribuicao"])).toBe(true);
+    expect(stepOpen("acordo", ["distribuicao", "sentenca"])).toBe(false);
+    expect(stepOpen("recurso_re", ["distribuicao"])).toBe(false);
+    expect(stepOpen("recurso_re", ["distribuicao", "sentenca_parcial"])).toBe(true);
+    expect(stepOpen("alvara", ["distribuicao", "acordo"])).toBe(true);
+    expect(stepOpen("alvara", ["distribuicao", "sentenca_improcedente", "transito"])).toBe(false);
+    expect(stepOpen("arquivamento", ["distribuicao", "sentenca_improcedente"])).toBe(true);
+  });
 });

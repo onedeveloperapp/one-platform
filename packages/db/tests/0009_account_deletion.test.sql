@@ -287,6 +287,8 @@ select is(
     'client_consents.term_id',
     'client_notices.kind', 'closing_goals.module_key',
     'consent_acceptances.term_id',
+    -- A court's way of paying (0135) is platform data of a court, which is never deleted.
+    'court_payment_paths.court',
     'filing_package_items.file_id',
     'filing_package_items.signed_file_id',
     'filing_receipts.file_id',

@@ -1,7 +1,9 @@
 import AgendaView, { type AgendaState } from "./agenda-view";
 import { redirect } from "next/navigation";
 
+import { isAgendaMode } from "@/lib/agenda/agenda";
 import { calendarProvider } from "@/lib/calendar/provider";
+import { todayInBrasilia } from "@/lib/deadlines/deadlines";
 import { isManager } from "@/lib/firm/roles";
 import { colleagues, courtZones, loadHearings, publicationsWithoutHearing } from "@/lib/hearings/facts";
 import { agendaAddress, type CourtZones, isHearingView, lastAgendaPage } from "@/lib/hearings/hearings";
@@ -19,6 +21,9 @@ async function loadState(
   ver: string | undefined,
   pagina: string | undefined,
   modulo: string | undefined,
+  modo: string | undefined,
+  dia: string | undefined,
+  assinar: string | undefined,
 ): Promise<AgendaState> {
   const context = await getMemberContext();
   if (!context) return { kind: "unavailable" };
@@ -52,6 +57,11 @@ async function loadState(
     return {
       kind: "ready",
       view,
+      // Lista, Dia, Semana or Mês (0132): the list is the hearings' views; the others the calendar of the days.
+      mode: isAgendaMode(modo) ? modo : "lista",
+      day: dia && /^\d{4}-\d{2}-\d{2}$/.test(dia) ? dia : todayInBrasilia(),
+      meId: context.userId,
+      subscribe: assinar === "1",
       data,
       colleagues: team,
       unwritten:
@@ -77,9 +87,9 @@ export default async function AgendaPage({
 }) {
   const query = await searchParams;
   const one = (key: string) => (Array.isArray(query[key]) ? query[key]?.[0] : (query[key] as string | undefined));
-  const state = await loadState(one("ver"), one("pagina"), one("modulo"));
+  const state = await loadState(one("ver"), one("pagina"), one("modulo"), one("modo"), one("dia"), one("assinar"));
   // A page past the end of its list is its last page, never a list with nothing in it.
-  if (state.kind === "ready" && state.data.rows.length === 0 && state.data.page > 0) {
+  if (state.kind === "ready" && state.mode === "lista" && state.data.rows.length === 0 && state.data.page > 0) {
     redirect(
       agendaAddress(
         state.view,

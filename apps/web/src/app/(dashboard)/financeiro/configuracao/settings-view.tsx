@@ -2,6 +2,7 @@
 
 import FinanceGate from "../finance-gate";
 import type { FinanceState } from "../load-finance";
+import FeeTermsCard from "./fee-terms-card";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
@@ -292,6 +293,8 @@ function Settings({ state }: { state: Ready }) {
           </Typography>
         </CardContent>
       </Card>
+
+      <FeeTermsCard terms={state.feeTerms ?? []} decides={state.decides && !state.supportVisit} factor={state.factor} />
 
       {state.people ? (
         <Card component="section" aria-labelledby="finance-settings-access">

@@ -67,6 +67,12 @@ export default function FinanceHomeView({ state }: { state: FinanceState }) {
             <Button component={Link} href="/financeiro/contas" variant="outlined" color="grey" size="small">
               {t("finance-bills-link")}
             </Button>
+            <Button component={Link} href="/financeiro/repasses" variant="outlined" color="grey" size="small">
+              {t("money-title")}
+            </Button>
+            <Button component={Link} href="/financeiro/relatorios" variant="outlined" color="grey" size="small">
+              {t("reports-title")}
+            </Button>
             {writes ? (
               <QuickActions
                 label={t("finance-new")}

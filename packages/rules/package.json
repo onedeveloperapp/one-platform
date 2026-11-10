@@ -17,6 +17,7 @@
     "./judgment": "./src/judgment.ts",
     "./oab": "./src/oab.ts",
     "./outcome": "./src/outcome.ts",
+    "./payout": "./src/payout.ts",
     "./person": "./src/person.ts",
     "./proceedings": "./src/proceedings.ts",
     "./state-count": "./src/state-count.ts",
@@ -25,6 +26,6 @@
     "./weather": "./src/weather.ts"
   },
   "scripts": {
-    "test": "node --experimental-strip-types --test src/rules.test.ts src/domain.test.ts src/deadlines.test.ts src/flight-problem.test.ts src/interview.test.ts src/judgment.test.ts src/stock.test.ts src/finance.test.ts src/boleto.test.ts src/outcome.test.ts"
+    "test": "node --experimental-strip-types --test src/rules.test.ts src/domain.test.ts src/deadlines.test.ts src/flight-problem.test.ts src/interview.test.ts src/judgment.test.ts src/stock.test.ts src/finance.test.ts src/boleto.test.ts src/outcome.test.ts src/internal-deadline.test.ts src/payout.test.ts"
   }
 }

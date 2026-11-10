@@ -344,6 +344,14 @@ insert into public.audit_events (org_id, actor_id, action, entity_type, entity_i
   ('b1210000-0000-4000-8000-00000000000a', null, 'library.import_saved_by_one', 'template_import', 'i-3',
    '{"template_id": "af210000-0000-4000-8000-0000000000ff"}', '2026-10-15 15:00+00');
 
+-- A result ONE read of the real case's lawsuit, and a case ONE closed (0130).
+insert into public.lawsuit_facts (org_id, case_id, proceeding_id, kind, result, happened_on, source, by_one, created_at) values
+  ('b1210000-0000-4000-8000-00000000000a', 'c1210000-0000-4000-8000-000000000001', 'f1210000-0000-4000-8000-000000000001',
+   'sentenca', 'procedente', '2026-10-15', 'rule', true, '2026-10-15 15:00+00');
+insert into public.cases (id, org_id, seq, module, incident, status, closed_at, closed_by_one, close_reason) values
+  ('c1210000-0000-4000-8000-000000000009', 'b1210000-0000-4000-8000-00000000000a', 9, 'direito-do-passageiro', 'delay',
+   'closed', '2026-10-15 15:00+00', true, 'Todas as ações foram arquivadas definitivamente.');
+
 -- ---------- The reading ----------
 
 create function pg_temp.sign_in(person uuid) returns void language sql as $$
@@ -376,7 +384,7 @@ select set_eq(
     ('publicacao_capturada', 1, 0, 0), ('publicacao_triada', 1, 1, 0), ('prazo_lido', 1, 0, 0), ('andamento_lido', 1, 0, 0),
     ('prazo_contado', 1, 0, 0), ('prazo_confirmado', 1, 0, 0), ('audiencia_lida', 1, 0, 0), ('audiencia_agenda', 1, 0, 0),
     ('aviso_audiencia', 1, 0, 0), ('aviso_andamento', 1, 0, 0), ('aviso_golpe', 1, 0, 0), ('pedido_documento', 1, 0, 0),
-    ('modelo_documento', 1, 1, 0) $$,
+    ('modelo_documento', 1, 1, 0), ('resultado_lido', 1, 0, 0), ('caso_encerrado', 1, 0, 0) $$,
   'each kind of ONE''s work is counted once, what a person approved and the test cases apart, and nothing undone'
 );
 -- The books' own work (0128) is said only to who reads the books, which Caio does not: 0127 counts it.

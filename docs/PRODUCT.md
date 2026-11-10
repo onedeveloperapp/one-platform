@@ -17,7 +17,7 @@ O ONE é um software por assinatura para escritórios de advocacia de contencios
 **O que o ONE não é**
 
 - Não é escritório: não presta serviço jurídico, não promete resultado, valor de indenização nem tempo até a sentença.
-- Não movimenta dinheiro de processo: nada de honorários, repasse ao cliente, valor da causa ou link de pagamento. Os honorários são assunto de cada escritório, fora do ONE.
+- Não movimenta dinheiro: registra, lê, calcula, prepara e avisa o dinheiro do escritório e o dos seus clientes (os livros, os honorários, os custos de cada caso), e nunca guarda, recebe, repassa, divide, paga nem cobra, nem em nome do escritório (a linha do dinheiro, decisão de 2026-11-07).
 - Não cobra o passageiro. A única cobrança é a assinatura do próprio ONE.
 - Não intermedeia causas: o passageiro chega ao escritório pelo canal do escritório, nunca pelo ONE.
 
@@ -122,7 +122,7 @@ O que existe hoje, na ordem em que o caso anda. "Construído" quer dizer código
 | Audiência (resumo para o audiencista, valor para acordo) | Não construído. A faixa de acordo por companhia é do M5. |
 | Sentença e recursos (embargos, recurso inominado, contrarrazões, réplica) | Prazos e publicações sim; peças além da inicial não estão no plano atual. |
 | Balcão virtual | Não está no plano. |
-| Financeiro (receber, pagar cliente) | Fora do ONE, por decisão. |
+| Financeiro (receber, pagar cliente) | Os livros do escritório, as contas a pagar e a receber, o resultado de cada ação, os honorários e custos do caso e a divisão do dinheiro do cliente com o repasse estão construídos; o ONE registra, divide e calcula e nunca recebe, paga nem cobra (a linha do dinheiro). |
 | Resumo semanal de cada etapa | O resumo semanal do sócio falta no M3. |
 | Direito do Passageiro (mensagens no dia do voo, verificação de atraso) | M4. |
 

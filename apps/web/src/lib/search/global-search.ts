@@ -36,6 +36,86 @@ export function caseHits(rows: readonly CaseListRow[], max = SEARCH_HITS): Searc
   }));
 }
 
+/** A person of the firm the search found (migration 0133): their page opens. */
+export type PersonHit = {
+  id: string;
+  name: string;
+  /** The CPF's middle only ("982.247"), never the whole number on a screen anybody may look at. */
+  cpfMiddle: string | null;
+  place: string | null;
+  cases: number;
+  active: boolean;
+};
+
+/** A conversation of the firm's WhatsApp the search found: it opens in Atendimento. */
+export type ConversationHit = { id: string; name: string | null; number: string };
+
+/** Everything the search at the top found, in the order a person reads it: people, cases, conversations. */
+export type GlobalHit =
+  | { kind: "person"; id: string; href: string; person: PersonHit }
+  | { kind: "case"; id: string; href: string; hit: SearchHit }
+  | { kind: "conversation"; id: string; href: string; conversation: ConversationHit };
+
+const text = (value: unknown): string | null => (typeof value === "string" && value.trim() !== "" ? value : null);
+
+/** The middle of a CPF ("982.247"), as a screen shows it. */
+export const cpfMiddle = (cpf: string | null): string | null =>
+  cpf && /^\d{11}$/.test(cpf) ? `${cpf.slice(3, 6)}.${cpf.slice(6, 9)}` : null;
+
+/** The people and conversations the database answered (`firm_people_search`), read as nothing more than they may be. */
+export function readPeopleSearch(raw: unknown): { people: PersonHit[]; conversations: ConversationHit[] } {
+  const answer = (typeof raw === "object" && raw !== null ? raw : {}) as Record<string, unknown>;
+  const rows = (value: unknown) =>
+    Array.isArray(value)
+      ? value.filter((row): row is Record<string, unknown> => typeof row === "object" && row !== null)
+      : [];
+  return {
+    people: rows(answer.people).flatMap((row): PersonHit[] => {
+      const id = text(row.id);
+      const name = text(row.name);
+      if (!id || !name) return [];
+      const city = text(row.city);
+      const uf = text(row.uf);
+      return [
+        {
+          id,
+          name,
+          cpfMiddle: cpfMiddle(text(row.cpf)),
+          place: city ? (uf ? `${city}/${uf}` : city) : null,
+          cases: typeof row.cases === "number" ? row.cases : 0,
+          active: row.active === true,
+        },
+      ];
+    }),
+    conversations: rows(answer.conversations).flatMap((row): ConversationHit[] => {
+      const id = text(row.id);
+      const number = text(row.number);
+      return id && number ? [{ id, name: text(row.name), number }] : [];
+    }),
+  };
+}
+
+/** The hits of one search, people first, then cases, then conversations. */
+export function globalHits(
+  found: { people: PersonHit[]; conversations: ConversationHit[] },
+  cases: readonly SearchHit[],
+): GlobalHit[] {
+  return [
+    ...found.people.map(
+      (person): GlobalHit => ({ kind: "person", id: `person:${person.id}`, href: `/pessoas/${person.id}`, person }),
+    ),
+    ...cases.map((hit): GlobalHit => ({ kind: "case", id: `case:${hit.id}`, href: `/casos/${hit.id}`, hit })),
+    ...found.conversations.map(
+      (conversation): GlobalHit => ({
+        kind: "conversation",
+        id: `conversation:${conversation.id}`,
+        href: `/atendimento?c=${conversation.id}`,
+        conversation,
+      }),
+    ),
+  ];
+}
+
 /** Whether what was typed is enough to search: a few letters or digits, never only spaces and marks. */
 export function searchable(text: string): boolean {
   return text.replace(/[^\p{L}\p{N}]/gu, "").length >= SEARCH_MIN;

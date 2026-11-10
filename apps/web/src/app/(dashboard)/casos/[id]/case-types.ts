@@ -7,10 +7,12 @@ import type { CheckAnswer } from "@/lib/cases/document-check";
 import type { DocumentQuality } from "@/lib/cases/document-quality";
 import type { CaseDossier, CaseDraft, CasePieces } from "@/lib/cases/draft-facts";
 import type { CivilCourtNeed, CourtNote, FamilyState } from "@/lib/cases/family";
+import type { CaseCost, CaseFees } from "@/lib/cases/fees";
 import type { CaseFiling } from "@/lib/cases/filing-facts";
 import type { FreeJusticeNeed } from "@/lib/cases/free-justice";
 import type { InterviewView } from "@/lib/cases/interview";
 import type { StageMoment } from "@/lib/cases/journey";
+import type { LawsuitFact } from "@/lib/cases/outcomes";
 import type { CasePulse } from "@/lib/cases/pulse";
 import type { ReadFields } from "@/lib/cases/read-fields";
 import type { ResidenceView } from "@/lib/cases/residence";
@@ -251,6 +253,16 @@ export type CaseState =
       residence: ResidenceView[] | null;
       /** Each claimant's word on free justice in the civil court (0125); null when it could not be read. */
       freeJustice: FreeJusticeNeed[] | null;
+      /** What each lawsuit came to (0130): its facts, ONE's and the firm's; null when they could not be read. */
+      outcomes: LawsuitFact[] | null;
+      /** ONE closed the case and no lawyer said yet they saw it (0130). */
+      closedByOne: { closed: boolean; acked: boolean };
+      /** The case's costs (0131), read by anybody of the firm; null when they could not be read. */
+      costs: CaseCost[] | null;
+      /** The case's fees (0131), only for who reads the books (null for anybody else, or none set). */
+      fees: CaseFees | null;
+      /** What the person reads and does of the firm's books (0126), for the fees' card. */
+      financeLevel: string | null;
       parties: CaseParty[];
       segments: CaseSegment[];
       documents: CaseDocument[];

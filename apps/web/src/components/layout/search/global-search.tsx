@@ -6,16 +6,30 @@ import { useEffect, useRef, useState } from "react";
 
 import { Autocomplete, Box, Button, Dialog, InputAdornment, TextField, Typography } from "@mui/material";
 
-import { useCaseSearch } from "@/components/layout/search/use-case-search";
+import { useGlobalSearch } from "@/components/layout/search/use-global-search";
 import NiCross from "@/icons/nexture/ni-cross";
 import NiSearch from "@/icons/nexture/ni-search";
 import { STATUS_KEY } from "@/lib/cases/cases";
-import { isSearchShortcut, isSetupPath, searchable, type SearchHit } from "@/lib/search/global-search";
+import { type GlobalHit, isSearchShortcut, isSetupPath, searchable } from "@/lib/search/global-search";
 
 /**
  * The field of the search: what is typed is asked of the database a moment after the last key, in the request's
  * body (`useCaseSearch`), and the cases found are listed under it, each opening its case.
  */
+const GROUP_KEY: Record<GlobalHit["kind"], string> = {
+  person: "search-group-people",
+  case: "search-group-cases",
+  conversation: "search-group-conversations",
+};
+
+/** What a hit is called: the person's name, the client of a case or its number, the contact of a conversation. */
+const hitTitle = (hit: GlobalHit): string =>
+  hit.kind === "person"
+    ? hit.person.name
+    : hit.kind === "case"
+      ? hit.hit.client || hit.hit.label
+      : (hit.conversation.name ?? hit.conversation.number);
+
 function SearchField({ autoFocus = false, onDone }: { autoFocus?: boolean; onDone?: () => void }) {
   const t = useTranslations("dashboard");
   const tp = useTranslations("product");
@@ -23,7 +37,7 @@ function SearchField({ autoFocus = false, onDone }: { autoFocus?: boolean; onDon
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [text, setText] = useState("");
   const [open, setOpen] = useState(false);
-  const found = useCaseSearch(text);
+  const found = useGlobalSearch(text);
 
   // "/" or Ctrl+K from anywhere on the screen brings the person here.
   useEffect(() => {
@@ -40,7 +54,7 @@ function SearchField({ autoFocus = false, onDone }: { autoFocus?: boolean; onDon
   const nothing = found.kind === "error" ? t("search-error") : searchable(text) ? t("search-empty") : t("search-hint");
 
   return (
-    <Autocomplete<SearchHit, false, false, false>
+    <Autocomplete<GlobalHit, false, false, false>
       options={hits}
       value={null}
       inputValue={text}
@@ -55,13 +69,13 @@ function SearchField({ autoFocus = false, onDone }: { autoFocus?: boolean; onDon
         setText("");
         setOpen(false);
         onDone?.();
-        router.push(`/casos/${chosen.id}`);
+        router.push(chosen.href);
       }}
       filterOptions={(all) => all}
-      getOptionLabel={(option) => option.client || option.label}
+      getOptionLabel={(option) => hitTitle(option)}
       getOptionKey={(option) => option.id}
       isOptionEqualToValue={(option, chosen) => option.id === chosen.id}
-      groupBy={() => t("search-group-cases")}
+      groupBy={(option) => t(GROUP_KEY[option.kind])}
       loading={found.kind === "loading"}
       loadingText={t("search-loading")}
       noOptionsText={nothing}
@@ -77,10 +91,20 @@ function SearchField({ autoFocus = false, onDone }: { autoFocus?: boolean; onDon
           <li key={key} {...rest}>
             <Box className="flex min-w-0 flex-col py-0.5">
               <Typography variant="body1" component="span" className="truncate font-semibold">
-                {option.client || option.label}
+                {hitTitle(option)}
               </Typography>
               <Typography variant="body2" component="span" className="text-text-secondary truncate">
-                {t("search-hit", { label: option.label, status: tp(STATUS_KEY[option.status]) })}
+                {option.kind === "case"
+                  ? t("search-hit", { label: option.hit.label, status: tp(STATUS_KEY[option.hit.status]) })
+                  : option.kind === "person"
+                    ? [
+                        option.person.cpfMiddle ? t("search-person-cpf", { middle: option.person.cpfMiddle }) : null,
+                        option.person.place,
+                        t("search-person-cases", { count: option.person.cases }),
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")
+                    : option.conversation.number}
               </Typography>
             </Box>
           </li>

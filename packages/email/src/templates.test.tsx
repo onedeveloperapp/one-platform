@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import { emailCopyFor } from "./copy";
 import { type EmailLocale, toEmailLocale } from "./locale";
 import AccessEndedEmail from "./templates/access-ended";
+import AgendaDigestEmail from "./templates/agenda-digest";
 import ContactFormEmail from "./templates/contact-form";
 import FirmInvitationEmail from "./templates/firm-invitation";
 import PartnerInvitationEmail from "./templates/partner-invitation";
@@ -36,6 +37,16 @@ const inHtml = (url: string) => url.replaceAll("&", "&amp;");
 function every(locale: EmailLocale): Record<string, ReactElement> {
   return {
     "member-welcome": createElement(MemberWelcomeEmail, { locale, name: "Ana", appUrl: APP }),
+    "agenda-digest": createElement(AgendaDigestEmail, {
+      locale,
+      firmName: "Lima Advocacia",
+      dayLabel: "terça-feira, 10 de novembro",
+      wholeFirm: false,
+      today: [{ text: "Prazo fatal: Réplica · Caso 12", url: APP, changed: false }],
+      next: [{ text: "Audiência de conciliação · Caso 12 · quarta-feira às 14:30", url: null, changed: true }],
+      agendaUrl: APP,
+      unsubscribeUrl: UNSUBSCRIBE,
+    }),
     "firm-invitation": createElement(FirmInvitationEmail, {
       locale,
       firmName: "Souza Advogados",
@@ -114,7 +125,7 @@ describe("e-mail templates", () => {
     for (const locale of LOCALES) {
       for (const [name, element] of Object.entries(every(locale))) {
         const html = await render(element);
-        const stoppable = name === "newsletter";
+        const stoppable = name === "newsletter" || name === "agenda-digest";
         expect(html.includes(inHtml(UNSUBSCRIBE)), `${name} (${locale})`).toBe(stoppable);
       }
     }

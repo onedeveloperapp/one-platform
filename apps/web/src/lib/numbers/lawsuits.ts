@@ -1,0 +1,228 @@
+/**
+ * The firm's numbers (migration 0136), as pure rules over the one set behind all of them: each lawsuit filed, grouped by
+ * a dimension, each number with its sample and the lawsuits behind it, no average of fewer than five, and the cohorts by
+ * the month a lawsuit was filed. What ONE read and nobody checked is counted, and may be left out.
+ */
+
+export type LawsuitRow = {
+  id: string;
+  caseId: string;
+  caseSeq: number | null;
+  cnj: string;
+  airline: string | null;
+  incident: string | null;
+  court: string;
+  comarca: string | null;
+  kind: string;
+  filedOn: string;
+  openedOn: string | null;
+  result: "procedente" | "parcial" | "improcedente" | null;
+  judgedOn: string | null;
+  judgedChecked: boolean;
+  valueCents: number | null;
+  settled: boolean;
+  final: boolean;
+  paidOn: string | null;
+  closed: boolean;
+  unchecked: number;
+  isTest: boolean;
+};
+
+export const DIMENSIONS = ["airline", "incident", "court", "comarca", "kind"] as const;
+export type Dimension = (typeof DIMENSIONS)[number];
+
+/** No average, median or rate of fewer than this many lawsuits. */
+export const MIN_SAMPLE = 5;
+
+const text = (value: unknown): string | null => (typeof value === "string" && value !== "" ? value : null);
+const DAY = /^\d{4}-\d{2}-\d{2}/;
+
+export function readLawsuitRows(raw: unknown): LawsuitRow[] {
+  const answer = (typeof raw === "object" && raw !== null ? raw : {}) as Record<string, unknown>;
+  const rows = Array.isArray(answer.rows) ? answer.rows : [];
+  return rows.flatMap((item): LawsuitRow[] => {
+    if (typeof item !== "object" || item === null) return [];
+    const row = item as Record<string, unknown>;
+    const id = text(row.id);
+    const filed = text(row.filed_on);
+    if (!id || !filed || !DAY.test(filed)) return [];
+    const result =
+      row.result === "procedente" || row.result === "parcial" || row.result === "improcedente" ? row.result : null;
+    return [
+      {
+        id,
+        caseId: text(row.case_id) ?? "",
+        caseSeq: typeof row.case_seq === "number" ? row.case_seq : null,
+        cnj: text(row.cnj) ?? "",
+        airline: text(row.airline),
+        incident: text(row.incident),
+        court: text(row.court) ?? "",
+        comarca: text(row.comarca),
+        kind: text(row.kind) ?? "",
+        filedOn: filed.slice(0, 10),
+        openedOn: text(row.opened_on)?.slice(0, 10) ?? null,
+        result,
+        judgedOn: text(row.judged_on)?.slice(0, 10) ?? null,
+        judgedChecked: row.judged_checked === true,
+        valueCents: typeof row.value_cents === "number" ? row.value_cents : null,
+        settled: row.settled === true,
+        final: row.final === true,
+        paidOn: text(row.paid_on)?.slice(0, 10) ?? null,
+        closed: row.closed === true,
+        unchecked: typeof row.unchecked === "number" ? row.unchecked : 0,
+        isTest: row.is_test === true,
+      },
+    ];
+  });
+}
+
+const days = (from: string, to: string): number =>
+  Math.round((Date.parse(`${to}T12:00:00Z`) - Date.parse(`${from}T12:00:00Z`)) / 86_400_000);
+
+/** The median of a list, or null with fewer than the sample. */
+export function median(values: readonly number[]): number | null {
+  if (values.length < MIN_SAMPLE) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  const middle = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 1 ? sorted[middle]! : Math.round((sorted[middle - 1]! + sorted[middle]!) / 2);
+}
+
+/** A judgment the numbers count: any, or only one a person checked. */
+const judgment = (row: LawsuitRow, checkedOnly: boolean) =>
+  row.result && (!checkedOnly || row.judgedChecked) ? row.result : null;
+
+export type Stats = {
+  key: string;
+  lawsuits: number;
+  judged: number;
+  won: number;
+  partial: number;
+  lost: number;
+  settled: number;
+  /** Won in whole or in part, of the judged; null with fewer than the sample. */
+  successRate: number | null;
+  valuePerClaimant: number | null;
+  daysToJudgment: number | null;
+  daysToMoney: number | null;
+  /** The firm's own time: from the case opening to the filing. */
+  daysToFiling: number | null;
+  unchecked: number;
+  ids: string[];
+};
+
+export function statsOf(key: string, rows: readonly LawsuitRow[], checkedOnly: boolean): Stats {
+  const judged = rows.filter((row) => judgment(row, checkedOnly) !== null);
+  const won = judged.filter((row) => judgment(row, checkedOnly) === "procedente").length;
+  const partial = judged.filter((row) => judgment(row, checkedOnly) === "parcial").length;
+  const values = judged
+    .filter((row) => judgment(row, checkedOnly) !== "improcedente" && row.valueCents !== null && row.valueCents > 0)
+    .map((row) => row.valueCents!);
+  return {
+    key,
+    lawsuits: rows.length,
+    judged: judged.length,
+    won,
+    partial,
+    lost: judged.length - won - partial,
+    settled: rows.filter((row) => row.settled).length,
+    successRate: judged.length >= MIN_SAMPLE ? (won + partial) / judged.length : null,
+    valuePerClaimant:
+      values.length >= MIN_SAMPLE ? Math.round(values.reduce((acc, value) => acc + value, 0) / values.length) : null,
+    daysToJudgment: median(judged.filter((row) => row.judgedOn).map((row) => days(row.filedOn, row.judgedOn!))),
+    daysToMoney: median(rows.filter((row) => row.paidOn).map((row) => days(row.filedOn, row.paidOn!))),
+    daysToFiling: median(
+      rows.filter((row) => row.openedOn).map((row) => Math.max(days(row.openedOn!, row.filedOn), 0)),
+    ),
+    unchecked: rows.reduce((acc, row) => acc + row.unchecked, 0),
+    ids: rows.map((row) => row.id),
+  };
+}
+
+const keyOf = (row: LawsuitRow, dimension: Dimension): string =>
+  (dimension === "airline"
+    ? row.airline
+    : dimension === "incident"
+      ? row.incident
+      : dimension === "court"
+        ? row.court
+        : dimension === "comarca"
+          ? row.comarca
+          : row.kind) ?? "";
+
+/** The rows of a period: filed from `from` to `to`, both optional. */
+export const withinPeriod = (rows: readonly LawsuitRow[], from: string | null, to: string | null): LawsuitRow[] =>
+  rows.filter((row) => (!from || row.filedOn >= from) && (!to || row.filedOn <= to));
+
+/** Each group of a dimension with its numbers, the largest first; a group with no key is "" (not recorded). */
+export function groupStats(rows: readonly LawsuitRow[], dimension: Dimension, checkedOnly: boolean): Stats[] {
+  const groups = new Map<string, LawsuitRow[]>();
+  for (const row of rows) {
+    const key = keyOf(row, dimension);
+    groups.set(key, [...(groups.get(key) ?? []), row]);
+  }
+  return [...groups.entries()]
+    .map(([key, list]) => statsOf(key, list, checkedOnly))
+    .sort((a, b) => b.lawsuits - a.lawsuits || a.key.localeCompare(b.key));
+}
+
+export type Cohort = {
+  month: string;
+  filed: number;
+  judged: number;
+  final: number;
+  executing: number;
+  paid: number;
+  closed: number;
+  success: number;
+  lost: number;
+};
+
+/** The cohorts by the month a lawsuit was filed, the latest first. */
+export function cohorts(rows: readonly LawsuitRow[], checkedOnly: boolean): Cohort[] {
+  const months = new Map<string, LawsuitRow[]>();
+  for (const row of rows) months.set(row.filedOn.slice(0, 7), [...(months.get(row.filedOn.slice(0, 7)) ?? []), row]);
+  return [...months.entries()]
+    .sort((a, b) => b[0].localeCompare(a[0]))
+    .map(([month, list]) => ({
+      month,
+      filed: list.length,
+      judged: list.filter((row) => judgment(row, checkedOnly) !== null).length,
+      final: list.filter((row) => row.final).length,
+      executing: list.filter((row) => row.final && !row.paidOn).length,
+      paid: list.filter((row) => row.paidOn !== null).length,
+      closed: list.filter((row) => row.closed).length,
+      success: list.filter((row) => {
+        const result = judgment(row, checkedOnly);
+        return result === "procedente" || result === "parcial" || row.settled;
+      }).length,
+      lost: list.filter((row) => judgment(row, checkedOnly) === "improcedente").length,
+    }));
+}
+
+export type Margin = {
+  caseId: string;
+  caseSeq: number | null;
+  feesCents: number;
+  costsCents: number;
+  marginCents: number;
+};
+
+export function readMargins(raw: unknown): Margin[] | null {
+  if (!Array.isArray(raw)) return null;
+  return raw.flatMap((item): Margin[] => {
+    if (typeof item !== "object" || item === null) return [];
+    const row = item as Record<string, unknown>;
+    const caseId = text(row.case_id);
+    if (!caseId) return [];
+    const whole = (value: unknown) => (typeof value === "number" ? Math.trunc(value) : 0);
+    return [
+      {
+        caseId,
+        caseSeq: typeof row.case_seq === "number" ? row.case_seq : null,
+        feesCents: whole(row.fees_cents),
+        costsCents: whole(row.costs_cents),
+        marginCents: whole(row.margin_cents),
+      },
+    ];
+  });
+}

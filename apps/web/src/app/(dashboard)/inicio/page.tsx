@@ -9,6 +9,7 @@ import { getTranslations } from "next-intl/server";
 import { readWaitingDecisions } from "@/lib/ai/decisions-read";
 import { cloudSigningOffered } from "@/lib/cases/filing-facts";
 import { readCaseList, readCaseStock } from "@/lib/cases/list-read";
+import { outcomeAttentionOf } from "@/lib/cases/outcomes";
 import { firmPulseOf } from "@/lib/cases/pulse";
 import { readFinanceAttention } from "@/lib/finance/attention";
 import { readFilingAttention } from "@/lib/firm/filing-attention";
@@ -102,6 +103,7 @@ async function loadHome(): Promise<
     acks,
     oneWork,
     finance,
+    outcomes,
   ] = await Promise.all([
     context.supabase.rpc("firm_today", { target_org: firm.id }),
     context.supabase.rpc("firm_pending", { target_org: firm.id }),
@@ -153,6 +155,10 @@ async function loadHome(): Promise<
     context.supabase
       .rpc("firm_finance_attention", { target_org: firm.id })
       .then(({ data, error }) => (error ? null : readFinanceAttention(data))),
+    // What the lawsuits' results ask of the firm's people (0130), as the center says it.
+    context.supabase
+      .rpc("firm_outcome_attention", { target_org: firm.id })
+      .then(({ data, error }) => (error ? null : outcomeAttentionOf(data))),
   ]);
   if (manager && facts && !isSetupAnswered(facts)) return { kind: "setup", setup: await loadSetupState(context) };
   // Read failures owe nothing: a registration that could not be read is never said to be missing.
@@ -199,6 +205,7 @@ async function loadHome(): Promise<
               : null,
             acks ? { acks, viewer: { userId: context.userId, firmFunction: firm.firmFunction } } : null,
             finance,
+            outcomes,
           ),
         )
       : null,

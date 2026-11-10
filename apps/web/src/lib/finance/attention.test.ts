@@ -49,6 +49,7 @@ describe("what waits in the books (0127)", () => {
         lines: { count: 0, accounts: 0, oldest: null },
         late: [],
         apart: { count: 0, cents: 0, oldest: null },
+        feesMissing: 0,
         bills: {
           paySoon: 0,
           paySoonCents: 0,

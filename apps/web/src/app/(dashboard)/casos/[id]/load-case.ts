@@ -24,10 +24,12 @@ import { CAUSES, isCaseStatus, linksOwedOf, ORIGINS, type RequiredDocument } fro
 import { readCheckAnswer } from "@/lib/cases/document-check";
 import { readQuality } from "@/lib/cases/document-quality";
 import { loadCasePieces } from "@/lib/cases/draft-facts";
+import { caseCostsOf, caseFeesOf } from "@/lib/cases/fees";
 import { cloudSigningOffered, loadCaseFilings } from "@/lib/cases/filing-facts";
 import { freeJusticeOf } from "@/lib/cases/free-justice";
 import { cpfLookup } from "@/lib/cases/identity";
 import { courtPublicationsOf, stageMomentsOf } from "@/lib/cases/journey";
+import { lawsuitFactsOf } from "@/lib/cases/outcomes";
 import { casePulseOf } from "@/lib/cases/pulse";
 import { readFieldsOf } from "@/lib/cases/read-fields";
 import { residenceViewsOf } from "@/lib/cases/residence";
@@ -171,7 +173,7 @@ export async function loadCase(id: string): Promise<CaseState> {
   const { data: row, error } = await supabase
     .from("cases")
     .select(
-      "id, seq, module, incident, airline_iata, flight_date, cause, status, origin, partnership_id, summary, responsible_id, close_reason, created_at",
+      "id, seq, module, incident, airline_iata, flight_date, cause, status, origin, partnership_id, summary, responsible_id, close_reason, created_at, closed_by_one, close_acked_at",
     )
     .eq("id", id)
     .eq("org_id", firm)
@@ -209,6 +211,10 @@ export async function loadCase(id: string): Promise<CaseState> {
     filings,
     residence,
     freeJustice,
+    outcomes,
+    costs,
+    fees,
+    financeAccess,
   ] = await Promise.all([
     supabase
       .from("case_parties")
@@ -293,6 +299,28 @@ export async function loadCase(id: string): Promise<CaseState> {
     supabase.rpc("case_residence", { target_case: id }),
     // Each claimant's word on free justice in the civil court (0125), with the declaration of who asks.
     supabase.rpc("case_free_justice", { target_case: id }),
+    // What each lawsuit came to (0130), in the order it happened.
+    supabase
+      .from("lawsuit_facts")
+      .select(
+        "id, proceeding_id, kind, result, appeal_by, release_kind, cents, per_claimant, happened_on, words, by_one, confirmed, ack_owed, acked_at, received_cents, received_on, corrected_at, corrected_reason",
+      )
+      .eq("case_id", id)
+      .order("happened_on", { ascending: true })
+      .order("created_at", { ascending: true }),
+    // The case's costs and fees (0131): the costs to anybody of the firm, the fees only to who reads the books.
+    supabase
+      .from("case_costs")
+      .select("id, description, cents, spent_on, paid_by, owed_by, absorbed_at, bill_id")
+      .eq("case_id", id)
+      .order("spent_on", { ascending: true }),
+    supabase
+      .from("case_fees")
+      .select(
+        "case_id, entry_cents, installments, installment_cents, success_percent, success_min_cents, settlement_percent, source, bills_at",
+      )
+      .eq("case_id", id),
+    supabase.rpc("firm_finance_access", { target_org: firm }),
   ]);
   if (
     parties.error ||
@@ -507,6 +535,14 @@ export async function loadCase(id: string): Promise<CaseState> {
     kind: "ready",
     residence: residence.error ? null : residenceViewsOf(residence.data),
     freeJustice: freeJustice.error ? null : freeJusticeOf(freeJustice.data),
+    outcomes: outcomes.error ? null : lawsuitFactsOf(outcomes.data),
+    costs: costs.error ? null : caseCostsOf(costs.data),
+    fees: fees.error ? null : caseFeesOf(fees.data),
+    financeLevel: financeAccess.error ? null : (((financeAccess.data ?? {}) as { level?: string }).level ?? null),
+    closedByOne: {
+      closed: row.closed_by_one === true,
+      acked: row.close_acked_at !== null && row.close_acked_at !== undefined,
+    },
     case: {
       id: row.id,
       seq: row.seq,

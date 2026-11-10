@@ -525,3 +525,38 @@ function skipRanges(skipped: Map<number, Why>, facts: (number: number) => DayFac
     .filter((range) => range.weekdays > 0)
     .map(({ from, to, reason, label }) => ({ from, to, reason, label }));
 }
+
+/**
+ * The internal deadline (phase 8 of the plan of the controladoria and the finance): the given number of the court's
+ * business days before the deadline, counted backward over the days the count itself saw (weekends, the national
+ * holidays and the days the court was closed never count; a suspension of the terms, the year-end one included, is no
+ * closure, and the firm works on it), and never before the first day of the term. Zero days is no internal deadline.
+ * Pure.
+ */
+export function internalDeadline(result: Pick<DeadlineResult, "dueOn" | "startsOn" | "skipped">, days: number): string | null {
+  if (!Number.isInteger(days) || days <= 0) return null;
+  const due = dayNumber(result.dueOn);
+  const first = dayNumber(result.startsOn);
+  if (due === null || first === null) return null;
+  const skipped: [number, number][] = [];
+  for (const skip of result.skipped) {
+    if (skip.reason !== "closed" && skip.reason !== "holiday") continue;
+    const from = dayNumber(skip.from);
+    const to = dayNumber(skip.to);
+    if (from !== null && to !== null) skipped.push([from, to]);
+  }
+  let day = due;
+  let counted = 0;
+  while (counted < days && day > first) {
+    day -= 1;
+    const text = dayText(day);
+    const weekday = weekdayOf(day);
+    const off =
+      weekday === 0 ||
+      weekday === 6 ||
+      nationalHoliday(text) !== null ||
+      skipped.some(([from, to]) => day >= from && day <= to);
+    if (!off) counted += 1;
+  }
+  return dayText(Math.max(day, first));
+}

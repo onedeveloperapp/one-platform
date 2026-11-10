@@ -10,8 +10,9 @@ import { Alert, Box, Button, Card, CardContent, Grid, Typography } from "@mui/ma
 import DeadlineCard from "@/components/deadlines/deadline-card";
 import DeadlinePanel from "@/components/deadlines/deadline-panel";
 import EmptyState from "@/components/product/empty-state";
-import { StatTile } from "@/components/product/home-tiles";
+import ListBar from "@/components/product/list-bar";
 import ModuleScope from "@/components/product/module-scope";
+import NumberCard from "@/components/product/number-card";
 import PageHeader from "@/components/product/page-header";
 import type { TileTone } from "@/components/product/tile-tone";
 import IllustrationConfigure from "@/icons/illustrations/illustration-configure";
@@ -61,11 +62,11 @@ export type DeadlinesState =
   | { kind: "error" };
 
 const VIEW_LOOK: Record<DeadlineView, { tone: TileTone; icon: React.ReactNode }> = {
-  confirmar: { tone: "accent-3", icon: <NiListCheck size="large" /> },
-  proximos: { tone: "primary", icon: <NiCalendarClock size="large" /> },
-  vencidos: { tone: "accent-3", icon: <NiClock size="large" /> },
-  rever: { tone: "accent-4", icon: <NiExclamationSquare size="large" /> },
-  concluidos: { tone: "secondary", icon: <NiCheckSquare size="large" /> },
+  confirmar: { tone: "accent-3", icon: <NiListCheck size="medium" /> },
+  proximos: { tone: "primary", icon: <NiCalendarClock size="medium" /> },
+  vencidos: { tone: "accent-3", icon: <NiClock size="medium" /> },
+  rever: { tone: "accent-4", icon: <NiExclamationSquare size="medium" /> },
+  concluidos: { tone: "secondary", icon: <NiCheckSquare size="medium" /> },
 };
 
 /**
@@ -153,8 +154,8 @@ export default function DeadlinesView({ state }: { state: DeadlinesState }) {
         <>
           <Grid container spacing={2.5}>
             {DEADLINE_VIEWS.map((view) => (
-              <Grid key={view} size={{ xs: 12, sm: 6, lg: "grow" }}>
-                <StatTile
+              <Grid key={view} size={{ xs: 6, lg: "grow" }}>
+                <NumberCard
                   onClick={() => router.push(deadlinesAddress(view, 0, module))}
                   pressed={ready.view === view}
                   icon={VIEW_LOOK[view].icon}
@@ -165,11 +166,23 @@ export default function DeadlinesView({ state }: { state: DeadlinesState }) {
                       ? t("deadlines-view-next-hint-soon", { count: data.soonCount, days: data.soonDays })
                       : t(VIEW_KEY[view].hint)
                   }
-                  value={data.counts[view]}
+                  value={String(data.counts[view])}
                 />
               </Grid>
             ))}
           </Grid>
+          <ListBar
+            label={t("deadlines-title")}
+            viewsTitle={t("list-views-title")}
+            views={DEADLINE_VIEWS.map((view) => ({
+              key: view,
+              label: t(VIEW_KEY[view].label),
+              count: String(data.counts[view]),
+              group: t("deadlines-views-group"),
+            }))}
+            view={ready.view}
+            onView={(key) => router.push(deadlinesAddress(key as typeof ready.view, 0, module))}
+          />
 
           {!ready.mayWork ? (
             <Typography variant="body2" className="text-text-secondary">

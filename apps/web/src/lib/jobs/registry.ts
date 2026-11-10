@@ -1,5 +1,6 @@
 import "server-only";
 
+import { agendaSweeps } from "@/lib/agenda/digest-work";
 import { aiSweeps } from "@/lib/ai/jobs";
 import { backupSweeps } from "@/lib/backup-jobs";
 import { billingSweeps } from "@/lib/billing-jobs";
@@ -7,9 +8,11 @@ import { caseSweeps } from "@/lib/cases/jobs";
 import { connectionSweeps } from "@/lib/connections/jobs";
 import { conversationSweeps } from "@/lib/conversations/jobs";
 import { courtSweeps } from "@/lib/courts/jobs";
+import { outcomeSweeps } from "@/lib/courts/outcome-work";
 import { deadlineSweeps } from "@/lib/deadlines/jobs";
 import { fileSweeps } from "@/lib/files/jobs";
 import { financeSweeps } from "@/lib/finance/jobs";
+import { moneySweeps } from "@/lib/finance/money-work";
 import { hearingSweeps } from "@/lib/hearings/jobs";
 import { importSweeps } from "@/lib/import/jobs";
 import type { Sweep } from "@/lib/jobs/schedule";
@@ -43,6 +46,9 @@ export const SWEEPS: readonly Sweep[] = [
   ...connectionSweeps,
   ...importSweeps,
   ...financeSweeps,
+  ...outcomeSweeps,
+  ...agendaSweeps,
+  ...moneySweeps,
   ...billingSweeps,
   ...leadSweeps,
   ...newsletterSweeps,

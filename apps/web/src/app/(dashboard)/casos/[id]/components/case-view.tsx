@@ -10,10 +10,13 @@ import DeadlinesCard from "./deadlines-card";
 import DocumentsCard from "./documents-card";
 import DossierCard from "./dossier-card";
 import DraftsCard from "./drafts-card";
+import FeesCard from "./fees-card";
 import FilingCard from "./filing-card";
 import HearingsCard from "./hearings-card";
 import JourneyCard from "./journey-card";
+import MoneyCard from "./money-card";
 import NoticesCard from "./notices-card";
+import OutcomeCard from "./outcome-card";
 import PeopleCard from "./people-card";
 import ProceedingsCard from "./proceedings-card";
 import PublicationsCard from "./publications-card";
@@ -319,6 +322,9 @@ export default function CaseView({ state: read }: { state: CaseState }) {
             <FilingCard state={state} writable={writable} onChanged={refresh} />
             <HearingsCard state={state} writable={writable} onChanged={refresh} />
             <PublicationsCard state={state} writable={writable} onChanged={refresh} />
+            <OutcomeCard state={state} writable={writable} onChanged={refresh} />
+            <MoneyCard state={state} />
+            <FeesCard state={state} writable={writable} onChanged={refresh} />
             <DeadlinesCard state={state} writable={writable} onChanged={refresh} />
             <ComplaintCard state={state} writable={writable} onChanged={refresh} />
           </Grid>

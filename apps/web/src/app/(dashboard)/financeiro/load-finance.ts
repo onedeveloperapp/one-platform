@@ -3,6 +3,7 @@ import "server-only";
 import { cookies } from "next/headers";
 
 import { momentLabel } from "@/lib/ai/approvals";
+import { type FeeTerms, feeTermsOf } from "@/lib/cases/fees";
 import { type FinanceAttention, readFinanceAttention } from "@/lib/finance/attention";
 import type { FinanceBill } from "@/lib/finance/bills";
 import type { FinanceHome, FinanceLevel } from "@/lib/finance/books";
@@ -51,6 +52,8 @@ export type FinanceState =
       attention: FinanceAttention | null;
       /** The bills to pay and to receive (0129), when the page lists them. */
       bills: FinanceBill[] | null;
+      /** The firm's fee terms in force (0131), when the page lists them. */
+      feeTerms: FeeTerms[] | null;
       readLabel: string;
     }
   /** The books are not open yet: who decides for the firm opens them; anybody else is told so. */
@@ -66,7 +69,7 @@ export type FinanceState =
  * the home of the books and their registrations always, and what the page lists (`with`).
  */
 export async function loadFinance(
-  withData: { entries?: boolean; lines?: boolean; people?: boolean; bills?: boolean } = {},
+  withData: { entries?: boolean; lines?: boolean; people?: boolean; bills?: boolean; terms?: boolean } = {},
 ): Promise<FinanceState> {
   const context = await getMemberContext();
   if (!context) return { kind: "unavailable" };
@@ -93,7 +96,7 @@ export async function loadFinance(
   if (access.level !== "view" && access.level !== "operate" && access.level !== "configure") {
     return { kind: "not-reader", level: access.level };
   }
-  const [home, registrations, entries, lines, people, attention, bills] = await Promise.all([
+  const [home, registrations, entries, lines, people, attention, bills, feeTerms] = await Promise.all([
     readFinanceHome(context.supabase, context.firm.id),
     readFinanceRegistrations(context.supabase, context.firm.id),
     withData.entries ? readFinanceEntries(context.supabase, context.firm.id) : Promise.resolve(null),
@@ -103,6 +106,17 @@ export async function loadFinance(
       .rpc("firm_finance_attention", { target_org: context.firm.id })
       .then(({ data, error }) => (error ? null : readFinanceAttention(data))),
     withData.bills ? readFinanceBills(context.supabase, context.firm.id) : Promise.resolve(null),
+    withData.terms
+      ? context.supabase
+          .from("fee_terms")
+          .select(
+            "id, module, incident, entry_cents, installments, installment_cents, success_percent, success_min_cents, settlement_percent, confirmed_at",
+          )
+          .eq("org_id", context.firm.id)
+          .is("archived_at", null)
+          .order("incident", { ascending: true, nullsFirst: true })
+          .then(({ data, error }) => (error ? null : feeTermsOf(data)))
+      : Promise.resolve(null),
   ]);
   if (home === "error" || home === null || !registrations) return { kind: "error" };
   if ((withData.entries && !entries) || (withData.lines && !lines) || (withData.bills && !bills)) {
@@ -122,6 +136,7 @@ export async function loadFinance(
     people,
     attention,
     bills,
+    feeTerms,
     readLabel: momentLabel(new Date().toISOString(), context.profile.timezone),
   };
 }

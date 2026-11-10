@@ -4,6 +4,8 @@ import ClientCivilCourt from "./client-civil-court";
 import ClientCourse from "./client-course";
 import ClientFreeJustice from "./client-free-justice";
 import ClientInterview from "./client-interview";
+import ClientMarketing from "./client-marketing";
+import ClientMoney from "./client-money";
 import ClientNotices from "./client-notices";
 import ClientResidence from "./client-residence";
 import ClientStatements from "./client-statements";
@@ -291,6 +293,8 @@ export default function ClientFolder({
         />
       )}
       <ClientNotices token={token} notices={tasks.notices} editable={editable} onSaved={() => router.refresh()} />
+      <ClientMoney token={token} editable={editable} />
+      <ClientMarketing token={token} editable={editable} />
       <ClientSignatures token={token} signatures={tasks.signatures} editable onSaved={() => router.refresh()} />
       {editable && (
         <Finish

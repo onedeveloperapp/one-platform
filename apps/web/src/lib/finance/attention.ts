@@ -17,6 +17,10 @@ export type FinanceAttention = {
   lines: { count: number; accounts: number; oldest: string | null };
   late: LateAccount[];
   apart: { count: number; cents: number; oldest: string | null };
+  /** The cases in court with no fees set (0131). */
+  feesMissing: number;
+  /** The clients' parts (0135): passed on late, held for a partner, a minor's waiting for the judge. */
+  money?: { late: number; lateCents: number; held: number; minor: number };
   /** The bills (0129): to pay in the next days and late, to receive late (to charge), near the five years. */
   bills: {
     paySoon: number;
@@ -63,6 +67,13 @@ export function readFinanceAttention(raw: unknown): FinanceAttention | null {
       return accountId && name ? [{ accountId, name, lastOn: text(row.last_on) }] : [];
     }),
     apart: { count: whole(apart.count), cents: whole(apart.cents), oldest: text(apart.oldest) },
+    feesMissing: whole(answer.fees_missing),
+    money: {
+      late: whole(record(answer.money).late),
+      lateCents: whole(record(answer.money).late_cents),
+      held: whole(record(answer.money).held),
+      minor: whole(record(answer.money).minor),
+    },
     bills: bills
       ? {
           paySoon: whole(bills.pay_soon),
@@ -180,6 +191,37 @@ export function financeAttentionItems(attention: FinanceAttention): PendingItem[
         ? { key: "pending-finance-late-since", values: { day: shortDay(account.lastOn) } }
         : { key: "pending-finance-late-never" },
       count: 1,
+    });
+  }
+  if (attention.feesMissing > 0) {
+    items.push({
+      id: "finance:fees-missing",
+      href: "/financeiro/configuracao#honorarios",
+      tag: { key: "pending-tag-finance" },
+      label: { key: "pending-finance-fees-missing", values: { count: attention.feesMissing } },
+      detail: { key: "pending-finance-fees-missing-detail" },
+      count: attention.feesMissing,
+    });
+  }
+  const money = attention.money ?? { late: 0, lateCents: 0, held: 0, minor: 0 };
+  if (money.late > 0) {
+    items.push({
+      id: "finance:money-late",
+      href: "/financeiro/repasses",
+      tag: { key: "pending-tag-finance" },
+      label: { key: "pending-finance-money-late", values: { count: money.late } },
+      detail: { key: "pending-finance-money-late-detail" },
+      count: money.late,
+    });
+  }
+  if (money.held + money.minor > 0) {
+    items.push({
+      id: "finance:money-held",
+      href: "/financeiro/repasses",
+      tag: { key: "pending-tag-finance" },
+      label: { key: "pending-finance-money-held", values: { count: money.held + money.minor } },
+      detail: { key: "pending-finance-money-held-detail" },
+      count: money.held + money.minor,
     });
   }
   const others = attention.late.length - LATE_NAMED;

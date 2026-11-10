@@ -761,3 +761,109 @@ export async function answerClientInterview(
   }
   return result;
 }
+
+// ---------- Marketing (migration 0133) ----------
+
+/**
+ * Whether the client asked not to receive the firm's marketing (`off`), read by the backend from the link's token:
+ * null when the link no longer answers.
+ */
+export async function readClientMarketing(
+  token: string,
+): Promise<{ ok: true; off: boolean } | { ok: false; code: string }> {
+  const closed = await refusal(token);
+  if (closed) return closed;
+  const backend = service();
+  if (!backend) return unavailable;
+  const { data, error } = await backend.rpc("client_link_marketing", { target_token: token, target_off: null });
+  const answer = (data ?? {}) as { ok?: boolean; off?: boolean; code?: string };
+  if (error || answer.ok !== true) return { ok: false, code: answer.code ?? "failed" };
+  return { ok: true, off: answer.off === true };
+}
+
+/** The client says, on their own link, that they do not want the firm's marketing, or want it again. */
+export async function setClientMarketing(
+  token: string,
+  off: boolean,
+): Promise<{ ok: true; off: boolean } | { ok: false; code: string }> {
+  const closed = await refusal(token);
+  if (closed) return closed;
+  if (typeof off !== "boolean") return { ok: false, code: "failed" };
+  const backend = service();
+  if (!backend) return unavailable;
+  const { data, error } = await backend.rpc("client_link_marketing", { target_token: token, target_off: off });
+  const answer = (data ?? {}) as { ok?: boolean; off?: boolean; code?: string };
+  if (error || answer.ok !== true) return { ok: false, code: answer.code ?? "failed" };
+  return { ok: true, off: answer.off === true };
+}
+
+// ---------- The client's money (migration 0135) ----------
+
+export type ClientMoney = {
+  shares: {
+    id: string;
+    grossCents: number;
+    feesCents: number;
+    costsCents: number;
+    heldCents: number;
+    payableCents: number;
+    status: string;
+    dueOn: string | null;
+    paidOn: string | null;
+    minor: boolean;
+    confirmedAt: string | null;
+  }[];
+  account: { kind: string; ends: string; bank: string | null } | null;
+};
+
+const readMoney = (data: unknown): ClientMoney => {
+  const answer = (data ?? {}) as { shares?: Record<string, unknown>[]; account?: Record<string, unknown> | null };
+  const whole = (value: unknown) => (typeof value === "number" ? value : 0);
+  const text = (value: unknown) => (typeof value === "string" && value !== "" ? value : null);
+  return {
+    shares: (answer.shares ?? []).map((row) => ({
+      id: String(row.id ?? ""),
+      grossCents: whole(row.gross_cents),
+      feesCents: whole(row.fees_cents),
+      costsCents: whole(row.costs_cents),
+      heldCents: whole(row.held_cents),
+      payableCents: whole(row.payable_cents),
+      status: String(row.status ?? ""),
+      dueOn: text(row.due_on),
+      paidOn: text(row.paid_on),
+      minor: row.minor === true,
+      confirmedAt: text(row.confirmed_at),
+    })),
+    account: answer.account
+      ? {
+          kind: String(answer.account.kind ?? ""),
+          ends: String(answer.account.ends ?? ""),
+          bank: text(answer.account.bank),
+        }
+      : null,
+  };
+};
+
+/**
+ * The client's money on their link: their parts and their son's or daughter's, and the account they gave; with `give`,
+ * the account they receive in (always in their own CPF); with `confirm`, that they received a part.
+ */
+export async function clientMoney(
+  token: string,
+  give: { kind: "pix" | "conta"; data: Record<string, string> } | null = null,
+  confirm: string | null = null,
+): Promise<{ ok: true; money: ClientMoney } | { ok: false; code: string }> {
+  const closed = await refusal(token);
+  if (closed) return closed;
+  const backend = service();
+  if (!backend) return unavailable;
+  const { data, error } = await backend.rpc("client_link_money", {
+    target_token: token,
+    target_kind: give?.kind ?? null,
+    target_data: give ? give.data : null,
+    target_confirm: confirm,
+  });
+  const answer = (data ?? {}) as { ok?: boolean; code?: string };
+  if (error || answer.ok !== true) return { ok: false, code: answer.code ?? "failed" };
+  return { ok: true, money: readMoney(data) };
+}

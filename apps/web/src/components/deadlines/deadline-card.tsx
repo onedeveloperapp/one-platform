@@ -236,6 +236,11 @@ export default function DeadlineCard({
           {t("deadline-counting-now")}
         </Typography>
       ) : null}
+      {row.dueOn && open && row.internalOn && row.internalOn !== row.dueOn ? (
+        <Typography variant="body2" className="text-text-secondary">
+          {t("deadline-internal-on", { day: day(row.internalOn), weekday: weekdayOf(row.internalOn) })}
+        </Typography>
+      ) : null}
 
       {recounting ? (
         <Typography variant="body2" className="text-text-secondary" role="status">

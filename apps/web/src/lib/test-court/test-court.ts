@@ -16,6 +16,10 @@ export const COURT_STEPS = [
   "audiencia_realizada",
   "manifestacao",
   "sentenca",
+  "sentenca_parcial",
+  "sentenca_improcedente",
+  "acordo",
+  "recurso_re",
   "transito",
   "alvara",
   "arquivamento",
@@ -30,14 +34,29 @@ const NEEDS: Record<CourtStep, readonly CourtStep[]> = {
   audiencia_realizada: ["audiencia"],
   manifestacao: ["distribuicao"],
   sentenca: ["distribuicao"],
-  transito: ["sentenca"],
-  alvara: ["transito"],
-  arquivamento: ["sentenca"],
+  sentenca_parcial: ["distribuicao"],
+  sentenca_improcedente: ["distribuicao"],
+  acordo: ["distribuicao"],
+  recurso_re: [],
+  transito: [],
+  alvara: [],
+  arquivamento: [],
 };
+
+/** The ways a lawsuit is judged (0130): one per lawsuit, a settlement among them. */
+const JUDGMENTS: readonly CourtStep[] = ["sentenca", "sentenca_parcial", "sentenca_improcedente", "acordo"];
+const judged = (done: readonly string[]) => done.some((step) => (JUDGMENTS as readonly string[]).includes(step));
 
 /** Whether a step may be taken now: not done yet, the lawsuit not archived, and what it needs done. */
 export function stepOpen(step: CourtStep, done: readonly string[]): boolean {
   if (done.includes(step) || done.includes("arquivamento")) return false;
+  if (JUDGMENTS.includes(step) && judged(done)) return false;
+  // What follows a judgment needs one, whatever its way; a release needs the judgment final or a settlement, and a
+  // judgment that denied the claim releases nothing (the database checks the same).
+  if (step === "transito" || step === "arquivamento" || step === "recurso_re") return judged(done);
+  if (step === "alvara") {
+    return (done.includes("transito") || done.includes("acordo")) && !done.includes("sentenca_improcedente");
+  }
   return NEEDS[step].every((needed) => done.includes(needed));
 }
 
@@ -56,6 +75,13 @@ export const STEP_KEY: Record<CourtStep, { title: string; body: string }> = {
   },
   manifestacao: { title: "test-court-step-manifestacao", body: "test-court-step-manifestacao-body" },
   sentenca: { title: "test-court-step-sentenca", body: "test-court-step-sentenca-body" },
+  sentenca_parcial: { title: "test-court-step-sentenca-parcial", body: "test-court-step-sentenca-parcial-body" },
+  sentenca_improcedente: {
+    title: "test-court-step-sentenca-improcedente",
+    body: "test-court-step-sentenca-improcedente-body",
+  },
+  acordo: { title: "test-court-step-acordo", body: "test-court-step-acordo-body" },
+  recurso_re: { title: "test-court-step-recurso-re", body: "test-court-step-recurso-re-body" },
   transito: { title: "test-court-step-transito", body: "test-court-step-transito-body" },
   alvara: { title: "test-court-step-alvara", body: "test-court-step-alvara-body" },
   arquivamento: { title: "test-court-step-arquivamento", body: "test-court-step-arquivamento-body" },
@@ -71,6 +97,7 @@ const ANSWER_KEY: Record<string, string> = {
   no_judgment: "test-court-error-no-judgment",
   not_final: "test-court-error-not-final",
   not_filed: "test-court-error-not-filed",
+  nothing_to_release: "test-court-error-nothing-to-release",
 };
 export const answerKey = (code: string): string => ANSWER_KEY[code] ?? "test-court-error-failed";
 

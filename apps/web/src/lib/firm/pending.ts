@@ -1,5 +1,6 @@
 import { decisionItems, type WaitingDecisions } from "@/lib/ai/decisions";
 import { waitingHref, waitingKey, waitingTagKey, waitPlaceOf } from "@/lib/cases/advance";
+import { type OutcomeAttention, outcomeAttentionItems } from "@/lib/cases/outcomes";
 import { type FinanceAttention, financeAttentionGroups } from "@/lib/finance/attention";
 import { type FilingAttention, filingAttentionItems, type FilingViewer } from "@/lib/firm/filing-attention";
 import { type AckViewer, publicationAckItems, type PublicationAcks } from "@/lib/firm/publication-acks";
@@ -371,6 +372,8 @@ export function pendingGroups(
   acks: { acks: PublicationAcks; viewer: AckViewer } | null = null,
   /** What waits in the books (0127), for who reads them; null for anybody else, or when it could not be read. */
   finance: FinanceAttention | null = null,
+  /** What the lawsuits' results ask of the firm's people (0130); null when it could not be read. */
+  outcomes: OutcomeAttention | null = null,
 ): PendingGroup[] {
   const groups: Record<PendingGroupKey, PendingItem[]> = { late: [], today: [], one: [], review: [] };
   const needs = withDecisions(todayNeeds(today, viewer), decisions);
@@ -615,6 +618,9 @@ export function pendingGroups(
     groups.today.push(...books.today);
     groups.one.push(...books.one);
   }
+  // What the results ask of a person (0130): the lawyers' awareness, a release's value, a fact to confirm, a case
+  // ready to close, a case ONE closed.
+  if (outcomes) groups.one.push(...outcomeAttentionItems(outcomes));
 
   // Every other need of the home, in the home's own order, in its group (the deadlines, hearings and papers
   // were placed above, split by how soon).

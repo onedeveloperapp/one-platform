@@ -1,5 +1,6 @@
 "use server";
 
+import { queueOutcomes } from "@/lib/courts/outcome-work";
 import { queuePublicationTriage } from "@/lib/publications/triage-work";
 import {
   isCourtStep,
@@ -65,6 +66,8 @@ export async function actTestCourt(token: string, proceedingId: string, step: st
   const answer = (data ?? {}) as { ok?: boolean; code?: string; published?: string; hearing_at?: string };
   // What the court published is triaged by ONE right after, as a capture of the DJEN is (0104).
   if (typeof answer.published === "string") await queuePublicationTriage();
+  // What the court did is read by ONE for the lawsuit's result right after (0130).
+  if (answer.ok === true) queueOutcomes();
   return {
     ok: answer.ok === true,
     code: String(answer.code ?? "failed"),

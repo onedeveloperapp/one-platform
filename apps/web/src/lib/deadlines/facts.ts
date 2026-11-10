@@ -19,7 +19,12 @@ import {
 } from "@/lib/deadlines/deadlines";
 import { readingsOf, type ShownReading, shownReading } from "@/lib/publications/reading-words";
 import { formatCnj } from "@flyee/rules/cnj";
-import type { DeadlineCounting, DeadlineResult, DeadlineTrigger } from "@flyee/rules/deadlines";
+import {
+  type DeadlineCounting,
+  type DeadlineResult,
+  type DeadlineTrigger,
+  internalDeadline,
+} from "@flyee/rules/deadlines";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 /**
@@ -86,6 +91,8 @@ export type DeadlineRow = {
   createdLabel: string | null;
   /** Proposed by ONE from the publication it read, where the firm lets it (0040, `publication_deadline`). */
   proposedAuto: boolean;
+  /** The internal deadline the firm works to, some business days before the fatal one (0132); null when off. */
+  internalOn?: string | null;
 };
 
 export type DeadlinesData = {
@@ -246,6 +253,36 @@ async function firmDeadlines(
 }
 
 /** A page of one of the lists of `/prazos`, with the count of each. */
+/**
+ * How many of the court's business days before the fatal deadline the firm's internal one comes (0132): zero when it
+ * switched it off, or when it cannot be read (nothing is said then, rather than a wrong day).
+ */
+export async function firmInternalDays(supabase: SupabaseClient, firmId: string): Promise<number> {
+  const { data, error } = await supabase
+    .from("organizations")
+    .select("internal_deadline_days")
+    .eq("id", firmId)
+    .maybeSingle();
+  if (error || !data) return 0;
+  const days = (data as { internal_deadline_days?: unknown }).internal_deadline_days;
+  return typeof days === "number" && Number.isInteger(days) && days > 0 ? days : 0;
+}
+
+/** Each open deadline with its internal day, by the firm's days. */
+function withInternal(rows: DeadlineRow[], days: number): DeadlineRow[] {
+  return rows.map((row) => {
+    const open = row.status === "proposed" || row.status === "confirmed";
+    const first = row.count?.startsOn ?? null;
+    return {
+      ...row,
+      internalOn:
+        open && row.dueOn && first && days > 0
+          ? internalDeadline({ dueOn: row.dueOn, startsOn: first, skipped: row.count?.skipped ?? [] }, days)
+          : null,
+    };
+  });
+}
+
 export async function loadDeadlines(
   supabase: SupabaseClient,
   firmId: string,
@@ -254,9 +291,10 @@ export async function loadDeadlines(
   timeZone: string | null | undefined,
   module: string | null = null,
 ): Promise<DeadlinesData> {
-  const [answer, names] = await Promise.all([
+  const [answer, names, internalDays] = await Promise.all([
     firmDeadlines(supabase, firmId, view, DEADLINES_SHOWN, page * DEADLINES_SHOWN, null, module),
     teamNames(supabase, firmId),
+    firmInternalDays(supabase, firmId),
   ]);
   const counts = Object.fromEntries(DEADLINE_VIEWS.map((name) => [name, countOf(answer.counts?.[name])])) as Record<
     DeadlineView,
@@ -269,7 +307,10 @@ export async function loadDeadlines(
     soonCount: countOf(answer.counts?.em_breve),
     counts,
     total,
-    rows: (answer.rows ?? []).flatMap((raw) => toRow(raw, names, timeZone) ?? []),
+    rows: withInternal(
+      (answer.rows ?? []).flatMap((raw) => toRow(raw, names, timeZone) ?? []),
+      internalDays,
+    ),
     page,
     more: (page + 1) * DEADLINES_SHOWN < total,
   };
@@ -293,15 +334,19 @@ export async function caseDeadlines(
   caseId: string,
   timeZone: string | null | undefined,
 ): Promise<CaseDeadlines> {
-  const [open, closed, names] = await Promise.all([
+  const [open, closed, names, internalDays] = await Promise.all([
     firmDeadlines(supabase, firmId, "abertos", 100, 0, caseId),
     firmDeadlines(supabase, firmId, "concluidos", CLOSED_SHOWN, 0, caseId),
     teamNames(supabase, firmId),
+    firmInternalDays(supabase, firmId),
   ]);
   return {
     today: String(open.today ?? ""),
     soonDays: soonOf(open.soon_days),
-    open: (open.rows ?? []).flatMap((raw) => toRow(raw, names, timeZone) ?? []),
+    open: withInternal(
+      (open.rows ?? []).flatMap((raw) => toRow(raw, names, timeZone) ?? []),
+      internalDays,
+    ),
     closed: (closed.rows ?? []).flatMap((raw) => toRow(raw, names, timeZone) ?? []),
     closedCount: countOf(closed.counts?.concluidos),
   };

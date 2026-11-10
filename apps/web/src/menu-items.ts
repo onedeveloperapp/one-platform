@@ -62,6 +62,15 @@ export const leftMenuItems: MenuItem[] = [
     color: "text-primary",
     href: "/casos",
   },
+  // Who the firm serves (0133, 0134): anybody of the firm finds a client and opens their page.
+  {
+    id: "pessoas",
+    icon: "NiUsers",
+    label: "menu-pessoas",
+    description: "menu-pessoas-description",
+    color: "text-primary",
+    href: "/pessoas",
+  },
   {
     id: "controladoria",
     icon: "NiChartBar",
@@ -69,6 +78,16 @@ export const leftMenuItems: MenuItem[] = [
     description: "menu-controladoria-description",
     color: "text-primary",
     href: "/controladoria",
+    canAccess: { oversees: true },
+  },
+  // The firm's numbers (0136): where it wins and how much, from the one set of its lawsuits.
+  {
+    id: "numeros",
+    icon: "NiChartLine",
+    label: "menu-numeros",
+    description: "menu-numeros-description",
+    color: "text-primary",
+    href: "/numeros",
     canAccess: { oversees: true },
   },
   // What ONE did for the firm each month (0120, 0121): the tasks and the hours are the whole firm's.

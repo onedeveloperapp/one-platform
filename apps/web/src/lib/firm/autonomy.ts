@@ -28,6 +28,8 @@ export const AUTONOMY_DECISIONS = [
   "publication_hearing",
   "model_from_document",
   "finance_lines",
+  "record_outcome",
+  "close_case",
 ] as const;
 export type AutonomyDecision = (typeof AUTONOMY_DECISIONS)[number];
 
@@ -103,6 +105,8 @@ export const DECISION_KEY: Record<AutonomyDecision, { title: string; body: strin
   publication_hearing: { title: "autonomy-publication-hearing", body: "autonomy-publication-hearing-body" },
   model_from_document: { title: "autonomy-model-from-document", body: "autonomy-model-from-document-body" },
   finance_lines: { title: "autonomy-finance-lines", body: "autonomy-finance-lines-body" },
+  record_outcome: { title: "autonomy-record-outcome", body: "autonomy-record-outcome-body" },
+  close_case: { title: "autonomy-close-case", body: "autonomy-close-case-body" },
 };
 
 export const MODE_KEY: Record<AutonomyMode, string> = {

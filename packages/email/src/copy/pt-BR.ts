@@ -148,6 +148,27 @@ export const emailCopy = {
     ignore: "Não esperava este convite? Ignore esta mensagem: nada acontece sem o seu aceite.",
   },
 
+  agendaDigest: {
+    subject: (day: string) => `Sua agenda de ${day} no ONE`,
+    /** The line a mail client shows beside the subject. */
+    preview: (today: number, next: number) =>
+      today === 0
+        ? `Nada para hoje, ${next === 1 ? "1 item" : `${next} itens`} nas próximas 48 horas`
+        : `${today === 1 ? "1 item" : `${today} itens`} para hoje`,
+    heading: (day: string) => `Sua agenda de ${day}`,
+    todayTitle: "Hoje",
+    todayNone: "Nada vence hoje.",
+    nextTitle: "Nas próximas 48 horas",
+    changed: "mudou desde ontem",
+    button: "Abrir a agenda no ONE",
+    reason: (firm: string, wholeFirm: boolean) =>
+      wholeFirm
+        ? `Você recebe a agenda de todo o escritório ${firm} nos dias úteis de manhã, quando há algo.`
+        : `Você recebe os prazos e as audiências de que responde em ${firm} nos dias úteis de manhã, quando há algo.`,
+    calendar: "O que vale é o ONE: um calendário assinado pode levar horas para mostrar uma mudança.",
+    unsubscribe: "Parar este e-mail",
+  },
+
   newsletter: {
     reason: "Você recebe este e-mail porque entrou na lista do ONE.",
     unsubscribe: "Sair da lista",

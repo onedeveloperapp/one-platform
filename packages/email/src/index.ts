@@ -4,6 +4,7 @@ import { emailCopyFor } from "./copy";
 import type { EmailLocale } from "./locale";
 import { emailEnv, isEmailConfigured, send, sendBatch, type SendResult } from "./send";
 import AccessEndedEmail, { type AccessEndedEmailProps } from "./templates/access-ended";
+import AgendaDigestEmail, { type AgendaDigestEmailProps } from "./templates/agenda-digest";
 import ContactFormEmail, { type ContactFormEmailProps } from "./templates/contact-form";
 import FirmInvitationEmail, { type FirmInvitationEmailProps } from "./templates/firm-invitation";
 import KitReceiptEmail, { type KitReceiptEmailProps } from "./templates/kit-receipt";
@@ -19,9 +20,11 @@ import SubscriptionCanceledEmail, {
 import TermEndingEmail, { type TermEndingEmailProps } from "./templates/term-ending";
 
 export { toEmailLocale, type EmailLocale } from "./locale";
+export type { AgendaDigestLine } from "./templates/agenda-digest";
 export { BATCH_LIMIT, emailEnv, isEmailConfigured, type SendResult } from "./send";
 export type {
   AccessEndedEmailProps,
+  AgendaDigestEmailProps,
   CancelCause,
   ContactFormEmailProps,
   FirmInvitationEmailProps,
@@ -116,6 +119,18 @@ export const sendPartnerInvitationEmail = (
     ...(replyTo ? { replyTo } : {}),
     subject: emailCopyFor(props.locale).partnerInvitation.subject(props.partnerName, props.firmName),
     react: createElement(PartnerInvitationEmail, props),
+  });
+
+/**
+ * A person's e-mail of the morning (migration 0132): their deadlines and hearings of the day and of the next 48 hours.
+ * The reader may stop it, so it carries the one-click exit in its header too.
+ */
+export const sendAgendaDigestEmail = (to: string, props: AgendaDigestEmailProps): Promise<SendResult> =>
+  send({
+    to,
+    subject: emailCopyFor(props.locale).agendaDigest.subject(props.dayLabel),
+    react: createElement(AgendaDigestEmail, props),
+    unsubscribeUrl: props.unsubscribeUrl,
   });
 
 /** What a person does in a firm, in the words an e-mail uses. */

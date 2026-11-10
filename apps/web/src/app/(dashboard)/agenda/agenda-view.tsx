@@ -1,18 +1,31 @@
 "use client";
 
+import AgendaCalendar from "./agenda-calendar";
+import AgendaSubscribePanel from "./agenda-subscribe-panel";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useCallback, useState } from "react";
 
-import { Alert, Box, Button, Card, CardContent, Grid, Typography } from "@mui/material";
+import {
+  Alert,
+  Box,
+  Button,
+  Card,
+  CardContent,
+  Grid,
+  ToggleButton,
+  ToggleButtonGroup,
+  Typography,
+} from "@mui/material";
 
 import HearingCard from "@/components/hearings/hearing-card";
 import HearingPanel from "@/components/hearings/hearing-panel";
 import ConfirmActionDialog from "@/components/product/confirm-action-dialog";
 import EmptyState from "@/components/product/empty-state";
-import { StatTile } from "@/components/product/home-tiles";
+import ListBar from "@/components/product/list-bar";
 import ModuleScope from "@/components/product/module-scope";
+import NumberCard from "@/components/product/number-card";
 import PageHeader from "@/components/product/page-header";
 import type { TileTone } from "@/components/product/tile-tone";
 import IllustrationPlatforms from "@/icons/illustrations/illustration-platforms";
@@ -22,6 +35,7 @@ import NiCrossSquare from "@/icons/nexture/ni-cross-square";
 import NiDocumentFull from "@/icons/nexture/ni-document-full";
 import NiExclamationSquare from "@/icons/nexture/ni-exclamation-square";
 import NiUsers from "@/icons/nexture/ni-users";
+import { AGENDA_MODES, type AgendaMode } from "@/lib/agenda/agenda";
 import { caseLabel } from "@/lib/cases/cases";
 import { retryHearingSyncs } from "@/lib/hearings/actions";
 import type {
@@ -40,6 +54,13 @@ export type AgendaState =
   | {
       kind: "ready";
       view: HearingView;
+      /** How the agenda is seen (0132): the list of hearings, or the days' calendar. */
+      mode: AgendaMode;
+      /** The day the calendar is on. */
+      day: string;
+      meId: string;
+      /** The panel of the person's agenda outside ONE opens with the page (the e-mail's link leads here). */
+      subscribe: boolean;
       data: HearingsData;
       colleagues: Colleague[];
       /**
@@ -63,10 +84,17 @@ export type AgendaState =
   | { kind: "error" };
 
 const VIEW_LOOK: Record<HearingView, { tone: TileTone; icon: React.ReactNode }> = {
-  proximas: { tone: "primary", icon: <NiCalendarClock size="large" /> },
-  sem_resultado: { tone: "accent-3", icon: <NiExclamationSquare size="large" /> },
-  realizadas: { tone: "secondary", icon: <NiCheckSquare size="large" /> },
-  canceladas: { tone: "accent-4", icon: <NiCrossSquare size="large" /> },
+  proximas: { tone: "primary", icon: <NiCalendarClock size="medium" /> },
+  sem_resultado: { tone: "accent-3", icon: <NiExclamationSquare size="medium" /> },
+  realizadas: { tone: "secondary", icon: <NiCheckSquare size="medium" /> },
+  canceladas: { tone: "accent-4", icon: <NiCrossSquare size="medium" /> },
+};
+
+const MODE_KEY: Record<AgendaMode, string> = {
+  lista: "agenda-mode-lista",
+  dia: "agenda-mode-dia",
+  semana: "agenda-mode-semana",
+  mes: "agenda-mode-mes",
 };
 
 const PROBLEM_KEY: Record<string, string> = {
@@ -90,6 +118,7 @@ export default function AgendaView({ state }: { state: AgendaState }) {
   const router = useRouter();
   const refresh = useCallback(() => router.refresh(), [router]);
   const [retrying, setRetrying] = useState(false);
+  const [subscribing, setSubscribing] = useState(state.kind === "ready" && state.subscribe);
   const [retryFailed, setRetryFailed] = useState(false);
   const ready = state.kind === "ready" ? state : null;
   const data = ready?.data ?? null;
@@ -115,13 +144,49 @@ export default function AgendaView({ state }: { state: AgendaState }) {
     }
   };
 
+  // The address keeps the mode and the day, so a day opened is a page the person can come back to.
+  const go = (mode: AgendaMode, day: string | null) => {
+    const query = new URLSearchParams();
+    if (mode !== "lista") query.set("modo", mode);
+    if (mode !== "lista" && day) query.set("dia", day);
+    if (module) query.set("modulo", module);
+    const text = query.toString();
+    router.push(text ? `/agenda?${text}` : "/agenda");
+  };
+  const calendar = ready && ready.mode !== "lista" ? ready : null;
+
   return (
     <Box className="flex flex-col gap-6">
       <PageHeader
         title={t("agenda-title")}
         crumbs={scopeCrumbs(t("approvals-home"), t("agenda-title"), ready?.scope.current ?? null)}
         description={ready ? t("agenda-description") : undefined}
+        action={
+          ready ? (
+            <Button variant="outlined" color="grey" onClick={() => setSubscribing(true)}>
+              {t("agenda-subscribe")}
+            </Button>
+          ) : undefined
+        }
       />
+      {ready ? (
+        <ToggleButtonGroup
+          exclusive
+          size="small"
+          value={ready.mode}
+          aria-label={t("agenda-mode-label")}
+          onChange={(_event, value: AgendaMode | null) => {
+            if (value) go(value, ready.day);
+          }}
+        >
+          {AGENDA_MODES.map((mode) => (
+            <ToggleButton key={mode} value={mode}>
+              {t(MODE_KEY[mode])}
+            </ToggleButton>
+          ))}
+        </ToggleButtonGroup>
+      ) : null}
+      {subscribing ? <AgendaSubscribePanel onClose={() => setSubscribing(false)} /> : null}
       {ready ? (
         <ModuleScope
           path="/agenda"
@@ -215,7 +280,18 @@ export default function AgendaView({ state }: { state: AgendaState }) {
         />
       ) : null}
 
-      {ready && data && total === 0 ? (
+      {calendar ? (
+        <AgendaCalendar
+          mode={calendar.mode as Exclude<AgendaMode, "lista">}
+          day={calendar.day}
+          meId={calendar.meId}
+          colleagues={calendar.colleagues}
+          module={module}
+          onDay={(day, mode) => go(mode, day)}
+        />
+      ) : null}
+
+      {ready && !calendar && data && total === 0 ? (
         <EmptyState
           illustration={<IllustrationPlatforms />}
           title={t("agenda-first-title")}
@@ -225,12 +301,12 @@ export default function AgendaView({ state }: { state: AgendaState }) {
         />
       ) : null}
 
-      {ready && data && total > 0 ? (
+      {ready && !calendar && data && total > 0 ? (
         <>
           <Grid container spacing={2.5}>
             {HEARING_VIEWS.map((view) => (
-              <Grid key={view} size={{ xs: 12, sm: 6, lg: "grow" }}>
-                <StatTile
+              <Grid key={view} size={{ xs: 6, lg: "grow" }}>
+                <NumberCard
                   onClick={() => router.push(agendaAddress(view, 0, module))}
                   pressed={ready.view === view}
                   icon={VIEW_LOOK[view].icon}
@@ -241,11 +317,23 @@ export default function AgendaView({ state }: { state: AgendaState }) {
                       ? t("agenda-view-next-hint-soon", { count: data.soonCount, days: data.soonDays })
                       : t(VIEW_KEY[view].hint)
                   }
-                  value={data.counts[view]}
+                  value={String(data.counts[view])}
                 />
               </Grid>
             ))}
           </Grid>
+          <ListBar
+            label={t("agenda-hearings-title")}
+            viewsTitle={t("list-views-title")}
+            views={HEARING_VIEWS.map((view) => ({
+              key: view,
+              label: t(VIEW_KEY[view].label),
+              count: String(data.counts[view]),
+              group: t("agenda-views-group"),
+            }))}
+            view={ready.view}
+            onView={(key) => router.push(agendaAddress(key as typeof ready.view, 0, module))}
+          />
 
           {!ready.mayWork ? (
             <Typography variant="body2" className="text-text-secondary">
