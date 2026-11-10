@@ -7,6 +7,7 @@ import ClientInterview from "./client-interview";
 import ClientMarketing from "./client-marketing";
 import ClientMoney from "./client-money";
 import ClientNotices from "./client-notices";
+import ClientReceipts from "./client-receipts";
 import ClientResidence from "./client-residence";
 import ClientStatements from "./client-statements";
 import { ClientSignatures, ClientTerms } from "./client-tasks";
@@ -294,6 +295,7 @@ export default function ClientFolder({
       )}
       <ClientNotices token={token} notices={tasks.notices} editable={editable} onSaved={() => router.refresh()} />
       <ClientMoney token={token} editable={editable} />
+      <ClientReceipts token={token} />
       <ClientMarketing token={token} editable={editable} />
       <ClientSignatures token={token} signatures={tasks.signatures} editable onSaved={() => router.refresh()} />
       {editable && (

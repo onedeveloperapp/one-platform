@@ -223,6 +223,7 @@ const ERROR_KEY: Record<string, string> = {
   invalid_data: "finance-error-invalid",
   daily_limit: "finance-error-daily-limit",
   bill_settled: "finance-error-bill-settled",
+  nothing_owed: "finance-error-nothing-owed",
 };
 export const financeErrorKey = (code: string): string => ERROR_KEY[code] ?? "finance-error-failed";
 

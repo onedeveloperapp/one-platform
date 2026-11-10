@@ -867,3 +867,57 @@ export async function clientMoney(
   if (error || answer.ok !== true) return { ok: false, code: answer.code ?? "failed" };
   return { ok: true, money: readMoney(data) };
 }
+
+// ---------- The receipts the firm issued to the client (migration 0152) ----------
+
+export type ClientReceipt = { id: string; cents: number; paidOn: string; about: string; verifyCode: string };
+
+/** The receipts of the link's person, issued and in force, the latest first. */
+export async function clientReceipts(
+  token: string,
+): Promise<{ ok: true; receipts: ClientReceipt[] } | { ok: false; code: string }> {
+  const closed = await refusal(token);
+  if (closed) return closed;
+  const backend = service();
+  if (!backend) return unavailable;
+  const { data, error } = await backend.rpc("client_link_receipts", { target_token: token });
+  const answer = (data ?? {}) as { ok?: boolean; code?: string; receipts?: unknown };
+  if (error || answer.ok !== true) return { ok: false, code: answer.code ?? "failed" };
+  const rows = Array.isArray(answer.receipts) ? (answer.receipts as Record<string, unknown>[]) : [];
+  return {
+    ok: true,
+    receipts: rows.flatMap((row) =>
+      typeof row.id === "string" && typeof row.verify_code === "string"
+        ? [
+            {
+              id: row.id,
+              cents: Number(row.cents ?? 0),
+              paidOn: String(row.paid_on ?? ""),
+              about: String(row.about ?? ""),
+              verifyCode: row.verify_code,
+            },
+          ]
+        : [],
+    ),
+  };
+}
+
+/** A link of a minute to the PDF of one of the client's receipts. */
+export async function downloadClientReceipt(token: string, receiptId: string): Promise<ClientResult<{ url: string }>> {
+  const closed = await refusal(token);
+  if (closed) return closed;
+  if (!isId(receiptId)) return { ok: false, code: "not_found" };
+  const backend = service();
+  if (!backend) return unavailable;
+  const { data, error } = await backend.rpc("client_link_receipt_file", {
+    target_token: token,
+    target_receipt: receiptId,
+  });
+  const answer = (data ?? {}) as { ok?: boolean; code?: string; storage_path?: string; name?: string };
+  if (error || answer.ok !== true || !answer.storage_path) return { ok: false, code: answer.code ?? "not_found" };
+  const { data: signed, error: signError } = await backend.storage
+    .from(FIRM_FILES_BUCKET)
+    .createSignedUrl(answer.storage_path, 60, { download: answer.name ?? "recibo.pdf" });
+  if (signError || !signed) return { ok: false, code: "storage_unavailable" };
+  return { ok: true, code: "ready", url: signed.signedUrl };
+}

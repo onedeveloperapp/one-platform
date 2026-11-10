@@ -30,6 +30,7 @@ export const AUTONOMY_DECISIONS = [
   "finance_lines",
   "record_outcome",
   "close_case",
+  "client_receipt",
 ] as const;
 export type AutonomyDecision = (typeof AUTONOMY_DECISIONS)[number];
 
@@ -107,6 +108,7 @@ export const DECISION_KEY: Record<AutonomyDecision, { title: string; body: strin
   finance_lines: { title: "autonomy-finance-lines", body: "autonomy-finance-lines-body" },
   record_outcome: { title: "autonomy-record-outcome", body: "autonomy-record-outcome-body" },
   close_case: { title: "autonomy-close-case", body: "autonomy-close-case-body" },
+  client_receipt: { title: "autonomy-client-receipt", body: "autonomy-client-receipt-body" },
 };
 
 export const MODE_KEY: Record<AutonomyMode, string> = {

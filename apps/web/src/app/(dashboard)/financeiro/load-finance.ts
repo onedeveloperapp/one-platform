@@ -22,6 +22,7 @@ import {
   readFinancePeople,
   readFinanceRegistrations,
 } from "@/lib/finance/read";
+import { type FinanceReceipt, readReceipts } from "@/lib/finance/receipts";
 import { getMemberContext } from "@/lib/member/context";
 import { IMPERSONATION_MARKER_COOKIE } from "@flyee/auth";
 
@@ -54,6 +55,8 @@ export type FinanceState =
       bills: FinanceBill[] | null;
       /** The series ONE made of the bills that repeat (0151), when the page lists the bills. */
       series: FinanceSeries[] | null;
+      /** The receipts ONE issues to clients of the bills received (0152), when the page lists the bills. */
+      receipts: FinanceReceipt[] | null;
       /** The firm's fee terms in force (0131), when the page lists them. */
       feeTerms: FeeTerms[] | null;
       readLabel: string;
@@ -129,6 +132,16 @@ export async function loadFinance(
   if ((withData.entries && !entries) || (withData.lines && !lines) || (withData.bills && !bills)) {
     return { kind: "error" };
   }
+  // The receipts of the receivables of a case that were received, in part or whole (0152): read once the bills are.
+  const received = (bills ?? []).filter((bill) => bill.direction === "receive" && bill.caseId && bill.paidCents > 0);
+  const receipts =
+    received.length > 0
+      ? await context.supabase
+          .rpc("firm_finance_receipts", { target_org: context.firm.id, target_bills: received.map((bill) => bill.id) })
+          .then(({ data, error }) => (error ? null : readReceipts(data)))
+      : bills
+        ? []
+        : null;
   return {
     kind: "ready",
     level: access.level,
@@ -144,6 +157,7 @@ export async function loadFinance(
     attention,
     bills,
     series,
+    receipts,
     feeTerms,
     readLabel: momentLabel(new Date().toISOString(), context.profile.timezone),
   };

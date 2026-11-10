@@ -2,6 +2,7 @@ import "server-only";
 
 import { supabaseFileStore } from "@/lib/files/store";
 import { categorizeRound } from "@/lib/finance/categorize-work";
+import { receiptRound } from "@/lib/finance/receipt-work";
 import type { Sweep } from "@/lib/jobs/schedule";
 import { takeBackFile } from "@flyee/documents/files";
 
@@ -21,6 +22,14 @@ export const financeSweeps: Sweep[] = [
     when: { every: 5 },
     whileUsed: true,
     run: (service, until) => categorizeRound(service, until),
+  },
+  {
+    // The receipts ONE issues to clients (0152): also while ONE is used, since the client reads them on their link and
+    // the database claims each under a number.
+    key: "finance-receipts",
+    when: { every: 5 },
+    whileUsed: true,
+    run: (service, until) => receiptRound(service, until),
   },
   {
     // A document of the books sent for a form nobody saved, kept a day, then taken back, record first (0140).

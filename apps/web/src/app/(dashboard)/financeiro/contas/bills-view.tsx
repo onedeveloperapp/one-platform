@@ -26,7 +26,7 @@ import NiMoney from "@/icons/nexture/ni-money";
 import NiMoneyBag from "@/icons/nexture/ni-money-bag";
 import NiReceipt from "@/icons/nexture/ni-receipt";
 import NiRefresh from "@/icons/nexture/ni-refresh";
-import { closeFinanceBill, stopFinanceSeries } from "@/lib/finance/actions";
+import { closeFinanceBill, requestFinanceReceipt, stopFinanceSeries } from "@/lib/finance/actions";
 import {
   type AgingBand,
   BILL_VIEWS,
@@ -43,6 +43,7 @@ import {
 } from "@/lib/finance/bills";
 import { configuresBooks, dayLabel, financeErrorKey, money, operatesBooks } from "@/lib/finance/books";
 import { openFinanceDocument } from "@/lib/finance/document-actions";
+import { type FinanceReceipt, receiptOfBill } from "@/lib/finance/receipts";
 
 const VIEW_KEY: Record<BillView, string> = {
   pagar: "finance-bills-view-pagar",
@@ -129,6 +130,7 @@ export default function BillsView({ state }: { state: FinanceState }) {
   const configures = configuresBooks(state.level) && !state.supportVisit;
   const numbers = billNumbers(bills, day);
   const series = state.series ?? [];
+  const receipts = state.receipts ?? [];
   const aging = receivableAging(bills, day);
 
   const views: ListView[] = BILL_VIEWS.map((key) => ({
@@ -178,11 +180,57 @@ export default function BillsView({ state }: { state: FinanceState }) {
       ? [{ key: "document", label: t("finance-doc-open"), onClick: () => void openDocument(bill.fileId as string) }]
       : [];
 
+  // The receipt ONE issues to the client of a receivable received (0152): seen once issued, asked for by who operates
+  // the books where the firm keeps it to a person or it failed.
+  const askReceipt = async (bill: FinanceBill) => {
+    setNote(null);
+    const result = await requestFinanceReceipt(bill.id);
+    setNote(result.ok ? t("finance-receipt-asked") : t(financeErrorKey(result.code)));
+    if (result.ok) router.refresh();
+  };
+  const receiptAction = (bill: FinanceBill): QuickAction[] => {
+    const receipt = receiptOfBill(receipts, bill.id);
+    if (!receipt) return [];
+    if (receipt.status === "issued" && receipt.fileId) {
+      return [
+        {
+          key: "receipt",
+          label: t("finance-receipt-open"),
+          onClick: () => void openDocument(receipt.fileId as string),
+        },
+      ];
+    }
+    if (writes && (receipt.status === "waiting" || receipt.status === "failed")) {
+      return [{ key: "receipt-ask", label: t("finance-receipt-ask"), onClick: () => void askReceipt(bill) }];
+    }
+    return [];
+  };
+  const receiptLine = (receipt: FinanceReceipt | null) => {
+    if (!receipt) return null;
+    switch (receipt.status) {
+      case "issued":
+        return (
+          <StateLine tone="done">
+            {t("finance-receipt-issued", { day: dayLabel(receipt.issuedAt?.slice(0, 10) ?? receipt.paidOn) })}
+          </StateLine>
+        );
+      case "owed":
+        return <StateLine tone="waiting">{t("finance-receipt-owed")}</StateLine>;
+      case "waiting":
+        return <StateLine tone="attention">{t("finance-receipt-waiting")}</StateLine>;
+      case "failed":
+        return <StateLine tone="failed">{t("finance-receipt-failed")}</StateLine>;
+      default:
+        return <StateLine tone="info">{t("finance-receipt-void")}</StateLine>;
+    }
+  };
+
   const actionsOf = (bill: FinanceBill): QuickAction[] =>
     bill.status !== "open"
-      ? documentAction(bill)
+      ? [...documentAction(bill), ...receiptAction(bill)]
       : [
           ...documentAction(bill),
+          ...receiptAction(bill),
           ...(bill.paidCents === 0
             ? [{ key: "edit", label: t("finance-bill-edit"), onClick: () => setWriting({ kind: "edit", bill }) }]
             : []),
@@ -432,6 +480,7 @@ export default function BillsView({ state }: { state: FinanceState }) {
                         {t("finance-bill-discount", { value: money(bill.discountCents) })}
                       </Typography>
                     ) : null}
+                    {bill.direction === "receive" ? receiptLine(receiptOfBill(receipts, bill.id)) : null}
                     {bill.seriesByOne && bill.status === "open" ? (
                       <Box>
                         <StatusChip tone="neutral" label={t("finance-series-chip")} />

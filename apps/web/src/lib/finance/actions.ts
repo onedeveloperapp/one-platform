@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import { queueFinanceCategorization } from "@/lib/finance/categorize-work";
 import { readFinanceAccess, readFinanceRegistrations } from "@/lib/finance/read";
+import { queueFinanceReceipts } from "@/lib/finance/receipt-work";
 import { getMemberContext } from "@/lib/member/context";
 
 /**
@@ -236,6 +237,8 @@ export async function finishFinanceStatement(
   }));
   // What no rule decided, ONE reads by the AI right after the answer (0128), never waited for by the person.
   if (finished.ok && finished.pending > 0) queueFinanceCategorization();
+  // A client's bill ONE settled from the statement owes its receipt (0152), issued after the answer.
+  if (finished.ok) queueFinanceReceipts();
   return finished;
 }
 
@@ -260,7 +263,7 @@ export async function decideFinanceLine(
   },
 ): Promise<FinanceResult<{ others?: number }>> {
   if (!isId(lineId)) return { ok: false, code: "not_found" };
-  return call(
+  const decided = await call(
     "decide_finance_line",
     {
       target_line: lineId,
@@ -276,6 +279,8 @@ export async function decideFinanceLine(
     },
     (answer) => ({ others: Number(answer.others ?? 0) }),
   );
+  if (decided.ok) queueFinanceReceipts();
+  return decided;
 }
 
 export async function undoFinanceLine(lineId: string): Promise<FinanceResult> {
@@ -413,7 +418,7 @@ export async function settleFinanceBill(
   if (!isId(billId) || !isId(fields.accountId)) return { ok: false, code: "invalid_data", field: "account" };
   if (!Number.isSafeInteger(fields.cents) || fields.cents <= 0)
     return { ok: false, code: "invalid_data", field: "cents" };
-  return call(
+  const settled = await call(
     "settle_finance_bill",
     {
       target_bill: billId,
@@ -426,6 +431,19 @@ export async function settleFinanceBill(
     },
     (answer) => ({ status: String(answer.status ?? "") }),
   );
+  // A client's bill received owes its receipt (0152): ONE issues it after the answer, never waited for.
+  if (settled.ok) queueFinanceReceipts();
+  return settled;
+}
+
+/** Who operates the books asks for the receipt of a bill: kept to a person by the firm, or one that failed (0152). */
+export async function requestFinanceReceipt(billId: string): Promise<FinanceResult<{ receipts: number }>> {
+  if (!isId(billId)) return { ok: false, code: "not_found" };
+  const asked = await call("request_finance_receipt", { target_bill: billId }, (answer) => ({
+    receipts: Number(answer.receipts ?? 0),
+  }));
+  if (asked.ok) queueFinanceReceipts();
+  return asked;
 }
 
 /** Cancels an open bill, or writes off a receivable a client will not pay, with the reason (0129). */
