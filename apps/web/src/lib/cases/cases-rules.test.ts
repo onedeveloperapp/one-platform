@@ -41,7 +41,11 @@ import messages from "@flyee/content/messages/pt-BR.json";
 vi.mock("server-only", () => ({}));
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../../..");
-const MIGRATION = fs.readFileSync(path.join(ROOT, "packages/db/migrations/0022_cases.sql"), "utf8");
+const MIGRATIONS_DIR = path.join(ROOT, "packages/db/migrations");
+const MIGRATION_FILES = fs
+  .readdirSync(MIGRATIONS_DIR)
+  .filter((name) => name.endsWith(".sql"))
+  .sort();
 // The cases and what came with them: the signatures and the client's acceptances.
 const CASE_MIGRATIONS = [
   "0022_cases.sql",
@@ -68,14 +72,23 @@ const TIMELINE_MIGRATIONS = [
   fs.readFileSync(path.join(ROOT, "packages/db/migrations/0088_notices_by_default.sql"), "utf8"),
   fs.readFileSync(path.join(ROOT, "packages/db/migrations/0090_account_before_piece.sql"), "utf8"),
   fs.readFileSync(path.join(ROOT, "packages/db/migrations/0092_account_asked_in_chat.sql"), "utf8"),
+  fs.readFileSync(path.join(ROOT, "packages/db/migrations/0123_residence_declaration.sql"), "utf8"),
 ].join(String.fromCharCode(10));
 const product = messages.product as Record<string, string>;
 
-/** The values a check constraint of migration 0022 allows, in its order. */
+/**
+ * The values a check constraint allows, in its order, as the latest migration that writes it says (0022, then a later
+ * one that widens it: 0123 adds the declaration of residence to the kinds of a document).
+ */
 function allowed(constraint: string): string[] {
-  const start = MIGRATION.indexOf(`constraint ${constraint} check`);
-  expect(start, constraint).toBeGreaterThan(-1);
-  const body = MIGRATION.slice(start, MIGRATION.indexOf(")", MIGRATION.indexOf("in (", start)));
+  const marker = `constraint ${constraint} check`;
+  const latest = MIGRATION_FILES.map((name) => fs.readFileSync(path.join(MIGRATIONS_DIR, name), "utf8"))
+    .filter((text) => text.includes(marker))
+    .at(-1);
+  expect(latest, constraint).toBeTruthy();
+  const migration = latest ?? "";
+  const start = migration.lastIndexOf(marker);
+  const body = migration.slice(start, migration.indexOf(")", migration.indexOf("in (", start)));
   return [...body.matchAll(/'([a-z_]+)'/g)].map((match) => match[1]);
 }
 

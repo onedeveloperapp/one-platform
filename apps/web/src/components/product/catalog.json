@@ -15,14 +15,14 @@
     {
       "name": "EmptyState",
       "from": "@/components/product/empty-state",
-      "props": "icon, title, description?, action?, secondaryAction?, className?, titleAs?",
-      "use": "Every zero-data view: icon + why it is empty + the ONE next action. Never a bare 'no data'. Inside a card whose title is the h2, pass titleAs=\"h3\"."
+      "props": "icon, illustration? (an @/icons/illustrations/* element), title, description?, action?, secondaryAction?, className?, titleAs?, layout? (stack | row), framed?",
+      "use": "Every zero-data view: icon + why it is empty + the ONE next action. Never a bare 'no data'. Inside a card whose title is the h2, pass titleAs=\"h3\". A section with nothing in it is never left as empty space (the owner, 2026-11-09): give it an `illustration` (the template's line drawings in @/icons/illustrations, in the secondary hue), `layout=\"row\"` for a short band (a board, a card across the page) and `framed={false}` inside a card. Pick the drawing by the subject: launch for the first case, documentation for the court and papers, performance for goals, support for conversations, configure for deadlines and time."
     },
     {
       "name": "PageHeader",
       "from": "@/components/product/page-header",
-      "props": "title, crumbs[{label,href?}], description?, action?",
-      "use": "The title block of every member screen: the page's ONE <h1>, breadcrumbs back to the home, one sentence on what the screen is for, at most one action. Never hand-write an h1 + Breadcrumbs pair again."
+      "props": "title, crumbs[{label,href?}], description? (behind the i), detail? (a line of state or data), chip?, action?",
+      "use": "The title block of every member screen: the page's ONE <h1>, breadcrumbs back to the home, at most one action. What the screen is for goes behind the \"i\" beside the title (`description`, 200 characters at most, kept by hint-budget.test.ts), never a paragraph read on every visit (the owner, 2026-11-09); `detail` is one line in sight only for state or data that tells the page apart (the kind of a case, who a passenger is); `chip` says where the page's subject stands beside its title. Never hand-write an h1 + Breadcrumbs pair again."
     },
     {
       "name": "UsageMeter",
@@ -58,7 +58,7 @@
       "name": "QuickActionTile",
       "from": "@/components/product/home-tiles",
       "props": "href?, icon, tone, title, description?, eyebrow?, outlined?, badge?, label?",
-      "use": "A shortcut: full-height tinted icon column (w-16) + title + one-line description. Four across, never two columns. A badge (StatusChip) beside the title names a state; no href is a readout. `eyebrow` is the template's hero tile: a small grey line over the title (its kind or state) and no description; `outlined` swaps the shadow for a hairline, for a tile inside another card (HomeHero)."
+      "use": "A shortcut: full-height tinted icon column (w-16) + title. Four across, never two columns. A tile is its icon and its name (the owner, 2026-11-09): a line under it only when it says a state, never one that repeats the name in other words. A badge (StatusChip) beside the title names a state; no href is a readout. `eyebrow` is the template's hero tile: a small grey line over the title (its kind or state) and no description; `outlined` swaps the shadow for a hairline, for a tile inside another card (HomeHero)."
     },
     {
       "name": "TILE_TONE",
@@ -75,8 +75,8 @@
     {
       "name": "InfoHint",
       "from": "@/components/product/info-hint",
-      "props": "label/title",
-      "use": "A definition attached to a number. A bare Tooltip on a non-focusable Box disappears on touch and for keyboards — use this instead."
+      "props": "label, placement?, className?",
+      "use": "What a title, a number or a chip is, behind an \"i\" a person opens when they want (a bare Tooltip on a non-focusable Box disappears on touch and for keyboards; this is a real button). 200 characters at most. PageHeader, CardTitle, CollapsibleCard and SectionTitle draw it themselves from their `description`. Never for what must be read before acting (a consequence, a legal note, that ONE may err): that stays in sight."
     },
     {
       "name": "StatusChip",
@@ -93,8 +93,14 @@
     {
       "name": "CardTitle",
       "from": "@/components/product/card-title",
-      "props": "id, icon, tone? (TileTone), title, description?, chip? (a StatusChip), actions? (QuickActions), as? (h2 | h3)",
-      "use": "The head of a card of a screen a person works through (the owner, 2026-11-03): the icon of what the card is, on its family's tint, the title, and on the right where the card stands (a StatusChip) and what it keeps one click away (QuickActions); under it, in one line, what the card is for. A person tells the cards apart, and sees which one asks for something, before reading any of them. A card that leads with a bare heading reads like every other card. Cards of a CollapsibleCard group keep that component's header."
+      "props": "id, icon, tone? (TileTone), title, description? (behind the i), detail? (a line in sight), chip? (a StatusChip), actions? (QuickActions), as? (h2 | h3)",
+      "use": "The head of a card of a screen a person works through (the owner, 2026-11-03): the icon of what the card is, on its family's tint, the title, and on the right where the card stands (a StatusChip) and what it keeps one click away (QuickActions). What the card is for goes behind the \"i\" beside the title (`description`, 200 characters at most), never a paragraph under it (the owner, 2026-11-09); `detail` is the one line in sight, only for state or data (how many a list shows, a phone number) or what must be read before acting (a consequence, a client's instructions). A person tells the cards apart, and sees which one asks for something, before reading any of them. Cards of a CollapsibleCard group keep that component's header."
+    },
+    {
+      "name": "SectionTitle",
+      "from": "@/components/product/section-title",
+      "props": "id, title, description? (behind the i), chip?, action?, as? (h2 | h3)",
+      "use": "The heading of a section of a page that is not a card (a board, a row of numbers, a group of tiles): its title, what it is behind the \"i\" beside it, where it stands (a StatusChip) and its own action at the right. Never an h2 with a paragraph under it (the owner, 2026-11-09). A card's head is CardTitle."
     },
     {
       "name": "StateLine",
@@ -171,8 +177,8 @@
     {
       "name": "CollapsibleCard",
       "from": "@/components/product/collapsible-card",
-      "props": "id, anchor?, title, titleAs? (h2 | h3), summary?, summaryClosedOnly?, chip? (StatusChip or InfoHint, kept clickable above the header), description?, action?, defaultOpen?, bodyClassName?, children; CollapsibleGroup around a screen of many and CollapsibleGroupToggle (Abrir/Fechar todos os cartões); CollapsibleGroup takes marks? (by card id: firm, failed, client, and working, the words of what the product does there now), looks? (by card id: the icon of its head and its tone) and words? (the words of the marks)",
-      "use": "A card of a long screen of many cards that a person opens when they need it: the case screen, the decisions of /settings/autonomia, the secondary cards of /settings/team, the template and notice lists of /settings/connections, the tasks and tools of /admin/ai. Closed, it still says where things stand in one line (summary) and, when something there waits for a person, what (chip, a StatusChip): the screen reads as a list of where things stand. Its header is a disclosure button inside the heading (aria-expanded, aria-controls) stretched over the whole header; the description and the card own action live in the body, so every closed card has the same shape. A link to the heading id (or to anchor) opens it and brings it into view. Open on arrival only where the work of the moment is, or where something waits (a pure rule, like lib/cases/sections.ts), read once so a card never opens or closes by itself; a form inside that starts over when the screen reads again is keyed itself, never the card. In a grid, a closed card beside an open one leaves a hole: give them the full width. Not for the primary card of a screen (the roster of /settings/team) nor for a short screen of two or three cards, which stay plain Cards. The head carries the icon of what the card is and what the top knows of it: a chip when something there asks the team, failed or waits for the outsider (unless the card's own chip says it), and a turning chip while the product works there. The card opens by itself when something comes to ask the team there, and closes once it is done, unless the person opened it (a click, a link to it) or is typing in it."
+      "props": "id, anchor?, title, titleAs? (h2 | h3), summary?, summaryClosedOnly?, chip? (a StatusChip, kept clickable above the header), description? (behind the i beside the title), detail? (in sight when open), action?, defaultOpen?, bodyClassName?, children; CollapsibleGroup around a screen of many and CollapsibleGroupToggle (Abrir/Fechar todos os cartões); CollapsibleGroup takes marks? (by card id: firm, failed, client, and working, the words of what the product does there now), looks? (by card id: the icon of its head and its tone) and words? (the words of the marks)",
+      "use": "A card of a long screen of many cards that a person opens when they need it: the case screen, the decisions of /settings/autonomia, the secondary cards of /settings/team, the template and notice lists of /settings/connections, the tasks and tools of /admin/ai. Closed, it still says where things stand in one line (summary) and, when something there waits for a person, what (chip, a StatusChip): the screen reads as a list of where things stand. Its header is a disclosure button inside the heading (aria-expanded, aria-controls) stretched over the whole header; what the card is for sits behind the \"i\" beside its title (`description`, 200 characters at most), what must be read before acting is `detail`, in sight when open, and the card own action live in the body, so every closed card has the same shape. A link to the heading id (or to anchor) opens it and brings it into view. Open on arrival only where the work of the moment is, or where something waits (a pure rule, like lib/cases/sections.ts), read once so a card never opens or closes by itself; a form inside that starts over when the screen reads again is keyed itself, never the card. In a grid, a closed card beside an open one leaves a hole: give them the full width. Not for the primary card of a screen (the roster of /settings/team) nor for a short screen of two or three cards, which stay plain Cards. The head carries the icon of what the card is and what the top knows of it: a chip when something there asks the team, failed or waits for the outsider (unless the card's own chip says it), and a turning chip while the product works there. The card opens by itself when something comes to ask the team there, and closes once it is done, unless the person opened it (a click, a link to it) or is typing in it."
     },
     {
       "name": "MessageBubble",

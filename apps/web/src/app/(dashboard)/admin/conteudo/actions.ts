@@ -29,8 +29,11 @@ function settled(answer: unknown, error: { message: string } | null): ContentRes
 export async function savePlatformTemplate(input: {
   templateId: string | null;
   name: string;
-  /** What it writes: a piece or a power of attorney (0054). Said on every save: a model saved without it is a piece. */
-  documentKind: "piece" | "procuracao";
+  /**
+   * What it writes: a piece, a power of attorney (0054) or a declaration of residence (0123). Said on every save: a
+   * model saved without it is a piece.
+   */
+  documentKind: "piece" | "procuracao" | "declaracao_residencia";
   proceedingKind: "juizado" | "comum" | null;
   body: string;
   isDefault: boolean;
@@ -43,9 +46,12 @@ export async function savePlatformTemplate(input: {
     target_template: input.templateId,
     fields: {
       name: String(input.name ?? "").trim(),
-      document_kind: input.documentKind === "procuracao" ? "procuracao" : "piece",
+      document_kind:
+        input.documentKind === "procuracao" || input.documentKind === "declaracao_residencia"
+          ? input.documentKind
+          : "piece",
       proceeding_kind:
-        input.documentKind !== "procuracao" && (input.proceedingKind === "juizado" || input.proceedingKind === "comum")
+        input.documentKind === "piece" && (input.proceedingKind === "juizado" || input.proceedingKind === "comum")
           ? input.proceedingKind
           : null,
       body: String(input.body ?? ""),

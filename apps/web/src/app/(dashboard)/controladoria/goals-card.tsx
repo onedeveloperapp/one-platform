@@ -7,6 +7,8 @@ import { useTranslations } from "next-intl";
 import { Alert, Box, Button, Card, CardContent, LinearProgress, Typography } from "@mui/material";
 
 import CardTitle from "@/components/product/card-title";
+import EmptyState from "@/components/product/empty-state";
+import IllustrationPerformance from "@/icons/illustrations/illustration-performance";
 import NiFlag from "@/icons/nexture/ni-flag";
 import { type ClosingGoals, goalProgress, goalsOfView } from "@/lib/controladoria/goals";
 import { type ModuleCard, scopedHref } from "@/lib/modules/offer";
@@ -41,7 +43,6 @@ export default function GoalsCard({
           id="controladoria-goals"
           icon={<NiFlag size="medium" />}
           title={t("goals-card-title")}
-          description={t("goals-card-body")}
           actions={
             <Button
               component={NextLink}
@@ -59,21 +60,20 @@ export default function GoalsCard({
             {t("goals-card-unread")}
           </Alert>
         ) : inForce.length === 0 ? (
-          <Box className="flex flex-wrap items-center justify-between gap-3">
-            <Typography variant="body2" className="text-text-secondary">
-              {t("goals-card-none")}
-            </Typography>
-            {goals.mayManage ? (
-              <Button
-                component={NextLink}
-                href={scopedHref("/controladoria/metas", module, { nova: "1" })}
-                variant="outlined"
-                size="small"
-              >
-                {t("goals-new")}
-              </Button>
-            ) : null}
-          </Box>
+          // No goal in force: a drawing and what a goal is, with the way to make one for who may (never a blank band).
+          <EmptyState
+            layout="row"
+            framed={false}
+            titleAs="h3"
+            illustration={<IllustrationPerformance />}
+            title={t("goals-card-none")}
+            description={t("goals-empty-now-body")}
+            action={
+              goals.mayManage
+                ? { label: t("goals-new"), href: scopedHref("/controladoria/metas", module, { nova: "1" }) }
+                : undefined
+            }
+          />
         ) : (
           <>
             {!goals.counting ? (

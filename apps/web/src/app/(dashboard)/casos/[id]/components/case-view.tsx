@@ -249,7 +249,7 @@ export default function CaseView({ state: read }: { state: CaseState }) {
           { label: t("cases-title"), href: "/casos" },
           { label: caseLabel(current.seq) },
         ]}
-        description={kindKey ? t(kindKey) : undefined}
+        detail={kindKey ? t(kindKey) : undefined}
         action={
           <Box className="flex flex-wrap items-center gap-2">
             <StatusChip tone={GROUP_TONE[groupOf(current.status)]} label={t(STATUS_KEY[current.status])} />

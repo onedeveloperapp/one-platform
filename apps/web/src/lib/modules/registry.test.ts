@@ -50,7 +50,6 @@ describe("the modules installed", () => {
     for (const definition of MODULES.modules) {
       for (const entry of definition.firmArea) {
         expect(product[entry.labelKey], entry.labelKey).toBeTruthy();
-        expect(product[entry.descriptionKey], entry.descriptionKey).toBeTruthy();
         expect(entry.href.startsWith("/"), entry.href).toBe(true);
       }
     }

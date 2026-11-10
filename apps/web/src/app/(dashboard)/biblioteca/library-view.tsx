@@ -18,8 +18,9 @@ import QuickActions, { type QuickAction } from "@/components/product/quick-actio
 import SidePanel from "@/components/product/side-panel";
 import StatusChip from "@/components/product/status-chip";
 import type { TileTone } from "@/components/product/tile-tone";
+import IllustrationConfigure from "@/icons/illustrations/illustration-configure";
+import IllustrationDocumentation from "@/icons/illustrations/illustration-documentation";
 import NiBinEmpty from "@/icons/nexture/ni-bin-empty";
-import NiBook from "@/icons/nexture/ni-book";
 import NiDocumentFull from "@/icons/nexture/ni-document-full";
 import NiDownloadCloud from "@/icons/nexture/ni-download-cloud";
 import NiDuplicate from "@/icons/nexture/ni-duplicate";
@@ -30,7 +31,7 @@ import NiShieldCheck from "@/icons/nexture/ni-shield-check";
 import NiUploadCloud from "@/icons/nexture/ni-upload-cloud";
 import NiUsers from "@/icons/nexture/ni-users";
 import type { ModelDocument } from "@/lib/cases/drafts";
-import { libraryErrorKey } from "@/lib/cases/drafts";
+import { isModelDocument, libraryErrorKey, MODEL_DOCUMENTS } from "@/lib/cases/drafts";
 import { readDraftTemplate, removeDraftTemplate, retireLegalSource, saveLegalSource } from "@/lib/library/actions";
 import type { LibraryData, LibrarySource, LibraryTemplate, MissingSource } from "@/lib/library/facts";
 import { dismissModelFromDocument, watchModelImports } from "@/lib/library/import-actions";
@@ -317,7 +318,7 @@ export default function LibraryView({ state, citation }: { state: LibraryState; 
 
       {data && empty ? (
         <EmptyState
-          icon={<NiBook size="large" />}
+          illustration={<IllustrationDocumentation />}
           title={t("library-first-title")}
           description={t(mayWrite ? "library-first-body" : "library-first-readonly")}
           action={mayWrite ? { label: t("library-import-start"), onClick: chooseDocument } : undefined}
@@ -398,12 +399,12 @@ export default function LibraryView({ state, citation }: { state: LibraryState; 
                           value={writes ?? ""}
                           onChange={(event) => {
                             const next = event.target.value;
-                            setWrites(next === "piece" || next === "procuracao" || next === "contrato" ? next : null);
+                            setWrites(isModelDocument(next) ? next : null);
                           }}
                           slotProps={{ select: { displayEmpty: true }, inputLabel: { shrink: true } }}
                         >
                           <MenuItem value="">{t("library-filter-writes-any")}</MenuItem>
-                          {(["piece", "procuracao", "contrato"] as const).map((key) => (
+                          {MODEL_DOCUMENTS.map((key) => (
                             <MenuItem key={key} value={key}>
                               {t(DOCUMENT_KEY[key].label)}
                             </MenuItem>
@@ -452,7 +453,7 @@ export default function LibraryView({ state, citation }: { state: LibraryState; 
               {shownCount === 0 ? (
                 narrowed ? (
                   <EmptyState
-                    icon={<NiBook />}
+                    illustration={<IllustrationDocumentation />}
                     title={t("library-none-found-title")}
                     description={t("library-none-found-body")}
                     action={{ label: t("library-none-found-action"), onClick: clearNarrowing }}
@@ -643,7 +644,7 @@ function ViewEmpty({
         : { label: t("library-import-start"), onClick: onDocument };
   return (
     <EmptyState
-      icon={family === "faltam" ? <NiShieldCheck /> : CARD[family].icon}
+      illustration={family === "faltam" ? <IllustrationConfigure /> : <IllustrationDocumentation />}
       title={t(`library-view-${view}-empty`)}
       description={t(`library-view-${view}-empty-body`)}
       action={action}

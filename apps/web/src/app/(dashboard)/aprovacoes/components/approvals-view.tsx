@@ -14,7 +14,7 @@ import EmptyState from "@/components/product/empty-state";
 import ModuleScope from "@/components/product/module-scope";
 import PageHeader from "@/components/product/page-header";
 import StatusChip, { type StatusTone } from "@/components/product/status-chip";
-import NiListCheck from "@/icons/nexture/ni-list-check";
+import IllustrationConfigure from "@/icons/illustrations/illustration-configure";
 import NiUsers from "@/icons/nexture/ni-users";
 import { type ApprovalsState, type DecidedApproval, mayDecide } from "@/lib/ai/approvals";
 import { scopeCrumbs } from "@/lib/modules/offer";
@@ -158,7 +158,7 @@ export default function ApprovalsView({ state }: { state: ApprovalsState }) {
 
           {pendingTotal === 0 ? (
             <EmptyState
-              icon={<NiListCheck size="large" />}
+              illustration={<IllustrationConfigure />}
               title={t("approvals-empty-title")}
               description={t("approvals-empty-body")}
               action={{ label: t("approvals-empty-action"), href: "/inicio" }}

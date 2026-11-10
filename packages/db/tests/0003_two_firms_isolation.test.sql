@@ -305,6 +305,13 @@ insert into public.civil_court_answers (org_id, case_id, party_id, person_id, ac
 insert into public.closing_goals (org_id, starts_on, ends_on, target) values
   ('b1000000-0000-4000-8000-00000000000a', date '2026-11-01', date '2026-11-30', 10),
   ('b1000000-0000-4000-8000-00000000000b', date '2026-11-01', date '2026-11-30', 20);
+-- A declaration of residence each firm owes for a bill in somebody else's name (0123).
+insert into public.residence_declarations (org_id, case_id, person_id, document_id, holder_name, holder_read)
+select d.org_id, d.case_id, cp.person_id, d.id, 'Joana Teste', 'JOANA TESTE'
+from public.case_documents d join public.case_parties cp on cp.case_id = d.case_id
+where d.org_id in ('b1000000-0000-4000-8000-00000000000a', 'b1000000-0000-4000-8000-00000000000b')
+  and d.id = (select x.id from public.case_documents x where x.org_id = d.org_id order by x.created_at, x.id limit 1)
+  and cp.id = (select y.id from public.case_parties y where y.case_id = d.case_id order by y.created_at, y.id limit 1);
 -- The estimates of ONE's work of each firm (0120): read only by who decides for it.
 insert into public.firm_one_work_minutes (org_id, kind, minutes) values
   ('b1000000-0000-4000-8000-00000000000a', 'texto_peca', 45),
@@ -497,7 +504,7 @@ select is(
     'movements', 'notice_optins', 'notice_stops', 'onboarding_state', 'partner_invitations', 'partner_links', 'pax_firm_clauses',
     'people',
     'proceeding_lawyers', 'proceeding_parties', 'proceeding_tracking', 'proceedings', 'publication_readings', 'publications', 'record_versions',
-    'signature_envelopes',
+    'residence_declarations', 'signature_envelopes',
     'subscriptions', 'template_imports', 'test_chats', 'tracked_legs', 'tracked_trips',
     'wa_contacts',
     'wa_conversation_events', 'wa_conversations', 'wa_messages', 'wa_numbers', 'wa_optouts', 'wa_templates'
@@ -672,7 +679,7 @@ select is(
     'import_rows', 'invoices', 'issued_documents', 'lawyer_signature_uses', 'legal_sources',
     'memberships', 'movements', 'notice_optins', 'notice_stops', 'partner_links', 'pax_firm_clauses', 'people', 'proceeding_lawyers', 'proceeding_parties', 'proceeding_tracking', 'proceedings',
     'publication_readings', 'publications',
-    'signature_envelopes',
+    'residence_declarations', 'signature_envelopes',
     'subscriptions', 'template_imports', 'test_chats', 'tracked_legs', 'tracked_trips',
     'wa_contacts', 'wa_conversation_events', 'wa_conversations', 'wa_messages', 'wa_numbers', 'wa_optouts', 'wa_templates'
   ],
@@ -716,7 +723,7 @@ select is(
     'movements', 'notice_optins', 'notice_stops', 'onboarding_state', 'partner_invitations', 'partner_links', 'pax_firm_clauses',
     'people',
     'proceeding_lawyers', 'proceeding_parties', 'proceeding_tracking', 'proceedings', 'publication_readings', 'publications', 'record_versions',
-    'signature_envelopes',
+    'residence_declarations', 'signature_envelopes',
     'subscriptions', 'template_imports', 'test_chats', 'tracked_legs', 'tracked_trips',
     'wa_contacts',
     'wa_conversation_events', 'wa_conversations', 'wa_messages', 'wa_numbers', 'wa_optouts', 'wa_templates'

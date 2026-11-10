@@ -220,7 +220,7 @@ export default function Thread({
             id="inbox-thread"
             icon={<NiUser size="medium" />}
             title={conversation.name}
-            description={conversation.phoneLabel}
+            detail={conversation.phoneLabel}
             chip={
               !conversation.numberActive ? (
                 <StatusChip label={t("inbox-number-off")} tone="attention" />

@@ -23,7 +23,7 @@ async function loadAutonomy(): Promise<AutonomyState> {
   if (!context) return { kind: "unavailable" };
   if (!context.firm) return { kind: "no-firm" };
   const firm = context.firm;
-  const [autonomy, team, signers, defaults, assurance, cookieStore, decides] = await Promise.all([
+  const [autonomy, team, signers, defaults, assurance, cookieStore, decides, policy, month] = await Promise.all([
     context.supabase.rpc("firm_autonomy", { target_org: firm.id }),
     context.supabase.rpc("firm_team", { target_org: firm.id }),
     context.supabase.from("firm_signers").select("user_id").eq("org_id", firm.id),
@@ -32,7 +32,11 @@ async function loadAutonomy(): Promise<AutonomyState> {
     cookies(),
     // Who decides for the firm what a partner decides (0078): a partner, or, with no partner, who manages it.
     context.supabase.rpc("decides_for_firm", { target_org: firm.id }),
+    // Whether the firm accepts a bill in somebody else's name (0123), and the month's packages that carry one.
+    context.supabase.from("organizations").select("third_party_bill").eq("id", firm.id).maybeSingle(),
+    context.supabase.rpc("firm_third_party_bills", { target_org: firm.id }),
   ]);
+  const counted = (month.error ? null : month.data) as { packages?: unknown; third_party?: unknown } | null;
   const decisions = autonomy.error ? null : firmAutonomyOf(autonomy.data);
   if (!decisions) return { kind: "error" };
   const signing = new Set(((signers.data ?? []) as { user_id: string }[]).map((row) => row.user_id));
@@ -70,6 +74,16 @@ async function loadAutonomy(): Promise<AutonomyState> {
             })),
     // The claim the firm asks by default for each kind of problem (0052); its card says when it could not be read.
     claimDefaults: defaults.error ? null : claimDefaultsOf(defaults.data),
+    thirdParty:
+      policy.error || !policy.data
+        ? null
+        : {
+            policy: (policy.data as { third_party_bill?: string }).third_party_bill === "refuse" ? "refuse" : "accept",
+            month:
+              counted && typeof counted.packages === "number" && typeof counted.third_party === "number"
+                ? { packages: counted.packages, thirdParty: counted.third_party }
+                : null,
+          },
     decisions: decisions.map((decision) => ({
       ...decision,
       changedByName: decision.changedBy ? names.get(decision.changedBy) || null : null,

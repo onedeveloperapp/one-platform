@@ -1,6 +1,7 @@
 "use client";
 
 import type { CaseDocument, CaseState } from "../case-types";
+import ResidenceLine from "./residence-line";
 import { useTranslations } from "next-intl";
 import { useRef, useState } from "react";
 
@@ -88,6 +89,8 @@ export default function DocumentsCard({
   const [early, setEarly] = useState<string | null>(null);
   const input = useRef<HTMLInputElement>(null);
 
+  const residenceOf = (document: CaseDocument) =>
+    state.residence?.find((view) => view.documentId === document.id) ?? null;
   const personOf = (partyId: string | null) =>
     state.parties.find((candidate) => candidate.partyId === partyId)?.person.full_name ?? null;
   const list = new Intl.ListFormat("pt-BR", { style: "long", type: "conjunction" });
@@ -211,6 +214,16 @@ export default function DocumentsCard({
           })}
         </Typography>
       )}
+      {residenceOf(document) ? (
+        // A bill in somebody else's name the firm accepted owes the client's declaration of residence (0123).
+        <ResidenceLine
+          caseId={state.case.id}
+          view={residenceOf(document)!}
+          writable={writable}
+          mayWaive={state.lawyer}
+          onChanged={onChanged}
+        />
+      ) : null}
       {document.status === "rejected" && document.rejectedReason && (
         <Typography variant="body2" className="text-text-secondary">
           {t("client-document-rejected", {

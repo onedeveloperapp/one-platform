@@ -5,6 +5,7 @@ import { createContext, type ReactNode, useCallback, useContext, useEffect, useM
 
 import { Box, Button, Card, CardContent, Collapse, Typography, useMediaQuery } from "@mui/material";
 
+import InfoHint from "@/components/product/info-hint";
 import StatusChip from "@/components/product/status-chip";
 import { TILE_TONE, type TileTone } from "@/components/product/tile-tone";
 import NiCheck from "@/icons/nexture/ni-check";
@@ -166,6 +167,7 @@ export default function CollapsibleCard({
   summaryClosedOnly = false,
   chip,
   description,
+  detail,
   action,
   defaultOpen = false,
   bodyClassName,
@@ -182,11 +184,16 @@ export default function CollapsibleCard({
   summary?: ReactNode;
   /** The summary only stands in for the content: a card whose open body says the same shows it closed only. */
   summaryClosedOnly?: boolean;
-  /** What waits for a person here, as a StatusChip; or a definition of the title, as an InfoHint. */
+  /** What waits for a person here, as a StatusChip. A definition of the title is `description`, behind its "i". */
   chip?: ReactNode;
-  /** What the card is for: shown open, above its content. */
-  description?: ReactNode;
-  /** The card's own action (add, settings, the whole list elsewhere): shown open, beside the description. */
+  /**
+   * What the card is for, behind the "i" beside the title (the owner, 2026-11-09): never a paragraph read on every
+   * visit. At most 200 characters (a test keeps it).
+   */
+  description?: string;
+  /** What must be read before acting here (a consequence, what each choice does): shown open, above the content. */
+  detail?: ReactNode;
+  /** The card's own action (add, settings, the whole list elsewhere): shown open, above the content. */
   action?: ReactNode;
   /** Open on arrival. Read once: what the person does afterwards is theirs. */
   defaultOpen?: boolean;
@@ -314,6 +321,12 @@ export default function CollapsibleCard({
                   {title}
                 </button>
               </Typography>
+              {/* Above the title's button, which covers the whole head: the "i" opens its text, never the card. */}
+              {description ? (
+                <Box className="relative z-[1] -ml-1.5 flex items-center">
+                  <InfoHint label={description} placement="bottom-start" className="self-center" />
+                </Box>
+              ) : null}
               {chip || stateChip || markChip || (!state && mark?.working) ? (
                 <Box className="relative z-[1] flex flex-wrap items-center gap-2">
                   {chip}
@@ -348,13 +361,15 @@ export default function CollapsibleCard({
 
         <Collapse in={open} timeout={reduceMotion ? 0 : "auto"}>
           <Box id={bodyId} className={cn("flex flex-col gap-4 pt-4", bodyClassName)}>
-            {description || action ? (
+            {detail || action ? (
               <Box className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
-                {description ? (
-                  <Typography variant="body2" className="text-text-secondary min-w-0 flex-1 basis-64">
-                    {description}
+                {detail ? (
+                  <Typography variant="body2" component="div" className="text-text-secondary min-w-0 flex-1 basis-64">
+                    {detail}
                   </Typography>
-                ) : null}
+                ) : (
+                  <span className="flex-1" />
+                )}
                 {action ? <Box className="flex flex-wrap gap-2">{action}</Box> : null}
               </Box>
             ) : null}

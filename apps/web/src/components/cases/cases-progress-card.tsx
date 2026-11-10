@@ -7,6 +7,7 @@ import type { ReactNode } from "react";
 import { Box, Button, Card, CardContent, Typography } from "@mui/material";
 
 import { ProgressCounts, ProgressList, type ProgressListRow } from "@/components/product/progress-steps";
+import SectionTitle from "@/components/product/section-title";
 import NiArchive from "@/icons/nexture/ni-archive";
 import NiArrowRight from "@/icons/nexture/ni-arrow-right";
 import NiCalendar from "@/icons/nexture/ni-calendar";
@@ -59,7 +60,8 @@ export default function CasesProgressCard({
   progress: CasesProgress;
   /** The module the card is of (a module's area); every link then opens the list under it. */
   module?: string | null;
-  description: string;
+  /** What the card counts, behind the "i" beside its title. */
+  description?: string;
 }) {
   const t = useTranslations("product");
   const { stock, ended, recent } = progress;
@@ -87,14 +89,7 @@ export default function CasesProgressCard({
   return (
     <Card component="section" aria-labelledby="cases-progress-title">
       <CardContent className="flex flex-col gap-5">
-        <Box className="flex flex-col gap-1">
-          <Typography id="cases-progress-title" variant="h5" component="h2" className="mb-0">
-            {t("journey-overview-title")}
-          </Typography>
-          <Typography variant="body2" className="text-text-secondary">
-            {description}
-          </Typography>
-        </Box>
+        <SectionTitle id="cases-progress-title" title={t("journey-overview-title")} description={description} />
         <ProgressCounts
           label={t("journey-overview-title")}
           steps={steps.map((step) => ({

@@ -109,7 +109,7 @@ export default function DocumentsSection({
         tone="secondary"
         title={t("pax-link-documents-title")}
         chip={chip}
-        description={standing === "complete" ? undefined : t("pax-link-documents-help")}
+        detail={standing === "complete" ? undefined : t("pax-link-documents-help")}
       />
       {standing === "complete" && (
         <StateLine tone="done" emphasis>

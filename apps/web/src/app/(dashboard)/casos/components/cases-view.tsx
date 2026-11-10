@@ -20,6 +20,9 @@ import PageHeader from "@/components/product/page-header";
 import { ProgressBar } from "@/components/product/progress-steps";
 import StatusChip from "@/components/product/status-chip";
 import type { TileTone } from "@/components/product/tile-tone";
+import IllustrationDocumentation from "@/icons/illustrations/illustration-documentation";
+import IllustrationLaunch from "@/icons/illustrations/illustration-launch";
+import IllustrationStorage from "@/icons/illustrations/illustration-storage";
 import NiArchive from "@/icons/nexture/ni-archive";
 import NiArrowInUp from "@/icons/nexture/ni-arrow-in-up";
 import NiBuilding from "@/icons/nexture/ni-building";
@@ -799,14 +802,14 @@ function CasesList({ ready }: { ready: Ready }) {
   // Why the table is empty says what to do next: another search, another view, or the cases that ended.
   const nothing = searching ? (
     <EmptyState
-      icon={<NiFolder size="large" />}
+      illustration={<IllustrationDocumentation />}
       title={t("cases-search-empty-title")}
       description={t(filter ? "cases-search-empty-filter-body" : "cases-search-empty-body")}
       action={filter ? { label: t("cases-search-everywhere"), onClick: () => setFilter(null) } : undefined}
     />
   ) : filter || query.incident || query.airline ? (
     <EmptyState
-      icon={<NiFolder size="large" />}
+      illustration={<IllustrationDocumentation />}
       title={t("cases-filter-empty-title")}
       description={t("cases-filter-empty-body")}
       action={{
@@ -816,7 +819,7 @@ function CasesList({ ready }: { ready: Ready }) {
     />
   ) : (
     <EmptyState
-      icon={<NiArchive size="large" />}
+      illustration={<IllustrationStorage />}
       title={t("cases-none-going-title")}
       description={t("cases-none-going-body")}
       action={{ label: t("cases-see-ended"), onClick: () => setFilter("ended") }}
@@ -855,7 +858,7 @@ function CasesList({ ready }: { ready: Ready }) {
       */}
       {!hasCases && (
         <EmptyState
-          icon={<NiFolder size="large" />}
+          illustration={<IllustrationLaunch />}
           title={t("cases-empty-title")}
           description={t("cases-empty-body")}
           action={

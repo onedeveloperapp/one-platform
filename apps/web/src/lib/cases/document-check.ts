@@ -43,6 +43,7 @@ const KIND_FOR_MODEL: Record<DocumentKind, string> = {
   receipt: "recibo, nota fiscal ou comprovante de uma despesa",
   evidence: "prova do que aconteceu (foto, conversa, aviso da companhia)",
   power_of_attorney: "procuração",
+  residence_declaration: "declaração de residência",
   contract: "contrato",
   petition: "petição do processo",
   other: "outro documento do caso",

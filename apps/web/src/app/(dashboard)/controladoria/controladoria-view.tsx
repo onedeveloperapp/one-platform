@@ -13,14 +13,20 @@ import { Alert, Box, Button, Card, CardContent, Grid, List, ListItem, ListItemBu
 
 import CardTitle from "@/components/product/card-title";
 import EmptyState from "@/components/product/empty-state";
+import InfoHint from "@/components/product/info-hint";
 import MetricBars from "@/components/product/metric-bars";
 import ModuleScope from "@/components/product/module-scope";
 import NumberCard from "@/components/product/number-card";
 import PageHeader from "@/components/product/page-header";
+import SectionTitle from "@/components/product/section-title";
+import StatusChip from "@/components/product/status-chip";
 import type { TileTone } from "@/components/product/tile-tone";
+import IllustrationDocumentation from "@/icons/illustrations/illustration-documentation";
+import IllustrationLaunch from "@/icons/illustrations/illustration-launch";
 import NiArchive from "@/icons/nexture/ni-archive";
 import NiArrowInDown from "@/icons/nexture/ni-arrow-in-down";
 import NiChartBar from "@/icons/nexture/ni-chart-bar";
+import NiChevronRightSmall from "@/icons/nexture/ni-chevron-right-small";
 import NiFlag from "@/icons/nexture/ni-flag";
 import NiFolder from "@/icons/nexture/ni-folder";
 import NiFolderPlus from "@/icons/nexture/ni-folder-plus";
@@ -293,17 +299,28 @@ export default function ControladoriaView({ state }: { state: ControladoriaState
             </Grid>
           ) : null}
 
-          {/* Where the cases are, right under the numbers (the owner, 2026-11-09): each column opens its list. */}
+          {/* Where the cases are, right under the numbers (the owner, 2026-11-09): each column opens its list. With no
+              case going, one drawing says so instead of a row of empty columns. */}
           <Box component="section" aria-labelledby="controladoria-board" className="flex flex-col gap-3">
-            <Box className="flex flex-col gap-1">
-              <Typography id="controladoria-board" variant="h5" component="h2" className="mb-0">
-                {t("controladoria-board-title")}
-              </Typography>
-              <Typography variant="body2" className="text-text-secondary">
-                {t("controladoria-board-body")}
-              </Typography>
-            </Box>
-            {ready.board ? (
+            <SectionTitle
+              id="controladoria-board"
+              title={t("controladoria-board-title")}
+              description={t("controladoria-board-body")}
+            />
+            {ready.board && ready.board.every((column) => column.cases === 0) ? (
+              <Card>
+                <CardContent>
+                  <EmptyState
+                    layout="row"
+                    framed={false}
+                    titleAs="h3"
+                    illustration={<IllustrationLaunch />}
+                    title={t("controladoria-board-none-title")}
+                    description={t("controladoria-board-none-body")}
+                  />
+                </CardContent>
+              </Card>
+            ) : ready.board ? (
               <CaseBoard
                 columns={ready.board}
                 stock={ready.stock}
@@ -360,6 +377,8 @@ export default function ControladoriaView({ state }: { state: ControladoriaState
                             <Typography variant="body2" component="span" className="font-semibold tabular-nums">
                               {countText(item.value)}
                             </Typography>
+                            {/* Each line opens the list of its cases: the arrow says it, no sentence does. */}
+                            <NiChevronRightSmall size="small" className="text-text-secondary flex-none" />
                           </ListItemButton>
                         </ListItem>
                       ))}
@@ -379,7 +398,6 @@ export default function ControladoriaView({ state }: { state: ControladoriaState
                       icon={<NiFolder size="medium" />}
                       tone="secondary"
                       title={t("controladoria-modules-title")}
-                      description={t("controladoria-modules-body")}
                     />
                     <MetricBars
                       spacing="dense"
@@ -393,16 +411,26 @@ export default function ControladoriaView({ state }: { state: ControladoriaState
                 </Card>
               ) : null}
             </Grid>
-            <Grid size={{ xs: 12, lg: 8 }}>
-              <Box component="section" aria-labelledby="controladoria-court" className="flex flex-col gap-3">
-                <Box className="flex flex-col gap-1">
-                  <Typography id="controladoria-court" variant="h5" component="h2" className="mb-0">
-                    {t("controladoria-court-title")}
-                  </Typography>
-                  <Typography variant="body2" className="text-text-secondary">
-                    {ready.courtRead ? t("controladoria-court-body") : t("controladoria-court-not-read")}
-                  </Typography>
-                </Box>
+            <Grid size={{ xs: 12, lg: 8 }} className="flex">
+              <Box component="section" aria-labelledby="controladoria-court" className="flex w-full flex-col gap-3">
+                {/* Where the environment reads no court, a chip says so, with what it means behind its "i". */}
+                <SectionTitle
+                  id="controladoria-court"
+                  title={t("controladoria-court-title")}
+                  description={ready.courtRead ? t("controladoria-court-body") : undefined}
+                  chip={
+                    ready.courtRead ? undefined : (
+                      <Box className="flex items-center gap-0.5">
+                        <StatusChip tone="neutral" label={t("controladoria-court-test-env")} />
+                        <InfoHint
+                          label={t("controladoria-court-not-read")}
+                          placement="bottom-start"
+                          className="self-center"
+                        />
+                      </Box>
+                    )
+                  }
+                />
                 {counts && counts.filed > 0 ? (
                   <Grid container spacing={2.5}>
                     {COURT_ORDER.map((view) => (
@@ -419,9 +447,18 @@ export default function ControladoriaView({ state }: { state: ControladoriaState
                     ))}
                   </Grid>
                 ) : (
-                  <Typography variant="body2" className="text-text-secondary">
-                    {t("controladoria-court-none")}
-                  </Typography>
+                  // Nothing in court yet: a drawing fills the space beside the cards of the left, never a blank.
+                  <Card className="flex-1">
+                    <CardContent className="flex h-full items-center justify-center">
+                      <EmptyState
+                        framed={false}
+                        titleAs="h3"
+                        illustration={<IllustrationDocumentation />}
+                        title={t("controladoria-court-none")}
+                        description={t("controladoria-court-none-body")}
+                      />
+                    </CardContent>
+                  </Card>
                 )}
               </Box>
             </Grid>

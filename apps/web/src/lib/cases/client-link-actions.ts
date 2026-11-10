@@ -9,6 +9,7 @@ import { finishLinkUpload, takeBackClientUpload } from "@/lib/cases/client-uploa
 import { readLinkUpload } from "@/lib/cases/document-prefill-work";
 import { queueDocumentProcessing } from "@/lib/cases/documents-work";
 import { queueInterview } from "@/lib/cases/interview-work";
+import { relationInputOf } from "@/lib/cases/residence";
 import { queueStatementWork } from "@/lib/cases/statements-work";
 import { FIRM_FILES_BUCKET, supabaseFileStore } from "@/lib/files/store";
 import { settleNotices } from "@/lib/notices/work";
@@ -502,6 +503,41 @@ export async function answerCivilCourt(
   );
   // A yes may be what the filing package of the lawsuit waited for (0039): the cases it woke are looked at now.
   if (result.ok && accepted) await queueCaseAdvance(null);
+  return result;
+}
+
+// ---------- A bill in somebody else's name (migration 0123) ----------
+
+/**
+ * The client says who the holder of their bill is to them, and the holder's name where ONE read it wrong. The backend
+ * records it (the database takes it from the service role only), with what the server saw of the request, and ONE is
+ * woken to issue the declaration of residence.
+ */
+export async function answerResidence(token: string, declarationId: string, input: unknown): Promise<ClientResult> {
+  const closed = await refusal(token);
+  if (closed) return closed;
+  if (!isId(declarationId)) return { ok: false, code: "failed" };
+  const read = relationInputOf(input);
+  if (!read.ok) return { ok: false, code: read.code };
+  const backend = service();
+  if (!backend) return unavailable;
+  const seen = await headers();
+  const evidence = {
+    user_agent: (seen.get("user-agent") ?? "").slice(0, 300),
+    ip: (seen.get("x-forwarded-for") ?? "").split(",")[0]?.trim().slice(0, 64) ?? "",
+  };
+  const result = fold(
+    await backend.rpc("client_link_answer_residence", {
+      target_token: token,
+      target_declaration: declarationId,
+      target_relation: read.relation,
+      target_note: read.note,
+      target_holder: read.holder,
+      target_evidence: evidence,
+    }),
+    nothing,
+  );
+  if (result.ok) await queueCaseAdvance(null);
   return result;
 }
 

@@ -12,6 +12,7 @@ import type { InterviewView } from "@/lib/cases/interview";
 import type { StageMoment } from "@/lib/cases/journey";
 import type { CasePulse } from "@/lib/cases/pulse";
 import type { ReadFields } from "@/lib/cases/read-fields";
+import type { ResidenceView } from "@/lib/cases/residence";
 import type { Ceiling, LawyerCauses, WeatherAssessment } from "@/lib/cases/rules";
 import type { CaseAudio, CaseComplaint, CaseStatement } from "@/lib/cases/statement-facts";
 import type { ComplaintChannel } from "@/lib/cases/statements";
@@ -242,6 +243,11 @@ export type CaseState =
   | {
       kind: "ready";
       case: CaseDetail;
+      /**
+       * The declarations of residence of the case (0123): each bill in somebody else's name the firm accepted, with
+       * where its declaration stands; null when they could not be read.
+       */
+      residence: ResidenceView[] | null;
       parties: CaseParty[];
       segments: CaseSegment[];
       documents: CaseDocument[];

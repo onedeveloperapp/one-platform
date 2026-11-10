@@ -40,7 +40,7 @@ export default function DjenHealthCard({ health, captureOn }: { health: DjenHeal
       title="Leitura do DJEN"
       chip={
         <>
-          <InfoHint label="Cada inscrição na OAB de alguém de um escritório é lida no DJEN algumas vezes por dia. Uma leitura atrasada ou que falha pode ser um escritório sem as publicações dele, e só aqui isso aparece fora do escritório." />
+          <InfoHint label="Cada inscrição na OAB de um escritório é lida no DJEN algumas vezes por dia. Uma leitura atrasada ou que falha pode deixar um escritório sem as suas publicações, e só aqui isso aparece." />
           {trouble ? <StatusChip label={trouble} tone="attention" /> : null}
         </>
       }

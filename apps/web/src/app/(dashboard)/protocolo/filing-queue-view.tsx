@@ -14,6 +14,7 @@ import NumberCard from "@/components/product/number-card";
 import PageHeader from "@/components/product/page-header";
 import StatusChip, { type StatusTone } from "@/components/product/status-chip";
 import type { TileTone } from "@/components/product/tile-tone";
+import IllustrationDocumentation from "@/icons/illustrations/illustration-documentation";
 import NiClock from "@/icons/nexture/ni-clock";
 import NiExclamationHexagon from "@/icons/nexture/ni-exclamation-hexagon";
 import NiLock from "@/icons/nexture/ni-lock";
@@ -177,7 +178,7 @@ export default function FilingQueueView({ state }: { state: FilingQueueState }) 
 
       {ready && ready.rows.length === 0 ? (
         <EmptyState
-          icon={<NiScale size="large" />}
+          illustration={<IllustrationDocumentation />}
           title={t("filing-queue-empty-title")}
           description={t("filing-queue-empty-body")}
           action={{ label: t("filing-queue-empty-action"), href: "/casos?ver=preparing" }}
@@ -295,7 +296,7 @@ export default function FilingQueueView({ state }: { state: FilingQueueState }) 
 
           {groups.length === 0 ? (
             <EmptyState
-              icon={<NiScale size="large" />}
+              illustration={<IllustrationDocumentation />}
               title={t("filing-queue-view-empty-title")}
               description={t("filing-queue-view-empty-body")}
               action={{ label: t("filing-queue-view-empty-action"), onClick: showAll }}

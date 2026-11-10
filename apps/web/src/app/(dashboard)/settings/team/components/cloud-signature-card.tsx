@@ -344,7 +344,10 @@ export default function CloudSignatureCard({
             <StatusChip label={t(renew ? "psc-waiting-chip-expiring" : "psc-waiting-chip")} tone="attention" />
           ) : null
         }
-        description={mayAuthorize ? t("psc-body") : t("psc-body-reader")}
+        // What a lawyer authorizes is read before they authorize it; what the list is, by who only reads it, is behind
+        // the "i".
+        detail={mayAuthorize ? t("psc-body") : undefined}
+        description={mayAuthorize ? undefined : t("psc-body-reader")}
         defaultOpen={Boolean(outcome) || Boolean(backToCase) || failingNow || Boolean(waiting)}
         bodyClassName="gap-5"
       >

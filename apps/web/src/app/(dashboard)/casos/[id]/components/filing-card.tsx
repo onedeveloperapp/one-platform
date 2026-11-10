@@ -189,6 +189,9 @@ const SIGNATURE_STALE = new Set([
   "family_split_unchosen",
   "civil_court_unanswered",
   "power_of_attorney_unsigned",
+  "residence_relation_missing",
+  "residence_address_conflict",
+  "residence_declaration_unsigned",
   "system_unapproved",
   "system_refused",
 ]);

@@ -118,7 +118,7 @@ export default function RightsSection({
         icon={<NiLock size="medium" />}
         tone="accent-1"
         title={t("pax-link-rights-title")}
-        description={body}
+        detail={body}
       />
       <Box ref={status} tabIndex={-1} role="status" aria-live="polite" className="outline-none">
         {problem && <Alert severity="error">{problem}</Alert>}

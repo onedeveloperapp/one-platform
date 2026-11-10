@@ -124,7 +124,15 @@ describe("what each court's system asks of a package", () => {
   });
 
   it("keeps the types of a system as the database checks them", () => {
-    const migration = fs.readFileSync(path.join(ROOT, "packages/db/migrations/0036_filing_systems.sql"), "utf8");
+    // The latest migration that defines the check (0036, then 0123 with the declaration of residence).
+    const folder = path.join(ROOT, "packages/db/migrations");
+    const latest = fs
+      .readdirSync(folder)
+      .filter((name) => name.endsWith(".sql"))
+      .sort()
+      .filter((name) => fs.readFileSync(path.join(folder, name), "utf8").includes("function public.filing_types_ok("))
+      .at(-1);
+    const migration = fs.readFileSync(path.join(folder, latest ?? "0036_filing_systems.sql"), "utf8");
     const kinds = /key in \(([^)]+)\)/.exec(migration)?.[1] ?? "";
     expect([...kinds.matchAll(/'([a-z_]+)'/g)].map((match) => match[1]).sort()).toEqual([...FILING_ORDER].sort());
   });

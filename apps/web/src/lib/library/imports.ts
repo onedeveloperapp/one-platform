@@ -196,6 +196,8 @@ const SENT_AS: Record<ModelDocument, string> = {
   piece: "a petição inicial que o escritório usa",
   procuracao: "a procuração que o escritório usa",
   contrato: "o contrato de honorários que o escritório usa",
+  // Never sent: a request takes only the three above (0079); the firm writes its declaration in the library.
+  declaracao_residencia: "a declaração de residência que o escritório usa",
 };
 
 /** What the marking is told of a request besides its text. */
@@ -507,6 +509,7 @@ export const DOCUMENT_NAMED_KEY: Record<ModelDocument, string> = {
   piece: "library-import-named-piece",
   procuracao: "library-import-named-procuracao",
   contrato: "library-import-named-contrato",
+  declaracao_residencia: "library-import-named-declaracao-residencia",
 };
 
 /** Why what ONE prepared waits for a person, said over the model. */

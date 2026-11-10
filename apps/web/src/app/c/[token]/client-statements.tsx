@@ -145,7 +145,7 @@ export default function ClientStatements({
           tone="primary"
           title={t("client-statements-title")}
           chip={chip}
-          description={editable ? t("client-statements-body") : t("client-statements-body-closed")}
+          detail={editable ? t("client-statements-body") : t("client-statements-body-closed")}
         />
 
         {problem && (

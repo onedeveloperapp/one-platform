@@ -158,6 +158,7 @@ const DESCRIPTION: Record<string, string> = {
   power_of_attorney: "Procuração",
   identity: "Documento de identidade",
   address_proof: "Comprovante de endereço",
+  residence_declaration: "Declaração de residência",
   ticket: "Bilhete da passagem",
   boarding_pass: "Cartão de embarque",
   receipt: "Comprovante de gasto",

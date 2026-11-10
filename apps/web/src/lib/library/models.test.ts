@@ -3,7 +3,14 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it, vi } from "vitest";
 
-import { DRAFT_MARKS, modelMarks, PAPER_MARK_KEY, PAPER_MARKS, unknownMarks } from "@/lib/cases/drafts";
+import {
+  DRAFT_MARKS,
+  modelMarks,
+  PAPER_MARK_KEY,
+  PAPER_MARKS,
+  RESIDENCE_MARKS,
+  unknownMarks,
+} from "@/lib/cases/drafts";
 import { modelForKind, paperModelFor } from "@/lib/library/facts";
 import messages from "@flyee/content/messages/pt-BR.json";
 
@@ -12,6 +19,8 @@ vi.mock("server-only", () => ({}));
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../../..");
 // The latest definition of `case_paper_filled`: 0054, with the fields of a firm's own form since 0093.
 const PAPERS = fs.readFileSync(path.join(ROOT, "packages/db/migrations/0093_paper_fields.sql"), "utf8");
+// What only a declaration of residence fills (0123).
+const RESIDENCE = fs.readFileSync(path.join(ROOT, "packages/db/migrations/0123_residence_declaration.sql"), "utf8");
 
 const FIRM = "f0000000-0000-4000-8000-000000000001";
 const OTHER = "f0000000-0000-4000-8000-000000000002";
@@ -35,11 +44,14 @@ describe("the marks of a paper (0054, 0093)", () => {
   it("are the ones the database fills, no more and no fewer", () => {
     const filled = [...PAPERS.matchAll(/replace\(filled, '\[\[([A-Z_]+)\]\]'/g)].map((match) => match[1]);
     expect([...filled].sort()).toEqual([...PAPER_MARKS].sort());
+    const declaration = RESIDENCE.slice(RESIDENCE.indexOf("function public.residence_marks_filled("));
+    const own = [...declaration.slice(0, declaration.indexOf("$$;")).matchAll(/'\[\[([A-Z_]+)\]\]', coalesce/g)];
+    expect(own.map((match) => match[1]).sort()).toEqual([...RESIDENCE_MARKS].sort());
   });
 
   it("each has its words", () => {
     const product = (messages as { product: Record<string, string> }).product;
-    for (const mark of PAPER_MARKS) expect(product[PAPER_MARK_KEY[mark]]).toBeTruthy();
+    for (const mark of [...PAPER_MARKS, ...RESIDENCE_MARKS]) expect(product[PAPER_MARK_KEY[mark]]).toBeTruthy();
   });
 
   it("are told apart from the marks of a piece", () => {
@@ -49,6 +61,11 @@ describe("the marks of a paper (0054, 0093)", () => {
     expect(unknownMarks("[[OUTORGANTE]] contra [[RE]]", modelMarks("procuracao"))).toEqual([]);
     expect(unknownMarks("[[OUTORGANTE]] contra [[RE]]")).toEqual(["OUTORGANTE"]);
     expect(unknownMarks("[[PARTES]], [[NOME]]", modelMarks("contrato"))).toEqual(["PARTES"]);
+    // The holder of a bill is a declaration's alone: a power of attorney leaves it unfilled.
+    expect(
+      unknownMarks("[[NOME]] mora na casa de [[TITULAR]], [[RELACAO]]", modelMarks("declaracao_residencia")),
+    ).toEqual([]);
+    expect(unknownMarks("[[NOME]], [[TITULAR]]", modelMarks("procuracao"))).toEqual(["TITULAR"]);
   });
 });
 

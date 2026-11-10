@@ -56,6 +56,7 @@ const KIND_LABEL: Record<string, string> = {
 const DOCUMENT_LABEL: Record<PlatformTemplate["documentKind"], string> = {
   piece: "Peça de uma ação",
   procuracao: "Procuração",
+  declaracao_residencia: "Declaração de residência",
 };
 
 const MARKS_HELP: Record<PlatformTemplate["documentKind"], string> = {
@@ -63,6 +64,8 @@ const MARKS_HELP: Record<PlatformTemplate["documentKind"], string> = {
     "Cite só fontes conferidas pelo ONE, como a biblioteca as escreve. As marcas [[PARTES]], [[RE]], [[JUIZO]], [[VALOR_DA_CAUSA]], [[PEDIDO_POR_PARTE]] e [[ADVOGADOS]] são preenchidas com os dados do caso.",
   procuracao:
     "As marcas [[OUTORGANTE]], [[OUTORGADOS]], [[ESCRITORIO]], [[RE]], [[OBJETO]], [[LOCAL_DATA]] e [[NOME]] são preenchidas com os dados de cada cliente quando o ONE envia a procuração para ele assinar. Um formulário campo por campo usa [[NOME]], [[NACIONALIDADE]], [[ESTADO_CIVIL]], [[PROFISSAO]], [[CPF]], [[NASCIMENTO]], [[ENDERECO]], [[CEP]], [[EMAIL]] e [[TELEFONE]], com [[REPRESENTADOS]] para os filhos menores e [[DATA]] para a data de hoje.",
+  declaracao_residencia:
+    "A declaração usa as marcas campo por campo da procuração ([[NOME]], [[CPF]], [[ENDERECO]], [[CEP]], [[LOCAL_DATA]]) e duas suas: [[TITULAR]], o nome de quem está na conta, e [[RELACAO]], quem o titular é para o cliente (minha mãe, meu pai). Escreva a responsabilidade do declarante (Lei 7.115/1983, art. 3º).",
 };
 
 const ERROR_TEXT: Record<string, string> = {
@@ -112,7 +115,7 @@ export default function ContentConsoleView({ state }: { state: ConsoleState<{ co
       <PageHeader
         title="Conteúdo padrão"
         crumbs={[{ label: "Admin", href: "/admin" }, { label: "Conteúdo padrão" }]}
-        description="Os modelos e as fontes que o ONE dá a todos os escritórios. Um escritório sem modelo de um tipo de ação escreve a partir do modelo padrão do ONE desse tipo, e um escritório sem procuração própria envia aos clientes a procuração padrão do ONE."
+        description="Os modelos e as fontes que o ONE dá a todos os escritórios. Quem não tem modelo próprio de um tipo de ação, ou procuração própria, usa o padrão do ONE."
       />
 
       <Card component="section" aria-labelledby="content-templates">
@@ -147,17 +150,14 @@ export default function ContentConsoleView({ state }: { state: ConsoleState<{ co
                       {template.name}
                     </Typography>
                     <Typography variant="body2" className="text-text-secondary">
-                      {template.documentKind === "procuracao"
-                        ? DOCUMENT_LABEL.procuracao
+                      {template.documentKind !== "piece"
+                        ? DOCUMENT_LABEL[template.documentKind]
                         : KIND_LABEL[template.proceedingKind ?? "any"]}{" "}
                       · {template.body.length.toLocaleString("pt-BR")} caracteres
                     </Typography>
                   </Box>
                   {template.isDefault ? (
-                    <StatusChip
-                      tone="info"
-                      label={template.documentKind === "procuracao" ? "Padrão" : "Padrão do tipo"}
-                    />
+                    <StatusChip tone="info" label={template.documentKind !== "piece" ? "Padrão" : "Padrão do tipo"} />
                   ) : null}
                   {template.provisional ? <StatusChip tone="attention" label="Provisório" /> : null}
                   <Box className="flex flex-wrap gap-1">
@@ -421,12 +421,19 @@ function TemplateDialog({
             select
             label="O que o modelo escreve"
             value={writes}
-            onChange={(event) => setWrites(event.target.value === "procuracao" ? "procuracao" : "piece")}
+            onChange={(event) =>
+              setWrites(
+                event.target.value === "procuracao" || event.target.value === "declaracao_residencia"
+                  ? event.target.value
+                  : "piece",
+              )
+            }
             disabled={pending}
             className="min-w-56"
           >
             <MenuItem value="piece">{DOCUMENT_LABEL.piece}</MenuItem>
             <MenuItem value="procuracao">{DOCUMENT_LABEL.procuracao}</MenuItem>
+            <MenuItem value="declaracao_residencia">{DOCUMENT_LABEL.declaracao_residencia}</MenuItem>
           </TextField>
           {writes === "piece" ? (
             <TextField
@@ -449,7 +456,9 @@ function TemplateDialog({
             label={
               writes === "procuracao"
                 ? "Procuração padrão para os escritórios sem procuração própria"
-                : "Modelo padrão deste tipo para os escritórios sem modelo próprio"
+                : writes === "declaracao_residencia"
+                  ? "Declaração padrão para os escritórios sem declaração própria"
+                  : "Modelo padrão deste tipo para os escritórios sem modelo próprio"
             }
             disabled={pending}
           />

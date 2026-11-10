@@ -15,13 +15,12 @@ import { StatTile } from "@/components/product/home-tiles";
 import ModuleScope from "@/components/product/module-scope";
 import PageHeader from "@/components/product/page-header";
 import type { TileTone } from "@/components/product/tile-tone";
-import NiCalendar from "@/icons/nexture/ni-calendar";
+import IllustrationPlatforms from "@/icons/illustrations/illustration-platforms";
 import NiCalendarClock from "@/icons/nexture/ni-calendar-clock";
 import NiCheckSquare from "@/icons/nexture/ni-check-square";
 import NiCrossSquare from "@/icons/nexture/ni-cross-square";
 import NiDocumentFull from "@/icons/nexture/ni-document-full";
 import NiExclamationSquare from "@/icons/nexture/ni-exclamation-square";
-import NiInbox from "@/icons/nexture/ni-inbox";
 import NiUsers from "@/icons/nexture/ni-users";
 import { caseLabel } from "@/lib/cases/cases";
 import { retryHearingSyncs } from "@/lib/hearings/actions";
@@ -218,7 +217,7 @@ export default function AgendaView({ state }: { state: AgendaState }) {
 
       {ready && data && total === 0 ? (
         <EmptyState
-          icon={<NiCalendar size="large" />}
+          illustration={<IllustrationPlatforms />}
           title={t("agenda-first-title")}
           description={t("agenda-first-body")}
           action={{ label: t("agenda-first-action"), href: "/casos" }}
@@ -270,7 +269,7 @@ export default function AgendaView({ state }: { state: AgendaState }) {
 
           {data.rows.length === 0 ? (
             <EmptyState
-              icon={<NiInbox size="large" />}
+              illustration={<IllustrationPlatforms />}
               title={t(VIEW_KEY[ready.view].emptyTitle)}
               description={t(VIEW_KEY[ready.view].emptyBody)}
               action={{ label: t(otherKey), href: agendaAddress(otherView, 0, module) }}

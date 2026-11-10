@@ -86,11 +86,7 @@ export default function PassengerView({ state }: { state: PassengerState }) {
   return (
     <Grid container spacing={5}>
       <Grid size={12}>
-        <PageHeader
-          title={traveler.fullName}
-          crumbs={[...crumbs, { label: traveler.fullName }]}
-          description={summary}
-        />
+        <PageHeader title={traveler.fullName} crumbs={[...crumbs, { label: traveler.fullName }]} detail={summary} />
       </Grid>
       {/* A trip of theirs became a case: the firm has it, and the passenger is still the agency's for the next (0106). */}
       {traveler.handedOver && (

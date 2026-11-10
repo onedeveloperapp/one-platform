@@ -80,7 +80,6 @@ async function loadArea(key: string): Promise<ModuleAreaState> {
       href: entry.href,
       icon: entry.icon,
       labelKey: entry.labelKey,
-      descriptionKey: entry.descriptionKey,
     }));
   if (testChat?.on && testChat.token) {
     shortcuts.push({
@@ -88,7 +87,6 @@ async function loadArea(key: string): Promise<ModuleAreaState> {
       href: `/t/${testChat.token}`,
       icon: "NiMessages",
       labelKey: "module-area-test-chat",
-      descriptionKey: "module-area-test-chat-hint",
     });
   }
 

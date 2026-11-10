@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 
-import { Alert, Box, Button, Grid, Typography } from "@mui/material";
+import { Alert, Box, Button, Grid } from "@mui/material";
 
 import CasesProgressCard, { type CasesProgress } from "@/components/cases/cases-progress-card";
 import EmptyState from "@/components/product/empty-state";
@@ -11,9 +11,11 @@ import { QuickActionTile } from "@/components/product/home-tiles";
 import ModuleIcon from "@/components/product/module-icon";
 import OneWorkLine from "@/components/product/one-work-line";
 import PageHeader from "@/components/product/page-header";
+import SectionTitle from "@/components/product/section-title";
 import StatusChip from "@/components/product/status-chip";
-import { TILE_TONE, type TileTone } from "@/components/product/tile-tone";
+import type { TileTone } from "@/components/product/tile-tone";
 import NextureIcons, { type IconName } from "@/icons/icon-registry";
+import IllustrationLaunch from "@/icons/illustrations/illustration-launch";
 import NiCalendar from "@/icons/nexture/ni-calendar";
 import NiCalendarClock from "@/icons/nexture/ni-calendar-clock";
 import NiInbox from "@/icons/nexture/ni-inbox";
@@ -24,10 +26,9 @@ import NiScale from "@/icons/nexture/ni-scale";
 import type { ComingModule, ContractedModule, LockedModule } from "@/lib/modules/offer";
 import { scopedHref } from "@/lib/modules/offer";
 import type { OneWorkTotals } from "@/lib/one-work/work";
-import { cn } from "@/lib/utils";
 
 /** A place only this module has (its definition's `firmArea`, or the test chat), as the area offers it. */
-export type ModuleShortcut = { id: string; href: string; icon: IconName; labelKey: string; descriptionKey: string };
+export type ModuleShortcut = { id: string; href: string; icon: IconName; labelKey: string };
 
 export type ModuleAreaState =
   | {
@@ -55,48 +56,13 @@ export type ModuleAreaState =
  * The module's share of the firm's work: the pages of the work under the module, each listing only what is of a
  * case of it. In the order of the main menu.
  */
-const WORK: { path: string; label: string; hint: string; tone: TileTone; icon: React.ReactNode }[] = [
-  {
-    path: "/atendimento",
-    label: "module-area-work-inbox",
-    hint: "module-area-work-inbox-hint",
-    tone: "primary",
-    icon: <NiMessages size="large" />,
-  },
-  {
-    path: "/protocolo",
-    label: "module-area-work-filing",
-    hint: "module-area-work-filing-hint",
-    tone: "accent-4",
-    icon: <NiScale size="large" />,
-  },
-  {
-    path: "/publicacoes",
-    label: "module-area-work-publications",
-    hint: "module-area-work-publications-hint",
-    tone: "accent-3",
-    icon: <NiInbox size="large" />,
-  },
-  {
-    path: "/prazos",
-    label: "module-area-work-deadlines",
-    hint: "module-area-work-deadlines-hint",
-    tone: "accent-3",
-    icon: <NiCalendarClock size="large" />,
-  },
-  {
-    path: "/agenda",
-    label: "module-area-work-hearings",
-    hint: "module-area-work-hearings-hint",
-    tone: "primary",
-    icon: <NiCalendar size="large" />,
-  },
+const WORK: { path: string; label: string; tone: TileTone; icon: React.ReactNode }[] = [
+  { path: "/atendimento", label: "module-area-work-inbox", tone: "primary", icon: <NiMessages size="large" /> },
+  { path: "/protocolo", label: "module-area-work-filing", tone: "accent-4", icon: <NiScale size="large" /> },
+  { path: "/publicacoes", label: "module-area-work-publications", tone: "accent-3", icon: <NiInbox size="large" /> },
+  { path: "/prazos", label: "module-area-work-deadlines", tone: "accent-3", icon: <NiCalendarClock size="large" /> },
+  { path: "/agenda", label: "module-area-work-hearings", tone: "primary", icon: <NiCalendar size="large" /> },
 ];
-
-const day = (value: string) =>
-  value
-    ? new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeZone: "America/Sao_Paulo" }).format(new Date(value))
-    : "";
 
 /**
  * A module's area. Somebody comes here to work one module and nothing of another: the way into the module's share of
@@ -180,9 +146,10 @@ export default function ModuleAreaView({ state }: { state: ModuleAreaState }) {
 function Area({ state }: { state: Extract<ModuleAreaState, { kind: "ready" }> }) {
   const t = useTranslations("product");
   const { module } = state;
-  const tone = TILE_TONE.primary;
   return (
     <Box className="flex flex-col gap-6">
+      {/* What the module covers is behind the title's "i", and that the firm has it is the chip beside it: since when
+          and in which package is said in /modulos, where modules are chosen (the owner, 2026-11-09). */}
       <PageHeader
         title={module.name}
         crumbs={[
@@ -191,39 +158,16 @@ function Area({ state }: { state: Extract<ModuleAreaState, { kind: "ready" }> })
           { label: module.name },
         ]}
         description={module.description ?? undefined}
+        chip={<StatusChip tone="positive" label={t("modules-status-contracted")} />}
       />
-
-      <Box className="flex flex-wrap items-center gap-3">
-        <Box
-          aria-hidden
-          className={cn("flex h-12 w-12 flex-none items-center justify-center rounded-2xl", tone.bg, tone.text)}
-        >
-          <ModuleIcon name={module.icon} />
-        </Box>
-        <StatusChip tone="positive" label={t("modules-status-contracted")} />
-        <Typography variant="body2" className="text-text-secondary">
-          {[
-            module.since ? t("modules-since", { date: day(module.since) }) : null,
-            module.soldAs === "included" ? t("modules-sold-included") : t("modules-sold-package"),
-          ]
-            .filter(Boolean)
-            .join(" · ")}
-        </Typography>
-      </Box>
 
       {state.oneWork ? (
         <OneWorkLine totals={state.oneWork} href={scopedHref("/trabalho-do-one", module.key)} scope="module" />
       ) : null}
 
+      {/* Each tile is its icon and its name: the line under each repeated the name in other words. */}
       <Box component="section" aria-labelledby="module-quick" className="flex flex-col gap-4">
-        <Box className="flex flex-col gap-1">
-          <Typography id="module-quick" variant="h5" component="h2" className="mb-0">
-            {t("module-area-quick-title")}
-          </Typography>
-          <Typography variant="body2" className="text-text-secondary">
-            {t("module-area-quick-body", { module: module.name })}
-          </Typography>
-        </Box>
+        <SectionTitle id="module-quick" title={t("module-area-quick-title")} />
         <Grid container spacing={2.5}>
           {WORK.map((work) => (
             <Grid key={work.path} size={{ xs: 12, sm: 6, lg: 3 }}>
@@ -232,7 +176,6 @@ function Area({ state }: { state: Extract<ModuleAreaState, { kind: "ready" }> })
                 icon={work.icon}
                 tone={work.tone}
                 title={t(work.label)}
-                description={t(work.hint)}
               />
             </Grid>
           ))}
@@ -243,7 +186,6 @@ function Area({ state }: { state: Extract<ModuleAreaState, { kind: "ready" }> })
                 icon={<NextureIcons icon={shortcut.icon} size="large" />}
                 tone="accent-1"
                 title={t(shortcut.labelKey)}
-                description={t(shortcut.descriptionKey)}
               />
             </Grid>
           ))}
@@ -259,7 +201,7 @@ function Area({ state }: { state: Extract<ModuleAreaState, { kind: "ready" }> })
       ) : state.progress ? (
         // No case of the module yet is ONE's wait, never the firm's task (the owner, 2026-11-03).
         <EmptyState
-          icon={<ModuleIcon name={module.icon} />}
+          illustration={<IllustrationLaunch />}
           title={t("module-area-cases-empty-title")}
           description={t("module-area-cases-empty-body", { module: module.name })}
           action={{ label: t("cases-empty-what-one-does"), href: "/settings/autonomia" }}

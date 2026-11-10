@@ -57,7 +57,7 @@ export default function TriagePolicyCard({ measure, onChanged }: { measure: Tria
       title="Categorias da triagem da IA"
       chip={
         <>
-          <InfoHint label="Numa categoria liberada, a resposta da IA é a triagem da publicação que ninguém triou ainda, nos escritórios que permitem, e uma parte espera a conferência de uma pessoa. A primeira pessoa que acha um prazo, uma audiência, uma decisão ou um pagamento onde a IA disse outra coisa, conferindo ou triando ela mesma, devolve a categoria à sombra. Prazo, audiência, decisão e pagamento nunca saem da sombra." />
+          <InfoHint label="Numa categoria liberada, a IA tria o que ninguém triou e uma parte espera conferência. Quem acha ali um prazo, audiência, decisão ou pagamento devolve a categoria à sombra; esses quatro nunca saem." />
           {due ? <StatusChip label="Categoria na meta" tone="attention" /> : null}
         </>
       }
@@ -66,7 +66,7 @@ export default function TriagePolicyCard({ measure, onChanged }: { measure: Tria
           ? `${released} de ${measure.byAiCategory.length} ${released === 1 ? "categoria liberada" : "categorias liberadas"}`
           : "Todas as categorias em sombra"
       }
-      description={
+      detail={
         <>
           Meta para liberar: {formatNumber(goal.minCompared)} publicações triadas por uma pessoa sem ver a resposta da
           IA nos últimos {formatNumber(goal.windowDays)} dias, {formatNumber(goal.minAgreedPercent)}% de concordância e

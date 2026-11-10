@@ -57,7 +57,7 @@ export default function ShadowTriageCard({ measure, onChanged }: { measure: Tria
       id="ai-shadow-triage"
       title="Triagem de publicações em modo sombra"
       chip={
-        <InfoHint label="A IA classifica cada publicação capturada do DJEN, e a resposta fica guardada sem aparecer para o escritório nem decidir nada. Aqui ela é comparada com o que uma pessoa do escritório disse da mesma publicação." />
+        <InfoHint label="A IA classifica cada publicação do DJEN, e a resposta fica guardada sem aparecer ao escritório nem decidir nada. Aqui ela é comparada com o que uma pessoa disse da mesma publicação." />
       }
       summary={
         measure.captured === 0

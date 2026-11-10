@@ -16,6 +16,7 @@ export const FILING_ORDER = [
   "power_of_attorney",
   "identity",
   "address_proof",
+  "residence_declaration",
   "ticket",
   "boarding_pass",
   "receipt",

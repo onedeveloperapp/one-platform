@@ -33,9 +33,8 @@ export type FirmAreaEntry = {
   id: string;
   href: string;
   icon: IconName;
-  /** The `product` message keys of its name and of its one line. */
+  /** The `product` message key of its name: its tile is its icon and its name (the owner, 2026-11-09). */
   labelKey: string;
-  descriptionKey: string;
   /** Shown only to who brings the firm's portfolio from a spreadsheet (`lib/import/who.ts`). */
   importers?: boolean;
 };

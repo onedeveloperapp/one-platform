@@ -72,7 +72,7 @@ export default function ClientInterview({
           icon={<NiTextQuote size="medium" />}
           tone="secondary"
           title={t("client-interview-title")}
-          description={question ? t("client-interview-body") : undefined}
+          detail={question ? t("client-interview-body") : undefined}
           chip={
             question ? (
               <StatusChip tone="attention" label={t("client-interview-progress", { position, total })} />

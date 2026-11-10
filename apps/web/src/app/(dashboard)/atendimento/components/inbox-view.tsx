@@ -16,9 +16,10 @@ import ModuleScope from "@/components/product/module-scope";
 import NumberCard from "@/components/product/number-card";
 import PageHeader from "@/components/product/page-header";
 import type { TileTone } from "@/components/product/tile-tone";
+import IllustrationEmail from "@/icons/illustrations/illustration-email";
+import IllustrationPhone from "@/icons/illustrations/illustration-phone";
+import IllustrationSupport from "@/icons/illustrations/illustration-support";
 import NiMessageDots from "@/icons/nexture/ni-message-dots";
-import NiMessages from "@/icons/nexture/ni-messages";
-import NiPlug from "@/icons/nexture/ni-plug";
 import NiSendUpRight from "@/icons/nexture/ni-send-up-right";
 import NiStopwatch from "@/icons/nexture/ni-stopwatch";
 import NiUser from "@/icons/nexture/ni-user";
@@ -151,7 +152,7 @@ export default function InboxView({ state }: { state: InboxState }) {
 
       {ready && ready.whatsapp === "none" ? (
         <EmptyState
-          icon={<NiPlug size="large" />}
+          illustration={<IllustrationPhone />}
           title={t("inbox-none-title")}
           description={manager ? t("inbox-none-body-manager") : t("inbox-none-body-member")}
           action={manager ? { label: t("inbox-none-action"), href: "/settings/connections" } : undefined}
@@ -178,7 +179,7 @@ export default function InboxView({ state }: { state: InboxState }) {
 
           {ready.counts.todas === 0 && !selected ? (
             <EmptyState
-              icon={<NiMessages size="large" />}
+              illustration={<IllustrationSupport />}
               title={t("inbox-empty-title")}
               description={t("inbox-empty-body")}
               action={
@@ -407,7 +408,7 @@ function InboxList({ ready, manager, onChanged }: { ready: Ready; manager: boole
             />
           ) : (
             <EmptyState
-              icon={<NiMessages size="large" />}
+              illustration={<IllustrationEmail />}
               title={t("inbox-choose-title")}
               description={t("inbox-choose-body")}
             />

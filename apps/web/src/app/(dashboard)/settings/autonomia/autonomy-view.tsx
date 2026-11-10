@@ -22,6 +22,7 @@ import {
   Typography,
 } from "@mui/material";
 
+import ThirdPartyBillCard, { type ThirdPartyMonth } from "@/components/firm/third-party-bill-card";
 import { useViewer } from "@/components/layout/viewer-context";
 import CollapsibleCard, { CollapsibleGroup, CollapsibleGroupToggle } from "@/components/product/collapsible-card";
 import EmptyState from "@/components/product/empty-state";
@@ -45,6 +46,7 @@ import {
   typedClaims,
 } from "@/lib/firm/autonomy";
 import { setFirmAutonomy, setFirmClaimDefault, setFirmSigner } from "@/lib/firm/autonomy-actions";
+import type { ThirdPartyBillPolicy } from "@/lib/firm/third-party-bill-actions";
 import { caseKindLabelKey, firmCaseKinds } from "@/lib/modules/registry";
 
 export type AutonomyDecisionView = FirmAutonomy & { changedByName: string | null; changedLabel: string | null };
@@ -65,6 +67,11 @@ export type AutonomyState =
       signers: AutonomySigner[] | null;
       /** The firm's Valor da Causa Pedido for each kind of problem it gives one for; null when it could not be read. */
       claimDefaults: ClaimDefault[] | null;
+      /**
+       * Whether the firm accepts a bill in somebody else's name with the client's declaration (0123), and, for who
+       * decides for it, the month's filing packages that carry one; null when it could not be read.
+       */
+      thirdParty: { policy: ThirdPartyBillPolicy; month: ThirdPartyMonth | null } | null;
     }
   | { kind: "no-firm" }
   | { kind: "unavailable" }
@@ -221,6 +228,15 @@ export default function AutonomyView({ state }: { state: AutonomyState }) {
                 editable={ready.partner && !ready.supportVisit && ready.secondFactor === "ok"}
                 onSaved={() => router.refresh()}
               />
+              {ready.thirdParty ? (
+                <ThirdPartyBillCard
+                  policy={ready.thirdParty.policy}
+                  decides={ready.partner}
+                  supportVisit={ready.supportVisit}
+                  month={ready.thirdParty.month}
+                  onSaved={() => router.refresh()}
+                />
+              ) : null}
             </CollapsibleGroup>
           </Grid>
         )}
@@ -278,7 +294,7 @@ function DecisionCard({
               : t("autonomy-changed-unnamed", { when: decision.changedLabel })
             : t("autonomy-default")
       }
-      description={t(words.body)}
+      detail={t(words.body)}
       bodyClassName="gap-3"
     >
       {LAWYER_ACTS.includes(decision.key) && (

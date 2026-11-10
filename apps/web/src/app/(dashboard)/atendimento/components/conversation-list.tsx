@@ -8,6 +8,7 @@ import { Box, Card, CardContent, List, ListItem, ListItemButton, Typography } fr
 import CardTitle from "@/components/product/card-title";
 import EmptyState from "@/components/product/empty-state";
 import StatusChip from "@/components/product/status-chip";
+import IllustrationSupport from "@/icons/illustrations/illustration-support";
 import NiMessages from "@/icons/nexture/ni-messages";
 import { cn } from "@/lib/utils";
 import type { ConversationSummary } from "@/lib/whatsapp/conversations";
@@ -59,12 +60,12 @@ export default function ConversationList({
           id="inbox-list"
           icon={<NiMessages size="medium" />}
           title={title}
-          description={stale ? t("inbox-list-loading") : shown > 0 ? description : undefined}
+          detail={stale ? t("inbox-list-loading") : shown > 0 ? description : undefined}
         />
         {shown === 0 ? (
           empty ? (
             <EmptyState
-              icon={<NiMessages size="large" />}
+              illustration={<IllustrationSupport />}
               title={empty.title}
               description={empty.description}
               action={empty.action}

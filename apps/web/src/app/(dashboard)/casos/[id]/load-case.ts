@@ -29,6 +29,7 @@ import { cpfLookup } from "@/lib/cases/identity";
 import { courtPublicationsOf, stageMomentsOf } from "@/lib/cases/journey";
 import { casePulseOf } from "@/lib/cases/pulse";
 import { readFieldsOf } from "@/lib/cases/read-fields";
+import { residenceViewsOf } from "@/lib/cases/residence";
 import { loadCivilCourt, loadRuleFacts } from "@/lib/cases/rule-facts";
 import { assessWeather, caseDomicile, smallClaimsCeiling, tripPlaces } from "@/lib/cases/rules";
 import { loadStatementFacts } from "@/lib/cases/statement-facts";
@@ -205,6 +206,7 @@ export async function loadCase(id: string): Promise<CaseState> {
     facts,
     told,
     filings,
+    residence,
   ] = await Promise.all([
     supabase
       .from("case_parties")
@@ -285,6 +287,8 @@ export async function loadCase(id: string): Promise<CaseState> {
     // The accounts and the complaints. A read that failed is an error of the page too.
     loadStatementFacts(supabase, firm, id, context.profile.timezone).catch(() => undefined),
     loadCaseFilings(supabase, firm, id, context.profile.timezone, context.userId).catch(() => undefined),
+    // The declarations of residence a bill in somebody else's name owes (0123), with where each stands.
+    supabase.rpc("case_residence", { target_case: id }),
   ]);
   if (
     parties.error ||
@@ -497,6 +501,7 @@ export async function loadCase(id: string): Promise<CaseState> {
 
   return {
     kind: "ready",
+    residence: residence.error ? null : residenceViewsOf(residence.data),
     case: {
       id: row.id,
       seq: row.seq,

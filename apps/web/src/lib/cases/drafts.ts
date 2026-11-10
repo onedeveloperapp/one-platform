@@ -116,7 +116,13 @@ export const PAPER_MARKS = [
   "REPRESENTADOS",
   "DATA",
 ] as const;
-export const PAPER_MARK_KEY: Record<(typeof PAPER_MARKS)[number], string> = {
+/**
+ * The marks only a declaration of residence takes (`residence_marks_filled`, 0123): who holds the bill and who they are
+ * to the client. A power of attorney or a contract leaves them unfilled, so it never takes them.
+ */
+export const RESIDENCE_MARKS = ["TITULAR", "RELACAO"] as const;
+const DECLARATION_MARKS: readonly string[] = [...PAPER_MARKS, ...RESIDENCE_MARKS];
+export const PAPER_MARK_KEY: Record<(typeof PAPER_MARKS)[number] | (typeof RESIDENCE_MARKS)[number], string> = {
   OUTORGANTE: "paper-mark-outorgante",
   CONTRATANTE: "paper-mark-contratante",
   OUTORGADOS: "paper-mark-outorgados",
@@ -136,10 +142,15 @@ export const PAPER_MARK_KEY: Record<(typeof PAPER_MARKS)[number], string> = {
   TELEFONE: "paper-mark-telefone",
   REPRESENTADOS: "paper-mark-representados",
   DATA: "paper-mark-data",
+  TITULAR: "paper-mark-titular",
+  RELACAO: "paper-mark-relacao",
 };
 
-/** What a model of the library writes (0054): the piece of a lawsuit, a power of attorney or a fee contract. */
-export const MODEL_DOCUMENTS = ["piece", "procuracao", "contrato"] as const;
+/**
+ * What a model of the library writes (0054): the piece of a lawsuit, a power of attorney, a fee contract, or a
+ * declaration of residence (0123).
+ */
+export const MODEL_DOCUMENTS = ["piece", "procuracao", "contrato", "declaracao_residencia"] as const;
 export type ModelDocument = (typeof MODEL_DOCUMENTS)[number];
 
 export const isModelDocument = (value: unknown): value is ModelDocument =>
@@ -147,7 +158,7 @@ export const isModelDocument = (value: unknown): value is ModelDocument =>
 
 /** The marks a model of a document may use. */
 export const modelMarks = (document: ModelDocument): readonly string[] =>
-  document === "piece" ? DRAFT_MARKS : PAPER_MARKS;
+  document === "piece" ? DRAFT_MARKS : document === "declaracao_residencia" ? DECLARATION_MARKS : PAPER_MARKS;
 
 /** The marks of a text that are none of the ones the platform fills: a typo to put right before approving. */
 export function unknownMarks(text: string, marks: readonly string[] = DRAFT_MARKS): string[] {

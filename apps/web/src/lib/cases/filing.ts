@@ -140,6 +140,7 @@ export const FILING_LABEL: Record<FilingKind, string> = {
   power_of_attorney: "Procuração",
   identity: "Documento de identidade",
   address_proof: "Comprovante de endereço",
+  residence_declaration: "Declaração de residência",
   ticket: "Bilhete",
   boarding_pass: "Cartão de embarque",
   receipt: "Comprovante de despesa",

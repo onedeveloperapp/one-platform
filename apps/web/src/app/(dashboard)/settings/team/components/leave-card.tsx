@@ -42,7 +42,7 @@ export default function LeaveCard({ data }: { data: TeamData }) {
             ? t("team-leave-summary-owner", { firm: data.firm.name })
             : t("team-leave-summary", { firm: data.firm.name })
         }
-        description={
+        detail={
           owner ? t("team-leave-owner", { firm: data.firm.name }) : t("team-leave-body", { firm: data.firm.name })
         }
       >

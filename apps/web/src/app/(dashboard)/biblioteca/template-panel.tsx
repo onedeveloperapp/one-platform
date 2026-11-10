@@ -23,11 +23,13 @@ import NiDocumentFull from "@/icons/nexture/ni-document-full";
 import {
   DRAFT_MARK_KEY,
   DRAFT_MARKS,
+  isModelDocument,
   libraryErrorKey,
   type ModelDocument,
   modelMarks,
   PAPER_MARK_KEY,
   PAPER_MARKS,
+  RESIDENCE_MARKS,
   unknownMarks,
 } from "@/lib/cases/drafts";
 import { readDraftTemplate, saveDraftTemplate } from "@/lib/library/actions";
@@ -45,6 +47,10 @@ export const DOCUMENT_KEY: Record<ModelDocument, { label: string; help: string }
   piece: { label: "library-document-piece", help: "library-document-piece-help" },
   procuracao: { label: "library-document-procuracao", help: "library-document-procuracao-help" },
   contrato: { label: "library-document-contrato", help: "library-document-contrato-help" },
+  declaracao_residencia: {
+    label: "library-document-declaracao-residencia",
+    help: "library-document-declaracao-residencia-help",
+  },
 };
 
 /** Which default a model would take the place of: a piece's is of its kind of lawsuit, a paper's of the paper. */
@@ -73,6 +79,7 @@ function copyName(name: string): string {
 function defaultKey(writes: ModelDocument, kind: Kind): string {
   if (writes === "procuracao") return "library-template-default-procuracao";
   if (writes === "contrato") return "library-template-default-contrato";
+  if (writes === "declaracao_residencia") return "library-template-default-declaracao";
   if (kind === null) return "library-template-default-any";
   return kind === "comum" ? "library-template-default-comum" : "library-template-default-juizado";
 }
@@ -211,7 +218,10 @@ export default function TemplatePanel({
   const marks: { mark: string; key: string }[] =
     writes === "piece"
       ? DRAFT_MARKS.map((mark) => ({ mark, key: DRAFT_MARK_KEY[mark] }))
-      : PAPER_MARKS.map((mark) => ({ mark, key: PAPER_MARK_KEY[mark] }));
+      : [...PAPER_MARKS, ...(writes === "declaracao_residencia" ? RESIDENCE_MARKS : [])].map((mark) => ({
+          mark,
+          key: PAPER_MARK_KEY[mark],
+        }));
   const complete = name.trim().length >= 2 && (body ?? "").trim().length >= 20;
   // What "changed" is measured against: the model read, a new one, or what ONE prepared from a document.
   const base = imported ?? {
@@ -365,8 +375,7 @@ export default function TemplatePanel({
             value={writes}
             // Chosen once the model is read: what it is now is what the choice starts from.
             onChange={(event) => {
-              const next: ModelDocument =
-                event.target.value === "procuracao" || event.target.value === "contrato" ? event.target.value : "piece";
+              const next: ModelDocument = isModelDocument(event.target.value) ? event.target.value : "piece";
               // A paper serves every lawsuit: it names no kind of lawsuit.
               const nextKind = next === "piece" ? kind : null;
               setWrites(next);
@@ -380,6 +389,7 @@ export default function TemplatePanel({
             <MenuItem value="piece">{t(DOCUMENT_KEY.piece.label)}</MenuItem>
             <MenuItem value="procuracao">{t(DOCUMENT_KEY.procuracao.label)}</MenuItem>
             <MenuItem value="contrato">{t(DOCUMENT_KEY.contrato.label)}</MenuItem>
+            <MenuItem value="declaracao_residencia">{t(DOCUMENT_KEY.declaracao_residencia.label)}</MenuItem>
           </TextField>
           {writes === "piece" ? (
             <TextField

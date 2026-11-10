@@ -112,7 +112,7 @@ export default function AiConsoleView({ state }: { state: AiConsoleState }) {
     <PageHeader
       title="IA"
       crumbs={CRUMBS}
-      description="O que a plataforma pede aos modelos: quanto custa e para qual escritório, como as respostas de cada tarefa se saíram com quem decide, e a tabela de preços por trás de cada custo. Aqui só há contagens e custo: uma resposta pertence ao escritório dela."
+      description="O que a plataforma pede aos modelos: o custo por escritório, como as respostas de cada tarefa se saíram e a tabela de preços. Só contagens e custo: uma resposta pertence ao escritório dela."
       action={
         <Button variant="outlined" color="grey" startIcon={<NiRefresh size="medium" />} onClick={refresh}>
           Atualizar
@@ -515,7 +515,7 @@ function TaskCard({
         </>
       }
       summary={summary}
-      description={[
+      detail={[
         task.task,
         task.activeVersion !== null ? `versão ${task.activeVersion} das instruções` : null,
         task.model,

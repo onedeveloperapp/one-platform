@@ -186,6 +186,20 @@ export type ClientCivilCourtItem = {
   source: "client" | "firm" | null;
 };
 
+/**
+ * A bill of the link's person in somebody else's name the firm accepted (`client_link_residence`, migration 0123): whose
+ * it is, the city on it, what they answered so far, and whether the declaration was issued already.
+ */
+export type ClientResidenceItem = {
+  id: string;
+  holder: string;
+  city: string | null;
+  relation: string | null;
+  note: string | null;
+  answered_at: string | null;
+  issued: boolean;
+};
+
 export type ClientTasks = {
   /** Where the case's account of what happened stands (0090); null when it could not be read. */
   account: AccountState | null;
@@ -204,6 +218,8 @@ export type ClientTasks = {
   agency: string | null;
   /** The interview of the case (0095), one question per screen; null with none, or when it could not be read. */
   interview: InterviewView | null;
+  /** What the link asks about a bill in somebody else's name (0123); none when it could not be read. */
+  residence: ClientResidenceItem[];
 };
 
 /** What the link asks the client to sign, to accept and to confirm, and what it tells them. Read only: no visit is counted. */
@@ -220,9 +236,10 @@ export async function readClientTasks(token: string): Promise<ClientTasks> {
       civilCourt: null,
       agency: null,
       interview: null,
+      residence: [],
     };
   }
-  const [signatures, terms, statements, course, notices, civil, agency, interview] = await Promise.all([
+  const [signatures, terms, statements, course, notices, civil, agency, interview, residence] = await Promise.all([
     supabase.rpc("client_link_signatures", { target_token: token }),
     supabase.rpc("client_link_terms", { target_token: token }),
     supabase.rpc("client_link_statements", { target_token: token }),
@@ -231,7 +248,9 @@ export async function readClientTasks(token: string): Promise<ClientTasks> {
     supabase.rpc("client_link_civil_court", { target_token: token }),
     supabase.rpc("client_link_agency", { target_token: token }),
     supabase.rpc("client_link_interview", { target_token: token }),
+    supabase.rpc("client_link_residence", { target_token: token }),
   ]);
+  const owned = residence.error ? null : (residence.data as { ok?: boolean; items?: unknown } | null);
   const handed = agency.data as { ok?: boolean; agency?: unknown; finished?: unknown } | null;
   const asked = civil.data as { ok?: boolean; items?: unknown } | null;
   const told = notices.data as (ClientNotices & { ok?: boolean }) | null;
@@ -267,5 +286,11 @@ export async function readClientTasks(token: string): Promise<ClientTasks> {
           )
         : null,
     agency: handed?.ok === true && typeof handed.agency === "string" && handed.finished !== true ? handed.agency : null,
+    residence:
+      owned?.ok === true && Array.isArray(owned.items)
+        ? (owned.items as ClientResidenceItem[]).filter(
+            (item) => typeof item?.id === "string" && typeof item?.holder === "string",
+          )
+        : [],
   };
 }

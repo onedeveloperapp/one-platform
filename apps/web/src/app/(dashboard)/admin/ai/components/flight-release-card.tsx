@@ -56,7 +56,8 @@ export default function FlightReleaseCard({
           ? `${NUMBER.format(status.readsToday)} de ${NUMBER.format(status.dailyReads)} leituras hoje · ${NUMBER.format(status.followingReal)} ${status.followingReal === 1 ? "viagem real acompanhada" : "viagens reais acompanhadas"}`
           : "Sem a chave da FlightAware neste ambiente"
       }
-      description="O ONE lê na FlightAware os voos que acompanha e, quando a regra encontra um problema, escreve primeiro ao passageiro. O chat de teste recebe sempre; um passageiro real só depois da liberação, dada aqui com a nota do parecer jurídico sobre captação de clientela (Código de Ética da OAB, art. 7º, e Provimento 205/2021)."
+      // What the release lets happen, and the legal note it is given with, is read before releasing: in sight.
+      detail="O ONE lê na FlightAware os voos que acompanha e, quando a regra encontra um problema, escreve primeiro ao passageiro. O chat de teste recebe sempre; um passageiro real só depois da liberação, dada aqui com a nota do parecer jurídico sobre captação de clientela (Código de Ética da OAB, art. 7º, e Provimento 205/2021)."
       // Alerts kept for a real passenger wait for this card: they are what the operator comes to weigh.
       defaultOpen={status.heldAlerts > 0}
     >

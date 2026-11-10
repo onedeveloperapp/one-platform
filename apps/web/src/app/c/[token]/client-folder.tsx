@@ -4,6 +4,7 @@ import ClientCivilCourt from "./client-civil-court";
 import ClientCourse from "./client-course";
 import ClientInterview from "./client-interview";
 import ClientNotices from "./client-notices";
+import ClientResidence from "./client-residence";
 import ClientStatements from "./client-statements";
 import { ClientSignatures, ClientTerms } from "./client-tasks";
 import { useRouter } from "next/navigation";
@@ -258,6 +259,8 @@ export default function ClientFolder({
         editable={editable}
         onSaved={() => router.refresh()}
       />
+      {/* A bill in somebody else's name the firm accepted asks who the holder is (0123), right under the documents. */}
+      <ClientResidence token={token} items={tasks.residence} editable={editable} onSaved={() => router.refresh()} />
       <People
         token={token}
         people={view.people}
@@ -1147,7 +1150,7 @@ function Documents({
           tone="secondary"
           title={t("client-documents-title")}
           chip={chip}
-          description={standing.state === "owed" || standing.state === "none" ? t("client-documents-body") : undefined}
+          detail={standing.state === "owed" || standing.state === "none" ? t("client-documents-body") : undefined}
         />
         {/* Nothing left for the client to send: the card says so first, and what was sent stays listed under it. */}
         {standing.state === "checking" && (

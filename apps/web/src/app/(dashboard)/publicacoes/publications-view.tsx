@@ -17,6 +17,9 @@ import StateLine from "@/components/product/state-line";
 import StatusChip, { type StatusTone } from "@/components/product/status-chip";
 import { TILE_TONE, type TileTone } from "@/components/product/tile-tone";
 import PublicationCard, { CATEGORY_LOOK } from "@/components/publications/publication-card";
+import IllustrationAccounts from "@/icons/illustrations/illustration-accounts";
+import IllustrationConfigure from "@/icons/illustrations/illustration-configure";
+import IllustrationEmail from "@/icons/illustrations/illustration-email";
 import NiDocumentCheck from "@/icons/nexture/ni-document-check";
 import NiDocumentCross from "@/icons/nexture/ni-document-cross";
 import NiInbox from "@/icons/nexture/ni-inbox";
@@ -442,7 +445,7 @@ function PublicationsScreen({ state, onReadAgain }: { state: PublicationsState; 
 
       {ready && data && total === 0 && reading === "none" && !data.hasRegistrations ? (
         <EmptyState
-          icon={<NiUsers size="large" />}
+          illustration={<IllustrationAccounts />}
           title={t("publications-no-registration-title")}
           description={t("publications-no-registration-body")}
           action={{ label: t("publications-no-registration-action"), href: "/settings/team" }}
@@ -451,7 +454,7 @@ function PublicationsScreen({ state, onReadAgain }: { state: PublicationsState; 
 
       {ready && data && total === 0 && (reading !== "none" || data.hasRegistrations) ? (
         <EmptyState
-          icon={<NiInbox size="large" />}
+          illustration={<IllustrationEmail />}
           title={t(off ? "publications-nothing-off-title" : "publications-nothing-title")}
           description={t(nothingKey)}
           action={mayAsk && !asking ? { label: t("publications-capture-now"), onClick: askForReading } : undefined}
@@ -580,7 +583,7 @@ function PublicationsScreen({ state, onReadAgain }: { state: PublicationsState; 
 
           {rows.length === 0 && !found ? (
             <EmptyState
-              icon={ready.view === "por-triar" ? <NiDocumentCheck size="large" /> : <NiInbox size="large" />}
+              illustration={ready.view === "por-triar" ? <IllustrationConfigure /> : <IllustrationEmail />}
               title={t(EMPTY_KEY[ready.view].title)}
               description={t(emptyBodyKey)}
               action={

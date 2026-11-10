@@ -112,8 +112,9 @@ select throws_ok(
 reset role;
 
 select ok(
-  (select (payload ->> 'sources')::int = 22 and (payload ->> 'models')::int = 3 from res where name = 'a_reads')
-    and (select (payload ->> 'sources')::int = 22 and (payload ->> 'models')::int = 3 from res where name = 'b_reads'),
+  -- The two pieces and the power of attorney, and since 0123 the declaration of residence.
+  (select (payload ->> 'sources')::int = 22 and (payload ->> 'models')::int = 4 from res where name = 'a_reads')
+    and (select (payload ->> 'sources')::int = 22 and (payload ->> 'models')::int = 4 from res where name = 'b_reads'),
   'both firms read the sources and the models of the platform'
 );
 select ok(

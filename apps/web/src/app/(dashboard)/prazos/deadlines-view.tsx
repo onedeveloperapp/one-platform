@@ -14,12 +14,12 @@ import { StatTile } from "@/components/product/home-tiles";
 import ModuleScope from "@/components/product/module-scope";
 import PageHeader from "@/components/product/page-header";
 import type { TileTone } from "@/components/product/tile-tone";
+import IllustrationConfigure from "@/icons/illustrations/illustration-configure";
 import NiCalendarClock from "@/icons/nexture/ni-calendar-clock";
 import NiCheckSquare from "@/icons/nexture/ni-check-square";
 import NiClock from "@/icons/nexture/ni-clock";
 import NiDocumentFull from "@/icons/nexture/ni-document-full";
 import NiExclamationSquare from "@/icons/nexture/ni-exclamation-square";
-import NiInbox from "@/icons/nexture/ni-inbox";
 import NiListCheck from "@/icons/nexture/ni-list-check";
 import NiUsers from "@/icons/nexture/ni-users";
 import { caseLabel } from "@/lib/cases/cases";
@@ -141,7 +141,7 @@ export default function DeadlinesView({ state }: { state: DeadlinesState }) {
 
       {ready && data && total === 0 && data.counts.rever === 0 && ready.untimed.total === 0 ? (
         <EmptyState
-          icon={<NiCalendarClock size="large" />}
+          illustration={<IllustrationConfigure />}
           title={t("deadlines-first-title")}
           description={t("deadlines-first-body")}
           action={{ label: t("deadlines-first-action"), href: "/publicacoes" }}
@@ -183,7 +183,7 @@ export default function DeadlinesView({ state }: { state: DeadlinesState }) {
 
           {data.rows.length === 0 ? (
             <EmptyState
-              icon={<NiInbox size="large" />}
+              illustration={<IllustrationConfigure />}
               title={t(VIEW_KEY[ready.view].emptyTitle)}
               description={t(VIEW_KEY[ready.view].emptyBody)}
               action={

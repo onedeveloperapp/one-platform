@@ -127,7 +127,7 @@ export default function ExecutorCheckCard({
           ? "O provedor desta tarefa não tem chave neste ambiente"
           : `Pergunta fixa a ${model}, em nome de um escritório`)
       }
-      description="Faz uma pergunta fixa ao modelo, sem nenhum dado de cliente, em nome de um escritório. Serve para ver o caminho inteiro funcionar ali: as instruções em vigor, a chamada, o custo lançado na conta do escritório e a resposta na fila de aprovações dele."
+      description="Faz uma pergunta fixa ao modelo, sem dado de cliente, em nome de um escritório, para ver o caminho inteiro: as instruções em vigor, a chamada, o custo na conta dele e a resposta na fila."
     >
       {blocked ? (
         <Alert severity="info" className="neutral bg-background-paper/60!">

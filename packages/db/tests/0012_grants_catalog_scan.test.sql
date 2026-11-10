@@ -82,7 +82,7 @@ select is(
     'client_link_finish_statement', 'client_link_finish_upload', 'client_link_interview', 'client_link_interview_answer',
     'client_link_notices',
     'client_link_open', 'client_link_remove_segment', 'client_link_reserve_signed', 'client_link_reserve_statement',
-    'client_link_reserve_upload',
+    'client_link_reserve_upload', 'client_link_residence',
     'client_link_save_person', 'client_link_save_segment', 'client_link_signature_original', 'client_link_signatures',
     'client_link_statements', 'client_link_terms', 'client_link_write_statement',
     'current_consent_terms', 'firm_invitation_preview', 'partner_invitation_preview',
