@@ -3,6 +3,7 @@
 import type { CaseState } from "../case-types";
 import { CivilCourtAnswers, FamilyPlanBox } from "./family-court";
 import FreeJusticeAnswers from "./free-justice";
+import QualificationBlock from "./qualification-block";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 
@@ -194,6 +195,12 @@ export default function RulesCard({
           {t(caseErrorKey(problem))}
         </Alert>
       )}
+      <QualificationBlock
+        caseId={state.case.id}
+        qualification={state.case.qualification}
+        mayRelease={writable && state.lawyer && !state.supportVisit}
+        onChanged={onChanged}
+      />
       {done && (
         <Alert
           severity="success"

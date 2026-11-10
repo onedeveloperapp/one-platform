@@ -36,7 +36,29 @@ describe("the firm's people", () => {
         adult: true,
         marketingOff: false,
         erased: false,
+        point: null,
+        reasons: [],
       },
+    ]);
+  });
+
+  it("reads where each person stands in the funnel, and why one did not qualify", () => {
+    const page = readPeoplePage({
+      counts: { leads: 1, "nao-qualificados": 1 },
+      total: 2,
+      rows: [
+        { id: "p1", name: "Maria Teste", point: "lead", reasons: [] },
+        { id: "p2", name: "João Teste", point: "nao_qualificado", reasons: ["cancelled_early_notice", 3] },
+        { id: "p3", name: "Ana Teste", point: "whatever" },
+      ],
+    });
+    expect(page.counts.leads).toBe(1);
+    expect(page.counts["nao-qualificados"]).toBe(1);
+    expect(page.counts.clientes).toBe(0);
+    expect(page.rows.map((row) => [row.point, row.reasons])).toEqual([
+      ["lead", []],
+      ["nao_qualificado", ["cancelled_early_notice"]],
+      [null, []],
     ]);
   });
 

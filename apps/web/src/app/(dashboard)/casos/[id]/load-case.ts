@@ -31,6 +31,7 @@ import { cpfLookup } from "@/lib/cases/identity";
 import { courtPublicationsOf, stageMomentsOf } from "@/lib/cases/journey";
 import { lawsuitFactsOf } from "@/lib/cases/outcomes";
 import { casePulseOf } from "@/lib/cases/pulse";
+import { readCaseQualification } from "@/lib/cases/qualification";
 import { readFieldsOf } from "@/lib/cases/read-fields";
 import { residenceViewsOf } from "@/lib/cases/residence";
 import { loadCivilCourt, loadRuleFacts } from "@/lib/cases/rule-facts";
@@ -173,7 +174,7 @@ export async function loadCase(id: string): Promise<CaseState> {
   const { data: row, error } = await supabase
     .from("cases")
     .select(
-      "id, seq, module, incident, airline_iata, flight_date, cause, status, origin, partnership_id, summary, responsible_id, close_reason, created_at, closed_by_one, close_acked_at, is_test",
+      "id, seq, module, incident, airline_iata, flight_date, cause, status, origin, partnership_id, summary, responsible_id, close_reason, created_at, closed_by_one, close_acked_at, is_test, qualification, qualification_released_by, qualification_released_at, qualification_release_reason",
     )
     .eq("id", id)
     .eq("org_id", firm)
@@ -547,6 +548,11 @@ export async function loadCase(id: string): Promise<CaseState> {
       id: row.id,
       seq: row.seq,
       isTest: row.is_test === true,
+      qualification: readCaseQualification(row.qualification, {
+        by: row.qualification_released_by ?? null,
+        at: row.qualification_released_at ?? null,
+        reason: row.qualification_release_reason ?? null,
+      }),
       module: row.module,
       incident: row.incident,
       airlineIata: row.airline_iata,

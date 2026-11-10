@@ -144,9 +144,9 @@ export default function GoalsView({ state }: { state: GoalsState }) {
         <>
           <ModuleScope path="/controladoria/metas" modules={ready.modules} current={ready.scope?.key ?? null} />
 
-          {!ready.goals.counting ? (
+          {!ready.goals.counting || ready.goals.testsCounted ? (
             <Alert severity="info" className="neutral bg-background-paper/60!">
-              {t("goals-not-counting")}
+              {t(ready.goals.counting ? "goals-tests-counted" : "goals-not-counting")}
             </Alert>
           ) : null}
           {ready.supportVisit ? (

@@ -14,6 +14,7 @@ import type { InterviewView } from "@/lib/cases/interview";
 import type { StageMoment } from "@/lib/cases/journey";
 import type { LawsuitFact } from "@/lib/cases/outcomes";
 import type { CasePulse } from "@/lib/cases/pulse";
+import type { CaseQualification } from "@/lib/cases/qualification";
 import type { ReadFields } from "@/lib/cases/read-fields";
 import type { ResidenceView } from "@/lib/cases/residence";
 import type { Ceiling, LawyerCauses, WeatherAssessment } from "@/lib/cases/rules";
@@ -191,6 +192,8 @@ export type CaseDetail = {
   seq: number;
   /** A case of the test chat (0061): its papers may be signed by simulation (0138). */
   isTest?: boolean;
+  /** The rule's word on whether the problem qualifies (0147), and a lawyer's going on with it all the same. */
+  qualification?: CaseQualification | null;
   /** The product module of the case (migration 0068). */
   module: string;
   /** The kind of problem, one of its module's (lib/modules/registry.ts); null for a module that has none. */

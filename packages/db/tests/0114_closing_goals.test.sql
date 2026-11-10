@@ -7,7 +7,7 @@ select plan(14);
 -- (a partner or the controladoria, never a support visit), what each may
 -- be of (a module the firm has, a partnership of its own), archived with
 -- the reason and brought back, every change on the record, and read by
--- anybody of the firm with no count until the rule of a closing exists.
+-- anybody of the firm with its count by the rule of a closing (0146).
 -- Two firms: A with a partner, the controladoria and a lawyer; B with its
 -- owner and an agency of its own.
 --
@@ -144,11 +144,11 @@ select is(
   'every change on the record'
 );
 select ok(
-  (select payload -> 'rule' = 'null'::jsonb from res where name = 'reads')
-    and (select bool_and(g -> 'closings' = 'null'::jsonb) from res, jsonb_array_elements(payload -> 'goals') g
+  (select payload ->> 'rule' = 'fechamento-v1' from res where name = 'reads')
+    and (select bool_and(g -> 'closings' = '0'::jsonb) from res, jsonb_array_elements(payload -> 'goals') g
          where name = 'reads')
     and jsonb_array_length((select payload -> 'goals' from res where name = 'reads')) = 2,
-  'the goals are read with no count while no rule says what a closing is'
+  'the goals are read with their closings by the rule of a closing (0146), none in a firm with no case'
 );
 select ok(
   (select g ->> 'partner' = 'Viagens Sol' from res, jsonb_array_elements(payload -> 'goals') g

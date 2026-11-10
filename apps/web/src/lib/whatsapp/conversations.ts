@@ -125,6 +125,8 @@ export function eventWords(event: ThreadEvent): {
         : { key: "inbox-event-returned-unnamed", values: {} };
     case "declined":
       return { key: "inbox-event-declined", values: {} };
+    case "not_qualified":
+      return { key: "inbox-event-not-qualified", values: {} };
     case "stopped":
       return { key: "inbox-event-stopped", values: {} };
     default:

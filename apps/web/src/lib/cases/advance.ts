@@ -16,6 +16,7 @@ import type { Missing } from "@/lib/cases/cases";
  * its words stay for a record written before.
  */
 export const ADVANCE_WAITING = [
+  "not_qualified",
   "case_incomplete",
   "claims_missing",
   "ceiling_unknown",
@@ -117,6 +118,8 @@ export const WAIT_PLACE: Record<AdvanceWaiting, WaitPlace> = {
   unavailable: ONE(null),
   step_failed: ONE(null),
   stuck: FIRM("anyone", null),
+  // The rule of qualification (0147) said the problem does not qualify: a lawyer goes on with it, or the firm declines.
+  not_qualified: FIRM("lawyer", "rules"),
 };
 
 /** Where a wait is put right, and by whom; a refusal the screen has no words of its own for is the firm's. */
@@ -168,7 +171,11 @@ export function lawsuitsWaiting(input: {
   account?: AccountState | null;
   /** A case an agency handed over (0071) whose client has not said on their link that they finished. */
   unconfirmedHandoff?: boolean;
+  /** The rule's word on whether the problem qualifies (0147), and whether a lawyer went on with it all the same. */
+  qualification?: { outcome: string; released: boolean } | null;
 }): AdvanceWaiting | null {
+  // A problem that does not qualify opens nothing in court until a lawyer says the firm goes on with it.
+  if (input.qualification?.outcome === "not_qualified" && !input.qualification.released) return "not_qualified";
   if (input.missing.length > 0) return "case_incomplete";
   if (input.claims.length === 0) return "no_claimants";
   const account = accountWaiting(input.account);
@@ -179,6 +186,7 @@ export function lawsuitsWaiting(input: {
 }
 
 const WAITING_KEY: Record<AdvanceWaiting, string> = {
+  not_qualified: "advance-waiting-not-qualified",
   case_incomplete: "advance-waiting-case-incomplete",
   claims_missing: "advance-waiting-claims-missing",
   ceiling_unknown: "advance-waiting-ceiling-unknown",
@@ -219,6 +227,7 @@ const WAITING_KEY: Record<AdvanceWaiting, string> = {
 
 /** What ONE waits for, in a word or two: how a person tells at a glance what a case needs of the firm. */
 const WAITING_TAG_KEY: Record<AdvanceWaiting, string> = {
+  not_qualified: "advance-tag-not-qualified",
   case_incomplete: "advance-tag-case-incomplete",
   claims_missing: "advance-tag-claims",
   ceiling_unknown: "advance-tag-ceiling",

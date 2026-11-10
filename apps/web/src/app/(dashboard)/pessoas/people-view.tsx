@@ -21,12 +21,17 @@ import NiCheckSquare from "@/icons/nexture/ni-check-square";
 import NiChevronRightSmall from "@/icons/nexture/ni-chevron-right-small";
 import NiCrossSquare from "@/icons/nexture/ni-cross-square";
 import NiUsers from "@/icons/nexture/ni-users";
+import { REASON_KEY } from "@/lib/cases/qualification";
 import { caseKindLabelKey } from "@/lib/modules/registry";
 import { listPeople } from "@/lib/people/actions";
 import {
   AGE_KEY,
+  FUNNEL_POINT_KEY,
+  type FunnelPoint,
+  isFunnelView,
   ORIGIN_KEY,
   OUTCOME_KEY,
+  PEOPLE_CARD_VIEWS,
   PEOPLE_SHOWN,
   PEOPLE_VIEW_KEY,
   PEOPLE_VIEWS,
@@ -53,7 +58,17 @@ export type PeopleState =
   | { kind: "unavailable" }
   | { kind: "error" };
 
-const VIEW_LOOK: Record<View, { tone: "primary" | "secondary" | "accent-3" | "accent-4"; icon: React.ReactNode }> = {
+const POINT_TONE: Record<FunnelPoint, "positive" | "info" | "attention" | "neutral"> = {
+  cliente: "positive",
+  lead: "info",
+  nao_qualificado: "attention",
+  contato: "neutral",
+};
+
+const VIEW_LOOK: Record<
+  (typeof PEOPLE_CARD_VIEWS)[number],
+  { tone: "primary" | "secondary" | "accent-3" | "accent-4"; icon: React.ReactNode }
+> = {
   todos: { tone: "primary", icon: <NiUsers size="medium" /> },
   ativos: { tone: "secondary", icon: <NiCheckSquare size="medium" /> },
   "sem-caso-ativo": { tone: "accent-4", icon: <NiChartBar size="medium" /> },
@@ -146,7 +161,7 @@ export default function PeopleView({ state }: { state: PeopleState }) {
       {ready && numbers ? (
         <>
           <Grid container spacing={2.5}>
-            {PEOPLE_VIEWS.map((key) => (
+            {PEOPLE_CARD_VIEWS.map((key) => (
               <Grid key={key} size={{ xs: 6, lg: "grow" }}>
                 <NumberCard
                   icon={VIEW_LOOK[key].icon}
@@ -216,7 +231,7 @@ export default function PeopleView({ state }: { state: PeopleState }) {
               key,
               label: t(PEOPLE_VIEW_KEY[key]),
               count: String(shown?.counts[key] ?? 0),
-              group: t("people-title"),
+              group: t(isFunnelView(key) ? "people-funnel-title" : "people-title"),
             }))}
             view={view}
             onView={(key) => router.push(key === "todos" ? "/pessoas" : `/pessoas?ver=${key}`)}
@@ -261,8 +276,21 @@ export default function PeopleView({ state }: { state: PeopleState }) {
                             .filter(Boolean)
                             .join(" · ") || t("people-no-data")}
                         </Typography>
+                        {row.point === "nao_qualificado" && row.reasons.length > 0 ? (
+                          <Typography variant="body2" className="text-text-secondary">
+                            {row.reasons
+                              .map((reason) =>
+                                reason in REASON_KEY ? t(REASON_KEY[reason as keyof typeof REASON_KEY]) : null,
+                              )
+                              .filter(Boolean)
+                              .join(" ")}
+                          </Typography>
+                        ) : null}
                       </Box>
                       <Box className="hidden flex-wrap justify-end gap-1 sm:flex">
+                        {row.point ? (
+                          <StatusChip tone={POINT_TONE[row.point]} label={t(FUNNEL_POINT_KEY[row.point])} />
+                        ) : null}
                         {row.erased ? <StatusChip tone="neutral" label={t("people-chip-erased")} /> : null}
                         {!row.adult ? <StatusChip tone="info" label={t("people-chip-minor")} /> : null}
                         {row.marketingOff ? <StatusChip tone="neutral" label={t("people-chip-no-marketing")} /> : null}

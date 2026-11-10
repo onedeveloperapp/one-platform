@@ -8,6 +8,7 @@ import { caseMissing, firstNameOf, type MissingParty, type PersonData, type Requ
 import { draftBlocks } from "@/lib/cases/drafts";
 import { queueDraftWork } from "@/lib/cases/drafts-work";
 import { queueFilingPackage } from "@/lib/cases/filing-work";
+import { caseQualification } from "@/lib/cases/qualification";
 import { lawsuitPlan, type MinimumWage, type RuleParty } from "@/lib/cases/rules";
 import { supabaseFileStore } from "@/lib/files/store";
 import { soon } from "@/lib/jobs/soon";
@@ -115,7 +116,27 @@ type LawsuitFacts = {
   unconfirmedHandoff: boolean;
   /** Where the client's account of what happened stands (0090): the lawsuits wait for it. */
   account: AccountState | null;
+  /** The rule's word on whether the problem qualifies (0147), kept as ONE read it now. */
+  qualification: { outcome: string; released: boolean } | null;
 };
+
+/**
+ * Runs the rule of qualification on the case (0147) and keeps its word: the database records it only when it says
+ * something new. Answers what holds the lawsuits; null when the case could not be read for it.
+ */
+async function qualifyCase(
+  service: SupabaseClient,
+  caseId: string,
+  day: string,
+): Promise<{ outcome: string; released: boolean } | null> {
+  const { data, error } = await service.rpc("case_qualification_facts", { target_case: caseId });
+  if (error) throw new Error("qualification facts unreadable");
+  const result = caseQualification(data, day);
+  if (!result) return null;
+  const recorded = await service.rpc("record_case_qualification", { target_case: caseId, target_result: result });
+  if (recorded.error) throw new Error("qualification not recorded");
+  return { outcome: result.outcome, released: (data as { released?: unknown } | null)?.released === true };
+}
 
 /** What creating a case's lawsuits reads of it. Throws when a read failed; null for a case that is gone. */
 async function loadLawsuitFacts(service: SupabaseClient, caseId: string): Promise<LawsuitFacts | null> {
@@ -137,6 +158,8 @@ async function loadLawsuitFacts(service: SupabaseClient, caseId: string): Promis
     if (finished.error) throw new Error("client links unreadable");
     unconfirmedHandoff = (finished.count ?? 0) === 0;
   }
+  // Whether the problem qualifies (0147): ONE runs the rule on every look, so a new answer of the client counts.
+  const qualification = await qualifyCase(service, caseId, today());
   // The client's account, as the database reads it (0090): the piece asked right after the lawsuits is written from it.
   const told = await service.rpc("case_account_state", { target_case: caseId });
   if (told.error) throw new Error("account unreadable");
@@ -226,6 +249,7 @@ async function loadLawsuitFacts(service: SupabaseClient, caseId: string): Promis
     systems: (systems.data ?? []) as { court: string; proceeding_kind: string; system: string; confirmed: boolean }[],
     unconfirmedHandoff,
     account: accountStateOf(told.data),
+    qualification,
   };
 }
 
@@ -280,6 +304,7 @@ async function createLawsuits(
     claims: facts.parties.filter((party) => party.role === "claimant").map((party) => party.claimCents),
     account: facts.account,
     unconfirmedHandoff: facts.unconfirmedHandoff,
+    qualification: facts.qualification,
   });
   if (waiting) return { waiting, created: false, lost: false };
   const planned = lawsuitPlan({

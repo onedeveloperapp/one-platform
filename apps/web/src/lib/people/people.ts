@@ -5,7 +5,13 @@ import { cpfMiddle } from "@/lib/search/global-search";
  * more than they may be, the numbers of the screen, the filters of a marketing segment and the columns of its export.
  */
 
-export const PEOPLE_VIEWS = ["todos", "ativos", "sem-caso-ativo", "sem-marketing"] as const;
+/** The views of the cards of numbers above the list. */
+export const PEOPLE_CARD_VIEWS = ["todos", "ativos", "sem-caso-ativo", "sem-marketing"] as const;
+/** The funnel (0148): where each person stands, the furthest point any of their opportunities reached. */
+export const FUNNEL_VIEWS = ["leads", "clientes", "nao-qualificados", "contatos"] as const;
+export const PEOPLE_VIEWS = [...PEOPLE_CARD_VIEWS, ...FUNNEL_VIEWS] as const;
+export const isFunnelView = (value: unknown): value is (typeof FUNNEL_VIEWS)[number] =>
+  (FUNNEL_VIEWS as readonly unknown[]).includes(value);
 export type PeopleView = (typeof PEOPLE_VIEWS)[number];
 export const isPeopleView = (value: unknown): value is PeopleView =>
   (PEOPLE_VIEWS as readonly unknown[]).includes(value);
@@ -15,6 +21,21 @@ export const PEOPLE_VIEW_KEY: Record<PeopleView, string> = {
   ativos: "people-view-active",
   "sem-caso-ativo": "people-view-inactive",
   "sem-marketing": "people-view-no-marketing",
+  leads: "people-view-leads",
+  clientes: "people-view-clients",
+  "nao-qualificados": "people-view-not-qualified",
+  contatos: "people-view-contacts",
+};
+
+export const FUNNEL_POINTS = ["lead", "cliente", "nao_qualificado", "contato"] as const;
+export type FunnelPoint = (typeof FUNNEL_POINTS)[number];
+const isFunnelPoint = (value: unknown): value is FunnelPoint => (FUNNEL_POINTS as readonly unknown[]).includes(value);
+
+export const FUNNEL_POINT_KEY: Record<FunnelPoint, string> = {
+  lead: "people-point-lead",
+  cliente: "people-point-client",
+  nao_qualificado: "people-point-not-qualified",
+  contato: "people-point-contact",
 };
 
 export const PEOPLE_SHOWN = 50;
@@ -29,6 +50,10 @@ export type PersonRow = {
   adult: boolean;
   marketingOff: boolean;
   erased: boolean;
+  /** Where the person stands in the funnel (0148); null where the database did not say. */
+  point: FunnelPoint | null;
+  /** Why the rule did not qualify their problem, for one not qualified. */
+  reasons: string[];
 };
 
 export type PeoplePage = { counts: Record<PeopleView, number>; total: number; rows: PersonRow[] };
@@ -63,6 +88,10 @@ export function readPeoplePage(raw: unknown): PeoplePage {
           adult: row.adult !== false,
           marketingOff: row.marketing_off === true,
           erased: row.erased === true,
+          point: isFunnelPoint(row.point) ? row.point : null,
+          reasons: Array.isArray(row.reasons)
+            ? row.reasons.filter((reason): reason is string => typeof reason === "string")
+            : [],
         },
       ];
     }),

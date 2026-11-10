@@ -369,3 +369,22 @@ export async function createPlannedProceedings(
   await queueCaseAdvance(caseId);
   return { ok: true, code: "created", created: Number(answer.count ?? 0) };
 }
+
+/**
+ * A partner or a lawyer goes on with a case the rule of qualification did not
+ * qualify, or left to a person (0147), with the reason: ONE carries it on.
+ */
+export async function releaseQualification(input: { caseId: string; reason: string }): Promise<RuleResult> {
+  const context = await getMemberContext();
+  if (!context?.firm || !isId(input?.caseId)) return { ok: false, code: "case_not_found" };
+  const { data, error } = await context.supabase.rpc("release_case_qualification", {
+    target_case: input.caseId,
+    target_reason: typeof input.reason === "string" ? input.reason.trim().slice(0, 500) : "",
+  });
+  const result = answerOf(data, error);
+  if (result.ok) {
+    refresh(input.caseId);
+    await queueCaseAdvance(input.caseId);
+  }
+  return result;
+}

@@ -45,6 +45,8 @@ export type ClosingGoals = {
   today: string;
   /** Whether the closings are counted (the rule of what a closing is exists). */
   counting: boolean;
+  /** The closings are of the firm's test cases, while it has no real case (migration 0146). */
+  testsCounted: boolean;
   mayManage: boolean;
   goals: ClosingGoal[];
 };
@@ -60,6 +62,7 @@ export function closingGoalsOf(raw: unknown): ClosingGoals | null {
   return {
     today: value.today,
     counting: value.rule !== null && value.rule !== undefined,
+    testsCounted: value.tests_counted === true,
     mayManage: value.may_manage === true,
     goals: value.goals.flatMap((entry): ClosingGoal[] => {
       if (typeof entry !== "object" || entry === null) return [];

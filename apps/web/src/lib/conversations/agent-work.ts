@@ -12,6 +12,7 @@ import {
   readInterview,
   startInterview,
 } from "@/lib/cases/interview-work";
+import { alertQualification } from "@/lib/cases/qualification";
 import { queueStatementWork } from "@/lib/cases/statements-work";
 import {
   byPersonMessage,
@@ -29,6 +30,7 @@ import {
   minorsOf,
   modelAnswerOf,
   modelInput,
+  notQualifiedMessage,
   type PaperKind,
   paperOf,
   quickAnswer,
@@ -251,10 +253,77 @@ async function agencyOfAlert(service: SupabaseClient, alertId: string): Promise<
   return typeof name === "string" && name.trim() !== "" ? name : null;
 }
 
+/**
+ * The rule of qualification on ONE's word about a flight (0147), from the alert and its trip's legs; null when they
+ * could not be read, and the case then opens as before (the rule runs on the case too).
+ */
+async function qualifyAlert(service: SupabaseClient, alertId: string) {
+  const { data, error } = await service
+    .from("flight_alerts")
+    .select(
+      "kind, delay_minutes, tracked_trips(tracked_legs(scheduled_departure_local, origin_iata, destination_iata))",
+    )
+    .eq("id", alertId)
+    .maybeSingle();
+  if (error || !data) return null;
+  const row = data as Record<string, unknown>;
+  const trip = (Array.isArray(row.tracked_trips) ? row.tracked_trips[0] : row.tracked_trips) as {
+    tracked_legs?: { scheduled_departure_local: string; origin_iata: string; destination_iata: string }[];
+  } | null;
+  const legs = trip?.tracked_legs ?? [];
+  const codes = [...new Set(legs.flatMap((leg) => [leg.origin_iata, leg.destination_iata]))];
+  let international: boolean | null = null;
+  if (codes.length > 0) {
+    const airports = await service.from("airports").select("iata, country").in("iata", codes);
+    if (!airports.error) {
+      const known = (airports.data ?? []) as { iata: string; country: string }[];
+      international = known.some((airport) => airport.country !== "BR")
+        ? true
+        : known.length === codes.length
+          ? false
+          : null;
+    }
+  }
+  const days = legs.map((leg) => String(leg.scheduled_departure_local).slice(0, 10)).sort();
+  return alertQualification({
+    kind: String(row.kind),
+    delayMinutes: typeof row.delay_minutes === "number" ? row.delay_minutes : null,
+    flightDay: days[0] ?? null,
+    international,
+    today: today(),
+  });
+}
+
 /** A yes: the case opened with the trip, and the link with the next steps; or the yes kept for a person. */
 async function openCase(service: SupabaseClient, held: Held, context: TurnContext, report: TurnReport): Promise<void> {
   const alert = context.alert;
   if (!alert) return;
+  // A problem the rule does not qualify opens no case: the firm's word, and the passenger kept with the reason.
+  const verdict = await qualifyAlert(service, alert.alertId);
+  if (verdict?.outcome === "not_qualified") {
+    const answer = await rpc(service, "one_alert_not_qualified", {
+      target_conversation: held.conversationId,
+      target_claim: held.claim,
+      target_alert: alert.alertId,
+      target_result: verdict,
+      target_body: notQualifiedMessage(alert.passengerName),
+    });
+    if (answer.code === "not_qualified") {
+      await send(service, answer.message_id);
+      return;
+    }
+    if (answer.code === "not_qualified_by_person") {
+      await callPerson(
+        service,
+        held,
+        "O passageiro quer seguir, mas pela regra o problema não se qualifica: uma pessoa do escritório responde.",
+      );
+      report.called += 1;
+      return;
+    }
+    if (answer.code === "answered_before" || answer.code === "already_opened") return;
+    throw new Error(`the answer could not be kept: ${String(answer.code)}`);
+  }
   const agency = await agencyOfAlert(service, alert.alertId);
   const token = randomBytes(32).toString("base64url");
   const answer = await rpc(service, "one_open_case_from_alert", {

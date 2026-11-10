@@ -96,6 +96,13 @@ export const caseOpenedNoLinkMessage = (passengerName: string): string =>
 export const byPersonMessage = (passengerName: string): string =>
   `Obrigado, ${firstNameOf(passengerName) || passengerName}. Uma pessoa do escritório vai confirmar e te escreve por aqui.`;
 
+/**
+ * A yes to a problem the rule does not qualify (0147): no case is opened, said in the firm's name, with no promise
+ * and no advice, and the way to a person kept open.
+ */
+export const notQualifiedMessage = (passengerName: string): string =>
+  `Obrigado por responder, ${firstNameOf(passengerName) || passengerName}. Pelo que vimos deste voo, o escritório não vai abrir um caso agora. Se quiser falar com uma pessoa do escritório, é só escrever aqui.`;
+
 /** The end of a no. */
 export const declinedMessage = (passengerName: string): string =>
   `Tudo bem, ${firstNameOf(passengerName) || passengerName}. O escritório não vai seguir com este caso. Se mudar de ideia, é só escrever aqui.`;

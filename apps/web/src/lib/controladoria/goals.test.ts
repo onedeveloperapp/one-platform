@@ -71,6 +71,20 @@ describe("closingGoalsOf", () => {
     ]);
   });
 
+  it("counts by the rule of a closing, and says when the test cases are what it counts", () => {
+    const read = closingGoalsOf({
+      today: TODAY,
+      rule: "fechamento-v1",
+      tests_counted: true,
+      may_manage: false,
+      goals: [{ id: "g1", starts_on: "2026-11-01", ends_on: "2026-11-30", target: 4, closings: 3 }],
+    });
+    expect(read?.counting).toBe(true);
+    expect(read?.testsCounted).toBe(true);
+    expect(read?.goals[0].closings).toBe(3);
+    expect(closingGoalsOf({ today: TODAY, rule: "fechamento-v1", goals: [] })?.testsCounted).toBe(false);
+  });
+
   it("is null for anything that is not an answer", () => {
     expect(closingGoalsOf(null)).toBeNull();
     expect(closingGoalsOf({ goals: [] })).toBeNull();

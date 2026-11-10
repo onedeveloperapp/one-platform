@@ -76,9 +76,9 @@ export default function GoalsCard({
           />
         ) : (
           <>
-            {!goals.counting ? (
+            {!goals.counting || goals.testsCounted ? (
               <Typography variant="body2" className="text-text-secondary">
-                {t("goals-not-counting")}
+                {t(goals.counting ? "goals-tests-counted" : "goals-not-counting")}
               </Typography>
             ) : null}
             <Box component="ul" className="m-0 flex list-none flex-col gap-3 p-0">
