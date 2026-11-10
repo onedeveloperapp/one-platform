@@ -83,6 +83,12 @@ const ptBR = {
     body: `${person} gerou o arquivo com a carteira inteira, com os dados pessoais de todos os clientes. Se você não esperava por isso, fale com essa pessoa.`,
   }),
 
+  /** Somebody cleared the firm's cases and clients (migration 0161): told to the others who decide or manage it. */
+  firmDataCleared: (person: string): BellText => ({
+    title: "Os casos e clientes do escritório foram apagados",
+    body: `${person} apagou os casos, os clientes e as conversas do escritório para começar de novo. Se você não esperava por isso, fale com essa pessoa.`,
+  }),
+
   /** A travel agency accepted the firm's invitation (migration 0069): told to who manages the firm. */
   partnerJoined: (partner: string): BellText => ({
     title: "Agência parceira conectada",

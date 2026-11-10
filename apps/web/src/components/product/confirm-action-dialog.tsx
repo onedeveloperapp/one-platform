@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 
 import {
   Alert,
@@ -39,6 +39,13 @@ import {
  * somebody, handing the firm over): there the audit event is written by the
  * database function with who and when, so `requireReason={false}` drops the
  * reason field, and the two button labels come from the message catalog.
+ *
+ * An act that cannot be undone and takes a whole set of records (clearing a
+ * firm's cases and clients) asks the person to type a word too (`typedWord`):
+ * the button stays off until it matches, and the word typed goes to
+ * `onConfirm` for the server to check again. What the act needs first (the
+ * second factor, asked in place) goes in `children`, above the word, with
+ * `blocked` keeping the button off until it is met.
  */
 export default function ConfirmActionDialog({
   title,
@@ -55,6 +62,9 @@ export default function ConfirmActionDialog({
   cancelLabel = "Cancelar",
   busyLabel = "Aplicando…",
   tone = "warning",
+  typedWord,
+  children,
+  blocked = false,
   onConfirm,
   onClose,
 }: {
@@ -79,14 +89,22 @@ export default function ConfirmActionDialog({
   busyLabel?: string;
   /** `danger` paints the confirm button red — for actions that take something away. */
   tone?: "warning" | "danger";
-  onConfirm: (reason: string) => Promise<string | null>;
+  /** A word the person types to confirm: the button stays off until `matches` says it is the word. */
+  typedWord?: { label: string; help?: string; matches: (typed: string) => boolean };
+  /** What the act needs first, asked in place (the second factor), above the word. */
+  children?: ReactNode;
+  /** Keeps the button off while what `children` asks is not met. */
+  blocked?: boolean;
+  onConfirm: (reason: string, typed: string) => Promise<string | null>;
   onClose: () => void;
 }) {
   const [reason, setReason] = useState("");
+  const [typed, setTyped] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const reasonOk = !requireReason || reason.trim().length >= reasonMinLength;
+  const wordOk = !typedWord || typedWord.matches(typed);
 
   const close = () => {
     if (busy) return;
@@ -96,7 +114,7 @@ export default function ConfirmActionDialog({
   const confirm = async () => {
     setBusy(true);
     setError(null);
-    const failure = await onConfirm(reason.trim());
+    const failure = await onConfirm(reason.trim(), typed);
     setBusy(false);
     // A failure keeps the dialog open with the reason still typed: closing it
     // would make the operator write the justification a second time.
@@ -138,6 +156,28 @@ export default function ConfirmActionDialog({
             </Box>
           )}
 
+          {children}
+
+          {typedWord && (
+            <FormControl className="outlined" variant="standard">
+              <FormLabel htmlFor="confirm-action-word">{typedWord.label}</FormLabel>
+              <Input
+                id="confirm-action-word"
+                value={typed}
+                onChange={(event) => setTyped(event.target.value)}
+                disabled={busy || blocked}
+                autoComplete="off"
+                inputProps={{ spellCheck: false, autoCapitalize: "none", maxLength: 40 }}
+                aria-describedby={typedWord.help ? "confirm-action-word-help" : undefined}
+              />
+              {typedWord.help ? (
+                <Typography id="confirm-action-word-help" variant="body2" className="text-text-secondary mt-1">
+                  {typedWord.help}
+                </Typography>
+              ) : null}
+            </FormControl>
+          )}
+
           {requireReason && (
             <FormControl className="outlined" variant="standard">
               <FormLabel htmlFor="confirm-action-reason">{reasonLabel}</FormLabel>
@@ -175,7 +215,7 @@ export default function ConfirmActionDialog({
           variant="contained"
           color={tone === "danger" ? "error" : "primary"}
           onClick={confirm}
-          disabled={busy || !reasonOk}
+          disabled={busy || blocked || !reasonOk || !wordOk}
         >
           {busy ? busyLabel : confirmLabel}
         </Button>

@@ -6,6 +6,7 @@ import { Box, List, ListItem, ListItemButton, ListItemIcon, ListItemText } from 
 import { useViewer } from "@/components/layout/viewer-context";
 import NiBuilding from "@/icons/nexture/ni-building";
 import NiCheckSquare from "@/icons/nexture/ni-check-square";
+import NiEraser from "@/icons/nexture/ni-eraser";
 import NiPlug from "@/icons/nexture/ni-plug";
 import NiRobot from "@/icons/nexture/ni-robot";
 import NiUser from "@/icons/nexture/ni-user";
@@ -13,7 +14,15 @@ import NiUsers from "@/icons/nexture/ni-users";
 import NiWallet from "@/icons/nexture/ni-wallet";
 import { canAccess } from "@/lib/firm/menu";
 
-export type SettingsMenuActive = "profile" | "billing" | "security" | "team" | "autonomy" | "connections" | "partners";
+export type SettingsMenuActive =
+  | "profile"
+  | "billing"
+  | "security"
+  | "team"
+  | "autonomy"
+  | "connections"
+  | "partners"
+  | "data";
 
 type GroupProps = { label: string };
 
@@ -57,6 +66,9 @@ export default function SettingsMenu({ active }: { active: SettingsMenuActive })
   const viewer = useViewer();
   const inFirm = canAccess(undefined, viewer);
   const managesFirm = canAccess({ manager: true }, viewer);
+  // Clearing the firm's data is who decides for it (0161): a partner, or who manages a firm with none. The menu shows
+  // it to both; the page says whose it is when a partner exists and the viewer only manages the account.
+  const clearsFirm = managesFirm || (inFirm && viewer?.firmFunction === "socio");
   return (
     <Box className="flex flex-col gap-4">
       <List className="-mt-6">
@@ -108,6 +120,14 @@ export default function SettingsMenu({ active }: { active: SettingsMenuActive })
               icon={<NiWallet size="medium" />}
               selected={active === "billing"}
             />
+            {clearsFirm ? (
+              <Item
+                href="/settings/dados"
+                label={t("settings-data")}
+                icon={<NiEraser size="medium" />}
+                selected={active === "data"}
+              />
+            ) : null}
           </>
         ) : null}
       </List>
