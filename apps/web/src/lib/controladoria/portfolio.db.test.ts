@@ -153,7 +153,16 @@ describe.skipIf(!DB_URL)("the whole portfolio, from the database to the file", (
 
   it("writes every sheet of the firm's own, with the words the screens use", async () => {
     const { begun, lines, bytes } = await take(true);
-    expect(begun.counts).toEqual({ clientes: 2, casos: 2, acoes: 1, prazos: 1, audiencias: 1, documentos: 1 });
+    expect(begun.counts).toEqual({
+      clientes: 2,
+      casos: 2,
+      acoes: 1,
+      prazos: 1,
+      audiencias: 1,
+      documentos: 1,
+      lancamentos: 0,
+      contas: 0,
+    });
     // Each sheet read holds what was counted.
     for (const sheet of PORTFOLIO_SHEETS) expect(lines[sheet]).toHaveLength(begun.counts[sheet]);
 
@@ -196,7 +205,16 @@ describe.skipIf(!DB_URL)("the whole portfolio, from the database to the file", (
 
   it("leaves the test cases out with who is only in them, and says so", async () => {
     const { begun, bytes } = await take(false);
-    expect(begun.counts).toEqual({ clientes: 1, casos: 1, acoes: 1, prazos: 1, audiencias: 1, documentos: 1 });
+    expect(begun.counts).toEqual({
+      clientes: 1,
+      casos: 1,
+      acoes: 1,
+      prazos: 1,
+      audiencias: 1,
+      documentos: 1,
+      lancamentos: 0,
+      contas: 0,
+    });
     expect(sheetText(bytes, 2)).not.toContain("Teo Teste");
     expect(sheetText(bytes, 1)).toContain(say("portfolio-about-tests"));
   });
