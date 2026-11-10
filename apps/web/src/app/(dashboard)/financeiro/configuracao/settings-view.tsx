@@ -9,6 +9,7 @@ import { useState } from "react";
 
 import { Alert, Box, Button, Card, CardContent, MenuItem, TextField, Typography } from "@mui/material";
 
+import MoneyPath from "@/components/finance/money-path";
 import CardTitle from "@/components/product/card-title";
 import ConfirmActionDialog from "@/components/product/confirm-action-dialog";
 import { CurrencyField } from "@/components/product/fields";
@@ -20,6 +21,7 @@ import StateLine from "@/components/product/state-line";
 import StatusChip from "@/components/product/status-chip";
 import NiBuilding from "@/icons/nexture/ni-building";
 import NiList from "@/icons/nexture/ni-list";
+import NiMoney from "@/icons/nexture/ni-money";
 import NiUsers from "@/icons/nexture/ni-users";
 import { archiveFinanceRecord, saveFinanceAccount, saveFinanceCategory, setFinanceAccess } from "@/lib/finance/actions";
 import {
@@ -295,6 +297,19 @@ function Settings({ state }: { state: Ready }) {
       </Card>
 
       <FeeTermsCard terms={state.feeTerms ?? []} decides={state.decides && !state.supportVisit} factor={state.factor} />
+
+      <Card component="section" aria-labelledby="finance-settings-money-path">
+        <CardContent className="flex flex-col gap-4">
+          <CardTitle
+            id="finance-settings-money-path"
+            icon={<NiMoney size="medium" />}
+            tone="primary"
+            title={t("money-path-title")}
+            description={t("money-path-description")}
+          />
+          <MoneyPath caseId={null} writes={configuresBooks(state.level) && !state.supportVisit} />
+        </CardContent>
+      </Card>
 
       {state.people ? (
         <Card component="section" aria-labelledby="finance-settings-access">

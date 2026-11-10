@@ -86,3 +86,49 @@ export async function recordMinorOrder(shareId: string, order: "deposited" | "re
   if (!UUID.test(shareId)) return { ok: false, code: "invalid_data" };
   return call("record_minor_order", { target_share: shareId, target_order: order });
 }
+
+// ---------- The way the released money takes (migration 0158) ----------
+
+export type MoneyPath = "firm" | "direct";
+export type CaseMoneyPath = { case: MoneyPath | null; firm: MoneyPath; accepts: boolean | null };
+
+const pathOf = (value: unknown): MoneyPath | null => (value === "firm" || value === "direct" ? value : null);
+
+/** The way a case's released money takes, for who reads the books; null for anybody else. */
+export async function readCaseMoneyPath(caseId: string): Promise<CaseMoneyPath | null> {
+  const context = await getMemberContext();
+  if (!context?.firm || !UUID.test(caseId)) return null;
+  const { data, error } = await context.supabase.rpc("case_money_path", { target_case: caseId });
+  if (error || !data || typeof data !== "object") return null;
+  const answer = data as Record<string, unknown>;
+  return {
+    case: pathOf(answer.case),
+    firm: pathOf(answer.firm) ?? "firm",
+    accepts: typeof answer.accepts === "boolean" ? answer.accepts : null,
+  };
+}
+
+/** Who operates the books says a case's way, or none to follow the firm's (the second factor). */
+export async function setCaseMoneyPath(caseId: string, path: MoneyPath | null): Promise<Result> {
+  if (!UUID.test(caseId)) return { ok: false, code: "invalid_data" };
+  return call("set_case_money_path", { target_case: caseId, target_path: path });
+}
+
+/** The firm's way, as the books' configuration reads it. */
+export async function readFirmMoneyPath(): Promise<MoneyPath | null> {
+  const context = await getMemberContext();
+  if (!context?.firm) return null;
+  const { data, error } = await context.supabase
+    .from("organizations")
+    .select("money_path")
+    .eq("id", context.firm.id)
+    .maybeSingle();
+  return error ? null : pathOf(data?.money_path);
+}
+
+/** Who configures the books says the firm's way (the second factor). */
+export async function setFirmMoneyPath(path: MoneyPath): Promise<Result> {
+  const context = await getMemberContext();
+  if (!context?.firm) return { ok: false, code: "failed" };
+  return call("set_money_path", { target_org: context.firm.id, target_path: path });
+}

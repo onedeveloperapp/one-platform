@@ -3,6 +3,7 @@
 import type { CaseState } from "../case-types";
 import { useTranslations } from "next-intl";
 
+import MoneyPath from "@/components/finance/money-path";
 import MoneyShares from "@/components/finance/money-shares";
 import CollapsibleCard from "@/components/product/collapsible-card";
 
@@ -17,7 +18,18 @@ export default function MoneyCard({ state }: { state: Ready }) {
   const t = useTranslations("product");
   const reads = state.financeLevel === "view" || state.financeLevel === "operate" || state.financeLevel === "configure";
   const received = (state.outcomes ?? []).some((fact) => fact.kind === "alvara" && fact.receivedOn !== null);
-  if (!reads || !received) return null;
+  // Money is expected (a settlement, a judgment won, a deposit, a release): the way it takes is said, and chosen, before
+  // it arrives (0158).
+  const expected = (state.outcomes ?? []).some(
+    (fact) =>
+      !fact.corrected &&
+      (fact.kind === "acordo" ||
+        fact.kind === "deposito" ||
+        fact.kind === "alvara" ||
+        (fact.kind === "sentenca" && (fact.result === "procedente" || fact.result === "parcial"))),
+  );
+  const writes = state.financeLevel === "operate" || state.financeLevel === "configure";
+  if (!reads || (!received && !expected)) return null;
   return (
     <CollapsibleCard
       id="case-money"
@@ -26,7 +38,8 @@ export default function MoneyCard({ state }: { state: Ready }) {
       description={t("money-case-description")}
       defaultOpen
     >
-      <MoneyShares caseId={state.case.id} />
+      <MoneyPath caseId={state.case.id} writes={writes} />
+      {received ? <MoneyShares caseId={state.case.id} /> : null}
     </CollapsibleCard>
   );
 }
