@@ -45,6 +45,17 @@ const METHOD_KEY: Record<Method, string> = {
   enotariado: "case-signature-method-enotariado",
 };
 
+/**
+ * The level of each way of signing (Lei 14.063/2020, art. 4º): a ZapSign signature is a simple electronic one, gov.br's
+ * an advanced one, and an act of e-Notariado a qualified one, with an ICP-Brasil certificate. Said beside each paper,
+ * since the CNJ's Recomendação 159/2024 names a signature with no ICP-Brasil certificate among the signs it watches.
+ */
+const LEVEL_KEY: Record<Method, string> = {
+  zapsign: "case-signature-level-simple",
+  govbr: "case-signature-level-advanced",
+  enotariado: "case-signature-level-qualified",
+};
+
 const METHOD_HINT_KEY: Record<Method, string> = {
   zapsign: "case-signature-method-zapsign-hint",
   govbr: "case-signature-method-govbr-hint",
@@ -198,6 +209,9 @@ export default function SignaturesCard({
                     {original.name}
                   </Typography>
                 )}
+                <Typography variant="caption" className="text-text-secondary">
+                  {t(LEVEL_KEY[envelope.method])}
+                </Typography>
               </Box>
               <StatusChip tone={status.tone} label={t(status.key)} />
             </Box>

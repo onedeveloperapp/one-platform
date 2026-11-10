@@ -17,6 +17,8 @@ export const FILING_ORDER = [
   "identity",
   "address_proof",
   "residence_declaration",
+  "free_justice_declaration",
+  "income_proof",
   "ticket",
   "boarding_pass",
   "receipt",

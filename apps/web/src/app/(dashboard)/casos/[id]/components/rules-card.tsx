@@ -2,6 +2,7 @@
 
 import type { CaseState } from "../case-types";
 import { CivilCourtAnswers, FamilyPlanBox } from "./family-court";
+import FreeJusticeAnswers from "./free-justice";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 
@@ -339,6 +340,7 @@ export default function RulesCard({
       </Box>
 
       <CivilCourtAnswers state={state} writable={writable} onChanged={onChanged} />
+      <FreeJusticeAnswers caseId={state.case.id} needs={state.freeJustice} writable={writable} onChanged={onChanged} />
 
       <Box className="border-grey-100 flex flex-col gap-3 border-t pt-5">
         <Typography variant="subtitle2" component="h3" className="mb-0">

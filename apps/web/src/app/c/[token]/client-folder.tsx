@@ -2,6 +2,7 @@
 
 import ClientCivilCourt from "./client-civil-court";
 import ClientCourse from "./client-course";
+import ClientFreeJustice from "./client-free-justice";
 import ClientInterview from "./client-interview";
 import ClientNotices from "./client-notices";
 import ClientResidence from "./client-residence";
@@ -250,6 +251,7 @@ export default function ClientFolder({
       <ClientCourse lawsuits={tasks.course} />
       <ClientTerms token={token} terms={tasks.terms} onSaved={() => router.refresh()} />
       <ClientCivilCourt token={token} items={tasks.civilCourt} onSaved={() => router.refresh()} />
+      <ClientFreeJustice token={token} view={tasks.freeJustice} editable={editable} onSaved={() => router.refresh()} />
       {/* The documents first: ONE reads the data of each person and the trip in them (migration 0063). */}
       <Documents
         token={token}

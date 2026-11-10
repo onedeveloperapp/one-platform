@@ -159,6 +159,8 @@ const DESCRIPTION: Record<string, string> = {
   identity: "Documento de identidade",
   address_proof: "Comprovante de endereço",
   residence_declaration: "Declaração de residência",
+  free_justice_declaration: "Declaração de hipossuficiência",
+  income_proof: "Comprovante de renda",
   ticket: "Bilhete da passagem",
   boarding_pass: "Cartão de embarque",
   receipt: "Comprovante de gasto",

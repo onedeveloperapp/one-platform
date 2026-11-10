@@ -328,7 +328,13 @@ const PAPERS_PER_LOOK = 6;
 /** The name of a paper's file, plain: no accent, no space. */
 function paperFileName(kind: string, person: string): string {
   const name =
-    kind === "procuracao" ? "procuracao" : kind === "declaracao_residencia" ? "declaracao-de-residencia" : "contrato";
+    kind === "procuracao"
+      ? "procuracao"
+      : kind === "declaracao_residencia"
+        ? "declaracao-de-residencia"
+        : kind === "declaracao_hipossuficiencia"
+          ? "declaracao-de-hipossuficiencia"
+          : "contrato";
   const plain = `${name}-${person}`
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")

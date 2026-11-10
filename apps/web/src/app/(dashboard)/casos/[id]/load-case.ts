@@ -25,6 +25,7 @@ import { readCheckAnswer } from "@/lib/cases/document-check";
 import { readQuality } from "@/lib/cases/document-quality";
 import { loadCasePieces } from "@/lib/cases/draft-facts";
 import { cloudSigningOffered, loadCaseFilings } from "@/lib/cases/filing-facts";
+import { freeJusticeOf } from "@/lib/cases/free-justice";
 import { cpfLookup } from "@/lib/cases/identity";
 import { courtPublicationsOf, stageMomentsOf } from "@/lib/cases/journey";
 import { casePulseOf } from "@/lib/cases/pulse";
@@ -207,6 +208,7 @@ export async function loadCase(id: string): Promise<CaseState> {
     told,
     filings,
     residence,
+    freeJustice,
   ] = await Promise.all([
     supabase
       .from("case_parties")
@@ -289,6 +291,8 @@ export async function loadCase(id: string): Promise<CaseState> {
     loadCaseFilings(supabase, firm, id, context.profile.timezone, context.userId).catch(() => undefined),
     // The declarations of residence a bill in somebody else's name owes (0123), with where each stands.
     supabase.rpc("case_residence", { target_case: id }),
+    // Each claimant's word on free justice in the civil court (0125), with the declaration of who asks.
+    supabase.rpc("case_free_justice", { target_case: id }),
   ]);
   if (
     parties.error ||
@@ -502,6 +506,7 @@ export async function loadCase(id: string): Promise<CaseState> {
   return {
     kind: "ready",
     residence: residence.error ? null : residenceViewsOf(residence.data),
+    freeJustice: freeJustice.error ? null : freeJusticeOf(freeJustice.data),
     case: {
       id: row.id,
       seq: row.seq,

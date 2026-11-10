@@ -312,6 +312,12 @@ from public.case_documents d join public.case_parties cp on cp.case_id = d.case_
 where d.org_id in ('b1000000-0000-4000-8000-00000000000a', 'b1000000-0000-4000-8000-00000000000b')
   and d.id = (select x.id from public.case_documents x where x.org_id = d.org_id order by x.created_at, x.id limit 1)
   and cp.id = (select y.id from public.case_parties y where y.case_id = d.case_id order by y.created_at, y.id limit 1);
+-- A claimant's word on free justice of each firm (0125).
+insert into public.free_justice_answers (org_id, case_id, party_id, person_id, asks, source)
+select cp.org_id, cp.case_id, cp.id, cp.person_id, true, 'client'
+from public.case_parties cp
+where cp.org_id in ('b1000000-0000-4000-8000-00000000000a', 'b1000000-0000-4000-8000-00000000000b')
+  and cp.id = (select y.id from public.case_parties y where y.org_id = cp.org_id order by y.created_at, y.id limit 1);
 -- The estimates of ONE's work of each firm (0120): read only by who decides for it.
 insert into public.firm_one_work_minutes (org_id, kind, minutes) values
   ('b1000000-0000-4000-8000-00000000000a', 'texto_peca', 45),
@@ -499,7 +505,7 @@ select is(
     'consent_acceptances',
     'deadlines', 'djen_captures', 'dossiers', 'draft_templates', 'entitlement_grants', 'files', 'filing_package_items', 'filing_packages',
     'filing_receipts', 'filing_submissions', 'firm_autonomy', 'firm_calendars',
-    'firm_claim_defaults', 'firm_invitations', 'firm_modules', 'firm_notice_kinds', 'firm_one_work_cost', 'firm_one_work_minutes', 'firm_signers', 'flight_alerts', 'flight_checks', 'flight_segments', 'hearings', 'import_batches', 'import_rows', 'invoices',
+    'firm_claim_defaults', 'firm_invitations', 'firm_modules', 'firm_notice_kinds', 'firm_one_work_cost', 'firm_one_work_minutes', 'firm_signers', 'flight_alerts', 'flight_checks', 'flight_segments', 'free_justice_answers', 'hearings', 'import_batches', 'import_rows', 'invoices',
     'issued_documents', 'lawyer_signature_uses', 'legal_sources', 'memberships',
     'movements', 'notice_optins', 'notice_stops', 'onboarding_state', 'partner_invitations', 'partner_links', 'pax_firm_clauses',
     'people',
@@ -675,7 +681,7 @@ select is(
     'client_links', 'client_notices', 'closing_goals',
     'consent_acceptances', 'deadlines', 'djen_captures', 'dossiers', 'draft_templates', 'entitlement_grants', 'files',
     'filing_package_items', 'filing_packages',
-    'filing_receipts', 'filing_submissions', 'firm_autonomy', 'firm_calendars', 'firm_claim_defaults', 'firm_modules', 'firm_notice_kinds', 'firm_signers', 'flight_alerts', 'flight_checks', 'flight_segments', 'hearings', 'import_batches',
+    'filing_receipts', 'filing_submissions', 'firm_autonomy', 'firm_calendars', 'firm_claim_defaults', 'firm_modules', 'firm_notice_kinds', 'firm_signers', 'flight_alerts', 'flight_checks', 'flight_segments', 'free_justice_answers', 'hearings', 'import_batches',
     'import_rows', 'invoices', 'issued_documents', 'lawyer_signature_uses', 'legal_sources',
     'memberships', 'movements', 'notice_optins', 'notice_stops', 'partner_links', 'pax_firm_clauses', 'people', 'proceeding_lawyers', 'proceeding_parties', 'proceeding_tracking', 'proceedings',
     'publication_readings', 'publications',
@@ -718,7 +724,7 @@ select is(
     'consent_acceptances',
     'deadlines', 'djen_captures', 'dossiers', 'draft_templates', 'entitlement_grants', 'files', 'filing_package_items', 'filing_packages',
     'filing_receipts', 'filing_submissions', 'firm_autonomy', 'firm_calendars',
-    'firm_claim_defaults', 'firm_invitations', 'firm_modules', 'firm_notice_kinds', 'firm_one_work_cost', 'firm_one_work_minutes', 'firm_signers', 'flight_alerts', 'flight_checks', 'flight_segments', 'hearings', 'import_batches', 'import_rows', 'invoices',
+    'firm_claim_defaults', 'firm_invitations', 'firm_modules', 'firm_notice_kinds', 'firm_one_work_cost', 'firm_one_work_minutes', 'firm_signers', 'flight_alerts', 'flight_checks', 'flight_segments', 'free_justice_answers', 'hearings', 'import_batches', 'import_rows', 'invoices',
     'issued_documents', 'lawyer_signature_uses', 'legal_sources', 'memberships',
     'movements', 'notice_optins', 'notice_stops', 'onboarding_state', 'partner_invitations', 'partner_links', 'pax_firm_clauses',
     'people',

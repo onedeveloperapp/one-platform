@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   DRAFT_MARKS,
+  FREE_JUSTICE_MARKS,
   modelMarks,
   PAPER_MARK_KEY,
   PAPER_MARKS,
@@ -47,11 +48,18 @@ describe("the marks of a paper (0054, 0093)", () => {
     const declaration = RESIDENCE.slice(RESIDENCE.indexOf("function public.residence_marks_filled("));
     const own = [...declaration.slice(0, declaration.indexOf("$$;")).matchAll(/'\[\[([A-Z_]+)\]\]', coalesce/g)];
     expect(own.map((match) => match[1]).sort()).toEqual([...RESIDENCE_MARKS].sort());
+    // What only a declaration of economic hardship fills (0125).
+    const justice = fs.readFileSync(path.join(ROOT, "packages/db/migrations/0125_free_justice.sql"), "utf8");
+    const hardship = justice.slice(justice.indexOf("function public.free_justice_marks_filled("));
+    const asks = [...hardship.slice(0, hardship.indexOf("$$;")).matchAll(/'\[\[([A-Z_]+)\]\]'/g)];
+    expect(asks.map((match) => match[1])).toEqual([...FREE_JUSTICE_MARKS]);
   });
 
   it("each has its words", () => {
     const product = (messages as { product: Record<string, string> }).product;
-    for (const mark of [...PAPER_MARKS, ...RESIDENCE_MARKS]) expect(product[PAPER_MARK_KEY[mark]]).toBeTruthy();
+    for (const mark of [...PAPER_MARKS, ...RESIDENCE_MARKS, ...FREE_JUSTICE_MARKS]) {
+      expect(product[PAPER_MARK_KEY[mark]]).toBeTruthy();
+    }
   });
 
   it("are told apart from the marks of a piece", () => {
@@ -66,6 +74,11 @@ describe("the marks of a paper (0054, 0093)", () => {
       unknownMarks("[[NOME]] mora na casa de [[TITULAR]], [[RELACAO]]", modelMarks("declaracao_residencia")),
     ).toEqual([]);
     expect(unknownMarks("[[NOME]], [[TITULAR]]", modelMarks("procuracao"))).toEqual(["TITULAR"]);
+    // Who asks for free justice is a declaration of hardship's alone (0125).
+    expect(unknownMarks("[[NOME]] pede para: [[GRATUIDADE_PARA]]", modelMarks("declaracao_hipossuficiencia"))).toEqual(
+      [],
+    );
+    expect(unknownMarks("[[GRATUIDADE_PARA]]", modelMarks("declaracao_residencia"))).toEqual(["GRATUIDADE_PARA"]);
   });
 });
 

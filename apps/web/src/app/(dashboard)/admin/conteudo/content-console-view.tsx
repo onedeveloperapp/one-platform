@@ -57,6 +57,7 @@ const DOCUMENT_LABEL: Record<PlatformTemplate["documentKind"], string> = {
   piece: "Peça de uma ação",
   procuracao: "Procuração",
   declaracao_residencia: "Declaração de residência",
+  declaracao_hipossuficiencia: "Declaração de hipossuficiência",
 };
 
 const MARKS_HELP: Record<PlatformTemplate["documentKind"], string> = {
@@ -66,6 +67,8 @@ const MARKS_HELP: Record<PlatformTemplate["documentKind"], string> = {
     "As marcas [[OUTORGANTE]], [[OUTORGADOS]], [[ESCRITORIO]], [[RE]], [[OBJETO]], [[LOCAL_DATA]] e [[NOME]] são preenchidas com os dados de cada cliente quando o ONE envia a procuração para ele assinar. Um formulário campo por campo usa [[NOME]], [[NACIONALIDADE]], [[ESTADO_CIVIL]], [[PROFISSAO]], [[CPF]], [[NASCIMENTO]], [[ENDERECO]], [[CEP]], [[EMAIL]] e [[TELEFONE]], com [[REPRESENTADOS]] para os filhos menores e [[DATA]] para a data de hoje.",
   declaracao_residencia:
     "A declaração usa as marcas campo por campo da procuração ([[NOME]], [[CPF]], [[ENDERECO]], [[CEP]], [[LOCAL_DATA]]) e duas suas: [[TITULAR]], o nome de quem está na conta, e [[RELACAO]], quem o titular é para o cliente (minha mãe, meu pai). Escreva a responsabilidade do declarante (Lei 7.115/1983, art. 3º).",
+  declaracao_hipossuficiencia:
+    "A declaração usa as marcas campo por campo da procuração ([[NOME]], [[CPF]], [[ENDERECO]], [[CEP]], [[LOCAL_DATA]]) e uma sua: [[GRATUIDADE_PARA]], quem pede a gratuidade (o próprio cliente e cada filho menor por quem ele responde). Escreva a responsabilidade do declarante (Lei 7.115/1983, art. 3º) e a multa de quem pede de má-fé (CPC, art. 100, parágrafo único).",
 };
 
 const ERROR_TEXT: Record<string, string> = {
@@ -423,7 +426,9 @@ function TemplateDialog({
             value={writes}
             onChange={(event) =>
               setWrites(
-                event.target.value === "procuracao" || event.target.value === "declaracao_residencia"
+                event.target.value === "procuracao" ||
+                  event.target.value === "declaracao_residencia" ||
+                  event.target.value === "declaracao_hipossuficiencia"
                   ? event.target.value
                   : "piece",
               )
@@ -434,6 +439,7 @@ function TemplateDialog({
             <MenuItem value="piece">{DOCUMENT_LABEL.piece}</MenuItem>
             <MenuItem value="procuracao">{DOCUMENT_LABEL.procuracao}</MenuItem>
             <MenuItem value="declaracao_residencia">{DOCUMENT_LABEL.declaracao_residencia}</MenuItem>
+            <MenuItem value="declaracao_hipossuficiencia">{DOCUMENT_LABEL.declaracao_hipossuficiencia}</MenuItem>
           </TextField>
           {writes === "piece" ? (
             <TextField
@@ -456,7 +462,7 @@ function TemplateDialog({
             label={
               writes === "procuracao"
                 ? "Procuração padrão para os escritórios sem procuração própria"
-                : writes === "declaracao_residencia"
+                : writes === "declaracao_residencia" || writes === "declaracao_hipossuficiencia"
                   ? "Declaração padrão para os escritórios sem declaração própria"
                   : "Modelo padrão deste tipo para os escritórios sem modelo próprio"
             }

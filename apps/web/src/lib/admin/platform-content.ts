@@ -14,7 +14,7 @@ export type PlatformTemplate = {
   id: string;
   name: string;
   /** What it writes (0054): the piece of a lawsuit or a power of attorney; the platform never writes a contract. */
-  documentKind: "piece" | "procuracao" | "declaracao_residencia";
+  documentKind: "piece" | "procuracao" | "declaracao_residencia" | "declaracao_hipossuficiencia";
   proceedingKind: "juizado" | "comum" | null;
   isDefault: boolean;
   provisional: boolean;
@@ -77,8 +77,10 @@ export async function loadPlatformContent(supabase: SupabaseClient): Promise<Pla
       id: row.id,
       name: row.name,
       documentKind:
-        row.document_kind === "procuracao" || row.document_kind === "declaracao_residencia"
-          ? (row.document_kind as "procuracao" | "declaracao_residencia")
+        row.document_kind === "procuracao" ||
+        row.document_kind === "declaracao_residencia" ||
+        row.document_kind === "declaracao_hipossuficiencia"
+          ? (row.document_kind as "procuracao" | "declaracao_residencia" | "declaracao_hipossuficiencia")
           : ("piece" as const),
       proceedingKind: row.proceeding_kind === "juizado" || row.proceeding_kind === "comum" ? row.proceeding_kind : null,
       isDefault: row.is_default === true,

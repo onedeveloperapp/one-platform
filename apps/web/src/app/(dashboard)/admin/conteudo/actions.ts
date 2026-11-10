@@ -30,10 +30,10 @@ export async function savePlatformTemplate(input: {
   templateId: string | null;
   name: string;
   /**
-   * What it writes: a piece, a power of attorney (0054) or a declaration of residence (0123). Said on every save: a
-   * model saved without it is a piece.
+   * What it writes: a piece, a power of attorney (0054), a declaration of residence (0123) or of economic hardship
+   * (0125). Said on every save: a model saved without it is a piece.
    */
-  documentKind: "piece" | "procuracao" | "declaracao_residencia";
+  documentKind: "piece" | "procuracao" | "declaracao_residencia" | "declaracao_hipossuficiencia";
   proceedingKind: "juizado" | "comum" | null;
   body: string;
   isDefault: boolean;
@@ -47,7 +47,9 @@ export async function savePlatformTemplate(input: {
     fields: {
       name: String(input.name ?? "").trim(),
       document_kind:
-        input.documentKind === "procuracao" || input.documentKind === "declaracao_residencia"
+        input.documentKind === "procuracao" ||
+        input.documentKind === "declaracao_residencia" ||
+        input.documentKind === "declaracao_hipossuficiencia"
           ? input.documentKind
           : "piece",
       proceeding_kind:

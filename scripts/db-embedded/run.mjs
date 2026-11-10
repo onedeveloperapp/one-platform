@@ -236,6 +236,9 @@ try {
     let total = 0;
     let failedFiles = 0;
     await sql.unsafe("set statement_timeout = '120s'");
+    // The tests speak of days in Brasília, as the functions count them: the session says so, whatever the
+    // server's own zone (UTC on CI and on Supabase, where a night in Brasília is already the next day).
+    await sql.unsafe("set timezone = 'America/Sao_Paulo'");
     for (const file of files) {
       const source = fs.readFileSync(path.join(testsDir, file), "utf8");
       let results;

@@ -23,6 +23,7 @@ import NiDocumentFull from "@/icons/nexture/ni-document-full";
 import {
   DRAFT_MARK_KEY,
   DRAFT_MARKS,
+  FREE_JUSTICE_MARKS,
   isModelDocument,
   libraryErrorKey,
   type ModelDocument,
@@ -50,6 +51,10 @@ export const DOCUMENT_KEY: Record<ModelDocument, { label: string; help: string }
   declaracao_residencia: {
     label: "library-document-declaracao-residencia",
     help: "library-document-declaracao-residencia-help",
+  },
+  declaracao_hipossuficiencia: {
+    label: "library-document-declaracao-hipossuficiencia",
+    help: "library-document-declaracao-hipossuficiencia-help",
   },
 };
 
@@ -80,6 +85,7 @@ function defaultKey(writes: ModelDocument, kind: Kind): string {
   if (writes === "procuracao") return "library-template-default-procuracao";
   if (writes === "contrato") return "library-template-default-contrato";
   if (writes === "declaracao_residencia") return "library-template-default-declaracao";
+  if (writes === "declaracao_hipossuficiencia") return "library-template-default-hipossuficiencia";
   if (kind === null) return "library-template-default-any";
   return kind === "comum" ? "library-template-default-comum" : "library-template-default-juizado";
 }
@@ -218,7 +224,11 @@ export default function TemplatePanel({
   const marks: { mark: string; key: string }[] =
     writes === "piece"
       ? DRAFT_MARKS.map((mark) => ({ mark, key: DRAFT_MARK_KEY[mark] }))
-      : [...PAPER_MARKS, ...(writes === "declaracao_residencia" ? RESIDENCE_MARKS : [])].map((mark) => ({
+      : [
+          ...PAPER_MARKS,
+          ...(writes === "declaracao_residencia" ? RESIDENCE_MARKS : []),
+          ...(writes === "declaracao_hipossuficiencia" ? FREE_JUSTICE_MARKS : []),
+        ].map((mark) => ({
           mark,
           key: PAPER_MARK_KEY[mark],
         }));
@@ -390,6 +400,7 @@ export default function TemplatePanel({
             <MenuItem value="procuracao">{t(DOCUMENT_KEY.procuracao.label)}</MenuItem>
             <MenuItem value="contrato">{t(DOCUMENT_KEY.contrato.label)}</MenuItem>
             <MenuItem value="declaracao_residencia">{t(DOCUMENT_KEY.declaracao_residencia.label)}</MenuItem>
+            <MenuItem value="declaracao_hipossuficiencia">{t(DOCUMENT_KEY.declaracao_hipossuficiencia.label)}</MenuItem>
           </TextField>
           {writes === "piece" ? (
             <TextField

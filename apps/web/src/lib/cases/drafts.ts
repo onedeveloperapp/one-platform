@@ -78,6 +78,8 @@ export const DRAFT_MARKS = [
   "VALOR_DA_CAUSA",
   "PEDIDO_POR_PARTE",
   "ADVOGADOS",
+  "GRATUIDADE",
+  "PEDIDO_GRATUIDADE",
 ] as const;
 export const DRAFT_MARK_KEY: Record<(typeof DRAFT_MARKS)[number], string> = {
   PARTES: "draft-mark-partes",
@@ -87,6 +89,8 @@ export const DRAFT_MARK_KEY: Record<(typeof DRAFT_MARKS)[number], string> = {
   VALOR_DA_CAUSA: "draft-mark-valor",
   PEDIDO_POR_PARTE: "draft-mark-pedido",
   ADVOGADOS: "draft-mark-advogados",
+  GRATUIDADE: "draft-mark-gratuidade",
+  PEDIDO_GRATUIDADE: "draft-mark-pedido-gratuidade",
 };
 
 /**
@@ -122,7 +126,13 @@ export const PAPER_MARKS = [
  */
 export const RESIDENCE_MARKS = ["TITULAR", "RELACAO"] as const;
 const DECLARATION_MARKS: readonly string[] = [...PAPER_MARKS, ...RESIDENCE_MARKS];
-export const PAPER_MARK_KEY: Record<(typeof PAPER_MARKS)[number] | (typeof RESIDENCE_MARKS)[number], string> = {
+/** The mark only a declaration of economic hardship takes (`free_justice_marks_filled`, 0125): who asks. */
+export const FREE_JUSTICE_MARKS = ["GRATUIDADE_PARA"] as const;
+const HARDSHIP_MARKS: readonly string[] = [...PAPER_MARKS, ...FREE_JUSTICE_MARKS];
+export const PAPER_MARK_KEY: Record<
+  (typeof PAPER_MARKS)[number] | (typeof RESIDENCE_MARKS)[number] | (typeof FREE_JUSTICE_MARKS)[number],
+  string
+> = {
   OUTORGANTE: "paper-mark-outorgante",
   CONTRATANTE: "paper-mark-contratante",
   OUTORGADOS: "paper-mark-outorgados",
@@ -144,13 +154,20 @@ export const PAPER_MARK_KEY: Record<(typeof PAPER_MARKS)[number] | (typeof RESID
   DATA: "paper-mark-data",
   TITULAR: "paper-mark-titular",
   RELACAO: "paper-mark-relacao",
+  GRATUIDADE_PARA: "paper-mark-gratuidade-para",
 };
 
 /**
  * What a model of the library writes (0054): the piece of a lawsuit, a power of attorney, a fee contract, or a
  * declaration of residence (0123).
  */
-export const MODEL_DOCUMENTS = ["piece", "procuracao", "contrato", "declaracao_residencia"] as const;
+export const MODEL_DOCUMENTS = [
+  "piece",
+  "procuracao",
+  "contrato",
+  "declaracao_residencia",
+  "declaracao_hipossuficiencia",
+] as const;
 export type ModelDocument = (typeof MODEL_DOCUMENTS)[number];
 
 export const isModelDocument = (value: unknown): value is ModelDocument =>
@@ -158,7 +175,13 @@ export const isModelDocument = (value: unknown): value is ModelDocument =>
 
 /** The marks a model of a document may use. */
 export const modelMarks = (document: ModelDocument): readonly string[] =>
-  document === "piece" ? DRAFT_MARKS : document === "declaracao_residencia" ? DECLARATION_MARKS : PAPER_MARKS;
+  document === "piece"
+    ? DRAFT_MARKS
+    : document === "declaracao_residencia"
+      ? DECLARATION_MARKS
+      : document === "declaracao_hipossuficiencia"
+        ? HARDSHIP_MARKS
+        : PAPER_MARKS;
 
 /** The marks of a text that are none of the ones the platform fills: a typo to put right before approving. */
 export function unknownMarks(text: string, marks: readonly string[] = DRAFT_MARKS): string[] {
@@ -226,6 +249,8 @@ const BLOCKER_KEY: Record<string, string> = {
   unknown_mark: "draft-blocker-unknown-mark",
   placeholder_left: "draft-blocker-placeholder",
   unwritable_characters: "draft-blocker-unwritable",
+  free_justice_unanswered: "draft-blocker-free-justice-unanswered",
+  free_justice_mark_missing: "draft-blocker-free-justice-mark",
 };
 export const draftBlockerKey = (code: string): string => BLOCKER_KEY[code] ?? "draft-blocker-other";
 /** What keeps a draft from being approved is said as what is missing, never as something that went wrong. */

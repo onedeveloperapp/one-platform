@@ -264,6 +264,14 @@ select ok(
   'the client answers in the words the page showed, for themselves and the minor they answer for, with what the server saw'
 );
 
+-- Nobody of the family asks for free justice (0125): the gate of the civil court waits for that word too, and here
+-- it is the claimants' acceptance alone that is tried.
+insert into public.free_justice_answers (org_id, case_id, party_id, person_id, asks, source, note)
+select cp.org_id, cp.case_id, cp.id, public.civil_court_answerer(cp.id), false, 'firm', 'Disseram que não pedem.'
+from public.proceeding_parties pp
+join public.case_parties cp on cp.id = pp.party_id and cp.role = 'claimant'
+where pp.proceeding_id = pg_temp.got('lawsuit', 'id')::uuid and public.civil_court_answerer(cp.id) is not null;
+
 -- The firm records Pedro's word, given in person, saying how: anybody of the firm.
 select pg_temp.sign_in('ae440000-0000-4000-8000-000000000002');
 set local role authenticated;
@@ -411,6 +419,12 @@ select public.record_civil_court_answer(pg_temp.got('case', 'case_id')::uuid, pg
   'Rui assinou o termo no escritório.', null,
   pg_temp.firm_words(pg_temp.got('case', 'case_id')::uuid, pg_temp.got('minor', 'party_id')));
 reset role;
+-- Rui's word on free justice for João too (0125): Maria's no longer counts once Rui answers for him.
+update public.free_justice_answers set replaced_at = now()
+where party_id = pg_temp.got('minor', 'party_id')::uuid and replaced_at is null;
+insert into public.free_justice_answers (org_id, case_id, party_id, person_id, asks, source, note)
+select cp.org_id, cp.case_id, cp.id, public.civil_court_answerer(cp.id), false, 'firm', 'Disse que não pede.'
+from public.case_parties cp where cp.id = pg_temp.got('minor', 'party_id')::uuid;
 select pg_temp.sign_in('ae440000-0000-4000-8000-000000000001');
 set local role authenticated;
 insert into res values ('package_ready', public.request_filing_package(pg_temp.got('lawsuit', 'id')::uuid,

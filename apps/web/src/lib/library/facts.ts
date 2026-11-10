@@ -3,6 +3,7 @@ import "server-only";
 import { momentLabel } from "@/lib/ai/approvals";
 import { isModelDocument, type ModelDocument, sourceLabel } from "@/lib/cases/drafts";
 import { type ImportLimits, importLimitsOf, type LibraryImport, readLibraryImports } from "@/lib/library/import-read";
+import { type AttorneyPowers, attorneyPowers } from "@/lib/library/powers";
 import {
   citationGap,
   distinctCitations,
@@ -202,13 +203,14 @@ export function modelForKind(rows: readonly ModelRow[], firmId: string, kind: "j
 export function paperModelFor(
   rows: readonly ModelRow[],
   firmId: string,
-  kind: "procuracao" | "contrato",
+  kind: "procuracao" | "contrato" | "declaracao_residencia" | "declaracao_hipossuficiencia",
 ): string | null {
   const firm = rows.filter((t) => t.org_id === firmId && documentOf(t) === kind);
   if (firm.length > 0) {
     return firm.find((t) => t.is_default === true)?.id ?? (firm.length === 1 ? firm[0].id : null);
   }
-  if (kind !== "procuracao") return null;
+  // The platform has a power of attorney and the declarations (0123, 0125), never a contract: the fees are each firm's.
+  if (kind === "contrato") return null;
   return rows.find((t) => t.org_id === null && documentOf(t) === kind && t.is_default === true)?.id ?? null;
 }
 
@@ -220,9 +222,14 @@ export type SetupPaper = {
   platform: LibraryTemplate | null;
   /** The name of the firm's default of it, which a new default takes the place of. */
   firmDefault: string | null;
+  /**
+   * Of a power of attorney, the special powers its text writes (CPC, art. 105), as ONE read them: null for a contract.
+   */
+  powers: AttorneyPowers | null;
 };
 
 type PaperRow = ModelRow & {
+  body?: string | null;
   provisional: boolean | null;
   prepared_by_one: boolean | null;
   name: string;
@@ -243,7 +250,9 @@ export async function loadSetupPapers(
 ): Promise<{ procuracao: SetupPaper; contrato: SetupPaper } | null> {
   const { data, error } = await supabase
     .from("draft_templates")
-    .select("id, org_id, provisional, prepared_by_one, name, document_kind, proceeding_kind, is_default, updated_at")
+    .select(
+      "id, org_id, provisional, prepared_by_one, name, document_kind, proceeding_kind, is_default, updated_at, body",
+    )
     .or(`org_id.eq.${firmId},org_id.is.null`)
     .in("document_kind", ["procuracao", "contrato"])
     .order("name");
@@ -276,6 +285,7 @@ export async function loadSetupPapers(
       used: used ? view(used, true) : null,
       platform: platform ? view(platform, platform.id === usedId) : null,
       firmDefault: firmDefault?.name ?? null,
+      powers: kind === "procuracao" && used ? attorneyPowers(used.body ?? "") : null,
     };
   };
   return { procuracao: paper("procuracao"), contrato: paper("contrato") };
@@ -319,6 +329,8 @@ export async function loadLibrary(
       modelForKind(templateRows, firmId, "comum"),
       paperModelFor(templateRows, firmId, "procuracao"),
       paperModelFor(templateRows, firmId, "contrato"),
+      paperModelFor(templateRows, firmId, "declaracao_residencia"),
+      paperModelFor(templateRows, firmId, "declaracao_hipossuficiencia"),
     ].filter((id): id is string => id !== null),
   );
 

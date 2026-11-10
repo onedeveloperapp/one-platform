@@ -81,7 +81,11 @@ export async function requestModelFromDocument(
   if (!context?.firm || !isId(fileId)) return { ok: false, code: "not_found" };
   // ONE makes a model of a petition, a power of attorney or a contract (0079); a declaration is written in the library.
   const expected =
-    isModelDocument(options?.expected) && options.expected !== "declaracao_residencia" ? options.expected : null;
+    isModelDocument(options?.expected) &&
+    options.expected !== "declaracao_residencia" &&
+    options.expected !== "declaracao_hipossuficiencia"
+      ? options.expected
+      : null;
   const finished = await finishUpload(context, fileId);
   if (!finished.ok) return { ok: false, code: finished.code };
   const { data, error } = await context.supabase.rpc("request_template_import", {

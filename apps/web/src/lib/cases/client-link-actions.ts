@@ -506,6 +506,37 @@ export async function answerCivilCourt(
   return result;
 }
 
+// ---------- Free justice in the civil court (migration 0125) ----------
+
+/**
+ * The client says, for their own claim or a minor's they answer for, whether they ask for free justice. The backend
+ * records it (the database takes it from the service role only) with what the server saw of the request; ONE is woken
+ * to issue the declaration of who asks, or to issue it again when an answer changed.
+ */
+export async function answerFreeJustice(token: string, partyId: string, asks: boolean): Promise<ClientResult> {
+  const closed = await refusal(token);
+  if (closed) return closed;
+  if (!isId(partyId) || typeof asks !== "boolean") return { ok: false, code: "failed" };
+  const backend = service();
+  if (!backend) return unavailable;
+  const seen = await headers();
+  const evidence = {
+    user_agent: (seen.get("user-agent") ?? "").slice(0, 300),
+    ip: (seen.get("x-forwarded-for") ?? "").split(",")[0]?.trim().slice(0, 64) ?? "",
+  };
+  const result = fold(
+    await backend.rpc("client_link_answer_free_justice", {
+      target_token: token,
+      target_party: partyId,
+      target_asks: asks,
+      target_evidence: evidence,
+    }),
+    nothing,
+  );
+  if (result.ok) await queueCaseAdvance(null);
+  return result;
+}
+
 // ---------- A bill in somebody else's name (migration 0123) ----------
 
 /**

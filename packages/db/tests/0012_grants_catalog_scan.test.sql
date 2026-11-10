@@ -79,7 +79,7 @@ select is(
     'client_link_course',
     'client_link_discard_upload',
     'client_link_finish',
-    'client_link_finish_statement', 'client_link_finish_upload', 'client_link_interview', 'client_link_interview_answer',
+    'client_link_finish_statement', 'client_link_finish_upload', 'client_link_free_justice', 'client_link_interview', 'client_link_interview_answer',
     'client_link_notices',
     'client_link_open', 'client_link_remove_segment', 'client_link_reserve_signed', 'client_link_reserve_statement',
     'client_link_reserve_upload', 'client_link_residence',

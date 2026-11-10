@@ -8,6 +8,7 @@ import type { DocumentQuality } from "@/lib/cases/document-quality";
 import type { CaseDossier, CaseDraft, CasePieces } from "@/lib/cases/draft-facts";
 import type { CivilCourtNeed, CourtNote, FamilyState } from "@/lib/cases/family";
 import type { CaseFiling } from "@/lib/cases/filing-facts";
+import type { FreeJusticeNeed } from "@/lib/cases/free-justice";
 import type { InterviewView } from "@/lib/cases/interview";
 import type { StageMoment } from "@/lib/cases/journey";
 import type { CasePulse } from "@/lib/cases/pulse";
@@ -248,6 +249,8 @@ export type CaseState =
        * where its declaration stands; null when they could not be read.
        */
       residence: ResidenceView[] | null;
+      /** Each claimant's word on free justice in the civil court (0125); null when it could not be read. */
+      freeJustice: FreeJusticeNeed[] | null;
       parties: CaseParty[];
       segments: CaseSegment[];
       documents: CaseDocument[];

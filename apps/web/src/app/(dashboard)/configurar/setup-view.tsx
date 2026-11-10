@@ -33,6 +33,7 @@ import {
 import PageHeader from "@/components/product/page-header";
 import SecondFactorPrompt from "@/components/product/second-factor-prompt";
 import SetupWizard, { type WizardStep } from "@/components/product/setup-wizard";
+import StateLine from "@/components/product/state-line";
 import StatusChip from "@/components/product/status-chip";
 import { useEmailReady } from "@/components/product/use-email-ready";
 import WordDownloadButton from "@/components/product/word-download-button";
@@ -773,6 +774,29 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
                     <Typography variant="body2" className="text-text-secondary">
                       {t("setup-papers-prepared-by-one")}
                     </Typography>
+                  ) : null}
+                  {/* What the power of attorney ONE sends grants of the special powers (CPC, art. 105), read from its
+                      words: what the client's money and free justice will need later. */}
+                  {choice.powers ? (
+                    <Box className="flex flex-col gap-1">
+                      <StateLine tone={choice.powers.discharge ? "done" : "attention"}>
+                        {t(
+                          choice.powers.discharge
+                            ? "setup-papers-power-discharge"
+                            : "setup-papers-power-discharge-missing",
+                        )}
+                      </StateLine>
+                      <StateLine tone={choice.powers.hardship ? "done" : "attention"}>
+                        {t(
+                          choice.powers.hardship
+                            ? "setup-papers-power-hardship"
+                            : "setup-papers-power-hardship-missing",
+                        )}
+                      </StateLine>
+                      <Typography variant="caption" className="text-text-secondary">
+                        {t("setup-papers-powers-read")}
+                      </Typography>
+                    </Box>
                   ) : null}
                   {request ? (
                     <PaperRequestLine

@@ -2,6 +2,7 @@ import "server-only";
 
 import { type AccountState, accountStateOf } from "@/lib/cases/account";
 import type { PersonData, RequiredDocument } from "@/lib/cases/cases";
+import { type ClientFreeJustice, clientFreeJusticeOf } from "@/lib/cases/free-justice";
 import { type InterviewView, interviewViewOf } from "@/lib/cases/interview";
 import { createAnonClient } from "@/lib/public-content";
 
@@ -220,6 +221,8 @@ export type ClientTasks = {
   interview: InterviewView | null;
   /** What the link asks about a bill in somebody else's name (0123); none when it could not be read. */
   residence: ClientResidenceItem[];
+  /** What the link asks about free justice in the civil court (0125); null when it could not be read. */
+  freeJustice: ClientFreeJustice | null;
 };
 
 /** What the link asks the client to sign, to accept and to confirm, and what it tells them. Read only: no visit is counted. */
@@ -237,19 +240,22 @@ export async function readClientTasks(token: string): Promise<ClientTasks> {
       agency: null,
       interview: null,
       residence: [],
+      freeJustice: null,
     };
   }
-  const [signatures, terms, statements, course, notices, civil, agency, interview, residence] = await Promise.all([
-    supabase.rpc("client_link_signatures", { target_token: token }),
-    supabase.rpc("client_link_terms", { target_token: token }),
-    supabase.rpc("client_link_statements", { target_token: token }),
-    supabase.rpc("client_link_course", { target_token: token }),
-    supabase.rpc("client_link_notices", { target_token: token }),
-    supabase.rpc("client_link_civil_court", { target_token: token }),
-    supabase.rpc("client_link_agency", { target_token: token }),
-    supabase.rpc("client_link_interview", { target_token: token }),
-    supabase.rpc("client_link_residence", { target_token: token }),
-  ]);
+  const [signatures, terms, statements, course, notices, civil, agency, interview, residence, justice] =
+    await Promise.all([
+      supabase.rpc("client_link_signatures", { target_token: token }),
+      supabase.rpc("client_link_terms", { target_token: token }),
+      supabase.rpc("client_link_statements", { target_token: token }),
+      supabase.rpc("client_link_course", { target_token: token }),
+      supabase.rpc("client_link_notices", { target_token: token }),
+      supabase.rpc("client_link_civil_court", { target_token: token }),
+      supabase.rpc("client_link_agency", { target_token: token }),
+      supabase.rpc("client_link_interview", { target_token: token }),
+      supabase.rpc("client_link_residence", { target_token: token }),
+      supabase.rpc("client_link_free_justice", { target_token: token }),
+    ]);
   const owned = residence.error ? null : (residence.data as { ok?: boolean; items?: unknown } | null);
   const handed = agency.data as { ok?: boolean; agency?: unknown; finished?: unknown } | null;
   const asked = civil.data as { ok?: boolean; items?: unknown } | null;
@@ -292,5 +298,6 @@ export async function readClientTasks(token: string): Promise<ClientTasks> {
             (item) => typeof item?.id === "string" && typeof item?.holder === "string",
           )
         : [],
+    freeJustice: justice.error ? null : clientFreeJusticeOf(justice.data),
   };
 }

@@ -44,6 +44,9 @@ const KIND_FOR_MODEL: Record<DocumentKind, string> = {
   evidence: "prova do que aconteceu (foto, conversa, aviso da companhia)",
   power_of_attorney: "procuração",
   residence_declaration: "declaração de residência",
+  free_justice_declaration: "declaração de hipossuficiência econômica",
+  income_proof:
+    "comprovante de renda (holerite, extrato de benefício do INSS, declaração do imposto de renda ou carteira de trabalho)",
   contract: "contrato",
   petition: "petição do processo",
   other: "outro documento do caso",

@@ -202,6 +202,8 @@ const DOCUMENT_PHRASE_KEY: Record<DocumentKind, string> = {
   evidence: "case-now-document-evidence",
   power_of_attorney: "case-now-document-power-of-attorney",
   residence_declaration: "case-now-document-residence-declaration",
+  free_justice_declaration: "case-now-document-free-justice-declaration",
+  income_proof: "case-now-document-income-proof",
   contract: "case-now-document-contract",
   petition: "case-now-document-petition",
   other: "case-now-document",
@@ -819,7 +821,9 @@ export function caseNow(input: CaseNowInput): CaseNow {
           const saidAbove = blocking.some((line) =>
             filing.blocker?.startsWith("system_")
               ? line.id === `system:${lawsuit.id}`
-              : filing.blocker === "power_of_attorney_unsigned" || filing.blocker === "residence_declaration_unsigned"
+              : filing.blocker === "power_of_attorney_unsigned" ||
+                  filing.blocker === "residence_declaration_unsigned" ||
+                  filing.blocker === "free_justice_unsigned"
                 ? line.id.startsWith("envelope:")
                 : filing.blocker === "civil_court_unanswered"
                   ? line.id.startsWith("civil:")
