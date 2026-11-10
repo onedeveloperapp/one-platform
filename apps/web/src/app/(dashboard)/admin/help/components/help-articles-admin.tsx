@@ -11,7 +11,7 @@ import DataTable from "@/components/data-grid/data-table";
 import EmptyState from "@/components/product/empty-state";
 import { LOCALES } from "@/constants";
 import { localizeHref } from "@/i18n/routing";
-import NiDocumentFull from "@/icons/nexture/ni-document-full";
+import IllustrationDocumentation from "@/icons/illustrations/illustration-documentation";
 import NiPen from "@/icons/nexture/ni-pen";
 import { formatDate } from "@/lib/admin/format";
 import { labelOf, LOCALE_LABEL } from "@/lib/admin/labels";
@@ -437,7 +437,8 @@ export default function HelpArticlesAdmin() {
               </Typography>
             ) : (
               <EmptyState
-                icon={<NiDocumentFull size="medium" />}
+                layout="row"
+                illustration={<IllustrationDocumentation />}
                 title="Nenhum artigo de ajuda ainda"
                 description="Escreva o primeiro artigo da central de ajuda. Comece pela pergunta que o suporte mais responde."
                 action={{ label: "Novo artigo", onClick: () => setForm(EMPTY_FORM) }}

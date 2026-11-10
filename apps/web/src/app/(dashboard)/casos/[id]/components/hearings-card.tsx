@@ -5,12 +5,14 @@ import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 
-import { Alert, Box, Button, Typography } from "@mui/material";
+import { Alert, Box, Button } from "@mui/material";
 
 import HearingCard from "@/components/hearings/hearing-card";
 import HearingPanel from "@/components/hearings/hearing-panel";
 import CollapsibleCard from "@/components/product/collapsible-card";
+import EmptyState from "@/components/product/empty-state";
 import StatusChip from "@/components/product/status-chip";
+import IllustrationPlatforms from "@/icons/illustrations/illustration-platforms";
 import { opensOnArrival } from "@/lib/cases/sections";
 import { momentIn } from "@/lib/hearings/hearings";
 import { formatCnj } from "@flyee/rules/cnj";
@@ -97,9 +99,14 @@ export default function HearingsCard({
       ) : null}
 
       {hearings.upcoming.length === 0 ? (
-        <Typography variant="body2" className="text-text-secondary">
-          {t("case-hearings-none")}
-        </Typography>
+        <EmptyState
+          titleAs="h3"
+          layout="row"
+          framed={false}
+          illustration={<IllustrationPlatforms />}
+          title={t("case-hearings-empty-title")}
+          description={t("case-hearings-empty-body")}
+        />
       ) : (
         <Box component="ul" className="m-0 flex list-none flex-col gap-3 p-0">
           {hearings.upcoming.map((row) => (

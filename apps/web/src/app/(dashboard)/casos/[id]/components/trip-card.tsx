@@ -12,7 +12,7 @@ import CollapsibleCard from "@/components/product/collapsible-card";
 import DialogHeader from "@/components/product/dialog-header";
 import EmptyState from "@/components/product/empty-state";
 import StatusChip, { type StatusTone } from "@/components/product/status-chip";
-import NiPlane from "@/icons/nexture/ni-plane";
+import IllustrationLaunch from "@/icons/illustrations/illustration-launch";
 import { removeFlightSegment, saveFlightSegment } from "@/lib/cases/actions";
 import { caseErrorKey, formatLocalTime } from "@/lib/cases/cases";
 import { segmentFields, type SegmentValues, segmentValues } from "@/lib/cases/forms";
@@ -138,7 +138,9 @@ export default function TripCard({
       {state.segments.length === 0 && (
         <EmptyState
           titleAs="h3"
-          icon={<NiPlane />}
+          layout="row"
+          framed={false}
+          illustration={<IllustrationLaunch />}
           title={t("case-trip-empty-title")}
           description={t("case-trip-empty-docs")}
           action={writable ? { label: t("case-trip-send-ticket"), onClick: () => setFromTicket(true) } : undefined}

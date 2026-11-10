@@ -13,11 +13,12 @@ import DocumentSlot, { type SlotState } from "@/components/cases/document-slot";
 import CollapsibleCard from "@/components/product/collapsible-card";
 import ConfirmActionDialog from "@/components/product/confirm-action-dialog";
 import EmptyState from "@/components/product/empty-state";
+import InfoHint from "@/components/product/info-hint";
 import StateLine from "@/components/product/state-line";
 import StatusChip, { type StatusTone } from "@/components/product/status-chip";
 import { TILE_TONE } from "@/components/product/tile-tone";
+import IllustrationDocumentation from "@/icons/illustrations/illustration-documentation";
 import NiDocumentCheck from "@/icons/nexture/ni-document-check";
-import NiScale from "@/icons/nexture/ni-scale";
 import { caseErrorKey, DOCUMENT_KIND_KEY, isDocumentKind } from "@/lib/cases/cases";
 import { prefillErrorKey, type ReceiptReading, receiptReadingOf } from "@/lib/cases/document-prefill";
 import {
@@ -155,11 +156,12 @@ export default function FilingCard({
     >
       {lawsuits.length === 0 ? (
         <EmptyState
-          icon={<NiScale />}
           titleAs="h3"
+          layout="row"
+          framed={false}
+          illustration={<IllustrationDocumentation />}
           title={t("filing-empty-title")}
           description={t("filing-empty-body")}
-          className="py-8"
         />
       ) : (
         lawsuits.map((proceeding) => (
@@ -823,9 +825,12 @@ function Lawsuit({
       ) : null}
 
       {writable && proceeding.status === "planned" && petitions.length === 0 ? (
-        <Typography variant="body2" className="text-text-secondary">
-          {t("filing-needs-petition")}
-        </Typography>
+        <Box className="flex items-center gap-1">
+          <Typography variant="body2" className="text-text-secondary">
+            {t("filing-needs-petition")}
+          </Typography>
+          <InfoHint label={t("filing-needs-petition-outside")} className="self-center" />
+        </Box>
       ) : null}
 
       {formOpen ? (

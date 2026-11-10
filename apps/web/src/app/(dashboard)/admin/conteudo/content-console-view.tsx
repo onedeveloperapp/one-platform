@@ -31,8 +31,7 @@ import EmptyState from "@/components/product/empty-state";
 import PageHeader from "@/components/product/page-header";
 import StatusChip from "@/components/product/status-chip";
 import WordDownloadButton from "@/components/product/word-download-button";
-import NiBook from "@/icons/nexture/ni-book";
-import NiDocumentFull from "@/icons/nexture/ni-document-full";
+import IllustrationDocumentation from "@/icons/illustrations/illustration-documentation";
 import type { PlatformContent, PlatformSource, PlatformTemplate } from "@/lib/admin/platform-content";
 import type { ConsoleState } from "@/lib/admin/session";
 import { LIBRARY_KINDS } from "@flyee/knowledge/citations";
@@ -133,7 +132,7 @@ export default function ContentConsoleView({ state }: { state: ConsoleState<{ co
           </Box>
           {templates.length === 0 ? (
             <EmptyState
-              icon={<NiDocumentFull />}
+              illustration={<IllustrationDocumentation />}
               title="Nenhum modelo do ONE"
               description="Sem modelo padrão, o ONE espera que cada escritório escolha um modelo antes de escrever uma peça."
               action={{ label: "Novo modelo", onClick: () => setTemplateForm({ template: null }) }}
@@ -208,7 +207,7 @@ export default function ContentConsoleView({ state }: { state: ConsoleState<{ co
           </Box>
           {verified.length === 0 ? (
             <EmptyState
-              icon={<NiBook />}
+              illustration={<IllustrationDocumentation />}
               title="Nenhuma fonte do ONE"
               description="As peças dos escritórios só citam fontes conferidas. Registre as que os modelos do ONE citam."
               action={{ label: "Nova fonte", onClick: () => setSourceForm({ source: null }) }}

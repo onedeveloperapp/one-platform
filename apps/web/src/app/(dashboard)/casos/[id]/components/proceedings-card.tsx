@@ -29,7 +29,7 @@ import DialogHeader from "@/components/product/dialog-header";
 import EmptyState from "@/components/product/empty-state";
 import StateLine from "@/components/product/state-line";
 import StatusChip, { type StatusTone } from "@/components/product/status-chip";
-import NiScale from "@/icons/nexture/ni-scale";
+import IllustrationLaunch from "@/icons/illustrations/illustration-launch";
 import { removeProceeding, saveProceeding } from "@/lib/cases/actions";
 import { caseErrorKey } from "@/lib/cases/cases";
 import { caseDomicile, lawyerNeedsSupplementary, ruleParties } from "@/lib/cases/rules";
@@ -161,7 +161,9 @@ export default function ProceedingsCard({
       {state.proceedings.length === 0 && (
         <EmptyState
           titleAs="h3"
-          icon={<NiScale />}
+          layout="row"
+          framed={false}
+          illustration={<IllustrationLaunch />}
           title={t("case-proceedings-empty-title")}
           description={t("case-proceedings-empty-body")}
           action={writable ? { label: t("case-proceedings-add"), onClick: () => setEditing("new") } : undefined}

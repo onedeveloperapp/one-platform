@@ -15,6 +15,10 @@ import MetricBars from "@/components/product/metric-bars";
 import PageHeader from "@/components/product/page-header";
 import StatusChip from "@/components/product/status-chip";
 import type { TileTone } from "@/components/product/tile-tone";
+import IllustrationAccounts from "@/icons/illustrations/illustration-accounts";
+import IllustrationDocumentation from "@/icons/illustrations/illustration-documentation";
+import IllustrationIntegrate from "@/icons/illustrations/illustration-integrate";
+import IllustrationLaunch from "@/icons/illustrations/illustration-launch";
 import NiBriefcase from "@/icons/nexture/ni-briefcase";
 import NiCalendar from "@/icons/nexture/ni-calendar";
 import NiClock from "@/icons/nexture/ni-clock";
@@ -25,7 +29,6 @@ import NiRefresh from "@/icons/nexture/ni-refresh";
 import NiShield from "@/icons/nexture/ni-shield";
 import NiStar from "@/icons/nexture/ni-star";
 import NiUserMinus from "@/icons/nexture/ni-user-minus";
-import NiUsers from "@/icons/nexture/ni-users";
 import {
   ATTENTION_FILTERS,
   filterFirms,
@@ -426,7 +429,7 @@ export default function FirmsView({
             {tab === "partners" ? (
               ready.partners.length === 0 ? (
                 <EmptyState
-                  icon={<NiUsers size="large" />}
+                  illustration={<IllustrationIntegrate />}
                   title="Nenhuma parceria com agência ainda"
                   description="Um escritório convida uma agência de viagens em Configurações, Parceiros. Cada parceria aparece aqui com o que a agência guarda, em números, nunca um passageiro."
                 />
@@ -440,21 +443,25 @@ export default function FirmsView({
                   enableExport={false}
                   labels={{ search: "Buscar por agência ou escritório" }}
                   noResultsOverlay={
-                    <EmptyState icon={<NiUsers size="large" />} title="Nenhuma parceria corresponde à busca" />
+                    <EmptyState
+                      layout="row"
+                      illustration={<IllustrationDocumentation />}
+                      title="Nenhuma parceria corresponde à busca"
+                    />
                   }
                 />
               )
             ) : tab === "firms" ? (
               firms.length === 0 ? (
                 <EmptyState
-                  icon={<NiBriefcase size="large" />}
+                  illustration={<IllustrationLaunch />}
                   title="Nenhum escritório ainda"
                   description="Cada escritório fundado aparece aqui, com a equipe, o plano e o que pede atenção. Enquanto o site está em lista de espera, quem se inscreve fica em Leads."
                   action={{ label: "Ver a lista de espera", href: "/admin/leads" }}
                 />
               ) : visible.length === 0 ? (
                 <EmptyState
-                  icon={<NiBriefcase size="large" />}
+                  illustration={<IllustrationDocumentation />}
                   title={`Nenhum escritório em “${activeFilter?.label ?? "este filtro"}”`}
                   description={activeFilter?.hint ?? "Nenhum escritório corresponde a este filtro agora."}
                   action={{ label: "Ver todos os escritórios", onClick: () => setFilter("firms") }}
@@ -472,7 +479,8 @@ export default function FirmsView({
                   labels={{ search: "Buscar por escritório, titular, plano ou campanha" }}
                   noResultsOverlay={
                     <EmptyState
-                      icon={<NiBriefcase size="large" />}
+                      layout="row"
+                      illustration={<IllustrationDocumentation />}
                       title="Nenhum escritório corresponde à busca"
                       description={`Nada encontrado para “${query}” ${filter === "firms" ? "entre todos os escritórios" : `no filtro “${activeFilter?.label}”`}. Quem criou a conta e ainda não está em um escritório fica na outra aba.`}
                     />
@@ -481,7 +489,7 @@ export default function FirmsView({
               )
             ) : ready.people.people.length === 0 ? (
               <EmptyState
-                icon={<NiUsers size="large" />}
+                illustration={<IllustrationAccounts />}
                 title="Nenhuma conta sem escritório"
                 description="Uma conta nova fica aqui até fundar um escritório ou aceitar um convite. Quando alguém aparecer e não sair, vale conferir se o convite foi para outro e-mail."
               />
@@ -519,7 +527,11 @@ export default function FirmsView({
                   enableExport={false}
                   labels={{ search: "Buscar por nome ou e-mail" }}
                   noResultsOverlay={
-                    <EmptyState icon={<NiUsers size="large" />} title="Nenhuma pessoa corresponde à busca" />
+                    <EmptyState
+                      layout="row"
+                      illustration={<IllustrationDocumentation />}
+                      title="Nenhuma pessoa corresponde à busca"
+                    />
                   }
                 />
               </Box>

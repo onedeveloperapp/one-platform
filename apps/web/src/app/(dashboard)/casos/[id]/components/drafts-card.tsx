@@ -21,9 +21,11 @@ import CollapsibleCard from "@/components/product/collapsible-card";
 import ConfirmActionDialog from "@/components/product/confirm-action-dialog";
 import DialogHeader from "@/components/product/dialog-header";
 import EmptyState from "@/components/product/empty-state";
+import SectionTitle from "@/components/product/section-title";
 import StatusChip, { type StatusTone } from "@/components/product/status-chip";
 import UsageMeter from "@/components/product/usage-meter";
-import NiDocumentFull from "@/icons/nexture/ni-document-full";
+import IllustrationConfigure from "@/icons/illustrations/illustration-configure";
+import IllustrationDocumentation from "@/icons/illustrations/illustration-documentation";
 import { caseLabel } from "@/lib/cases/cases";
 import {
   approveCaseDraft,
@@ -219,27 +221,30 @@ export default function DraftsCard({
       {state.proceedings.length === 0 ? (
         <EmptyState
           titleAs="h3"
-          icon={<NiDocumentFull />}
+          layout="row"
+          framed={false}
+          illustration={<IllustrationDocumentation />}
           title={t("drafts-empty-title")}
           description={t("drafts-empty-body")}
-          className="py-8"
         />
       ) : lawsuits.length === 0 ? (
         <EmptyState
           titleAs="h3"
-          icon={<NiDocumentFull />}
+          layout="row"
+          framed={false}
+          illustration={<IllustrationConfigure />}
           title={t("drafts-filed-title")}
           description={t("drafts-filed-body")}
-          className="py-8"
         />
       ) : state.pieces.templates.length === 0 && drafts.length === 0 ? (
         <EmptyState
           titleAs="h3"
-          icon={<NiDocumentFull />}
+          layout="row"
+          framed={false}
+          illustration={<IllustrationDocumentation />}
           title={t("drafts-no-template-title")}
           description={t(state.lawyer ? "drafts-no-template-body-lawyer" : "drafts-no-template-body")}
           action={{ label: t("drafts-no-template-action"), href: "/biblioteca" }}
-          className="py-8"
         />
       ) : (
         lawsuits.map((proceeding) => (
@@ -256,12 +261,6 @@ export default function DraftsCard({
           />
         ))
       )}
-
-      {lawsuits.length > 0 ? (
-        <Typography variant="body2" className="text-text-secondary">
-          {t("drafts-outside")}
-        </Typography>
-      ) : null}
 
       {open ? (
         <DraftDialog
@@ -1321,11 +1320,15 @@ function DraftDialog({
         {preview ? (
           <Box component="section" aria-labelledby={`${titleId}-preview`} className="flex flex-col gap-3">
             <Box className="flex flex-col gap-1">
-              <Typography id={`${titleId}-preview`} variant="subtitle2" component="h3" className="mb-0">
-                {t("draft-preview-title")}
-              </Typography>
+              <SectionTitle
+                id={`${titleId}-preview`}
+                as="h3"
+                variant="subtitle2"
+                title={t("draft-preview-title")}
+                description={t("draft-preview-about", { version: preview.version })}
+              />
               <Typography variant="body2" className="text-text-secondary">
-                {t("draft-preview-body", { version: preview.version })}
+                {t("draft-preview-read")}
               </Typography>
             </Box>
             {previewStale ? (

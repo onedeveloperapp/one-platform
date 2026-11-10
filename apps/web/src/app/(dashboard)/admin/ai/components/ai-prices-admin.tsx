@@ -5,10 +5,10 @@ import { useCallback, useEffect, useState } from "react";
 import { Alert, Box, Button, Chip, IconButton, TextField, Typography } from "@mui/material";
 
 import EmptyState from "@/components/product/empty-state";
+import IllustrationAnalytics from "@/icons/illustrations/illustration-analytics";
 import NiBinEmpty from "@/icons/nexture/ni-bin-empty";
 import NiChevronDownSmall from "@/icons/nexture/ni-chevron-down-small";
 import NiChevronRightSmall from "@/icons/nexture/ni-chevron-right-small";
-import NiMoney from "@/icons/nexture/ni-money";
 import NiPlus from "@/icons/nexture/ni-plus";
 import NiRefresh from "@/icons/nexture/ni-refresh";
 import { recordAudit } from "@/lib/audit";
@@ -577,7 +577,7 @@ export default function AiPricesAdmin({ onSaved }: { onSaved?: () => void }) {
 
         {rows.length === 0 && !loading && (
           <EmptyState
-            icon={<NiMoney size="large" />}
+            illustration={<IllustrationAnalytics />}
             title="Nenhum preço cadastrado"
             description="Enquanto esta tabela estiver vazia, toda chamada entra como sem preço e o custo de cada escritório aparece como zero. Um preço por modelo já faz os números existirem."
             action={{

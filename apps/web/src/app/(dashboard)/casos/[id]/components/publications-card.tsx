@@ -9,7 +9,7 @@ import { Alert, Typography } from "@mui/material";
 import CollapsibleCard from "@/components/product/collapsible-card";
 import EmptyState from "@/components/product/empty-state";
 import PublicationCard from "@/components/publications/publication-card";
-import NiInbox from "@/icons/nexture/ni-inbox";
+import IllustrationEmail from "@/icons/illustrations/illustration-email";
 import { opensOnArrival } from "@/lib/cases/sections";
 import type { Said } from "@/lib/publications/list-state";
 
@@ -72,11 +72,12 @@ export default function PublicationsCard({
         </Alert>
       ) : rows.length === 0 ? (
         <EmptyState
-          icon={<NiInbox />}
           titleAs="h3"
+          layout="row"
+          framed={false}
+          illustration={<IllustrationEmail />}
           title={t("case-publications-empty-title")}
           description={t("case-publications-empty-body")}
-          className="py-8"
         />
       ) : (
         rows.map((row) => (

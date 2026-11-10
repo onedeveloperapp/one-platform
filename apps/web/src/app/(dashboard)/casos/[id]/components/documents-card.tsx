@@ -23,7 +23,7 @@ import DialogHeader from "@/components/product/dialog-header";
 import EmptyState from "@/components/product/empty-state";
 import StateLine from "@/components/product/state-line";
 import StatusChip, { type StatusTone } from "@/components/product/status-chip";
-import NiPaperclip from "@/icons/nexture/ni-paperclip";
+import IllustrationDocumentation from "@/icons/illustrations/illustration-documentation";
 import { decideCaseDocument, finishCaseUpload, openCaseFile, startCaseUpload } from "@/lib/cases/actions";
 import {
   caseErrorKey,
@@ -325,7 +325,9 @@ export default function DocumentsCard({
       {state.documents.length === 0 && (
         <EmptyState
           titleAs="h3"
-          icon={<NiPaperclip />}
+          layout="row"
+          framed={false}
+          illustration={<IllustrationDocumentation />}
           title={t("case-documents-empty-title")}
           description={t("case-documents-empty-body")}
         />

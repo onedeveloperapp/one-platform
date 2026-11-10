@@ -10,8 +10,8 @@ import DataTable from "@/components/data-grid/data-table";
 import EmptyState from "@/components/product/empty-state";
 import StatusChip from "@/components/product/status-chip";
 import { LOCALES } from "@/constants";
+import IllustrationSupport from "@/icons/illustrations/illustration-support";
 import NiPen from "@/icons/nexture/ni-pen";
-import NiQuestionHexagon from "@/icons/nexture/ni-question-hexagon";
 import { labelOf, LOCALE_LABEL } from "@/lib/admin/labels";
 import { recordAudit } from "@/lib/audit";
 import { createClient } from "@flyee/auth/client";
@@ -318,7 +318,8 @@ export default function HelpCategoriesAdmin() {
               </Typography>
             ) : (
               <EmptyState
-                icon={<NiQuestionHexagon size="medium" />}
+                layout="row"
+                illustration={<IllustrationSupport />}
                 title="Nenhuma categoria de ajuda ainda"
                 description="As categorias agrupam os artigos da central de ajuda pública. Comece pelos dois ou três assuntos que os integrantes mais perguntam."
                 action={{ label: "Nova categoria", onClick: () => setForm(EMPTY_FORM) }}

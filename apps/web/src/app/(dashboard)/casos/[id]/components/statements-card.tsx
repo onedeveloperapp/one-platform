@@ -12,9 +12,10 @@ import { Alert, Box, Button, MenuItem, TextField, Typography } from "@mui/materi
 import CollapsibleCard from "@/components/product/collapsible-card";
 import EmptyState from "@/components/product/empty-state";
 import SecondFactorPrompt from "@/components/product/second-factor-prompt";
+import SectionTitle from "@/components/product/section-title";
 import StateLine from "@/components/product/state-line";
 import StatusChip, { type StatusTone } from "@/components/product/status-chip";
-import NiMicrophone from "@/icons/nexture/ni-microphone";
+import IllustrationSupport from "@/icons/illustrations/illustration-support";
 import { mayDecide } from "@/lib/ai/approvals";
 import { ACCOUNT_TOPIC_SHORT_KEY } from "@/lib/cases/account";
 import { openCaseFile } from "@/lib/cases/actions";
@@ -578,10 +579,11 @@ export default function StatementsCard({
       {state.statements.length === 0 && state.interview ? null : state.statements.length === 0 ? (
         <EmptyState
           titleAs="h3"
-          icon={<NiMicrophone />}
+          layout="row"
+          framed={false}
+          illustration={<IllustrationSupport />}
           title={t("case-statements-empty-title")}
           description={t("case-statements-empty-body")}
-          className="py-8"
         />
       ) : (
         <Box className="flex flex-col gap-2">{state.statements.map(row)}</Box>
@@ -589,12 +591,13 @@ export default function StatementsCard({
 
       {writable && state.audios.length > 0 && (
         <Box className="border-grey-100 flex flex-col gap-2 rounded-2xl border p-4">
-          <Typography variant="body1" className="font-semibold">
-            {t("case-statements-audios-title")}
-          </Typography>
-          <Typography variant="body2" className="text-text-secondary">
-            {t("case-statements-audios-body")}
-          </Typography>
+          <SectionTitle
+            id="case-statements-audios"
+            as="h3"
+            variant="subtitle2"
+            title={t("case-statements-audios-title")}
+            description={t("case-statements-audios-body")}
+          />
           <Box component="ul" className="m-0 flex list-none flex-col gap-2 p-0">
             {state.audios.map((audio) => (
               <Box component="li" key={audio.fileId} className="flex flex-wrap items-center gap-2">

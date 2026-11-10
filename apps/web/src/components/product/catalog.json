@@ -99,8 +99,8 @@
     {
       "name": "SectionTitle",
       "from": "@/components/product/section-title",
-      "props": "id, title, description? (behind the i), chip?, action?, as? (h2 | h3)",
-      "use": "The heading of a section of a page that is not a card (a board, a row of numbers, a group of tiles): its title, what it is behind the \"i\" beside it, where it stands (a StatusChip) and its own action at the right. Never an h2 with a paragraph under it (the owner, 2026-11-09). A card's head is CardTitle."
+      "props": "id, title, description? (behind the i), chip?, action?, as? (h2 | h3 | h4), variant? (h5 | h6 | subtitle1 | subtitle2)",
+      "use": "The heading of a section of a page that is not a card (a board, a row of numbers, a group of tiles): its title, what it is behind the \"i\" beside it, where it stands (a StatusChip) and its own action at the right. Never an h2 with a paragraph under it (the owner, 2026-11-09). A card's head is CardTitle. A section inside a card takes the card's sub-heading style, variant=\"subtitle2\" and as=\"h3\", with what it is behind the same \"i\" (the case's cards, 2026-11-10)."
     },
     {
       "name": "StateLine",

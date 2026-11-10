@@ -36,7 +36,7 @@ import DialogHeader from "@/components/product/dialog-header";
 import EmptyState from "@/components/product/empty-state";
 import PageHeader from "@/components/product/page-header";
 import StatusChip, { type StatusTone } from "@/components/product/status-chip";
-import NiCalendar from "@/icons/nexture/ni-calendar";
+import IllustrationPlatforms from "@/icons/illustrations/illustration-platforms";
 import type {
   CalendarConsole,
   CalendarDayRecord,
@@ -252,7 +252,7 @@ export default function CalendarConsoleView({ state }: { state: State }) {
                 </>
               ) : (
                 <EmptyState
-                  icon={<NiCalendar size="large" />}
+                  illustration={<IllustrationPlatforms />}
                   title={`O ano de ${calendar.year} do ${calendar.court} não foi conferido`}
                   description="Leia o ato do tribunal com os feriados e pontos facultativos do ano, registre os dias abaixo e então a conferência, com o endereço do ato."
                   action={{ label: "Registrar a conferência", onClick: () => setEditingYear(true) }}
@@ -381,7 +381,7 @@ export default function CalendarConsoleView({ state }: { state: State }) {
               </Typography>
               {calendar.days.length === 0 ? (
                 <EmptyState
-                  icon={<NiCalendar size="large" />}
+                  illustration={<IllustrationPlatforms />}
                   title="Nenhum dia registrado neste ano"
                   description="Registre os feriados do tribunal e das comarcas, o recesso, os pontos facultativos e as suspensões de prazo do ato."
                   action={{ label: "Adicionar dia ou período", onClick: () => setAddingDay(true) }}

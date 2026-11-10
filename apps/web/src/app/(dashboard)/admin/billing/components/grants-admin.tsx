@@ -23,7 +23,7 @@ import { type GridColDef, type GridRenderCellParams } from "@mui/x-data-grid";
 
 import DataTable from "@/components/data-grid/data-table";
 import EmptyState from "@/components/product/empty-state";
-import NiTicket from "@/icons/nexture/ni-ticket";
+import IllustrationAccess from "@/icons/illustrations/illustration-access";
 import { createClient } from "@flyee/auth/client";
 
 type GrantRow = {
@@ -330,7 +330,8 @@ export default function GrantsAdmin() {
           loading={!loaded}
           noRowsOverlay={
             <EmptyState
-              icon={<NiTicket size="medium" />}
+              layout="row"
+              illustration={<IllustrationAccess />}
               title="Nenhum kit ou cortesia ainda"
               description="Os kits aparecem aqui quando o pagamento único é confirmado; as cortesias, quando você concede uma acima."
               className="border-none"

@@ -7,7 +7,8 @@ import EmptyState from "@/components/product/empty-state";
 import InfoHint from "@/components/product/info-hint";
 import MetricBars from "@/components/product/metric-bars";
 import StatusChip from "@/components/product/status-chip";
-import NiRefresh from "@/icons/nexture/ni-refresh";
+import IllustrationAccounts from "@/icons/illustrations/illustration-accounts";
+import IllustrationServers from "@/icons/illustrations/illustration-servers";
 import { DJEN_FAILURE_LABEL, type DjenHealth } from "@/lib/admin/ai";
 import { formatDate, formatNumber } from "@/lib/admin/format";
 
@@ -76,7 +77,7 @@ export default function DjenHealthCard({ health, captureOn }: { health: DjenHeal
       {health.registrations === 0 ? (
         <EmptyState
           titleAs="h3"
-          icon={<NiRefresh size="large" />}
+          illustration={health.unseen > 0 ? <IllustrationServers /> : <IllustrationAccounts />}
           title={health.unseen > 0 ? "Nenhuma leitura feita ainda" : "Nenhuma inscrição para ler"}
           description={
             health.unseen > 0

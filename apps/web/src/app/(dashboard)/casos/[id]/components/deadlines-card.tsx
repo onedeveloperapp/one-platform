@@ -5,12 +5,14 @@ import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 
-import { Alert, Box, Button, Typography } from "@mui/material";
+import { Alert, Box, Button } from "@mui/material";
 
 import DeadlineCard from "@/components/deadlines/deadline-card";
 import DeadlinePanel from "@/components/deadlines/deadline-panel";
 import CollapsibleCard from "@/components/product/collapsible-card";
+import EmptyState from "@/components/product/empty-state";
 import StatusChip from "@/components/product/status-chip";
+import IllustrationConfigure from "@/icons/illustrations/illustration-configure";
 import { opensOnArrival } from "@/lib/cases/sections";
 import { formatCnj } from "@flyee/rules/cnj";
 import { formatDayBr } from "@flyee/rules/person";
@@ -106,9 +108,14 @@ export default function DeadlinesCard({
       ) : null}
 
       {deadlines.open.length === 0 ? (
-        <Typography variant="body2" className="text-text-secondary">
-          {t("case-deadlines-none")}
-        </Typography>
+        <EmptyState
+          titleAs="h3"
+          layout="row"
+          framed={false}
+          illustration={<IllustrationConfigure />}
+          title={t("case-deadlines-empty-title")}
+          description={t("case-deadlines-empty-body")}
+        />
       ) : (
         <Box component="ul" className="m-0 flex list-none flex-col gap-3 p-0">
           {deadlines.open.map((row) => (

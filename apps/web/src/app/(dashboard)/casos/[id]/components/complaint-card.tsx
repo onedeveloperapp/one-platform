@@ -22,7 +22,7 @@ import ConfirmActionDialog from "@/components/product/confirm-action-dialog";
 import DialogHeader from "@/components/product/dialog-header";
 import EmptyState from "@/components/product/empty-state";
 import StatusChip, { type StatusTone } from "@/components/product/status-chip";
-import NiFlag from "@/icons/nexture/ni-flag";
+import IllustrationSupport from "@/icons/illustrations/illustration-support";
 import { caseErrorKey } from "@/lib/cases/cases";
 import { opensOnArrival } from "@/lib/cases/sections";
 import { removeAdminComplaint, saveAdminComplaint } from "@/lib/cases/statement-actions";
@@ -121,11 +121,12 @@ export default function ComplaintCard({
       {state.complaints.length === 0 ? (
         <EmptyState
           titleAs="h3"
-          icon={<NiFlag />}
+          layout="row"
+          framed={false}
+          illustration={<IllustrationSupport />}
           title={t("case-complaints-empty-title")}
           description={t("case-complaints-empty-body")}
           action={writable ? { label: t("case-complaints-add"), onClick: () => setEditing("new") } : undefined}
-          className="py-8"
         />
       ) : (
         <Box className="flex flex-col gap-2">

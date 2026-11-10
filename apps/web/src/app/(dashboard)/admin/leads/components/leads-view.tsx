@@ -15,6 +15,8 @@ import EmptyState from "@/components/product/empty-state";
 import { StatTile } from "@/components/product/home-tiles";
 import PageHeader from "@/components/product/page-header";
 import StatusChip, { type StatusTone } from "@/components/product/status-chip";
+import IllustrationDocumentation from "@/icons/illustrations/illustration-documentation";
+import IllustrationEmail from "@/icons/illustrations/illustration-email";
 import NiArrowInDown from "@/icons/nexture/ni-arrow-in-down";
 import NiBinEmpty from "@/icons/nexture/ni-bin-empty";
 import NiClock from "@/icons/nexture/ni-clock";
@@ -401,14 +403,14 @@ export default function LeadsView({ state, canSend }: { state: LeadsState; canSe
           <CardContent>
             {leads.length === 0 ? (
               <EmptyState
-                icon={<NiEmail size="large" />}
+                illustration={<IllustrationEmail />}
                 title="Nenhum contato ainda"
                 description="Quem se inscreve na lista de espera do site aparece aqui. O link de confirmação chega por e-mail e só depois do clique o contato pode receber as novidades."
                 action={{ label: "Abrir a lista de espera", href: "/espera" }}
               />
             ) : visible.length === 0 ? (
               <EmptyState
-                icon={<NiEmail size="large" />}
+                illustration={<IllustrationEmail />}
                 title={`Nenhum contato em “${active.label}”`}
                 description={active.hint}
                 action={{ label: "Ver todos", onClick: () => setFilter("all") }}
@@ -426,7 +428,8 @@ export default function LeadsView({ state, canSend }: { state: LeadsState; canSe
                 labels={{ search: "Buscar por e-mail, nome ou campanha" }}
                 noResultsOverlay={
                   <EmptyState
-                    icon={<NiEmail size="large" />}
+                    layout="row"
+                    illustration={<IllustrationDocumentation />}
                     title="Nenhum contato corresponde à busca"
                     description={`Nada encontrado para “${query}”.`}
                   />

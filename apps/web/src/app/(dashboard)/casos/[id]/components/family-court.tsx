@@ -20,6 +20,8 @@ import {
 } from "@mui/material";
 
 import DialogHeader from "@/components/product/dialog-header";
+import InfoHint from "@/components/product/info-hint";
+import SectionTitle from "@/components/product/section-title";
 import StatusChip from "@/components/product/status-chip";
 import { caseErrorKey } from "@/lib/cases/cases";
 import { type CivilCourtNeed, COURT_NOTE_STANCE_KEY, type CourtNote, noteForState } from "@/lib/cases/family";
@@ -138,9 +140,12 @@ export function FamilyPlanBox({
           {t("case-family-mismatch")}
         </Alert>
       ) : family === "together" ? (
-        <Typography variant="body2" className="text-text-secondary">
-          {t("case-family-together")}
-        </Typography>
+        <Box className="flex items-center gap-1">
+          <Typography variant="body2" className="text-text-secondary">
+            {t("case-family-together")}
+          </Typography>
+          <InfoHint label={t("case-family-together-why")} className="self-center" />
+        </Box>
       ) : (
         <Alert severity="warning" className="neutral bg-background-paper/60!">
           <Box className="flex flex-col gap-2">
@@ -298,12 +303,13 @@ export function CivilCourtAnswers({
 
   return (
     <Box className="border-grey-100 flex flex-col gap-3 border-t pt-5">
-      <Typography variant="subtitle2" component="h3" className="mb-0">
-        {t("case-civil-title")}
-      </Typography>
-      <Typography variant="body2" className="text-text-secondary">
-        {t("case-civil-body")}
-      </Typography>
+      <SectionTitle
+        id="case-civil-title"
+        as="h3"
+        variant="subtitle2"
+        title={t("case-civil-title")}
+        description={t("case-civil-body")}
+      />
       <Box component="ul" className="m-0 flex list-none flex-col gap-3 p-0">
         {state.civilCourt.map((need) => (
           <Box

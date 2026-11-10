@@ -22,11 +22,12 @@ import InfoHint from "@/components/product/info-hint";
 import MetricBars, { type MetricBarItem } from "@/components/product/metric-bars";
 import PageHeader from "@/components/product/page-header";
 import StatusChip, { type StatusTone } from "@/components/product/status-chip";
+import IllustrationAnalytics from "@/icons/illustrations/illustration-analytics";
+import IllustrationLaunch from "@/icons/illustrations/illustration-launch";
 import NiBriefcase from "@/icons/nexture/ni-briefcase";
 import NiMoney from "@/icons/nexture/ni-money";
 import NiReceipt from "@/icons/nexture/ni-receipt";
 import NiRefresh from "@/icons/nexture/ni-refresh";
-import NiRobot from "@/icons/nexture/ni-robot";
 import NiSparkle from "@/icons/nexture/ni-sparkle";
 import {
   acceptedShare,
@@ -237,7 +238,7 @@ export default function AiConsoleView({ state }: { state: AiConsoleState }) {
         {totals.calls === 0 ? (
           <Grid size={12}>
             <EmptyState
-              icon={<NiMoney size="large" />}
+              illustration={<IllustrationAnalytics />}
               title={
                 spend.measuringSince
                   ? `Nenhuma chamada nos últimos ${formatNumber(spend.windowDays)} dias`
@@ -369,7 +370,7 @@ export default function AiConsoleView({ state }: { state: AiConsoleState }) {
         {accuracy.tasks.length === 0 ? (
           <Grid size={12}>
             <EmptyState
-              icon={<NiRobot size="large" />}
+              illustration={<IllustrationLaunch />}
               title="Nenhuma tarefa no catálogo"
               description="As tarefas chegam com as migrações. Sem nenhuma, a plataforma não pede nada a um modelo."
             />
@@ -528,7 +529,7 @@ function TaskCard({
     >
       {never ? (
         <EmptyState
-          icon={<NiRobot size="large" />}
+          illustration={<IllustrationLaunch />}
           titleAs="h4"
           title="Esta tarefa ainda não rodou"
           description="Quando rodar, aparecem aqui as execuções, as falhas e o que quem decide fez com as respostas."

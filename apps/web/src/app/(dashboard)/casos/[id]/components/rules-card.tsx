@@ -20,6 +20,7 @@ import {
 
 import CollapsibleCard from "@/components/product/collapsible-card";
 import { CurrencyField } from "@/components/product/fields";
+import SectionTitle from "@/components/product/section-title";
 import StatusChip, { type StatusTone } from "@/components/product/status-chip";
 import { caseErrorKey } from "@/lib/cases/cases";
 import { createPlannedProceedings, readCaseWeather, saveSuspension, setPartyClaim } from "@/lib/cases/rule-actions";
@@ -343,12 +344,13 @@ export default function RulesCard({
       <FreeJusticeAnswers caseId={state.case.id} needs={state.freeJustice} writable={writable} onChanged={onChanged} />
 
       <Box className="border-grey-100 flex flex-col gap-3 border-t pt-5">
-        <Typography variant="subtitle2" component="h3" className="mb-0">
-          {t("case-suspension-title")}
-        </Typography>
-        <Typography variant="body2" className="text-text-secondary">
-          {t("case-suspension-body")}
-        </Typography>
+        <SectionTitle
+          id="case-suspension-title"
+          as="h3"
+          variant="subtitle2"
+          title={t("case-suspension-title")}
+          description={t("case-suspension-body")}
+        />
 
         <TextField
           select

@@ -27,7 +27,7 @@ import CollapsibleCard from "@/components/product/collapsible-card";
 import DialogHeader from "@/components/product/dialog-header";
 import EmptyState from "@/components/product/empty-state";
 import StatusChip, { type StatusTone } from "@/components/product/status-chip";
-import NiPen from "@/icons/nexture/ni-pen";
+import IllustrationDocumentation from "@/icons/illustrations/illustration-documentation";
 import { openCaseFile } from "@/lib/cases/actions";
 import { caseErrorKey, DOCUMENT_KIND_KEY, isDocumentKind } from "@/lib/cases/cases";
 import { opensOnArrival } from "@/lib/cases/sections";
@@ -194,7 +194,9 @@ export default function SignaturesCard({
       {state.envelopes.length === 0 && (
         <EmptyState
           titleAs="h3"
-          icon={<NiPen />}
+          layout="row"
+          framed={false}
+          illustration={<IllustrationDocumentation />}
           title={t("case-signatures-empty-title")}
           description={t("case-signatures-empty-body")}
           action={writable ? { label: t("case-signatures-request"), onClick: () => setRequesting(true) } : undefined}

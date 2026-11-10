@@ -9,6 +9,10 @@ import InfoHint from "@/components/product/info-hint";
  * the "i" beside it, where it stands (a `StatusChip`) and its own action at the right. A page had a heading and a
  * paragraph under it for each section, read on every visit (the owner, 2026-11-09).
  *
+ * A section inside a card (the suspension of a case's rules, the preview of a piece) takes the card's own sub-heading
+ * style with `variant="subtitle2"` and `as="h3"`: a paragraph under such a heading said what the section was on every
+ * visit to the case (the owner, 2026-11-10).
+ *
  * Closest catalog entry: `CardTitle`, the head of a card, which leads with an icon on its tint; a section of a page
  * sits on the page's ground and needs none.
  */
@@ -19,6 +23,7 @@ export default function SectionTitle({
   chip,
   action,
   as = "h2",
+  variant = "h5",
 }: {
   /** The heading's id: what the section is labelled by. */
   id: string;
@@ -29,11 +34,13 @@ export default function SectionTitle({
   chip?: ReactNode;
   /** The section's own action, at the right. */
   action?: ReactNode;
-  as?: "h2" | "h3";
+  as?: "h2" | "h3" | "h4";
+  /** The heading style of the sections around it: a page's (`h5`) or a card's (`subtitle2`). */
+  variant?: "h5" | "h6" | "subtitle1" | "subtitle2";
 }) {
   return (
     <Box className="flex flex-wrap items-center gap-x-2 gap-y-1">
-      <Typography id={id} variant="h5" component={as} className="mb-0">
+      <Typography id={id} variant={variant} component={as} className="mb-0">
         {title}
       </Typography>
       {description ? <InfoHint label={description} placement="bottom-start" className="self-center" /> : null}

@@ -10,7 +10,7 @@ import ComparisonTable from "@/components/product/comparison-table";
 import EmptyState from "@/components/product/empty-state";
 import InfoHint from "@/components/product/info-hint";
 import MetricBars from "@/components/product/metric-bars";
-import NiRobot from "@/icons/nexture/ni-robot";
+import IllustrationEmail from "@/icons/illustrations/illustration-email";
 import { TRIAGE_CATEGORY_LABEL, type TriageMeasure } from "@/lib/admin/ai";
 import { formatNumber, formatPercent, ratio } from "@/lib/admin/format";
 
@@ -83,7 +83,7 @@ export default function ShadowTriageCard({ measure, onChanged }: { measure: Tria
       {measure.captured === 0 ? (
         <EmptyState
           titleAs="h3"
-          icon={<NiRobot size="large" />}
+          illustration={<IllustrationEmail />}
           title="Nenhuma publicação capturada no período"
           description="Quando a leitura do DJEN trouxer publicações, a classificação da IA e a comparação com a triagem das pessoas aparecem aqui."
           className="py-8"

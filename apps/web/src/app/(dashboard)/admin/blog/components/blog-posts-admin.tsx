@@ -11,7 +11,7 @@ import DataTable from "@/components/data-grid/data-table";
 import EmptyState from "@/components/product/empty-state";
 import StatusChip from "@/components/product/status-chip";
 import { LOCALES } from "@/constants";
-import NiDocumentFull from "@/icons/nexture/ni-document-full";
+import IllustrationDocumentation from "@/icons/illustrations/illustration-documentation";
 import NiPen from "@/icons/nexture/ni-pen";
 import { formatDate } from "@/lib/admin/format";
 import { labelOf, LOCALE_LABEL } from "@/lib/admin/labels";
@@ -478,7 +478,8 @@ export default function BlogPostsAdmin() {
               </Typography>
             ) : (
               <EmptyState
-                icon={<NiDocumentFull size="medium" />}
+                layout="row"
+                illustration={<IllustrationDocumentation />}
                 title="Nenhum post ainda"
                 description="Os posts aparecem no blog público. As novidades também aparecem para os integrantes em /novidades, junto com as versões novas das ferramentas."
                 action={{ label: "Novo post", onClick: () => setForm(EMPTY_FORM) }}

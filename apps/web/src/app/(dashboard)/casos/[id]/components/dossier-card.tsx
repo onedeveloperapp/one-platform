@@ -9,7 +9,7 @@ import { Alert, Box, Button, CircularProgress, Typography } from "@mui/material"
 import CollapsibleCard from "@/components/product/collapsible-card";
 import EmptyState from "@/components/product/empty-state";
 import MetricBars from "@/components/product/metric-bars";
-import NiDocumentCheck from "@/icons/nexture/ni-document-check";
+import IllustrationDocumentation from "@/icons/illustrations/illustration-documentation";
 import { openCaseDossier, requestCaseDossier } from "@/lib/cases/dossier-actions";
 import { opensOnArrival } from "@/lib/cases/sections";
 
@@ -215,11 +215,11 @@ export default function DossierCard({
       ) : busy !== "generate" ? (
         <EmptyState
           titleAs="h3"
-          icon={<NiDocumentCheck />}
+          framed={false}
+          illustration={<IllustrationDocumentation />}
           title={t("dossier-none-title")}
           description={t("dossier-none-body")}
           action={writable ? { label: t("dossier-generate"), onClick: () => void generate() } : undefined}
-          className="py-6"
         />
       ) : null}
     </CollapsibleCard>
