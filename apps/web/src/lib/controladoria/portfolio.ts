@@ -10,6 +10,7 @@ import {
 } from "@/lib/cases/cases";
 import { COUNTING_KEY, STATUS_KEY as DEADLINE_STATUS_KEY } from "@/lib/deadlines/deadlines";
 import type { XlsxCell, XlsxColumn, XlsxSheet } from "@/lib/export/xlsx-write";
+import { ENTRY_KIND_KEY } from "@/lib/finance/books";
 import {
   KIND_KEY as HEARING_KIND_KEY,
   MODE_KEY,
@@ -27,7 +28,16 @@ import { formatCnj } from "@flyee/rules/cnj";
  */
 
 /** The sheets of the file, in the order they are read and written. */
-export const PORTFOLIO_SHEETS = ["clientes", "casos", "acoes", "prazos", "audiencias", "documentos"] as const;
+export const PORTFOLIO_SHEETS = [
+  "clientes",
+  "casos",
+  "acoes",
+  "prazos",
+  "audiencias",
+  "documentos",
+  "lancamentos",
+  "contas",
+] as const;
 export type PortfolioSheet = (typeof PORTFOLIO_SHEETS)[number];
 export const isPortfolioSheet = (value: unknown): value is PortfolioSheet =>
   (PORTFOLIO_SHEETS as readonly unknown[]).includes(value);
@@ -147,6 +157,25 @@ const SOURCE_KEY: Record<string, string> = {
 };
 
 const caseCell = (value: unknown): XlsxCell => number(value);
+
+/** A value of the books in reais, from its cents. */
+const money = (name: string) => (row: PortfolioRow) => {
+  const cents = number(row[name]);
+  return cents === null ? null : cents / 100;
+};
+
+const BILL_DIRECTION_KEY: Record<string, string> = {
+  pay: "portfolio-bill-pay",
+  receive: "portfolio-bill-receive",
+};
+
+const BILL_STATUS_KEY: Record<string, string> = {
+  open: "portfolio-bill-open",
+  paid: "portfolio-bill-paid",
+  cancelled: "portfolio-bill-cancelled",
+  renegotiated: "portfolio-bill-renegotiated",
+  written_off: "portfolio-bill-written-off",
+};
 
 /** One column of a sheet: the words of its title, what it holds, and its value in a row. */
 type Column = {
@@ -314,6 +343,44 @@ const COLUMNS: Record<PortfolioSheet, Column[]> = {
     { title: "portfolio-column-refusal", width: 30, value: field("rejected_reason") },
     { title: "portfolio-column-sha", width: 30, value: field("sha256") },
   ],
+  // The firm's books (0164): every entry, the cancelled ones with when and why, and every bill.
+  lancamentos: [
+    { title: "portfolio-column-day", kind: "date", width: 12, value: field("occurred_on") },
+    { title: "portfolio-column-competence", kind: "date", width: 12, value: field("competence_on") },
+    { title: "portfolio-column-account", width: 22, value: field("account") },
+    {
+      title: "portfolio-column-entry-kind",
+      width: 18,
+      value: (row, say) => named(ENTRY_KIND_KEY as Record<string, string>, row.kind, say),
+    },
+    { title: "portfolio-column-category", width: 28, value: field("category") },
+    { title: "portfolio-column-cost-center", width: 20, value: field("center") },
+    { title: "portfolio-column-value", kind: "number", width: 14, value: money("cents") },
+    { title: "portfolio-column-counterparty", width: 26, value: field("counterparty") },
+    { title: "portfolio-column-description", width: 34, value: field("description") },
+    { title: "cases-column-case", kind: "number", width: 8, value: (row) => caseCell(row.seq) },
+    { title: "portfolio-column-by-one", width: 10, value: yes("by_one") },
+    { title: "portfolio-column-cancelled", kind: "moment", width: 17, value: field("cancelled_at") },
+    { title: "portfolio-column-cancelled-reason", width: 30, value: field("cancelled_reason") },
+  ],
+  contas: [
+    {
+      title: "portfolio-column-direction",
+      width: 12,
+      value: (row, say) => named(BILL_DIRECTION_KEY, row.direction, say),
+    },
+    { title: "portfolio-column-bill-status", width: 14, value: (row, say) => named(BILL_STATUS_KEY, row.status, say) },
+    { title: "portfolio-column-counterparty", width: 26, value: field("counterparty") },
+    { title: "portfolio-column-description", width: 34, value: field("description") },
+    { title: "portfolio-column-category", width: 28, value: field("category") },
+    { title: "cases-column-case", kind: "number", width: 8, value: (row) => caseCell(row.seq) },
+    { title: "portfolio-column-value", kind: "number", width: 14, value: money("cents") },
+    { title: "portfolio-column-paid", kind: "number", width: 14, value: money("paid_cents") },
+    { title: "portfolio-column-due", kind: "date", width: 12, value: field("due_on") },
+    { title: "portfolio-column-competence", kind: "date", width: 12, value: field("competence_on") },
+    { title: "portfolio-column-by-one", width: 10, value: yes("by_one") },
+    { title: "portfolio-column-closed-reason", width: 30, value: field("closed_reason") },
+  ],
 };
 
 const SHEET_KEY: Record<PortfolioSheet, string> = {
@@ -323,6 +390,8 @@ const SHEET_KEY: Record<PortfolioSheet, string> = {
   prazos: "portfolio-sheet-prazos",
   audiencias: "portfolio-sheet-audiencias",
   documentos: "portfolio-sheet-documentos",
+  lancamentos: "portfolio-sheet-lancamentos",
+  contas: "portfolio-sheet-contas",
 };
 
 /** The name of a sheet, in the file and on the screen. */

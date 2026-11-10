@@ -212,6 +212,7 @@ const ERROR_KEY: Record<string, string> = {
   not_allowed: "finance-error-not-allowed",
   second_factor: "finance-error-second-factor",
   books_closed: "finance-error-closed",
+  month_closed: "finance-error-month-closed",
   has_entries: "finance-error-has-entries",
   not_found: "finance-error-not-found",
   in_use: "finance-error-in-use",

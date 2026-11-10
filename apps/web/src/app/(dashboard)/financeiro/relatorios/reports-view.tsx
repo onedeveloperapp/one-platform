@@ -9,6 +9,7 @@ import {
   Button,
   Card,
   CardContent,
+  MenuItem,
   Skeleton,
   Table,
   TableBody,
@@ -22,17 +23,22 @@ import {
 
 import CardTitle from "@/components/product/card-title";
 import ConfirmActionDialog from "@/components/product/confirm-action-dialog";
+import EmptyState from "@/components/product/empty-state";
+import { CurrencyField } from "@/components/product/fields";
 import PageHeader from "@/components/product/page-header";
 import SecondFactorPrompt from "@/components/product/second-factor-prompt";
 import SidePanel from "@/components/product/side-panel";
 import StateLine from "@/components/product/state-line";
 import StatusChip from "@/components/product/status-chip";
+import IllustrationPerformance from "@/icons/illustrations/illustration-performance";
 import NiChartBar from "@/icons/nexture/ni-chart-bar";
 import NiDocumentFull from "@/icons/nexture/ni-document-full";
 import NiMoney from "@/icons/nexture/ni-money";
 import { writeWorkbook, XLSX_TYPE } from "@/lib/export/xlsx-write";
 import { savedFileName, saveFile } from "@/lib/files/save-file";
+import { ENTRY_KIND_KEY } from "@/lib/finance/books";
 import {
+  budgetStanding,
   DRE_ORDER,
   type DreLine,
   flowTotal,
@@ -44,11 +50,14 @@ import {
 } from "@/lib/finance/reports";
 import {
   closeFinanceMonth,
+  type MonthMovement,
+  readFinanceMonthMovement,
   readFinanceReports,
   recordFinanceInvoice,
   reopenFinanceMonth,
+  saveFinanceBudget,
 } from "@/lib/finance/reports-actions";
-import { formatCents } from "@flyee/rules/finance";
+import { formatCents, parseCents } from "@flyee/rules/finance";
 import { formatDayBr } from "@flyee/rules/person";
 
 const LINE_KEY: Record<DreLine, string> = {
@@ -89,7 +98,19 @@ const lastMonth = () => {
  * month a year before, the 13 weeks ahead from the open bills, the closing with its checklist, the data of each invoice
  * of fees received and the accountant's package. Managerial reports, never the accounting; ONE computes no tax.
  */
-export default function ReportsView() {
+type BudgetCategory = { id: string; name: string; kind: string };
+
+export default function ReportsView({
+  configures,
+  factor: sessionFactor,
+  categories,
+}: {
+  /** Who configures the books sets the budget (0163). */
+  configures: boolean;
+  factor: "ok" | "challenge" | "missing";
+  /** The chart's categories of income and expense in force, which a budget is set on. */
+  categories: BudgetCategory[];
+}) {
   const t = useTranslations("product");
   const [month, setMonth] = useState(lastMonth());
   const [state, setState] = useState<
@@ -101,6 +122,7 @@ export default function ReportsView() {
   const [factor, setFactor] = useState(false);
   const [reopening, setReopening] = useState(false);
   const [invoicing, setInvoicing] = useState<InvoiceData | null>(null);
+  const [budgeting, setBudgeting] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -133,8 +155,22 @@ export default function ReportsView() {
   const ready = state.kind === "ready" ? state : null;
   const report = ready?.report ?? null;
 
-  const download = () => {
+  const [packing, setPacking] = useState(false);
+  const download = async () => {
     if (!ready || !report) return;
+    setPacking(true);
+    let movement: MonthMovement[] | null = null;
+    try {
+      movement = await readFinanceMonthMovement(month);
+    } catch {
+      movement = null;
+    } finally {
+      setPacking(false);
+    }
+    if (!movement) {
+      setProblem(t("reports-package-failed"));
+      return;
+    }
     const dreRows = DRE_ORDER.map((line) => [t(LINE_KEY[line]), lineTotal(report.current, line) / 100]);
     const bytes = writeWorkbook([
       {
@@ -151,6 +187,29 @@ export default function ReportsView() {
         sheet: t("reports-dfc-title"),
         columns: [{ title: t("reports-col-line") }, { title: t("reports-col-month"), kind: "number" }],
         rows: report.current.dfc.map((row) => [t(FLOW_KEY[row.line] ?? "reports-flow-operating"), row.cents / 100]),
+      },
+      {
+        sheet: t("reports-movement-title"),
+        columns: [
+          { title: t("reports-col-day"), kind: "date" },
+          { title: t("reports-col-account") },
+          { title: t("reports-col-kind") },
+          { title: t("reports-col-category") },
+          { title: t("reports-col-center") },
+          { title: t("reports-col-value"), kind: "number" },
+          { title: t("reports-col-case") },
+          { title: t("reports-col-by-one") },
+        ],
+        rows: movement.map((row) => [
+          row.day,
+          row.account,
+          t(ENTRY_KIND_KEY[row.kind as keyof typeof ENTRY_KIND_KEY] ?? "finance-kind-expense"),
+          row.category ?? "",
+          row.center ?? t("reports-no-center"),
+          row.cents / 100,
+          row.caseSeq !== null ? `#${row.caseSeq}` : "",
+          row.byOne ? t("reports-yes") : "",
+        ]),
       },
       {
         sheet: t("reports-invoices-title"),
@@ -195,7 +254,7 @@ export default function ReportsView() {
               slotProps={{ inputLabel: { shrink: true } }}
             />
             {report ? (
-              <Button variant="outlined" color="grey" onClick={download}>
+              <Button variant="outlined" color="grey" loading={packing} onClick={() => void download()}>
                 {t("reports-package-download")}
               </Button>
             ) : null}
@@ -267,6 +326,11 @@ export default function ReportsView() {
               {report.closing?.byOne && !report.closing.reopenedAt ? (
                 <StateLine tone="info">{t("reports-closed-by-one-note")}</StateLine>
               ) : null}
+              {report.closing && !report.closing.reopenedAt && report.closing.changedAfter > 0 ? (
+                <StateLine tone="attention">
+                  {t("reports-changed-after", { count: report.closing.changedAfter })}
+                </StateLine>
+              ) : null}
             </CardContent>
           </Card>
 
@@ -334,6 +398,159 @@ export default function ReportsView() {
             </CardContent>
           </Card>
 
+          <Card component="section" aria-labelledby="reports-budget">
+            <CardContent className="flex flex-col gap-3">
+              <CardTitle
+                id="reports-budget"
+                icon={<NiChartBar size="medium" />}
+                title={t("reports-budget-title")}
+                description={t("reports-budget-description")}
+                actions={
+                  configures ? (
+                    <Button size="small" variant="outlined" color="grey" onClick={() => setBudgeting(true)}>
+                      {t(report.budget.rows.length > 0 ? "reports-budget-change" : "reports-budget-set")}
+                    </Button>
+                  ) : undefined
+                }
+              />
+              {report.budget.rows.length === 0 ? (
+                <EmptyState
+                  illustration={<IllustrationPerformance />}
+                  layout="row"
+                  framed={false}
+                  title={t("reports-budget-none")}
+                />
+              ) : (
+                <TableContainer>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>{t("reports-col-category")}</TableCell>
+                        <TableCell align="right">{t("reports-col-planned")}</TableCell>
+                        <TableCell align="right">{t("reports-col-actual")}</TableCell>
+                        <TableCell align="right">{t("reports-col-difference")}</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {report.budget.rows.map((row) => {
+                        const standing = budgetStanding(row);
+                        return (
+                          <TableRow key={row.categoryId}>
+                            <TableCell>{row.category}</TableCell>
+                            <TableCell align="right" className="tabular-nums">
+                              {formatCents(row.planned)}
+                            </TableCell>
+                            <TableCell align="right" className="tabular-nums">
+                              {formatCents(row.actual)}
+                            </TableCell>
+                            <TableCell align="right" className="tabular-nums">
+                              <Box className="flex flex-wrap items-center justify-end gap-2">
+                                {standing.attention ? (
+                                  <StatusChip
+                                    tone="attention"
+                                    label={row.kind === "income" ? t("reports-budget-under") : t("reports-budget-over")}
+                                  />
+                                ) : null}
+                                {t("reports-budget-difference", {
+                                  value: formatCents(standing.difference),
+                                  share: standing.share,
+                                })}
+                              </Box>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              )}
+              {report.budget.outsideIncome > 0 || report.budget.outsideExpense > 0 ? (
+                <StateLine tone="info">
+                  {t("reports-budget-outside", {
+                    income: formatCents(report.budget.outsideIncome),
+                    expense: formatCents(report.budget.outsideExpense),
+                  })}
+                </StateLine>
+              ) : null}
+            </CardContent>
+          </Card>
+
+          {report.current.centers.length > 0 ? (
+            <Card component="section" aria-labelledby="reports-centers">
+              <CardContent className="flex flex-col gap-3">
+                <CardTitle
+                  id="reports-centers"
+                  icon={<NiChartBar size="medium" />}
+                  title={t("reports-centers-title")}
+                  description={t("reports-centers-description")}
+                />
+                <TableContainer>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>{t("reports-col-center")}</TableCell>
+                        <TableCell align="right">{t("reports-col-income")}</TableCell>
+                        <TableCell align="right">{t("reports-col-expense")}</TableCell>
+                        <TableCell align="right">{t("reports-line-result")}</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {report.current.centers.map((row) => (
+                        <TableRow key={row.center ?? "none"}>
+                          <TableCell>{row.center ?? t("reports-no-center")}</TableCell>
+                          <TableCell align="right" className="tabular-nums">
+                            {formatCents(row.income)}
+                          </TableCell>
+                          <TableCell align="right" className="tabular-nums">
+                            {formatCents(row.expense)}
+                          </TableCell>
+                          <TableCell align="right" className="tabular-nums">
+                            {formatCents(row.income - row.expense)}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </CardContent>
+            </Card>
+          ) : null}
+
+          {report.current.partners.length > 0 ? (
+            <Card component="section" aria-labelledby="reports-partners">
+              <CardContent className="flex flex-col gap-3">
+                <CardTitle
+                  id="reports-partners"
+                  icon={<NiMoney size="medium" />}
+                  title={t("reports-partners-title")}
+                  description={t("reports-partners-description")}
+                />
+                <TableContainer>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>{t("reports-col-partner")}</TableCell>
+                        <TableCell>{t("reports-col-category")}</TableCell>
+                        <TableCell align="right">{t("reports-col-month")}</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {report.current.partners.map((row) => (
+                        <TableRow key={`${row.partner}-${row.category}`}>
+                          <TableCell>{row.partner}</TableCell>
+                          <TableCell>{row.category}</TableCell>
+                          <TableCell align="right" className="tabular-nums">
+                            {formatCents(row.cents)}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </CardContent>
+            </Card>
+          ) : null}
+
           {ready.forecast ? (
             <Card component="section" aria-labelledby="reports-forecast">
               <CardContent className="flex flex-col gap-3">
@@ -343,6 +560,15 @@ export default function ReportsView() {
                   title={t("reports-forecast-title")}
                   description={t("reports-forecast-description")}
                 />
+                {ready.forecast.expected.cents > 0 ? (
+                  <StateLine tone="info">
+                    {t("reports-expected-fees", {
+                      value: formatCents(ready.forecast.expected.cents),
+                      count: ready.forecast.expected.lawsuits,
+                      final: formatCents(ready.forecast.expected.finalCents),
+                    })}
+                  </StateLine>
+                ) : null}
                 <TableContainer>
                   <Table size="small">
                     <TableHead>
@@ -441,6 +667,20 @@ export default function ReportsView() {
           }}
         />
       ) : null}
+      {budgeting && report ? (
+        <BudgetPanel
+          month={month}
+          categories={categories}
+          current={report.budget.rows}
+          factor={sessionFactor}
+          onClose={() => setBudgeting(false)}
+          onSave={async (rows, months) => {
+            const answer = await act(() => saveFinanceBudget(month, rows, months));
+            if (answer.ok) setBudgeting(false);
+            return answer.ok ? null : t(errorKey(answer.code));
+          }}
+        />
+      ) : null}
       {invoicing ? (
         <InvoicePanel
           item={invoicing}
@@ -505,6 +745,123 @@ function InvoicePanel({
           slotProps={{ inputLabel: { shrink: true } }}
         />
         <StateLine tone="info">{t("reports-invoice-note")}</StateLine>
+      </Box>
+    </SidePanel>
+  );
+}
+
+const centsText = (cents: number) => (cents > 0 ? (cents / 100).toFixed(2).replace(".", ",") : "");
+
+/**
+ * The budget of a month (0163): what each category of income and expense should come to, for this month and as many
+ * after it as chosen. A category left blank has no budget; saving replaces those months' budget.
+ */
+function BudgetPanel({
+  month,
+  categories,
+  current,
+  factor,
+  onClose,
+  onSave,
+}: {
+  month: string;
+  categories: BudgetCategory[];
+  current: Report["budget"]["rows"];
+  factor: "ok" | "challenge" | "missing";
+  onClose: () => void;
+  onSave: (rows: { categoryId: string; cents: number }[], months: number) => Promise<string | null>;
+}) {
+  const t = useTranslations("product");
+  const [values, setValues] = useState<Record<string, string>>(() =>
+    Object.fromEntries(current.map((row) => [row.categoryId, centsText(row.planned)])),
+  );
+  const [months, setMonths] = useState("1");
+  const [confirmed, setConfirmed] = useState(factor === "ok");
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+  const groups = [
+    { key: "reports-budget-income", items: categories.filter((category) => category.kind === "income") },
+    { key: "reports-budget-expense", items: categories.filter((category) => category.kind !== "income") },
+  ];
+
+  const save = async () => {
+    setBusy(true);
+    setProblem(null);
+    const rows = Object.entries(values).flatMap(([categoryId, text]) => {
+      const cents = parseCents(text || "0") ?? 0;
+      return cents > 0 ? [{ categoryId, cents }] : [];
+    });
+    try {
+      setProblem(await onSave(rows, Number(months) || 1));
+    } catch {
+      setProblem(t("reports-error-failed"));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <SidePanel
+      onClose={onClose}
+      closeLabel={t("reports-cancel")}
+      icon={<NiChartBar size="medium" />}
+      busy={busy}
+      title={t("reports-budget-panel-title", { month: month.split("-").reverse().join("/") })}
+      description={t("reports-budget-panel-body")}
+      onSubmit={() => void save()}
+      actions={
+        <>
+          <Button type="submit" variant="contained" disabled={busy || !confirmed}>
+            {t("reports-save")}
+          </Button>
+          <Button variant="text" color="grey" onClick={onClose} disabled={busy}>
+            {t("reports-cancel")}
+          </Button>
+        </>
+      }
+    >
+      <Box className="flex flex-col gap-5">
+        {problem ? (
+          <Alert severity="error" className="neutral bg-background-paper/60!" role="alert">
+            {problem}
+          </Alert>
+        ) : null}
+        {!confirmed ? (
+          <SecondFactorPrompt
+            state={factor === "missing" ? "missing" : "challenge"}
+            onConfirmed={() => setConfirmed(true)}
+          />
+        ) : null}
+        <TextField
+          select
+          label={t("reports-budget-months")}
+          value={months}
+          onChange={(event) => setMonths(event.target.value)}
+        >
+          {["1", "3", "6", "12"].map((count) => (
+            <MenuItem key={count} value={count}>
+              {t("reports-budget-months-option", { count: Number(count) })}
+            </MenuItem>
+          ))}
+        </TextField>
+        {groups.map((group) =>
+          group.items.length > 0 ? (
+            <Box key={group.key} className="flex flex-col gap-3">
+              <Typography variant="subtitle2" component="h3">
+                {t(group.key)}
+              </Typography>
+              {group.items.map((category) => (
+                <CurrencyField
+                  key={category.id}
+                  label={category.name}
+                  currencySymbol="R$"
+                  value={values[category.id] ?? ""}
+                  onChange={(event) => setValues((current) => ({ ...current, [category.id]: event.target.value }))}
+                />
+              ))}
+            </Box>
+          ) : null,
+        )}
       </Box>
     </SidePanel>
   );

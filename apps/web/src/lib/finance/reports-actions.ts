@@ -75,3 +75,75 @@ export async function recordFinanceInvoice(entryId: string, number: string, issu
     false,
   );
 }
+
+/**
+ * Who configures the books says what each category should come to in a month, and in as many months after it as
+ * asked (migration 0163): the rows replace those months' budget. With the second factor; on the record.
+ */
+export async function saveFinanceBudget(
+  month: string,
+  rows: { categoryId: string; cents: number }[],
+  months: number,
+): Promise<Result> {
+  if (!MONTH.test(month)) return { ok: false, code: "invalid_data" };
+  const clean = (Array.isArray(rows) ? rows : [])
+    .filter((row) => /^[0-9a-f-]{36}$/i.test(String(row?.categoryId ?? "")) && Number(row?.cents) > 0)
+    .slice(0, 200)
+    .map((row) => ({ category_id: row.categoryId, cents: String(Math.trunc(Number(row.cents))) }));
+  return call("save_finance_budget", {
+    target_month: `${month}-01`,
+    target_rows: clean,
+    target_months: Math.min(Math.max(Math.trunc(Number(months) || 1), 1), 12),
+  });
+}
+
+/** A movement of the month for the accountant's package (0164): never a name, only the case's number. */
+export type MonthMovement = {
+  day: string;
+  account: string;
+  kind: string;
+  category: string | null;
+  center: string | null;
+  cents: number;
+  caseSeq: number | null;
+  byOne: boolean;
+};
+
+const one = <T>(value: T | T[] | null | undefined): T | null =>
+  Array.isArray(value) ? (value[0] ?? null) : (value ?? null);
+
+/**
+ * The month's movement of the books, by its day, for the accountant's package: every entry in force but a transfer
+ * between the firm's own accounts, with its account, kind, category, cost centre, value and case number, never who it
+ * was of nor its words (a client's name may be in them). Read under the books' policies: only who reads them.
+ */
+export async function readFinanceMonthMovement(month: string): Promise<MonthMovement[] | null> {
+  if (!MONTH.test(month)) return null;
+  const context = await getMemberContext();
+  if (!context?.firm) return null;
+  const [year, number] = month.split("-").map(Number);
+  const last = new Date(Date.UTC(year, number, 0)).toISOString().slice(0, 10);
+  const { data, error } = await context.supabase
+    .from("finance_entries")
+    .select(
+      "occurred_on, kind, cents, by_one, finance_accounts(name), finance_categories(name), finance_cost_centers(name), cases(seq)",
+    )
+    .eq("org_id", context.firm.id)
+    .is("cancelled_at", null)
+    .neq("kind", "transfer")
+    .gte("occurred_on", `${month}-01`)
+    .lte("occurred_on", last)
+    .order("occurred_on", { ascending: true })
+    .limit(20000);
+  if (error) return null;
+  return (data ?? []).map((row) => ({
+    day: String(row.occurred_on),
+    account: String(one(row.finance_accounts as { name?: string } | null)?.name ?? ""),
+    kind: String(row.kind),
+    category: one(row.finance_categories as { name?: string } | null)?.name ?? null,
+    center: one(row.finance_cost_centers as { name?: string } | null)?.name ?? null,
+    cents: Number(row.cents),
+    caseSeq: one(row.cases as { seq?: number } | null)?.seq ?? null,
+    byOne: row.by_one === true,
+  }));
+}

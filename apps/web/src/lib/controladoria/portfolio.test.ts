@@ -20,7 +20,16 @@ const line = (sheet: (typeof PORTFOLIO_SHEETS)[number], row: Record<string, unkn
 };
 
 describe("what the database answers of beginning a portfolio", () => {
-  const counts = { clientes: 3, casos: 2, acoes: 2, prazos: 2, audiencias: 2, documentos: 1 };
+  const counts = {
+    clientes: 3,
+    casos: 2,
+    acoes: 2,
+    prazos: 2,
+    audiencias: 2,
+    documentos: 1,
+    lancamentos: 4,
+    contas: 1,
+  };
 
   it("takes a whole answer", () => {
     expect(portfolioBegunOf({ ok: true, page: 2000, counts, left: 2 })).toEqual({
@@ -237,7 +246,16 @@ describe("each row as a line of its sheet", () => {
 });
 
 describe("the file", () => {
-  const counts = { clientes: 3, casos: 2, acoes: 2, prazos: 2, audiencias: 2, documentos: 1 };
+  const counts = {
+    clientes: 3,
+    casos: 2,
+    acoes: 2,
+    prazos: 2,
+    audiencias: 2,
+    documentos: 1,
+    lancamentos: 4,
+    contas: 1,
+  };
   const about = (testsLeftOut: boolean) =>
     portfolioAbout({
       firm: "Lima Advocacia",
@@ -270,7 +288,16 @@ describe("the file", () => {
   it("has what it is first, then each sheet in order with its lines", () => {
     const sheets = portfolioWorkbook({
       about: about(false),
-      lines: { clientes: [["Maria Teste"]], casos: [], acoes: [], prazos: [], audiencias: [], documentos: [] },
+      lines: {
+        clientes: [["Maria Teste"]],
+        casos: [],
+        acoes: [],
+        prazos: [],
+        audiencias: [],
+        documentos: [],
+        lancamentos: [],
+        contas: [],
+      },
       say,
     });
     expect(sheets.map((sheet) => sheet.sheet)).toEqual([
@@ -281,7 +308,56 @@ describe("the file", () => {
       "portfolio-sheet-prazos",
       "portfolio-sheet-audiencias",
       "portfolio-sheet-documentos",
+      "portfolio-sheet-lancamentos",
+      "portfolio-sheet-contas",
     ]);
     expect(sheets[1].rows).toEqual([["Maria Teste"]]);
+  });
+});
+
+describe("the books in the portfolio", () => {
+  it("writes an entry and a bill as their sheets say them", () => {
+    expect(
+      portfolioLine(
+        "lancamentos",
+        {
+          occurred_on: "2026-11-05",
+          competence_on: "2026-11-05",
+          account: "Itaú PJ",
+          kind: "expense",
+          category: "Aluguel e condomínio",
+          center: null,
+          cents: -300000,
+          counterparty: "Imobiliária Teste",
+          description: null,
+          seq: null,
+          by_one: false,
+          cancelled_at: null,
+          cancelled_reason: null,
+        },
+        say,
+      ),
+    ).toEqual([
+      "2026-11-05",
+      "2026-11-05",
+      "Itaú PJ",
+      "finance-kind-expense",
+      "Aluguel e condomínio",
+      null,
+      -3000,
+      "Imobiliária Teste",
+      null,
+      null,
+      null,
+      null,
+      null,
+    ]);
+    expect(
+      portfolioLine(
+        "contas",
+        { direction: "receive", status: "open", cents: 150000, paid_cents: 0, due_on: "2026-11-17", by_one: true },
+        say,
+      ).slice(0, 2),
+    ).toEqual(["portfolio-bill-receive", "portfolio-bill-open"]);
   });
 });

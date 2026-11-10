@@ -361,6 +361,10 @@ insert into public.lawsuit_facts (org_id, case_id, proceeding_id, kind, result, 
 insert into public.finance_closings (org_id, month) values
   ('b1000000-0000-4000-8000-00000000000a', date '2026-09-01'),
   ('b1000000-0000-4000-8000-00000000000b', date '2026-09-01');
+-- A budget of each firm's books (0163): read only by who reads them.
+insert into public.finance_budgets (org_id, month, category_id, cents) values
+  ('b1000000-0000-4000-8000-00000000000a', date '2026-11-01', 'f9100000-0000-4000-8000-00000000000a', 100000),
+  ('b1000000-0000-4000-8000-00000000000b', date '2026-11-01', 'f9100000-0000-4000-8000-00000000000b', 100000);
 -- An import of each firm's open bills from its old system (0154).
 insert into public.finance_imports (org_id, file_name, lines, opened) values
   ('b1000000-0000-4000-8000-00000000000a', 'contas-a.xlsx', 1, 1),
@@ -617,7 +621,7 @@ select is(
     'case_weather', 'cases', 'certificate_inventory', 'civil_court_answers', 'client_consents', 'client_links', 'client_notices', 'client_payment_accounts', 'closing_goals', 'connections',
     'consent_acceptances',
     'deadlines', 'djen_captures', 'dossiers', 'draft_templates', 'entitlement_grants', 'fee_terms', 'files', 'filing_package_items', 'filing_packages',
-    'filing_receipts', 'filing_submissions', 'finance_access', 'finance_accounts', 'finance_bill_payments', 'finance_bills', 'finance_categories', 'finance_closings', 'finance_cost_centers', 'finance_entries', 'finance_imports', 'finance_invoices', 'finance_receipts', 'finance_rules', 'finance_series',
+    'filing_receipts', 'filing_submissions', 'finance_access', 'finance_accounts', 'finance_bill_payments', 'finance_bills', 'finance_budgets', 'finance_categories', 'finance_closings', 'finance_cost_centers', 'finance_entries', 'finance_imports', 'finance_invoices', 'finance_receipts', 'finance_rules', 'finance_series',
     'finance_statement_lines', 'finance_statements', 'firm_autonomy', 'firm_calendars',
     'firm_claim_defaults', 'firm_invitations', 'firm_marketing_terms', 'firm_modules', 'firm_notice_kinds', 'firm_one_work_cost', 'firm_one_work_minutes', 'firm_signers', 'flight_alerts', 'flight_checks', 'flight_segments', 'free_justice_answers', 'hearings', 'import_batches', 'import_rows', 'invoices',
     'issued_documents', 'lawsuit_facts', 'lawyer_signature_uses', 'legal_sources', 'marketing_segments', 'memberships',
@@ -837,7 +841,7 @@ select is(
     'case_weather', 'cases', 'certificate_inventory', 'civil_court_answers', 'client_consents', 'client_links', 'client_notices', 'client_payment_accounts', 'closing_goals', 'connections',
     'consent_acceptances',
     'deadlines', 'djen_captures', 'dossiers', 'draft_templates', 'entitlement_grants', 'fee_terms', 'files', 'filing_package_items', 'filing_packages',
-    'filing_receipts', 'filing_submissions', 'finance_access', 'finance_accounts', 'finance_bill_payments', 'finance_bills', 'finance_categories', 'finance_closings', 'finance_cost_centers', 'finance_entries', 'finance_imports', 'finance_invoices', 'finance_receipts', 'finance_rules', 'finance_series',
+    'filing_receipts', 'filing_submissions', 'finance_access', 'finance_accounts', 'finance_bill_payments', 'finance_bills', 'finance_budgets', 'finance_categories', 'finance_closings', 'finance_cost_centers', 'finance_entries', 'finance_imports', 'finance_invoices', 'finance_receipts', 'finance_rules', 'finance_series',
     'finance_statement_lines', 'finance_statements', 'firm_autonomy', 'firm_calendars',
     'firm_claim_defaults', 'firm_invitations', 'firm_marketing_terms', 'firm_modules', 'firm_notice_kinds', 'firm_one_work_cost', 'firm_one_work_minutes', 'firm_signers', 'flight_alerts', 'flight_checks', 'flight_segments', 'free_justice_answers', 'hearings', 'import_batches', 'import_rows', 'invoices',
     'issued_documents', 'lawsuit_facts', 'lawyer_signature_uses', 'legal_sources', 'marketing_segments', 'memberships',

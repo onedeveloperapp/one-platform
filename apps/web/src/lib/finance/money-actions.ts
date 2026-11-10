@@ -18,7 +18,10 @@ async function call(name: string, args: Record<string, unknown>): Promise<Result
   const context = await getMemberContext();
   if (!context?.firm) return { ok: false, code: "failed" };
   const { data, error } = await context.supabase.rpc(name, args);
-  if (error) return { ok: false, code: error.code === "42501" ? "not_allowed" : "failed" };
+  if (error) {
+    if (String(error.message ?? "").includes("month_closed")) return { ok: false, code: "month_closed" };
+    return { ok: false, code: error.code === "42501" ? "not_allowed" : "failed" };
+  }
   const answer = (data ?? {}) as { ok?: boolean; code?: string };
   if (answer.ok !== true) return { ok: false, code: answer.code ?? "failed" };
   revalidatePath("/financeiro/repasses");

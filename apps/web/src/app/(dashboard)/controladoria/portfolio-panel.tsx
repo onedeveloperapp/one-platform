@@ -45,6 +45,8 @@ const GOES: Record<PortfolioSheet, string> = {
   prazos: "portfolio-goes-prazos",
   audiencias: "portfolio-goes-audiencias",
   documentos: "portfolio-goes-documentos",
+  lancamentos: "portfolio-goes-lancamentos",
+  contas: "portfolio-goes-contas",
 };
 
 type Progress = { sheet: PortfolioSheet; done: number; total: number; read: number; all: number };
