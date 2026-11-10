@@ -10,7 +10,15 @@
  * The trips, by the name of their scenario (`tracked_trips.label`): the four ready ones, a passenger an agency
  * registered (migration 0071), and a real flight.
  */
-export const TEST_TRIPS = ["cancelamento", "familia", "conexao", "internacional", "agencia", "voo_real"] as const;
+export const TEST_TRIPS = [
+  "cancelamento",
+  "familia",
+  "conexao",
+  "internacional",
+  "agencia",
+  "escritorio",
+  "voo_real",
+] as const;
 
 /** The trip of a real flight, followed at FlightAware: no tool makes it happen. */
 export const REAL_FLIGHT = "voo_real";
@@ -20,6 +28,18 @@ export const REAL_FLIGHT = "voo_real";
  * once the passenger agrees on the agency's link (0071), with the legs the agency wrote.
  */
 export const AGENCY_TRIP = "agencia";
+
+/**
+ * The trip of a passenger the firm registered itself with the test chat's number (0170): followed here as the
+ * agency's is, with the legs the firm wrote.
+ */
+export const FIRM_TRIP = "escritorio";
+
+/** The trip the test chat puts in front of the tester: one still followed, the agency's first, else the latest. */
+export function testTripInFront<T extends { label: string; status: string }>(trips: readonly T[]): T | null {
+  const ours = trips.filter((trip) => trip.label === AGENCY_TRIP || trip.label === FIRM_TRIP);
+  return ours.find((trip) => trip.status === "watching" || trip.status === "alerted") ?? ours[0] ?? null;
+}
 
 /** The WhatsApp an agency gives its passenger for the test chat to follow them, as the database keeps it. */
 export const AGENCY_TEST_PHONE = "5500988880006";
@@ -53,6 +73,19 @@ export type ToolLeg =
   | { position: number; event: "depart" | "land" };
 
 export type TestTool = { key: string; label: string; legs: ToolLeg[] };
+
+/** The tools of a passenger an agency or the firm registered: the problems, and the flight going as it should. */
+const AGENCY_TOOLS: TestTool[] = [
+  { key: "cancel", label: "test-chat-tool-cancel", legs: [{ position: 1, status: "cancelled" }] },
+  {
+    key: "late_6h",
+    label: "test-chat-tool-late-6-last",
+    legs: [{ position: LAST_LEG, status: "delayed", late_minutes: 360 }],
+  },
+  // The flight going as it should, step by step, for the agency to see it happen (0084).
+  { key: "depart", label: "test-chat-tool-depart", legs: [{ position: NEXT_TO_LEAVE, event: "depart" }] },
+  { key: "land", label: "test-chat-tool-land", legs: [{ position: IN_THE_AIR, event: "land" }] },
+];
 
 /**
  * The tools of each trip: the problem it was made for, and one the rule does
@@ -91,17 +124,9 @@ export const TEST_TOOLS: Record<TestTrip, TestTool[]> = {
     { key: "late_9h", label: "test-chat-tool-late-9", legs: [{ position: 1, status: "delayed", late_minutes: 540 }] },
     { key: "cancel", label: "test-chat-tool-cancel", legs: [{ position: 1, status: "cancelled" }] },
   ],
-  agencia: [
-    { key: "cancel", label: "test-chat-tool-cancel", legs: [{ position: 1, status: "cancelled" }] },
-    {
-      key: "late_6h",
-      label: "test-chat-tool-late-6-last",
-      legs: [{ position: LAST_LEG, status: "delayed", late_minutes: 360 }],
-    },
-    // The flight going as it should, step by step, for the agency to see it happen (0084).
-    { key: "depart", label: "test-chat-tool-depart", legs: [{ position: NEXT_TO_LEAVE, event: "depart" }] },
-    { key: "land", label: "test-chat-tool-land", legs: [{ position: IN_THE_AIR, event: "land" }] },
-  ],
+  agencia: AGENCY_TOOLS,
+  // The firm's own passenger is tested as the agency's is (0170).
+  escritorio: AGENCY_TOOLS,
   voo_real: [],
 };
 
@@ -164,6 +189,7 @@ export const TRIP_KEY: Record<TestTrip, string> = {
   conexao: "test-chat-trip-conexao",
   internacional: "test-chat-trip-internacional",
   agencia: "test-chat-trip-agencia",
+  escritorio: "test-chat-trip-escritorio",
   voo_real: "test-chat-trip-voo-real",
 };
 

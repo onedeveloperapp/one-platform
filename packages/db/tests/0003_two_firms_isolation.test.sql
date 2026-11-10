@@ -459,6 +459,10 @@ insert into public.tracked_legs (org_id, trip_id, position, flight_number, origi
 insert into public.flight_alerts (org_id, trip_id, kind, rule_version) values
   ('b1000000-0000-4000-8000-00000000000a', 'ae900000-0000-4000-8000-00000000000a', 'cancelled', 'flight-problem-v1'),
   ('b1000000-0000-4000-8000-00000000000b', 'ae900000-0000-4000-8000-00000000000b', 'cancelled', 'flight-problem-v1');
+-- A document the firm kept with a trip of its own passenger, before any case (0170).
+insert into public.tracked_trip_documents (org_id, trip_id, file_id, kind) values
+  ('b1000000-0000-4000-8000-00000000000a', 'ae900000-0000-4000-8000-00000000000a', 'e2000000-0000-4000-8000-00000000000a', 'identity'),
+  ('b1000000-0000-4000-8000-00000000000b', 'ae900000-0000-4000-8000-00000000000b', 'e2000000-0000-4000-8000-00000000000b', 'identity');
 -- The claim each firm asks by default (0052), and the power of attorney ONE sent its client to sign (0054).
 insert into public.firm_claim_defaults (org_id, incident, cents) values
   ('b1000000-0000-4000-8000-00000000000a', 'delay', 800000),
@@ -621,7 +625,7 @@ select is(
     'people', 'person_data_requests',
     'proceeding_lawyers', 'proceeding_parties', 'proceeding_tracking', 'proceedings', 'publication_readings', 'publications', 'record_versions',
     'residence_declarations', 'signature_envelopes',
-    'subscriptions', 'template_imports', 'test_chats', 'tracked_legs', 'tracked_trips',
+    'subscriptions', 'template_imports', 'test_chats', 'tracked_legs', 'tracked_trip_documents', 'tracked_trips',
     'wa_contacts',
     'wa_conversation_events', 'wa_conversations', 'wa_messages', 'wa_numbers', 'wa_optouts', 'wa_templates'
   ],
@@ -796,7 +800,7 @@ select is(
     'memberships', 'movements', 'notice_optins', 'notice_stops', 'partner_links', 'pax_firm_clauses', 'people', 'proceeding_lawyers', 'proceeding_parties', 'proceeding_tracking', 'proceedings',
     'publication_readings', 'publications',
     'residence_declarations', 'signature_envelopes',
-    'subscriptions', 'template_imports', 'test_chats', 'tracked_legs', 'tracked_trips',
+    'subscriptions', 'template_imports', 'test_chats', 'tracked_legs', 'tracked_trip_documents', 'tracked_trips',
     'wa_contacts', 'wa_conversation_events', 'wa_conversations', 'wa_messages', 'wa_numbers', 'wa_optouts', 'wa_templates'
   ],
   'and of their own firm less than the owner: no audit trail, no history, no invitations, no checkout, no vendor accounts'
@@ -841,7 +845,7 @@ select is(
     'people', 'person_data_requests',
     'proceeding_lawyers', 'proceeding_parties', 'proceeding_tracking', 'proceedings', 'publication_readings', 'publications', 'record_versions',
     'residence_declarations', 'signature_envelopes',
-    'subscriptions', 'template_imports', 'test_chats', 'tracked_legs', 'tracked_trips',
+    'subscriptions', 'template_imports', 'test_chats', 'tracked_legs', 'tracked_trip_documents', 'tracked_trips',
     'wa_contacts',
     'wa_conversation_events', 'wa_conversations', 'wa_messages', 'wa_numbers', 'wa_optouts', 'wa_templates'
   ],

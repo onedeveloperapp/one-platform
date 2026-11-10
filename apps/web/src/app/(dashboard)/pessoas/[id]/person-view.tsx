@@ -7,6 +7,8 @@ import { useState } from "react";
 
 import { Alert, Box, Button, Card, CardContent, MenuItem, TextField, Typography } from "@mui/material";
 
+import { useViewer } from "@/components/layout/viewer-context";
+import { PersonModuleSections } from "@/components/people/module-people";
 import CardTitle from "@/components/product/card-title";
 import PageHeader from "@/components/product/page-header";
 import SecondFactorPrompt from "@/components/product/second-factor-prompt";
@@ -75,6 +77,7 @@ const day = (moment: string | null) => (moment ? (formatDayBr(moment.slice(0, 10
 export default function PersonView({ state }: { state: PersonState }) {
   const t = useTranslations("product");
   const router = useRouter();
+  const viewer = useViewer();
   const [marketing, setMarketing] = useState(false);
   const [data, setData] = useState<"export" | "erase" | null>(null);
 
@@ -242,6 +245,8 @@ export default function PersonView({ state }: { state: PersonState }) {
           ) : null}
         </CardContent>
       </Card>
+
+      {erased ? null : <PersonModuleSections modules={viewer?.modules} personId={state.id} personName={name} />}
 
       <Box className="grid gap-6 lg:grid-cols-2">
         <Card component="section" aria-labelledby="person-documents">

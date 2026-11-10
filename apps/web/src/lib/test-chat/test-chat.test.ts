@@ -9,6 +9,7 @@ import {
   messagePartsOf,
   NEXT_TO_LEAVE,
   TEST_TOOLS,
+  testTripInFront,
 } from "@/lib/test-chat/test-chat";
 import { isValidPhoneBr } from "@flyee/fields";
 
@@ -86,5 +87,23 @@ describe("the tools that make a flight go as it should (0084)", () => {
 
   it("are the agency's trip's, after the problems it was made for", () => {
     expect(TEST_TOOLS.agencia.map((tool) => tool.key)).toEqual(["cancel", "late_6h", "depart", "land"]);
+  });
+});
+
+describe("the trip in front of the tester", () => {
+  it("is the agency's or the firm's passenger still followed, the agency's first", () => {
+    const trips = [
+      { label: "escritorio", status: "case_opened" },
+      { label: "agencia", status: "watching" },
+      { label: "voo_real", status: "watching" },
+    ];
+    expect(testTripInFront(trips)?.label).toBe("agencia");
+    expect(
+      testTripInFront([
+        { label: "escritorio", status: "alerted" },
+        { label: "agencia", status: "declined" },
+      ])?.label,
+    ).toBe("escritorio");
+    expect(testTripInFront([{ label: "voo_real", status: "watching" }])).toBeNull();
   });
 });

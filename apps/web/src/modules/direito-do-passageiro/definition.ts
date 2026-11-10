@@ -48,6 +48,10 @@ export const passengerModule: ModuleDefinition = {
   // On the agency's home, its passengers in progress, each with where they are along their way, and their flights as
   // they happen, once each agreed (0084).
   partnerHome: () => import("./agency/partner-home-section"),
+  // The firm's own passengers (0170): registered from their documents, their trip followed as an agency's passenger's
+  // is; and on a person's page, the trips ONE follows of them.
+  firmPassenger: { label: "passenger-new", panel: () => import("./passengers/new-passenger-panel") },
+  personSection: () => import("./passengers/person-trips"),
   // What a firm sets up of this module, after the core and before the home (0081): the Valor da Causa Pedido of the
   // air-passenger problems, the words of the clause its agencies register, and the partner agency.
   firmSetup: "/configurar/direito-do-passageiro",

@@ -8,6 +8,8 @@ import { useEffect, useRef, useState } from "react";
 
 import { Alert, Box, Button, Card, CardContent, Grid, Typography } from "@mui/material";
 
+import { useViewer } from "@/components/layout/viewer-context";
+import { passengerPanelsOf } from "@/components/people/module-people";
 import CardTitle from "@/components/product/card-title";
 import EmptyState from "@/components/product/empty-state";
 import ListBar from "@/components/product/list-bar";
@@ -83,7 +85,12 @@ const VIEW_LOOK: Record<
 export default function PeopleView({ state }: { state: PeopleState }) {
   const t = useTranslations("product");
   const router = useRouter();
+  const viewer = useViewer();
   const ready = state.kind === "ready" ? state : null;
+  // 0170: a passenger the firm registers itself, from each module the firm works in that has one.
+  const panels = passengerPanelsOf(viewer?.modules);
+  const [adding, setAdding] = useState<string | null>(null);
+  const Adding = panels.find((panel) => panel.key === adding)?.Panel ?? null;
   const [search, setSearch] = useState("");
   const [shown, setShown] = useState<PeoplePage | null>(ready?.page ?? null);
   const [more, setMore] = useState(0);
@@ -235,6 +242,20 @@ export default function PeopleView({ state }: { state: PeopleState }) {
             }))}
             view={view}
             onView={(key) => router.push(key === "todos" ? "/pessoas" : `/pessoas?ver=${key}`)}
+            create={
+              panels.length === 0
+                ? undefined
+                : panels.length === 1
+                  ? { label: t(panels[0].label), onClick: () => setAdding(panels[0].key) }
+                  : {
+                      label: t("people-new"),
+                      actions: panels.map((panel) => ({
+                        key: panel.key,
+                        label: t(panel.label),
+                        onClick: () => setAdding(panel.key),
+                      })),
+                    }
+            }
             search={{
               label: t("list-bar-search"),
               placeholder: t("people-search-placeholder"),
@@ -326,6 +347,15 @@ export default function PeopleView({ state }: { state: PeopleState }) {
 
           <SegmentsCard segments={ready.segments} term={ready.term} factor={ready.factor} numbers={numbers} />
         </>
+      ) : null}
+      {Adding ? (
+        <Adding
+          onClose={() => setAdding(null)}
+          onDone={(personId) => {
+            setAdding(null);
+            router.push(`/pessoas/${personId}`);
+          }}
+        />
       ) : null}
     </Box>
   );

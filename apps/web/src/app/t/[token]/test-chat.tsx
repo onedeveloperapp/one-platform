@@ -23,12 +23,12 @@ import {
 } from "@/lib/test-chat/actions";
 import {
   AGENCY_TEST_PHONE,
-  AGENCY_TRIP,
   messagePartsOf,
   QUICK_REPLIES,
   TEST_TOOLS,
   type TestChatView,
   type TestMessage,
+  testTripInFront,
   type TestTripView,
   waitsForChoice,
 } from "@/lib/test-chat/test-chat";
@@ -130,7 +130,8 @@ export default function TestChat({ token, initial }: { token: string; initial: T
 
   // The test is only the agency's passenger at the test WhatsApp (the owner, 2026-11-03): once they agreed on the
   // agency's link, their trip is here; until then, how to have one.
-  const trip = view.trips.find((item) => item.label === AGENCY_TRIP) ?? null;
+  // A passenger the firm registered itself at the test WhatsApp is tested the same way (0170).
+  const trip = testTripInFront(view.trips);
   const messages = (trip && threads[trip.id]) ?? [];
   // What the page already has, read by the pull without starting it again at every message.
   const threadsRef = useRef(threads);

@@ -1,6 +1,6 @@
 "use client";
 
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Fragment, type ReactNode, useId, useState } from "react";
 
@@ -9,11 +9,13 @@ import { Box, Button, Divider, ListSubheader, Menu, MenuItem } from "@mui/materi
 import AddPanel, { type AddKind } from "@/components/layout/add/add-panel";
 import FinanceAddPanel, { type FinanceAddKind } from "@/components/layout/add/finance-add-panel";
 import { useViewer } from "@/components/layout/viewer-context";
+import { passengerPanelsOf } from "@/components/people/module-people";
 import { TILE_TONE, type TileTone } from "@/components/product/tile-tone";
 import NiArrowLeftRight from "@/icons/nexture/ni-arrow-left-right";
 import NiCalendar from "@/icons/nexture/ni-calendar";
 import NiCalendarClock from "@/icons/nexture/ni-calendar-clock";
 import NiChevronDownSmall from "@/icons/nexture/ni-chevron-down-small";
+import NiLuggage from "@/icons/nexture/ni-luggage";
 import NiMoney from "@/icons/nexture/ni-money";
 import NiPlus from "@/icons/nexture/ni-plus";
 import NiWallet from "@/icons/nexture/ni-wallet";
@@ -22,7 +24,9 @@ import type { FirmFunction } from "@/lib/firm/roles";
 import { isSetupPath } from "@/lib/search/global-search";
 import { cn } from "@/lib/utils";
 
-type MenuKind = AddKind | FinanceAddKind;
+/** A module's passenger the firm registers itself (0170): `passenger:<module>`. */
+type PassengerKind = `passenger:${string}`;
+type MenuKind = AddKind | FinanceAddKind | PassengerKind;
 type AddEntry = {
   kind: MenuKind;
   label: string;
@@ -39,7 +43,8 @@ const DEADLINE_WRITERS: readonly FirmFunction[] = ["socio", "advogado", "control
 
 /**
  * What may be added from the top, by group, as the drawings of 2026-11-07 group it: the cases', and the books' (Nova
- * receita, Nova despesa, Transferência, 0127) for who writes in them. The people (Nova pessoa) join with their phase.
+ * receita, Nova despesa, Transferência, 0127) for who writes in them, and the people: each module's passenger the firm
+ * registers itself (Novo passageiro, 0170), to anybody of the firm.
  */
 const GROUPS: readonly AddGroup[] = [
   {
@@ -103,6 +108,8 @@ export default function AddMenu() {
   const t = useTranslations("product");
   const viewer = useViewer();
   const pathname = usePathname();
+  const router = useRouter();
+  const passengers = passengerPanelsOf(viewer?.modules);
   const menuId = useId();
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   // What was picked waits for the menu to finish closing, which gives the focus back to the button: then the panel
@@ -110,16 +117,29 @@ export default function AddMenu() {
   const [picked, setPicked] = useState<MenuKind | null>(null);
   const [adding, setAdding] = useState<MenuKind | null>(null);
 
-  const groups = GROUPS.map((group) => ({
-    ...group,
-    entries: group.entries.filter((entry) =>
-      !viewer
-        ? false
-        : entry.allowed
-          ? entry.allowed(viewer)
-          : Boolean(viewer.firmFunction && entry.functions?.includes(viewer.firmFunction)),
-    ),
-  })).filter((group) => group.entries.length > 0);
+  const peopleGroup: AddGroup = {
+    key: "people",
+    label: "add-group-people",
+    entries: passengers.map((panel) => ({
+      kind: `passenger:${panel.key}` as PassengerKind,
+      label: panel.label,
+      icon: <NiLuggage size="small" />,
+      tone: "secondary" as TileTone,
+      allowed: () => true,
+    })),
+  };
+  const groups = [GROUPS[0], peopleGroup, ...GROUPS.slice(1)]
+    .map((group) => ({
+      ...group,
+      entries: group.entries.filter((entry) =>
+        !viewer
+          ? false
+          : entry.allowed
+            ? entry.allowed(viewer)
+            : Boolean(viewer.firmFunction && entry.functions?.includes(viewer.firmFunction)),
+      ),
+    }))
+    .filter((group) => group.entries.length > 0);
   if (!viewer?.hasFirm || viewer.partner || viewer.owesSecondFactor || groups.length === 0) return null;
   // A setup leads nowhere else before it ends: nothing is added from the top there.
   if (isSetupPath(pathname) && !adding) return null;
@@ -204,7 +224,21 @@ export default function AddMenu() {
           </Fragment>
         ))}
       </Menu>
-      {adding && FINANCE_KINDS.includes(adding) ? (
+      {adding?.startsWith("passenger:") ? (
+        (() => {
+          const Panel = passengers.find((panel) => adding === `passenger:${panel.key}`)?.Panel;
+          return Panel ? (
+            <Panel
+              key={adding}
+              onClose={() => setAdding(null)}
+              onDone={(personId) => {
+                setAdding(null);
+                router.push(`/pessoas/${personId}`);
+              }}
+            />
+          ) : null;
+        })()
+      ) : adding && FINANCE_KINDS.includes(adding) ? (
         <FinanceAddPanel key={adding} kind={adding as FinanceAddKind} onClose={() => setAdding(null)} />
       ) : adding ? (
         <AddPanel key={adding} kind={adding as AddKind} onClose={() => setAdding(null)} />
