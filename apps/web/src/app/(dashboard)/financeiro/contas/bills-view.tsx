@@ -3,6 +3,7 @@
 import FinanceGate from "../finance-gate";
 import type { FinanceState } from "../load-finance";
 import { BillPanel, RenegotiatePanel, SettlePanel } from "./bill-panels";
+import ImportPanel from "./import-panel";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useMemo, useState } from "react";
@@ -112,6 +113,7 @@ export default function BillsView({ state }: { state: FinanceState }) {
   const [closing, setClosing] = useState<Closing | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [stopping, setStopping] = useState<FinanceSeries | null>(null);
+  const [importing, setImporting] = useState(false);
   const day = today();
   const bills = useMemo(() => (state.kind === "ready" ? (state.bills ?? []) : []), [state]);
   const shown = useMemo(() => {
@@ -328,7 +330,16 @@ export default function BillsView({ state }: { state: FinanceState }) {
               }
             : undefined
         }
+        more={
+          writes
+            ? {
+                label: t("list-bar-more"),
+                actions: [{ key: "import", label: t("finance-legacy-title"), onClick: () => setImporting(true) }],
+              }
+            : undefined
+        }
       />
+      <ImportPanel open={importing} onClose={() => setImporting(false)} />
       {view === "cobrar" ? <StateLine tone="info">{t("finance-bills-charge-note")}</StateLine> : null}
       {view === "cobrar" && aging.count > 0 ? (
         <Card>
