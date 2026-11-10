@@ -178,6 +178,7 @@ export const EVENT_KEY: Record<string, string> = {
   document_added: "case-event-document-added",
   document_accepted: "case-event-document-accepted",
   document_rejected: "case-event-document-rejected",
+  document_reused: "case-event-document-reused",
   client_person_saved: "case-event-client-person-saved",
   client_dependent_added: "case-event-client-dependent-added",
   client_segment_saved: "case-event-client-segment-saved",

@@ -57,6 +57,7 @@ const SOURCE_KEY: Record<CaseDocument["source"], string> = {
   whatsapp: "case-document-source-whatsapp",
   signature: "case-document-source-signature",
   partner: "case-document-source-partner",
+  reuse: "case-document-source-reuse",
 };
 
 /**

@@ -1,6 +1,7 @@
 import "server-only";
 
 import { advanceOne, followSoon } from "@/lib/cases/advance-work";
+import { reuseRound } from "@/lib/cases/document-reuse-work";
 import { claimCaseDocuments, processClaimedDocument } from "@/lib/cases/documents-work";
 import { approveWaitingDrafts, draftNext } from "@/lib/cases/drafts-work";
 import { submitFilings } from "@/lib/cases/filing-submit-work";
@@ -195,5 +196,16 @@ export const caseSweeps: Sweep[] = [
       }
       return outcomes;
     },
+  },
+  /**
+   * The documents of a client who comes back (migration 0157): the identity and a recent proof of address accepted in
+   * an earlier case, copied into the new case being gathered. Also while ONE is used, since the client is asked for
+   * what is missing on their link.
+   */
+  {
+    key: "document-reuse",
+    when: { every: 5 },
+    whileUsed: true,
+    run: (service, until) => reuseRound(service, until),
   },
 ];

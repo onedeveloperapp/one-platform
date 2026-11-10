@@ -34,6 +34,7 @@ describe("the platform's sweeps (2026-11-04)", () => {
         "court-tracking",
         "deadline-counts",
         "djen-capture",
+        "document-reuse",
         "files-upkeep",
         "filing-packages",
         "filing-submissions",
