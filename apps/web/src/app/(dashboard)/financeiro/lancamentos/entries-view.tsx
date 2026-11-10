@@ -22,6 +22,7 @@ import { writeXlsx, XLSX_TYPE } from "@/lib/export/xlsx-write";
 import { savedFileName, saveFile } from "@/lib/files/save-file";
 import { beginFinanceExport, cancelFinanceEntry, setFinanceMoneyApart } from "@/lib/finance/actions";
 import { dayLabel, ENTRY_KIND_KEY, financeErrorKey, money, operatesBooks } from "@/lib/finance/books";
+import { openFinanceDocument } from "@/lib/finance/document-actions";
 import {
   entryExportColumns,
   entryExportLine,
@@ -193,7 +194,16 @@ export default function EntriesView({ state }: { state: FinanceState }) {
     else router.refresh();
   };
 
+  // The receipt kept with an entry opens in a new tab, by a link of a minute (0140).
+  const openDocument = async (fileId: string) => {
+    const link = await openFinanceDocument(fileId);
+    if (link.ok) window.open(link.url, "_blank", "noopener,noreferrer");
+  };
+
   const actionsOf = (entry: FinanceEntryRow): QuickAction[] => [
+    ...(entry.fileId
+      ? [{ key: "document", label: t("finance-doc-open"), onClick: () => void openDocument(entry.fileId as string) }]
+      : []),
     ...(entry.apart === "owed"
       ? [{ key: "apart", label: t("finance-apart-mark"), onClick: () => void markApart(entry, true) }]
       : []),

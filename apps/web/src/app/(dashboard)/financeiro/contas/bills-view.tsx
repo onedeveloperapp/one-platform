@@ -9,9 +9,11 @@ import { useMemo, useState } from "react";
 
 import { Alert, Box, Card, CardContent, Grid, Typography } from "@mui/material";
 
+import CardTitle from "@/components/product/card-title";
 import ConfirmActionDialog from "@/components/product/confirm-action-dialog";
 import EmptyState from "@/components/product/empty-state";
 import ListBar, { type ListView } from "@/components/product/list-bar";
+import MetricBars from "@/components/product/metric-bars";
 import NumberCard from "@/components/product/number-card";
 import PageHeader from "@/components/product/page-header";
 import QuickActions, { type QuickAction } from "@/components/product/quick-actions";
@@ -19,11 +21,14 @@ import StateLine from "@/components/product/state-line";
 import StatusChip from "@/components/product/status-chip";
 import IllustrationAnalytics from "@/icons/illustrations/illustration-analytics";
 import NiCalendarClock from "@/icons/nexture/ni-calendar-clock";
+import NiChartBar from "@/icons/nexture/ni-chart-bar";
 import NiMoney from "@/icons/nexture/ni-money";
 import NiMoneyBag from "@/icons/nexture/ni-money-bag";
 import NiReceipt from "@/icons/nexture/ni-receipt";
-import { closeFinanceBill } from "@/lib/finance/actions";
+import NiRefresh from "@/icons/nexture/ni-refresh";
+import { closeFinanceBill, stopFinanceSeries } from "@/lib/finance/actions";
 import {
+  type AgingBand,
   BILL_VIEWS,
   type BillDirection,
   billInView,
@@ -33,8 +38,11 @@ import {
   billStanding,
   type BillView,
   type FinanceBill,
+  type FinanceSeries,
+  receivableAging,
 } from "@/lib/finance/bills";
 import { configuresBooks, dayLabel, financeErrorKey, money, operatesBooks } from "@/lib/finance/books";
+import { openFinanceDocument } from "@/lib/finance/document-actions";
 
 const VIEW_KEY: Record<BillView, string> = {
   pagar: "finance-bills-view-pagar",
@@ -72,6 +80,15 @@ const CLOSE_KEY: Record<"cancelled" | "written_off", { title: string; kept: stri
 const today = () => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date());
 const plain = (text: string) => text.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
 
+/** The words of each band of default. */
+const BAND_KEY: Record<AgingBand, string> = {
+  "1-30": "finance-aging-1-30",
+  "31-60": "finance-aging-31-60",
+  "61-90": "finance-aging-61-90",
+  "91-180": "finance-aging-91-180",
+  "180+": "finance-aging-180",
+};
+
 type Writing = { kind: "new"; direction: BillDirection } | { kind: "edit"; bill: FinanceBill };
 type Closing = { bill: FinanceBill; how: "cancelled" | "written_off" };
 
@@ -93,6 +110,7 @@ export default function BillsView({ state }: { state: FinanceState }) {
   const [renegotiating, setRenegotiating] = useState<FinanceBill | null>(null);
   const [closing, setClosing] = useState<Closing | null>(null);
   const [note, setNote] = useState<string | null>(null);
+  const [stopping, setStopping] = useState<FinanceSeries | null>(null);
   const day = today();
   const bills = useMemo(() => (state.kind === "ready" ? (state.bills ?? []) : []), [state]);
   const shown = useMemo(() => {
@@ -110,6 +128,8 @@ export default function BillsView({ state }: { state: FinanceState }) {
   const writes = operatesBooks(state.level) && !state.supportVisit;
   const configures = configuresBooks(state.level) && !state.supportVisit;
   const numbers = billNumbers(bills, day);
+  const series = state.series ?? [];
+  const aging = receivableAging(bills, day);
 
   const views: ListView[] = BILL_VIEWS.map((key) => ({
     key,
@@ -148,10 +168,21 @@ export default function BillsView({ state }: { state: FinanceState }) {
     }
   };
 
+  // The document a bill was read from opens in a new tab, by a link of a minute (0140).
+  const openDocument = async (fileId: string) => {
+    const link = await openFinanceDocument(fileId);
+    if (link.ok) window.open(link.url, "_blank", "noopener,noreferrer");
+  };
+  const documentAction = (bill: FinanceBill): QuickAction[] =>
+    bill.fileId
+      ? [{ key: "document", label: t("finance-doc-open"), onClick: () => void openDocument(bill.fileId as string) }]
+      : [];
+
   const actionsOf = (bill: FinanceBill): QuickAction[] =>
     bill.status !== "open"
-      ? []
+      ? documentAction(bill)
       : [
+          ...documentAction(bill),
           ...(bill.paidCents === 0
             ? [{ key: "edit", label: t("finance-bill-edit"), onClick: () => setWriting({ kind: "edit", bill }) }]
             : []),
@@ -251,6 +282,103 @@ export default function BillsView({ state }: { state: FinanceState }) {
         }
       />
       {view === "cobrar" ? <StateLine tone="info">{t("finance-bills-charge-note")}</StateLine> : null}
+      {view === "cobrar" && aging.count > 0 ? (
+        <Card>
+          <CardContent className="flex flex-col gap-4">
+            <CardTitle
+              id="finance-aging"
+              icon={<NiChartBar size="medium" />}
+              tone="accent-3"
+              title={t("finance-aging-title")}
+              description={t("finance-aging-hint")}
+              detail={t("finance-aging-detail", { count: aging.count, value: money(aging.cents) })}
+            />
+            <Grid container spacing={4}>
+              <Grid size={{ xs: 12, md: 6 }}>
+                <MetricBars
+                  items={aging.bands.map((band) => ({
+                    key: band.band,
+                    label: t(BAND_KEY[band.band]),
+                    value: band.count,
+                    tone: band.band === "1-30" ? "secondary" : "attention",
+                    hint: band.count > 0 ? money(band.cents) : undefined,
+                  }))}
+                />
+              </Grid>
+              <Grid size={{ xs: 12, md: 6 }}>
+                <Typography variant="subtitle2" component="h3" className="mb-2">
+                  {t("finance-aging-clients")}
+                </Typography>
+                <Box component="ul" className="m-0 flex list-none flex-col gap-2 p-0">
+                  {aging.clients.map((client) => (
+                    <Box component="li" key={client.name} className="flex items-baseline justify-between gap-3">
+                      <Typography variant="body2" className="min-w-0 truncate">
+                        {client.name || t("finance-bill-untitled")}
+                      </Typography>
+                      <Typography variant="body2" className="tabular-nums">
+                        {money(client.cents)}
+                      </Typography>
+                    </Box>
+                  ))}
+                </Box>
+              </Grid>
+            </Grid>
+          </CardContent>
+        </Card>
+      ) : null}
+      {series.length > 0 && (view === "pagar" || view === "receber") ? (
+        <Card>
+          <CardContent className="flex flex-col gap-3">
+            <CardTitle
+              id="finance-series"
+              icon={<NiRefresh size="medium" />}
+              tone="primary"
+              title={t("finance-series-title")}
+              description={t("finance-series-hint")}
+            />
+            <Box component="ul" className="m-0 flex list-none flex-col p-0">
+              {series.map((item) => (
+                <Box
+                  component="li"
+                  key={item.id}
+                  className="border-grey-100 flex items-start justify-between gap-3 border-b py-3 last:border-b-0"
+                >
+                  <Box className="flex min-w-0 flex-col gap-1">
+                    <Typography variant="body1">{item.counterparty ?? t("finance-bill-untitled")}</Typography>
+                    <Typography variant="body2" className="text-text-secondary">
+                      {[t(WAY_KEY[item.direction].kind), item.category, t("finance-series-every", { day: item.day })]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </Typography>
+                    {item.status === "stopped" ? (
+                      <StateLine tone="info">
+                        {t("finance-series-stopped", { reason: item.stoppedReason ?? "" })}
+                      </StateLine>
+                    ) : item.nextDueOn ? (
+                      <StateLine tone="waiting">
+                        {t("finance-series-next", { day: dayLabel(item.nextDueOn) })}
+                      </StateLine>
+                    ) : (
+                      <StateLine tone="info">{t("finance-series-waiting")}</StateLine>
+                    )}
+                  </Box>
+                  <Box className="flex shrink-0 items-start gap-2">
+                    <Typography variant="body1" className="tabular-nums">
+                      {money(item.cents)}
+                    </Typography>
+                    {writes && item.status === "active" ? (
+                      <QuickActions
+                        label={t("finance-series-actions")}
+                        actions={[{ key: "stop", label: t("finance-series-stop"), onClick: () => setStopping(item) }]}
+                      />
+                    ) : null}
+                  </Box>
+                </Box>
+              ))}
+            </Box>
+          </CardContent>
+        </Card>
+      ) : null}
       {note ? (
         <Alert severity="error" className="neutral bg-background-paper/60!" role="alert">
           {note}
@@ -303,6 +431,11 @@ export default function BillsView({ state }: { state: FinanceState }) {
                       <Typography variant="body2" className="text-text-secondary">
                         {t("finance-bill-discount", { value: money(bill.discountCents) })}
                       </Typography>
+                    ) : null}
+                    {bill.seriesByOne && bill.status === "open" ? (
+                      <Box>
+                        <StatusChip tone="neutral" label={t("finance-series-chip")} />
+                      </Box>
                     ) : null}
                     {bill.byOne && bill.status === "paid" ? (
                       <Box>
@@ -367,6 +500,27 @@ export default function BillsView({ state }: { state: FinanceState }) {
           onSaved={() => {
             setRenegotiating(null);
             router.refresh();
+          }}
+        />
+      ) : null}
+      {stopping ? (
+        <ConfirmActionDialog
+          title={t("finance-series-stop-title")}
+          intro={t("finance-series-stop-intro", { who: stopping.counterparty ?? t("finance-bill-untitled") })}
+          consequences={[t("finance-series-stop-bills"), t("finance-series-stop-never")]}
+          reasonLabel={t("finance-field-reason")}
+          reasonMinLength={3}
+          requireReason
+          confirmLabel={t("finance-series-stop")}
+          cancelLabel={t("finance-cancel")}
+          tone="warning"
+          onClose={() => setStopping(null)}
+          onConfirm={async (reason) => {
+            const result = await stopFinanceSeries(stopping.id, reason);
+            if (!result.ok) return t(financeErrorKey(result.code));
+            setStopping(null);
+            router.refresh();
+            return null;
           }}
         />
       ) : null}

@@ -130,10 +130,12 @@ export async function saveFinanceEntry(fields: {
   description?: string;
   occurredOn: string;
   competenceOn?: string | null;
-}): Promise<FinanceResult<{ entryId?: string; transferId?: string }>> {
+  /** The receipt ONE read into the form (0140), kept with the entry. */
+  fileId?: string | null;
+}): Promise<FinanceResult<{ entryId?: string; transferId?: string; documentKept?: boolean }>> {
   if (!isId(fields.accountId) || !Number.isSafeInteger(fields.cents))
     return { ok: false, code: "invalid_data", field: "cents" };
-  return call(
+  const saved = await call(
     "save_finance_entry",
     {
       fields: {
@@ -155,6 +157,8 @@ export async function saveFinanceEntry(fields: {
       transferId: typeof answer.transfer_id === "string" ? answer.transfer_id : undefined,
     }),
   );
+  if (!saved.ok || !isId(fields.fileId) || !saved.entryId) return saved;
+  return { ...saved, documentKept: await attachFinanceDocument("entry", saved.entryId, fields.fileId) };
 }
 
 export async function cancelFinanceEntry(entryId: string, reason: string): Promise<FinanceResult> {
@@ -323,12 +327,14 @@ export async function saveFinanceBill(
     typedLine: string | null;
     barcode: string | null;
     repeat: number;
+    /** The document ONE read into the form (0140), kept with the bill (the first month of a series). */
+    fileId?: string | null;
   },
-): Promise<FinanceResult<{ billId: string; months: number }>> {
+): Promise<FinanceResult<{ billId: string; months: number; documentKept?: boolean }>> {
   if (billId !== null && !isId(billId)) return { ok: false, code: "not_found" };
   if (!Number.isSafeInteger(fields.cents) || fields.cents <= 0)
     return { ok: false, code: "invalid_data", field: "cents" };
-  return call(
+  const saved = await call(
     "save_finance_bill",
     {
       target_bill: billId,
@@ -348,6 +354,55 @@ export async function saveFinanceBill(
     },
     (answer) => ({ billId: String(answer.bill_id), months: Number(answer.months ?? 1) }),
   );
+  if (!saved.ok || !isId(fields.fileId)) return saved;
+  // A series answers its last month: the document is of the first, which carries the typed line.
+  const context = await getMemberContext();
+  let target = saved.billId;
+  if (context?.firm && saved.months > 1) {
+    const { data: last } = await context.supabase
+      .from("finance_bills")
+      .select("series_id")
+      .eq("id", saved.billId)
+      .maybeSingle();
+    if (last?.series_id) {
+      const { data: first } = await context.supabase
+        .from("finance_bills")
+        .select("id")
+        .eq("series_id", last.series_id)
+        .order("due_on", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      if (first?.id) target = String(first.id);
+    }
+  }
+  const kept = await attachFinanceDocument("bill", target, fields.fileId);
+  return { ...saved, documentKept: kept };
+}
+
+/** A person stops a series ONE made, with the reason: its open bills are cancelled with it (0151). */
+export async function stopFinanceSeries(
+  seriesId: string,
+  reason: string,
+): Promise<FinanceResult<{ cancelled: number }>> {
+  if (!isId(seriesId)) return { ok: false, code: "not_found" };
+  return call(
+    "stop_finance_series",
+    { target_series: seriesId, target_reason: String(reason ?? "").slice(0, 300) },
+    (answer) => ({ cancelled: Number(answer.cancelled ?? 0) }),
+  );
+}
+
+/** Keeps a document ONE read with the bill or the entry it was read into (0140); false when it could not. */
+async function attachFinanceDocument(kind: "bill" | "entry", recordId: string, fileId: string): Promise<boolean> {
+  const context = await getMemberContext();
+  if (!context?.firm || !isId(recordId)) return false;
+  const { data, error } = await context.supabase.rpc("attach_finance_document", {
+    target_org: context.firm.id,
+    target_kind: kind,
+    target_record: recordId,
+    target_file: fileId,
+  });
+  return !error && (data as { ok?: boolean } | null)?.ok === true;
 }
 
 /** Registers a payment or a receipt of a bill, in part or whole, or with a discount (0129). */

@@ -20,7 +20,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
  * nothing here writes to a case, a person or a lawsuit.
  */
 
-const IMAGE_MIMES = ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"];
+export const IMAGE_MIMES = ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"];
 
 export type PrefillRead = { ok: true; output: Record<string, unknown> } | { ok: false; code: string };
 
@@ -29,8 +29,8 @@ const MOST_BYTES = 20 * 1024 * 1024;
 
 type Attachment = { kind: "image" | "document"; mime: string; dataBase64: string };
 
-/** A file's bytes as the model reads them: a photo reduced and upright, a PDF whole. */
-async function attachmentOf(bytes: Uint8Array, mime: string): Promise<Attachment | { code: string }> {
+/** A file's bytes as the model reads them: a photo reduced and upright, a PDF whole. Also the books' (0140). */
+export async function attachmentOf(bytes: Uint8Array, mime: string): Promise<Attachment | { code: string }> {
   if (IMAGE_MIMES.includes(mime)) {
     try {
       return { kind: "image", mime: "image/jpeg", dataBase64: base64((await normalizeImage(bytes, MODEL_IMAGE)).jpeg) };

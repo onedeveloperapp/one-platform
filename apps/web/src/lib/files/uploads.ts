@@ -171,7 +171,7 @@ export async function downloadUrl(
 export async function discardUpload(
   context: MemberContext,
   fileId: string,
-  purpose: "upload" | "statement" | "model_source" = "upload",
+  purpose: "upload" | "statement" | "model_source" | "finance" = "upload",
 ): Promise<void> {
   if (!context.firm) return;
   const backend = service();

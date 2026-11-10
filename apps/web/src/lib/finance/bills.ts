@@ -30,6 +30,10 @@ export type FinanceBill = {
   /** The interest and fine, and the discount, of its payments. */
   extraCents: number;
   discountCents: number;
+  /** The document it was read from, kept with it (0140). */
+  fileId?: string | null;
+  /** A bill ONE wrote for a series it made (0151). */
+  seriesByOne?: boolean;
 };
 
 export type BillStanding =
@@ -123,4 +127,96 @@ export function billOrder(a: FinanceBill, b: FinanceBill): number {
   const openB = b.status === "open";
   if (openA !== openB) return openA ? -1 : 1;
   return openA ? a.dueOn.localeCompare(b.dueOn) : b.dueOn.localeCompare(a.dueOn);
+}
+
+/** How long a receivable is past its day: the market's bands of default. */
+export const AGING_BANDS = ["1-30", "31-60", "61-90", "91-180", "180+"] as const;
+export type AgingBand = (typeof AGING_BANDS)[number];
+
+const bandOf = (days: number): AgingBand =>
+  days <= 30 ? "1-30" : days <= 60 ? "31-60" : days <= 90 ? "61-90" : days <= 180 ? "91-180" : "180+";
+
+export type ReceivableAging = {
+  /** Each band with how many receivables and what is still owed of them, in the bands' order. */
+  bands: { band: AgingBand; count: number; cents: number }[];
+  /** Who owes the most, the largest first, at most `top` of them. */
+  clients: { name: string; count: number; cents: number }[];
+  count: number;
+  cents: number;
+};
+
+/**
+ * The default of the firm's receivables on a day (phase 5): every receivable still open past its due day, by how long
+ * (the bands) and by who owes it (the counterparty, or the description when there is none). ONE charges nobody: this
+ * says what the firm's people charge or inform.
+ */
+export function receivableAging(bills: readonly FinanceBill[], today: string, top = 5): ReceivableAging {
+  const bands = new Map<AgingBand, { count: number; cents: number }>(
+    AGING_BANDS.map((band) => [band, { count: 0, cents: 0 }]),
+  );
+  const clients = new Map<string, { name: string; count: number; cents: number }>();
+  let count = 0;
+  let cents = 0;
+  for (const bill of bills) {
+    if (bill.direction !== "receive" || bill.status !== "open" || bill.dueOn >= today) continue;
+    const rest = billRest(bill);
+    if (rest <= 0) continue;
+    const band = bands.get(bandOf(daysBetween(bill.dueOn, today))) as { count: number; cents: number };
+    band.count += 1;
+    band.cents += rest;
+    const name = (bill.counterparty ?? bill.description ?? "").trim();
+    const key = name.toLocaleLowerCase("pt-BR");
+    const client = clients.get(key) ?? { name, count: 0, cents: 0 };
+    client.count += 1;
+    client.cents += rest;
+    clients.set(key, client);
+    count += 1;
+    cents += rest;
+  }
+  return {
+    bands: AGING_BANDS.map((band) => ({ band, ...(bands.get(band) as { count: number; cents: number }) })),
+    clients: [...clients.values()]
+      .sort((a, b) => b.cents - a.cents || a.name.localeCompare(b.name, "pt-BR"))
+      .slice(0, top),
+    count,
+    cents,
+  };
+}
+
+/** A series ONE made of a bill it saw three months in a row in the statement (migration 0151). */
+export type FinanceSeries = {
+  id: string;
+  direction: BillDirection;
+  counterparty: string | null;
+  category: string | null;
+  cents: number;
+  day: number;
+  status: "active" | "stopped";
+  stoppedReason: string | null;
+  nextDueOn: string | null;
+};
+
+/** The firm's series as the database answers them (`firm_finance_series`); anything unreadable is left out. */
+export function readFinanceSeries(raw: unknown): FinanceSeries[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.flatMap((row): FinanceSeries[] => {
+    if (typeof row !== "object" || row === null) return [];
+    const value = row as Record<string, unknown>;
+    const direction = value.direction === "pay" || value.direction === "receive" ? value.direction : null;
+    const status = value.status === "active" || value.status === "stopped" ? value.status : null;
+    if (typeof value.id !== "string" || !direction || !status) return [];
+    return [
+      {
+        id: value.id,
+        direction,
+        counterparty: typeof value.counterparty === "string" ? value.counterparty : null,
+        category: typeof value.category === "string" ? value.category : null,
+        cents: Number(value.cents ?? 0),
+        day: Number(value.day ?? 1),
+        status,
+        stoppedReason: typeof value.stopped_reason === "string" ? value.stopped_reason : null,
+        nextDueOn: typeof value.next_due_on === "string" ? value.next_due_on : null,
+      },
+    ];
+  });
 }

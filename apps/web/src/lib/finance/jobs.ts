@@ -1,7 +1,9 @@
 import "server-only";
 
+import { supabaseFileStore } from "@/lib/files/store";
 import { categorizeRound } from "@/lib/finance/categorize-work";
 import type { Sweep } from "@/lib/jobs/schedule";
+import { takeBackFile } from "@flyee/documents/files";
 
 /** How many passes one round makes: each takes out the words of up to two thousand movements. */
 const MOST_PASSES = 10;
@@ -19,6 +21,32 @@ export const financeSweeps: Sweep[] = [
     when: { every: 5 },
     whileUsed: true,
     run: (service, until) => categorizeRound(service, until),
+  },
+  {
+    // A document of the books sent for a form nobody saved, kept a day, then taken back, record first (0140).
+    key: "finance-documents",
+    when: { daily: { hour: 5, minute: 40 } },
+    run: async (service, until) => {
+      const { data, error } = await service.rpc("finance_unused_documents", { target_limit: 200 });
+      if (error) throw new Error(`finance_unused_documents failed: ${error.code ?? "unknown"}`);
+      const store = supabaseFileStore(service);
+      let taken = 0;
+      for (const row of (data ?? []) as { file_id: string; storage_path: string }[]) {
+        if (Date.now() >= until) break;
+        if (await takeBackFile(store, row.file_id, row.storage_path)) taken += 1;
+      }
+      return { taken };
+    },
+  },
+  {
+    // The bills that repeat (0151): ONE makes a series of what it saw three months in a row and writes the next bill.
+    key: "finance-series",
+    when: { daily: { hour: 6, minute: 10 } },
+    run: async (service) => {
+      const { data, error } = await service.rpc("finance_series_sweep", { target_limit: 2000 });
+      if (error) throw new Error(`finance_series_sweep failed: ${error.code ?? "unknown"}`);
+      return (data ?? {}) as Record<string, number>;
+    },
   },
   {
     key: "finance-retention",

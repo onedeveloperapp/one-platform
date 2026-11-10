@@ -128,6 +128,8 @@ export type FinanceEntryRow = FinanceEntryView & {
    * apart, or in a custody account: `apart`; any other entry: null.
    */
   apart: "owed" | "apart" | null;
+  /** The receipt kept with it (0140). */
+  fileId: string | null;
 };
 
 /** The entries of the books, the latest first, a page at a time (the list decides its views in the browser). */
@@ -139,7 +141,7 @@ export async function readFinanceEntries(
   const { data, error } = await supabase
     .from("finance_entries")
     .select(
-      "id, kind, cents, occurred_on, by_one, source, counterparty, description, cancelled_at, cancelled_reason, transfer_id, statement_line_id, apart_at, finance_accounts(name, kind), finance_categories(name)",
+      "id, kind, cents, occurred_on, by_one, source, counterparty, description, cancelled_at, cancelled_reason, transfer_id, statement_line_id, apart_at, file_id, finance_accounts(name, kind), finance_categories(name)",
     )
     .eq("org_id", firmId)
     .order("occurred_on", { ascending: false })
@@ -161,6 +163,7 @@ export async function readFinanceEntries(
       cancelledReason: (row.cancelled_reason as string | null) ?? null,
       transferId: (row.transfer_id as string | null) ?? null,
       fromStatement: row.statement_line_id !== null,
+      fileId: (row.file_id as string | null) ?? null,
       apart:
         view.kind !== "client_money" || view.cents <= 0 || row.cancelled_at !== null
           ? null
@@ -285,7 +288,7 @@ export async function readFinanceBills(
   const { data, error } = await supabase
     .from("finance_bills")
     .select(
-      "id, direction, status, counterparty, description, category_id, case_id, cents, paid_cents, due_on, competence_on, paid_on, typed_line, series_index, series_total, closed_reason, finance_categories(name), finance_bill_payments(by_one, extra_cents, discount_cents, undone_at)",
+      "id, direction, status, counterparty, description, category_id, case_id, cents, paid_cents, due_on, competence_on, paid_on, typed_line, series_index, series_total, closed_reason, file_id, source, by_one, finance_categories(name), finance_bill_payments(by_one, extra_cents, discount_cents, undone_at)",
     )
     .eq("org_id", firmId)
     .order("due_on", { ascending: false })
@@ -324,6 +327,8 @@ export async function readFinanceBills(
         byOne: payments.some((payment) => payment.by_one === true),
         extraCents: payments.reduce((sum, payment) => sum + Number(payment.extra_cents ?? 0), 0),
         discountCents: payments.reduce((sum, payment) => sum + Number(payment.discount_cents ?? 0), 0),
+        fileId: (row.file_id as string | null) ?? null,
+        seriesByOne: row.source === "series" && row.by_one === true,
       },
     ];
   });

@@ -6,25 +6,63 @@ import { useMemo, useState } from "react";
 
 import { Alert, Box, Button, MenuItem, TextField } from "@mui/material";
 
+import DocumentSlot, { type SlotState } from "@/components/cases/document-slot";
 import { CurrencyField } from "@/components/product/fields";
 import SidePanel from "@/components/product/side-panel";
 import StateLine from "@/components/product/state-line";
+import { TILE_TONE } from "@/components/product/tile-tone";
 import NiCalendarClock from "@/icons/nexture/ni-calendar-clock";
+import NiDocumentFull from "@/icons/nexture/ni-document-full";
 import NiMoney from "@/icons/nexture/ni-money";
 import NiReceipt from "@/icons/nexture/ni-receipt";
 import { renegotiateFinanceBill, saveFinanceBill, settleFinanceBill } from "@/lib/finance/actions";
 import { type BillDirection, billRest, type FinanceBill } from "@/lib/finance/bills";
 import { financeErrorKey, financeFieldKey, money } from "@/lib/finance/books";
+import { dropUnsavedFinance, sendFinanceDocument } from "@/lib/finance/document-browser";
+import { FINANCE_DOCUMENT_KIND_KEY, type FinanceDocumentRead } from "@/lib/finance/documents";
 import { readBoleto } from "@flyee/rules/boleto";
 import { formatCents, parseCents } from "@flyee/rules/finance";
 
 const NEW_KEY: Record<BillDirection, string> = { pay: "finance-bill-new-pay", receive: "finance-bill-new-receive" };
+const SLOT_KEY: Record<BillDirection, string> = { pay: "finance-doc-slot-pay", receive: "finance-doc-slot-receive" };
 const SETTLE_KEY: Record<BillDirection, string> = {
   pay: "finance-bill-settle-pay",
   receive: "finance-bill-settle-receive",
 };
 const today = () => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date());
 const centsText = (cents: number) => formatCents(cents).replace(/^-?R\$\s/, "");
+
+/** Why ONE could not read a document of the books, as the slot says it; the form stays to be filled by hand. */
+const DOCUMENT_FAILED_KEY: Record<string, string> = {
+  document_limit: "finance-doc-failed-limit",
+  unsupported_type: "finance-doc-failed-type",
+  type_not_allowed: "finance-doc-failed-type",
+  image_unreadable: "finance-doc-failed-image",
+  too_large: "finance-doc-failed-large",
+  not_allowed: "finance-doc-failed-not-allowed",
+  second_factor: "finance-doc-failed-second-factor",
+};
+export const documentFailedKey = (code: string) => DOCUMENT_FAILED_KEY[code] ?? "finance-doc-failed-generic";
+
+/** What ONE read of a document, in one sentence for its slot: what it is, that ONE may err, and what to look at. */
+export function useDocumentSentence() {
+  const t = useTranslations("product");
+  return (
+    read: FinanceDocumentRead,
+    target: "bill" | "entry" = "bill",
+  ): { tone: "positive" | "attention"; sentence: string } => {
+    const kind = t(FINANCE_DOCUMENT_KIND_KEY[read.kind]);
+    const parts = [
+      target === "entry" ? t("finance-doc-read-sentence-entry", { kind }) : t("finance-doc-read-sentence", { kind }),
+    ];
+    if (read.valueFromLine) parts.push(t("finance-doc-value-from-line"));
+    if (read.lineFailed) parts.push(t("finance-doc-line-failed"));
+    if (!read.legible) parts.push(t("finance-doc-not-legible"));
+    if (read.notes) parts.push(read.notes);
+    const doubtful = !read.legible || read.kind === "outro" || read.lineFailed || read.cents === null;
+    return { tone: doubtful ? "attention" : "positive", sentence: parts.join(" ") };
+  };
+}
 
 /** The refusal of a write, with the field it names, as the panels say it. */
 function Problem({ problem }: { problem: { code: string; field?: string } | null }) {
@@ -82,6 +120,66 @@ export function BillPanel({
   const [repeat, setRepeat] = useState("1");
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<{ code: string; field?: string } | null>(null);
+  // A new bill starts from its document (0140); the typed line and the fields by hand are the other ways in.
+  const [stage, setStage] = useState<"start" | "form">(bill ? "form" : "start");
+  const [slot, setSlot] = useState<SlotState>({ kind: "empty" });
+  const [fileId, setFileId] = useState<string | null>(null);
+  const [fileName, setFileName] = useState<string | null>(null);
+  const [readFields, setReadFields] = useState<Record<string, string>>({});
+  const documentSentence = useDocumentSentence();
+  const readHelp = (field: string, current: string) =>
+    readFields[field] !== undefined && readFields[field] === current ? t("finance-doc-field-read") : undefined;
+
+  const close = () => {
+    dropUnsavedFinance([fileId]);
+    onClose();
+  };
+
+  const sendDocument = async (file: File) => {
+    dropUnsavedFinance([fileId]);
+    setFileId(null);
+    setFileName(file.name);
+    setSlot({ kind: "sending" });
+    setProblem(null);
+    const sent = await sendFinanceDocument(file, { direction, target: "bill" });
+    setFileId(sent.fileId);
+    if (!sent.ok) {
+      setSlot({ kind: "failed", sentence: t(documentFailedKey(sent.code)) });
+      setStage("form");
+      return;
+    }
+    const read = sent.read;
+    const filled: Record<string, string> = {};
+    if (read.counterparty) {
+      setCounterparty(read.counterparty);
+      filled.counterparty = read.counterparty;
+    }
+    if (read.description) {
+      setDescription(read.description);
+      filled.description = read.description;
+    }
+    if (read.categoryId && categories.some((category) => category.id === read.categoryId)) {
+      setCategoryId(read.categoryId);
+      filled.category = read.categoryId;
+    }
+    if (read.typedLine || read.barcode) readLine(read.typedLine ?? read.barcode ?? "");
+    if (read.cents) {
+      setValue(centsText(read.cents));
+      filled.value = centsText(read.cents);
+    }
+    if (read.dueOn) {
+      setDueOn(read.dueOn);
+      filled.due = read.dueOn;
+    }
+    const month = read.competence ?? read.dueOn?.slice(0, 7) ?? null;
+    if (month) {
+      setCompetence(month);
+      filled.competence = month;
+    }
+    setReadFields(filled);
+    setSlot({ kind: "read", ...documentSentence(read) });
+    setStage("form");
+  };
 
   const readLine = (text: string) => {
     setTyped(text);
@@ -97,6 +195,7 @@ export function BillPanel({
       setLineNote({ tone: "failed", text: t("finance-bill-line-wrong") });
       return;
     }
+    setStage("form");
     setBarcode(read.boleto.barcode);
     if (read.boleto.cents) setValue(centsText(read.boleto.cents));
     if (read.boleto.dueOn) {
@@ -137,6 +236,7 @@ export function BillPanel({
         typedLine: digits.length === 47 || digits.length === 48 ? digits : null,
         barcode,
         repeat: Number(repeat) || 1,
+        fileId,
       });
       if (result.ok) onSaved(result.months);
       else setProblem({ code: result.code, field: result.field });
@@ -149,20 +249,26 @@ export function BillPanel({
 
   return (
     <SidePanel
-      onClose={onClose}
+      onClose={close}
       closeLabel={t("finance-cancel")}
       icon={direction === "pay" ? <NiReceipt size="medium" /> : <NiMoney size="medium" />}
       tone={direction === "pay" ? "accent-2" : "secondary"}
-      busy={busy}
+      busy={busy || slot.kind === "sending" || slot.kind === "reading"}
       title={t(NEW_KEY[direction])}
       description={t("finance-bill-panel-body")}
-      onSubmit={() => void save()}
+      onSubmit={() => (stage === "form" ? void save() : undefined)}
       actions={
         <>
-          <Button type="submit" variant="contained" disabled={busy}>
-            {busy ? t("finance-saving") : t("finance-save")}
-          </Button>
-          <Button variant="text" color="grey" onClick={onClose} disabled={busy}>
+          {stage === "form" ? (
+            <Button type="submit" variant="contained" disabled={busy || slot.kind === "sending"}>
+              {busy ? t("finance-saving") : t("finance-save")}
+            </Button>
+          ) : (
+            <Button variant="outlined" color="grey" onClick={() => setStage("form")}>
+              {t("prefill-manual")}
+            </Button>
+          )}
+          <Button variant="text" color="grey" onClick={close} disabled={busy}>
             {t("finance-cancel")}
           </Button>
         </>
@@ -170,6 +276,29 @@ export function BillPanel({
     >
       <Box className="flex flex-col gap-5">
         <Problem problem={problem} />
+        {bill ? null : (
+          <Box component="ul" className="m-0 flex list-none flex-col gap-3 p-0">
+            <DocumentSlot
+              id="finance-bill-doc"
+              icon={<NiDocumentFull size="medium" className={TILE_TONE.primary.text} />}
+              title={t(SLOT_KEY[direction])}
+              hint={t("finance-doc-slot-hint")}
+              state={slot}
+              fileName={fileName}
+              primary={stage === "start"}
+              disabled={busy}
+              labels={{
+                send: t("prefill-send"),
+                again: t("prefill-again"),
+                sending: t("prefill-sending"),
+                reading: t("prefill-reading"),
+                read: t("prefill-read"),
+                failed: t("prefill-failed"),
+              }}
+              onFile={(picked) => void sendDocument(picked)}
+            />
+          </Box>
+        )}
         <TextField
           label={t("finance-bill-field-typed-line")}
           value={typed}
@@ -178,82 +307,91 @@ export function BillPanel({
           slotProps={{ htmlInput: { inputMode: "numeric", maxLength: 70 } }}
         />
         {lineNote ? <StateLine tone={lineNote.tone}>{lineNote.text}</StateLine> : null}
-        <TextField
-          label={t("finance-field-counterparty")}
-          value={counterparty}
-          onChange={(event) => setCounterparty(event.target.value)}
-        />
-        <TextField
-          select
-          label={t("finance-field-category")}
-          value={categoryId}
-          onChange={(event) => setCategoryId(event.target.value)}
-        >
-          {categories.map((category) => (
-            <MenuItem key={category.id} value={category.id}>
-              {category.name}
-            </MenuItem>
-          ))}
-        </TextField>
-        <Box className="grid gap-4 sm:grid-cols-2">
-          <CurrencyField
-            label={t("finance-bill-field-value")}
-            currencySymbol="R$"
-            value={value}
-            onChange={(event) => setValue(event.target.value)}
-          />
-          <TextField
-            type="date"
-            label={t("finance-bill-field-due")}
-            value={dueOn}
-            onChange={(event) => setDueOn(event.target.value)}
-            slotProps={{ inputLabel: { shrink: true } }}
-          />
-          <TextField
-            type="month"
-            label={t("finance-bill-field-competence")}
-            value={competence}
-            onChange={(event) => setCompetence(event.target.value)}
-            helperText={t("finance-bill-field-competence-help")}
-            slotProps={{ inputLabel: { shrink: true } }}
-          />
-          {bill ? null : (
+        {stage === "start" ? null : (
+          <>
+            <TextField
+              label={t("finance-field-counterparty")}
+              value={counterparty}
+              onChange={(event) => setCounterparty(event.target.value)}
+              helperText={readHelp("counterparty", counterparty)}
+            />
             <TextField
               select
-              label={t("finance-bill-field-repeat")}
-              value={repeat}
-              onChange={(event) => setRepeat(event.target.value)}
+              label={t("finance-field-category")}
+              value={categoryId}
+              onChange={(event) => setCategoryId(event.target.value)}
+              helperText={readHelp("category", categoryId)}
             >
-              {["1", "2", "3", "6", "12", "24"].map((months) => (
-                <MenuItem key={months} value={months}>
-                  {months === "1" ? t("finance-bill-once") : t("finance-bill-months", { count: Number(months) })}
+              {categories.map((category) => (
+                <MenuItem key={category.id} value={category.id}>
+                  {category.name}
                 </MenuItem>
               ))}
             </TextField>
-          )}
-        </Box>
-        {centers.length > 0 ? (
-          <TextField
-            select
-            label={t("finance-field-cost-center")}
-            value={centerId}
-            onChange={(event) => setCenterId(event.target.value)}
-          >
-            <MenuItem value="">{t("finance-none")}</MenuItem>
-            {centers.map((center) => (
-              <MenuItem key={center.id} value={center.id}>
-                {center.name}
-              </MenuItem>
-            ))}
-          </TextField>
-        ) : null}
-        <TextField
-          label={t("finance-field-description")}
-          value={description}
-          onChange={(event) => setDescription(event.target.value)}
-          multiline
-          minRows={2}
-        />
+            <Box className="grid gap-4 sm:grid-cols-2">
+              <CurrencyField
+                label={t("finance-bill-field-value")}
+                currencySymbol="R$"
+                value={value}
+                onChange={(event) => setValue(event.target.value)}
+                helperText={readHelp("value", value)}
+              />
+              <TextField
+                type="date"
+                label={t("finance-bill-field-due")}
+                value={dueOn}
+                onChange={(event) => setDueOn(event.target.value)}
+                helperText={readHelp("due", dueOn)}
+                slotProps={{ inputLabel: { shrink: true } }}
+              />
+              <TextField
+                type="month"
+                label={t("finance-bill-field-competence")}
+                value={competence}
+                onChange={(event) => setCompetence(event.target.value)}
+                helperText={readHelp("competence", competence) ?? t("finance-bill-field-competence-help")}
+                slotProps={{ inputLabel: { shrink: true } }}
+              />
+              {bill ? null : (
+                <TextField
+                  select
+                  label={t("finance-bill-field-repeat")}
+                  value={repeat}
+                  onChange={(event) => setRepeat(event.target.value)}
+                >
+                  {["1", "2", "3", "6", "12", "24"].map((months) => (
+                    <MenuItem key={months} value={months}>
+                      {months === "1" ? t("finance-bill-once") : t("finance-bill-months", { count: Number(months) })}
+                    </MenuItem>
+                  ))}
+                </TextField>
+              )}
+            </Box>
+            {centers.length > 0 ? (
+              <TextField
+                select
+                label={t("finance-field-cost-center")}
+                value={centerId}
+                onChange={(event) => setCenterId(event.target.value)}
+              >
+                <MenuItem value="">{t("finance-none")}</MenuItem>
+                {centers.map((center) => (
+                  <MenuItem key={center.id} value={center.id}>
+                    {center.name}
+                  </MenuItem>
+                ))}
+              </TextField>
+            ) : null}
+            <TextField
+              label={t("finance-field-description")}
+              value={description}
+              onChange={(event) => setDescription(event.target.value)}
+              helperText={readHelp("description", description)}
+              multiline
+              minRows={2}
+            />
+          </>
+        )}
       </Box>
     </SidePanel>
   );

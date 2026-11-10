@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 
-import { billInView, billNumbers, billOrder, billStanding, type FinanceBill } from "@/lib/finance/bills";
+import {
+  billInView,
+  billNumbers,
+  billOrder,
+  billStanding,
+  type FinanceBill,
+  readFinanceSeries,
+  receivableAging,
+} from "@/lib/finance/bills";
 
 const bill = (overrides: Partial<FinanceBill>): FinanceBill => ({
   id: "b",
@@ -71,5 +79,63 @@ describe("the bills to pay and to receive (0129)", () => {
       bill({ id: "sooner", dueOn: "2026-11-05" }),
     ].sort(billOrder);
     expect(list.map((item) => item.id)).toEqual(["sooner", "later", "paid"]);
+  });
+
+  it("ages what clients owe past its day, by band and by who owes the most", () => {
+    const owed = (counterparty: string, cents: number, dueOn: string, paidCents = 0): FinanceBill => ({
+      ...bill({ direction: "receive", counterparty, cents, dueOn }),
+      paidCents,
+    });
+    const aging = receivableAging(
+      [
+        owed("Maria Teste", 50000, "2026-11-01"),
+        owed("Maria Teste", 30000, "2026-08-01", 10000),
+        owed("João Teste", 90000, "2026-03-01"),
+        owed("Rui Teste", 20000, "2026-11-20"),
+        { ...bill({ direction: "pay", counterparty: "Energia Teste", cents: 18990, dueOn: "2026-10-01" }) },
+      ],
+      "2026-11-10",
+    );
+    expect(aging.count).toBe(3);
+    expect(aging.cents).toBe(50000 + 20000 + 90000);
+    expect(aging.bands.map((band) => [band.band, band.count])).toEqual([
+      ["1-30", 1],
+      ["31-60", 0],
+      ["61-90", 0],
+      ["91-180", 1],
+      ["180+", 1],
+    ]);
+    expect(aging.clients[0]).toEqual({ name: "João Teste", count: 1, cents: 90000 });
+    expect(aging.clients[1]).toEqual({ name: "Maria Teste", count: 2, cents: 70000 });
+  });
+
+  it("reads the firm's series as the database answers them, and leaves out what is not one", () => {
+    expect(
+      readFinanceSeries([
+        {
+          id: "s1",
+          direction: "pay",
+          counterparty: "Imobiliária Teste",
+          cents: 250000,
+          day: 10,
+          status: "active",
+          next_due_on: "2026-12-10",
+        },
+        { id: "s2", direction: "sideways", status: "active" },
+        null,
+      ]),
+    ).toEqual([
+      {
+        id: "s1",
+        direction: "pay",
+        counterparty: "Imobiliária Teste",
+        category: null,
+        cents: 250000,
+        day: 10,
+        status: "active",
+        stoppedReason: null,
+        nextDueOn: "2026-12-10",
+      },
+    ]);
   });
 });
