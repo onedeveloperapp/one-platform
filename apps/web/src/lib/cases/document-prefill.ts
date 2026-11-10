@@ -13,17 +13,19 @@ import { isValidCpf, onlyDigits } from "@flyee/fields";
 import { formatCnj, isValidCnj } from "@flyee/rules/cnj";
 
 /** What a person may send to start a registration, each read by its task. */
-export const PREFILL_READINGS = ["identity", "address_proof", "ticket", "filing_receipt"] as const;
+export const PREFILL_READINGS = ["identity", "address_proof", "ticket", "filing_receipt", "case_cost"] as const;
 export type PrefillReading = (typeof PREFILL_READINGS)[number];
 
 export const DOCUMENT_READING_TASK = "caso.documento.leitura";
 export const RECEIPT_READING_TASK = "caso.protocolo.leitura";
+export const COST_READING_TASK = "caso.custo.leitura";
 
 export const PREFILL_TASK: Record<PrefillReading, string> = {
   identity: DOCUMENT_READING_TASK,
   address_proof: DOCUMENT_READING_TASK,
   ticket: DOCUMENT_READING_TASK,
   filing_receipt: RECEIPT_READING_TASK,
+  case_cost: COST_READING_TASK,
 };
 
 /** What the model is told the document was said to be, in its own language. */
@@ -34,6 +36,8 @@ export const PREFILL_KIND_FOR_MODEL: Record<PrefillReading, string> = {
   ticket:
     "bilhete, cartão de embarque ou confirmação de reserva da passagem aérea, que pode vir como print de tela do aplicativo, do site ou do e-mail, ou como foto do documento impresso",
   filing_receipt: "recibo ou comprovante do protocolo de uma ação no sistema de um tribunal",
+  case_cost:
+    "comprovante de um custo do processo (guia de custas, recibo, nota fiscal, boleto ou comprovante de pagamento)",
 };
 
 /** The briefing the model reads beside the file: only what the document was said to be. */
@@ -254,6 +258,36 @@ export function receiptReadingOf(raw: unknown, today: string): ReceiptReading {
     unit: text(answer.orgao, 200),
     caseClass: text(answer.classe, 200),
     note: text(answer.observacoes, 300),
+  };
+}
+
+/** What ONE read of a cost's receipt (0162): only what passes the form's checks. */
+export type CostReading = {
+  /** It is the receipt of an expense, by the model's word. */
+  isCost: boolean;
+  legible: boolean;
+  description: string;
+  /** The value, in cents; 0 when nothing was read. */
+  cents: number;
+  /** The day it was paid (or issued), never one still to come. */
+  spentOn: string;
+  note: string;
+};
+
+/** The answer of `caso.custo.leitura`, read for the form of a cost. */
+export function costReadingOf(raw: unknown, today: string): CostReading {
+  const answer = record(raw);
+  const cents = typeof answer.valor_centavos === "number" ? Math.trunc(answer.valor_centavos) : 0;
+  const description = text(answer.descricao, 200);
+  return {
+    isCost: typeof answer.tipo === "string" && answer.tipo !== "outro",
+    legible: answer.legivel === true,
+    description: description.length >= 2 ? description : "",
+    cents: cents > 0 && cents <= 999_999_999_999 ? cents : 0,
+    spentOn: dayOf(answer.data, today),
+    note: text(answer.observacoes, 300)
+      .replace(/\s*[\u2013\u2014]\s*/g, ", ")
+      .replace(/!/g, "."),
   };
 }
 

@@ -318,7 +318,7 @@ export async function loadCase(id: string): Promise<CaseState> {
     supabase
       .from("case_fees")
       .select(
-        "case_id, entry_cents, installments, installment_cents, success_percent, success_min_cents, settlement_percent, source, bills_at",
+        "case_id, entry_cents, installments, installment_cents, success_percent, success_min_cents, settlement_percent, source, bills_at, monthly_cents, monthly_months, hearing_cents, appeal_cents, late_fine_percent, late_interest_percent",
       )
       .eq("case_id", id),
     supabase.rpc("firm_finance_access", { target_org: firm }),

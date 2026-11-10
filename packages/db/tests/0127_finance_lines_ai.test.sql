@@ -100,7 +100,7 @@ create temp table handed as
 select h.statement_id, public.finance_lines_to_categorize(h.statement_id, h.claim) as input from held h;
 select ok(
   (select count(*) = 2 from held)
-    and (select bool_and(jsonb_array_length(input -> 'lines') = 4 and jsonb_array_length(input -> 'categories') = 25)
+    and (select bool_and(jsonb_array_length(input -> 'lines') = 4 and jsonb_array_length(input -> 'categories') = 26)
          from handed)
     and (select (input -> 'lines' -> 0 ->> 'n') = '1' and (input -> 'lines' -> 0 ->> 'memo') = 'TARIFA PACOTE SERVICOS'
          from handed h join public.finance_statements s on s.id = h.statement_id where s.file_name = 'lima.ofx'),

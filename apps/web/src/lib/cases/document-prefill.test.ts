@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   caseFactsOf,
+  costReadingOf,
   documentReadingOf,
   flightOf,
   legComplete,
@@ -209,5 +210,52 @@ describe("the readings and their words", () => {
     ]) {
       expect(product[prefillErrorKey(code)], code).toBeTruthy();
     }
+  });
+});
+
+describe("what ONE read of a cost's receipt", () => {
+  it("keeps the value, the day and what was paid", () => {
+    expect(
+      costReadingOf(
+        {
+          tipo: "guia_custas",
+          legivel: true,
+          descricao: "  Custas   iniciais ",
+          valor_centavos: 18_734,
+          data: "2026-11-03",
+          observacoes: "",
+        },
+        "2026-11-10",
+      ),
+    ).toEqual({
+      isCost: true,
+      legible: true,
+      description: "Custas iniciais",
+      cents: 18_734,
+      spentOn: "2026-11-03",
+      note: "",
+    });
+  });
+
+  it("leaves out a day still to come, a value that is none, and says a paper that is no expense", () => {
+    const read = costReadingOf(
+      {
+        tipo: "outro",
+        legivel: true,
+        descricao: "x",
+        valor_centavos: -5,
+        data: "2026-12-01",
+        observacoes: "Uma procuração.",
+      },
+      "2026-11-10",
+    );
+    expect(read).toEqual({
+      isCost: false,
+      legible: true,
+      description: "",
+      cents: 0,
+      spentOn: "",
+      note: "Uma procuração.",
+    });
   });
 });

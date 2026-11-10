@@ -26,6 +26,8 @@ import { type FinanceReceipt, readReceipts } from "@/lib/finance/receipts";
 import { getMemberContext } from "@/lib/member/context";
 import { IMPERSONATION_MARKER_COOKIE } from "@flyee/auth";
 
+const today = () => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date());
+
 export type FinanceRegistrations = {
   accounts: FinanceAccountRow[];
   categories: FinanceCategory[];
@@ -59,6 +61,8 @@ export type FinanceState =
       receipts: FinanceReceipt[] | null;
       /** The firm's fee terms in force (0131), when the page lists them. */
       feeTerms: FeeTerms[] | null;
+      /** The name of the firm's fee contract in the library, which ONE reads the terms from (0160). */
+      feeContract: string | null;
       readLabel: string;
     }
   /** The books are not open yet: who decides for the firm opens them; anybody else is told so. */
@@ -115,7 +119,7 @@ export async function loadFinance(
       ? context.supabase
           .from("fee_terms")
           .select(
-            "id, module, incident, entry_cents, installments, installment_cents, success_percent, success_min_cents, settlement_percent, confirmed_at",
+            "id, module, incident, entry_cents, installments, installment_cents, success_percent, success_min_cents, settlement_percent, confirmed_at, monthly_cents, monthly_months, hearing_cents, appeal_cents, late_fine_percent, late_interest_percent",
           )
           .eq("org_id", context.firm.id)
           .is("archived_at", null)
@@ -131,6 +135,43 @@ export async function loadFinance(
   if (home === "error" || home === null || !registrations) return { kind: "error" };
   if ((withData.entries && !entries) || (withData.lines && !lines) || (withData.bills && !bills)) {
     return { kind: "error" };
+  }
+  // The firm's fee contract, which ONE reads the terms from (0160): the default first.
+  const feeContract = withData.terms
+    ? await context.supabase
+        .from("draft_templates")
+        .select("name")
+        .eq("org_id", context.firm.id)
+        .eq("document_kind", "contrato")
+        .order("is_default", { ascending: false })
+        .order("updated_at", { ascending: false })
+        .limit(1)
+        .maybeSingle()
+        .then(({ data }) => (data?.name ? String(data.name) : null))
+    : null;
+  // The fine and interest of the fee contract of each case with a fee receivable past its day (0159).
+  const lateFees = (bills ?? []).filter(
+    (bill) =>
+      bill.direction === "receive" &&
+      bill.caseId &&
+      bill.status === "open" &&
+      bill.dueOn < today() &&
+      (bill.source === "fees" || bill.source === "act"),
+  );
+  if (lateFees.length > 0) {
+    const { data } = await context.supabase
+      .from("case_fees")
+      .select("case_id, late_fine_percent, late_interest_percent")
+      .in("case_id", [...new Set(lateFees.map((bill) => bill.caseId as string))]);
+    const terms = new Map(
+      ((data ?? []) as { case_id: string; late_fine_percent: number | null; late_interest_percent: number | null }[])
+        .filter((row) => Number(row.late_fine_percent ?? 0) > 0 || Number(row.late_interest_percent ?? 0) > 0)
+        .map((row) => [
+          row.case_id,
+          { finePercent: Number(row.late_fine_percent ?? 0), interestPercent: Number(row.late_interest_percent ?? 0) },
+        ]),
+    );
+    for (const bill of lateFees) bill.lateTerms = terms.get(bill.caseId as string) ?? null;
   }
   // The receipts of the receivables of a case that were received, in part or whole (0152): read once the bills are.
   const received = (bills ?? []).filter((bill) => bill.direction === "receive" && bill.caseId && bill.paidCents > 0);
@@ -159,6 +200,7 @@ export async function loadFinance(
     series,
     receipts,
     feeTerms,
+    feeContract,
     readLabel: momentLabel(new Date().toISOString(), context.profile.timezone),
   };
 }

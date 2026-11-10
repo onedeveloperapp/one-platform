@@ -423,6 +423,10 @@ insert into public.case_fees (case_id, org_id, success_percent, source) values
 insert into public.case_costs (org_id, case_id, description, cents, spent_on, paid_by) values
   ('b1000000-0000-4000-8000-00000000000a', 'a3000000-0000-4000-8000-00000000000a', 'Custas iniciais', 10000, date '2026-11-01', 'firm'),
   ('b1000000-0000-4000-8000-00000000000b', 'a3000000-0000-4000-8000-00000000000b', 'Custas iniciais', 10000, date '2026-11-01', 'firm');
+-- A split of each firm's case's fees with another lawyer (0159): read only by who reads the books.
+insert into public.case_fee_splits (org_id, case_id, name, document, bar_registration, percent) values
+  ('b1000000-0000-4000-8000-00000000000a', 'a3000000-0000-4000-8000-00000000000a', 'Carlos Teste', '52998224725', 'GO 12345', 20),
+  ('b1000000-0000-4000-8000-00000000000b', 'a3000000-0000-4000-8000-00000000000b', 'Carlos Teste', '52998224725', 'GO 12345', 20);
 -- The estimates of ONE's work of each firm (0120): read only by who decides for it.
 insert into public.firm_one_work_minutes (org_id, kind, minutes) values
   ('b1000000-0000-4000-8000-00000000000a', 'texto_peca', 45),
@@ -604,7 +608,7 @@ select is(
    from pg_temp.firm_rows('b1000000-0000-4000-8000-00000000000a') where visible > 0),
   array[
     'admin_complaints', 'agenda_digests', 'agenda_preferences', 'ai_runs', 'approvals', 'audit_events', 'billing_operations', 'case_advances', 'case_costs', 'case_documents',
-    'case_draft_citations', 'case_draft_versions', 'case_drafts', 'case_events', 'case_fees', 'case_interview_answers', 'case_interviews',
+    'case_draft_citations', 'case_draft_versions', 'case_drafts', 'case_events', 'case_fee_splits', 'case_fees', 'case_interview_answers', 'case_interviews',
     'case_papers', 'case_parties', 'case_statements',
     'case_weather', 'cases', 'certificate_inventory', 'civil_court_answers', 'client_consents', 'client_links', 'client_notices', 'client_payment_accounts', 'closing_goals', 'connections',
     'consent_acceptances',
@@ -824,7 +828,7 @@ select is(
    from pg_temp.firm_rows('b1000000-0000-4000-8000-00000000000b') where visible > 0),
   array[
     'admin_complaints', 'agenda_digests', 'agenda_preferences', 'ai_runs', 'approvals', 'audit_events', 'billing_operations', 'case_advances', 'case_costs', 'case_documents',
-    'case_draft_citations', 'case_draft_versions', 'case_drafts', 'case_events', 'case_fees', 'case_interview_answers', 'case_interviews',
+    'case_draft_citations', 'case_draft_versions', 'case_drafts', 'case_events', 'case_fee_splits', 'case_fees', 'case_interview_answers', 'case_interviews',
     'case_papers', 'case_parties', 'case_statements',
     'case_weather', 'cases', 'certificate_inventory', 'civil_court_answers', 'client_consents', 'client_links', 'client_notices', 'client_payment_accounts', 'closing_goals', 'connections',
     'consent_acceptances',

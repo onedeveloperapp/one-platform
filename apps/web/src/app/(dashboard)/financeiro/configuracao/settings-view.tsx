@@ -296,7 +296,12 @@ function Settings({ state }: { state: Ready }) {
         </CardContent>
       </Card>
 
-      <FeeTermsCard terms={state.feeTerms ?? []} decides={state.decides && !state.supportVisit} factor={state.factor} />
+      <FeeTermsCard
+        terms={state.feeTerms ?? []}
+        decides={state.decides && !state.supportVisit}
+        factor={state.factor}
+        contract={state.feeContract ?? null}
+      />
 
       <Card component="section" aria-labelledby="finance-settings-money-path">
         <CardContent className="flex flex-col gap-4">

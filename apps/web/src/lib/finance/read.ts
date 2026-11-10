@@ -329,6 +329,7 @@ export async function readFinanceBills(
         discountCents: payments.reduce((sum, payment) => sum + Number(payment.discount_cents ?? 0), 0),
         fileId: (row.file_id as string | null) ?? null,
         seriesByOne: row.source === "series" && row.by_one === true,
+        source: (row.source as string | null) ?? null,
       },
     ];
   });

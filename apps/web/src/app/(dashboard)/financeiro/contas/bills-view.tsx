@@ -27,6 +27,7 @@ import NiMoney from "@/icons/nexture/ni-money";
 import NiMoneyBag from "@/icons/nexture/ni-money-bag";
 import NiReceipt from "@/icons/nexture/ni-receipt";
 import NiRefresh from "@/icons/nexture/ni-refresh";
+import { lateCharge } from "@/lib/cases/fees";
 import { closeFinanceBill, requestFinanceReceipt, stopFinanceSeries } from "@/lib/finance/actions";
 import {
   type AgingBand,
@@ -155,14 +156,35 @@ export default function BillsView({ state }: { state: FinanceState }) {
         );
       case "closed":
         return <StateLine tone="info">{t(CLOSED_KEY[standing.status], { reason: bill.closedReason ?? "" })}</StateLine>;
-      case "late":
+      case "late": {
+        const charge = bill.lateTerms
+          ? lateCharge(
+              bill.cents - bill.paidCents,
+              bill.dueOn,
+              day,
+              bill.lateTerms.finePercent,
+              bill.lateTerms.interestPercent,
+            )
+          : null;
         return (
-          <StateLine tone="attention">
-            {t(WAY_KEY[bill.direction].late, {
-              count: standing.days,
-            })}
-          </StateLine>
+          <>
+            <StateLine tone="attention">
+              {t(WAY_KEY[bill.direction].late, {
+                count: standing.days,
+              })}
+            </StateLine>
+            {charge && charge.totalCents > bill.cents - bill.paidCents ? (
+              <StateLine tone="info">
+                {t("finance-bill-late-charge", {
+                  value: money(charge.totalCents),
+                  fine: money(charge.fineCents),
+                  interest: money(charge.interestCents),
+                })}
+              </StateLine>
+            ) : null}
+          </>
         );
+      }
       case "today":
         return <StateLine tone="attention">{t("finance-bill-today")}</StateLine>;
       case "soon":

@@ -34,6 +34,10 @@ export type FinanceBill = {
   fileId?: string | null;
   /** A bill ONE wrote for a series it made (0151). */
   seriesByOne?: boolean;
+  /** Where it came from: the fees of a case and an act of it carry the contract's late charges (0159). */
+  source?: string | null;
+  /** The fine and the monthly interest of the case's fee contract, on a fee receivable paid late (0159). */
+  lateTerms?: { finePercent: number; interestPercent: number } | null;
 };
 
 export type BillStanding =
