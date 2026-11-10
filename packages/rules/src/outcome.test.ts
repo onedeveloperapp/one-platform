@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { againstClient, endsLawsuit, movementFact, readJudgment, readRelease } from "./outcome.ts";
+import { againstClient, certifiesFinal, endsLawsuit, movementFact, readJudgment, readRelease } from "./outcome.ts";
 
 describe("what a lawsuit came to, read by rule", () => {
   it("reads the facts a court's movements say", () => {
@@ -66,5 +66,26 @@ describe("what a lawsuit came to, read by rule", () => {
     );
     assert.equal(readRelease("Recolha a parte as custas de R$ 300,00 no prazo de 5 dias."), null);
     assert.equal(readRelease("Expeça-se alvará eletrônico em favor da parte autora."), null);
+  });
+
+  it("reads the court's certificate that the judgment became final, never the order of what follows it", () => {
+    for (const certified of [
+      "CERTIDÃO. Certifico, para os devidos fins, que a sentença proferida nos autos transitou em julgado em 10/11/2026.",
+      "Certifico que o acórdão transitou em julgado.",
+      "CERTIDÃO DE TRÂNSITO EM JULGADO. Nada mais.",
+      "Sentença transitada em julgado em 03/11/2026. Intime-se a ré para pagamento.",
+      "Certifico que a decisão transitada em julgado não foi objeto de recurso.",
+    ]) {
+      assert.equal(certifiesFinal(certified), true, certified);
+    }
+    for (const notYet of [
+      "SENTENÇA. Julgo procedente o pedido. Após o trânsito em julgado, arquivem-se os autos.",
+      "Com o trânsito em julgado, intime-se a parte autora.",
+      "Certifico que a sentença ainda não transitou em julgado, pois há recurso pendente.",
+      "Intime-se a parte autora para se manifestar.",
+      "",
+    ]) {
+      assert.equal(certifiesFinal(notYet), false, notYet);
+    }
   });
 });

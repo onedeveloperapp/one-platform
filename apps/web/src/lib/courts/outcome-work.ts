@@ -2,14 +2,16 @@ import "server-only";
 
 import type { Sweep } from "@/lib/jobs/schedule";
 import { soon } from "@/lib/jobs/soon";
+import { plainText } from "@/lib/publications/publications";
 import { createServiceClient } from "@flyee/auth/service";
-import { movementFact, readJudgment, readRelease } from "@flyee/rules/outcome";
+import { certifiesFinal, movementFact, readJudgment, readRelease } from "@flyee/rules/outcome";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 /**
  * ONE reads what each lawsuit came to (phase 6, migration 0130): every movement of the court not read yet is read by
  * the rule `resultado-v1` (`@flyee/rules/outcome`), and every publication the firm's triage says is the judgment, or a
- * payment, is read for its result and its value; what the rule reads is recorded by the database as a fact of the
+ * payment, is read for its result and its value, and every other publication for the certificate that the judgment
+ * became final (0142); what the rule reads is recorded by the database as a fact of the
  * lawsuit, as ONE's (or waiting for a person where the firm keeps the result to a person). Then the cases ready are
  * closed by ONE where the firm lets it. Only ids and the rule's reading leave this file; the court's words the fact
  * keeps are the court's.
@@ -101,6 +103,32 @@ export async function outcomesRound(service: SupabaseClient, until: number): Pro
       }
       if (rows.length < BATCH) break;
     }
+  }
+  // The court's certificate that the judgment became final, published apart from it and triaged as anything but the
+  // judgment or a payment (0142): each triaged publication read once more, for that alone.
+  while (Date.now() < until) {
+    const { data, error } = await service
+      .from("publications")
+      .select("id, category, judgment, body")
+      .is("final_read_at", null)
+      .not("category", "is", null)
+      .order("captured_at", { ascending: true })
+      .limit(BATCH);
+    if (error) throw new Error(`publications to read for the trânsito failed: ${error.code ?? "unknown"}`);
+    const rows = (data ?? []) as { id: string; category: string; judgment: boolean | null; body: string | null }[];
+    for (const row of rows) {
+      const read = row.category !== "pagamento" && !(row.category === "decisao" && row.judgment === true);
+      const text = read ? plainText(row.body ?? "") : "";
+      const { data: answer, error: recordError } = await service.rpc("record_publication_final", {
+        target_publication: row.id,
+        target_final: read && certifiesFinal(text),
+        target_words: read ? text.slice(0, 600) : null,
+      });
+      if (recordError) throw new Error(`record_publication_final failed: ${recordError.code ?? "unknown"}`);
+      counts.publications += 1;
+      if ((answer as { code?: string } | null)?.code === "recorded") counts.recorded += 1;
+    }
+    if (rows.length < BATCH) break;
   }
   const { data: closed, error: closeError } = await service.rpc("close_cases_by_one", { target_limit: 50 });
   if (closeError) throw new Error(`close_cases_by_one failed: ${closeError.code ?? "unknown"}`);

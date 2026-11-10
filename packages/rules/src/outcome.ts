@@ -72,6 +72,24 @@ export function movementFact(title: string, detail: string | null = null): Movem
   return null;
 }
 
+/**
+ * Whether a publication's words certify that the judgment became final: the court's certificate, published apart from
+ * the judgment and triaged as anything but the judgment ("Certifico que a sentença transitou em julgado em ..."). A
+ * certification or the past tense only: never the order of what follows it ("após o trânsito em julgado, arquivem-se"),
+ * which every judgment writes, nor a denial ("ainda não transitou em julgado").
+ */
+export function certifiesFinal(text: string): boolean {
+  const words = plain(text);
+  if (!words) return false;
+  if (/\bnao(?: \w+){0,3} transit(?:ou|ad[oa]s?)\b/.test(words)) return false;
+  return (
+    /certific\w*[^.;]{0,240}transit(?:ou|ad[oa]s?) em julgado/.test(words) ||
+    /certidao de transito em julgado/.test(words) ||
+    /\btransitou em julgado\b/.test(words) ||
+    /\btransitad[oa]s? em julgado (?:em|no dia|desde) \d/.test(words)
+  );
+}
+
 /** The result a judgment's words say: denied, granted in part, or granted. */
 function judgmentResultOf(words: string): JudgmentResult | null {
   if (/\bimprocedente/.test(words)) return "improcedente";
@@ -108,8 +126,10 @@ export function readJudgment(text: string): JudgmentReading | null {
   const lowered = plain(raw);
   if (!lowered) return null;
   // The operative part: from the last "ante o exposto" (or its kin), else the whole text.
-  const marks = [...lowered.matchAll(/ante o exposto|isto posto|diante do exposto|pelo exposto|posto isso|em face do exposto/g)];
-  const from = marks.length ? marks[marks.length - 1].index ?? 0 : 0;
+  const marks = [
+    ...lowered.matchAll(/ante o exposto|isto posto|diante do exposto|pelo exposto|posto isso|em face do exposto/g),
+  ];
+  const from = marks.length ? (marks[marks.length - 1].index ?? 0) : 0;
   const operative = lowered.slice(from);
   const operativeRaw = raw.slice(from);
   if (/homolog\w* (o |por sentenca o |por sentenca )?acordo/.test(operative)) {
@@ -127,7 +147,8 @@ export function readJudgment(text: string): JudgmentReading | null {
     if (condemnation >= 0) {
       const after = operativeRaw.slice(condemnation, condemnation + 400);
       cents = centsOf(after);
-      perClaimant = cents !== null && /(por|para cada|a cada) (autor|autora|parte autora|requerente)/i.test(plain(after));
+      perClaimant =
+        cents !== null && /(por|para cada|a cada) (autor|autora|parte autora|requerente)/i.test(plain(after));
     }
   }
   const start = Math.max((verb.index ?? 0) - 40, 0);

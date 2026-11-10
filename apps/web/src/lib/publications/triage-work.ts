@@ -1,6 +1,7 @@
 import "server-only";
 
 import { providerReadiness, runFirmTask } from "@/lib/ai/executor";
+import { settleDeadlineCounts } from "@/lib/deadlines/count-work";
 import { soon } from "@/lib/jobs/soon";
 import { settleFirmNotices } from "@/lib/notices/work";
 import { tellPublicationAcks } from "@/lib/publications/ack-notices";
@@ -125,6 +126,8 @@ async function judgeTriagedDecision(service: SupabaseClient, row: PublicationToT
     target_judgment: reading,
   });
   if (error) throw new Error(`record_publication_judgment_rule failed: ${error.message}`);
+  // A judgment proposes the terms the law gives it (0141): counted right after, so their day shows at once.
+  if (reading) settleDeadlineCounts();
 }
 
 /**

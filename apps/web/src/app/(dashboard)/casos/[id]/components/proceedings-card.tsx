@@ -85,6 +85,10 @@ const systemLabel = (t: (key: string) => string, system: string | null) =>
  * records what was decided. Under each lawsuit filed, its course as the court
  * shows it (`CourtCourse`).
  */
+/** A city or a comarca as one name, whatever its accents and capitals. */
+const plainName = (value: string) =>
+  value.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase().replace(/\s+/g, " ").trim();
+
 export default function ProceedingsCard({
   state,
   writable,
@@ -195,6 +199,20 @@ export default function ProceedingsCard({
               </Box>
               <StatusChip tone={STATUS_TONE[proceeding.status]} label={t(STATUS_KEY[proceeding.status])} />
             </Box>
+            {proceeding.status === "planned" && proceeding.comarca ? (
+              proceeding.comarcaChecked ? (
+                proceeding.forumCity && plainName(proceeding.forumCity) !== plainName(proceeding.comarca) ? (
+                  <Typography variant="body2" className="text-text-secondary">
+                    {t("case-proceeding-comarca-of", { city: proceeding.forumCity, comarca: proceeding.comarca })}
+                  </Typography>
+                ) : null
+              ) : (
+                // The platform's table does not know this city in this court (0145): a person checks it before filing.
+                <StateLine tone="attention">
+                  {t("case-proceeding-comarca-unchecked", { comarca: proceeding.comarca })}
+                </StateLine>
+              )
+            ) : null}
             {proceeding.cnj && (
               <Typography variant="body2" className="font-mono">
                 {[

@@ -119,6 +119,7 @@ export function DeadlineAssumptions({ assumptions }: { assumptions: readonly Dea
       case "partial_start":
         return t(ASSUMPTION_KEY[assumption.code], { day: day(assumption.day), label: assumption.label });
       case "start_not_business":
+      case "portal_first":
         return t(ASSUMPTION_KEY[assumption.code], { day: day(assumption.day) });
       default:
         return t(ASSUMPTION_KEY[assumption.code]);

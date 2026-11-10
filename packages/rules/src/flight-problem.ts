@@ -1,6 +1,6 @@
 /**
  * Whether a trip ONE follows has a problem to tell its passenger
- * (`flight-problem-v2`), and what the airline owes them for it.
+ * (`flight-problem-v3`), and what the airline owes them for it.
  *
  * A trip is its legs, each in the local times of its airports, as a source
  * says them now (the test chat's tools, FlightAware), in the order they fly
@@ -23,15 +23,18 @@
  * never across zones.
  *
  * What the airline owes is ANAC's, by the time the passenger waits
- * (Resolução 400, art. 27): from one hour, the means to communicate; from
- * two, food; from four, lodging when a night must be spent, with the way to
- * it. A cancellation, a delay of four hours or more and a change the
+ * (Resolução 400, art. 27, in the words of Resolução 813/2026, in force from
+ * 26/10/2026): from two hours, food; from four, lodging when a night must be
+ * spent, with the way to it. The means to communicate from one hour (its
+ * inciso I) were revoked then, so v3 no longer names them: ONE tells of
+ * flights as they happen, all after that day. A cancellation, a delay of
+ * four hours or more and a change the
  * passenger does not accept give the choice of another flight, the refund
  * or another way to travel (art. 21 and art. 12). The rule names what is
  * owed; the words are the app's.
  */
 
-export const FLIGHT_PROBLEM_RULE = "flight-problem-v2";
+export const FLIGHT_PROBLEM_RULE = "flight-problem-v3";
 
 /** A leg of a trip as a source says it now. Times are local (`2026-10-22T08:10:00`), at the leg's own airports. */
 export type WatchedLeg = {
@@ -60,7 +63,7 @@ export type FlightProblem = {
 };
 
 /** What ANAC has the airline give, each said once. */
-export type Assistance = "rebooking_or_refund" | "communication" | "food" | "lodging";
+export type Assistance = "rebooking_or_refund" | "food" | "lodging";
 
 /** Minutes between two local times of the same airport; null when either is not a time. */
 export function minutesBetween(earlier: string, later: string): number | null {
@@ -132,11 +135,10 @@ export function flightProblem(legs: readonly WatchedLeg[], options: { delayMinut
  */
 export function assistanceDue(problem: FlightProblem): Assistance[] {
   if (problem.kind === "changed") return ["rebooking_or_refund"];
-  if (problem.kind === "cancelled") return ["rebooking_or_refund", "communication", "food", "lodging"];
+  if (problem.kind === "cancelled") return ["rebooking_or_refund", "food", "lodging"];
   const wait = problem.delayMinutes ?? 0;
   const owed: Assistance[] = [];
   if (wait >= 240) owed.push("rebooking_or_refund");
-  if (wait >= 60) owed.push("communication");
   if (wait >= 120) owed.push("food");
   if (wait >= 240) owed.push("lodging");
   return owed;

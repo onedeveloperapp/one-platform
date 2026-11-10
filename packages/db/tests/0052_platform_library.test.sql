@@ -54,9 +54,9 @@ $$ select t.id from public.draft_templates t where t.org_id is null and t.is_def
 -- ---------- What the platform ships ----------
 
 select ok(
-  (select count(*) = 22 and bool_and(status = 'verified' and source_url like 'https://%' and quote is not null)
+  (select count(*) = 23 and bool_and(status = 'verified' and source_url like 'https://%' and quote is not null)
    from public.legal_sources where org_id is null),
-  'the platform ships 22 sources, each checked at an official address and quoted'
+  'the platform ships 23 sources, each checked at an official address and quoted'
 );
 select ok(
   (select key = 'lei::8078#14' and citation = 'art. 14 da Lei nº 8.078'
@@ -113,8 +113,8 @@ reset role;
 
 select ok(
   -- The two pieces and the power of attorney, since 0123 the declaration of residence, since 0125 of hardship.
-  (select (payload ->> 'sources')::int = 22 and (payload ->> 'models')::int = 5 from res where name = 'a_reads')
-    and (select (payload ->> 'sources')::int = 22 and (payload ->> 'models')::int = 5 from res where name = 'b_reads'),
+  (select (payload ->> 'sources')::int = 23 and (payload ->> 'models')::int = 5 from res where name = 'a_reads')
+    and (select (payload ->> 'sources')::int = 23 and (payload ->> 'models')::int = 5 from res where name = 'b_reads'),
   'both firms read the sources and the models of the platform'
 );
 select ok(
@@ -205,7 +205,7 @@ insert into res values ('work', (select to_jsonb(w) from public.case_draft_to_wo
 reset role;
 
 select ok(
-  (select jsonb_array_length(payload -> 'library') = 22
+  (select jsonb_array_length(payload -> 'library') = 23
           and payload -> 'library' @> '[{"chave": "tema:STF:1240", "como_citar": "Tema 1.240 do STF"}]'::jsonb
           and payload -> 'library' @> '[{"chave": "lei::8078#14", "titulo": "Responsabilidade objetiva, como o escritório a conferiu"}]'::jsonb
           and payload ->> 'template' like 'EXCELENTÍSSIMO(A)%'

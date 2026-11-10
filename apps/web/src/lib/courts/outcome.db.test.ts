@@ -22,6 +22,8 @@ const ANA = "ae960000-0000-4000-8000-000000000001";
 const FIRM = "be960000-0000-4000-8000-00000000000a";
 const CASE = "ce960000-0000-4000-8000-000000000001";
 const LAWSUIT = "fe960000-0000-4000-8000-000000000001";
+const CASE_2 = "ce960000-0000-4000-8000-000000000002";
+const LAWSUIT_2 = "fe960000-0000-4000-8000-000000000002";
 
 describe.skipIf(!DB_URL)("what a lawsuit came to", () => {
   beforeAll(async () => {
@@ -52,6 +54,19 @@ describe.skipIf(!DB_URL)("what a lawsuit came to", () => {
         ('${FIRM}', 'resultado-app-alvara', 'TJGO', '10003012720998090100', current_date - 5, 'Intimação',
          'Expeça-se alvará eletrônico em favor da parte autora no valor de R$ 10.000,00, para levantamento do valor depositado pela ré.',
          '${LAWSUIT}', '${CASE}', 'pagamento', now(), null);
+      -- A second lawsuit whose trânsito reaches the firm only as a published certificate, triaged as a notice (0142).
+      insert into public.cases (id, org_id, seq, module, incident, status) values
+        ('${CASE_2}', '${FIRM}', 2, 'direito-do-passageiro', 'cancellation', 'filed');
+      insert into public.proceedings (id, org_id, case_id, kind, court, status, cnj, filed_at) values
+        ('${LAWSUIT_2}', '${FIRM}', '${CASE_2}', 'juizado', 'TJGO', 'filed', '10003021220998090100', '2026-09-01');
+      insert into public.publications (org_id, hash, court, cnj, available_on, kind, body, proceeding_id, case_id, category, triaged_at, judgment)
+      values
+        ('${FIRM}', 'resultado-app-ordem', 'TJGO', '10003021220998090100', current_date - 8, 'Intimação',
+         'Intimem-se as partes. Após o trânsito em julgado, arquivem-se os autos.',
+         '${LAWSUIT_2}', '${CASE_2}', 'ciencia', now(), null),
+        ('${FIRM}', 'resultado-app-certidao', 'TJGO', '10003021220998090100', current_date - 3, 'Intimação',
+         '<p>CERTIDÃO</p><p>Certifico, para os devidos fins, que a sentença proferida nestes autos <b>transitou em julgado</b>.</p>',
+         '${LAWSUIT_2}', '${CASE_2}', 'ciencia', now(), null);
     `);
   }, 120_000);
 
@@ -82,6 +97,25 @@ describe.skipIf(!DB_URL)("what a lawsuit came to", () => {
     // Read again, nothing is recorded twice.
     const again = await outcomesRound(backend as never, Date.now() + 20_000);
     expect(again.recorded).toBe(0);
+  });
+
+  it("reads the certificate that the judgment became final where it is only published, never the order after it", async () => {
+    const { outcomesRound } = await import("@/lib/courts/outcome-work");
+    await outcomesRound(backend as never, Date.now() + 20_000);
+    const facts = (await sql.unsafe(
+      `select f.kind, f.happened_on = current_date - 3 as on_its_day, f.by_one, p.hash
+       from public.lawsuit_facts f left join public.publications p on p.id = f.publication_id
+       where f.case_id = $1`,
+      [CASE_2],
+    )) as Row[];
+    expect(facts.map((fact) => [fact.kind, fact.on_its_day, fact.by_one, fact.hash])).toEqual([
+      ["transito", true, true, "resultado-app-certidao"],
+    ]);
+    const [unread] = (await sql.unsafe(
+      `select count(*)::int as n from public.publications where case_id = $1 and final_read_at is null`,
+      [CASE_2],
+    )) as Row[];
+    expect(unread.n).toBe(0);
   });
 
   it("closes the case once the release was received and the lawsuit archived definitively", async () => {

@@ -78,7 +78,6 @@ export function whatWords(kind: FlightProblem["kind"], delayMinutes: number | nu
 }
 
 const OWED: Record<Exclude<Assistance, "rebooking_or_refund">, string> = {
-  communication: "meios de comunicação",
   food: "alimentação",
   lodging: "hospedagem, se for preciso passar a noite, com o transporte até ela",
 };

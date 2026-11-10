@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { isDjenCaptureOn } from "@/lib/courts/djen";
+import { settleDeadlineCounts } from "@/lib/deadlines/count-work";
 import { getMemberContext } from "@/lib/member/context";
 import { settleFirmNotices } from "@/lib/notices/work";
 import { queueFirmCapture } from "@/lib/publications/capture";
@@ -92,6 +93,8 @@ export async function triagePublication(input: {
   // they say nothing clear (the owner, 2026-11-05; migration 0096).
   if (input.category === "decisao") {
     const judgment = await judgeDecision(context.supabase, input.publicationId);
+    // A judgment proposes the terms the law gives it (0141): counted right after, so its day shows at once.
+    if (judgment === true) settleDeadlineCounts();
     return { ...result, reading: null, judgment };
   }
   const kind = readingKindOf(input.category);
@@ -170,6 +173,8 @@ export async function setPublicationJudgment(publicationId: string, judgment: bo
   if (result.ok) {
     refresh();
     revalidatePath("/casos");
+    // A judgment proposes the terms the law gives it (0141): counted right after, so their day shows at once.
+    if (judgment) settleDeadlineCounts();
   }
   return result;
 }

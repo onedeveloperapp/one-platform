@@ -30,13 +30,21 @@ import { computeDeadline, DEADLINE_RULE_VERSION } from "@flyee/rules/deadlines";
 
 const ROOT = path.resolve(__dirname, "../../../../..");
 const MIGRATION = fs.readFileSync(path.join(ROOT, "packages/db/migrations/0034_deadlines.sql"), "utf8");
+// Every migration in order: a check a later one replaced (0144 the assumptions') is read where it was last written.
+const MIGRATIONS_DIR = path.join(ROOT, "packages/db/migrations");
+const ALL_MIGRATIONS = fs
+  .readdirSync(MIGRATIONS_DIR)
+  .filter((name) => name.endsWith(".sql"))
+  .sort()
+  .map((name) => fs.readFileSync(path.join(MIGRATIONS_DIR, name), "utf8"))
+  .join("\n");
 const product = messages.product as Record<string, string>;
 
-/** The values a check constraint of migration 0034 allows, in its order. */
+/** The values a check constraint of the deadlines allows, in its order, as the latest migration that wrote it says. */
 function allowed(constraint: string): string[] {
-  const start = MIGRATION.indexOf(`constraint ${constraint} check`);
+  const start = ALL_MIGRATIONS.lastIndexOf(`constraint ${constraint} check`);
   expect(start, constraint).toBeGreaterThan(-1);
-  const list = /(?:in \(|array\[)([^)\]]+)[)\]]/.exec(MIGRATION.slice(start));
+  const list = /(?:in \(|array\[)([^)\]]+)[)\]]/.exec(ALL_MIGRATIONS.slice(start));
   return [...(list?.[1] ?? "").matchAll(/'([a-z0-9_]+)'/g)].map((match) => match[1]);
 }
 
@@ -202,6 +210,7 @@ describe("the input of the rule from what the database hands over", () => {
       on: "2026-10-10",
       days: 5,
       counting: "business",
+      portalOn: null,
       place: { proceedingKind: "comum", system: "projudi", comarca: "Goiânia" },
       calendar: {
         years: [{ year: 2026, allComarcas: true, comarcas: [], checkedOn: null }],

@@ -1,7 +1,7 @@
 import { readDay } from "@flyee/rules/person";
 
 /**
- * The deadline of a procedural act (rule `prazo-v1`): the day a term set in
+ * The deadline of a procedural act (rule `prazo-v2`): the day a term set in
  * days runs out, counted the way the Código de Processo Civil counts it
  * (Lei nº 13.105/2015) over the forensic calendar of the court the lawsuit
  * is in. The small-claims court counts the same way since Lei nº
@@ -17,6 +17,13 @@ import { readDay } from "@flyee/rules/person";
  *     count starts on the first business day after the publication (§ 3º;
  *     Resolução CNJ nº 455/2022, art. 11, § 3º, as Resolução CNJ nº
  *     569/2024 wrote it, from 16 May 2025 on).
+ *   - When the same act was also intimated in the court's own system, the
+ *     intimation is made on the day the lawyer read it, the next business
+ *     day when read on a day with none, or on the tenth day when unread
+ *     (Lei nº 11.419/2006, art. 5º, §§ 1º to 3º), and the person gives that
+ *     day. The term then runs from the earlier of the two: which one prevails
+ *     is the STJ's Tema 1.180, whose thesis the rule does not take as settled,
+ *     and an earlier start never puts a deadline later than it is.
  *   - Terms in business days do not run from 20 December to 20 January,
  *     both included (art. 220), in every court of the country, the
  *     small-claims courts too (Resolução CNJ nº 244/2016, art. 3º), nor on
@@ -44,7 +51,12 @@ import { readDay } from "@flyee/rules/person";
  * firm confirms every deadline.
  */
 
-export const DEADLINE_RULE_VERSION = "prazo-v1";
+/**
+ * `prazo-v2` (2026-11-10) also takes the day the same act was intimated in the court's own system, when a person gave
+ * it, and counts from the earlier of the two; `prazo-v1` knew only the DJEN's. A count keeps the version it was made by.
+ */
+export const DEADLINE_RULE_VERSION = "prazo-v2";
+export type DeadlineRuleVersion = "prazo-v1" | typeof DEADLINE_RULE_VERSION;
 
 export const DEADLINE_COUNTINGS = ["business", "calendar"] as const;
 export type DeadlineCounting = (typeof DEADLINE_COUNTINGS)[number];
@@ -121,6 +133,11 @@ export interface DeadlineInput {
   counting: DeadlineCounting;
   place: DeadlinePlace;
   calendar: CourtCalendar;
+  /**
+   * For a publication: the day the lawyer was intimated of the same act in the court's own system (read, or the
+   * tenth day when unread), when a person said so; the term runs from it when it came first.
+   */
+  portalOn?: string | null;
 }
 
 /**
@@ -157,11 +174,13 @@ export type DeadlineAssumption =
   | { code: "start_not_business"; day: string }
   /** Made available before the DJEN's publication was what terms run from. */
   | { code: "djen_before_rule" }
+  /** The lawyer was intimated in the court's own system before the DJEN published it: the term runs from that day. */
+  | { code: "portal_first"; day: string }
   /** A term in calendar days ran through a suspension of procedural terms: a procedural one stops there, and ends later. */
   | { code: "calendar_suspension" };
 
 export interface DeadlineResult {
-  rule: typeof DEADLINE_RULE_VERSION;
+  rule: DeadlineRuleVersion;
   trigger: DeadlineTrigger;
   /** The day the input named: the day a publication was made available, or the day given. */
   triggerDay: string;
@@ -402,6 +421,22 @@ export function computeDeadline(input: DeadlineInput): DeadlineOutcome {
     from = published;
     publishedOn = dayText(published);
     if (input.on < DJEN_RULE_FROM) assumptions.push({ code: "djen_before_rule" });
+    // The same act intimated in the court's own system: made on the day the person gives, or on the next business
+    // day when that day had none (Lei nº 11.419/2006, art. 5º, § 2º). Where it came first, the term runs from it.
+    const portalDay = input.portalOn ?? null;
+    const portal =
+      portalDay && portalDay >= DEADLINE_FIRST_DAY && portalDay <= DEADLINE_LAST_DAY ? dayNumber(portalDay) : null;
+    if (portalDay && portal !== null) {
+      let made = portal;
+      for (let guard = 0; !facts(made).business; guard += 1) {
+        if (guard > 60) return failed("too_long");
+        made += 1;
+      }
+      if (made < from) {
+        from = made;
+        assumptions.push({ code: "portal_first", day: portalDay });
+      }
+    }
   } else if (!facts(trigger).business) {
     assumptions.push({ code: "start_not_business", day: input.on });
   }
@@ -533,7 +568,10 @@ function skipRanges(skipped: Map<number, Why>, facts: (number: number) => DayFac
  * closure, and the firm works on it), and never before the first day of the term. Zero days is no internal deadline.
  * Pure.
  */
-export function internalDeadline(result: Pick<DeadlineResult, "dueOn" | "startsOn" | "skipped">, days: number): string | null {
+export function internalDeadline(
+  result: Pick<DeadlineResult, "dueOn" | "startsOn" | "skipped">,
+  days: number,
+): string | null {
   if (!Number.isInteger(days) || days <= 0) return null;
   const due = dayNumber(result.dueOn);
   const first = dayNumber(result.startsOn);

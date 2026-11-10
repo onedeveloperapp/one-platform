@@ -74,10 +74,37 @@ function count(overrides: Partial<DeadlineInput>): DeadlineResult {
   return (outcome as { ok: true; result: DeadlineResult }).result;
 }
 
+test("an intimation in the court's own system that came first starts the term, said as an assumption", () => {
+  // Made available Monday 2 March (published Tuesday 3); the lawyer read it in the system on Friday 27 February.
+  const earlier = count({ portalOn: "2026-02-27" });
+  assert.equal(earlier.publishedOn, "2026-03-03");
+  assert.equal(earlier.fromDay, "2026-02-27");
+  assert.equal(earlier.startsOn, "2026-03-02");
+  assert.deepEqual(earlier.assumptions, [{ code: "portal_first", day: "2026-02-27" }]);
+  assert.ok(earlier.dueOn < count({}).dueOn);
+
+  // Read on a Saturday: made on Monday 2 March, still before the DJEN's publication on Tuesday.
+  const weekend = count({ portalOn: "2026-02-28" });
+  assert.equal(weekend.fromDay, "2026-03-02");
+  assert.equal(weekend.startsOn, "2026-03-03");
+  assert.deepEqual(weekend.assumptions, [{ code: "portal_first", day: "2026-02-28" }]);
+
+  // Read after the DJEN published it, or on the same day: the DJEN's start stands, and nothing is said.
+  for (const portalOn of ["2026-03-03", "2026-03-10"]) {
+    const later = count({ portalOn });
+    assert.equal(later.fromDay, "2026-03-03");
+    assert.deepEqual(later.assumptions, []);
+  }
+
+  // A day that is no day, or a deadline that runs from a day a person gave, is counted as before.
+  assert.equal(count({ portalOn: "not a day" }).fromDay, "2026-03-03");
+  assert.equal(count({ trigger: "day", on: "2026-03-04", portalOn: "2026-02-27" }).fromDay, "2026-03-04");
+});
+
 test("a publication is published on the next business day, and the term counts from the business day after", () => {
   // Made available on a Monday: published on Tuesday, counted from Wednesday, the court's day off skipped.
   const result = count({});
-  assert.equal(result.rule, "prazo-v1");
+  assert.equal(result.rule, "prazo-v2");
   assert.equal(result.publishedOn, "2026-03-03");
   assert.equal(result.fromDay, "2026-03-03");
   assert.equal(result.startsOn, "2026-03-04");
@@ -158,7 +185,13 @@ const LOCAL: CourtCalendar = {
 };
 
 test("a day of a comarca is that comarca's only, and a comarca not known says so", () => {
-  const there = count({ trigger: "day", on: "2026-09-04", days: 3, calendar: LOCAL, place: { ...GOIANIA, comarca: "Comarca de Vila Exemplo" } });
+  const there = count({
+    trigger: "day",
+    on: "2026-09-04",
+    days: 3,
+    calendar: LOCAL,
+    place: { ...GOIANIA, comarca: "Comarca de Vila Exemplo" },
+  });
   assert.equal(there.startsOn, "2026-09-09");
   assert.equal(there.dueOn, "2026-09-11");
   assert.deepEqual(there.skipped, [
@@ -167,19 +200,43 @@ test("a day of a comarca is that comarca's only, and a comarca not known says so
   ]);
   assert.deepEqual(there.assumptions, []);
 
-  const elsewhere = count({ trigger: "day", on: "2026-09-04", days: 3, calendar: LOCAL, place: { ...GOIANIA, comarca: "Outra Cidade" } });
+  const elsewhere = count({
+    trigger: "day",
+    on: "2026-09-04",
+    days: 3,
+    calendar: LOCAL,
+    place: { ...GOIANIA, comarca: "Outra Cidade" },
+  });
   assert.equal(elsewhere.dueOn, "2026-09-10");
   assert.deepEqual(elsewhere.assumptions, []);
 
-  const unknown = count({ trigger: "day", on: "2026-09-04", days: 3, calendar: LOCAL, place: { ...GOIANIA, comarca: null } });
+  const unknown = count({
+    trigger: "day",
+    on: "2026-09-04",
+    days: 3,
+    calendar: LOCAL,
+    place: { ...GOIANIA, comarca: null },
+  });
   assert.equal(unknown.dueOn, "2026-09-10");
   assert.deepEqual(unknown.assumptions, [{ code: "comarca_unknown" }]);
 
   // A calendar that holds the days of some comarcas only: another comarca's own holidays are not on record.
   const some: CourtCalendar = { ...LOCAL, years: [{ year: 2026, allComarcas: false, comarcas: ["Vila Exemplo"] }] };
-  const unlisted = count({ trigger: "day", on: "2026-09-04", days: 3, calendar: some, place: { ...GOIANIA, comarca: "Outra Cidade" } });
+  const unlisted = count({
+    trigger: "day",
+    on: "2026-09-04",
+    days: 3,
+    calendar: some,
+    place: { ...GOIANIA, comarca: "Outra Cidade" },
+  });
   assert.deepEqual(unlisted.assumptions, [{ code: "local_days_unchecked", years: [2026] }]);
-  const listed = count({ trigger: "day", on: "2026-09-04", days: 3, calendar: some, place: { ...GOIANIA, comarca: "VILA EXEMPLO" } });
+  const listed = count({
+    trigger: "day",
+    on: "2026-09-04",
+    days: 3,
+    calendar: some,
+    place: { ...GOIANIA, comarca: "VILA EXEMPLO" },
+  });
   assert.deepEqual(listed.assumptions, []);
 });
 
@@ -191,19 +248,37 @@ test("a day of a kind of lawsuit or of a system applies to it alone, and is not 
       day("2026-09-10", "closed", "Só da vara cível", { proceedingKinds: ["comum"] }),
     ],
   };
-  const pje = count({ trigger: "day", on: "2026-09-08", days: 2, calendar: scoped, place: { proceedingKind: "juizado", system: "pje", comarca: "X" } });
+  const pje = count({
+    trigger: "day",
+    on: "2026-09-08",
+    days: 2,
+    calendar: scoped,
+    place: { proceedingKind: "juizado", system: "pje", comarca: "X" },
+  });
   assert.equal(pje.dueOn, "2026-09-11");
   assert.deepEqual(pje.skipped, [
     { from: "2026-09-09", to: "2026-09-09", reason: "court_suspension", label: "Migração do sistema" },
   ]);
 
-  const civil = count({ trigger: "day", on: "2026-09-08", days: 2, calendar: scoped, place: { proceedingKind: "comum", system: "projudi", comarca: "X" } });
+  const civil = count({
+    trigger: "day",
+    on: "2026-09-08",
+    days: 2,
+    calendar: scoped,
+    place: { proceedingKind: "comum", system: "projudi", comarca: "X" },
+  });
   assert.equal(civil.dueOn, "2026-09-11");
   assert.deepEqual(civil.skipped, [
     { from: "2026-09-10", to: "2026-09-10", reason: "closed", label: "Só da vara cível" },
   ]);
 
-  const unsure = count({ trigger: "day", on: "2026-09-08", days: 2, calendar: scoped, place: { proceedingKind: null, system: null, comarca: "X" } });
+  const unsure = count({
+    trigger: "day",
+    on: "2026-09-08",
+    days: 2,
+    calendar: scoped,
+    place: { proceedingKind: null, system: null, comarca: "X" },
+  });
   assert.equal(unsure.dueOn, "2026-09-10");
   assert.deepEqual(unsure.assumptions, [
     { code: "scope_unknown", what: "proceeding_kind", days: ["2026-09-10"] },
@@ -240,9 +315,19 @@ test("a term in calendar days runs through the year's end, and says a procedural
   assert.equal(result.countedDueOn, "2026-12-25");
   // Christmas is in the court's recess: the last day moves to the first day the court has business.
   assert.equal(result.dueOn, "2027-01-07");
-  assert.deepEqual(result.moved, { from: "2026-12-25", to: "2027-01-07", reason: "not_business", label: "Recesso forense" });
-  assert.deepEqual(result.skipped, [{ from: "2026-12-26", to: "2027-01-06", reason: "closed", label: "Recesso forense" }]);
-  assert.deepEqual(result.assumptions, [{ code: "calendar_suspension" }, { code: "calendar_unchecked", years: [2027] }]);
+  assert.deepEqual(result.moved, {
+    from: "2026-12-25",
+    to: "2027-01-07",
+    reason: "not_business",
+    label: "Recesso forense",
+  });
+  assert.deepEqual(result.skipped, [
+    { from: "2026-12-26", to: "2027-01-06", reason: "closed", label: "Recesso forense" },
+  ]);
+  assert.deepEqual(result.assumptions, [
+    { code: "calendar_suspension" },
+    { code: "calendar_unchecked", years: [2027] },
+  ]);
 
   // The same term in business days stops at the suspension, as the code says.
   const procedural = count({ trigger: "day", on: "2026-12-15", days: 10 });
@@ -254,7 +339,10 @@ test("a term in calendar days runs through the year's end, and says a procedural
   assert.equal(published.publishedOn, "2027-01-14");
   assert.equal(published.startsOn, "2027-01-15");
   assert.equal(published.dueOn, "2027-01-18");
-  assert.deepEqual(published.assumptions, [{ code: "calendar_suspension" }, { code: "calendar_unchecked", years: [2027] }]);
+  assert.deepEqual(published.assumptions, [
+    { code: "calendar_suspension" },
+    { code: "calendar_unchecked", years: [2027] },
+  ]);
 
   // A day the court suspended the terms is run through the same way.
   const suspended: CourtCalendar = {
@@ -278,7 +366,12 @@ test("a start day that is no business day is kept as given, and said", () => {
 });
 
 test("what the rule cannot know is said: a year nobody checked, a comarca not known, a publication before the DJEN's rule", () => {
-  const result = count({ on: "2025-05-15", days: 5, calendar: { years: [], days: [] }, place: { proceedingKind: null, system: null, comarca: null } });
+  const result = count({
+    on: "2025-05-15",
+    days: 5,
+    calendar: { years: [], days: [] },
+    place: { proceedingKind: null, system: null, comarca: null },
+  });
   assert.equal(result.publishedOn, "2025-05-16");
   assert.equal(result.dueOn, "2025-05-23");
   assert.deepEqual(result.assumptions, [

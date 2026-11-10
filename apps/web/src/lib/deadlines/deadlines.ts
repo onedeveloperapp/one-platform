@@ -118,6 +118,7 @@ export const ASSUMPTION_KEY: Record<DeadlineAssumption["code"], string> = {
   partial_start: "deadline-assumption-partial-start",
   start_not_business: "deadline-assumption-start-not-business",
   djen_before_rule: "deadline-assumption-djen-before-rule",
+  portal_first: "deadline-assumption-portal-first",
   calendar_suspension: "deadline-assumption-calendar-suspension",
 };
 
@@ -160,6 +161,7 @@ export const DEADLINE_FIELDS = [
   "days",
   "counting",
   "due_on",
+  "portal_on",
   "reason",
   "note",
 ] as const;
@@ -195,6 +197,8 @@ function readAssumption(value: unknown): DeadlineAssumption[] {
       return [{ code: "comarca_unknown" }];
     case "djen_before_rule":
       return [{ code: "djen_before_rule" }];
+    case "portal_first":
+      return isDay(item.day) ? [{ code: "portal_first", day: item.day }] : [];
     case "calendar_suspension":
       return [{ code: "calendar_suspension" }];
     case "scope_unknown":
@@ -290,6 +294,8 @@ export type DeadlineToCount = {
   trigger_on: string;
   days: number;
   counting: string;
+  /** The day the same act was intimated in the court's own system, when a person gave it (0144). */
+  portal_on?: string | null;
   court: string;
   place: { proceeding_kind: string | null; system: string | null; comarca: string | null } | null;
   years: CalendarYearRow[] | null;
@@ -336,6 +342,7 @@ export function countInput(read: DeadlineToCount): DeadlineInput | null {
     on: read.trigger_on,
     days: read.days,
     counting: read.counting,
+    portalOn: isDay(read.portal_on) ? read.portal_on : null,
     place: {
       proceedingKind: read.place?.proceeding_kind ?? null,
       system: read.place?.system ?? null,

@@ -287,6 +287,8 @@ select is(
     'client_consents.term_id',
     'client_notices.kind', 'closing_goals.module_key',
     'consent_acceptances.term_id',
+    -- Which comarca each municipality belongs to (0145) is platform data of a court, which is never deleted.
+    'court_comarcas.court',
     -- A court's way of paying (0135) is platform data of a court, which is never deleted.
     'court_payment_paths.court',
     'filing_package_items.file_id',

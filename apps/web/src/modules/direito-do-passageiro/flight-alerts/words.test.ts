@@ -75,10 +75,13 @@ describe("ONE's first word when a flight has a problem", () => {
 
   it("says what the airline owes by ANAC's rules", () => {
     expect(assistanceWords({ kind: "cancelled", leg: 1, delayMinutes: null })).toBe(
-      "oferecer outro voo, o reembolso ou outro meio de transporte, e dar meios de comunicação, alimentação e hospedagem, se for preciso passar a noite, com o transporte até ela",
+      "oferecer outro voo, o reembolso ou outro meio de transporte, e dar alimentação e hospedagem, se for preciso passar a noite, com o transporte até ela",
     );
-    expect(assistanceWords({ kind: "delayed", leg: 1, delayMinutes: 150 })).toBe(
-      "dar meios de comunicação e alimentação",
+    expect(assistanceWords({ kind: "delayed", leg: 1, delayMinutes: 150 })).toBe("dar alimentação");
+    // Under two hours, ANAC asks nothing more than the information (Resolução 813/2026 revoked the means of
+    // communication from one hour).
+    expect(assistanceWords({ kind: "delayed", leg: 1, delayMinutes: 90 })).toBe(
+      "informar o que aconteceu e o que vai fazer",
     );
     expect(assistanceWords({ kind: "changed", leg: 1, delayMinutes: null })).toBe(
       "oferecer outro voo, o reembolso ou outro meio de transporte",

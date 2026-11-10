@@ -117,6 +117,8 @@ export type CaseProceeding = {
   forumReason: string | null;
   /** The city the forum is in, when it is not the domicile's. */
   forumCity: string | null;
+  /** The comarca is one the platform's table of the court knows (migration 0145). */
+  comarcaChecked: boolean;
   status: "planned" | "filed" | "closed";
   filedAt: string | null;
   /** The system is ONE's, from the court's row of the platform's table (migration 0066). */

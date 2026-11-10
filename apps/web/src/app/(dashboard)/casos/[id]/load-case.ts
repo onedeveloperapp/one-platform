@@ -246,7 +246,7 @@ export async function loadCase(id: string): Promise<CaseState> {
     supabase
       .from("proceedings")
       .select(
-        "id, kind, court, comarca, unit, system, cnj, forum_basis, forum_reason, forum_city, status, filed_at, system_by_one, system_approved_by, system_approved_at, system_refused_by, system_refused_at, system_refused_reason, created_by_one, proceeding_parties(party_id), proceeding_lawyers(user_id)",
+        "id, kind, court, comarca, unit, system, cnj, forum_basis, forum_reason, forum_city, comarca_checked, status, filed_at, system_by_one, system_approved_by, system_approved_at, system_refused_by, system_refused_at, system_refused_reason, created_by_one, proceeding_parties(party_id), proceeding_lawyers(user_id)",
       )
       .eq("case_id", id)
       .eq("org_id", firm)
@@ -610,6 +610,7 @@ export async function loadCase(id: string): Promise<CaseState> {
         forum_basis: string | null;
         forum_reason: string | null;
         forum_city: string | null;
+        comarca_checked: boolean | null;
         status: CaseProceeding["status"];
         filed_at: string | null;
         system_by_one: boolean | null;
@@ -633,6 +634,7 @@ export async function loadCase(id: string): Promise<CaseState> {
       forumBasis: proceeding.forum_basis,
       forumReason: proceeding.forum_reason,
       forumCity: proceeding.forum_city,
+      comarcaChecked: proceeding.comarca_checked === true,
       status: proceeding.status,
       filedAt: proceeding.filed_at,
       systemByOne: proceeding.system_by_one === true,

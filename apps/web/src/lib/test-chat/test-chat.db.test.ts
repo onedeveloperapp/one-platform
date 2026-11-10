@@ -179,7 +179,8 @@ describe.skipIf(!DB_URL)("the test chat, where a passenger's phone stands", () =
     expect(await runTestTool(TOKEN, family, "late_6h")).toEqual({ ok: true, code: "told" });
     const [message] = await sentTo("5500988880002");
     expect(String(message.body)).toContain("está previsto para chegar ao destino com 6 horas de atraso");
-    expect(String(message.body)).toContain("dar meios de comunicação, alimentação e hospedagem");
+    expect(String(message.body)).toContain("dar alimentação e hospedagem");
+    expect(String(message.body)).not.toContain("comunicação");
 
     expect(await runTestTool(TOKEN, family, "reset")).toEqual({ ok: true, code: "reset" });
     const [alerts] = await sql.unsafe(`select count(*)::int as n from public.flight_alerts where trip_id = $1`, [

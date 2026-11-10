@@ -19,7 +19,7 @@ import {
 import DeadlineCount from "@/components/deadlines/deadline-count";
 import SidePanel from "@/components/product/side-panel";
 import NiCalendarClock from "@/icons/nexture/ni-calendar-clock";
-import { previewDeadline, proposeDeadline, updateDeadline } from "@/lib/deadlines/actions";
+import { previewDeadline, proposeDeadline, readDeadlinePortalDay, updateDeadline } from "@/lib/deadlines/actions";
 import { COUNTING_KEY, deadlineErrorKey, isDeadlineField, weekdayOf } from "@/lib/deadlines/deadlines";
 import type { DeadlineAct } from "@/lib/deadlines/facts";
 import {
@@ -54,7 +54,7 @@ const PREVIEW_DELAY_MS = 400;
 const OTHER_ACT = "";
 
 /** The fields the form shows an error beside; the database's word on any other is said above the buttons. */
-const FIELDS_WITH_INPUT = new Set(["title", "days", "trigger_on"]);
+const FIELDS_WITH_INPUT = new Set(["title", "days", "trigger_on", "portal_on"]);
 
 /** What a refusal of a field with no input of its own is called. */
 const FIELD_ERROR_KEY: Record<string, string> = {
@@ -132,6 +132,10 @@ export default function DeadlinePanel({
   const [counting, setCounting] = useState<DeadlineCounting>(editing?.counting ?? "business");
   const [trigger, setTrigger] = useState<DeadlineTrigger>(editing?.trigger ?? (availableOn ? "publication" : "day"));
   const [triggerOn, setTriggerOn] = useState(editing && editing.trigger === "day" ? editing.triggerOn : "");
+  // The day the act was intimated in the court's own system (0144): the term of a publication runs from the earlier.
+  const [portalOn, setPortalOn] = useState("");
+  const [portalBefore, setPortalBefore] = useState<string | null>(null);
+  const portalTouched = useRef(false);
   const [preview, setPreview] = useState<Preview>({ state: "idle" });
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<{ code: string; field: string | null } | null>(null);
@@ -140,6 +144,8 @@ export default function DeadlinePanel({
   const dayCount = Number(days);
   const daysValid = Number.isInteger(dayCount) && dayCount >= 1 && dayCount <= 365;
   const startValid = trigger === "publication" ? Boolean(availableOn) : /^\d{4}-\d{2}-\d{2}$/.test(triggerOn);
+  const portalValid = portalOn === "" || /^\d{4}-\d{2}-\d{2}$/.test(portalOn);
+  const portalDay = trigger === "publication" && portalValid && portalOn !== "" ? portalOn : null;
   const titleValid = title.trim().length >= 2;
   // Opened with no lawsuit (the "Adicionar" of the top): nothing is counted nor sent until one is chosen.
   const waiting = !editing && !subject;
@@ -154,6 +160,23 @@ export default function DeadlinePanel({
     setDays(String(chosen.days));
     setCounting(chosen.counting);
   };
+
+  // A deadline being corrected shows the day of the system it has, unless the person already wrote another.
+  useEffect(() => {
+    if (!deadlineId || !editing || editing.trigger !== "publication") return;
+    let live = true;
+    void readDeadlinePortalDay(deadlineId).then(
+      (day) => {
+        if (!live) return;
+        setPortalBefore(day);
+        if (!portalTouched.current) setPortalOn(day ?? "");
+      },
+      () => undefined,
+    );
+    return () => {
+      live = false;
+    };
+  }, [deadlineId, editing]);
 
   useEffect(() => {
     if (waiting || !daysValid || !startValid) {
@@ -174,6 +197,7 @@ export default function DeadlinePanel({
           triggerOn: trigger === "day" ? triggerOn : null,
           days: dayCount,
           counting,
+          portalOn: portalDay,
         });
         next = result.ok
           ? { state: "ready", result: result.result }
@@ -185,12 +209,27 @@ export default function DeadlinePanel({
       if (asked.current === mine) setPreview(next);
     }, PREVIEW_DELAY_MS);
     return () => clearTimeout(timer);
-  }, [waiting, publicationId, proceedingId, deadlineId, trigger, triggerOn, dayCount, counting, daysValid, startValid]);
+  }, [
+    waiting,
+    publicationId,
+    proceedingId,
+    deadlineId,
+    trigger,
+    triggerOn,
+    dayCount,
+    counting,
+    daysValid,
+    startValid,
+    portalDay,
+  ]);
 
   const submit = async () => {
     if (waiting) return;
-    if (!titleValid || !daysValid || !startValid) {
-      setProblem({ code: "invalid_data", field: !titleValid ? "title" : !daysValid ? "days" : "trigger_on" });
+    if (!titleValid || !daysValid || !startValid || !portalValid) {
+      setProblem({
+        code: "invalid_data",
+        field: !titleValid ? "title" : !daysValid ? "days" : !startValid ? "trigger_on" : "portal_on",
+      });
       return;
     }
     setBusy(true);
@@ -202,6 +241,8 @@ export default function DeadlinePanel({
       triggerOn: trigger === "day" ? triggerOn : null,
       days: dayCount,
       counting,
+      // Sent only when it says something new: a correction that leaves it as it was asks nothing of it.
+      portalOn: trigger !== "publication" || portalDay === portalBefore ? undefined : portalDay,
     };
     try {
       const result = deadlineId
@@ -219,7 +260,12 @@ export default function DeadlinePanel({
     }
   };
 
-  const fieldError = (field: string) => (problem?.field === field ? t(deadlineErrorKey(problem.code)) : undefined);
+  const fieldError = (field: string) =>
+    problem?.field !== field
+      ? undefined
+      : field === "portal_on"
+        ? t("deadline-error-portal-day")
+        : t(deadlineErrorKey(problem.code));
   const chosenAct = offered.find((item) => item.slug === act) ?? null;
 
   return (
@@ -352,6 +398,23 @@ export default function DeadlinePanel({
                   onChange={(event) => setTriggerOn(event.target.value)}
                   error={Boolean(fieldError("trigger_on"))}
                   helperText={fieldError("trigger_on") ?? t("deadline-field-trigger-on-help")}
+                  slotProps={{ inputLabel: { shrink: true } }}
+                />
+              ) : null}
+              {trigger === "publication" && availableOn ? (
+                <TextField
+                  size="small"
+                  type="date"
+                  id="deadline-portal-on"
+                  label={t("deadline-field-portal-on")}
+                  value={portalOn}
+                  disabled={busy}
+                  onChange={(event) => {
+                    portalTouched.current = true;
+                    setPortalOn(event.target.value);
+                  }}
+                  error={Boolean(fieldError("portal_on")) || !portalValid}
+                  helperText={fieldError("portal_on") ?? t("deadline-field-portal-on-help")}
                   slotProps={{ inputLabel: { shrink: true } }}
                 />
               ) : null}

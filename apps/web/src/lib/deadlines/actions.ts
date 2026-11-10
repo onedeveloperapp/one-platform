@@ -60,6 +60,8 @@ type CountRequest = Subject & {
   triggerOn?: string | null;
   days: number;
   counting: string;
+  /** For a term of a publication: the day the same act was intimated in the court's own system, when known. */
+  portalOn?: string | null;
 };
 
 /** What a deadline would come to: counted by the rule over the court's calendar, as the backend will count it. Nothing is written. */
@@ -128,13 +130,17 @@ export async function previewDeadline(
   const on = trigger === "publication" ? publication?.available_on : input.triggerOn;
   if (!isDayText(on))
     return { ok: false, code: "invalid_data", field: trigger === "publication" ? "trigger" : "trigger_on" };
+  const portalOn = trigger === "publication" && isDayText(input.portalOn) ? input.portalOn : null;
+  // The calendar from the year of the earlier start: an intimation in the system may come before the publication.
+  const firstDay = portalOn && portalOn < on ? portalOn : on;
   try {
-    const rows = await courtCalendar(supabase, court, Number(on.slice(0, 4)));
+    const rows = await courtCalendar(supabase, court, Number(firstDay.slice(0, 4)));
     const outcome = computeDeadline({
       trigger,
       on,
       days: input.days,
       counting,
+      portalOn,
       place,
       calendar: calendarOf(rows.years, rows.days),
     });
@@ -171,6 +177,8 @@ type DeadlineFields = {
   triggerOn?: string | null;
   days: number;
   counting: string;
+  /** For a term of a publication: the day the act was intimated in the court's own system, or null for none. */
+  portalOn?: string | null;
 };
 
 const fieldsOf = (input: DeadlineFields) => ({
@@ -198,10 +206,38 @@ export async function proposeDeadline(
   });
   const result = fold(data, error);
   if (!result.ok || !result.id) return result;
+  // The day of the intimation in the system, when the person gave it: the deadline is counted from the earlier (0144).
+  const portal = publicationId && isDayText(input.portalOn) ? await setPortalDay(result.id, input.portalOn) : null;
   await settleDeadlineCount(result.id);
   const counted = await countedDay(result.id);
   refresh(counted.caseId);
+  if (portal && !portal.ok) return portal;
   return { ...result, dueOn: counted.dueOn, counted: counted.counted };
+}
+
+/** The day the act of a deadline's publication was intimated in the court's own system, given or taken back (0144). */
+async function setPortalDay(deadlineId: string, day: string | null): Promise<DeadlineActionResult> {
+  const context = await getMemberContext();
+  if (!context?.firm) return { ok: false, code: "failed" };
+  const { data, error } = await context.supabase.rpc("set_deadline_portal_day", {
+    target_deadline: deadlineId,
+    target_day: day,
+  });
+  return fold(data, error);
+}
+
+/** The day of the intimation in the system a deadline has, for the form that corrects it. */
+export async function readDeadlinePortalDay(deadlineId: string): Promise<string | null> {
+  const context = await getMemberContext();
+  if (!context?.firm || !isId(deadlineId)) return null;
+  const { data } = await context.supabase
+    .from("deadlines")
+    .select("portal_on")
+    .eq("id", deadlineId)
+    .eq("org_id", context.firm.id)
+    .maybeSingle();
+  const day = (data?.portal_on as string | null | undefined) ?? null;
+  return isDayText(day) ? day : null;
 }
 
 /**
@@ -218,7 +254,13 @@ export async function updateDeadline(input: DeadlineFields & { deadlineId: strin
   });
   const result = fold(data, error);
   if (!result.ok) return result;
-  if (result.code === "updated") await settleDeadlineCount(input.deadlineId);
+  // Only a term of a publication takes the day of the system; `undefined` leaves it as it is.
+  const portal =
+    input.trigger === "publication" && input.portalOn !== undefined
+      ? await setPortalDay(input.deadlineId, isDayText(input.portalOn) ? input.portalOn : null)
+      : null;
+  if (portal && !portal.ok) return portal;
+  if (result.code === "updated" || portal?.code === "set") await settleDeadlineCount(input.deadlineId);
   const counted = await countedDay(input.deadlineId);
   refresh(counted.caseId);
   return { ...result, dueOn: counted.dueOn, counted: counted.counted };

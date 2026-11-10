@@ -149,19 +149,17 @@ test("a cancellation is told before a change, and a change before a delay", () =
   });
 });
 
-test("what the airline owes, by ANAC's rules and the time waited", () => {
+test("what the airline owes, by ANAC's rules and the time waited (Resolução 813/2026: no means of communication)", () => {
   assert.deepEqual(assistanceDue({ kind: "cancelled", leg: 1, delayMinutes: null }), [
     "rebooking_or_refund",
-    "communication",
     "food",
     "lodging",
   ]);
   assert.deepEqual(assistanceDue({ kind: "changed", leg: 1, delayMinutes: null }), ["rebooking_or_refund"]);
-  assert.deepEqual(assistanceDue({ kind: "delayed", leg: 1, delayMinutes: 90 }), ["communication"]);
-  assert.deepEqual(assistanceDue({ kind: "delayed", leg: 1, delayMinutes: 150 }), ["communication", "food"]);
+  assert.deepEqual(assistanceDue({ kind: "delayed", leg: 1, delayMinutes: 90 }), []);
+  assert.deepEqual(assistanceDue({ kind: "delayed", leg: 1, delayMinutes: 150 }), ["food"]);
   assert.deepEqual(assistanceDue({ kind: "delayed", leg: 1, delayMinutes: 360 }), [
     "rebooking_or_refund",
-    "communication",
     "food",
     "lodging",
   ]);
