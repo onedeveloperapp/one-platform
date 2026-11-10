@@ -104,6 +104,8 @@ export type Tally = { key: string; count: number };
 
 export type PeopleNumbers = {
   registered: number;
+  /** The test cases counted, the firm having no real case yet (0138): the screen says so. */
+  testsCounted: boolean;
   active: number;
   inactive: number;
   marketingOff: number;
@@ -128,6 +130,7 @@ export function readPeopleNumbers(raw: unknown): PeopleNumbers {
   const ages = (answer.ages ?? {}) as Record<string, unknown>;
   return {
     registered: whole(answer.registered),
+    testsCounted: answer.tests_counted === true,
     active: whole(answer.active),
     inactive: whole(answer.inactive),
     marketingOff: whole(answer.marketing_off),

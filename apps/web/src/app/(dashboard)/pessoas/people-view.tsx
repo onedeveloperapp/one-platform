@@ -168,6 +168,12 @@ export default function PeopleView({ state }: { state: PeopleState }) {
             ))}
           </Grid>
 
+          {numbers.testsCounted ? (
+            <Typography variant="body2" className="text-text-secondary">
+              {t("people-tests-counted")}
+            </Typography>
+          ) : null}
+
           {numbers.registered > 0 ? (
             <Card component="section" aria-labelledby="people-numbers">
               <CardContent className="flex flex-col gap-4">

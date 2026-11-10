@@ -4,12 +4,15 @@ import { revalidatePath } from "next/cache";
 import { randomBytes } from "node:crypto";
 
 import { getVault } from "@/lib/connections/vault";
+import { supabaseFileStore } from "@/lib/files/store";
 import { isManager } from "@/lib/firm/roles";
 import { getMemberContext } from "@/lib/member/context";
 import { openReservedEnvelopes, sendProviderCancels, SETTLED, syncEnvelope, zapSignFor } from "@/lib/signatures/work";
 import { connectionRefusal, isSupportVisit } from "@/lib/whatsapp/session";
 import { createServiceClient } from "@flyee/auth/service";
 import { BRAND } from "@flyee/content";
+import { takeBackFile } from "@flyee/documents/files";
+import { measureFile } from "@flyee/documents/measure";
 import { webhookSecretHash, ZapSignAuthError, ZapSignProvider } from "@flyee/signatures/providers/zapsign";
 
 /**
@@ -276,5 +279,54 @@ export async function refreshSignature(caseId: string, envelopeId: string): Prom
     return { ok: false, code: code.startsWith("vault_") || code === "token_refused" ? "account_unavailable" : code };
   } catch {
     return { ok: false, code: "provider_unavailable" };
+  }
+}
+
+/**
+ * A paper of a test case signed in one click (migration 0138): the database checks it is a test case's and who may
+ * write on it; the backend keeps a copy of the paper as its signed document and records it through the very function a
+ * provider's signature goes through, its evidence saying it was simulated. Never a real case.
+ */
+export async function simulateTestSignature(caseId: string, envelopeId: string): Promise<SignatureResult> {
+  const context = await getMemberContext();
+  if (!context?.firm || !isId(envelopeId)) return { ok: false, code: "not_found" };
+  const { data, error } = await context.supabase.rpc("test_signature_to_simulate", { target_envelope: envelopeId });
+  const gate = (data ?? {}) as { ok?: boolean; code?: string; org_id?: string; storage_path?: string };
+  if (error || gate.ok !== true || !gate.org_id || !gate.storage_path) {
+    return { ok: false, code: error ? "failed" : (gate.code ?? "failed") };
+  }
+  const service = createServiceClient();
+  const store = supabaseFileStore(service);
+  const original = await store.get(gate.storage_path);
+  if (!original) return { ok: false, code: "document_not_found" };
+  const reserved = await store.reserve({
+    orgId: gate.org_id,
+    purpose: "signed",
+    name: "assinatura-simulada.pdf",
+    mime: "application/pdf",
+    bytes: original.length,
+  });
+  if (!reserved.ok) return { ok: false, code: "failed" };
+  try {
+    await store.put(reserved.storagePath, original, "application/pdf");
+    const measure = await measureFile(original);
+    const confirmed = await store.confirm(reserved.fileId, measure);
+    if (!confirmed.ok) throw new Error("not confirmed");
+    const { data: recorded, error: recordError } = await service.rpc("record_signature_signed", {
+      target_envelope: envelopeId,
+      target_file: reserved.fileId,
+      target_sha256: measure.sha256,
+      target_evidence: [{ signer: "Assinatura simulada em caso de teste", signed_at: new Date().toISOString() }],
+    });
+    const code = recordError ? "failed" : String((recorded as { code?: string } | null)?.code ?? "failed");
+    if (code !== "signed") {
+      await takeBackFile(store, reserved.fileId, reserved.storagePath);
+      return { ok: false, code };
+    }
+    refresh(caseId);
+    return { ok: true, code: "signed" } as SignatureResult;
+  } catch {
+    await takeBackFile(store, reserved.fileId, reserved.storagePath).catch(() => undefined);
+    return { ok: false, code: "failed" };
   }
 }

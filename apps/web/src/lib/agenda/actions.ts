@@ -3,9 +3,11 @@
 import { revalidatePath } from "next/cache";
 import { createHash, randomBytes } from "node:crypto";
 
-import { type AgendaItems, readAgendaItems } from "@/lib/agenda/agenda";
+import { addDays, type AgendaItems, digestFor, digestHour, isBusinessDay, readAgendaItems } from "@/lib/agenda/agenda";
+import { dayWords, lineWords } from "@/lib/agenda/digest-work";
 import { getMemberContext } from "@/lib/member/context";
 import { BRAND } from "@flyee/content";
+import { type AgendaDigestLine, isEmailConfigured } from "@flyee/email";
 
 /**
  * The agenda of each person (migration 0132): what a range of days holds, the firm's internal days, the person's
@@ -100,4 +102,40 @@ export async function startAgendaCalendar(): Promise<
 /** The person ends their calendar link: it stops answering at once. */
 export async function endAgendaCalendar(): Promise<Result> {
   return call("end_agenda_calendar", {});
+}
+
+export type MorningPreview = {
+  /** The day of Brasília it is the e-mail of, in words ("terça-feira, 10 de novembro"). */
+  day: string;
+  businessDay: boolean;
+  /** Whether this environment sends e-mail at all (the provider's key). */
+  configured: boolean;
+  wholeFirm: boolean;
+  today: AgendaDigestLine[];
+  next: AgendaDigestLine[];
+};
+
+/**
+ * The person's e-mail of this morning (0132) as the backend would write it, shown on the agenda's panel: the same
+ * items, the same words and the same rule, whether or not this environment sends e-mail.
+ */
+export async function previewMorningEmail(): Promise<
+  { ok: true; preview: MorningPreview } | { ok: false; code: string }
+> {
+  const now = new Date();
+  const { day: today } = digestHour(now);
+  const read = await readAgenda(today, addDays(today, 2), null);
+  if (!read.ok) return read;
+  const digest = digestFor(read.items, { userId: read.me.id, wholeFirm: read.me.wholeFirm }, today, now);
+  return {
+    ok: true,
+    preview: {
+      day: dayWords(today),
+      businessDay: isBusinessDay(today),
+      configured: isEmailConfigured,
+      wholeFirm: read.me.wholeFirm,
+      today: digest.today.map((line) => lineWords(line, today)),
+      next: digest.next.map((line) => lineWords(line, today)),
+    },
+  };
 }

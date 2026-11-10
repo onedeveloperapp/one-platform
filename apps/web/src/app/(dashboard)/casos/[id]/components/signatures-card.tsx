@@ -31,7 +31,13 @@ import NiPen from "@/icons/nexture/ni-pen";
 import { openCaseFile } from "@/lib/cases/actions";
 import { caseErrorKey, DOCUMENT_KIND_KEY, isDocumentKind } from "@/lib/cases/cases";
 import { opensOnArrival } from "@/lib/cases/sections";
-import { cancelSignature, confirmSignature, refreshSignature, requestSignature } from "@/lib/signatures/actions";
+import {
+  cancelSignature,
+  confirmSignature,
+  refreshSignature,
+  requestSignature,
+  simulateTestSignature,
+} from "@/lib/signatures/actions";
 import { isMinorOn } from "@flyee/rules/person";
 
 type Ready = Extract<CaseState, { kind: "ready" }>;
@@ -113,6 +119,19 @@ export default function SignaturesCard({
     setProblem(null);
     try {
       const result = await refreshSignature(state.case.id, envelope.id);
+      if (!result.ok) setProblem(result.code);
+      else onChanged();
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  // A paper of a test case signed in one click (0138): the copy kept as signed says it was simulated.
+  const simulate = async (envelope: CaseEnvelope) => {
+    setBusy(envelope.id);
+    setProblem(null);
+    try {
+      const result = await simulateTestSignature(state.case.id, envelope.id);
       if (!result.ok) setProblem(result.code);
       else onChanged();
     } finally {
@@ -258,6 +277,17 @@ export default function SignaturesCard({
               {returned && envelope.status === "received" && (
                 <Button variant="outlined" color="grey" size="small" onClick={() => void open(returned.fileId)}>
                   {t("case-signature-open-returned")}
+                </Button>
+              )}
+              {writable && state.case.isTest && envelope.status === "pending" && (
+                <Button
+                  variant="outlined"
+                  color="grey"
+                  size="small"
+                  disabled={busy !== null}
+                  onClick={() => void simulate(envelope)}
+                >
+                  {busy === envelope.id ? t("cases-working") : t("case-signature-simulate")}
                 </Button>
               )}
               {writable && envelope.method === "zapsign" && envelope.status === "pending" && (

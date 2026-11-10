@@ -173,7 +173,7 @@ export async function loadCase(id: string): Promise<CaseState> {
   const { data: row, error } = await supabase
     .from("cases")
     .select(
-      "id, seq, module, incident, airline_iata, flight_date, cause, status, origin, partnership_id, summary, responsible_id, close_reason, created_at, closed_by_one, close_acked_at",
+      "id, seq, module, incident, airline_iata, flight_date, cause, status, origin, partnership_id, summary, responsible_id, close_reason, created_at, closed_by_one, close_acked_at, is_test",
     )
     .eq("id", id)
     .eq("org_id", firm)
@@ -546,6 +546,7 @@ export async function loadCase(id: string): Promise<CaseState> {
     case: {
       id: row.id,
       seq: row.seq,
+      isTest: row.is_test === true,
       module: row.module,
       incident: row.incident,
       airlineIata: row.airline_iata,

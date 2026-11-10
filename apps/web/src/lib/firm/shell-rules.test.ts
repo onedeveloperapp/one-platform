@@ -105,6 +105,8 @@ describe("the menu by role", () => {
       "inicio",
       "modulos",
       "casos",
+      // The firm's people are anybody of the firm's to find (0133); the money is not in them.
+      "pessoas",
       // What ONE did is the whole firm's to read (0120 to 0122); the money in it is who decides for the firm's.
       "trabalho-do-one",
       "atendimento",
@@ -118,7 +120,10 @@ describe("the menu by role", () => {
       "inicio",
       "modulos",
       "casos",
+      "pessoas",
       "controladoria",
+      // The firm's numbers are who oversees the firm's (0136).
+      "numeros",
       "trabalho-do-one",
       "atendimento",
       "protocolo",

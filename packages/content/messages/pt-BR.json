@@ -8054,7 +8054,21 @@
     "reports-error-month-open": "Um mês só fecha depois que acaba.",
     "reports-error-invalid": "Confira o que foi preenchido.",
     "reports-error-support": "Uma visita de suporte não muda os livros.",
-    "reports-error-failed": "Não foi possível agora. Tente de novo."
+    "reports-error-failed": "Não foi possível agora. Tente de novo.",
+    "test-court-statement": "Baixar extrato de teste",
+    "test-court-statement-done": "Extrato baixado. Importe em Financeiro, Conciliação: as liberações, os repasses e as contas dos casos de teste estão nele.",
+    "test-court-statement-failed": "Não foi possível montar o extrato agora. Tente de novo.",
+    "case-signature-simulate": "Simular assinatura",
+    "agenda-preview-show": "Ver o e-mail desta manhã",
+    "agenda-preview-subject": "Sua agenda de {day}",
+    "agenda-preview-not-configured": "Neste ambiente nenhum e-mail sai: falta a chave do provedor. Este é o que sairia.",
+    "agenda-preview-not-business": "Hoje não é dia útil: o e-mail não sai.",
+    "agenda-preview-empty": "Nada para você hoje nem nas próximas 48 horas: nenhum e-mail sai.",
+    "agenda-preview-today": "Hoje",
+    "agenda-preview-today-none": "Nada vence hoje.",
+    "agenda-preview-next": "Nas próximas 48 horas",
+    "agenda-preview-changed": "{text} · mudou desde ontem",
+    "people-tests-counted": "Contando os casos de teste, porque o escritório ainda não tem caso real. Saem dos números e dos segmentos com o primeiro caso real."
   },
   "auth": {
     "continue": "Continuar",

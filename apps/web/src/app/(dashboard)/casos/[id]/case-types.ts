@@ -187,6 +187,8 @@ export type CourtSystem = {
 export type CaseDetail = {
   id: string;
   seq: number;
+  /** A case of the test chat (0061): its papers may be signed by simulation (0138). */
+  isTest?: boolean;
   /** The product module of the case (migration 0068). */
   module: string;
   /** The kind of problem, one of its module's (lib/modules/registry.ts); null for a module that has none. */

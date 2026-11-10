@@ -10,7 +10,13 @@ import StatusChip from "@/components/product/status-chip";
 import NiArrowLeft from "@/icons/nexture/ni-arrow-left";
 import NiReceipt from "@/icons/nexture/ni-receipt";
 import NiScale from "@/icons/nexture/ni-scale";
-import { actTestCourt, leaveTestLawsuitQuiet, readTestCourt, testCourtReceipt } from "@/lib/test-court/actions";
+import {
+  actTestCourt,
+  downloadTestStatement,
+  leaveTestLawsuitQuiet,
+  readTestCourt,
+  testCourtReceipt,
+} from "@/lib/test-court/actions";
 import {
   answerKey,
   COURT_STEPS,
@@ -157,6 +163,28 @@ export default function TestCourt({ token, initial }: { token: string; initial: 
     }
   };
 
+  const [statementBusy, setStatementBusy] = useState(false);
+  const [statementNote, setStatementNote] = useState<string | null>(null);
+  // The statement a bank would show of the test cases (0138), saved as a file the books' reconciliation imports.
+  const saveStatement = async () => {
+    setStatementBusy(true);
+    setStatementNote(null);
+    try {
+      const answer = await downloadTestStatement(token);
+      if (!answer.ok) return setStatementNote(t("test-court-statement-failed"));
+      const url = URL.createObjectURL(new Blob([answer.ofx], { type: "application/x-ofx" }));
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = answer.fileName;
+      link.click();
+      URL.revokeObjectURL(url);
+      setStatementNote(t("test-court-statement-done"));
+    } catch {
+      setStatementNote(t("test-court-statement-failed"));
+    } finally {
+      setStatementBusy(false);
+    }
+  };
   const caseWords = (seq: number | null, client: string | null) =>
     [seq !== null ? t("test-court-case-seq", { seq }) : null, client].filter(Boolean).join(" · ");
   const placeWords = (kind: string | null, court: string | null, comarca: string | null) =>
@@ -175,7 +203,7 @@ export default function TestCourt({ token, initial }: { token: string; initial: 
           <Typography variant="body2" className="text-text-secondary">
             {t("test-court-subtitle", { firm: view.firm })}
           </Typography>
-          <Box>
+          <Box className="flex flex-wrap gap-2">
             <Button
               variant="text"
               color="grey"
@@ -185,7 +213,21 @@ export default function TestCourt({ token, initial }: { token: string; initial: 
             >
               {t("test-court-back")}
             </Button>
+            <Button
+              variant="outlined"
+              color="grey"
+              size="small"
+              disabled={statementBusy}
+              onClick={() => void saveStatement()}
+            >
+              {t("test-court-statement")}
+            </Button>
           </Box>
+          {statementNote ? (
+            <Typography variant="body2" className="text-text-secondary" role="status">
+              {statementNote}
+            </Typography>
+          ) : null}
         </Box>
 
         <Card component="section" aria-labelledby="test-court-filing">

@@ -2,6 +2,7 @@
 
 import { queueOutcomes } from "@/lib/courts/outcome-work";
 import { queuePublicationTriage } from "@/lib/publications/triage-work";
+import { readTestStatement, writeTestStatement } from "@/lib/test-court/statement";
 import {
   isCourtStep,
   isQuietDays,
@@ -135,4 +136,22 @@ export async function testCourtReceipt(
   } catch {
     return { ok: false, code: "failed" };
   }
+}
+
+/**
+ * The test statement (migration 0138): what a bank would show of the firm's test cases, as an OFX file the books
+ * import, by the link's secret. Nothing of it is a real bank's.
+ */
+export async function downloadTestStatement(
+  token: string,
+): Promise<{ ok: true; ofx: string; fileName: string } | { ok: false; code: "missing" | "unavailable" }> {
+  if (!TOKEN.test(String(token ?? ""))) return { ok: false, code: "missing" };
+  const service = backendOrNull();
+  if (!service) return { ok: false, code: "unavailable" };
+  const { data, error } = await service.rpc("test_court_statement", { target_token: token });
+  if (error) return { ok: false, code: "unavailable" };
+  const read = readTestStatement(data);
+  if (!read) return { ok: false, code: "missing" };
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date());
+  return { ok: true, ofx: writeTestStatement(read, today), fileName: `extrato-de-teste-${today}.ofx` };
 }

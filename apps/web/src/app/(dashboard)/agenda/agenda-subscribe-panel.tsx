@@ -11,6 +11,8 @@ import StateLine from "@/components/product/state-line";
 import NiCalendar from "@/icons/nexture/ni-calendar";
 import {
   endAgendaCalendar,
+  type MorningPreview,
+  previewMorningEmail,
   readAgenda,
   setAgendaDigest,
   setInternalDeadlineDays,
@@ -148,6 +150,7 @@ export default function AgendaSubscribePanel({ onClose }: { onClose: () => void 
               <Typography variant="body2" className="text-text-secondary">
                 {t(me.wholeFirm ? "agenda-digest-whole" : "agenda-digest-own")}
               </Typography>
+              <MorningPreviewBox />
             </Box>
 
             <Box component="section" className="flex flex-col gap-2">
@@ -282,5 +285,86 @@ export default function AgendaSubscribePanel({ onClose }: { onClose: () => void 
         />
       ) : null}
     </SidePanel>
+  );
+}
+
+/**
+ * The person's e-mail of this morning as the backend would write it (0132): the same items and words, shown here also
+ * where this environment sends no e-mail, so a test sees what would arrive.
+ */
+function MorningPreviewBox() {
+  const t = useTranslations("product");
+  const [preview, setPreview] = useState<MorningPreview | null>(null);
+  const [state, setState] = useState<"idle" | "loading" | "error">("idle");
+  const show = async () => {
+    setState("loading");
+    try {
+      const answer = await previewMorningEmail();
+      if (answer.ok) {
+        setPreview(answer.preview);
+        setState("idle");
+      } else setState("error");
+    } catch {
+      setState("error");
+    }
+  };
+  if (!preview) {
+    return (
+      <Box className="flex flex-col gap-1">
+        <Box>
+          <Button size="small" variant="text" disabled={state === "loading"} onClick={() => void show()}>
+            {t("agenda-preview-show")}
+          </Button>
+        </Box>
+        {state === "error" ? (
+          <Typography variant="body2" className="text-text-secondary">
+            {t("agenda-load-failed")}
+          </Typography>
+        ) : null}
+      </Box>
+    );
+  }
+  const empty = preview.today.length === 0 && preview.next.length === 0;
+  const lines = (items: MorningPreview["today"]) => (
+    <Box component="ul" className="m-0 flex list-none flex-col gap-1 p-0">
+      {items.map((line, index) => (
+        <Typography key={`${index}:${line.text}`} component="li" variant="body2">
+          {line.changed ? t("agenda-preview-changed", { text: line.text }) : line.text}
+        </Typography>
+      ))}
+    </Box>
+  );
+  return (
+    <Box className="border-grey-100 flex flex-col gap-2 rounded-lg border p-3">
+      <Typography variant="subtitle2">{t("agenda-preview-subject", { day: preview.day })}</Typography>
+      {!preview.configured ? <StateLine tone="info">{t("agenda-preview-not-configured")}</StateLine> : null}
+      {!preview.businessDay ? (
+        <StateLine tone="info">{t("agenda-preview-not-business")}</StateLine>
+      ) : empty ? (
+        <StateLine tone="info">{t("agenda-preview-empty")}</StateLine>
+      ) : null}
+      {!empty ? (
+        <>
+          <Typography variant="caption" className="text-text-secondary font-semibold">
+            {t("agenda-preview-today")}
+          </Typography>
+          {preview.today.length > 0 ? (
+            lines(preview.today)
+          ) : (
+            <Typography variant="body2" className="text-text-secondary">
+              {t("agenda-preview-today-none")}
+            </Typography>
+          )}
+          {preview.next.length > 0 ? (
+            <>
+              <Typography variant="caption" className="text-text-secondary font-semibold">
+                {t("agenda-preview-next")}
+              </Typography>
+              {lines(preview.next)}
+            </>
+          ) : null}
+        </>
+      ) : null}
+    </Box>
   );
 }
