@@ -9,7 +9,12 @@ import { Alert, Box, Button, Dialog, DialogActions, DialogContent, TextField, Ty
 
 import CollapsibleCard from "@/components/product/collapsible-card";
 import DialogHeader from "@/components/product/dialog-header";
-import StatusChip, { type StatusTone } from "@/components/product/status-chip";
+import ItemRows, { type ItemRow } from "@/components/product/item-rows";
+import type { StateTone } from "@/components/product/state-line";
+import StatusChip from "@/components/product/status-chip";
+import NiClock from "@/icons/nexture/ni-clock";
+import NiMessages from "@/icons/nexture/ni-messages";
+import { SECTION_ANCHOR } from "@/lib/cases/now";
 import { opensOnArrival } from "@/lib/cases/sections";
 import { recordNoticeStop } from "@/lib/notices/actions";
 import type { CaseNoticePerson } from "@/lib/notices/facts";
@@ -18,12 +23,13 @@ import { phoneLabel } from "@/lib/whatsapp/conversations";
 
 type Ready = Extract<CaseState, { kind: "ready" }>;
 
-const SENT_TONE: Record<string, StatusTone> = {
-  queued: "info",
-  sending: "info",
-  sent: "primary",
-  delivered: "positive",
-  read: "positive",
+/** Where a message that went stands, in its line's colour: on its way, delivered or read. */
+const SENT_STATE: Record<string, StateTone> = {
+  queued: "waiting",
+  sending: "waiting",
+  sent: "done",
+  delivered: "done",
+  read: "done",
   failed: "attention",
 };
 
@@ -63,6 +69,41 @@ export default function NoticesCard({
 
   const unreached = notices.people.filter((person) => person.blocker).length;
 
+  // A message whose fate is unknown, or that did not go, asks the firm to look; the rest went.
+  const troubled = notices.sent.filter((item) => isUnconfirmed(item.status, item.error) || item.status === "failed");
+  const delivered = notices.sent.filter((item) => !troubled.includes(item));
+  const sentLine = (item: (typeof notices.sent)[number]): ItemRow => {
+    const unconfirmed = isUnconfirmed(item.status, item.error);
+    const failed = !unconfirmed && item.status === "failed";
+    return {
+      key: item.id,
+      icon: <NiMessages size="small" />,
+      tone: "accent-1",
+      title: [kindLabel(item.kind), names.get(item.personId)].filter(Boolean).join(" · "),
+      detail: item.reservedLabel,
+      state: {
+        tone: unconfirmed || failed ? "attention" : (SENT_STATE[item.status] ?? "info"),
+        text: t(unconfirmed ? "notice-sent-unconfirmed" : sentKey(item.status)),
+      },
+      opener: unconfirmed || failed ? t("case-rows-notice-open") : undefined,
+      openLabel: t("case-rows-notice-open-label", { kind: kindLabel(item.kind) }),
+      content: () => (
+        <Typography variant="body2" className="text-text-secondary break-words whitespace-pre-line">
+          {item.body}
+        </Typography>
+      ),
+    };
+  };
+  const dueLine = (item: (typeof notices.due)[number], index: number): ItemRow => ({
+    key: `due-${index}-${item.kind}-${item.personId}`,
+    icon: <NiClock size="small" />,
+    tone: "accent-4",
+    title: [kindLabel(item.kind), names.get(item.personId)].filter(Boolean).join(" · "),
+    state: item.blocker
+      ? { tone: "info", text: t(blockerKey(item.blocker)) }
+      : { tone: "waiting", text: t("case-notices-due-going") },
+  });
+
   return (
     <CollapsibleCard
       id="case-notices"
@@ -75,6 +116,11 @@ export default function NoticesCard({
             : unreached > 0
               ? t("case-notices-summary-unreached", { count: unreached })
               : t("case-notices-summary-reached")
+      }
+      chip={
+        troubled.length > 0 ? (
+          <StatusChip tone="attention" label={t("case-rows-ask-chip", { count: troubled.length })} />
+        ) : null
       }
       action={
         state.managesFirm ? (
@@ -138,52 +184,17 @@ export default function NoticesCard({
         </Box>
       ) : null}
 
-      {notices.due.length > 0 ? (
-        <Box className="flex flex-col gap-1">
-          <Typography variant="body2" className="font-semibold">
-            {t("case-notices-due")}
-          </Typography>
-          <Box component="ul" className="m-0 flex list-disc flex-col gap-1 pl-5">
-            {notices.due.map((item, index) => (
-              <Typography key={index} component="li" variant="body2">
-                {t("case-notices-due-item", {
-                  kind: kindLabel(item.kind),
-                  name: names.get(item.personId) ?? "",
-                  state: item.blocker ? t(blockerKey(item.blocker)) : t("case-notices-due-going"),
-                })}
-              </Typography>
-            ))}
-          </Box>
-        </Box>
-      ) : null}
-
-      {notices.sent.length > 0 ? (
-        <Box className="flex flex-col gap-2">
-          <Typography variant="body2" className="font-semibold">
-            {t("case-notices-sent")}
-          </Typography>
-          <Box component="ul" className="m-0 flex list-none flex-col gap-3 p-0">
-            {notices.sent.map((item) => {
-              const unconfirmed = isUnconfirmed(item.status, item.error);
-              return (
-                <Box component="li" key={item.id} className="flex flex-col gap-1">
-                  <Box className="flex flex-wrap items-center gap-2">
-                    <Typography variant="body2" className="min-w-0 flex-1">
-                      {[kindLabel(item.kind), names.get(item.personId), item.reservedLabel].filter(Boolean).join(" · ")}
-                    </Typography>
-                    <StatusChip
-                      tone={unconfirmed ? "attention" : (SENT_TONE[item.status] ?? "info")}
-                      label={t(unconfirmed ? "notice-sent-unconfirmed" : sentKey(item.status))}
-                    />
-                  </Box>
-                  <Typography variant="body2" className="text-text-secondary line-clamp-3 break-words">
-                    {item.body}
-                  </Typography>
-                </Box>
-              );
-            })}
-          </Box>
-        </Box>
+      {notices.due.length > 0 || notices.sent.length > 0 ? (
+        // One line per notice (the owner's canvas, 2026-11-10): one whose sending nobody can confirm first, what ONE
+        // will send, then what went, the latest first, its words opening in the line.
+        <ItemRows
+          arrival={[SECTION_ANCHOR.notices]}
+          sections={[
+            { key: "ask", title: t("item-rows-ask"), ask: true, rows: troubled.map(sentLine) },
+            { key: "due", title: t("case-notices-due"), rows: notices.due.map(dueLine) },
+            { key: "sent", title: t("case-notices-sent"), rows: delivered.map(sentLine), shown: 3 },
+          ]}
+        />
       ) : null}
       {asking ? (
         <StopDialog

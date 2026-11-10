@@ -64,6 +64,13 @@ export default function DeadlinesCard({
   const toConfirm = deadlines.open.filter((row) => row.status === "proposed").length;
   const toReview = deadlines.open.filter((row) => row.review).length;
   const nearest = deadlines.open.map((row) => row.urgentOn ?? row.dueOn).find(Boolean) ?? null;
+  // What waits for a person first (the owner's canvas, 2026-11-10): a deadline to confirm or to look at again, then
+  // the confirmed ones, each group in its own order (the nearest first).
+  const waitsForPerson = (row: (typeof deadlines.open)[number]) => row.status === "proposed" || row.review;
+  const asking = [
+    ...deadlines.open.filter((row) => waitsForPerson(row)),
+    ...deadlines.open.filter((row) => !waitsForPerson(row)),
+  ];
 
   return (
     <CollapsibleCard
@@ -118,7 +125,7 @@ export default function DeadlinesCard({
         />
       ) : (
         <Box component="ul" className="m-0 flex list-none flex-col gap-3 p-0">
-          {deadlines.open.map((row) => (
+          {asking.map((row) => (
             <Box component="li" key={`${row.id}:${row.revision}:${row.status}`}>
               <DeadlineCard
                 row={row}

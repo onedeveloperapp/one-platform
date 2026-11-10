@@ -253,6 +253,12 @@
       "use": "Keeps a screen in step with the database while it is open: asks a light pulse every few seconds while the product works there or right after the person acted (call acted() from every write), less often otherwise, never on a hidden tab, and reads the screen again only when the mark changed. Say checkedAt as when the screen last knew it was current. One per screen, never an interval per card."
     },
     {
+      "name": "ItemRows",
+      "from": "@/components/product/item-rows",
+      "props": "sections: { key, title, rows: ItemRow[], ask? (what asks the person: tinted, opened first on arrival), shown? (lines in sight before \"Mostrar mais\") }[]; arrival? (the addresses that bring a person to the list: there, the first line that asks opens). ItemRow: { key, icon, tone (TileTone), tint? (a tile of its own: a thing cancelled), title, detail?, state? { tone: StateTone, text }, action? (its one button, done in place), opener? (words of a button that opens the line, in place of action), content? () => ReactNode (what opens in the line), openLabel? }",
+      "use": "A card's list of many things as one line each (the owner, 2026-11-10): what asks the person first, in a section of its own, each line saying what is missing in its state's colour and holding its one button; what the product is doing as lines that wait; what is settled below, the newest first, a few in sight and the rest one click away. A line opens in place on everything it holds, one at a time; what opened once stays mounted, so a note typed or a panel opened in it lives on. Use it where a card lists things that pile up and some ask for action (publications, documents, notices, papers to sign); a card of one or two things, or of things that never ask, keeps its own layout."
+    },
+    {
       "name": "useFresh",
       "from": "@/components/product/use-fresh",
       "props": "(signatures: Record<key, signature of how it stands>, holdMs = 6000) -> ReadonlySet<key> of what is new or changed since the previous reading",

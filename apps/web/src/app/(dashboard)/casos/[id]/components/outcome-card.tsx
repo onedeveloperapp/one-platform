@@ -53,14 +53,22 @@ const ERROR_KEY: Record<string, string> = {
 const errorKey = (code: string) => ERROR_KEY[code] ?? "outcome-error-failed";
 
 /** One fact as a line: what it is, its value and day, whose it is, and the court's words beside it. */
+/** A fact that asks the firm: ONE's reading to confirm, the awareness owed, or what a release paid to register. */
+const factAsks = (fact: LawsuitFact) =>
+  !fact.corrected &&
+  (!fact.confirmed || (fact.ackOwed && !fact.ackedAt) || (fact.kind === "alvara" && !fact.receivedOn));
+
 function FactLine({
   fact,
   writable,
   onAct,
+  lawsuit,
 }: {
   fact: LawsuitFact;
   writable: boolean;
   onAct: (fact: LawsuitFact, action: "ack" | "confirm" | "received" | "correct") => void;
+  /** The lawsuit it is of, said when the line stands away from its lawsuit (among what asks the firm). */
+  lawsuit?: string;
 }) {
   const t = useTranslations("product");
   const ackWords = ACK_WORDS[fact.kind === "sentenca" ? "against" : "course"];
@@ -80,7 +88,9 @@ function FactLine({
             {what}
           </Typography>
           <Typography variant="body2" className="text-text-secondary">
-            {brDay(fact.happenedOn)}
+            {[brDay(fact.happenedOn), lawsuit ? t("outcome-lawsuit", { number: lawsuit }) : null]
+              .filter(Boolean)
+              .join(" · ")}
           </Typography>
         </Box>
         {writable && !fact.corrected ? (
@@ -180,6 +190,11 @@ export default function OutcomeCard({
   const t = useTranslations("product");
   const lawsuits = state.proceedings.filter((lawsuit) => lawsuit.cnj && lawsuit.status !== "planned");
   const facts = state.outcomes ?? [];
+  const asking = facts.filter(factAsks);
+  const numberOf = (proceedingId: string) => {
+    const cnj = lawsuits.find((lawsuit) => lawsuit.id === proceedingId)?.cnj ?? "";
+    return formatCnj(cnj) ?? cnj;
+  };
   const [problem, setProblem] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [receiving, setReceiving] = useState<LawsuitFact | null>(null);
@@ -259,8 +274,31 @@ export default function OutcomeCard({
           {t("outcome-closed-by-one")}
         </StateLine>
       ) : null}
+      {/* What asks the firm first, whatever lawsuit it is of (the owner's canvas, 2026-11-10). */}
+      {asking.length > 0 ? (
+        <Box component="section" aria-labelledby="outcome-asking" className="flex flex-col gap-1">
+          <Typography id="outcome-asking" variant="subtitle2" component="h3">
+            {t("item-rows-section", { title: t("item-rows-ask"), count: asking.length })}
+          </Typography>
+          <Box
+            component="ul"
+            className="bg-accent-3-light/5 border-grey-100 m-0 flex list-none flex-col rounded-2xl border px-4 py-0"
+          >
+            {asking.map((fact) => (
+              <FactLine
+                key={fact.id}
+                fact={fact}
+                writable={writable}
+                lawsuit={numberOf(fact.proceedingId)}
+                onAct={(item, action) => void act(item, action)}
+              />
+            ))}
+          </Box>
+        </Box>
+      ) : null}
       {lawsuits.map((lawsuit) => {
-        const own = facts.filter((fact) => fact.proceedingId === lawsuit.id);
+        const all = facts.filter((fact) => fact.proceedingId === lawsuit.id);
+        const own = all.filter((fact) => !factAsks(fact));
         return (
           <Box key={lawsuit.id} className="flex flex-col gap-1">
             <Box className="flex flex-wrap items-center justify-between gap-2">
@@ -268,13 +306,13 @@ export default function OutcomeCard({
                 {t("outcome-lawsuit", { number: formatCnj(lawsuit.cnj ?? "") ?? lawsuit.cnj ?? "" })}
               </Typography>
               <StatusChip
-                tone={lawsuitOutcome(own) === "archived" ? "positive" : "neutral"}
-                label={t(OUTCOME_KEY[lawsuitOutcome(own)])}
+                tone={lawsuitOutcome(all) === "archived" ? "positive" : "neutral"}
+                label={t(OUTCOME_KEY[lawsuitOutcome(all)])}
               />
             </Box>
-            {own.length === 0 ? (
+            {all.length === 0 ? (
               <StateLine tone="info">{t("outcome-none")}</StateLine>
-            ) : (
+            ) : own.length === 0 ? null : (
               <Box component="ul" className="m-0 flex list-none flex-col p-0">
                 {own.map((fact) => (
                   <FactLine

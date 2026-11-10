@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useTranslations } from "next-intl";
-import { useEffect, useRef, useState, useTransition } from "react";
+import { type ElementType, useEffect, useRef, useState, useTransition } from "react";
 
 import {
   Alert,
@@ -120,6 +120,7 @@ export default function PublicationCard({
   onSaid,
   onSeen,
   onAcknowledged,
+  inline = false,
 }: {
   row: PublicationRow;
   /** What ONE recorded of it since the list was read, while ONE reads it. */
@@ -136,6 +137,11 @@ export default function PublicationCard({
   onSeen: () => void;
   /** The person said they are aware of ONE's triage (0104): what the list or the case does with it. */
   onAcknowledged?: () => void;
+  /**
+   * Drawn inside a line of its case's list (`ItemRows`): the line says what it is and where it stands, and gives the
+   * awareness of ONE's triage, so the card leaves out its head, the way to the case and that awareness.
+   */
+  inline?: boolean;
 }) {
   const t = useTranslations("product");
   const [pending, startTransition] = useTransition();
@@ -350,34 +356,44 @@ export default function PublicationCard({
     />
   );
 
-  return (
-    <Card component="article" aria-labelledby={titleId}>
-      <CardContent className="flex flex-col gap-4">
-        {/* What it is, where it comes from, and where it stands. */}
-        <Box className="flex flex-row items-start gap-3">
-          <Box aria-hidden className={cn("flex h-10 w-10 flex-none items-center justify-center rounded-xl", look.tint)}>
-            {look.icon}
-          </Box>
-          <Box className="flex min-w-0 flex-1 flex-col gap-0.5">
-            <Typography id={titleId} variant="body1" component="h3" className="mb-0 font-semibold">
-              {what}
-            </Typography>
-            <Typography variant="body2" className="text-text-secondary">
-              {[row.court, row.unit].filter(Boolean).join(" · ")}
-            </Typography>
-          </Box>
-          <Box className="flex flex-none flex-wrap justify-end gap-1">
-            {!row.active ? <StatusChip tone="danger" label={t("publication-cancelled")} /> : null}
-            {category ? (
-              <StatusChip tone={CATEGORY_TONE[category]} label={t(CATEGORY_KEY[category])} />
-            ) : row.active ? (
-              <StatusChip tone="attention" label={t("publications-view-untriaged")} />
-            ) : null}
-          </Box>
-        </Box>
+  // Inside a line, the card is the line's body: no surface, no head of its own.
+  const Outer: ElementType = inline ? Box : Card;
+  const Inner: ElementType = inline ? Box : CardContent;
 
-        <Typography variant="body2" className="text-text-secondary -mt-2">
+  return (
+    <Outer component="article" {...(inline ? { "aria-label": what } : { "aria-labelledby": titleId })}>
+      <Inner className="flex flex-col gap-4">
+        {/* What it is, where it comes from, and where it stands. */}
+        {inline ? null : (
+          <Box className="flex flex-row items-start gap-3">
+            <Box
+              aria-hidden
+              className={cn("flex h-10 w-10 flex-none items-center justify-center rounded-xl", look.tint)}
+            >
+              {look.icon}
+            </Box>
+            <Box className="flex min-w-0 flex-1 flex-col gap-0.5">
+              <Typography id={titleId} variant="body1" component="h3" className="mb-0 font-semibold">
+                {what}
+              </Typography>
+              <Typography variant="body2" className="text-text-secondary">
+                {[row.court, row.unit].filter(Boolean).join(" · ")}
+              </Typography>
+            </Box>
+            <Box className="flex flex-none flex-wrap justify-end gap-1">
+              {!row.active ? <StatusChip tone="danger" label={t("publication-cancelled")} /> : null}
+              {category ? (
+                <StatusChip tone={CATEGORY_TONE[category]} label={t(CATEGORY_KEY[category])} />
+              ) : row.active ? (
+                <StatusChip tone="attention" label={t("publications-view-untriaged")} />
+              ) : null}
+            </Box>
+          </Box>
+        )}
+
+        <Typography variant="body2" className={cn("text-text-secondary", !inline && "-mt-2")}>
           {[
+            inline ? [row.court, row.unit].filter(Boolean).join(" · ") : null,
             t("publication-case-number", { number: row.cnj }),
             t("publication-available-on", { day: formatDayBr(row.availableOn) ?? row.availableOn }),
             row.className,
@@ -566,7 +582,7 @@ export default function PublicationCard({
           </Alert>
         ) : null}
 
-        {row.ackOwed && !acked && !said && category && !controls && row.active ? (
+        {!inline && row.ackOwed && !acked && !said && category && !controls && row.active ? (
           <StateLine
             tone="attention"
             emphasis
@@ -638,7 +654,7 @@ export default function PublicationCard({
         {/* Of which case, to whom, what the publication set in motion, and what is kept one click away. */}
         <Box className="border-grey-100 flex flex-wrap items-center justify-between gap-2 border-t pt-3">
           <Box className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1">
-            {row.caseId ? (
+            {inline ? null : row.caseId ? (
               <Button
                 variant="text"
                 color="primary"
@@ -690,7 +706,7 @@ export default function PublicationCard({
             <QuickActions label={t("publication-more-actions")} actions={more} />
           </Box>
         </Box>
-      </CardContent>
+      </Inner>
 
       {scheduling && row.proceedingId ? (
         <HearingPanel
@@ -767,7 +783,7 @@ export default function PublicationCard({
           </DialogContent>
         </Dialog>
       ) : null}
-    </Card>
+    </Outer>
   );
 }
 

@@ -22,31 +22,34 @@ import CheckSuggestion from "@/components/product/check-suggestion";
 import CollapsibleCard from "@/components/product/collapsible-card";
 import DialogHeader from "@/components/product/dialog-header";
 import EmptyState from "@/components/product/empty-state";
-import StateLine from "@/components/product/state-line";
-import StatusChip, { type StatusTone } from "@/components/product/status-chip";
+import ItemRows, { type ItemRow } from "@/components/product/item-rows";
+import StatusChip from "@/components/product/status-chip";
 import IllustrationDocumentation from "@/icons/illustrations/illustration-documentation";
+import NiDocumentCross from "@/icons/nexture/ni-document-cross";
+import NiDocumentFull from "@/icons/nexture/ni-document-full";
 import { decideCaseDocument, finishCaseUpload, openCaseFile, startCaseUpload } from "@/lib/cases/actions";
 import {
   caseErrorKey,
   DOCUMENT_KIND_KEY,
   DOCUMENT_KINDS,
-  DOCUMENT_STATUS_KEY,
   type DocumentKind,
   FILE_REFUSAL_KEY,
   isDocumentKind,
 } from "@/lib/cases/cases";
 import { processingErrorKey, readDataDiffers, type ReadDiffer } from "@/lib/cases/document-check";
 import { PHOTO_PROBLEM_KEY } from "@/lib/cases/document-quality";
+import { documentLine, orderDocuments } from "@/lib/cases/document-rows";
+import { SECTION_ANCHOR } from "@/lib/cases/now";
 import { opensOnArrival } from "@/lib/cases/sections";
 import { mimeOf, uploadToSignedUrl } from "@/lib/files/browser-upload";
 
 type Ready = Extract<CaseState, { kind: "ready" }>;
 
-const STATUS_TONE: Record<CaseDocument["status"], StatusTone> = {
-  received: "info",
-  accepted: "positive",
-  rejected: "attention",
-};
+/** A day as a line says it, in Brasília: 07/11. */
+const dayOf = (at: string) =>
+  new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit", timeZone: "America/Sao_Paulo" }).format(
+    new Date(at),
+  );
 const READ_DIFFER_KEY: Record<ReadDiffer, string> = {
   cpf: "read-item-cpf",
   birth_date: "read-item-birth-date",
@@ -123,8 +126,6 @@ export default function DocumentsCard({
     (document) =>
       document.status === "received" && (document.processing === "pending" || document.processing === "working"),
   );
-  const toReview = state.documents.filter((document) => document.status === "received" && !checking.includes(document));
-  const decided = state.documents.filter((document) => document.status !== "received");
 
   const open = async (document: CaseDocument, fileId: string = document.fileId) => {
     setOpening(document.id);
@@ -183,20 +184,12 @@ export default function DocumentsCard({
       }
     });
 
-  const row = (document: CaseDocument) => (
-    <Box key={document.id} className="border-grey-100 flex flex-col gap-2 rounded-2xl border p-4">
-      <Box className="flex flex-wrap items-start justify-between gap-2">
-        <Box className="flex min-w-0 flex-col">
-          <Typography variant="body1" className="font-semibold">
-            {isDocumentKind(document.kind) ? t(DOCUMENT_KIND_KEY[document.kind]) : document.kind}
-            {personOf(document.partyId) ? ` · ${personOf(document.partyId)}` : ""}
-          </Typography>
-          <Typography variant="body2" className="text-text-secondary break-all">
-            {document.name} · {t(SOURCE_KEY[document.source])}
-          </Typography>
-        </Box>
-        <StatusChip tone={STATUS_TONE[document.status]} label={t(DOCUMENT_STATUS_KEY[document.status])} />
-      </Box>
+  // What opens in a document's line: the file, ONE's suggestion, what the photo measured, and the decision.
+  const body = (document: CaseDocument) => (
+    <Box className="flex flex-col gap-2">
+      <Typography variant="body2" className="text-text-secondary break-all">
+        {document.name} · {t(SOURCE_KEY[document.source])}
+      </Typography>
       {document.status === "received" && document.check?.waiting ? (
         <Box className="flex flex-col gap-1">
           <CheckSuggestion answer={document.check.answer} />
@@ -313,6 +306,31 @@ export default function DocumentsCard({
     </Box>
   );
 
+  // One line per document (the owner's canvas, 2026-11-10): what asks the firm first, ONE's checks, then the rest.
+  const lined = state.documents.map((document) => ({
+    document,
+    line: documentLine(document, residenceOf(document)),
+  }));
+  const ordered = orderDocuments(lined);
+  const refusalWords = (reason: string | null) =>
+    reason ? (FILE_REFUSAL_KEY[reason] ? t(FILE_REFUSAL_KEY[reason]) : reason) : "";
+  const asLine = ({ document, line }: (typeof lined)[number]): ItemRow => {
+    const kind = isDocumentKind(document.kind) ? t(DOCUMENT_KIND_KEY[document.kind]) : document.kind;
+    const day = dayOf(document.createdAt);
+    return {
+      key: document.id,
+      icon: document.status === "rejected" ? <NiDocumentCross size="small" /> : <NiDocumentFull size="small" />,
+      tone: line.place === "working" ? "accent-4" : "secondary",
+      tint: document.status === "rejected" ? "bg-error-light/10 text-error" : undefined,
+      title: [kind, personOf(document.partyId)].filter(Boolean).join(" · "),
+      detail: t("case-rows-doc-detail", { source: t(SOURCE_KEY[document.source]), day }),
+      state: { tone: line.tone, text: t(line.key, { reason: refusalWords(line.reason) }) },
+      opener: line.place === "ask" && writable ? t("case-rows-doc-open") : undefined,
+      openLabel: t("case-rows-doc-open-label", { kind }),
+      content: () => body(document),
+    };
+  };
+
   const accepted = state.documents.filter((document) => document.status === "accepted").length;
   const refused = state.documents.filter((document) => document.status === "rejected").length;
 
@@ -332,12 +350,12 @@ export default function DocumentsCard({
               .join(" · ")
       }
       chip={
-        toReview.length > 0 ? (
-          <StatusChip tone="attention" label={t("case-documents-to-review", { count: toReview.length })} />
+        ordered.ask.length > 0 ? (
+          <StatusChip tone="attention" label={t("case-rows-ask-chip", { count: ordered.ask.length })} />
         ) : null
       }
       description={t("case-documents-body")}
-      defaultOpen={opensOnArrival(state.case.status, "documents", toReview.length > 0, state.documents.length === 0)}
+      defaultOpen={opensOnArrival(state.case.status, "documents", ordered.ask.length > 0, state.documents.length === 0)}
     >
       {problem && (
         <Alert severity="error" className="neutral bg-background-paper/60!" onClose={() => setProblem(null)}>
@@ -356,28 +374,16 @@ export default function DocumentsCard({
         />
       )}
 
-      {checking.length > 0 && (
-        <Box className="flex flex-col gap-2">
-          <StateLine tone="waiting">{t("case-documents-checking", { count: checking.length })}</StateLine>
-          {checking.map(row)}
-        </Box>
-      )}
-      {toReview.length > 0 && (
-        <Box className="flex flex-col gap-2">
-          <Typography variant="subtitle2" component="h3">
-            {t("case-documents-to-review", { count: toReview.length })}
-          </Typography>
-          {toReview.map(row)}
-        </Box>
-      )}
-      {decided.length > 0 && (
-        <Box className="flex flex-col gap-2">
-          <Typography variant="subtitle2" component="h3">
-            {t("case-documents-decided")}
-          </Typography>
-          {decided.map(row)}
-        </Box>
-      )}
+      {state.documents.length > 0 ? (
+        <ItemRows
+          arrival={[SECTION_ANCHOR.documents]}
+          sections={[
+            { key: "ask", title: t("item-rows-ask"), ask: true, rows: ordered.ask.map(asLine) },
+            { key: "working", title: t("case-rows-doc-working"), rows: ordered.working.map(asLine) },
+            { key: "done", title: t("case-documents-decided"), rows: ordered.done.map(asLine), shown: 3 },
+          ]}
+        />
+      ) : null}
 
       {writable && (
         <Box className="border-grey-100 flex flex-col gap-3 rounded-2xl border p-4">
