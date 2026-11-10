@@ -85,7 +85,30 @@ export type PartnershipFacts = {
   flightReadsToday: number | null;
   /** What the firm foresees of the partnership, in numbers (0084); null when the answer has none. */
   forecast: PartnershipForecast | null;
+  /** The agency's passengers by the firm's numbers (0171); null when the answer has none. */
+  passengers: PartnershipPassengers | null;
 };
+
+/**
+ * The agency's passengers by the firm's numbers (migration 0171, the owner's decision of 2026-11-07): the ones it
+ * registered, the ones that never agreed or no longer do, the leads (a yes that passed their data to the firm, no
+ * case yet) and the ones whose trip became a case.
+ */
+export type PartnershipPassengers = { registered: number; unagreed: number; leads: number; converted: number };
+
+/** The passengers' numbers of a partnership as the database answers them; null for an answer that is not one. */
+export function partnershipPassengersOf(raw: unknown): PartnershipPassengers | null {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return null;
+  const row = raw as Record<string, unknown>;
+  const registered = whole(row.registered);
+  if (registered === null) return null;
+  return {
+    registered,
+    unagreed: whole(row.unagreed) ?? 0,
+    leads: whole(row.leads) ?? 0,
+    converted: whole(row.converted) ?? 0,
+  };
+}
 
 /**
  * What a firm foresees of a partnership, to foresee the cases that may come (the owner, 2026-11-03), in numbers and
@@ -172,6 +195,7 @@ export function partnershipFactsOf(raw: unknown): FirmPartnershipFacts | null {
       readingsToday: whole(row.readings_today),
       flightReadsToday: whole(row.flight_reads_today),
       forecast: partnershipForecastOf(row.forecast),
+      passengers: partnershipPassengersOf(row.passengers),
     });
   }
   const readingsDaily = whole(answer.readings_daily);

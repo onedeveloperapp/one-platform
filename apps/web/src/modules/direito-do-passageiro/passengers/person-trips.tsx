@@ -22,6 +22,7 @@ import {
   TRIP_STATUS_TONE,
   tripStoppable,
 } from "@/modules/direito-do-passageiro/passengers/passengers";
+import PersonAgency from "@/modules/direito-do-passageiro/passengers/person-agency";
 
 const dayOf = (value: string) =>
   value
@@ -40,6 +41,8 @@ export default function PersonTrips({ personId, personName }: { personId: string
   const [adding, setAdding] = useState(false);
   const [stopping, setStopping] = useState<PersonTrip | null>(null);
   const [done, setDone] = useState<string | null>(null);
+  // 0171: the agencies the person came from as a lead, with the trips ONE follows for them.
+  const [agencies, setAgencies] = useState(0);
 
   const read = useCallback(() => {
     void personTrips(personId).then(setTrips, () => setTrips(null));
@@ -84,9 +87,11 @@ export default function PersonTrips({ personId, personName }: { personId: string
             {t("passenger-trips-unread")}
           </Alert>
         ) : trips.length === 0 ? (
-          <Typography variant="body2" className="text-text-secondary">
-            {t("passenger-trips-none")}
-          </Typography>
+          agencies > 0 ? null : (
+            <Typography variant="body2" className="text-text-secondary">
+              {t("passenger-trips-none")}
+            </Typography>
+          )
         ) : (
           <Box component="ul" className="m-0 flex list-none flex-col p-0">
             {trips.map((trip) => (
@@ -131,6 +136,7 @@ export default function PersonTrips({ personId, personName }: { personId: string
             ))}
           </Box>
         )}
+        <PersonAgency personId={personId} onLoaded={setAgencies} />
       </CardContent>
 
       {adding ? (

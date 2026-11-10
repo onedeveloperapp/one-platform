@@ -9,6 +9,7 @@ import {
   partnerModules,
   partnerSetupPending,
   partnershipFactsOf,
+  partnershipPassengersOf,
 } from "@/lib/partners/partner";
 import messages from "@flyee/content/messages/pt-BR.json";
 
@@ -155,6 +156,7 @@ describe("what the firm has of its partnerships", () => {
         inAir: 1,
         arrivedToday: 2,
       },
+      passengers: null,
     });
     // A partnership whose answer carries no forecast has none, never zeros said as numbers.
     expect(facts?.byLink.get("link-lua")?.forecast).toBeNull();
@@ -169,5 +171,19 @@ describe("what the firm has of its partnerships", () => {
     expect(member?.byLink.get("link-sol")?.casesGoing).toBe(2);
     expect(partnershipFactsOf(null)).toBeNull();
     expect(partnershipFactsOf({ partnerships: "x" })).toBeNull();
+  });
+});
+
+describe("the agency's passengers by the firm's numbers", () => {
+  it("reads the four counts, and none from an answer that has none", () => {
+    expect(partnershipPassengersOf({ registered: 12, unagreed: 3, leads: 7, converted: 2 })).toEqual({
+      registered: 12,
+      unagreed: 3,
+      leads: 7,
+      converted: 2,
+    });
+    expect(partnershipPassengersOf({ registered: 4 })).toEqual({ registered: 4, unagreed: 0, leads: 0, converted: 0 });
+    expect(partnershipPassengersOf(null)).toBeNull();
+    expect(partnershipPassengersOf({ leads: 2 })).toBeNull();
   });
 });

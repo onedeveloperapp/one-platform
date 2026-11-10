@@ -1940,7 +1940,7 @@
     "partners-cases-total": "Casos vindos da agência",
     "partners-cases-open": "Ver os casos",
     "partners-forecast-title": "Previsão de casos",
-    "partners-forecast-body": "Quantos passageiros desta agência concordaram com o acompanhamento dos voos e quando voam, sem identificar ninguém. Os dados de um passageiro só chegam ao escritório quando ele aceita a ajuda.",
+    "partners-forecast-body": "Quantos passageiros desta agência concordaram com o acompanhamento dos voos e quando voam. Os dados de quem concorda chegam ao escritório como lead, em Pessoas.",
     "partners-forecast-none": "Nenhum passageiro desta agência concordou ainda. Quando concordar, os números aparecem aqui.",
     "partners-forecast-agreed": "Passageiros que concordaram",
     "partners-forecast-agreed-since": "O primeiro concordou em {date}.",
@@ -8589,7 +8589,14 @@
     "passenger-trip-stop-confirm": "Parar de acompanhar",
     "passenger-trip-stopped-now": "O ONE parou de acompanhar a viagem.",
     "people-new": "Nova pessoa",
-    "add-group-people": "Pessoas"
+    "add-group-people": "Pessoas",
+    "partners-passengers-registered": "Passageiros cadastrados",
+    "partners-passengers-unagreed": "Sem acordo",
+    "partners-passengers-leads": "Leads do escritório",
+    "partners-passengers-leads-hint": "Concordaram, e os dados vieram ao escritório em Pessoas. Ainda sem caso.",
+    "partners-passengers-converted": "Viraram caso",
+    "lead-agency-title": "Veio da agência {agency}",
+    "lead-agency-day": "Concordou em {day} que os dados viessem ao escritório. O ONE acompanha estas viagens pela agência."
   },
   "auth": {
     "continue": "Continuar",

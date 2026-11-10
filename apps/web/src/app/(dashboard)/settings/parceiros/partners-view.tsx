@@ -513,7 +513,11 @@ function PartnershipItem({
         </Grid>
       )}
       {active && partnership.facts?.forecast && (
-        <PartnershipForecast forecast={partnership.facts.forecast} days={forecastDays} />
+        <PartnershipForecast
+          forecast={partnership.facts.forecast}
+          passengers={partnership.facts.passengers}
+          days={forecastDays}
+        />
       )}
     </Box>
   );

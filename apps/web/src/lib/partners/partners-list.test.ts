@@ -18,6 +18,7 @@ const facts = (casesGoingCount: number) => ({
   readingsToday: null,
   flightReadsToday: null,
   forecast: null,
+  passengers: null,
 });
 
 const partnership = (patch: Partial<FirmPartnership> & { linkId: string; partner: string }): FirmPartnership => ({

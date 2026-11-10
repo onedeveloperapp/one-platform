@@ -257,6 +257,16 @@ describe.skipIf(!DB_URL)("an agency's passenger, from the agency's area to the f
       followed: 1,
     });
 
+    // The words say the data go to the firm (0171): the passenger is the firm's lead from the yes, before any problem.
+    expect(wording).toContain("A partir deste acordo, o escritório cuida desses dados");
+    const [lead] = await sql.unsafe(
+      `select p.full_name, p.cpf, f.point from public.people p
+       join public.people_funnel($1) f on f.person_id = p.id
+       where p.org_id = $1`,
+      [FIRM],
+    );
+    expect(lead).toEqual({ full_name: "Rafaela Teste Lima", cpf: "52998224725", point: "lead" });
+
     const { readTestChat } = await import("@/lib/test-chat/actions");
     const read = await readTestChat(CHAT_TOKEN);
     expect(read.ok).toBe(true);
