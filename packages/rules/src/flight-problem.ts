@@ -22,6 +22,11 @@
  * a delay. The times of a leg are compared at its own airport (both local),
  * never across zones.
  *
+ * v4 (2026-11-10, item 2.4 of the case journey plan) reads each journey on
+ * its own too (`flightProblems`): the way back of a round trip whose outbound
+ * became a case is still told of a problem of its own. A journey's problem is
+ * its cancelled leg, else its changed one, else its last leg landing late.
+ *
  * What the airline owes is ANAC's, by the time the passenger waits
  * (Resolução 400, art. 27, in the words of Resolução 813/2026, in force from
  * 26/10/2026): from two hours, food; from four, lodging when a night must be
@@ -34,7 +39,7 @@
  * owed; the words are the app's.
  */
 
-export const FLIGHT_PROBLEM_RULE = "flight-problem-v3";
+export const FLIGHT_PROBLEM_RULE = "flight-problem-v4";
 
 /** A leg of a trip as a source says it now. Times are local (`2026-10-22T08:10:00`), at the leg's own airports. */
 export type WatchedLeg = {
@@ -126,6 +131,29 @@ export function flightProblem(legs: readonly WatchedLeg[], options: { delayMinut
     if (late !== null && late >= threshold) return { kind: "delayed", leg: last.position, delayMinutes: late };
   }
   return null;
+}
+
+/** A problem of one journey of a trip: which journey, counted from 1 in the order they fly, and its legs. */
+export type JourneyProblem = FlightProblem & { journey: number; legs: number[] };
+
+/**
+ * The problem of each journey of a trip, in the order they fly; a journey with nothing to tell has none. The legs
+ * may come in any order; each journey is read on its own, at its own last leg for a delay.
+ */
+export function flightProblems(legs: readonly WatchedLeg[], options: { delayMinutes: number }): JourneyProblem[] {
+  if (legs.length === 0) return [];
+  const threshold = Math.max(1, Math.round(options.delayMinutes));
+  return journeysOf(legs).flatMap((journey, index): JourneyProblem[] => {
+    const of = { journey: index + 1, legs: journey.map((leg) => leg.position) };
+    const cancelled = journey.find((leg) => leg.status === "cancelled");
+    if (cancelled) return [{ kind: "cancelled", leg: cancelled.position, delayMinutes: null, ...of }];
+    const changed = journey.find((leg) => leg.status === "changed");
+    if (changed) return [{ kind: "changed", leg: changed.position, delayMinutes: null, ...of }];
+    const last = journey[journey.length - 1];
+    if (!last.estimatedArrival) return [];
+    const late = minutesBetween(last.scheduledArrival, last.estimatedArrival);
+    return late !== null && late >= threshold ? [{ kind: "delayed", leg: last.position, delayMinutes: late, ...of }] : [];
+  });
 }
 
 /**

@@ -8662,7 +8662,8 @@
     "partners-passengers-leads-hint": "Concordaram, e os dados vieram ao escritório em Pessoas. Ainda sem caso.",
     "partners-passengers-converted": "Viraram caso",
     "lead-agency-title": "Veio da agência {agency}",
-    "lead-agency-day": "Concordou em {day} que os dados viessem ao escritório. O ONE acompanha estas viagens pela agência."
+    "lead-agency-day": "Concordou em {day} que os dados viessem ao escritório. O ONE acompanha estas viagens pela agência.",
+    "passenger-trip-rest-followed": "O ONE acompanha o resto da viagem"
   },
   "auth": {
     "continue": "Continuar",

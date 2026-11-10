@@ -4,13 +4,14 @@ import { soon } from "@/lib/jobs/soon";
 import { deliverOutbox } from "@/lib/whatsapp/send";
 import { type AlertLeg, alertParams } from "@/modules/direito-do-passageiro/flight-alerts/words";
 import { createServiceClient } from "@flyee/auth/service";
-import { FLIGHT_PROBLEM_RULE, type FlightProblem, flightProblem, type WatchedLeg } from "@flyee/rules/flight-problem";
+import { FLIGHT_PROBLEM_RULE, type FlightProblem, flightProblems, type WatchedLeg } from "@flyee/rules/flight-problem";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 /**
  * The backend's half of the flights ONE follows (migration 0047): what a
- * source says of a trip's legs is read by the rule (`flight-problem-v2`), and
- * a problem it finds is one alert per trip and fact, kept by the database;
+ * source says of a trip's legs is read by the rule (`flight-problem-v4`), and
+ * a problem it finds is one alert per journey and fact, kept by the database
+ * (0172: the way back of a trip that became a case is still told);
  * each alert is claimed under a number, its values are written here from the
  * rule (`flight-alerts/words.ts` of the module), and the database sends it as the
  * firm's template, once, through the outbox of 0019, or says why it could
@@ -54,29 +55,35 @@ export function watchedLegs(raw: unknown): WatchedLeg[] {
 }
 
 /**
- * Reads a trip's legs with the rule and keeps the alert of what it found.
- * Answers the problem (null when there is none) and the alert's id when a
- * new one was kept; one already known keeps nothing new.
+ * Reads a trip's legs with the rule and keeps the alert of what it found on each journey (0172). Answers the
+ * problem (the first journey's that is new, else the first found; null when there is none) and the id of the alert
+ * kept new; a journey already known, or one a case took, keeps nothing new.
  */
 export async function evaluateTrip(
   service: SupabaseClient,
   input: { tripId: string; legs: unknown; delayMinutes: number },
 ): Promise<{ problem: FlightProblem | null; alertId: string | null }> {
-  const problem = flightProblem(watchedLegs(input.legs), { delayMinutes: input.delayMinutes });
-  if (!problem) return { problem: null, alertId: null };
-  const { data, error } = await service.rpc("record_flight_alert", {
-    target_trip: input.tripId,
-    target_kind: problem.kind,
-    target_leg: problem.leg,
-    target_delay: problem.delayMinutes,
-    target_rule: FLIGHT_PROBLEM_RULE,
-  });
-  if (error) throw new Error("the alert could not be kept");
-  const answer = (data ?? {}) as { ok?: boolean; code?: string; alert_id?: unknown };
-  return {
-    problem,
-    alertId: answer.code === "recorded" && typeof answer.alert_id === "string" ? answer.alert_id : null,
-  };
+  const problems = flightProblems(watchedLegs(input.legs), { delayMinutes: input.delayMinutes });
+  if (problems.length === 0) return { problem: null, alertId: null };
+  let kept: { problem: FlightProblem; alertId: string } | null = null;
+  for (const problem of problems) {
+    const { data, error } = await service.rpc("record_flight_alert", {
+      target_trip: input.tripId,
+      target_kind: problem.kind,
+      target_leg: problem.leg,
+      target_delay: problem.delayMinutes,
+      target_rule: FLIGHT_PROBLEM_RULE,
+      target_journey: problem.journey,
+      target_legs: problem.legs,
+    });
+    if (error) throw new Error("the alert could not be kept");
+    const answer = (data ?? {}) as { ok?: boolean; code?: string; alert_id?: unknown };
+    if (!kept && answer.code === "recorded" && typeof answer.alert_id === "string") {
+      kept = { problem, alertId: answer.alert_id };
+    }
+  }
+  const first = problems[0];
+  return kept ?? { problem: { kind: first.kind, leg: first.leg, delayMinutes: first.delayMinutes }, alertId: null };
 }
 
 type Claimed = {

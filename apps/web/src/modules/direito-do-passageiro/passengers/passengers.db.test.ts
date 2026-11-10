@@ -226,4 +226,65 @@ describe.skipIf(!DB_URL)("a passenger the firm registers itself", () => {
     expect(await stopFollowing({ tripId: trips?.[0]?.id ?? "", personId })).toEqual({ ok: true, code: "stopped" });
     expect((await personTrips(personId))?.map((trip) => trip.status)).toEqual(["stopped"]);
   });
+
+  it("follows the way back of a trip whose way out became a case, and opens its own case at its yes (0172)", async () => {
+    const { registerPassenger } = await import("@/modules/direito-do-passageiro/passengers/actions");
+    const { runTestTool, sendTestMessage } = await import("@/lib/test-chat/actions");
+    const { takeConversationTurns } = await import("@/lib/conversations/agent-work");
+    const day = (days: number) =>
+      new Date(Date.now() + days * 86_400_000).toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
+    const roundTrip = await registerPassenger({
+      personId,
+      legs: [
+        {
+          flight_number: "LA3456",
+          origin_iata: "GYN",
+          destination_iata: "GRU",
+          scheduled_departure_local: `${day(3)}T08:00`,
+          scheduled_arrival_local: `${day(3)}T09:45`,
+        },
+        {
+          flight_number: "LA3457",
+          origin_iata: "GRU",
+          destination_iata: "GYN",
+          scheduled_departure_local: `${day(10)}T18:00`,
+          scheduled_arrival_local: `${day(10)}T19:45`,
+        },
+      ],
+      how: "whatsapp",
+      documents: [],
+    });
+    expect(roundTrip).toMatchObject({ ok: true, test: true });
+    const [{ id: trip }] = await sql.unsafe(
+      `select id from public.tracked_trips where org_id = $1 and label = 'escritorio'`,
+      [FIRM],
+    );
+    const before = await sql.unsafe(`select id from public.cases where org_id = $1`, [FIRM]);
+    const casesSince = async () =>
+      sql.unsafe(
+        `select c.id, array_agg(s.flight_number order by s.position) as flights
+         from public.cases c join public.flight_segments s on s.case_id = c.id
+         where c.org_id = $1 and not (c.id = any ($2::uuid[]))
+         group by c.id, c.created_at order by c.created_at`,
+        [FIRM, before.map((row) => String(row.id))],
+      );
+
+    // The way out is cancelled: the yes opens a case of that journey alone.
+    expect(await runTestTool(TOKEN, String(trip), "cancel")).toEqual({ ok: true, code: "told" });
+    expect(await sendTestMessage(TOKEN, String(trip), { reply: "SIM" })).toEqual({ ok: true, code: "delivered" });
+    expect(await takeConversationTurns(backend() as never)).toMatchObject({ opened: 1 });
+    expect((await casesSince()).map((row) => row.flights)).toEqual([["LA3456"]]);
+
+    // The way back lands six hours late: ONE still follows it, tells it, and its yes opens a case of its own.
+    expect(await runTestTool(TOKEN, String(trip), "late_6h")).toEqual({ ok: true, code: "told" });
+    expect(await sendTestMessage(TOKEN, String(trip), { reply: "SIM" })).toEqual({ ok: true, code: "delivered" });
+    expect(await takeConversationTurns(backend() as never)).toMatchObject({ opened: 1 });
+    expect((await casesSince()).map((row) => row.flights)).toEqual([["LA3456"], ["LA3457"]]);
+    const [kept] = await sql.unsafe(
+      `select t.status, (select count(*)::int from public.tracked_legs l where l.trip_id = t.id and l.case_id is null) as open
+       from public.tracked_trips t where t.id = $1`,
+      [trip],
+    );
+    expect(kept).toEqual({ status: "case_opened", open: 0 });
+  });
 });

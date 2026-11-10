@@ -3,7 +3,9 @@ import test from "node:test";
 
 import {
   assistanceDue,
+  FLIGHT_PROBLEM_RULE,
   flightProblem,
+  flightProblems,
   inFlightOrder,
   journeysOf,
   minutesBetween,
@@ -162,5 +164,47 @@ test("what the airline owes, by ANAC's rules and the time waited (Resolução 81
     "rebooking_or_refund",
     "food",
     "lodging",
+  ]);
+});
+
+test("v4 reads each journey on its own: the way back has a problem of its own", () => {
+  assert.equal(FLIGHT_PROBLEM_RULE, "flight-problem-v4");
+  const out = leg({ position: 1, origin: "GRU", destination: "REC", status: "cancelled" });
+  const back = leg({
+    position: 2,
+    origin: "REC",
+    destination: "GRU",
+    scheduledDeparture: "2099-10-29T18:00:00",
+    scheduledArrival: "2099-10-29T21:15:00",
+    status: "delayed",
+    estimatedArrival: "2099-10-30T02:00:00",
+  });
+  assert.deepEqual(flightProblems([back, out], RULE), [
+    { kind: "cancelled", leg: 1, delayMinutes: null, journey: 1, legs: [1] },
+    { kind: "delayed", leg: 2, delayMinutes: 285, journey: 2, legs: [2] },
+  ]);
+  // The way back alone, the outbound flown as it should.
+  assert.deepEqual(flightProblems([{ ...out, status: "landed" }, back], RULE), [
+    { kind: "delayed", leg: 2, delayMinutes: 285, journey: 2, legs: [2] },
+  ]);
+  // A delay under the setting is nothing; a trip with nothing has no problem.
+  assert.deepEqual(flightProblems([{ ...back, estimatedArrival: "2099-10-29T22:00:00" }], RULE), []);
+  assert.deepEqual(flightProblems([], RULE), []);
+  // The first of them is still the trip's problem, as v3 said it.
+  assert.deepEqual(flightProblem([back, out], RULE), { kind: "cancelled", leg: 1, delayMinutes: null });
+});
+
+test("v4 says the legs of a journey with a connection, and its change before a delay", () => {
+  const first = leg({ position: 1, origin: "GYN", destination: "GRU", scheduledArrival: "2099-10-22T10:00:00" });
+  const second = leg({
+    position: 2,
+    origin: "GRU",
+    destination: "REC",
+    scheduledDeparture: "2099-10-22T12:00:00",
+    scheduledArrival: "2099-10-22T15:20:00",
+    status: "changed",
+  });
+  assert.deepEqual(flightProblems([first, second], RULE), [
+    { kind: "changed", leg: 2, delayMinutes: null, journey: 1, legs: [1, 2] },
   ]);
 });

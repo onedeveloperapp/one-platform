@@ -109,6 +109,8 @@ export type PersonTrip = {
   agreedAt: string;
   caseId: string | null;
   documents: number;
+  /** A trip that became a case whose other journey ONE still follows (0172). */
+  restFollowed: boolean;
   legs: {
     position: number;
     flight: string;
@@ -127,7 +129,7 @@ export async function personTrips(personId: string): Promise<PersonTrip[] | null
   const { data, error } = await context.supabase
     .from("tracked_trips")
     .select(
-      "id, status, is_test, consent_at, case_id, tracked_legs(position, flight_number, origin_iata, destination_iata, scheduled_departure_local, scheduled_arrival_local, status), tracked_trip_documents(id)",
+      "id, status, is_test, consent_at, case_id, rest_closed, tracked_legs(position, flight_number, origin_iata, destination_iata, scheduled_departure_local, scheduled_arrival_local, status, case_id), tracked_trip_documents(id)",
     )
     .eq("org_id", context.firm.id)
     .eq("person_id", personId)
@@ -144,6 +146,8 @@ export async function personTrips(personId: string): Promise<PersonTrip[] | null
       agreedAt: String(row.consent_at ?? ""),
       caseId: typeof row.case_id === "string" ? row.case_id : null,
       documents,
+      restFollowed:
+        row.status === "case_opened" && row.rest_closed !== true && legs.some((leg) => leg.case_id === null),
       legs: legs
         .map((leg) => ({
           position: Number(leg.position),

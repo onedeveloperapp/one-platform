@@ -105,6 +105,7 @@ export default function PersonTrips({ personId, personName }: { personId: string
                     tone={TRIP_STATUS_TONE[trip.status] ?? "neutral"}
                     label={t(TRIP_STATUS_KEY[trip.status] ?? "passenger-trip-watching")}
                   />
+                  {trip.restFollowed ? <StatusChip tone="info" label={t("passenger-trip-rest-followed")} /> : null}
                   {trip.test ? <StatusChip tone="neutral" label={t("agenda-entry-test")} /> : null}
                   <Box className="flex-1" />
                   {trip.caseId ? (
