@@ -3,6 +3,7 @@
 import { GROUP_TONE } from "../../cases-types";
 import { caseFacts } from "../case-facts";
 import type { CaseState } from "../case-types";
+import { CaseActionProvider, useCaseActions } from "./case-action";
 import CaseAtWork from "./case-at-work";
 import ClientLinkCard from "./client-link-card";
 import ComplaintCard from "./complaint-card";
@@ -29,7 +30,7 @@ import TimelineCard from "./timeline-card";
 import TripCard from "./trip-card";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { useCallback, useMemo, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Alert, Box, Button, Grid } from "@mui/material";
 
@@ -42,7 +43,9 @@ import {
 import EmptyState from "@/components/product/empty-state";
 import PageHeader from "@/components/product/page-header";
 import QuickActions from "@/components/product/quick-actions";
+import StateLine from "@/components/product/state-line";
 import StatusChip from "@/components/product/status-chip";
+import { useFresh } from "@/components/product/use-fresh";
 import { useLiveRead } from "@/components/product/use-live-read";
 import NiAnnouncement from "@/icons/nexture/ni-announcement";
 import NiBell from "@/icons/nexture/ni-bell";
@@ -93,6 +96,12 @@ const LOOKS: Record<CaseSection, CardLook> = {
   timeline: { icon: <NiTimeline size="medium" />, tone: "accent-1" },
 };
 
+/** A moment as a clock says it, in Brasília: 14:32. */
+const clockOf = (at: number) =>
+  new Intl.DateTimeFormat("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" }).format(
+    new Date(at),
+  );
+
 /** What ONE is doing in each card, in a word on its head. */
 const WORKING_KEY: Partial<Record<CaseSection, string>> = {
   people: "case-card-working-reading",
@@ -132,6 +141,11 @@ export default function CaseView({ state: read }: { state: CaseState }) {
   // What happens in the case now, read from what the screen read (pure).
   const facts = useMemo(() => (ready ? caseFacts(ready) : null), [ready]);
 
+  // One action at a time (the owner's canvas, 2026-11-10): what the person does locks the case's other controls
+  // until the screen shows what came of it; a change made outside is read again saying so, with nothing locked.
+  const actedRef = useRef<() => void>(() => {});
+  const actions = useCaseActions({ acted: useCallback(() => actedRef.current(), []) });
+
   const live = useLiveRead({
     stamp: ready?.pulse?.stamp ?? null,
     read: useCallback(async () => {
@@ -141,15 +155,15 @@ export default function CaseView({ state: read }: { state: CaseState }) {
     }, [ready]),
     // ONE at work there now (a work already late is still followed, at the slower pace).
     busy: facts?.now.working.some((line) => !line.slow) ?? false,
-    onChange: useCallback(() => router.refresh(), [router]),
+    onChange: actions.follow,
   });
+  // After a person's write the pulse is asked often for a while, since ONE goes on from it.
+  useEffect(() => {
+    actedRef.current = live.acted;
+  }, [live.acted]);
 
-  // A person's write: the screen reads again now, and asks often for a while, since ONE goes on from it.
-  const { acted } = live;
-  const refresh = useCallback(() => {
-    acted();
-    router.refresh();
-  }, [acted, router]);
+  // A write a card made on its own: the screen reads again, the case's controls waiting until it shows.
+  const refresh = actions.reload;
 
   // What the top knows of each card, by its id: something there waits for the firm or failed, or for the client,
   // and what ONE does there now.
@@ -180,6 +194,34 @@ export default function CaseView({ state: read }: { state: CaseState }) {
     () => ({ firm: t("case-card-mark-firm"), failed: t("case-card-mark-failed"), client: t("case-card-mark-client") }),
     [t],
   );
+
+  // While an action runs, every control of the cards waits, and pointing at one says why.
+  const lock = actions.running ? t("case-action-wait", { doing: actions.running.doing }) : null;
+  // What came of the action, in the card where the person acted, for a while.
+  const note = actions.note;
+  const notes = useMemo(() => {
+    const out: Record<string, ReactNode> = {};
+    if (note) {
+      out[SECTION_ANCHOR[note.section]] = (
+        <Box role="status">
+          <StateLine tone="done" emphasis status={t("case-action-done-at", { time: clockOf(note.at) })}>
+            {note.text}
+          </StateLine>
+        </Box>
+      );
+    }
+    return out;
+  }, [note, t]);
+  // The cards whose state changed with the latest reading are marked for a moment (the one the person acted in says
+  // it in its own line).
+  const fresh = useFresh(
+    useMemo(() => Object.fromEntries(Object.entries(marks).map(([id, mark]) => [id, JSON.stringify(mark)])), [marks]),
+    3000,
+  );
+  const flash = useMemo(() => {
+    const acted = note ? SECTION_ANCHOR[note.section] : null;
+    return new Set([...fresh].filter((id) => id !== acted));
+  }, [fresh, note]);
 
   const onJudgment = useCallback(
     async (publicationId: string, judgment: boolean) => {
@@ -265,6 +307,7 @@ export default function CaseView({ state: read }: { state: CaseState }) {
                     label: t("case-stage-change"),
                     icon: <NiChange size="medium" />,
                     onClick: () => setStaging(true),
+                    disabled: actions.running !== null,
                   },
                 ]}
               />
@@ -297,52 +340,63 @@ export default function CaseView({ state: read }: { state: CaseState }) {
         </Alert>
       )}
 
-      {/* Where the case stands, who it is with, what ONE is doing now and what holds it: said once, here. */}
-      <JourneyCard state={state} journey={facts.journey} now={facts.now} live={live} onJudgment={onJudgment} />
+      <CaseActionProvider value={actions}>
+        {/* Where the case stands, who it is with, what ONE is doing now and what holds it: said once, here. It says the
+          action under way and a reading of the case, and changes at the same moment as the cards. */}
+        <JourneyCard
+          state={state}
+          journey={facts.journey}
+          now={facts.now}
+          live={live}
+          action={actions.running}
+          syncing={actions.syncing}
+          onJudgment={onJudgment}
+        />
 
-      {/* While ONE works on the case, its actions wait: the notice says what ONE is doing, and the screen comes back
+        {/* While ONE works on the case, its actions wait: the notice says what ONE is doing, and the screen comes back
           by itself, read again, when it ends (the screen pattern after ADVBox). */}
-      <CaseAtWork caseId={state.case.id} working={facts.now.working} events={state.events} />
+        <CaseAtWork caseId={state.case.id} working={facts.now.working} events={state.events} />
 
-      {/* Each card opens by itself when the case's stage is about it or something in it waits for the firm, and
+        {/* Each card opens by itself when the case's stage is about it or something in it waits for the firm, and
           closes once that is done; the person may open or close every one at once to read the whole case. */}
-      <CollapsibleGroup marks={marks} looks={looks} words={words}>
-        <CollapsibleGroupToggle className="-mb-3" />
-        <Grid container spacing={3}>
-          <Grid size={{ xs: 12, lg: 8 }} className="flex flex-col gap-3">
-            {/* In the order the case goes: its people and trip, what happened, the papers, the lawsuits, the court. */}
-            <PeopleCard state={state} writable={writable} onChanged={refresh} />
-            <TripCard state={state} writable={writable} onChanged={refresh} />
-            <StatementsCard state={state} writable={writable} onChanged={refresh} />
-            <DocumentsCard state={state} writable={writable} onChanged={refresh} />
-            <SignaturesCard state={state} writable={writable} onChanged={refresh} />
-            <RulesCard state={state} writable={writable} onChanged={refresh} />
-            <ProceedingsCard state={state} writable={writable} onChanged={refresh} />
-            <DraftsCard state={state} writable={writable} onChanged={refresh} />
-            <FilingCard state={state} writable={writable} onChanged={refresh} />
-            <HearingsCard state={state} writable={writable} onChanged={refresh} />
-            <PublicationsCard state={state} writable={writable} onChanged={refresh} />
-            <OutcomeCard state={state} writable={writable} onChanged={refresh} />
-            <MoneyCard state={state} />
-            <FeesCard state={state} writable={writable} onChanged={refresh} />
-            <DeadlinesCard state={state} writable={writable} onChanged={refresh} />
-            <ComplaintCard state={state} writable={writable} onChanged={refresh} />
-          </Grid>
+        <CollapsibleGroup marks={marks} looks={looks} words={words} lock={lock} notes={notes} flash={flash}>
+          <CollapsibleGroupToggle className="-mb-3" />
+          <Grid container spacing={3}>
+            <Grid size={{ xs: 12, lg: 8 }} className="flex flex-col gap-3">
+              {/* In the order the case goes: its people and trip, what happened, the papers, the lawsuits, the court. */}
+              <PeopleCard state={state} writable={writable} onChanged={refresh} />
+              <TripCard state={state} writable={writable} onChanged={refresh} />
+              <StatementsCard state={state} writable={writable} onChanged={refresh} />
+              <DocumentsCard state={state} writable={writable} onChanged={refresh} />
+              <SignaturesCard state={state} writable={writable} onChanged={refresh} />
+              <RulesCard state={state} writable={writable} onChanged={refresh} />
+              <ProceedingsCard state={state} writable={writable} onChanged={refresh} />
+              <DraftsCard state={state} writable={writable} onChanged={refresh} />
+              <FilingCard state={state} writable={writable} onChanged={refresh} />
+              <HearingsCard state={state} writable={writable} onChanged={refresh} />
+              <PublicationsCard state={state} writable={writable} onChanged={refresh} />
+              <OutcomeCard state={state} writable={writable} onChanged={refresh} />
+              <MoneyCard state={state} />
+              <FeesCard state={state} writable={writable} onChanged={refresh} />
+              <DeadlinesCard state={state} writable={writable} onChanged={refresh} />
+              <ComplaintCard state={state} writable={writable} onChanged={refresh} />
+            </Grid>
 
-          <Grid size={{ xs: 12, lg: 4 }} className="flex flex-col gap-3">
-            <ClientLinkCard
-              state={state}
-              holderPersonId={holderParty?.person.person_id ?? null}
-              writable={writable}
-              onChanged={refresh}
-            />
-            <NoticesCard state={state} writable={writable} onChanged={refresh} />
-            <SummaryCard state={state} writable={writable} onChanged={refresh} />
-            <DossierCard state={state} writable={writable} onChanged={refresh} />
-            <TimelineCard state={state} />
+            <Grid size={{ xs: 12, lg: 4 }} className="flex flex-col gap-3">
+              <ClientLinkCard
+                state={state}
+                holderPersonId={holderParty?.person.person_id ?? null}
+                writable={writable}
+                onChanged={refresh}
+              />
+              <NoticesCard state={state} writable={writable} onChanged={refresh} />
+              <SummaryCard state={state} writable={writable} onChanged={refresh} />
+              <DossierCard state={state} writable={writable} onChanged={refresh} />
+              <TimelineCard state={state} />
+            </Grid>
           </Grid>
-        </Grid>
-      </CollapsibleGroup>
+        </CollapsibleGroup>
+      </CaseActionProvider>
 
       {staging && (
         <StageDialog

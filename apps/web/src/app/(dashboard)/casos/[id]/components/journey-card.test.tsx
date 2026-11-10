@@ -1,4 +1,5 @@
 import type { CaseState } from "../case-types";
+import type { RunningAction } from "./case-action";
 import JourneyCard from "./journey-card";
 import { NextIntlClientProvider } from "next-intl";
 import { afterEach, describe, expect, it } from "vitest";
@@ -85,9 +86,10 @@ const lawsuit = {
   systemRefusal: null,
 };
 
-function draw(
+function view(
   now: ReturnType<typeof caseNow>,
   facts: JourneyFacts = { signatureSince: null, filingSince: "2026-11-05T14:00:00Z" },
+  screenState: { action?: RunningAction | null; syncing?: boolean } = {},
 ) {
   const journey = caseJourney({
     status: "drafting",
@@ -96,11 +98,23 @@ function draw(
     court: NO_COURT_FACTS,
     facts,
   });
-  return render(
+  return (
     <NextIntlClientProvider locale="pt-BR" messages={messages} timeZone="America/Sao_Paulo">
-      <JourneyCard state={state} journey={journey} now={now} live={live} onJudgment={async () => {}} />
-    </NextIntlClientProvider>,
+      <JourneyCard
+        state={state}
+        journey={journey}
+        now={now}
+        live={live}
+        action={screenState.action ?? null}
+        syncing={screenState.syncing ?? false}
+        onJudgment={async () => {}}
+      />
+    </NextIntlClientProvider>
   );
+}
+
+function draw(...args: Parameters<typeof view>) {
+  return render(view(...args));
 }
 
 afterEach(cleanup);
@@ -163,5 +177,56 @@ describe("JourneyCard", () => {
     ).toBeTruthy();
     expect(screen.getByRole("button", { name: "É a sentença" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Não é" })).toBeTruthy();
+  });
+
+  // The owner's canvas of the case's actions (2026-11-10): the top says the action under way and a reading of the
+  // case, and marks what changed.
+  const waiting = () =>
+    caseNow(
+      input({
+        proceedings: [lawsuit],
+        drafts: [{ id: "dr", proceedingId: "lw", status: "issued", work: null }],
+        filings: [
+          {
+            id: "fp",
+            proceedingId: "lw",
+            system: "projudi",
+            status: "ready",
+            blocker: null,
+            signature: { takesSigned: true, status: "signed" },
+          },
+        ],
+      }),
+    );
+
+  it("says the person's action under way, and its ways wait until the screen shows what came of it", () => {
+    draw(waiting(), undefined, { action: { key: "plan", section: "rules", doing: "criando os processos" } });
+    expect(screen.getByText("Uma ação em andamento: criando os processos")).toBeTruthy();
+    expect(screen.getByText("O andamento se atualiza assim que a ação terminar.")).toBeTruthy();
+    expect((screen.getByRole("button", { name: "Resolver" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.queryByText(/Atualizado às/)).toBeNull();
+  });
+
+  it("says it reads the case again for a change made outside, with nothing locked", () => {
+    draw(waiting(), undefined, { syncing: true });
+    expect(screen.getByText("Atualizando o caso")).toBeTruthy();
+    expect((screen.getByRole("button", { name: "Resolver" }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("marks what changed with the next reading, never what the person found on arrival", () => {
+    const { rerender } = draw(waiting());
+    expect(screen.queryByText("Novo")).toBeNull();
+    rerender(
+      view(
+        caseNow(
+          input({
+            proceedings: [lawsuit],
+            drafts: [{ id: "dr", proceedingId: "lw", status: "generating", work: "generate" }],
+          }),
+        ),
+        { signatureSince: null, filingSince: null },
+      ),
+    );
+    expect(screen.getAllByText("Novo").length).toBeGreaterThan(0);
   });
 });

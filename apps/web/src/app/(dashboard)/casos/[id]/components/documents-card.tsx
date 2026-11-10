@@ -1,6 +1,7 @@
 "use client";
 
 import type { CaseDocument, CaseState } from "../case-types";
+import { sentence, useCaseAction } from "./case-action";
 import ResidenceLine from "./residence-line";
 import { useTranslations } from "next-intl";
 import { useRef, useState } from "react";
@@ -82,7 +83,22 @@ export default function DocumentsCard({
 }) {
   const t = useTranslations("product");
   const [refusing, setRefusing] = useState<CaseDocument | null>(null);
-  const [busy, setBusy] = useState<string | null>(null);
+  // One action at a time on the case: while one runs, every control waits, and the result shows before they come back.
+  const action = useCaseAction("documents");
+  const words = {
+    accept: {
+      doing: t("case-action-document-accept-doing"),
+      done: t("case-action-document-accept-done"),
+      failed: t("case-action-document-accept-failed"),
+    },
+    upload: {
+      doing: t("case-action-document-upload-doing"),
+      done: t("case-action-document-upload-done"),
+      failed: t("case-action-document-upload-failed"),
+    },
+  };
+  // Opening a file only reads: it stays free while an action runs.
+  const [opening, setOpening] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [kind, setKind] = useState<DocumentKind>("evidence");
   const [party, setParty] = useState<string>("");
@@ -111,58 +127,61 @@ export default function DocumentsCard({
   const decided = state.documents.filter((document) => document.status !== "received");
 
   const open = async (document: CaseDocument, fileId: string = document.fileId) => {
-    setBusy(document.id);
+    setOpening(document.id);
     setProblem(null);
     const link = await openCaseFile(fileId);
-    setBusy(null);
+    setOpening(null);
     if (link.ok) window.open(link.url, "_blank", "noopener,noreferrer");
     else setProblem(link.code);
   };
 
-  const accept = async (document: CaseDocument) => {
-    setBusy(document.id);
-    setProblem(null);
-    const result = await decideCaseDocument(state.case.id, document.id, "accepted");
-    setBusy(null);
-    if (!result.ok) setProblem(result.code);
-    else onChanged();
+  const accept = (document: CaseDocument) =>
+    action.run(`accept-${document.id}`, words.accept, async () => {
+      setProblem(null);
+      const result = await decideCaseDocument(state.case.id, document.id, "accepted");
+      if (!result.ok) setProblem(result.code);
+      return result.ok;
+    });
+
+  // The file goes straight to storage from the browser, and the backend measures it before the case keeps it.
+  const upload = async (file: File) => {
+    const mime = mimeOf(file);
+    const started = await startCaseUpload({ name: file.name, mime, bytes: file.size });
+    if (!started.ok) {
+      setProblem(started.code);
+      return false;
+    }
+    const uploaded = await uploadToSignedUrl({
+      storagePath: started.storagePath,
+      uploadToken: started.uploadToken,
+      file,
+      contentType: mime,
+    });
+    if (!uploaded) {
+      setProblem("not_uploaded");
+      return false;
+    }
+    const finished = await finishCaseUpload({
+      caseId: state.case.id,
+      fileId: started.fileId,
+      kind,
+      partyId: party || null,
+    });
+    if (!finished.ok) setProblem(finished.code);
+    return finished.ok;
   };
 
-  const send = async (file: File) => {
-    setBusy("upload");
-    setProblem(null);
-    try {
-      const mime = mimeOf(file);
-      const started = await startCaseUpload({ name: file.name, mime, bytes: file.size });
-      if (!started.ok) {
-        setProblem(started.code);
-        return;
-      }
-      const uploaded = await uploadToSignedUrl({
-        storagePath: started.storagePath,
-        uploadToken: started.uploadToken,
-        file,
-        contentType: mime,
-      });
-      if (!uploaded) {
+  const send = (file: File) =>
+    action.run("upload", words.upload, async () => {
+      setProblem(null);
+      try {
+        return await upload(file);
+      } catch {
+        // A request that failed on the way (the network, the server): the button comes back.
         setProblem("not_uploaded");
-        return;
+        return false;
       }
-      const finished = await finishCaseUpload({
-        caseId: state.case.id,
-        fileId: started.fileId,
-        kind,
-        partyId: party || null,
-      });
-      if (!finished.ok) setProblem(finished.code);
-      else onChanged();
-    } catch {
-      // A request that failed on the way (the network, the server): the button comes back.
-      setProblem("not_uploaded");
-    } finally {
-      setBusy(null);
-    }
-  };
+    });
 
   const row = (document: CaseDocument) => (
     <Box key={document.id} className="border-grey-100 flex flex-col gap-2 rounded-2xl border p-4">
@@ -239,7 +258,8 @@ export default function DocumentsCard({
           variant="outlined"
           color="grey"
           size="small"
-          disabled={busy !== null}
+          component="span"
+          disabled={opening !== null}
           onClick={() => void open(document)}
         >
           {t("case-document-open")}
@@ -249,33 +269,35 @@ export default function DocumentsCard({
             variant="outlined"
             color="grey"
             size="small"
-            disabled={busy !== null}
+            component="span"
+            disabled={opening !== null}
             onClick={() => void open(document, document.normalizedFileId ?? document.fileId)}
           >
             {t("case-document-open-pdf")}
           </Button>
         )}
         {writable && document.status === "received" && checking.includes(document) && early !== document.id && (
-          <Button
-            variant="text"
-            color="grey"
-            size="small"
-            disabled={busy !== null}
-            onClick={() => setEarly(document.id)}
-          >
+          <Button variant="text" color="grey" size="small" disabled={action.busy} onClick={() => setEarly(document.id)}>
             {t("case-document-decide-early")}
           </Button>
         )}
         {writable && document.status === "received" && (!checking.includes(document) || early === document.id) && (
           <>
-            <Button variant="contained" size="small" disabled={busy !== null} onClick={() => void accept(document)}>
-              {t("case-document-accept")}
+            <Button
+              variant="contained"
+              size="small"
+              disabled={action.busy}
+              loading={action.pending(`accept-${document.id}`)}
+              loadingPosition="start"
+              onClick={() => void accept(document)}
+            >
+              {action.pending(`accept-${document.id}`) ? sentence(words.accept.doing) : t("case-document-accept")}
             </Button>
             <Button
               variant="text"
               color="grey"
               size="small"
-              disabled={busy !== null}
+              disabled={action.busy}
               onClick={() => setRefusing(document)}
             >
               {t("case-document-refuse")}
@@ -411,10 +433,12 @@ export default function DocumentsCard({
               variant="outlined"
               color="grey"
               size="small"
-              disabled={busy !== null}
+              disabled={action.busy}
+              loading={action.pending("upload")}
+              loadingPosition="start"
               onClick={() => input.current?.click()}
             >
-              {busy === "upload" ? t("client-documents-sending") : t("client-documents-choose")}
+              {action.pending("upload") ? t("client-documents-sending") : t("client-documents-choose")}
             </Button>
           </Box>
         </Box>

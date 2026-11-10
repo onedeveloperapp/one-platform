@@ -1,6 +1,7 @@
 "use client";
 
 import type { CaseParty, CasePerson, CaseState } from "../case-types";
+import { sentence, useCaseAction } from "./case-action";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 
@@ -101,7 +102,17 @@ export default function PeopleCard({
 }) {
   const t = useTranslations("product");
   const [editing, setEditing] = useState<Member | "new" | null>(null);
-  const [busy, setBusy] = useState<string | null>(null);
+  // One action at a time on the case: while one runs, every control waits, and the result shows before they come back.
+  const action = useCaseAction("people");
+  const words = {
+    check: { doing: t("case-action-cpf-doing"), failed: t("case-action-cpf-failed") },
+    read: { doing: t("case-action-read-doing"), failed: t("case-action-read-failed") },
+    remove: {
+      doing: t("case-action-person-remove-doing"),
+      done: t("case-action-person-remove-done"),
+      failed: t("case-action-person-remove-failed"),
+    },
+  };
   const [notice, setNotice] = useState<
     | { kind: "error"; code: string }
     | { kind: "checked"; result: string; matches: boolean | null }
@@ -135,48 +146,50 @@ export default function PeopleCard({
       )
       .join(" · ");
 
-  const check = async (member: Member) => {
-    setBusy(member.person.person_id);
-    setNotice(null);
-    const result = await checkCpf(state.case.id, member.person.person_id);
-    setBusy(null);
-    setNotice(
-      result.ok
-        ? { kind: "checked", result: result.result, matches: result.matches }
-        : { kind: "error", code: result.code },
-    );
-    if (result.ok) onChanged();
-  };
+  const check = (member: Member) =>
+    action.run(`cpf-${member.person.person_id}`, words.check, async () => {
+      setNotice(null);
+      const result = await checkCpf(state.case.id, member.person.person_id);
+      setNotice(
+        result.ok
+          ? { kind: "checked", result: result.result, matches: result.matches }
+          : { kind: "error", code: result.code },
+      );
+      return result.ok;
+    });
 
   // What ONE read of a person, said by a person of the firm to agree with the documents (0094).
-  const confirmRead = async (member: Member) => {
-    setBusy(member.person.person_id);
-    setNotice(null);
-    const result = await confirmPersonReadFields(state.case.id, member.person.person_id);
-    setBusy(null);
-    setNotice(result.ok ? { kind: "confirmed" } : { kind: "error", code: result.code });
-    if (result.ok) onChanged();
-  };
+  const confirmRead = (member: Member) =>
+    action.run(`read-${member.person.person_id}`, words.read, async () => {
+      setNotice(null);
+      const result = await confirmPersonReadFields(state.case.id, member.person.person_id);
+      setNotice(result.ok ? { kind: "confirmed" } : { kind: "error", code: result.code });
+      return result.ok;
+    });
 
   // Taking a person out of the case is said before it is done: what goes with them, what stays.
   const [removing, setRemoving] = useState<Member | null>(null);
 
   const remove = async (member: Member) => {
-    setBusy(member.person.person_id);
-    setNotice(null);
-    // The claimant party first: a case keeps at least one, and the database says so.
-    const ordered = [...member.parties].sort(
-      (a, b) => (a.role === "claimant" ? -1 : 1) - (b.role === "claimant" ? -1 : 1),
-    );
-    for (const party of ordered) {
-      const result = await removeCaseParty(state.case.id, party.partyId);
-      if (!result.ok) {
-        setNotice({ kind: "error", code: result.code });
-        break;
+    const removed = { any: false };
+    const ok = await action.run(`remove-${member.person.person_id}`, words.remove, async () => {
+      setNotice(null);
+      // The claimant party first: a case keeps at least one, and the database says so.
+      const ordered = [...member.parties].sort(
+        (a, b) => (a.role === "claimant" ? -1 : 1) - (b.role === "claimant" ? -1 : 1),
+      );
+      for (const party of ordered) {
+        const result = await removeCaseParty(state.case.id, party.partyId);
+        if (!result.ok) {
+          setNotice({ kind: "error", code: result.code });
+          return false;
+        }
+        removed.any = true;
       }
-    }
-    setBusy(null);
-    onChanged();
+      return true;
+    });
+    // Taken out of one role and refused the other: what was done shows all the same.
+    if (!ok && removed.any) onChanged();
   };
 
   const removingDialog = removing ? (
@@ -318,10 +331,14 @@ export default function PeopleCard({
                       variant="outlined"
                       color="grey"
                       size="small"
-                      disabled={busy !== null}
+                      disabled={action.busy}
+                      loading={action.pending(`read-${person.person_id}`)}
+                      loadingPosition="start"
                       onClick={() => void confirmRead(member)}
                     >
-                      {busy === person.person_id ? t("cases-working") : t("case-person-read-confirm")}
+                      {action.pending(`read-${person.person_id}`)
+                        ? sentence(words.read.doing)
+                        : t("case-person-read-confirm")}
                     </Button>
                   ) : undefined
                 }
@@ -337,8 +354,15 @@ export default function PeopleCard({
                   {t("case-person-edit")}
                 </Button>
                 {mayCheck && (
-                  <Button variant="text" size="small" disabled={busy !== null} onClick={() => void check(member)}>
-                    {busy === person.person_id ? t("cases-working") : t("case-cpf-check")}
+                  <Button
+                    variant="text"
+                    size="small"
+                    disabled={action.busy}
+                    loading={action.pending(`cpf-${person.person_id}`)}
+                    loadingPosition="start"
+                    onClick={() => void check(member)}
+                  >
+                    {action.pending(`cpf-${person.person_id}`) ? sentence(words.check.doing) : t("case-cpf-check")}
                   </Button>
                 )}
                 {members.length > 1 && (
@@ -346,7 +370,7 @@ export default function PeopleCard({
                     variant="text"
                     color="grey"
                     size="small"
-                    disabled={busy !== null}
+                    disabled={action.busy}
                     onClick={() => setRemoving(member)}
                   >
                     {t("case-person-remove")}

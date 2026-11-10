@@ -1,6 +1,7 @@
 "use client";
 
 import type { CaseDraft, CaseProceeding, CaseState } from "../case-types";
+import { type CaseActionWords, sentence, useCaseAction } from "./case-action";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useEffect, useMemo, useState, useTransition } from "react";
@@ -351,7 +352,52 @@ function Lawsuit({
   onRead: (draft: CaseDraft) => void;
 }) {
   const t = useTranslations("product");
-  const [pending, startTransition] = useTransition();
+  // One action at a time on the case: while one runs, every control waits, and the result shows before they come back.
+  const action = useCaseAction("drafts");
+  const pending = action.busy;
+  const words = {
+    ai: {
+      doing: t("case-action-draft-ai-doing"),
+      done: t("case-action-draft-ai-done"),
+      failed: t("case-action-draft-failed"),
+    },
+    blank: {
+      doing: t("case-action-draft-blank-doing"),
+      done: t("case-action-draft-blank-done"),
+      failed: t("case-action-draft-failed"),
+    },
+    reject: {
+      doing: t("case-action-draft-reject-doing"),
+      done: t("case-action-draft-reject-done"),
+      failed: t("case-action-draft-failed"),
+    },
+    resume: {
+      doing: t("case-action-draft-resume-doing"),
+      done: t("case-action-draft-resume-done"),
+      failed: t("case-action-draft-failed"),
+    },
+    withdraw: {
+      doing: t("case-action-draft-withdraw-doing"),
+      done: t("case-action-draft-withdraw-done"),
+      failed: t("case-action-draft-failed"),
+    },
+    reopen: {
+      doing: t("case-action-draft-reopen-doing"),
+      done: t("case-action-draft-reopen-done"),
+      failed: t("case-action-draft-failed"),
+    },
+    approve: {
+      doing: t("case-action-draft-approve-doing"),
+      done: t("case-action-draft-approve-done"),
+      failed: t("case-action-draft-failed"),
+      target: "filing",
+    },
+    discard: {
+      doing: t("case-action-draft-discard-doing"),
+      done: t("case-action-draft-discard-done"),
+      failed: t("case-action-draft-failed"),
+    },
+  } satisfies Record<string, CaseActionWords>;
   const [errorCode, setErrorCode] = useState<string | null>(null);
   const [alreadyWorking, setAlreadyWorking] = useState(false);
   // The draft a refusal or a discard was opened on, and for a refusal the version that was read then: what a
@@ -386,28 +432,38 @@ function Lawsuit({
   const planned = proceeding.status === "planned";
   const lawyer = state.lawyer;
 
-  const run = (work: () => Promise<{ ok: boolean; code: string }>, after?: () => void) =>
-    startTransition(async () => {
+  const keyOf = (key: string) => `${proceeding.id}:${key}`;
+  const doing = (key: keyof typeof words) => action.pending(keyOf(key));
+  const run = async (
+    key: keyof typeof words,
+    work: () => Promise<{ ok: boolean; code: string }>,
+    after?: () => void,
+  ) => {
+    const refused = { now: false };
+    await action.run(keyOf(key), words[key], async () => {
       setErrorCode(null);
       setAlreadyWorking(false);
       try {
         const result = await work();
         if (!result.ok) {
           setErrorCode(result.code);
-          // What refused it may be what somebody else just did: the draft is read again.
-          onChanged();
-          return;
+          refused.now = true;
+          return false;
         }
         if (result.code === "working") setAlreadyWorking(true);
         after?.();
-        onChanged();
+        return true;
       } catch {
         setErrorCode("failed");
+        return false;
       }
     });
+    // What refused it may be what somebody else just did: the draft is read again.
+    if (refused.now) onChanged();
+  };
 
   const ask = (mode: "ai" | "blank") =>
-    run(() => requestCaseDraft({ caseId, proceedingId: proceeding.id, templateId: chosen, mode }));
+    void run(mode, () => requestCaseDraft({ caseId, proceedingId: proceeding.id, templateId: chosen, mode }));
   const stopRejecting = () => {
     setRejectingOn(null);
     setNote("");
@@ -640,8 +696,11 @@ function Lawsuit({
             <Button
               variant="contained"
               disabled={pending || note.trim().length < 3 || rejectStale}
+              loading={doing("reject")}
+              loadingPosition="start"
               onClick={() =>
-                run(
+                void run(
+                  "reject",
                   () =>
                     rejectCaseDraft({
                       caseId,
@@ -653,7 +712,9 @@ function Lawsuit({
                 )
               }
             >
-              {t(rewritten ? "draft-reject-revision-confirm" : "draft-reject-confirm")}
+              {doing("reject")
+                ? sentence(words.reject.doing)
+                : t(rewritten ? "draft-reject-revision-confirm" : "draft-reject-confirm")}
             </Button>
             <Button variant="text" color="grey" disabled={pending} onClick={stopRejecting}>
               {t("draft-keep")}
@@ -697,9 +758,15 @@ function Lawsuit({
               variant={status === "failed" ? "contained" : "outlined"}
               color={status === "failed" ? "primary" : "grey"}
               disabled={pending}
-              onClick={() => run(() => resumeCaseDraft({ caseId, draftId: draft.id }))}
+              loading={doing("resume")}
+              loadingPosition="start"
+              onClick={() => void run("resume", () => resumeCaseDraft({ caseId, draftId: draft.id }))}
             >
-              {revision ? t("draft-revision-retry") : t("draft-resume")}
+              {doing("resume")
+                ? sentence(words.resume.doing)
+                : revision
+                  ? t("draft-revision-retry")
+                  : t("draft-resume")}
             </Button>
           ) : null}
           {revision && writable && lawyer ? (
@@ -708,9 +775,11 @@ function Lawsuit({
               variant="outlined"
               color="grey"
               disabled={pending}
-              onClick={() => run(() => withdrawDraftRevision({ caseId, draftId: draft.id }))}
+              loading={doing("withdraw")}
+              loadingPosition="start"
+              onClick={() => void run("withdraw", () => withdrawDraftRevision({ caseId, draftId: draft.id }))}
             >
-              {t("draft-revision-withdraw")}
+              {doing("withdraw") ? sentence(words.withdraw.doing) : t("draft-revision-withdraw")}
             </Button>
           ) : null}
           {status === "approved" && late && writable && lawyer ? (
@@ -719,9 +788,11 @@ function Lawsuit({
               variant="outlined"
               color="grey"
               disabled={pending}
-              onClick={() => run(() => reopenCaseDraft({ caseId, draftId: draft.id }))}
+              loading={doing("reopen")}
+              loadingPosition="start"
+              onClick={() => void run("reopen", () => reopenCaseDraft({ caseId, draftId: draft.id }))}
             >
-              {t("draft-reopen")}
+              {doing("reopen") ? sentence(words.reopen.doing) : t("draft-reopen")}
             </Button>
           ) : null}
           {hasText && (status === "approved" || status === "issued") ? (
@@ -802,12 +873,21 @@ function Lawsuit({
                 variant={draft ? "outlined" : "contained"}
                 color={draft ? "grey" : "primary"}
                 disabled={pending || !chosen}
+                loading={doing("ai")}
+                loadingPosition="start"
                 onClick={() => ask("ai")}
               >
-                {t("draft-ask-ai")}
+                {doing("ai") ? sentence(words.ai.doing) : t("draft-ask-ai")}
               </Button>
-              <Button variant="text" color="grey" disabled={pending || !chosen} onClick={() => ask("blank")}>
-                {t("draft-ask-blank")}
+              <Button
+                variant="text"
+                color="grey"
+                disabled={pending || !chosen}
+                loading={doing("blank")}
+                loadingPosition="start"
+                onClick={() => ask("blank")}
+              >
+                {doing("blank") ? sentence(words.blank.doing) : t("draft-ask-blank")}
               </Button>
             </Box>
           )}
@@ -828,19 +908,24 @@ function Lawsuit({
           cancelLabel={t("draft-approve-as-is-back")}
           busyLabel={t("draft-approve-as-is-busy")}
           onConfirm={async () => {
-            try {
-              const result = await approveCaseDraftAsIs({ caseId, draftId: draft.id, version: approvingOn.version });
-              onChanged();
-              if (result.ok) return null;
-              // What keeps it from being approved, or a newer version, is said on the card, where the text opens.
-              if (isDraftBlocker(result.code) || result.code === "version_changed") {
-                setErrorCode(result.code);
-                return null;
+            // The dialog stays on until the case shows the piece approved, or says why not.
+            const outcome: { message: string | null; refused: boolean } = { message: null, refused: false };
+            await action.run(keyOf("approve"), words.approve, async () => {
+              try {
+                const result = await approveCaseDraftAsIs({ caseId, draftId: draft.id, version: approvingOn.version });
+                if (result.ok) return true;
+                outcome.refused = true;
+                // What keeps it from being approved, or a newer version, is said on the card, where the text opens.
+                if (isDraftBlocker(result.code) || result.code === "version_changed") setErrorCode(result.code);
+                else outcome.message = t(draftErrorKey(result.code));
+                return false;
+              } catch {
+                outcome.message = t("draft-error-failed");
+                return false;
               }
-              return t(draftErrorKey(result.code));
-            } catch {
-              return t("draft-error-failed");
-            }
+            });
+            if (outcome.refused) onChanged();
+            return outcome.message;
           }}
           onClose={() => setApprovingOn(null)}
         />
@@ -862,13 +947,21 @@ function Lawsuit({
           cancelLabel={t("draft-keep")}
           busyLabel={t("draft-cancel-busy")}
           onConfirm={async () => {
-            try {
-              const result = await cancelCaseDraft({ caseId, draftId: draft.id });
-              onChanged();
-              return result.ok ? null : t(draftErrorKey(result.code));
-            } catch {
-              return t("draft-error-failed");
-            }
+            const outcome: { message: string | null; refused: boolean } = { message: null, refused: false };
+            await action.run(keyOf("discard"), words.discard, async () => {
+              try {
+                const result = await cancelCaseDraft({ caseId, draftId: draft.id });
+                if (result.ok) return true;
+                outcome.refused = true;
+                outcome.message = t(draftErrorKey(result.code));
+                return false;
+              } catch {
+                outcome.message = t("draft-error-failed");
+                return false;
+              }
+            });
+            if (outcome.refused) onChanged();
+            return outcome.message;
           }}
           onClose={() => setDiscardingId(null)}
         />

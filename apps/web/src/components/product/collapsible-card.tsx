@@ -87,35 +87,63 @@ type Group = {
   marks: Record<string, CardMark>;
   looks: Record<string, CardLook>;
   words: CardMarkWords | null;
+  lock: string | null;
+  notes: Record<string, ReactNode>;
+  flash: ReadonlySet<string>;
 };
 
 const GroupContext = createContext<Group | null>(null);
 
 const NO_MARKS: Record<string, CardMark> = {};
 const NO_LOOKS: Record<string, CardLook> = {};
+const NO_NOTES: Record<string, ReactNode> = {};
+const NO_FLASH: ReadonlySet<string> = new Set();
 
 /**
  * The cards of one screen, opened or closed together by its
  * `CollapsibleGroupToggle`. Each card below obeys the latest order once, and
  * is the person's again right after it. The screen may hand each card, by its
  * id, the icon of its head (`looks`) and what the top knows of it (`marks`).
+ *
+ * A screen where one action at a time is done (the case, the owner's canvas of
+ * 2026-11-10) also hands: `lock`, why nothing can be done while an action
+ * runs, which disables every control of every card's body (the heads still
+ * open and close, and links still lead where they go); `notes`, a line shown
+ * at the top of a card's body (what came of the action done there); `flash`,
+ * the cards that changed a moment ago, marked for a while.
  */
 export function CollapsibleGroup({
   children,
   marks,
   looks,
   words,
+  lock,
+  notes,
+  flash,
 }: {
   children: ReactNode;
   marks?: Record<string, CardMark>;
   looks?: Record<string, CardLook>;
   words?: CardMarkWords;
+  /** Why the cards wait now, said when a disabled control is pointed at; null when nothing runs. */
+  lock?: string | null;
+  notes?: Record<string, ReactNode>;
+  flash?: ReadonlySet<string>;
 }) {
   const [command, setCommand] = useState<Command | null>(null);
   const setAll = useCallback((open: boolean) => setCommand((last) => ({ seq: (last?.seq ?? 0) + 1, open })), []);
   const value = useMemo(
-    () => ({ command, setAll, marks: marks ?? NO_MARKS, looks: looks ?? NO_LOOKS, words: words ?? null }),
-    [command, setAll, marks, looks, words],
+    () => ({
+      command,
+      setAll,
+      marks: marks ?? NO_MARKS,
+      looks: looks ?? NO_LOOKS,
+      words: words ?? null,
+      lock: lock ?? null,
+      notes: notes ?? NO_NOTES,
+      flash: flash ?? NO_FLASH,
+    }),
+    [command, setAll, marks, looks, words, lock, notes, flash],
   );
   return <GroupContext.Provider value={value}>{children}</GroupContext.Provider>;
 }
@@ -203,6 +231,9 @@ export default function CollapsibleCard({
   const group = useContext(GroupContext);
   const mark = group?.marks[id] ?? null;
   const look = group?.looks[id] ?? null;
+  const lock = group?.lock ?? null;
+  const note = group?.notes[id] ?? null;
+  const flashed = group?.flash.has(id) ?? false;
   // Something there waits for the firm, or failed: the card opens for it, and closes once it is done.
   const attention = Boolean(mark && (mark.firm || mark.failed));
   const [open, setOpen] = useState(defaultOpen || attention);
@@ -282,7 +313,16 @@ export default function CollapsibleCard({
   }, [id, anchor]);
 
   return (
-    <Card component="section" ref={card} aria-labelledby={id} id={anchor} className="scroll-mt-24">
+    <Card
+      component="section"
+      ref={card}
+      aria-labelledby={id}
+      id={anchor}
+      className={cn(
+        "scroll-mt-24 transition-shadow duration-500 motion-reduce:transition-none",
+        flashed && "ring-primary/40 dark:ring-primary-light/40 ring-4",
+      )}
+    >
       <CardContent className="flex flex-col">
         <Box className="group relative flex items-start gap-3">
           {look ? (
@@ -360,7 +400,22 @@ export default function CollapsibleCard({
         </Box>
 
         <Collapse in={open} timeout={reduceMotion ? 0 : "auto"}>
-          <Box id={bodyId} className={cn("flex flex-col gap-4 pt-4", bodyClassName)}>
+          {/* Always a fieldset, so a lock never remounts what is typed in it: disabled, every control of the body
+              waits, and pointing at one says why. A link still leads where it goes, and so does a control that
+              only reads, drawn as no button (`component="span"`: opening a file). */}
+          <Box
+            component="fieldset"
+            role="presentation"
+            disabled={lock !== null}
+            title={lock ?? undefined}
+            id={bodyId}
+            className={cn(
+              "m-0 flex min-w-0 flex-col gap-4 border-0 p-0 pt-4",
+              "[&:disabled_.MuiInputBase-root:not(.Mui-disabled)]:opacity-60 [&:disabled_button]:cursor-not-allowed [&:disabled_button.MuiButtonBase-root:not(.Mui-disabled)]:opacity-50",
+              bodyClassName,
+            )}
+          >
+            {note}
             {detail || action ? (
               <Box className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
                 {detail ? (

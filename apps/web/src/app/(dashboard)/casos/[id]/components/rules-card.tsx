@@ -1,6 +1,7 @@
 "use client";
 
 import type { CaseState } from "../case-types";
+import { type CaseActionWords, sentence, useCaseAction } from "./case-action";
 import { CivilCourtAnswers, FamilyPlanBox } from "./family-court";
 import FreeJusticeAnswers from "./free-justice";
 import QualificationBlock from "./qualification-block";
@@ -103,9 +104,9 @@ export default function RulesCard({
   const [touchedDecision, setTouchedDecision] = useState<(typeof DECISIONS)[number] | null>(null);
   const cause = touchedCause ?? rules.statedCause ?? "";
   const decision = touchedDecision ?? rules.decision;
-  const [busy, setBusy] = useState<string | null>(null);
+  // One action at a time on the case: while one runs, every control waits, and the result shows before they come back.
+  const action = useCaseAction("rules");
   const [problem, setProblem] = useState<string | null>(null);
-  const [done, setDone] = useState<string | null>(null);
 
   const centsOf = (partyId: string): number | null => {
     const value = Number(claims[partyId]);
@@ -147,19 +148,33 @@ export default function RulesCard({
     weatherSigns: rules.weather.signs,
   });
 
-  const run = async (key: string, work: () => Promise<{ ok: boolean; code: string }>, success: string | null) => {
-    setBusy(key);
-    setProblem(null);
-    setDone(null);
-    const result = await work();
-    setBusy(null);
-    if (!result.ok) {
-      setProblem(result.code);
-      return;
-    }
-    if (success) setDone(success);
-    onChanged();
-  };
+  // What came of each action is said in the card by the case screen, with the time, once the screen shows it.
+  const run = (key: string, work: () => Promise<{ ok: boolean; code: string }>, words: CaseActionWords) =>
+    action.run(key, words, async () => {
+      setProblem(null);
+      const result = await work();
+      if (!result.ok) setProblem(result.code);
+      return result.ok;
+    });
+  const words = {
+    claim: { doing: t("case-action-claim-doing"), done: t("case-action-claim-done") },
+    plan: {
+      doing: t("case-action-plan-doing"),
+      done: t("case-plan-created"),
+      failed: t("case-action-plan-failed"),
+      target: "proceedings",
+    },
+    weather: {
+      doing: t("case-action-weather-doing"),
+      done: t("case-suspension-weather-done"),
+      failed: t("case-action-weather-failed"),
+    },
+    suspension: {
+      doing: t("case-action-suspension-doing"),
+      done: t("case-suspension-saved"),
+      failed: t("case-action-suspension-failed"),
+    },
+  } satisfies Record<string, CaseActionWords>;
 
   const signWords = (signs: string[]) =>
     signs.length === 0
@@ -201,16 +216,6 @@ export default function RulesCard({
         mayRelease={writable && state.lawyer && !state.supportVisit}
         onChanged={onChanged}
       />
-      {done && (
-        <Alert
-          severity="success"
-          role="status"
-          className="neutral bg-background-paper/60!"
-          onClose={() => setDone(null)}
-        >
-          {done}
-        </Alert>
-      )}
 
       <Box className="flex flex-col gap-3">
         <Typography variant="subtitle2" component="h3" className="mb-0">
@@ -280,7 +285,7 @@ export default function RulesCard({
                       label={t("case-plan-claim-label", { name: party.person.full_name })}
                       currencySymbol="R$"
                       value={claims[party.partyId] ?? ""}
-                      disabled={busy !== null}
+                      disabled={action.busy}
                       onChange={(event) =>
                         setClaims((current) => ({ ...current, [party.partyId]: event.target.value }))
                       }
@@ -290,16 +295,20 @@ export default function RulesCard({
                         variant="text"
                         color="grey"
                         size="small"
-                        disabled={busy !== null || centsOf(party.partyId) === (rules.claims[party.partyId] ?? null)}
+                        disabled={action.busy || centsOf(party.partyId) === (rules.claims[party.partyId] ?? null)}
+                        loading={action.pending(`claim-${party.partyId}`)}
+                        loadingPosition="start"
                         onClick={() =>
                           void run(
                             `claim-${party.partyId}`,
                             () => setPartyClaim(state.case.id, party.partyId, centsOf(party.partyId)),
-                            null,
+                            words.claim,
                           )
                         }
                       >
-                        {t("case-plan-claim-save")}
+                        {action.pending(`claim-${party.partyId}`)
+                          ? sentence(words.claim.doing)
+                          : t("case-plan-claim-save")}
                       </Button>
                     </Box>
                   </Box>
@@ -324,16 +333,14 @@ export default function RulesCard({
                 <Box>
                   <Button
                     variant="contained"
-                    disabled={busy !== null || unsavedClaim || !everyForumKnown}
+                    disabled={action.busy || unsavedClaim || !everyForumKnown}
+                    loading={action.pending("plan")}
+                    loadingPosition="start"
                     onClick={() =>
-                      void run(
-                        "plan",
-                        () => createPlannedProceedings(state.case.id, rules.family.choice),
-                        t("case-plan-created"),
-                      )
+                      void run("plan", () => createPlannedProceedings(state.case.id, rules.family.choice), words.plan)
                     }
                   >
-                    {busy === "plan" ? t("cases-working") : t("case-plan-create")}
+                    {action.pending("plan") ? sentence(words.plan.doing) : t("case-plan-create")}
                   </Button>
                 </Box>
                 {unsavedClaim && (
@@ -367,7 +374,7 @@ export default function RulesCard({
           id="case-stated-cause"
           label={t("case-suspension-cause-label")}
           value={cause}
-          disabled={!writable || busy !== null}
+          disabled={!writable || action.busy}
           onChange={(event) => setTouchedCause(event.target.value)}
         >
           <MenuItem value="">{t("case-field-choose")}</MenuItem>
@@ -411,12 +418,12 @@ export default function RulesCard({
                   variant="outlined"
                   color="grey"
                   size="small"
-                  disabled={busy !== null || !rules.weatherConfigured}
-                  onClick={() =>
-                    void run("weather", () => readCaseWeather(state.case.id), t("case-suspension-weather-done"))
-                  }
+                  disabled={action.busy || !rules.weatherConfigured}
+                  loading={action.pending("weather")}
+                  loadingPosition="start"
+                  onClick={() => void run("weather", () => readCaseWeather(state.case.id), words.weather)}
                 >
-                  {busy === "weather" ? t("cases-working") : t("case-suspension-weather-read")}
+                  {action.pending("weather") ? sentence(words.weather.doing) : t("case-suspension-weather-read")}
                 </Button>
               </Box>
               {!rules.weatherConfigured && (
@@ -456,7 +463,7 @@ export default function RulesCard({
             <FormControlLabel
               key={value}
               value={value}
-              disabled={!writable || !state.lawyer || busy !== null}
+              disabled={!writable || !state.lawyer || action.busy}
               control={<Radio size="small" />}
               label={t(DECISION_KEY[value])}
             />
@@ -476,7 +483,7 @@ export default function RulesCard({
             <Button
               variant="contained"
               disabled={
-                busy !== null ||
+                action.busy ||
                 (cause === (rules.statedCause ?? "") &&
                   decision === rules.decision &&
                   // A lawyer makes ONE's decision their own by saving it as it is.
@@ -503,11 +510,13 @@ export default function RulesCard({
                     }
                     return result;
                   },
-                  t("case-suspension-saved"),
+                  words.suspension,
                 )
               }
+              loading={action.pending("suspension")}
+              loadingPosition="start"
             >
-              {busy === "suspension" ? t("cases-working") : t("case-suspension-save")}
+              {action.pending("suspension") ? sentence(words.suspension.doing) : t("case-suspension-save")}
             </Button>
           </Box>
         )}

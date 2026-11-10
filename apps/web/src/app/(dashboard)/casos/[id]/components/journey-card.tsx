@@ -1,16 +1,19 @@
 "use client";
 
 import type { CaseState } from "../case-types";
+import type { RunningAction } from "./case-action";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { type ReactNode, useState } from "react";
 
-import { Box, Button, Card, CardContent, Collapse, Typography } from "@mui/material";
+import { Box, Button, Card, CardContent, Collapse, LinearProgress, Typography } from "@mui/material";
 
 import ActivityCards, { type ActivityItem } from "@/components/product/activity-cards";
 import ProgressSteps, { ProgressBar, ProgressNow, type ProgressStep } from "@/components/product/progress-steps";
 import StateLine from "@/components/product/state-line";
+import StatusChip from "@/components/product/status-chip";
 import type { TileTone } from "@/components/product/tile-tone";
+import { useFresh } from "@/components/product/use-fresh";
 import type { LiveRead } from "@/components/product/use-live-read";
 import NiCalendar from "@/icons/nexture/ni-calendar";
 import NiClock from "@/icons/nexture/ni-clock";
@@ -19,6 +22,7 @@ import NiFlag from "@/icons/nexture/ni-flag";
 import NiFolder from "@/icons/nexture/ni-folder";
 import NiInbox from "@/icons/nexture/ni-inbox";
 import NiLink from "@/icons/nexture/ni-link";
+import NiLoader from "@/icons/nexture/ni-loader";
 import NiMessageDots from "@/icons/nexture/ni-message-dots";
 import NiMessages from "@/icons/nexture/ni-messages";
 import NiMicrophone from "@/icons/nexture/ni-microphone";
@@ -53,6 +57,7 @@ import {
 import type { CaseSection } from "@/lib/cases/sections";
 import { sayPending } from "@/lib/firm/pending";
 import { momentIn } from "@/lib/hearings/hearings";
+import { cn } from "@/lib/utils";
 
 type Ready = Extract<CaseState, { kind: "ready" }>;
 
@@ -140,18 +145,29 @@ export function goToSection(section: CaseSection) {
  * what holds the case and whose turn each thing is (the firm's with who of it acts and the way to it for who may,
  * the client's, the platform's), and what ONE did a moment ago. It is the one place that says it: the cards below
  * hold the work. The screen follows the database by itself (`live`), and says when it last knew it was current.
+ *
+ * It is the screen's panel of the case's actions too (the owner's canvas, 2026-11-10): while the person's action
+ * runs it says which, with a bar, and dims what may change; while the screen reads the case again for a change made
+ * outside it says "Atualizando o caso"; it changes at the same moment as the cards, never after, and marks for a few
+ * seconds what changed.
  */
 export default function JourneyCard({
   state,
   journey,
   now,
   live,
+  action,
+  syncing,
   onJudgment,
 }: {
   state: Ready;
   journey: CaseJourney;
   now: CaseNow;
   live: LiveRead;
+  /** The person's action under way, until the screen shows what came of it. */
+  action: RunningAction | null;
+  /** The screen reads the case again for a change somebody else made. */
+  syncing: boolean;
   /** The person says whether a decision the court published is the judgment. */
   onJudgment: (publicationId: string, judgment: boolean) => Promise<void>;
 }) {
@@ -160,6 +176,7 @@ export default function JourneyCard({
   const [answering, setAnswering] = useState<string | null>(null);
   const thisYear = state.today.slice(0, 4);
   const working = now.working.length > 0;
+  const reading = action !== null || syncing;
   const viewer = {
     lawyer: state.lawyer,
     partner: state.partner,
@@ -227,7 +244,14 @@ export default function JourneyCard({
     if (line.owner === "firm" && !mayAct(line.actor, viewer)) return null;
     if (line.href) {
       return (
-        <Button variant="outlined" color="grey" size="small" href={line.href} LinkComponent={Link}>
+        <Button
+          variant="outlined"
+          color="grey"
+          size="small"
+          href={line.href}
+          LinkComponent={Link}
+          disabled={action !== null}
+        >
           {label}
         </Button>
       );
@@ -235,7 +259,13 @@ export default function JourneyCard({
     if (line.section) {
       const section = line.section;
       return (
-        <Button variant="outlined" color="grey" size="small" onClick={() => goToSection(section)}>
+        <Button
+          variant="outlined"
+          color="grey"
+          size="small"
+          disabled={action !== null}
+          onClick={() => goToSection(section)}
+        >
           {label}
         </Button>
       );
@@ -260,7 +290,7 @@ export default function JourneyCard({
           variant="outlined"
           color="grey"
           size="small"
-          disabled={answering === publicationId}
+          disabled={answering === publicationId || action !== null}
           onClick={() => void answer(true)}
         >
           {t("case-now-judgment-yes")}
@@ -269,7 +299,7 @@ export default function JourneyCard({
           variant="outlined"
           color="grey"
           size="small"
-          disabled={answering === publicationId}
+          disabled={answering === publicationId || action !== null}
           onClick={() => void answer(false)}
         >
           {t("case-now-judgment-no")}
@@ -331,155 +361,227 @@ export default function JourneyCard({
     ].filter((fact): fact is string => fact !== null);
   }
 
+  // What changed with the latest reading: who has the case and each line of the top, marked for a few seconds.
+  const fresh = useFresh({
+    holder: `${now.holder}:${nowKey}:${extra ?? ""}`,
+    ...Object.fromEntries(now.working.map((line) => [`working:${line.id}`, say(line)])),
+    ...(now.blocking.length === 0
+      ? { "blocking:none": working ? "working" : "none" }
+      : Object.fromEntries(now.blocking.map((line) => [`blocking:${line.id}`, say(line)]))),
+  });
+  const isNew = (key: string) => fresh.has(key);
+  const newChip = <StatusChip label={t("case-action-new")} tone="primary" />;
+  const newLine = (key: string, line: ReactNode) =>
+    isNew(key) ? (
+      <Box key={key} className="bg-primary-light/10 -mx-2 rounded-xl px-2 py-1">
+        {line}
+      </Box>
+    ) : (
+      line
+    );
+
   return (
-    <Card component="section" aria-labelledby="case-journey-title">
+    <Card component="section" aria-labelledby="case-journey-title" aria-busy={reading} className="relative">
+      {reading ? <LinearProgress aria-hidden className="absolute inset-x-0 top-0 h-[3px]" /> : null}
       <CardContent className="flex flex-col gap-5">
-        <Box className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+        <Box className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
           <Typography id="case-journey-title" variant="h5" component="h2" className="mb-0">
             {t("journey-title")}
           </Typography>
-          {live.live ? (
-            <Box className="flex flex-wrap items-center gap-2" role="status">
-              <Typography variant="body2" className="text-text-secondary">
-                {live.failed
-                  ? t("case-now-live-failed")
-                  : live.checkedAt
-                    ? t("case-now-live", { time: clock(live.checkedAt) })
-                    : null}
+          {/* What the screen is doing: the person's action, a reading of the case, or when it last knew it was current. */}
+          <Box className="flex flex-wrap items-center gap-2" role="status">
+            {action ? (
+              <StatusChip
+                tone="primary"
+                icon={<NiLoader size="small" className="animate-spin motion-reduce:animate-none" />}
+                label={t("case-action-running", { doing: action.doing })}
+              />
+            ) : syncing ? (
+              <StatusChip
+                tone="primary"
+                icon={<NiLoader size="small" className="animate-spin motion-reduce:animate-none" />}
+                label={t("case-action-syncing")}
+              />
+            ) : live.live ? (
+              <>
+                <Typography variant="body2" className="text-text-secondary">
+                  {live.failed
+                    ? t("case-now-live-failed")
+                    : live.checkedAt
+                      ? t("case-now-live", { time: clock(live.checkedAt) })
+                      : null}
+                </Typography>
+                {live.failed ? (
+                  <Button variant="text" color="grey" size="small" onClick={live.checkNow}>
+                    {t("case-now-live-retry")}
+                  </Button>
+                ) : null}
+              </>
+            ) : null}
+          </Box>
+        </Box>
+
+        {/* While the screen reads the case again, what may change is dimmed: it changes at the same moment as the
+            cards, never after them. */}
+        <Box
+          className={cn(
+            "flex flex-col gap-5 transition-opacity duration-200 motion-reduce:transition-none",
+            reading && "opacity-45",
+          )}
+        >
+          {/* From a tablet on, the steps across; on a phone, who has the case first and the steps one tap away. */}
+          <Box className="hidden md:block">
+            <ProgressSteps
+              steps={steps}
+              label={t("journey-title")}
+              working={working}
+              stateWords={{
+                done: t("journey-state-done"),
+                current: t("journey-state-current"),
+                next: t("journey-state-next"),
+                stopped: t("journey-state-stopped"),
+              }}
+              href={(step) => {
+                const section = STEP_SECTION[step.key as JourneyStepId];
+                return section ? `#${SECTION_ANCHOR[section]}` : null;
+              }}
+            />
+          </Box>
+
+          <Box
+            className={cn(
+              "rounded-2xl transition-shadow duration-500 motion-reduce:transition-none",
+              isNew("holder") && "ring-primary/40 dark:ring-primary-light/40 ring-2",
+            )}
+          >
+            <ProgressNow
+              tone={journey.ended === "closed" ? "done" : journey.ended === "declined" ? "stopped" : "progress"}
+              working={working}
+              lead={t(HOLDER_KEY[now.holder])}
+              text={t(nowKey)}
+              extra={
+                extra ? (
+                  <Typography variant="body2" className="text-text-secondary">
+                    {extra}
+                  </Typography>
+                ) : undefined
+              }
+              action={isNew("holder") ? newChip : undefined}
+            />
+          </Box>
+
+          <Box className="flex flex-col gap-2 md:hidden">
+            <Box className="flex flex-wrap items-center justify-between gap-2">
+              <Typography variant="body2" className="font-semibold">
+                {t("case-now-steps-compact", {
+                  position: current + 1,
+                  total: steps.length,
+                  step: steps[current]?.label ?? "",
+                })}
               </Typography>
-              {live.failed ? (
-                <Button variant="text" color="grey" size="small" onClick={live.checkNow}>
-                  {t("case-now-live-retry")}
-                </Button>
-              ) : null}
+              <Button variant="text" color="grey" size="small" onClick={() => setStepsOpen((open) => !open)}>
+                {stepsOpen ? t("case-now-steps-hide") : t("case-now-steps-show")}
+              </Button>
             </Box>
-          ) : null}
-        </Box>
-
-        {/* From a tablet on, the steps across; on a phone, who has the case first and the steps one tap away. */}
-        <Box className="hidden md:block">
-          <ProgressSteps
-            steps={steps}
-            label={t("journey-title")}
-            working={working}
-            stateWords={{
-              done: t("journey-state-done"),
-              current: t("journey-state-current"),
-              next: t("journey-state-next"),
-              stopped: t("journey-state-stopped"),
-            }}
-            href={(step) => {
-              const section = STEP_SECTION[step.key as JourneyStepId];
-              return section ? `#${SECTION_ANCHOR[section]}` : null;
-            }}
-          />
-        </Box>
-
-        <ProgressNow
-          tone={journey.ended === "closed" ? "done" : journey.ended === "declined" ? "stopped" : "progress"}
-          working={working}
-          lead={t(HOLDER_KEY[now.holder])}
-          text={t(nowKey)}
-          extra={
-            extra ? (
-              <Typography variant="body2" className="text-text-secondary">
-                {extra}
-              </Typography>
-            ) : undefined
-          }
-        />
-
-        <Box className="flex flex-col gap-2 md:hidden">
-          <Box className="flex flex-wrap items-center justify-between gap-2">
-            <Typography variant="body2" className="font-semibold">
-              {t("case-now-steps-compact", {
+            <ProgressBar
+              steps={steps.length}
+              reached={journey.reached}
+              state={journey.ended === "declined" ? "stopped" : journey.ended ? "done" : "progress"}
+              label={t("journey-bar-label", {
+                label: steps[current]?.label ?? "",
                 position: current + 1,
                 total: steps.length,
-                step: steps[current]?.label ?? "",
               })}
-            </Typography>
-            <Button variant="text" color="grey" size="small" onClick={() => setStepsOpen((open) => !open)}>
-              {stepsOpen ? t("case-now-steps-hide") : t("case-now-steps-show")}
-            </Button>
+            />
+            <Collapse in={stepsOpen}>
+              <Box className="pt-2">
+                <ProgressSteps
+                  steps={steps}
+                  label={t("journey-title")}
+                  working={working}
+                  stateWords={{
+                    done: t("journey-state-done"),
+                    current: t("journey-state-current"),
+                    next: t("journey-state-next"),
+                    stopped: t("journey-state-stopped"),
+                  }}
+                />
+              </Box>
+            </Collapse>
           </Box>
-          <ProgressBar
-            steps={steps.length}
-            reached={journey.reached}
-            state={journey.ended === "declined" ? "stopped" : journey.ended ? "done" : "progress"}
-            label={t("journey-bar-label", {
-              label: steps[current]?.label ?? "",
-              position: current + 1,
-              total: steps.length,
-            })}
-          />
-          <Collapse in={stepsOpen}>
-            <Box className="pt-2">
-              <ProgressSteps
-                steps={steps}
-                label={t("journey-title")}
-                working={working}
-                stateWords={{
-                  done: t("journey-state-done"),
-                  current: t("journey-state-current"),
-                  next: t("journey-state-next"),
-                  stopped: t("journey-state-stopped"),
-                }}
-              />
+
+          {now.working.length > 0 ? (
+            <Box component="section" aria-labelledby="case-now-working" className="flex flex-col gap-2">
+              <Typography id="case-now-working" variant="subtitle2" component="h3" className="mb-0">
+                {t("case-now-title-working")}
+              </Typography>
+              {now.working.map((line) =>
+                newLine(
+                  `working:${line.id}`,
+                  <StateLine
+                    key={line.id}
+                    tone="waiting"
+                    status={
+                      isNew(`working:${line.id}`) || line.slow || line.since ? (
+                        <Box component="span" className="flex items-center gap-2">
+                          {isNew(`working:${line.id}`) ? newChip : null}
+                          {line.slow
+                            ? t("case-now-slow")
+                            : line.since
+                              ? t("case-now-since", { time: clock(line.since) })
+                              : null}
+                        </Box>
+                      ) : undefined
+                    }
+                    action={line.section ? way({ ...line, owner: "one" }, t("case-now-see")) : undefined}
+                  >
+                    {say(line)}
+                  </StateLine>,
+                ),
+              )}
             </Box>
-          </Collapse>
+          ) : null}
+
+          {!journey.ended ? (
+            <Box component="section" aria-labelledby="case-now-blocking" className="flex flex-col gap-2">
+              <Typography id="case-now-blocking" variant="subtitle2" component="h3" className="mb-0">
+                {t("case-now-title-blocking")}
+              </Typography>
+              {now.blocking.length === 0
+                ? newLine(
+                    "blocking:none",
+                    <StateLine key="none" tone="done" status={isNew("blocking:none") ? newChip : undefined}>
+                      {t(working ? "case-now-nothing-working" : "case-now-nothing")}
+                    </StateLine>,
+                  )
+                : now.blocking.map((line) =>
+                    newLine(
+                      `blocking:${line.id}`,
+                      <StateLine
+                        key={line.id}
+                        tone={line.tone}
+                        status={isNew(`blocking:${line.id}`) ? newChip : undefined}
+                        action={
+                          line.ask ? ask(line) : way(line, line.owner === "firm" ? t("case-now-do") : t("case-now-see"))
+                        }
+                      >
+                        {say(line)}
+                        <Box component="span" className="text-text-secondary block">
+                          {whose(line)}
+                        </Box>
+                      </StateLine>,
+                    ),
+                  )}
+            </Box>
+          ) : null}
+
+          <ActivityCards id="case-now-recent" title={t("case-now-title-recent")} items={recent} />
         </Box>
-
-        {now.working.length > 0 ? (
-          <Box component="section" aria-labelledby="case-now-working" className="flex flex-col gap-2">
-            <Typography id="case-now-working" variant="subtitle2" component="h3" className="mb-0">
-              {t("case-now-title-working")}
-            </Typography>
-            {now.working.map((line) => (
-              <StateLine
-                key={line.id}
-                tone="waiting"
-                status={
-                  line.slow
-                    ? t("case-now-slow")
-                    : line.since
-                      ? t("case-now-since", { time: clock(line.since) })
-                      : undefined
-                }
-                action={line.section ? way({ ...line, owner: "one" }, t("case-now-see")) : undefined}
-              >
-                {say(line)}
-              </StateLine>
-            ))}
-          </Box>
+        {action ? (
+          <Typography variant="body2" className="text-text-secondary">
+            {t("case-action-journey-after")}
+          </Typography>
         ) : null}
-
-        {!journey.ended ? (
-          <Box component="section" aria-labelledby="case-now-blocking" className="flex flex-col gap-2">
-            <Typography id="case-now-blocking" variant="subtitle2" component="h3" className="mb-0">
-              {t("case-now-title-blocking")}
-            </Typography>
-            {now.blocking.length === 0 ? (
-              <StateLine tone="done">{t(working ? "case-now-nothing-working" : "case-now-nothing")}</StateLine>
-            ) : (
-              now.blocking.map((line) => (
-                <StateLine
-                  key={line.id}
-                  tone={line.tone}
-                  action={
-                    line.ask ? ask(line) : way(line, line.owner === "firm" ? t("case-now-do") : t("case-now-see"))
-                  }
-                >
-                  {say(line)}
-                  <Box component="span" className="text-text-secondary block">
-                    {whose(line)}
-                  </Box>
-                </StateLine>
-              ))
-            )}
-          </Box>
-        ) : null}
-
-        <ActivityCards id="case-now-recent" title={t("case-now-title-recent")} items={recent} />
       </CardContent>
     </Card>
   );

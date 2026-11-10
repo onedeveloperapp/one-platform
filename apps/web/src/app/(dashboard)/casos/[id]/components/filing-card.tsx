@@ -1,6 +1,7 @@
 "use client";
 
 import type { CaseFiling, CaseProceeding, CaseState } from "../case-types";
+import { type CaseActionWords, sentence, useCaseAction } from "./case-action";
 import CourtSystem from "./court-system";
 import FilingByOne, { filedWithoutNumber, oneFilesIt } from "./filing-by-one";
 import Link from "next/link";
@@ -237,7 +238,43 @@ function Lawsuit({
   const [again, setAgain] = useState(false);
   // Cancelling a package is said before it is done: its files go, and ONE asks for no other by itself.
   const [cancelling, setCancelling] = useState(false);
-  const [busy, setBusy] = useState<string | null>(null);
+  // One action at a time on the case: while one runs, every control waits, and the result shows before they come back.
+  const action = useCaseAction("filing");
+  const words = {
+    ask: {
+      doing: t("case-action-filing-ask-doing"),
+      done: t("case-action-filing-ask-done"),
+      failed: t("case-action-filing-failed"),
+    },
+    file: {
+      doing: t("case-action-filing-file-doing"),
+      done: t("case-action-filing-file-done"),
+      failed: t("case-action-filing-failed"),
+    },
+    sign: {
+      doing: t("case-action-filing-sign-doing"),
+      done: t("case-action-filing-sign-done"),
+      failed: t("case-action-filing-failed"),
+    },
+    cancel: {
+      doing: t("case-action-filing-cancel-doing"),
+      done: t("case-action-filing-cancel-done"),
+      failed: t("case-action-filing-failed"),
+    },
+    receipt: {
+      doing: t("case-action-filing-receipt-doing"),
+      done: t("case-action-filing-receipt-done"),
+      failed: t("case-action-filing-failed"),
+      target: "proceedings",
+    },
+  } satisfies Record<string, CaseActionWords>;
+  type ActionKey = keyof typeof words;
+  const keyOf = (key: ActionKey) => `${proceeding.id}:${key}`;
+  // Opening a file only reads: it stays free while an action runs.
+  const [opening, setOpening] = useState<string | null>(null);
+  // The action of this lawsuit under way, by its name; any other action of the case keeps these controls waiting too.
+  const runningKey = (Object.keys(words) as ActionKey[]).find((key) => action.pending(keyOf(key))) ?? null;
+  const busy: string | null = runningKey ?? (action.busy ? "elsewhere" : null);
   const [problem, setProblem] = useState<string | null>(null);
   // Which action a problem answers: one of the signature is said beside it.
   const [problemFor, setProblemFor] = useState<string | null>(null);
@@ -281,26 +318,27 @@ function Lawsuit({
       .join(" · ");
   };
 
-  const run = async (key: string, work: () => Promise<{ ok: boolean; code: string }>, after?: () => void) => {
-    if (busy) return;
-    setBusy(key);
-    setProblem(null);
-    setProblemFor(key);
-    try {
-      const result = await work();
-      if (!result.ok) {
-        setProblem(result.code);
-        if (key === "sign" && SIGNATURE_STALE.has(result.code)) onChanged();
-        return;
+  const run = async (key: ActionKey, work: () => Promise<{ ok: boolean; code: string }>, after?: () => void) => {
+    const stale = { now: false };
+    await action.run(keyOf(key), words[key], async () => {
+      setProblem(null);
+      setProblemFor(key);
+      try {
+        const result = await work();
+        if (!result.ok) {
+          setProblem(result.code);
+          stale.now = key === "sign" && SIGNATURE_STALE.has(result.code);
+          return false;
+        }
+        after?.();
+        return true;
+      } catch {
+        // A request that failed on the way (the network, the server): the button comes back.
+        setProblem("unavailable");
+        return false;
       }
-      after?.();
-      onChanged();
-    } catch {
-      // A request that failed on the way (the network, the server): the button comes back.
-      setProblem("unavailable");
-    } finally {
-      setBusy(null);
-    }
+    });
+    if (stale.now) onChanged();
   };
 
   /** The signature asked over a colleague's, from the confirmation: an error in words, or null. */
@@ -323,8 +361,8 @@ function Lawsuit({
   };
 
   const open = async (key: string, link: () => Promise<{ ok: true; url: string } | { ok: false; code: string }>) => {
-    if (busy) return;
-    setBusy(key);
+    if (opening) return;
+    setOpening(key);
     setProblem(null);
     try {
       const result = await link();
@@ -333,7 +371,7 @@ function Lawsuit({
     } catch {
       setProblem("unavailable");
     } finally {
-      setBusy(null);
+      setOpening(null);
     }
   };
 
@@ -521,7 +559,8 @@ function Lawsuit({
             variant="outlined"
             color="grey"
             size="small"
-            disabled={busy !== null}
+            component="span"
+            disabled={opening !== null}
             onClick={() => void open("open-receipt", () => openFilingReceipt(filing.receipt?.id as string))}
           >
             {t("filing-receipt-open")}
@@ -688,7 +727,8 @@ function Lawsuit({
                     variant="outlined"
                     color="grey"
                     size="small"
-                    disabled={busy !== null}
+                    component="span"
+                    disabled={opening !== null}
                     aria-label={t("filing-item-download-signed-aria", { name: item.name })}
                     onClick={() => void open(`${item.id}-p7s`, () => openFilingFile(item.id, true))}
                   >
@@ -699,7 +739,8 @@ function Lawsuit({
                   variant={ownSignedFiles && item.signed ? "text" : "outlined"}
                   color="grey"
                   size="small"
-                  disabled={busy !== null}
+                  component="span"
+                  disabled={opening !== null}
                   aria-label={
                     ownSignedFiles && item.signed
                       ? t("filing-item-download-pdf-aria", { name: item.name })
@@ -808,9 +849,11 @@ function Lawsuit({
                       variant="contained"
                       size="small"
                       disabled={busy !== null || !cnjOk || !filedOn}
+                      loading={busy === "receipt"}
+                      loadingPosition="start"
                       onClick={() => void attach()}
                     >
-                      {busy === "receipt" ? t("cases-working") : t("filing-receipt-attach")}
+                      {busy === "receipt" ? sentence(words.receipt.doing) : t("filing-receipt-attach")}
                     </Button>
                   </Box>
                 </>
@@ -885,9 +928,11 @@ function Lawsuit({
               variant="contained"
               size="small"
               disabled={busy !== null || !petition || systemWaits}
+              loading={busy === "ask"}
+              loadingPosition="start"
               onClick={() => void ask()}
             >
-              {busy === "ask" ? t("cases-working") : t("filing-build")}
+              {busy === "ask" ? sentence(words.ask.doing) : t("filing-build")}
             </Button>
             {again ? (
               <Button variant="text" color="grey" size="small" disabled={busy !== null} onClick={() => setAgain(false)}>
@@ -912,7 +957,7 @@ function Lawsuit({
             </Button>
           ) : null}
           <Button variant="text" color="grey" size="small" disabled={busy !== null} onClick={() => setCancelling(true)}>
-            {busy === "cancel" ? t("cases-working") : t("filing-cancel")}
+            {busy === "cancel" ? sentence(words.cancel.doing) : t("filing-cancel")}
           </Button>
         </Box>
       ) : null}

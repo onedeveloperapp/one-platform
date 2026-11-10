@@ -1,6 +1,7 @@
 "use client";
 
 import type { CaseEnvelope, CaseState } from "../case-types";
+import { sentence, useCaseAction } from "./case-action";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
@@ -105,7 +106,16 @@ export default function SignaturesCard({
   const [requesting, setRequesting] = useState(false);
   const [cancelling, setCancelling] = useState<CaseEnvelope | null>(null);
   const [confirming, setConfirming] = useState<CaseEnvelope | null>(null);
-  const [busy, setBusy] = useState<string | null>(null);
+  // One action at a time on the case: while one runs, every control waits, and the result shows before they come back.
+  const action = useCaseAction("signatures");
+  const words = {
+    refresh: { doing: t("case-action-signature-refresh-doing"), failed: t("case-action-signature-refresh-failed") },
+    simulate: {
+      doing: t("case-action-signature-simulate-doing"),
+      done: t("case-action-signature-simulate-done"),
+      failed: t("case-action-signature-simulate-failed"),
+    },
+  };
   const [problem, setProblem] = useState<string | null>(null);
 
   const documentOf = (id: string | null) => state.documents.find((document) => document.id === id) ?? null;
@@ -114,30 +124,22 @@ export default function SignaturesCard({
       SIGNABLE_KINDS.includes(document.kind) && document.status !== "rejected" && document.source !== "signature",
   );
 
-  const refresh = async (envelope: CaseEnvelope) => {
-    setBusy(envelope.id);
-    setProblem(null);
-    try {
+  const refresh = (envelope: CaseEnvelope) =>
+    action.run(`refresh-${envelope.id}`, words.refresh, async () => {
+      setProblem(null);
       const result = await refreshSignature(state.case.id, envelope.id);
       if (!result.ok) setProblem(result.code);
-      else onChanged();
-    } finally {
-      setBusy(null);
-    }
-  };
+      return result.ok;
+    });
 
   // A paper of a test case signed in one click (0138): the copy kept as signed says it was simulated.
-  const simulate = async (envelope: CaseEnvelope) => {
-    setBusy(envelope.id);
-    setProblem(null);
-    try {
+  const simulate = (envelope: CaseEnvelope) =>
+    action.run(`simulate-${envelope.id}`, words.simulate, async () => {
+      setProblem(null);
       const result = await simulateTestSignature(state.case.id, envelope.id);
       if (!result.ok) setProblem(result.code);
-      else onChanged();
-    } finally {
-      setBusy(null);
-    }
-  };
+      return result.ok;
+    });
 
   const open = async (fileId: string) => {
     const link = await openCaseFile(fileId);
@@ -247,7 +249,7 @@ export default function SignaturesCard({
                       : t("case-signature-signer-waiting", { name: signer.name })}
                 </Typography>
                 {writable && !signer.signedAt && envelope.status === "pending" && signer.signUrl && (
-                  <Button variant="text" size="small" onClick={() => void copy(signer.signUrl ?? "")}>
+                  <Button component="span" variant="text" size="small" onClick={() => void copy(signer.signUrl ?? "")}>
                     {t("case-signature-copy-link")}
                   </Button>
                 )}
@@ -272,12 +274,24 @@ export default function SignaturesCard({
 
             <Box className="flex flex-wrap gap-2 pt-1">
               {signed && (
-                <Button variant="outlined" color="grey" size="small" onClick={() => void open(signed.fileId)}>
+                <Button
+                  component="span"
+                  variant="outlined"
+                  color="grey"
+                  size="small"
+                  onClick={() => void open(signed.fileId)}
+                >
                   {t("case-signature-open-signed")}
                 </Button>
               )}
               {returned && envelope.status === "received" && (
-                <Button variant="outlined" color="grey" size="small" onClick={() => void open(returned.fileId)}>
+                <Button
+                  component="span"
+                  variant="outlined"
+                  color="grey"
+                  size="small"
+                  onClick={() => void open(returned.fileId)}
+                >
                   {t("case-signature-open-returned")}
                 </Button>
               )}
@@ -286,26 +300,50 @@ export default function SignaturesCard({
                   variant="outlined"
                   color="grey"
                   size="small"
-                  disabled={busy !== null}
+                  disabled={action.busy}
+                  loading={action.pending(`simulate-${envelope.id}`)}
+                  loadingPosition="start"
                   onClick={() => void simulate(envelope)}
                 >
-                  {busy === envelope.id ? t("cases-working") : t("case-signature-simulate")}
+                  {action.pending(`simulate-${envelope.id}`)
+                    ? sentence(words.simulate.doing)
+                    : t("case-signature-simulate")}
                 </Button>
               )}
               {writable && envelope.method === "zapsign" && envelope.status === "pending" && (
-                <Button variant="text" size="small" disabled={busy !== null} onClick={() => void refresh(envelope)}>
-                  {busy === envelope.id ? t("cases-working") : t("case-signature-refresh")}
+                <Button
+                  variant="text"
+                  size="small"
+                  disabled={action.busy}
+                  loading={action.pending(`refresh-${envelope.id}`)}
+                  loadingPosition="start"
+                  onClick={() => void refresh(envelope)}
+                >
+                  {action.pending(`refresh-${envelope.id}`)
+                    ? sentence(words.refresh.doing)
+                    : t("case-signature-refresh")}
                 </Button>
               )}
               {writable &&
                 envelope.method !== "zapsign" &&
                 (envelope.status === "pending" || envelope.status === "received") && (
-                  <Button variant="contained" size="small" onClick={() => setConfirming(envelope)}>
+                  <Button
+                    variant="contained"
+                    size="small"
+                    disabled={action.busy}
+                    onClick={() => setConfirming(envelope)}
+                  >
                     {t("case-signature-confirm")}
                   </Button>
                 )}
               {writable && !ended && (
-                <Button variant="text" color="grey" size="small" onClick={() => setCancelling(envelope)}>
+                <Button
+                  variant="text"
+                  color="grey"
+                  size="small"
+                  disabled={action.busy}
+                  onClick={() => setCancelling(envelope)}
+                >
                   {t("case-signature-cancel")}
                 </Button>
               )}

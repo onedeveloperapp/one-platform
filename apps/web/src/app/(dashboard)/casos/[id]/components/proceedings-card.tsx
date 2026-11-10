@@ -1,6 +1,7 @@
 "use client";
 
 import type { CaseProceeding, CaseState } from "../case-types";
+import { useCaseAction } from "./case-action";
 import CourtCourse from "./court-course";
 import CourtSystem from "./court-system";
 import { useTranslations } from "next-intl";
@@ -101,7 +102,8 @@ export default function ProceedingsCard({
   const t = useTranslations("product");
   const [editing, setEditing] = useState<CaseProceeding | "new" | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
-  const [busy, setBusy] = useState<string | null>(null);
+  // One action at a time on the case: while one runs, every control waits, and the result shows before they come back.
+  const action = useCaseAction("proceedings");
 
   const nameOfParty = (partyId: string) =>
     state.parties.find((party) => party.partyId === partyId)?.person.full_name ?? "";
@@ -117,14 +119,21 @@ export default function ProceedingsCard({
   // Removing a planned lawsuit is said before it is done: its piece and package go, and ONE never makes it again.
   const [removing, setRemoving] = useState<CaseProceeding | null>(null);
 
-  const remove = async (proceeding: CaseProceeding) => {
-    setBusy(proceeding.id);
-    setProblem(null);
-    const result = await removeProceeding(state.case.id, proceeding.id);
-    setBusy(null);
-    if (!result.ok) setProblem(result.code);
-    else onChanged();
-  };
+  const remove = (proceeding: CaseProceeding) =>
+    action.run(
+      `remove-${proceeding.id}`,
+      {
+        doing: t("case-action-proceeding-remove-doing"),
+        done: t("case-action-proceeding-remove-done"),
+        failed: t("case-action-proceeding-remove-failed"),
+      },
+      async () => {
+        setProblem(null);
+        const result = await removeProceeding(state.case.id, proceeding.id);
+        if (!result.ok) setProblem(result.code);
+        return result.ok;
+      },
+    );
 
   // What the courts did that nobody of the firm saw yet, over every lawsuit of the case.
   const unseen = state.proceedings.reduce(
@@ -284,7 +293,7 @@ export default function ProceedingsCard({
                     variant="text"
                     color="grey"
                     size="small"
-                    disabled={busy !== null}
+                    disabled={action.busy}
                     onClick={() => setRemoving(proceeding)}
                   >
                     {t("client-trip-remove")}

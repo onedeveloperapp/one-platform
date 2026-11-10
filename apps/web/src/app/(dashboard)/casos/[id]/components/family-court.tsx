@@ -1,6 +1,7 @@
 "use client";
 
 import type { CaseState } from "../case-types";
+import { sentence, useCaseAction } from "./case-action";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 
@@ -99,7 +100,13 @@ export function FamilyPlanBox({
 }) {
   const t = useTranslations("product");
   const [splitting, setSplitting] = useState(false);
-  const [busy, setBusy] = useState(false);
+  // One action at a time on the case: while one runs, every control waits, and the result shows before they come back.
+  const action = useCaseAction("rules");
+  const togetherWords = {
+    doing: t("case-action-family-together-doing"),
+    done: t("case-action-family-together-done"),
+    failed: t("case-action-family-together-failed"),
+  };
   const [problem, setProblem] = useState<string | null>(null);
   if (family === "single") return null;
 
@@ -119,19 +126,18 @@ export function FamilyPlanBox({
   const lawyerHere = writable && state.lawyer && (!filed || plannedJuizado);
   const mismatch = family === "together" && plannedJuizado;
 
-  const together = async () => {
-    setBusy(true);
-    setProblem(null);
-    try {
-      const result = await setFamilyChoice(state.case.id, "together", null);
-      if (!result.ok) setProblem(result.code);
-      else onChanged();
-    } catch {
-      setProblem("failed");
-    } finally {
-      setBusy(false);
-    }
-  };
+  const together = () =>
+    action.run("family-together", togetherWords, async () => {
+      setProblem(null);
+      try {
+        const result = await setFamilyChoice(state.case.id, "together", null);
+        if (!result.ok) setProblem(result.code);
+        return result.ok;
+      } catch {
+        setProblem("failed");
+        return false;
+      }
+    });
 
   return (
     <Box className="flex flex-col gap-2">
@@ -167,12 +173,26 @@ export function FamilyPlanBox({
       {lawyerHere && (canSplit || canJoin) ? (
         <Box>
           {canSplit ? (
-            <Button variant="outlined" color="grey" size="small" disabled={busy} onClick={() => setSplitting(true)}>
+            <Button
+              variant="outlined"
+              color="grey"
+              size="small"
+              disabled={action.busy}
+              onClick={() => setSplitting(true)}
+            >
               {t("case-family-split-action")}
             </Button>
           ) : (
-            <Button variant="outlined" color="grey" size="small" disabled={busy} onClick={() => void together()}>
-              {busy ? t("cases-working") : t("case-family-together-action")}
+            <Button
+              variant="outlined"
+              color="grey"
+              size="small"
+              disabled={action.busy}
+              loading={action.pending("family-together")}
+              loadingPosition="start"
+              onClick={() => void together()}
+            >
+              {action.pending("family-together") ? sentence(togetherWords.doing) : t("case-family-together-action")}
             </Button>
           )}
         </Box>
