@@ -136,7 +136,10 @@ function FactLine({
           {fact.kind === "alvara" && fact.confirmed ? (
             fact.receivedOn ? (
               <StateLine tone="done">
-                {t("outcome-received", { value: formatCents(fact.receivedCents ?? 0), day: brDay(fact.receivedOn) })}
+                {t(fact.receivedByOne ? "outcome-received-by-one" : "outcome-received", {
+                  value: formatCents(fact.receivedCents ?? 0),
+                  day: brDay(fact.receivedOn),
+                })}
               </StateLine>
             ) : (
               <StateLine

@@ -19,7 +19,12 @@ import {
 import CardTitle from "@/components/product/card-title";
 import StateLine from "@/components/product/state-line";
 import NiMoney from "@/icons/nexture/ni-money";
-import { type ClientMoney as Money, clientMoney } from "@/lib/cases/client-link-actions";
+import {
+  type ClientMoney as Money,
+  clientMoney,
+  clientMoneyStatements,
+  downloadClientMoneyStatement,
+} from "@/lib/cases/client-link-actions";
 import { formatCents } from "@flyee/rules/finance";
 import { formatDayBr } from "@flyee/rules/person";
 
@@ -53,6 +58,8 @@ export default function ClientMoney({ token, editable }: { token: string; editab
   const [agency, setAgency] = useState("");
   const [account, setAccount] = useState("");
   const [own, setOwn] = useState(false);
+  // The accountability statement of each part passed on (0156), by its part.
+  const [statements, setStatements] = useState<Map<string, string>>(new Map());
 
   useEffect(() => {
     let live = true;
@@ -61,12 +68,18 @@ export default function ClientMoney({ token, editable }: { token: string; editab
         if (live && answer.ok) setMoney(answer.money);
       })
       .catch(() => undefined);
+    void clientMoneyStatements(token)
+      .then((answer) => {
+        if (live && answer.ok) setStatements(new Map(answer.statements.map((item) => [item.shareId, item.id])));
+      })
+      .catch(() => undefined);
     return () => {
       live = false;
     };
   }, [token]);
 
-  if (!money || money.shares.length === 0) return null;
+  // Shown once money is expected on the case, so the account is given before the court releases anything (0155).
+  if (!money || (money.shares.length === 0 && !money.expected)) return null;
 
   const run = async (give: Parameters<typeof clientMoney>[1], confirm: string | null) => {
     setBusy(true);
@@ -110,6 +123,25 @@ export default function ClientMoney({ token, editable }: { token: string; editab
                 day: formatDayBr(share.paidOn ?? share.dueOn ?? "") ?? "",
               })}
             </StateLine>
+            {statements.has(share.id) ? (
+              <Box>
+                <Button
+                  size="small"
+                  variant="text"
+                  disabled={busy}
+                  onClick={() =>
+                    void downloadClientMoneyStatement(token, statements.get(share.id) as string)
+                      .then((link) => {
+                        if (link.ok) window.open(link.url, "_blank", "noopener,noreferrer");
+                        else setProblem(t("client-money-statement-error"));
+                      })
+                      .catch(() => setProblem(t("client-money-statement-error")))
+                  }
+                >
+                  {t("client-money-statement-download")}
+                </Button>
+              </Box>
+            ) : null}
             {share.confirmedAt ? (
               <StateLine tone="done">{t("client-money-confirmed")}</StateLine>
             ) : (share.status === "paid" || share.status === "direct") && editable ? (
@@ -122,6 +154,11 @@ export default function ClientMoney({ token, editable }: { token: string; editab
           </Box>
         ))}
 
+        {money.shares.length === 0 ? (
+          <Typography variant="body2" className="text-text-secondary">
+            {t("client-money-expected")}
+          </Typography>
+        ) : null}
         {money.account ? (
           <StateLine tone="done">
             {t(ACCOUNT_KEY[money.account.kind] ?? "client-money-account-bank", { ends: money.account.ends })}

@@ -15,12 +15,14 @@ import StatusChip from "@/components/product/status-chip";
 import IllustrationAccounts from "@/icons/illustrations/illustration-accounts";
 import NiMoney from "@/icons/nexture/ni-money";
 import { caseLabel } from "@/lib/cases/cases";
+import { openFinanceDocument } from "@/lib/finance/document-actions";
 import { HOLD_KEY, MINOR_ORDER_KEY, type MoneyShare, SHARE_STATUS_KEY, shareLate } from "@/lib/finance/money";
 import {
   decideMoneyHold,
   readMoneyShareList,
   recordMinorOrder,
   recordMoneyTransfer,
+  requestMoneyStatement,
 } from "@/lib/finance/money-actions";
 import { formatCents } from "@flyee/rules/finance";
 import { formatDayBr } from "@flyee/rules/person";
@@ -150,7 +152,14 @@ export default function MoneyShares({
                   </StateLine>
                 ) : null}
                 {share.status === "paid" ? (
-                  <StateLine tone="done">{t("money-paid-on", { day: day(share.paidOn) })}</StateLine>
+                  <StateLine tone="done">
+                    {t(share.paidByOne ? "money-paid-on-by-one" : "money-paid-on", { day: day(share.paidOn) })}
+                  </StateLine>
+                ) : null}
+                {share.receivedByOne ? (
+                  <Typography variant="caption" className="text-text-secondary">
+                    {t("money-received-by-one")}
+                  </Typography>
                 ) : null}
                 {share.account ? (
                   <Typography variant="caption" className="text-text-secondary">
@@ -162,6 +171,21 @@ export default function MoneyShares({
                   </Typography>
                 ) : null}
                 {share.confirmedAt ? <StateLine tone="done">{t("money-confirmed")}</StateLine> : null}
+                {share.statement ? (
+                  <StateLine
+                    tone={
+                      share.statement.status === "issued"
+                        ? "done"
+                        : share.statement.status === "failed"
+                          ? "failed"
+                          : share.statement.status === "waiting"
+                            ? "attention"
+                            : "waiting"
+                    }
+                  >
+                    {t(`money-statement-${share.statement.status}`)}
+                  </StateLine>
+                ) : null}
               </Box>
               <Box className="flex shrink-0 flex-col items-end gap-2">
                 <StatusChip
@@ -184,6 +208,28 @@ export default function MoneyShares({
                 {share.status === "owed" ? (
                   <Button size="small" variant="outlined" color="grey" onClick={() => setPaying(share)}>
                     {t("money-record-transfer")}
+                  </Button>
+                ) : null}
+                {share.statement?.status === "issued" && share.statement.fileId ? (
+                  <Button
+                    size="small"
+                    variant="text"
+                    onClick={() =>
+                      void openFinanceDocument(share.statement?.fileId as string).then((link) => {
+                        if (link.ok) window.open(link.url, "_blank", "noopener,noreferrer");
+                      })
+                    }
+                  >
+                    {t("money-statement-open")}
+                  </Button>
+                ) : share.statement?.status === "waiting" || share.statement?.status === "failed" ? (
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    color="grey"
+                    onClick={() => void act(() => requestMoneyStatement(share.id))}
+                  >
+                    {t("money-statement-ask")}
                   </Button>
                 ) : null}
                 {share.status === "held" ? (

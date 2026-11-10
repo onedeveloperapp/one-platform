@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { type MoneyShare, readMoneyShares } from "@/lib/finance/money";
+import { queueMoneyStatements } from "@/lib/finance/statement-work";
 import { getMemberContext } from "@/lib/member/context";
 
 /**
@@ -32,13 +33,46 @@ export async function readMoneyShareList(caseId: string | null): Promise<MoneySh
     target_org: context.firm.id,
     target_case: caseId && UUID.test(caseId) ? caseId : null,
   });
-  return error ? null : readMoneyShares(data);
+  const shares = error ? null : readMoneyShares(data);
+  if (!shares || shares.length === 0) return shares;
+  // The accountability statement of each part (0156), where it stands and its file once issued.
+  const { data: statements } = await context.supabase.rpc("firm_money_statements", { target_org: context.firm.id });
+  const byShare = new Map(
+    (Array.isArray(statements) ? (statements as Record<string, unknown>[]) : []).map((row) => [
+      String(row.share_id ?? ""),
+      row,
+    ]),
+  );
+  return shares.map((share) => {
+    const row = byShare.get(share.id);
+    const status = row?.status;
+    return {
+      ...share,
+      statement:
+        status === "owed" || status === "waiting" || status === "issued" || status === "failed"
+          ? { status, fileId: typeof row?.file_id === "string" ? row.file_id : null }
+          : null,
+    };
+  });
 }
 
 /** Who operates the books records a part passed on at the bank. */
 export async function recordMoneyTransfer(shareId: string, paidOn: string): Promise<Result> {
   if (!UUID.test(shareId) || !/^\d{4}-\d{2}-\d{2}$/.test(paidOn)) return { ok: false, code: "invalid_data" };
-  return call("record_money_transfer", { target_share: shareId, target_paid_on: paidOn });
+  const recorded = await call("record_money_transfer", { target_share: shareId, target_paid_on: paidOn });
+  // The part passed on owes its accountability statement (0156), issued after the answer.
+  if (recorded.ok) queueMoneyStatements();
+  return recorded;
+}
+
+/** Who operates the books asks for the accountability statement of a part (0156), with the second factor. */
+export async function requestMoneyStatement(shareId: string): Promise<Result> {
+  if (!UUID.test(shareId)) return { ok: false, code: "invalid_data" };
+  const context = await getMemberContext();
+  if (!context?.firm) return { ok: false, code: "failed" };
+  const asked = await call("request_money_statement", { target_org: context.firm.id, target_share: shareId });
+  if (asked.ok) queueMoneyStatements();
+  return asked;
 }
 
 /** A partner decides a held part, with the second factor. */

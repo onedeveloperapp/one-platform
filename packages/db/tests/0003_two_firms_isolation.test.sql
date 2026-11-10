@@ -392,6 +392,10 @@ from public.money_releases r;
 insert into public.client_payment_accounts (person_id, org_id, kind, pix_key) values
   ('a2000000-0000-4000-8000-00000000000a', 'b1000000-0000-4000-8000-00000000000a', 'pix', '52998224725'),
   ('a2000000-0000-4000-8000-00000000000b', 'b1000000-0000-4000-8000-00000000000b', 'pix', '12345678909');
+-- An accountability statement of each firm's client's part (0156).
+insert into public.money_statements (org_id, share_id, case_id, person_id)
+select s.org_id, s.id, s.case_id, s.person_id from public.money_shares s
+where s.org_id in ('b1000000-0000-4000-8000-00000000000a', 'b1000000-0000-4000-8000-00000000000b');
 -- A request about a client's data, the marketing term and a segment of each firm (0133, 0134).
 insert into public.person_data_requests (org_id, person_id, kind, how, status) values
   ('b1000000-0000-4000-8000-00000000000a', 'a2000000-0000-4000-8000-00000000000a', 'export', 'email', 'done'),
@@ -609,7 +613,7 @@ select is(
     'finance_statement_lines', 'finance_statements', 'firm_autonomy', 'firm_calendars',
     'firm_claim_defaults', 'firm_invitations', 'firm_marketing_terms', 'firm_modules', 'firm_notice_kinds', 'firm_one_work_cost', 'firm_one_work_minutes', 'firm_signers', 'flight_alerts', 'flight_checks', 'flight_segments', 'free_justice_answers', 'hearings', 'import_batches', 'import_rows', 'invoices',
     'issued_documents', 'lawsuit_facts', 'lawyer_signature_uses', 'legal_sources', 'marketing_segments', 'memberships',
-    'money_releases', 'money_shares', 'movements', 'notice_optins', 'notice_stops', 'onboarding_state', 'partner_invitations', 'partner_links', 'pax_firm_clauses',
+    'money_releases', 'money_shares', 'money_statements', 'movements', 'notice_optins', 'notice_stops', 'onboarding_state', 'partner_invitations', 'partner_links', 'pax_firm_clauses',
     'people', 'person_data_requests',
     'proceeding_lawyers', 'proceeding_parties', 'proceeding_tracking', 'proceedings', 'publication_readings', 'publications', 'record_versions',
     'residence_declarations', 'signature_envelopes',
@@ -829,7 +833,7 @@ select is(
     'finance_statement_lines', 'finance_statements', 'firm_autonomy', 'firm_calendars',
     'firm_claim_defaults', 'firm_invitations', 'firm_marketing_terms', 'firm_modules', 'firm_notice_kinds', 'firm_one_work_cost', 'firm_one_work_minutes', 'firm_signers', 'flight_alerts', 'flight_checks', 'flight_segments', 'free_justice_answers', 'hearings', 'import_batches', 'import_rows', 'invoices',
     'issued_documents', 'lawsuit_facts', 'lawyer_signature_uses', 'legal_sources', 'marketing_segments', 'memberships',
-    'money_releases', 'money_shares', 'movements', 'notice_optins', 'notice_stops', 'onboarding_state', 'partner_invitations', 'partner_links', 'pax_firm_clauses',
+    'money_releases', 'money_shares', 'money_statements', 'movements', 'notice_optins', 'notice_stops', 'onboarding_state', 'partner_invitations', 'partner_links', 'pax_firm_clauses',
     'people', 'person_data_requests',
     'proceeding_lawyers', 'proceeding_parties', 'proceeding_tracking', 'proceedings', 'publication_readings', 'publications', 'record_versions',
     'residence_declarations', 'signature_envelopes',

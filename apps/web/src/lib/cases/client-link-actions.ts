@@ -814,10 +814,16 @@ export type ClientMoney = {
     confirmedAt: string | null;
   }[];
   account: { kind: string; ends: string; bank: string | null } | null;
+  /** Money is expected on the case (a settlement, a judgment won, a deposit, a release): the account is asked now (0155). */
+  expected: boolean;
 };
 
 const readMoney = (data: unknown): ClientMoney => {
-  const answer = (data ?? {}) as { shares?: Record<string, unknown>[]; account?: Record<string, unknown> | null };
+  const answer = (data ?? {}) as {
+    shares?: Record<string, unknown>[];
+    account?: Record<string, unknown> | null;
+    expected?: unknown;
+  };
   const whole = (value: unknown) => (typeof value === "number" ? value : 0);
   const text = (value: unknown) => (typeof value === "string" && value !== "" ? value : null);
   return {
@@ -841,6 +847,7 @@ const readMoney = (data: unknown): ClientMoney => {
           bank: text(answer.account.bank),
         }
       : null,
+    expected: answer.expected === true,
   };
 };
 
@@ -918,6 +925,55 @@ export async function downloadClientReceipt(token: string, receiptId: string): P
   const { data: signed, error: signError } = await backend.storage
     .from(FIRM_FILES_BUCKET)
     .createSignedUrl(answer.storage_path, 60, { download: answer.name ?? "recibo.pdf" });
+  if (signError || !signed) return { ok: false, code: "storage_unavailable" };
+  return { ok: true, code: "ready", url: signed.signedUrl };
+}
+
+// ---------- The accountability statements of the client's money (migration 0156) ----------
+
+/** The statements issued of the link's person's parts (and of a child's they answer for), each by its part. */
+export async function clientMoneyStatements(
+  token: string,
+): Promise<
+  { ok: true; statements: { id: string; shareId: string; verifyCode: string }[] } | { ok: false; code: string }
+> {
+  const closed = await refusal(token);
+  if (closed) return closed;
+  const backend = service();
+  if (!backend) return unavailable;
+  const { data, error } = await backend.rpc("client_link_money_statements", { target_token: token });
+  const answer = (data ?? {}) as { ok?: boolean; code?: string; statements?: unknown };
+  if (error || answer.ok !== true) return { ok: false, code: answer.code ?? "failed" };
+  const rows = Array.isArray(answer.statements) ? (answer.statements as Record<string, unknown>[]) : [];
+  return {
+    ok: true,
+    statements: rows.flatMap((row) =>
+      typeof row.id === "string" && typeof row.share_id === "string" && typeof row.verify_code === "string"
+        ? [{ id: row.id, shareId: row.share_id, verifyCode: row.verify_code }]
+        : [],
+    ),
+  };
+}
+
+/** A link of a minute to the PDF of one of the client's accountability statements. */
+export async function downloadClientMoneyStatement(
+  token: string,
+  statementId: string,
+): Promise<ClientResult<{ url: string }>> {
+  const closed = await refusal(token);
+  if (closed) return closed;
+  if (!isId(statementId)) return { ok: false, code: "not_found" };
+  const backend = service();
+  if (!backend) return unavailable;
+  const { data, error } = await backend.rpc("client_link_money_statement_file", {
+    target_token: token,
+    target_statement: statementId,
+  });
+  const answer = (data ?? {}) as { ok?: boolean; code?: string; storage_path?: string; name?: string };
+  if (error || answer.ok !== true || !answer.storage_path) return { ok: false, code: answer.code ?? "not_found" };
+  const { data: signed, error: signError } = await backend.storage
+    .from(FIRM_FILES_BUCKET)
+    .createSignedUrl(answer.storage_path, 60, { download: answer.name ?? "prestacao-de-contas.pdf" });
   if (signError || !signed) return { ok: false, code: "storage_unavailable" };
   return { ok: true, code: "ready", url: signed.signedUrl };
 }

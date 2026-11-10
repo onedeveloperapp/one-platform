@@ -3,8 +3,10 @@
 import { revalidatePath } from "next/cache";
 
 import { queueFinanceCategorization } from "@/lib/finance/categorize-work";
+import { queueMoneySplit } from "@/lib/finance/money-work";
 import { readFinanceAccess, readFinanceRegistrations } from "@/lib/finance/read";
 import { queueFinanceReceipts } from "@/lib/finance/receipt-work";
+import { queueMoneyStatements } from "@/lib/finance/statement-work";
 import { getMemberContext } from "@/lib/member/context";
 
 /**
@@ -239,6 +241,10 @@ export async function finishFinanceStatement(
   if (finished.ok && finished.pending > 0) queueFinanceCategorization();
   // A client's bill ONE settled from the statement owes its receipt (0152), issued after the answer.
   if (finished.ok) queueFinanceReceipts();
+  // A release ONE read as received owes its split, and a part it read as passed on its accountability statement
+  // (0155, 0156): both after the answer.
+  if (finished.ok) queueMoneySplit();
+  if (finished.ok) queueMoneyStatements();
   return finished;
 }
 

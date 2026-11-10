@@ -25,6 +25,12 @@ export type MoneyShare = {
   minorOrder: "deposited" | "released" | "accounts" | null;
   confirmedAt: string | null;
   path: "firm" | "direct";
+  /** ONE read the Pix of this part in the statement (0155). */
+  paidByOne: boolean;
+  /** ONE read the release's money in the statement (0155). */
+  receivedByOne: boolean;
+  /** Its accountability statement to the client (0156), once the part was passed on or paid by the court. */
+  statement?: { status: "owed" | "waiting" | "issued" | "failed"; fileId: string | null } | null;
   account: { kind: "pix" | "conta"; ends: string } | null;
 };
 
@@ -73,6 +79,8 @@ export function readMoneyShares(raw: unknown): MoneyShare[] | null {
             : null,
         confirmedAt: text(row.confirmed_at),
         path: row.path === "direct" ? "direct" : "firm",
+        paidByOne: row.paid_by_one === true,
+        receivedByOne: row.received_by_one === true,
         account:
           account && (account.kind === "pix" || account.kind === "conta")
             ? { kind: account.kind, ends: text(account.ends) ?? "" }

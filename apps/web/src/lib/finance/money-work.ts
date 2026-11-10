@@ -1,5 +1,6 @@
 import "server-only";
 
+import { statementRound } from "@/lib/finance/statement-work";
 import type { Sweep, SweepReport } from "@/lib/jobs/schedule";
 import { soon } from "@/lib/jobs/soon";
 import { createServiceClient } from "@flyee/auth/service";
@@ -95,7 +96,13 @@ export async function moneyRound(service: SupabaseClient, until: number): Promis
     if (Date.now() >= until) break;
     if (await splitRelease(service, id)) split += 1;
   }
-  return { split };
+  // The accountability statements owed (0156): of a part the court paid straight to the client, once split, and of
+  // every part passed on.
+  const statements = Date.now() < until ? await statementRound(service, until) : {};
+  return {
+    split,
+    ...Object.fromEntries(Object.entries(statements).map(([key, value]) => [`statement_${key}`, value])),
+  };
 }
 
 /** Right after a person registered a release as received: its split, on the same server. */

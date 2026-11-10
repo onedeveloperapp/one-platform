@@ -28,6 +28,8 @@ export type LawsuitFact = {
   ackedAt: string | null;
   receivedCents: number | null;
   receivedOn: string | null;
+  /** ONE read the release's money in the bank's statement (0155). */
+  receivedByOne?: boolean;
   corrected: boolean;
   correctedReason: string | null;
 };
@@ -70,6 +72,7 @@ export function lawsuitFactsOf(raw: unknown): LawsuitFact[] {
         ackedAt: text(row.acked_at),
         receivedCents: integer(row.received_cents),
         receivedOn: text(row.received_on),
+        receivedByOne: row.received_by_one === true,
         corrected: row.corrected_at !== null && row.corrected_at !== undefined,
         correctedReason: text(row.corrected_reason),
       },
