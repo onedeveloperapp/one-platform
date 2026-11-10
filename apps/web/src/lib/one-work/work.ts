@@ -19,6 +19,8 @@ export const ONE_WORK_FAMILIES = [
   "prazos",
   "avisos",
   "biblioteca",
+  // The books (0128): said only to who reads them, so the database lists the family to nobody else.
+  "financeiro",
 ] as const;
 export type OneWorkFamily = (typeof ONE_WORK_FAMILIES)[number];
 const isFamily = (value: unknown): value is OneWorkFamily => (ONE_WORK_FAMILIES as readonly unknown[]).includes(value);

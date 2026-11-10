@@ -2,6 +2,7 @@
 
 import { readWaitingDecisions } from "@/lib/ai/decisions-read";
 import { cloudSigningOffered } from "@/lib/cases/filing-facts";
+import { readFinanceAttention } from "@/lib/finance/attention";
 import { readFilingAttention } from "@/lib/firm/filing-attention";
 import { pendingBadge, type PendingGroup, pendingGroups, pendingLate, readFirmPending } from "@/lib/firm/pending";
 import { readPublicationAcks } from "@/lib/firm/publication-acks";
@@ -27,7 +28,7 @@ export async function readPendingCenter(): Promise<PendingRead> {
   // run now and then, after the answer (lib/jobs/while-used.ts).
   sweepWhileUsed();
 
-  const [today, pending, decisions, filing, cloudSigning, acks] = await Promise.all([
+  const [today, pending, decisions, filing, cloudSigning, acks, finance] = await Promise.all([
     context.supabase.rpc("firm_today", { target_org: context.firm.id }),
     context.supabase.rpc("firm_pending", { target_org: context.firm.id }),
     // Each decision that waits, placed where it is decided; unread, the center counts them as before.
@@ -39,6 +40,10 @@ export async function readPendingCenter(): Promise<PendingRead> {
     context.supabase
       .rpc("firm_publication_acks", { target_org: context.firm.id })
       .then(({ data, error }) => (error ? null : readPublicationAcks(data))),
+    // What waits in the books (0127), only for who reads them (the database answers null to anybody else).
+    context.supabase
+      .rpc("firm_finance_attention", { target_org: context.firm.id })
+      .then(({ data, error }) => (error ? null : readFinanceAttention(data))),
   ]);
   const todayRead = today.error ? null : readFirmToday(today.data);
   const pendingRead = pending.error ? null : readFirmPending(pending.data);
@@ -65,6 +70,7 @@ export async function readPendingCenter(): Promise<PendingRead> {
         }
       : null,
     acks ? { acks, viewer: { userId: context.userId, firmFunction: context.firm.firmFunction } } : null,
+    finance,
   );
   return { ok: true, groups, badge: pendingBadge(groups), late: pendingLate(groups) };
 }

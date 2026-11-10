@@ -7,25 +7,39 @@ import { Fragment, type ReactNode, useId, useState } from "react";
 import { Box, Button, Divider, ListSubheader, Menu, MenuItem } from "@mui/material";
 
 import AddPanel, { type AddKind } from "@/components/layout/add/add-panel";
+import FinanceAddPanel, { type FinanceAddKind } from "@/components/layout/add/finance-add-panel";
 import { useViewer } from "@/components/layout/viewer-context";
 import { TILE_TONE, type TileTone } from "@/components/product/tile-tone";
+import NiArrowLeftRight from "@/icons/nexture/ni-arrow-left-right";
 import NiCalendar from "@/icons/nexture/ni-calendar";
 import NiCalendarClock from "@/icons/nexture/ni-calendar-clock";
 import NiChevronDownSmall from "@/icons/nexture/ni-chevron-down-small";
+import NiMoney from "@/icons/nexture/ni-money";
 import NiPlus from "@/icons/nexture/ni-plus";
+import NiWallet from "@/icons/nexture/ni-wallet";
+import type { MenuViewer } from "@/lib/firm/menu";
 import type { FirmFunction } from "@/lib/firm/roles";
 import { isSetupPath } from "@/lib/search/global-search";
 import { cn } from "@/lib/utils";
 
-type AddEntry = { kind: AddKind; label: string; icon: ReactNode; tone: TileTone; functions: readonly FirmFunction[] };
+type MenuKind = AddKind | FinanceAddKind;
+type AddEntry = {
+  kind: MenuKind;
+  label: string;
+  icon: ReactNode;
+  tone: TileTone;
+  /** Who may add it: these functions of the firm, or what the viewer says (the books' level). */
+  functions?: readonly FirmFunction[];
+  allowed?: (viewer: MenuViewer) => boolean;
+};
 type AddGroup = { key: string; label: string; entries: readonly AddEntry[] };
 
 /** Who signs or runs the deadlines writes a deadline and a hearing (0034, 0037). */
 const DEADLINE_WRITERS: readonly FirmFunction[] = ["socio", "advogado", "controladoria"];
 
 /**
- * What may be added from the top, by group, as the drawings of 2026-11-07 group it. The finance (Nova receita, Nova
- * despesa, Transferência) and the people (Nova pessoa) join with their phases of the plan.
+ * What may be added from the top, by group, as the drawings of 2026-11-07 group it: the cases', and the books' (Nova
+ * receita, Nova despesa, Transferência, 0127) for who writes in them. The people (Nova pessoa) join with their phase.
  */
 const GROUPS: readonly AddGroup[] = [
   {
@@ -48,7 +62,36 @@ const GROUPS: readonly AddGroup[] = [
       },
     ],
   },
+  {
+    key: "finance",
+    label: "add-group-finance",
+    entries: [
+      {
+        kind: "income",
+        label: "finance-new-income",
+        icon: <NiMoney size="small" />,
+        tone: "secondary",
+        allowed: (viewer) => viewer.financeWrites === true,
+      },
+      {
+        kind: "expense",
+        label: "finance-new-expense",
+        icon: <NiWallet size="small" />,
+        tone: "accent-2",
+        allowed: (viewer) => viewer.financeWrites === true,
+      },
+      {
+        kind: "transfer",
+        label: "finance-new-transfer",
+        icon: <NiArrowLeftRight size="small" />,
+        tone: "primary",
+        allowed: (viewer) => viewer.financeWrites === true,
+      },
+    ],
+  },
 ];
+
+const FINANCE_KINDS: readonly MenuKind[] = ["income", "expense", "transfer"];
 
 /**
  * "Adicionar" at the top of every screen (the screen pattern after ADVBox, approved on 2026-11-07): what the person
@@ -64,12 +107,18 @@ export default function AddMenu() {
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   // What was picked waits for the menu to finish closing, which gives the focus back to the button: then the panel
   // opens, takes the focus into its first field, and gives it back to the button when it closes.
-  const [picked, setPicked] = useState<AddKind | null>(null);
-  const [adding, setAdding] = useState<AddKind | null>(null);
+  const [picked, setPicked] = useState<MenuKind | null>(null);
+  const [adding, setAdding] = useState<MenuKind | null>(null);
 
   const groups = GROUPS.map((group) => ({
     ...group,
-    entries: group.entries.filter((entry) => viewer?.firmFunction && entry.functions.includes(viewer.firmFunction)),
+    entries: group.entries.filter((entry) =>
+      !viewer
+        ? false
+        : entry.allowed
+          ? entry.allowed(viewer)
+          : Boolean(viewer.firmFunction && entry.functions?.includes(viewer.firmFunction)),
+    ),
   })).filter((group) => group.entries.length > 0);
   if (!viewer?.hasFirm || viewer.partner || viewer.owesSecondFactor || groups.length === 0) return null;
   // A setup leads nowhere else before it ends: nothing is added from the top there.
@@ -155,7 +204,11 @@ export default function AddMenu() {
           </Fragment>
         ))}
       </Menu>
-      {adding ? <AddPanel key={adding} kind={adding} onClose={() => setAdding(null)} /> : null}
+      {adding && FINANCE_KINDS.includes(adding) ? (
+        <FinanceAddPanel key={adding} kind={adding as FinanceAddKind} onClose={() => setAdding(null)} />
+      ) : adding ? (
+        <AddPanel key={adding} kind={adding as AddKind} onClose={() => setAdding(null)} />
+      ) : null}
     </>
   );
 }

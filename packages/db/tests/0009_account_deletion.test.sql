@@ -274,6 +274,10 @@ select is(
   -- a kind of notice, a product module) point at rows no firm deletes: a firm
   -- that goes takes its cases, its notices, its modules and its partnerships
   -- with it.
+  -- The firm's books (0126, 0129): an entry and a bill name their category, an entry its account, a
+  -- statement and its lines name their account; each pair cascades from the
+  -- firm in the same statement, and an account or a category something uses
+  -- is archived, never deleted.
   array[
     'ai_runs.prompt_version_id',
     'ai_runs.task',
@@ -287,6 +291,11 @@ select is(
     'filing_package_items.signed_file_id',
     'filing_receipts.file_id',
     'filing_submissions.receipt_file_id',
+    'finance_bills.category_id',
+    'finance_entries.account_id',
+    'finance_entries.category_id',
+    'finance_statement_lines.account_id',
+    'finance_statements.account_id',
     'firm_modules.module_key',
     'firm_notice_kinds.kind',
     'flight_segments.destination_iata',

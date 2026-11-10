@@ -379,9 +379,10 @@ select set_eq(
     ('modelo_documento', 1, 1, 0) $$,
   'each kind of ONE''s work is counted once, what a person approved and the test cases apart, and nothing undone'
 );
+-- The books' own work (0128) is said only to who reads the books, which Caio does not: 0127 counts it.
 select is(
   (select count(*)::int from public.one_work_kinds k
-   where not exists (select 1 from pg_temp.october('caio') o where o.kind = k.key)),
+   where k.family <> 'financeiro' and not exists (select 1 from pg_temp.october('caio') o where o.kind = k.key)),
   0,
   'and the fixture holds an act of every kind of the catalog'
 );

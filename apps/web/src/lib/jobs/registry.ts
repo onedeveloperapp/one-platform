@@ -9,6 +9,7 @@ import { conversationSweeps } from "@/lib/conversations/jobs";
 import { courtSweeps } from "@/lib/courts/jobs";
 import { deadlineSweeps } from "@/lib/deadlines/jobs";
 import { fileSweeps } from "@/lib/files/jobs";
+import { financeSweeps } from "@/lib/finance/jobs";
 import { hearingSweeps } from "@/lib/hearings/jobs";
 import { importSweeps } from "@/lib/import/jobs";
 import type { Sweep } from "@/lib/jobs/schedule";
@@ -41,6 +42,7 @@ export const SWEEPS: readonly Sweep[] = [
   ...fileSweeps,
   ...connectionSweeps,
   ...importSweeps,
+  ...financeSweeps,
   ...billingSweeps,
   ...leadSweeps,
   ...newsletterSweeps,

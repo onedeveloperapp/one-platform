@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
 import DashboardShell from "@/components/layout/dashboard-shell";
+import { readFinanceAccess } from "@/lib/finance/read";
 import { resolveGate } from "@/lib/firm/gate";
 import { FIRM_SETUP_PATH } from "@/lib/firm/gate-rules";
 import type { MenuViewer } from "@/lib/firm/menu";
@@ -57,6 +58,8 @@ export default async function DashboardLayout({
           };
         })
       : [];
+  // Whether the person reads the firm's books (0126): the menu shows the finance only to them.
+  const finance = context?.firm ? await readFinanceAccess(context.supabase, context.firm.id) : null;
   // Who is looking, for the menus: read here once, so no item appears and then leaves.
   const viewer: MenuViewer | null = context
     ? {
@@ -73,6 +76,8 @@ export default async function DashboardLayout({
         partnerSetupPending,
         isSuperadmin: context.isSuperadmin,
         owesSecondFactor,
+        finance: finance !== null && ["view", "operate", "configure"].includes(finance.level),
+        financeWrites: finance !== null && finance.opened && ["operate", "configure"].includes(finance.level),
       }
     : null;
   return <DashboardShell viewer={viewer}>{children}</DashboardShell>;

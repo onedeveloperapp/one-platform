@@ -122,7 +122,7 @@ describe("hours, money and months", () => {
   it("names every family and kind by a key of the catalog", () => {
     expect(familyLabelKey("tribunal")).toBe("one-work-family-tribunal");
     expect(kindLabelKey("tema_1417")).toBe("one-work-kind-tema-1417");
-    expect(ONE_WORK_FAMILIES).toHaveLength(10);
+    expect(ONE_WORK_FAMILIES).toHaveLength(11);
   });
 });
 

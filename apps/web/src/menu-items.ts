@@ -80,6 +80,16 @@ export const leftMenuItems: MenuItem[] = [
     color: "text-primary",
     href: "/trabalho-do-one",
   },
+  // The firm's books (0126): only who reads them; the costs of the cases are read on each case.
+  {
+    id: "financeiro",
+    icon: "NiMoney",
+    label: "menu-financeiro",
+    description: "menu-financeiro-description",
+    color: "text-primary",
+    href: "/financeiro",
+    canAccess: { finance: true },
+  },
   {
     id: "atendimento",
     icon: "NiMessages",

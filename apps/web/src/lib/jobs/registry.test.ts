@@ -37,6 +37,8 @@ describe("the platform's sweeps (2026-11-04)", () => {
         "files-upkeep",
         "filing-packages",
         "filing-submissions",
+        "finance-categorize",
+        "finance-retention",
         "flight-alerts",
         "flight-checks",
         "flight-watch",

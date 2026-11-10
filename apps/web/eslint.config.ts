@@ -1,3 +1,4 @@
+import { LEGACY_MODULE_IMPORTS } from "./src/lib/modules/boundary";
 import prettierConfig from "eslint-config-prettier";
 import prettierPlugin from "eslint-plugin-prettier";
 import reactPlugin from "eslint-plugin-react";
@@ -8,8 +9,6 @@ import tseslint from "typescript-eslint";
 
 import js from "@eslint/js";
 import nextPlugin from "@next/eslint-plugin-next";
-
-import { LEGACY_MODULE_IMPORTS } from "./src/lib/modules/boundary";
 
 /** MUI X's paid tiers, refused everywhere (the owner's decision of 2026-10-21). */
 const PAID_MUI = [
@@ -146,6 +145,32 @@ export default [
         {
           patterns: [
             ...PAID_MUI,
+            {
+              regex: "^@/modules/",
+              message:
+                "O core não importa um módulo: pergunte ao registro (lib/modules/registry.ts) ou ponha o código no módulo.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  // The line of the money (the plan of the controladoria and the finance, decision 1; migration 0126): the firm's
+  // books record, read, calculate and warn, and never charge, pay or hold anybody's money. Their code never reaches
+  // ONE's own billing, which charges only ONE's subscription.
+  {
+    files: ["src/lib/finance/**/*.{ts,tsx}", "src/app/(dashboard)/financeiro/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            ...PAID_MUI,
+            {
+              regex: "^(@flyee/billing|@/lib/billing)",
+              message:
+                "O financeiro do escritório nunca toca a cobrança do próprio ONE: o ONE não cobra nem paga ninguém pelo escritório.",
+            },
             {
               regex: "^@/modules/",
               message:

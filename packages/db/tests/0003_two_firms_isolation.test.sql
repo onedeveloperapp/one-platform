@@ -318,6 +318,41 @@ select cp.org_id, cp.case_id, cp.id, cp.person_id, true, 'client'
 from public.case_parties cp
 where cp.org_id in ('b1000000-0000-4000-8000-00000000000a', 'b1000000-0000-4000-8000-00000000000b')
   and cp.id = (select y.id from public.case_parties y where y.org_id = cp.org_id order by y.created_at, y.id limit 1);
+-- The books of each firm (0126): an account, a category, a cost centre, an entry, a statement with its line, a rule,
+-- and what one person reads of them.
+insert into public.finance_accounts (id, org_id, kind, name) values
+  ('f9000000-0000-4000-8000-00000000000a', 'b1000000-0000-4000-8000-00000000000a', 'bank', 'Conta de A'),
+  ('f9000000-0000-4000-8000-00000000000b', 'b1000000-0000-4000-8000-00000000000b', 'bank', 'Conta de B');
+insert into public.finance_categories (id, org_id, kind, name) values
+  ('f9100000-0000-4000-8000-00000000000a', 'b1000000-0000-4000-8000-00000000000a', 'expense', 'Despesa de A'),
+  ('f9100000-0000-4000-8000-00000000000b', 'b1000000-0000-4000-8000-00000000000b', 'expense', 'Despesa de B');
+insert into public.finance_cost_centers (org_id, name) values
+  ('b1000000-0000-4000-8000-00000000000a', 'Centro de A'),
+  ('b1000000-0000-4000-8000-00000000000b', 'Centro de B');
+insert into public.finance_statements (id, org_id, account_id, file_name, file_sha256) values
+  ('f9200000-0000-4000-8000-00000000000a', 'b1000000-0000-4000-8000-00000000000a', 'f9000000-0000-4000-8000-00000000000a', 'a.ofx', repeat('a', 64)),
+  ('f9200000-0000-4000-8000-00000000000b', 'b1000000-0000-4000-8000-00000000000b', 'f9000000-0000-4000-8000-00000000000b', 'b.ofx', repeat('b', 64));
+insert into public.finance_statement_lines (org_id, account_id, statement_id, posted_on, cents, memo, line_key) values
+  ('b1000000-0000-4000-8000-00000000000a', 'f9000000-0000-4000-8000-00000000000a', 'f9200000-0000-4000-8000-00000000000a', date '2026-11-01', -100, 'A', 'a'),
+  ('b1000000-0000-4000-8000-00000000000b', 'f9000000-0000-4000-8000-00000000000b', 'f9200000-0000-4000-8000-00000000000b', date '2026-11-01', -100, 'B', 'b');
+insert into public.finance_entries (org_id, account_id, kind, cents, category_id, occurred_on, competence_on) values
+  ('b1000000-0000-4000-8000-00000000000a', 'f9000000-0000-4000-8000-00000000000a', 'expense', -100, 'f9100000-0000-4000-8000-00000000000a', date '2026-11-01', date '2026-11-01'),
+  ('b1000000-0000-4000-8000-00000000000b', 'f9000000-0000-4000-8000-00000000000b', 'expense', -100, 'f9100000-0000-4000-8000-00000000000b', date '2026-11-01', date '2026-11-01');
+insert into public.finance_rules (org_id, words, direction, kind, category_id) values
+  ('b1000000-0000-4000-8000-00000000000a', 'energia', 'out', 'expense', 'f9100000-0000-4000-8000-00000000000a'),
+  ('b1000000-0000-4000-8000-00000000000b', 'energia', 'out', 'expense', 'f9100000-0000-4000-8000-00000000000b');
+insert into public.finance_access (org_id, user_id, level) values
+  ('b1000000-0000-4000-8000-00000000000a', 'a1000000-0000-4000-8000-000000000002', 'costs'),
+  ('b1000000-0000-4000-8000-00000000000b', 'a1000000-0000-4000-8000-000000000004', 'configure');
+-- A bill and its payment of each firm (0129).
+insert into public.finance_bills (id, org_id, direction, category_id, cents, due_on, competence_on) values
+  ('f9300000-0000-4000-8000-00000000000a', 'b1000000-0000-4000-8000-00000000000a', 'pay', 'f9100000-0000-4000-8000-00000000000a', 100, date '2026-11-01', date '2026-11-01'),
+  ('f9300000-0000-4000-8000-00000000000b', 'b1000000-0000-4000-8000-00000000000b', 'pay', 'f9100000-0000-4000-8000-00000000000b', 100, date '2026-11-01', date '2026-11-01');
+insert into public.finance_bill_payments (org_id, bill_id, entry_id, paid_on, base_cents)
+select e.org_id, case when e.org_id = 'b1000000-0000-4000-8000-00000000000a' then 'f9300000-0000-4000-8000-00000000000a'::uuid
+                      else 'f9300000-0000-4000-8000-00000000000b'::uuid end, e.id, date '2026-11-01', 100
+from public.finance_entries e
+where e.org_id in ('b1000000-0000-4000-8000-00000000000a', 'b1000000-0000-4000-8000-00000000000b');
 -- The estimates of ONE's work of each firm (0120): read only by who decides for it.
 insert into public.firm_one_work_minutes (org_id, kind, minutes) values
   ('b1000000-0000-4000-8000-00000000000a', 'texto_peca', 45),
@@ -504,7 +539,8 @@ select is(
     'case_weather', 'cases', 'certificate_inventory', 'civil_court_answers', 'client_consents', 'client_links', 'client_notices', 'closing_goals', 'connections',
     'consent_acceptances',
     'deadlines', 'djen_captures', 'dossiers', 'draft_templates', 'entitlement_grants', 'files', 'filing_package_items', 'filing_packages',
-    'filing_receipts', 'filing_submissions', 'firm_autonomy', 'firm_calendars',
+    'filing_receipts', 'filing_submissions', 'finance_access', 'finance_accounts', 'finance_bill_payments', 'finance_bills', 'finance_categories', 'finance_cost_centers', 'finance_entries', 'finance_rules',
+    'finance_statement_lines', 'finance_statements', 'firm_autonomy', 'firm_calendars',
     'firm_claim_defaults', 'firm_invitations', 'firm_modules', 'firm_notice_kinds', 'firm_one_work_cost', 'firm_one_work_minutes', 'firm_signers', 'flight_alerts', 'flight_checks', 'flight_segments', 'free_justice_answers', 'hearings', 'import_batches', 'import_rows', 'invoices',
     'issued_documents', 'lawyer_signature_uses', 'legal_sources', 'memberships',
     'movements', 'notice_optins', 'notice_stops', 'onboarding_state', 'partner_invitations', 'partner_links', 'pax_firm_clauses',
@@ -681,7 +717,7 @@ select is(
     'client_links', 'client_notices', 'closing_goals',
     'consent_acceptances', 'deadlines', 'djen_captures', 'dossiers', 'draft_templates', 'entitlement_grants', 'files',
     'filing_package_items', 'filing_packages',
-    'filing_receipts', 'filing_submissions', 'firm_autonomy', 'firm_calendars', 'firm_claim_defaults', 'firm_modules', 'firm_notice_kinds', 'firm_signers', 'flight_alerts', 'flight_checks', 'flight_segments', 'free_justice_answers', 'hearings', 'import_batches',
+    'filing_receipts', 'filing_submissions', 'finance_access', 'firm_autonomy', 'firm_calendars', 'firm_claim_defaults', 'firm_modules', 'firm_notice_kinds', 'firm_signers', 'flight_alerts', 'flight_checks', 'flight_segments', 'free_justice_answers', 'hearings', 'import_batches',
     'import_rows', 'invoices', 'issued_documents', 'lawyer_signature_uses', 'legal_sources',
     'memberships', 'movements', 'notice_optins', 'notice_stops', 'partner_links', 'pax_firm_clauses', 'people', 'proceeding_lawyers', 'proceeding_parties', 'proceeding_tracking', 'proceedings',
     'publication_readings', 'publications',
@@ -723,7 +759,8 @@ select is(
     'case_weather', 'cases', 'certificate_inventory', 'civil_court_answers', 'client_consents', 'client_links', 'client_notices', 'closing_goals', 'connections',
     'consent_acceptances',
     'deadlines', 'djen_captures', 'dossiers', 'draft_templates', 'entitlement_grants', 'files', 'filing_package_items', 'filing_packages',
-    'filing_receipts', 'filing_submissions', 'firm_autonomy', 'firm_calendars',
+    'filing_receipts', 'filing_submissions', 'finance_access', 'finance_accounts', 'finance_bill_payments', 'finance_bills', 'finance_categories', 'finance_cost_centers', 'finance_entries', 'finance_rules',
+    'finance_statement_lines', 'finance_statements', 'firm_autonomy', 'firm_calendars',
     'firm_claim_defaults', 'firm_invitations', 'firm_modules', 'firm_notice_kinds', 'firm_one_work_cost', 'firm_one_work_minutes', 'firm_signers', 'flight_alerts', 'flight_checks', 'flight_segments', 'free_justice_answers', 'hearings', 'import_batches', 'import_rows', 'invoices',
     'issued_documents', 'lawyer_signature_uses', 'legal_sources', 'memberships',
     'movements', 'notice_optins', 'notice_stops', 'onboarding_state', 'partner_invitations', 'partner_links', 'pax_firm_clauses',

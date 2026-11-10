@@ -45,6 +45,10 @@ export type MenuViewer = {
    * the shell keeps them on the security screen until it is set up.
    */
   owesSecondFactor: boolean;
+  /** The person reads the firm's books (0126: a partner, or granted "view" or more); the costs of the cases are not the books. */
+  finance?: boolean;
+  /** The person writes entries in the firm's books, open (0126: "operate" or "configure"): the top's "Adicionar" offers them. */
+  financeWrites?: boolean;
 };
 
 /** Who an item is for. An item that says nothing is for anybody of a firm. */
@@ -63,6 +67,8 @@ export type MenuAccess = {
   module?: string;
   /** Only somebody of a partner (0069): the partner's area. */
   partner?: boolean;
+  /** Only who reads the firm's books (0126). */
+  finance?: boolean;
 };
 
 /**
@@ -84,6 +90,7 @@ export function canAccess(access: MenuAccess | undefined, viewer: MenuViewer | n
   if (access?.oversees && !overseesFirm(viewer.role, viewer.firmFunction)) return false;
   if (access?.functions && !(viewer.firmFunction && access.functions.includes(viewer.firmFunction))) return false;
   if (access?.module && !viewer.modules.includes(access.module)) return false;
+  if (access?.finance && viewer.finance !== true) return false;
   return true;
 }
 

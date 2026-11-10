@@ -64,6 +64,7 @@ const FAMILY: Record<OneWorkFamily, { icon: ReactNode; tone: TileTone }> = {
   prazos: { icon: <NiCalendarClock size="medium" />, tone: "accent-3" },
   avisos: { icon: <NiBell size="medium" />, tone: "accent-2" },
   biblioteca: { icon: <NiBook size="medium" />, tone: "accent-4" },
+  financeiro: { icon: <NiMoney size="medium" />, tone: "secondary" },
 };
 
 /**

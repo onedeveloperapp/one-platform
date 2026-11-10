@@ -10,6 +10,7 @@ import { readWaitingDecisions } from "@/lib/ai/decisions-read";
 import { cloudSigningOffered } from "@/lib/cases/filing-facts";
 import { readCaseList, readCaseStock } from "@/lib/cases/list-read";
 import { firmPulseOf } from "@/lib/cases/pulse";
+import { readFinanceAttention } from "@/lib/finance/attention";
 import { readFilingAttention } from "@/lib/firm/filing-attention";
 import { attentionGroups, pendingGroups, readFirmPending } from "@/lib/firm/pending";
 import { personFlowKey, personSetupOwed, signsAtTheBar } from "@/lib/firm/person-setup";
@@ -100,6 +101,7 @@ async function loadHome(): Promise<
     cloudSigning,
     acks,
     oneWork,
+    finance,
   ] = await Promise.all([
     context.supabase.rpc("firm_today", { target_org: firm.id }),
     context.supabase.rpc("firm_pending", { target_org: firm.id }),
@@ -147,6 +149,10 @@ async function loadHome(): Promise<
       .then(({ data, error }) => (error ? null : readPublicationAcks(data))),
     // What ONE did for the firm this month (0120, 0121), the line that leads to its page; unread, the line hides.
     readOneWork(context.supabase, firm.id, brasiliaMonth(), brasiliaMonth(), null).catch(() => null),
+    // What waits in the books (0127), only for who reads them, as the center says it.
+    context.supabase
+      .rpc("firm_finance_attention", { target_org: firm.id })
+      .then(({ data, error }) => (error ? null : readFinanceAttention(data))),
   ]);
   if (manager && facts && !isSetupAnswered(facts)) return { kind: "setup", setup: await loadSetupState(context) };
   // Read failures owe nothing: a registration that could not be read is never said to be missing.
@@ -192,6 +198,7 @@ async function loadHome(): Promise<
                 }
               : null,
             acks ? { acks, viewer: { userId: context.userId, firmFunction: firm.firmFunction } } : null,
+            finance,
           ),
         )
       : null,
