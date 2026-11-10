@@ -392,7 +392,7 @@ export type ProgressListRow = {
   steps: number;
   reached: number;
   state: "progress" | "done" | "stopped";
-  /** The way in words, for assistive technology ("Peça, etapa 4 de 9"). */
+  /** The way in words, for assistive technology ("Inicial, etapa 4 de 9"). */
   label: string;
 };
 

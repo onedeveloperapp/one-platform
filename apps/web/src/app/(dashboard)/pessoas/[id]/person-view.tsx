@@ -38,6 +38,8 @@ const ERROR_KEY: Record<string, string> = {
   support_visit: "person-error-support",
   second_factor: "person-error-second-factor",
   open_lawsuit: "person-error-open-lawsuit",
+  // 0139: a part of a release the firm still owes the person.
+  money_owed: "person-error-money-owed",
   invalid_data: "person-error-invalid",
 };
 const errorKey = (code: string) => ERROR_KEY[code] ?? "person-error-failed";
