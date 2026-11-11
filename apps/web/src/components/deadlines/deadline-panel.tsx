@@ -455,7 +455,7 @@ export default function DeadlinePanel({
                     weekday: weekdayOf(preview.result.dueOn),
                   })}
                 </Typography>
-                <DeadlineCount count={preview.result} />
+                <DeadlineCount count={preview.result} act={act === OTHER_ACT ? null : act} />
               </>
             ) : null}
           </Box>

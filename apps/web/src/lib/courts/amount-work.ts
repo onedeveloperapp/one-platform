@@ -1,6 +1,8 @@
 import "server-only";
 
-import { amountDue, monthsNeeded } from "@/lib/courts/amount";
+import { amountDue, monthsNeeded, paymentTermEnds } from "@/lib/courts/amount";
+import { calendarOf } from "@/lib/deadlines/deadlines";
+import { courtCalendar } from "@/lib/deadlines/facts";
 import type { Sweep } from "@/lib/jobs/schedule";
 import { BcbIndexSource, FakeIndexSource, type IndexSource } from "@flyee/indices";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -50,7 +52,36 @@ type Owed = {
   final_on: string;
   deposited_cents: number;
   last_deposit_on: string | null;
+  kind: string | null;
+  court: string | null;
+  system: string | null;
+  comarca: string | null;
 };
+
+/**
+ * The last day of the airline's term to pay in the small-claims court (0214): 15 business days from the final
+ * judgment over the court's calendar, read once per court and year in a round. Null in the civil court, and when the
+ * calendar could not be read (the rule then waits three weeks).
+ */
+async function payUntilOf(
+  service: SupabaseClient,
+  row: Owed,
+  finalOn: string,
+  calendars: Map<string, Awaited<ReturnType<typeof courtCalendar>> | null>,
+): Promise<string | null> {
+  if (row.kind !== "juizado" || !row.court) return null;
+  const key = `${row.court}:${finalOn.slice(0, 4)}`;
+  if (!calendars.has(key)) {
+    calendars.set(key, await courtCalendar(service, row.court, Number(finalOn.slice(0, 4))).catch(() => null));
+  }
+  const rows = calendars.get(key);
+  if (!rows) return null;
+  return paymentTermEnds(
+    finalOn,
+    { proceedingKind: row.kind, system: row.system, comarca: row.comarca },
+    calendarOf(rows.years, rows.days),
+  );
+}
 
 export async function computeAmounts(service: SupabaseClient, source: IndexSource = indexSource()) {
   const { data, error } = await service.rpc("lawsuit_amounts_owed", { target_limit: 50 });
@@ -58,17 +89,24 @@ export async function computeAmounts(service: SupabaseClient, source: IndexSourc
   const rows = (data ?? []) as Owed[];
   if (rows.length === 0) return { computed: 0 };
   const today = todayInBrasilia();
-  const facts = rows.map((row) => ({
-    row,
-    facts: {
-      principalCents: Number(row.principal_cents),
-      judgmentOn: String(row.judgment_on).slice(0, 10),
-      interestFrom: String(row.interest_from).slice(0, 10),
-      finalOn: String(row.final_on).slice(0, 10),
-      depositedCents: Number(row.deposited_cents ?? 0),
-      lastDepositOn: row.last_deposit_on ? String(row.last_deposit_on).slice(0, 10) : null,
-    },
-  }));
+  const calendars = new Map<string, Awaited<ReturnType<typeof courtCalendar>> | null>();
+  const facts = [];
+  for (const row of rows) {
+    const finalOn = String(row.final_on).slice(0, 10);
+    facts.push({
+      row,
+      facts: {
+        principalCents: Number(row.principal_cents),
+        judgmentOn: String(row.judgment_on).slice(0, 10),
+        interestFrom: String(row.interest_from).slice(0, 10),
+        finalOn,
+        depositedCents: Number(row.deposited_cents ?? 0),
+        lastDepositOn: row.last_deposit_on ? String(row.last_deposit_on).slice(0, 10) : null,
+        kind: row.kind === "comum" ? ("comum" as const) : ("juizado" as const),
+        payUntil: await payUntilOf(service, row, finalOn, calendars),
+      },
+    });
+  }
   const from = facts.map(({ facts: item }) => monthsNeeded(item, today).from).sort()[0] ?? today.slice(0, 7);
   const to = today.slice(0, 7);
   const [ipca, selic] = await Promise.all([source.monthly("ipca", from, to), source.monthly("selic", from, to)]);
@@ -95,6 +133,7 @@ export async function computeAmounts(service: SupabaseClient, source: IndexSourc
         next_step: amount.step,
         short_cents: amount.shortCents,
         fine_cents: amount.fineCents,
+        pay_until: amount.payUntil,
       },
     });
     if (!recordError) computed += 1;

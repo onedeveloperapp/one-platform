@@ -359,7 +359,7 @@ export async function loadCase(id: string): Promise<CaseState> {
     supabase
       .from("lawsuit_amounts")
       .select(
-        "proceeding_id, as_of, corrected_cents, interest_cents, total_cents, missing, needs_terms, deposited_cents, next_step, short_cents, fine_cents",
+        "proceeding_id, as_of, corrected_cents, interest_cents, total_cents, missing, needs_terms, deposited_cents, next_step, short_cents, fine_cents, lawsuit_kind, pay_until",
       )
       .eq("case_id", id),
     // What may follow each judgment (0185).

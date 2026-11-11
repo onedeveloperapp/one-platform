@@ -1,10 +1,21 @@
+import { computeDeadline, type CourtCalendar, type DeadlinePlace } from "@flyee/rules/deadlines";
 import { depositShortfall, enforcementFine, LAW_14905_FROM, UPDATE_RULE, updateAmount } from "@flyee/rules/update";
 
 /**
- * What a condemnation is worth and what to ask for it (migration 0184, item 4.6 of the case journey plan). Pure: the
- * facts of the lawsuit, the monthly rates and the day are given; the next step follows from what was deposited and
- * from the 15 days the airline has to pay after the judgment became final (CPC, art. 523).
+ * What a condemnation is worth and what to ask for it (migrations 0184 and 0214, item 4.6 of the case journey plan).
+ * Pure: the facts of the lawsuit, the monthly rates and the day are given; the next step follows from what was
+ * deposited and from the term to pay, which the kind of lawsuit sets:
+ *
+ * - in the small-claims court the loser is told, when intimated of the judgment, to pay once it becomes final, and the
+ *   execution follows on request (Lei 9.099/1995, art. 52, III and IV): ONE waits the 15 business days from the final
+ *   judgment (art. 12-A), counted over the court's calendar, and past them the cumprimento comes with the fine of 10
+ *   percent and no fees of 10 percent (CPC, art. 523, § 1º; FONAJE, Enunciado 97);
+ * - in the civil court the cumprimento starts at the creditor's request, and the debtor is intimated to pay in 15
+ *   business days (CPC, arts. 513, § 2º, I, and 523): with nothing deposited the next step is the request, and the fine
+ *   and the fees of 10 percent each come only if the airline does not pay in the term of that intimation.
  */
+
+export type LawsuitKind = "juizado" | "comum";
 
 export type AmountFacts = {
   principalCents: number;
@@ -13,17 +24,39 @@ export type AmountFacts = {
   finalOn: string;
   depositedCents: number;
   lastDepositOn: string | null;
+  kind: LawsuitKind;
+  /** In the small-claims court, the last day of the airline's term to pay (`paymentTermEnds`); null otherwise. */
+  payUntil: string | null;
 };
 
 export type AmountStep = "aguardar" | "levantamento" | "complementacao" | "cumprimento";
 
-/** The days the airline has to pay once the judgment became final, counted as calendar days here (CPC, art. 523). */
+/** The business days the airline has to pay (Lei 9.099/1995, arts. 12-A and 52, III; CPC, art. 523). */
 export const PAYMENT_DAYS = 15;
+
+/** Three weeks: what 15 business days come to, read only when the court's calendar could not count them. */
+const PAYMENT_FALLBACK_DAYS = 21;
 
 function addDays(day: string, days: number): string {
   const date = new Date(`${day}T12:00:00Z`);
   date.setUTCDate(date.getUTCDate() + days);
   return date.toISOString().slice(0, 10);
+}
+
+/**
+ * The last day of the airline's term to pay in the small-claims court: 15 business days from the day the judgment
+ * became final, over the court's calendar, by the rule of the deadlines. Null when the day cannot be counted.
+ */
+export function paymentTermEnds(finalOn: string, place: DeadlinePlace, calendar: CourtCalendar): string | null {
+  const outcome = computeDeadline({
+    trigger: "day",
+    on: finalOn,
+    days: PAYMENT_DAYS,
+    counting: "business",
+    place,
+    calendar,
+  });
+  return outcome.ok ? outcome.result.dueOn : null;
 }
 
 export function amountDue(
@@ -43,7 +76,10 @@ export function amountDue(
   });
   const needsTerms = facts.judgmentOn < LAW_14905_FROM || facts.interestFrom < LAW_14905_FROM;
   const shortfall = depositShortfall(result.totalCents, facts.depositedCents);
-  const termOver = today > addDays(facts.finalOn, PAYMENT_DAYS);
+  const juizado = facts.kind === "juizado";
+  // The small-claims court waits the airline's term; in the civil court the request comes first.
+  const payUntil = juizado ? (facts.payUntil ?? addDays(facts.finalOn, PAYMENT_FALLBACK_DAYS)) : null;
+  const termOver = payUntil === null || today > payUntil;
   const step: AmountStep =
     facts.depositedCents > 0
       ? shortfall.kind === "inteiro"
@@ -61,7 +97,9 @@ export function amountDue(
     needsTerms,
     step,
     shortCents: step === "complementacao" ? shortfall.shortCents : 0,
-    fineCents: step === "cumprimento" ? enforcementFine(result.totalCents) : 0,
+    // The fine is already due in the small-claims court; in the civil court only after the intimation's term.
+    fineCents: step === "cumprimento" && juizado ? enforcementFine(result.totalCents) : 0,
+    payUntil,
   };
 }
 
@@ -72,13 +110,22 @@ export function monthsNeeded(facts: AmountFacts, today: string): { from: string;
   return { from: from.slice(0, 7), to: today.slice(0, 7) };
 }
 
-/** The words of each next step on the case. */
-export const AMOUNT_STEP_KEY: Record<AmountStep, string> = {
-  aguardar: "amount-step-wait",
-  levantamento: "amount-step-release",
-  complementacao: "amount-step-complement",
-  cumprimento: "amount-step-enforce",
-};
+/**
+ * The words of the next step on the case: the cumprimento of the small-claims court comes with its fine, the civil
+ * court's is the request that opens the airline's term.
+ */
+export function amountStepKey(step: AmountStep, kind: LawsuitKind | null): string {
+  switch (step) {
+    case "aguardar":
+      return "amount-step-wait";
+    case "levantamento":
+      return "amount-step-release";
+    case "complementacao":
+      return "amount-step-complement";
+    case "cumprimento":
+      return kind === "comum" ? "amount-step-request" : "amount-step-enforce";
+  }
+}
 
 /** What the case screen reads of a lawsuit's amount. */
 export type LawsuitAmount = {
@@ -93,6 +140,8 @@ export type LawsuitAmount = {
   step: AmountStep;
   shortCents: number;
   fineCents: number;
+  kind: LawsuitKind | null;
+  payUntil: string | null;
 };
 
 const STEPS: readonly AmountStep[] = ["aguardar", "levantamento", "complementacao", "cumprimento"];
@@ -119,6 +168,8 @@ export function lawsuitAmountsOf(raw: unknown): LawsuitAmount[] {
         step,
         shortCents: cents(row.short_cents),
         fineCents: cents(row.fine_cents),
+        kind: row.lawsuit_kind === "juizado" || row.lawsuit_kind === "comum" ? row.lawsuit_kind : null,
+        payUntil: typeof row.pay_until === "string" ? row.pay_until.slice(0, 10) : null,
       },
     ];
   });

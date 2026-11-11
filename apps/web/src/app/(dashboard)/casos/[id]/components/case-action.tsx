@@ -1,6 +1,6 @@
 "use client";
 
-import { goToSection } from "./journey-card";
+import { goToSection, showTrail } from "./journey-card";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useSnackbar } from "notistack";
@@ -79,9 +79,11 @@ function typing(): boolean {
  * One action at a time on a case (the owner's canvas, 2026-11-10): the state of the screen's actions, kept by the
  * case screen and handed to its cards. A refresh is the router's, inside a transition, so the screen knows when what
  * it read is the one on screen: the controls come back, the top and the cards change at the same moment, and the
- * line of what came of it shows, never before.
+ * line of what came of it shows, never before. When what the person did moved the case's trail (`trail`: its steps,
+ * who has it and the lines of what happens now, as the screen read them), the screen goes to the trail, which marks
+ * itself, and what came of it in the card is one "Ver" away (the owner, 2026-11-11).
  */
-export function useCaseActions({ acted }: { acted: () => void }): CaseActions {
+export function useCaseActions({ acted, trail }: { acted: () => void; trail: string }): CaseActions {
   const router = useRouter();
   const t = useTranslations("product");
   const { enqueueSnackbar } = useSnackbar();
@@ -92,6 +94,12 @@ export function useCaseActions({ acted }: { acted: () => void }): CaseActions {
   const [note, setNote] = useState<ActionNote | null>(null);
   const waiters = useRef<(() => void)[]>([]);
   const sawPending = useRef(false);
+  // The trail as the screen shows it. Kept before the refresh's own effect below, so that one finds it already as
+  // the screen read it again in the same commit.
+  const trailRef = useRef(trail);
+  useEffect(() => {
+    trailRef.current = trail;
+  }, [trail]);
 
   // A refresh asked inside the transition shows once the transition ends: then each one waiting for it goes on.
   useEffect(() => {
@@ -134,17 +142,18 @@ export function useCaseActions({ acted }: { acted: () => void }): CaseActions {
     setRunning(entry);
   }, []);
 
-  const end = useCallback((returnTo: Element | null) => {
+  const end = useCallback((returnTo: Element | null, stayInView = false) => {
     runningRef.current = null;
     setRunning(null);
-    // The disabled controls let go of the focus: it goes back to where the person was, when that is still there.
+    // The disabled controls let go of the focus: it goes back to where the person was, when that is still there,
+    // without taking the screen back from the trail it just went to.
     window.requestAnimationFrame(() => {
       if (
         returnTo instanceof HTMLElement &&
         returnTo.isConnected &&
         (document.activeElement === null || document.activeElement === document.body)
       ) {
-        returnTo.focus();
+        returnTo.focus({ preventScroll: stayInView });
       }
     });
   }, []);
@@ -153,6 +162,7 @@ export function useCaseActions({ acted }: { acted: () => void }): CaseActions {
     async (section, key, words, work) => {
       if (runningRef.current) return false;
       const returnTo = document.activeElement;
+      const before = trailRef.current;
       begin({ key, section, doing: words.doing });
       setNote(null);
       let ok = false;
@@ -179,9 +189,11 @@ export function useCaseActions({ acted }: { acted: () => void }): CaseActions {
       await land();
       const at = Date.now();
       if (words.done) setNote({ section, text: words.done, at });
-      // What came of it is said where the person acted; another card it changed, or a card out of sight, is one
-      // "Ver" away.
-      const lead = words.target ?? (inSight(section) ? null : section);
+      // What the person did moved the case: the screen goes to the trail, never from under a field being typed in.
+      const toTrail = trailRef.current !== before && !typing() && showTrail();
+      // What came of it is said where the person acted; another card it changed, or a card out of sight (the screen
+      // went to the trail), is one "Ver" away.
+      const lead = words.target ?? (toTrail || !inSight(section) ? section : null);
       if (lead && words.done) {
         enqueueSnackbar(words.done, {
           variant: "success",
@@ -192,7 +204,7 @@ export function useCaseActions({ acted }: { acted: () => void }): CaseActions {
           ),
         });
       }
-      end(returnTo);
+      end(returnTo, toTrail);
       return true;
     },
     [acted, begin, end, enqueueSnackbar, land, t],
@@ -208,8 +220,9 @@ export function useCaseActions({ acted }: { acted: () => void }): CaseActions {
       return;
     }
     const returnTo = document.activeElement;
+    const before = trailRef.current;
     begin({ key: "reload", section: null, doing: t("case-action-reloading") });
-    void land().then(() => end(returnTo));
+    void land().then(() => end(returnTo, trailRef.current !== before && !typing() && showTrail()));
   }, [acted, begin, end, land, t]);
 
   const follow = useCallback(() => {

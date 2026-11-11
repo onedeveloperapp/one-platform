@@ -4,7 +4,7 @@ import { useTranslations } from "next-intl";
 
 import { Alert, Box, Typography } from "@mui/material";
 
-import { ASSUMPTION_KEY, SKIP_KEY } from "@/lib/deadlines/deadlines";
+import { ASSUMPTION_KEY, localDaysToProve, SKIP_KEY } from "@/lib/deadlines/deadlines";
 import type { DeadlineAssumption, DeadlineCounting, DeadlineResult } from "@flyee/rules/deadlines";
 import { formatDayBr } from "@flyee/rules/person";
 
@@ -23,10 +23,11 @@ const SCOPE_KEY: Record<"proceeding_kind" | "system", string> = {
 /**
  * How the rule counted a deadline, in a person's words: the day it ran from,
  * how many days and from when, every day that did not count and why, a last
- * day that moved, and what the count could not know, each said as what it
- * would change, and when the court's calendar it went through was checked
- * against the court's acts. It is what the person who confirms reads before
- * confirming.
+ * day that moved, the days of the court's own calendar a recurso proves when
+ * it is filed (CPC, art. 1.003, § 6º), and what the count could not know,
+ * each said as what it would change, and when the court's calendar it went
+ * through was checked against the court's acts. It is what the person who
+ * confirms reads before confirming.
  *
  * Closest component: the explanation list of the rules card of a case
  * (`casos/[id]/components/rules-card.tsx`), which says the grounds of what a
@@ -35,12 +36,16 @@ const SCOPE_KEY: Record<"proceeding_kind" | "system", string> = {
 export default function DeadlineCount({
   count,
   checked,
+  act,
 }: {
   count: DeadlineResult;
   /** The checked years of the court's calendar as they are now, when known: a year checked again since the count says its latest day. */
   checked?: readonly { year: number; checkedOn: string | null }[];
+  /** The act of the deadline, when it has one: a recurso proves the court's own days its term went past. */
+  act?: string | null;
 }) {
   const t = useTranslations("product");
+  const proofs = localDaysToProve(act, count);
   const checkedYears = (checked ?? count.checkedYears).filter((year) => year.checkedOn !== null);
   const lines: string[] = [
     count.trigger === "publication" && count.publishedOn
@@ -86,6 +91,23 @@ export default function DeadlineCount({
         {moved ? (
           <Typography component="li" variant="body2">
             {moved}
+          </Typography>
+        ) : null}
+        {proofs.length > 0 ? (
+          <Typography component="li" variant="body2">
+            {t("deadline-count-local-proof", {
+              days: proofs
+                .map((proof) =>
+                  t("deadline-count-local-proof-day", {
+                    days:
+                      proof.from === proof.to
+                        ? day(proof.from)
+                        : t("deadline-count-range", { from: day(proof.from), to: day(proof.to) }),
+                    label: proof.label,
+                  }),
+                )
+                .join("; "),
+            })}
           </Typography>
         ) : null}
         {checkedYears.length > 0 ? (

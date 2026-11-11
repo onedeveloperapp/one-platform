@@ -4,7 +4,7 @@ import type { CaseState } from "../case-types";
 import type { RunningAction } from "./case-action";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 
 import { Box, Button, Card, CardContent, Collapse, LinearProgress, Typography } from "@mui/material";
 
@@ -139,6 +139,30 @@ export function goToSection(section: CaseSection) {
   else window.location.hash = id;
 }
 
+/** The address of the case's trail, "Andamento do caso", on the screen. */
+export const TRAIL_ID = "andamento-do-caso";
+/** Said to the trail when a person's action moved it: it marks itself for a moment. */
+const TRAIL_MOVED = "one:case-trail-moved";
+/** How long the trail stays marked once a person's action moved it. */
+const TRAIL_MARK_MS = 2500;
+
+/**
+ * A person's action in a card moved the case along (the owner, 2026-11-11): the trail marks itself for a moment and,
+ * when it is out of sight, the screen goes to it, so the person sees that what they did moved the case. Answers
+ * whether the screen moved.
+ */
+export function showTrail(): boolean {
+  const trail = document.getElementById(TRAIL_ID);
+  if (!trail) return false;
+  window.dispatchEvent(new Event(TRAIL_MOVED));
+  const box = trail.getBoundingClientRect();
+  // Its head already in the upper half of the screen: the mark is enough, and the person stays where they are.
+  if (box.top >= 0 && box.top < window.innerHeight / 2) return false;
+  const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  trail.scrollIntoView({ block: "start", behavior: still ? "auto" : "smooth" });
+  return true;
+}
+
 /**
  * Where the case stands, at its top (the owner, 2026-11-03; its audit, 2026-11-05): the steps of its way, who the
  * case is with now, and under it what ONE is doing at this moment (each with since when and the card it is in),
@@ -174,6 +198,21 @@ export default function JourneyCard({
   const t = useTranslations("product");
   const [stepsOpen, setStepsOpen] = useState(false);
   const [answering, setAnswering] = useState<string | null>(null);
+  // Marked for a moment when a person's action moved the case (`showTrail`).
+  const [moved, setMoved] = useState(false);
+  useEffect(() => {
+    let timer = 0;
+    const mark = () => {
+      setMoved(true);
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => setMoved(false), TRAIL_MARK_MS);
+    };
+    window.addEventListener(TRAIL_MOVED, mark);
+    return () => {
+      window.removeEventListener(TRAIL_MOVED, mark);
+      window.clearTimeout(timer);
+    };
+  }, []);
   const thisYear = state.today.slice(0, 4);
   const working = now.working.length > 0;
   const reading = action !== null || syncing;
@@ -381,7 +420,16 @@ export default function JourneyCard({
     );
 
   return (
-    <Card component="section" aria-labelledby="case-journey-title" aria-busy={reading} className="relative">
+    <Card
+      component="section"
+      id={TRAIL_ID}
+      aria-labelledby="case-journey-title"
+      aria-busy={reading}
+      className={cn(
+        "relative scroll-mt-24 transition-shadow duration-500 motion-reduce:transition-none",
+        moved && "ring-primary/40 dark:ring-primary-light/40 ring-4",
+      )}
+    >
       {reading ? <LinearProgress aria-hidden className="absolute inset-x-0 top-0 h-[3px]" /> : null}
       <CardContent className="flex flex-col gap-5">
         <Box className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">

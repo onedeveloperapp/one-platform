@@ -117,8 +117,9 @@ select ok(
   and (select kind = 'partial' from public.court_calendar_days where court = 'TJGO' and day = date '2026-02-18')
   and (select comarcas = array['Goiânia', 'Iporá', 'Leopoldo de Bulhões', 'Senador Canedo']
        from public.court_calendar_days where court = 'TJGO' and day = date '2026-05-24')
-  -- The thirteen of 0034, and the payment of a settlement to follow (0187).
-  and (select count(*) = 14 from public.deadline_acts where active),
+  -- The thirteen of 0034, the payment of a settlement to follow (0187) and the preparo of a recurso inominado (0213).
+  and (select count(*) = 15 from public.deadline_acts where active)
+  and (select days = 2 and counting = 'calendar' from public.deadline_acts where slug = 'preparo_recurso_inominado'),
   'the calendar of TJGO for 2026 is the court''s list, with the recess into 2027, and the acts carry the days the law gives them'
 );
 

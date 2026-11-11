@@ -16,6 +16,7 @@ import {
   type DeadlineToCount,
   deadlineUrgentOn,
   lastDeadlinePage,
+  localDaysToProve,
   readCheckedYears,
   readCount,
   SKIP_KEY,
@@ -284,5 +285,39 @@ describe("how the screens say where a deadline is", () => {
     // 02:30 in UTC is still the day before in Brasília.
     expect(todayInBrasilia(new Date("2026-10-12T02:30:00Z"))).toBe("2026-10-11");
     expect(todayInBrasilia(new Date("2026-10-12T03:30:00Z"))).toBe("2026-10-12");
+  });
+});
+
+describe("the court's own days a recurso proves when it is filed (CPC, art. 1.003, § 6º)", () => {
+  const place = { proceedingKind: "juizado", system: "projudi", comarca: "Goiânia" };
+  const entry = (day: string, kind: "closed" | "partial" | "suspended", label: string) => ({
+    day,
+    kind,
+    label,
+    proceedingKinds: [],
+    systems: [],
+    comarcas: [],
+  });
+  const calendar = {
+    years: [{ year: 2026, allComarcas: true, comarcas: [], checkedOn: "2026-10-11" }],
+    days: [entry("2026-10-28", "closed", "Dia do Servidor Público")],
+  };
+  const counted = (on: string, days: number) => {
+    const outcome = computeDeadline({ trigger: "day", on, days, counting: "business", place, calendar });
+    if (!outcome.ok) throw new Error(outcome.code);
+    return outcome.result;
+  };
+
+  it("names the court's day a recurso's term went past, and none of a national holiday", () => {
+    // From Monday 26/10/2026, ten business days pass 28/10 (the court's) and 02/11 (Finados, national).
+    expect(localDaysToProve("recurso_inominado", counted("2026-10-26", 10))).toEqual([
+      { from: "2026-10-28", to: "2026-10-28", label: "Dia do Servidor Público" },
+    ]);
+  });
+
+  it("asks nothing of an act that is no recurso, nor of a term that went past no day of the court", () => {
+    expect(localDaysToProve("replica", counted("2026-10-26", 10))).toEqual([]);
+    expect(localDaysToProve(null, counted("2026-10-26", 10))).toEqual([]);
+    expect(localDaysToProve("apelacao", counted("2026-09-01", 5))).toEqual([]);
   });
 });

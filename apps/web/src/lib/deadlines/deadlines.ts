@@ -102,6 +102,39 @@ export const TRIGGER_KEY: Record<DeadlineTrigger, string> = {
   day: "deadline-trigger-day",
 };
 
+/**
+ * The acts whose deadline is a recurso, the embargos de declaração among them (CPC, art. 994, IV): whoever files one
+ * proves, when filing, a local holiday the term went past (CPC, art. 1.003, § 6º, as Lei 14.939/2024 wrote it).
+ */
+export const APPEAL_ACTS: ReadonlySet<string> = new Set([
+  "embargos_declaracao",
+  "recurso_inominado",
+  "apelacao",
+  "agravo_instrumento",
+  "agravo_interno",
+  "recurso_extraordinario",
+  "recurso_especial",
+]);
+
+/**
+ * The days of the court's own calendar a count of a recurso went past, or moved its last day for: what the appellant
+ * proves when filing it (CPC, art. 1.003, § 6º), the court's act of each at hand. A national holiday and the year-end
+ * suspension are the law's and need no proof. None for an act that is no recurso.
+ */
+export function localDaysToProve(
+  act: string | null | undefined,
+  count: DeadlineResult,
+): { from: string; to: string; label: string }[] {
+  if (!act || !APPEAL_ACTS.has(act)) return [];
+  const days = count.skipped
+    .filter((skip) => skip.reason === "closed" || skip.reason === "court_suspension" || skip.reason === "partial")
+    .map(({ from, to, label }) => ({ from, to, label }));
+  if (count.moved?.reason === "partial") {
+    days.push({ from: count.moved.from, to: count.moved.from, label: count.moved.label });
+  }
+  return days.sort((left, right) => left.from.localeCompare(right.from));
+}
+
 export const SKIP_KEY: Record<DeadlineSkipReason, string> = {
   suspension: "deadline-skip-suspension",
   court_suspension: "deadline-skip-court-suspension",

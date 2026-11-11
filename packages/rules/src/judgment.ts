@@ -87,3 +87,49 @@ export function judgmentOf(input: { documentType?: string | null; text: string }
   if (before && !judgment) return false;
   return null;
 }
+
+/**
+ * Whether a judgment homologates the parties' settlement (`acordo-v1`): none of them appeals it, since the
+ * small-claims court gives no recurso against it (Lei 9.099/1995, art. 41) and whoever settled accepted the decision
+ * (CPC, art. 1.000); the embargos de declaração stay, for a material error. Read in its words: "homologo" and the
+ * settlement before the sentence ends (a "projeto de sentença" of the juiz leigo is no settlement), or the settlement
+ * said homologated. The database reads the same forms (`reading_homologates_settlement`, 0213).
+ */
+export const SETTLEMENT_RULE_VERSION = "acordo-v1";
+
+const SETTLEMENT_NOUN = /\b(?:o acordo|a transacao|a conciliacao|a composicao|o termo de acordo)\b/;
+const NOT_SETTLEMENT = /\b(?:projeto de sentenca|juiz leigo)\b/;
+const SETTLEMENT_FORMS: readonly RegExp[] = [
+  /\bhomologad[oa],? (?:por sentenca,? )?(?:o |a )?(?:acordo|transacao|conciliacao|composicao)\b/,
+  /\b(?:acordo|transacao|conciliacao|composicao) (?:celebrad[oa] |firmad[oa] |entabulad[oa] )?(?:entre as partes )?(?:fica |foi )?homologad[oa]\b/,
+];
+
+export function homologatesSettlement(text: string): boolean {
+  const words = plainWords(text);
+  for (const match of words.matchAll(/\bhomologo\b([^.;]{0,160})/g)) {
+    const rest = match[1] ?? "";
+    if (SETTLEMENT_NOUN.test(rest) && !NOT_SETTLEMENT.test(rest)) return true;
+  }
+  return SETTLEMENT_FORMS.some((form) => form.test(words));
+}
+
+/**
+ * Whether a decision rules on embargos de declaração (`embargos-v1`): it interrupts the term to appeal, which runs
+ * whole again from it (Lei 9.099/1995, art. 50; CPC, art. 1.026). Read in its words: the embargos received and
+ * decided ("acolho", "rejeito", "conheço", "não conheço", "dou provimento", "nego provimento", "julgo procedentes"
+ * or "improcedentes" them), or said decided ("embargos de declaração rejeitados"); never an order on their course
+ * ("intime-se a parte embargada"). Which judgment they were of is the database's to know (0213), which reads the same
+ * forms (`reading_decides_embargos`).
+ */
+export const EMBARGOS_RULE_VERSION = "embargos-v1";
+
+const EMBARGOS_DECISION_FORMS: readonly RegExp[] = [
+  /\b(?:acolho|rejeito|desacolho|conheco|nao conheco|deixo de conhecer|deixo de acolher|dou (?:parcial )?provimento|nego provimento|julgo (?:im)?procedentes)(?: em parte| parcialmente)?,? (?:os |aos |dos )?(?:presentes |referidos )?embargos\b/,
+  /\bembargos (?:de declaracao|declaratorios)\b[^.;]{0,80}\b(?:acolhidos|rejeitados|conhecidos|providos|improvidos|desprovidos)\b/,
+  /\bembargos (?:de declaracao|declaratorios)\b[\s\S]{0,200}(?:\brejeito-os\b|\bacolho-os\b|\bos rejeito\b|\bos acolho\b|\bnego-lhes provimento\b|\bdou-lhes (?:parcial )?provimento\b)/,
+];
+
+export function decidesEmbargos(text: string): boolean {
+  const words = plainWords(text);
+  return EMBARGOS_DECISION_FORMS.some((form) => form.test(words));
+}

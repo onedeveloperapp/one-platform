@@ -322,7 +322,7 @@ export default function DeadlineCard({
       {row.count ? (
         counting ? (
           <Box className="flex flex-col gap-2">
-            <DeadlineCount count={row.count} checked={row.calendarChecked} />
+            <DeadlineCount count={row.count} checked={row.calendarChecked} act={row.act} />
             {row.status !== "proposed" ? (
               <Box>
                 <Button variant="text" color="grey" size="small" className="-ml-2" onClick={() => setCounting(false)}>

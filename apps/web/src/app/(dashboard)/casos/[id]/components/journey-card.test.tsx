@@ -1,14 +1,14 @@
 import type { CaseState } from "../case-types";
 import type { RunningAction } from "./case-action";
-import JourneyCard from "./journey-card";
+import JourneyCard, { showTrail, TRAIL_ID } from "./journey-card";
 import { NextIntlClientProvider } from "next-intl";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { LiveRead } from "@/components/product/use-live-read";
 import { caseJourney, type JourneyFacts, NO_COURT_FACTS } from "@/lib/cases/journey";
 import { caseNow, type CaseNowInput } from "@/lib/cases/now";
 import messages from "@flyee/content/messages/pt-BR.json";
-import { cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, render, screen } from "@testing-library/react";
 
 // The top of a case, drawn from invented facts: who has the case, what ONE does now, what holds it and whose turn
 // each thing is, in the screen's own words (the owner's audit, 2026-11-05).
@@ -228,5 +228,31 @@ describe("JourneyCard", () => {
       ),
     );
     expect(screen.getAllByText("Novo").length).toBeGreaterThan(0);
+  });
+
+  it("goes to the trail when a person's action moved it out of sight, and only marks it when it is in sight", () => {
+    draw(waiting());
+    const trail = document.getElementById(TRAIL_ID) as HTMLElement;
+    const scrolled = vi.fn();
+    trail.scrollIntoView = scrolled;
+    window.matchMedia = vi.fn().mockReturnValue({ matches: true }) as unknown as typeof window.matchMedia;
+    const at = (top: number) =>
+      vi.spyOn(trail, "getBoundingClientRect").mockReturnValue({ top, bottom: top + 400 } as DOMRect);
+
+    // The person acted in a card far below: the trail is above the screen.
+    at(-900);
+    act(() => {
+      expect(showTrail()).toBe(true);
+    });
+    expect(scrolled).toHaveBeenCalledWith({ block: "start", behavior: "auto" });
+    expect(trail.className).toContain("ring-4");
+
+    // The trail's head already in sight: the screen stays where it is, and the trail is marked all the same.
+    scrolled.mockClear();
+    at(120);
+    act(() => {
+      expect(showTrail()).toBe(false);
+    });
+    expect(scrolled).not.toHaveBeenCalled();
   });
 });

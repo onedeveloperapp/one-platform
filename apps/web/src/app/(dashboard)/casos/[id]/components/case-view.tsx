@@ -146,7 +146,22 @@ export default function CaseView({ state: read }: { state: CaseState }) {
   // One action at a time (the owner's canvas, 2026-11-10): what the person does locks the case's other controls
   // until the screen shows what came of it; a change made outside is read again saying so, with nothing locked.
   const actedRef = useRef<() => void>(() => {});
-  const actions = useCaseActions({ acted: useCallback(() => actedRef.current(), []) });
+  // The case's trail as the screen reads it: an action that changes it brings the person to it.
+  const trail = useMemo(
+    () =>
+      facts
+        ? JSON.stringify([
+            facts.journey.current,
+            facts.journey.ended,
+            facts.journey.steps.map((step) => `${step.id}:${step.state}`),
+            facts.now.holder,
+            facts.now.working.map((line) => line.id),
+            facts.now.blocking.map((line) => line.id),
+          ])
+        : "",
+    [facts],
+  );
+  const actions = useCaseActions({ acted: useCallback(() => actedRef.current(), []), trail });
 
   const live = useLiveRead({
     stamp: ready?.pulse?.stamp ?? null,

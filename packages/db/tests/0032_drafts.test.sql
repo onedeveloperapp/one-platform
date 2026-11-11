@@ -44,8 +44,10 @@ insert into public.memberships (org_id, user_id, role, firm_function) values
 insert into public.oab_registrations (user_id, uf, number, kind) values
   ('af100000-0000-4000-8000-000000000001', 'GO', '12345', 'principal'),
   ('af100000-0000-4000-8000-000000000004', 'GO', '99999', 'principal');
--- The company an airline answers in court by is what the operator recorded of it.
-update public.airlines set legal_name = 'Companhia Aérea Exemplo S.A.', cnpj = '11222333000181' where iata = 'G3';
+-- The company an airline answers in court by is what the operator recorded of it (an invented one, with no head
+-- office on record: 0215 writes the address only where there is one).
+update public.airlines set legal_name = 'Companhia Aérea Exemplo S.A.', cnpj = '11222333000181', address = null
+where iata = 'G3';
 
 create temporary table res (name text primary key, payload jsonb);
 grant select, insert on res to anon, authenticated, service_role;

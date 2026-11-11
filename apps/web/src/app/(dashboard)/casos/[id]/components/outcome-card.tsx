@@ -29,7 +29,7 @@ import {
   lawsuitOutcome,
   RESULT_KEY,
 } from "@/lib/cases/outcomes";
-import { AMOUNT_STEP_KEY, type LawsuitAmount } from "@/lib/courts/amount";
+import { amountStepKey, type LawsuitAmount } from "@/lib/courts/amount";
 import { formatCnj } from "@flyee/rules/cnj";
 import { formatCents, parseCents } from "@flyee/rules/finance";
 import { CLAIM_KINDS, type ClaimKind } from "@flyee/rules/outcome";
@@ -713,7 +713,7 @@ const brl = (cents: number) =>
 function AmountLine({ amount }: { amount: LawsuitAmount | null }) {
   const t = useTranslations("product");
   if (!amount) return null;
-  const stepKey = AMOUNT_STEP_KEY[amount.step];
+  const stepKey = amountStepKey(amount.step, amount.kind);
   const tone = amount.step === "levantamento" ? "done" : amount.step === "aguardar" ? "waiting" : "attention";
   return (
     <Box className="flex flex-col gap-1">
@@ -730,6 +730,7 @@ function AmountLine({ amount }: { amount: LawsuitAmount | null }) {
           deposited: brl(amount.depositedCents),
           short: brl(amount.shortCents),
           fine: brl(amount.fineCents),
+          day: formatDayBr(amount.payUntil) ?? "",
         })}
       </StateLine>
       {amount.needsTerms ? <StateLine tone="info">{t("amount-needs-terms")}</StateLine> : null}

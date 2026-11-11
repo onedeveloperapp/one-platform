@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { judgmentOf, plainWords } from "./judgment.ts";
+import { decidesEmbargos, homologatesSettlement, judgmentOf, plainWords } from "./judgment.ts";
 
 // Every text here is invented, in the forms courts write.
 
@@ -15,8 +15,14 @@ test("a judgment by its type or by the forms it is written in", () => {
     }),
     true,
   );
-  assert.equal(judgmentOf({ text: "Homologo o projeto de sentença do juiz leigo, para que produza seus efeitos." }), true);
-  assert.equal(judgmentOf({ text: "Julgo extinto o processo, sem resolução do mérito, nos termos do artigo 485, VI." }), true);
+  assert.equal(
+    judgmentOf({ text: "Homologo o projeto de sentença do juiz leigo, para que produza seus efeitos." }),
+    true,
+  );
+  assert.equal(
+    judgmentOf({ text: "Julgo extinto o processo, sem resolução do mérito, nos termos do artigo 485, VI." }),
+    true,
+  );
 });
 
 test("a decision before the judgment, or an order of the course of the lawsuit", () => {
@@ -34,6 +40,45 @@ test("unclear: both forms, neither, or a type the words contradict, and the pers
   assert.equal(judgmentOf({ documentType: "Decisão", text: "Julgo procedente o pedido." }), null);
   assert.equal(judgmentOf({ documentType: "Sentença", text: "Mantenho a liminar." }), null);
   assert.equal(judgmentOf({ documentType: "Outros", text: "Intimação da parte." }), null);
+});
+
+test("a judgment that homologates the parties' settlement, and one that only homologates the juiz leigo", () => {
+  for (const text of [
+    "Homologo o acordo celebrado entre as partes, para que produza seus efeitos.",
+    "HOMOLOGO, por sentença, para que produza seus jurídicos e legais efeitos, a transação entabulada.",
+    "Vistos. Homologado o acordo entre as partes, julgo extinto o processo com resolução do mérito.",
+    "O acordo firmado entre as partes fica homologado. P.R.I.",
+  ]) {
+    assert.equal(homologatesSettlement(text), true, text);
+  }
+  for (const text of [
+    "Homologo o projeto de sentença do juiz leigo, para que produza seus efeitos.",
+    "Homologo o projeto de sentença do juiz leigo, que reconheceu não haver o acordo alegado.",
+    "Julgo procedente o pedido. As partes não chegaram a acordo na audiência.",
+    "Homologo os cálculos. Intime-se a ré para pagar.",
+  ]) {
+    assert.equal(homologatesSettlement(text), false, text);
+  }
+});
+
+test("a decision that rules on embargos de declaração, and an order on their course", () => {
+  for (const text of [
+    "Conheço dos embargos de declaração e, no mérito, rejeito-os.",
+    "Ante o exposto, REJEITO os embargos de declaração opostos pela ré.",
+    "Acolho parcialmente os embargos para sanar a omissão apontada.",
+    "Dou provimento aos embargos declaratórios, com efeitos infringentes.",
+    "Embargos de declaração rejeitados. Mantenho a sentença por seus próprios fundamentos.",
+    "Recebo os embargos de declaração, pois tempestivos. No mérito, nego-lhes provimento.",
+  ]) {
+    assert.equal(decidesEmbargos(text), true, text);
+  }
+  for (const text of [
+    "Opostos embargos de declaração, intime-se a parte embargada para, querendo, manifestar-se em 5 dias.",
+    "Julgo procedente o pedido. Nego provimento ao recurso.",
+    "Recebo os embargos de declaração. Conclusos.",
+  ]) {
+    assert.equal(decidesEmbargos(text), false, text);
+  }
 });
 
 test("reads the words as plain text: no accent, no case, no markup", () => {
