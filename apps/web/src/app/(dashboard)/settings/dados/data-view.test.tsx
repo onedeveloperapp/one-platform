@@ -10,7 +10,10 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 // counts again, asks the second factor in place and the word typed, and what came of it is said in front of the person.
 
 const refresh = vi.fn();
-vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh, push: vi.fn() }) }));
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ refresh, push: vi.fn() }),
+  usePathname: () => "/settings/dados",
+}));
 
 const actions = vi.hoisted(() => ({ readClearPreview: vi.fn(), clearFirmData: vi.fn() }));
 vi.mock("@/lib/firm/clear-data-actions", () => actions);

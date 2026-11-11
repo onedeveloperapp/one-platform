@@ -1,13 +1,14 @@
 "use client";
 
 import SettingsMenu from "../../components/settings-menu";
+import SupportAccessCard from "../../components/support-access-card";
+import WeeklyDigestCard from "../../components/weekly-digest-card";
 import { isTeamView, teamCounts, teamRows, type TeamView, teamViewsFor } from "../team-list";
 import type { TeamState } from "../team-types";
 import CertificatesCard from "./certificates-card";
 import CloudSignatureCard from "./cloud-signature-card";
 import FirmCard from "./firm-card";
 import InvitePanel from "./invite-panel";
-import LeaveCard from "./leave-card";
 import OabCard from "./oab-card";
 import TeamRoster from "./team-roster";
 import { useRouter } from "next/navigation";
@@ -36,20 +37,40 @@ const CARD: Partial<Record<TeamView, { icon: ReactNode; tone: TileTone }>> = {
 };
 
 /**
- * The team of the firm. The job of the screen depends on who opens it: who
- * manages the firm brings people in and keeps each one in the right function;
- * everybody else finds who does what, keeps their own registration at the bar
- * right, and can leave. It is a handful of people, not a ledger, so it reads
- * as a roster with what needs somebody's attention, never as a data table.
- *
- * The roster is a list of the screen pattern (2026-11-07): for who manages the
- * firm, three cards of numbers (the people, the invitations nobody answered,
- * who still owes the second factor), each the view it counts; the bar with the
- * views by function, the search (a name, an e-mail, a registration at the bar)
- * and "Novo" (inviting a person, in the side panel). The cards of the person's
- * own registrations, certificates and signature follow it.
+ * Which of the team's pages this is (the owner's canvas "ONE · Configurações", 2026-11-11): what each setting is
+ * of decides where it lives.
+ * - `team`, the firm's people: who is in the firm and what each one does, the invitations, and the team's
+ *   signatures in the cloud for a partner or who manages the firm.
+ * - `professional`, the person's own practice: their registrations at the bar, the certificate they sign with in
+ *   each court system and their own signature in the cloud. A lawyer's, whatever firm they are in.
+ * - `firm`, the firm's own data: its name, the partner's weekly digest and the support of ONE's access.
  */
-export default function TeamView({ state }: { state: TeamState }) {
+export type TeamPart = "team" | "professional" | "firm";
+
+const PART_TITLE: Record<TeamPart, string> = {
+  team: "team-title",
+  professional: "settings-professional-title",
+  firm: "settings-firm-title",
+};
+const PART_CRUMB: Record<TeamPart, string> = {
+  team: "settings-team",
+  professional: "settings-professional",
+  firm: "settings-firm",
+};
+const PART_ACTIVE = { team: "team", professional: "professional", firm: "firm" } as const;
+
+/**
+ * The team of the firm, and the two pages that read what it reads (`part`). On the team's own page the job depends
+ * on who opens it: who manages the firm brings people in and keeps each one in the right function; everybody else
+ * finds who does what. It is a handful of people, not a ledger, so it reads as a roster with what needs somebody's
+ * attention, never as a data table.
+ *
+ * The roster is a list of the screen pattern (2026-11-07): for who manages the firm, three cards of numbers (the
+ * people, the invitations nobody answered, who still owes the second factor), each the view it counts; the bar with
+ * the views by function, the search (a name, an e-mail, a registration at the bar) and "Novo" (inviting a person, in
+ * the side panel).
+ */
+export default function TeamView({ state, part }: { state: TeamState; part: TeamPart }) {
   const t = useTranslations("product");
   const router = useRouter();
   const [openDrawer, setOpenDrawer] = useState(false);
@@ -79,19 +100,27 @@ export default function TeamView({ state }: { state: TeamState }) {
   return (
     <Grid container spacing={5} className="items-start">
       <Grid size={"auto"} className="hidden pr-8 lg:flex">
-        <SettingsMenu active="team" />
+        <SettingsMenu active={PART_ACTIVE[part]} />
       </Grid>
       <Grid size={"grow"} spacing={5} container>
         <Grid size={12} spacing={2.5} container>
           <Grid size={{ xs: 12, md: "grow" }}>
             <PageHeader
-              title={t("team-title")}
+              title={t(PART_TITLE[part])}
               crumbs={[
                 { label: t("settings-home"), href: "/inicio" },
                 { label: t("settings-title"), href: "/settings" },
-                { label: t("settings-team") },
+                { label: t(PART_CRUMB[part]) },
               ]}
-              description={ready ? t("team-description", { firm: ready.firm.name }) : undefined}
+              description={
+                part === "team" && ready
+                  ? t("team-description", { firm: ready.firm.name })
+                  : part === "professional"
+                    ? t("settings-professional-description")
+                    : part === "firm"
+                      ? t("settings-firm-description")
+                      : undefined
+              }
             />
           </Grid>
           <Grid size={{ xs: 12, md: "auto" }} className="lg:hidden">
@@ -144,7 +173,7 @@ export default function TeamView({ state }: { state: TeamState }) {
           </Grid>
         )}
 
-        {ready && (
+        {ready && part === "team" && (
           <>
             {cards.length > 0 ? (
               <Grid size={12} container spacing={2.5}>
@@ -194,24 +223,35 @@ export default function TeamView({ state }: { state: TeamState }) {
                 onClearSearch={() => setSearch("")}
               />
             </Grid>
+            {/* The team's authorizations, for a partner or who manages the firm: each lawyer's own is theirs, in
+                Atuação profissional. */}
+            {readsTeamSignatures && (
+              <CloudSignatureCard data={ready.cloudSignature} mayAuthorize={false} readsTeam onChanged={refresh} />
+            )}
+          </>
+        )}
+
+        {ready && part === "professional" && (
+          <>
             <OabCard registrations={ready.myOab} lawyer={lawyer} onChanged={refresh} />
             {lawyer && <CertificatesCard entries={ready.myCertificates} today={ready.today} onChanged={refresh} />}
-            {(lawyer || readsTeamSignatures) && (
-              <CloudSignatureCard
-                data={ready.cloudSignature}
-                mayAuthorize={lawyer}
-                readsTeam={readsTeamSignatures}
-                onChanged={refresh}
-              />
+            {lawyer && (
+              <CloudSignatureCard data={ready.cloudSignature} mayAuthorize readsTeam={false} onChanged={refresh} />
             )}
-            {manager && <FirmCard data={ready} onChanged={refresh} />}
-            <LeaveCard data={ready} />
+          </>
+        )}
+
+        {ready && part === "firm" && (
+          <>
+            {manager ? <FirmCard data={ready} onChanged={refresh} /> : null}
+            <WeeklyDigestCard />
+            <SupportAccessCard />
           </>
         )}
 
         <Drawer open={openDrawer} anchor="right" onClose={() => setOpenDrawer(false)}>
           <Box className="min-w-80 p-7">
-            <SettingsMenu active="team" />
+            <SettingsMenu active={PART_ACTIVE[part]} />
           </Box>
         </Drawer>
       </Grid>

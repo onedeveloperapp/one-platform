@@ -114,7 +114,7 @@ describe("the lines of the center", () => {
     ]);
     const [signature, refused, unknown, more] = items;
     expect(signature).toMatchObject({
-      href: "/settings/team#team-cloud-signature",
+      href: "/settings/atuacao#team-cloud-signature",
       tag: { key: "pending-tag-cloud-signature" },
       count: 3,
     });
@@ -136,6 +136,8 @@ describe("the lines of the center", () => {
     const partner = filingAttentionItems(ATTENTION, lawyer(ANA, { firmFunction: "socio" }), NOW);
     const caio = partner.find((item) => item.id === `cloud-signature:${CAIO}:cpf_missing`);
     expect(caio).toBeDefined();
+    // A colleague's authorization is read in the team; the person's own in their practice.
+    expect(caio?.href).toBe("/settings/team#team-cloud-signature");
     expect(said(caio as PendingItem)).toEqual({
       label: "Uma ação espera a autorização de assinatura em nuvem de um advogado do escritório",
       detail: "Caso nº 9 · o ONE assina os arquivos do protocolo com ela",

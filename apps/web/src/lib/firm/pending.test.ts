@@ -280,7 +280,7 @@ describe("the center of what waits for somebody", () => {
     expect(group(groups, "one")!.items[0]).toMatchObject({
       id: `case:${CASE_B}:no_signer`,
       // Where the firm puts it right, when that is not the case itself.
-      href: "/settings/autonomia#quem-assina",
+      href: "/settings/regras#quem-assina",
       label: { key: "pending-case-unnamed", values: { seq: 8 } },
     });
     // The papers that are not late yet are only to look at, and are not counted twice.

@@ -242,7 +242,7 @@ function waitItem(code: string, since: string | null): NowItem {
           : "waiting",
     text: { key: "case-now-wait", values: { reason: { message: waitingKey(code) } } },
     section: (place.section as CaseSection | null) ?? null,
-    href: code === "no_signer" ? "/settings/autonomia#quem-assina" : code === "no_model" ? "/biblioteca" : null,
+    href: code === "no_signer" ? "/settings/regras#quem-assina" : code === "no_model" ? "/biblioteca" : null,
     since,
   });
 }

@@ -3,9 +3,9 @@
 import { refusalWords } from "../biblioteca/import-panel";
 import TemplatePanel from "../biblioteca/template-panel";
 import ConnectCard from "../settings/connections/components/connect-card";
-import NoticesCard from "../settings/connections/components/notices-card";
 import SignatureAccountCard from "../settings/connections/components/signature-account-card";
 import TestChatCard from "../settings/connections/components/test-chat-card";
+import NoticesCard from "../settings/mensagens/notices-card";
 import { teamErrorKey } from "../settings/team/team-types";
 import SetupCpf, { declareSetupCpf } from "./setup-cpf";
 import { useRouter } from "next/navigation";

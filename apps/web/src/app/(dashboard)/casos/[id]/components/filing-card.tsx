@@ -606,7 +606,7 @@ function Lawsuit({
                 variant="outlined"
                 color="grey"
                 size="small"
-                href={`/settings/team?voltar=${state.case.id}#team-cloud-signature`}
+                href={`/settings/atuacao?voltar=${state.case.id}#team-cloud-signature`}
                 LinkComponent={Link}
               >
                 {t("filing-signature-authorize")}
@@ -1047,7 +1047,7 @@ function SignatureBlock({
       : (status === "due" || status === "waiting") && signature.requestedBy && !signature.viewerRequested
         ? { kind: "request", name: requester }
         : null;
-  const authorizeHref = `/settings/team?voltar=${caseId}#team-cloud-signature`;
+  const authorizeHref = `/settings/atuacao?voltar=${caseId}#team-cloud-signature`;
 
   const line = held
     ? t("filing-signature-held")

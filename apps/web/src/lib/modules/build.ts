@@ -1,4 +1,4 @@
-import type { CaseKind, ModuleDefinition } from "@/lib/modules/types";
+import type { CaseKind, FirmAreaEntry, ModuleDefinition } from "@/lib/modules/types";
 
 /**
  * What the core asks of the modules installed, built from their definitions. Pure: `registry.ts` builds it from
@@ -23,6 +23,8 @@ export type ModuleRegistry = {
   partnerSetupOf: (kind: string | null | undefined) => string | null;
   /** Where a firm sets up a module it contracted (0081); null for a module with nothing to set up, or none. */
   firmSetupOf: (moduleKey: string | null | undefined) => string | null;
+  /** The module's own settings pages, in its order; none for a module with nothing of its own to set, or none. */
+  firmSettingsOf: (moduleKey: string | null | undefined) => readonly FirmAreaEntry[];
 };
 
 /**
@@ -62,5 +64,6 @@ export function buildRegistry(definitions: readonly ModuleDefinition[]): ModuleR
     caseKindForModel: (kind) => (kind ? (kinds.get(kind)?.forModel ?? null) : null),
     partnerSetupOf: (kind) => (kind ? (setups.get(kind) ?? null) : null),
     firmSetupOf: (moduleKey) => moduleOf(moduleKey)?.firmSetup ?? null,
+    firmSettingsOf: (moduleKey) => moduleOf(moduleKey)?.firmSettings ?? [],
   };
 }

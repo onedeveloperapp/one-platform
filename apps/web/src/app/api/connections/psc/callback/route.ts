@@ -41,9 +41,9 @@ import { MAX_PERSON_LIFETIME_SECONDS, PscError } from "@flyee/psc/types";
 const CASE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 const back = (request: NextRequest, outcome: SignatureOutcome, backToCase: string | null = null) => {
-  const destination = new URL("/settings/team", request.url);
+  const destination = new URL("/settings/atuacao", request.url);
   destination.searchParams.set("assinatura", outcome);
-  // The case the lawyer came from, by its id alone: the team's card offers the way back to it.
+  // The case the lawyer came from, by its id alone: their practice's card offers the way back to it.
   if (backToCase && CASE_ID.test(backToCase)) destination.searchParams.set("voltar", backToCase);
   destination.hash = "team-cloud-signature";
   return NextResponse.redirect(destination);

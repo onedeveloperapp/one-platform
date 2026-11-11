@@ -32,7 +32,7 @@ async function loadState(
   const page = Number.isInteger(asked) && asked >= 1 && asked <= 10_000 ? asked - 1 : 0;
   const scope = pageScopeOf(context.catalog, context.modules, modulo);
   try {
-    const [data, acts, team, zones, supportVisit, decides] = await Promise.all([
+    const [data, acts, team, zones, supportVisit] = await Promise.all([
       loadPublications(
         context.supabase,
         context.firm.id,
@@ -45,8 +45,6 @@ async function loadState(
       colleagues(context.supabase, context.firm.id),
       courtZones(context.supabase),
       isSupportVisit(),
-      // Who decides for the firm what a partner decides (0078): a partner, or, with none, who manages it.
-      context.supabase.rpc("decides_for_firm", { target_org: context.firm.id }),
     ]);
     const role = context.firm.firmFunction;
     return {
@@ -56,9 +54,6 @@ async function loadState(
       // Who says what a publication is: who signs, or who runs the firm's deadlines. Never a support visit.
       mayTriage: !supportVisit && (role === "socio" || role === "advogado" || role === "controladoria"),
       captureOn: isDjenCaptureOn(),
-      // Whether the AI's word may be the firm's triage is a partner's to say (with no partner, who manages the
-      // firm). Never a support visit.
-      mayDecideAi: !supportVisit && !decides.error && decides.data === true,
       acts,
       colleagues: team,
       courtZones: zones,

@@ -1,6 +1,6 @@
 "use client";
 
-import { type TeamData, teamErrorKey } from "../team-types";
+import { teamErrorKey } from "../team-types";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
@@ -16,11 +16,10 @@ import { leaveFirm } from "@/lib/firm/actions";
  * the owner hands it over first (from a colleague's menu in the roster) and
  * the card says so instead of offering a button that would be refused.
  */
-export default function LeaveCard({ data }: { data: TeamData }) {
+export default function LeaveCard({ firmName, owner }: { firmName: string; owner: boolean }) {
   const t = useTranslations("product");
   const router = useRouter();
   const [confirming, setConfirming] = useState(false);
-  const owner = data.me.role === "owner";
 
   const leave = async (): Promise<string | null> => {
     const result = await leaveFirm();
@@ -38,13 +37,9 @@ export default function LeaveCard({ data }: { data: TeamData }) {
         id="team-leave"
         title={t("team-leave-title")}
         summary={
-          owner
-            ? t("team-leave-summary-owner", { firm: data.firm.name })
-            : t("team-leave-summary", { firm: data.firm.name })
+          owner ? t("team-leave-summary-owner", { firm: firmName }) : t("team-leave-summary", { firm: firmName })
         }
-        detail={
-          owner ? t("team-leave-owner", { firm: data.firm.name }) : t("team-leave-body", { firm: data.firm.name })
-        }
+        detail={owner ? t("team-leave-owner", { firm: firmName }) : t("team-leave-body", { firm: firmName })}
       >
         {!owner && (
           <Box>
@@ -59,8 +54,8 @@ export default function LeaveCard({ data }: { data: TeamData }) {
         <ConfirmActionDialog
           requireReason={false}
           tone="danger"
-          title={t("team-leave-confirm-title", { firm: data.firm.name })}
-          consequences={[t("team-leave-does-1", { firm: data.firm.name }), t("team-leave-does-2")]}
+          title={t("team-leave-confirm-title", { firm: firmName })}
+          consequences={[t("team-leave-does-1", { firm: firmName }), t("team-leave-does-2")]}
           staysTitle={t("team-confirm-stays")}
           stays={[t("team-leave-stays")]}
           confirmLabel={t("team-leave-action")}

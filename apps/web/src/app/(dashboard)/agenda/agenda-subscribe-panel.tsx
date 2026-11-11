@@ -1,9 +1,10 @@
 "use client";
 
+import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
 
-import { Alert, Box, Button, FormControlLabel, MenuItem, Skeleton, Switch, TextField, Typography } from "@mui/material";
+import { Alert, Box, Button, FormControlLabel, Skeleton, Switch, TextField, Typography } from "@mui/material";
 
 import ConfirmActionDialog from "@/components/product/confirm-action-dialog";
 import SidePanel from "@/components/product/side-panel";
@@ -15,8 +16,6 @@ import {
   previewMorningEmail,
   readAgenda,
   setAgendaDigest,
-  setInternalDeadlineDays,
-  setInternalDeadlineDaysForAct,
   startAgendaCalendar,
 } from "@/lib/agenda/actions";
 
@@ -39,22 +38,19 @@ const when = (moment: string) =>
 /**
  * The person's agenda outside ONE (migration 0132): the e-mail of the morning (on by default, stopped in one click),
  * the calendar link the iPhone, Outlook and Google subscribe to (its address shown once: ONE keeps only its hash), and,
- * for a partner or the controladoria, how many business days before the fatal deadline the internal one comes.
+ * for a partner or the controladoria, the firm's internal deadline as it is, with the way to its home: it is the firm's,
+ * set in `/settings/regras`, and was set here until 2026-11-11.
  */
 export default function AgendaSubscribePanel({ onClose }: { onClose: () => void }) {
   const t = useTranslations("product");
   const [me, setMe] = useState<Me | null>(null);
   const [days, setDays] = useState<number | null>(null);
-  // The days of each act the firm set apart from its own (0167).
-  const [byAct, setByAct] = useState<Record<string, number>>({});
-  const [acts, setActs] = useState<{ slug: string; name: string }[]>([]);
   const [failed, setFailed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const [link, setLink] = useState<{ url: string; webcal: string } | null>(null);
   const [copied, setCopied] = useState(false);
   const [ending, setEnding] = useState(false);
-  const [daysSaved, setDaysSaved] = useState(false);
 
   useEffect(() => {
     let live = true;
@@ -64,8 +60,6 @@ export default function AgendaSubscribePanel({ onClose }: { onClose: () => void 
         if (!answer.ok) return setFailed(true);
         setMe(answer.me);
         setDays(answer.internalDays);
-        setByAct(answer.internalByAct);
-        setActs(answer.acts);
       })
       .catch(() => live && setFailed(true));
     return () => {
@@ -223,80 +217,18 @@ export default function AgendaSubscribePanel({ onClose }: { onClose: () => void 
                 <Typography variant="subtitle2" component="h3">
                   {t("agenda-internal-title")}
                 </Typography>
-                <Typography variant="body2" className="text-text-secondary">
-                  {t("agenda-internal-body")}
-                </Typography>
-                <Box className="flex flex-wrap items-center gap-2">
-                  <TextField
-                    select
-                    size="small"
-                    label={t("agenda-internal-title")}
-                    value={String(days)}
-                    onChange={(event) => {
-                      setDays(Number(event.target.value));
-                      setDaysSaved(false);
-                    }}
-                    className="w-56"
-                  >
-                    {[0, 1, 2, 3, 4, 5, 7, 10].map((count) => (
-                      <MenuItem key={count} value={String(count)}>
-                        {count === 0 ? t("agenda-internal-off") : t("agenda-internal-days", { count })}
-                      </MenuItem>
-                    ))}
-                  </TextField>
+                <StateLine tone="info">{t("agenda-internal-now", { count: days })}</StateLine>
+                <Box>
                   <Button
-                    variant="outlined"
-                    color="grey"
+                    variant="text"
                     size="small"
-                    disabled={busy}
-                    onClick={() =>
-                      void run(
-                        () => setInternalDeadlineDays(days),
-                        () => setDaysSaved(true),
-                      )
-                    }
+                    href="/settings/regras#prazo-interno"
+                    LinkComponent={Link}
+                    onClick={onClose}
                   >
-                    {t("agenda-internal-save")}
+                    {t("agenda-internal-open")}
                   </Button>
                 </Box>
-                {daysSaved ? <StateLine tone="done">{t("agenda-internal-saved")}</StateLine> : null}
-                {acts.length > 0 ? (
-                  <Box className="flex flex-col gap-3 pt-2">
-                    <Typography variant="body2" className="text-text-secondary">
-                      {t("agenda-internal-acts-body")}
-                    </Typography>
-                    {acts.map((act) => (
-                      <TextField
-                        key={act.slug}
-                        select
-                        size="small"
-                        label={act.name}
-                        value={act.slug in byAct ? String(byAct[act.slug]) : "firm"}
-                        disabled={busy}
-                        onChange={(event) => {
-                          const chosen = event.target.value === "firm" ? null : Number(event.target.value);
-                          void run(
-                            () => setInternalDeadlineDaysForAct(act.slug, chosen),
-                            () =>
-                              setByAct((current) => {
-                                const next = { ...current };
-                                if (chosen === null) delete next[act.slug];
-                                else next[act.slug] = chosen;
-                                return next;
-                              }),
-                          );
-                        }}
-                      >
-                        <MenuItem value="firm">{t("agenda-internal-act-firm", { count: days })}</MenuItem>
-                        {[0, 1, 2, 3, 4, 5, 7, 10].map((count) => (
-                          <MenuItem key={count} value={String(count)}>
-                            {count === 0 ? t("agenda-internal-off") : t("agenda-internal-days", { count })}
-                          </MenuItem>
-                        ))}
-                      </TextField>
-                    ))}
-                  </Box>
-                ) : null}
               </Box>
             ) : null}
           </>

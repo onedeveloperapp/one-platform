@@ -3,7 +3,6 @@
 import SettingsMenu from "../../components/settings-menu";
 import CalendarCard from "./calendar-card";
 import ConnectCard from "./connect-card";
-import NoticesCard from "./notices-card";
 import NumberCard from "./number-card";
 import SignatureAccountCard from "./signature-account-card";
 import TemplatesCard from "./templates-card";
@@ -209,8 +208,6 @@ export default function ConnectionsView({ state }: { state: ConnectionsState }) 
             {active.length > 0 ? (
               <TemplatesCard templates={ready.templates} readOnly={ready.supportVisit} onChanged={refresh} />
             ) : null}
-
-            <NoticesCard notices={ready.notices} blocked={blocked} onChanged={refresh} />
 
             <SignatureAccountCard
               account={ready.signature}

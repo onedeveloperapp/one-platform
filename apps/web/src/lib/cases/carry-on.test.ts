@@ -97,8 +97,8 @@ describe("what ONE carries on by itself where the firm said how (0052)", () => {
   it("sends a wait for a value, written before 0064, to the case's own card, and the firm's value to where it is said", () => {
     const caseId = "6f4a1c2e-0000-4000-8000-000000000001";
     expect(waitingHref("claims_missing", caseId)).toBe(`/casos/${caseId}#como-vai-a-juizo`);
-    expect(waitingFix("claims_missing")?.href).toBe("/settings/autonomia#valor-da-causa-pedido");
-    expect(waitingHref("no_signer", caseId)).toBe("/settings/autonomia#quem-assina");
+    expect(waitingFix("claims_missing")?.href).toBe("/settings/direito-do-passageiro#valor-da-causa-pedido");
+    expect(waitingHref("no_signer", caseId)).toBe("/settings/regras#quem-assina");
     expect(waitingHref("documents_waiting", caseId)).toBe(`/casos/${caseId}`);
   });
 });

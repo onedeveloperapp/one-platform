@@ -1,5 +1,6 @@
 import type { AccountState } from "@/lib/cases/account";
 import type { Missing } from "@/lib/cases/cases";
+import { MODULES } from "@/lib/modules/registry";
 
 /**
  * What ONE does by itself to carry a case on (migration 0039), where the
@@ -296,13 +297,20 @@ export function waitingKey(code: string): string {
   return isAdvanceWaiting(code) ? WAITING_KEY[code] : "advance-waiting-refused";
 }
 
+/**
+ * Where the firm says the Valor da Causa Pedido of its kinds of problem: the kinds are a module's, and so is the page
+ * (the first of the module's own settings, `firmSettings`); the firm's settings with no module that has one.
+ */
+const CLAIMS_SETTINGS = `${
+  MODULES.modules.find((module) => module.caseKinds.length > 0 && module.firmSettings?.length)?.firmSettings?.[0]
+    ?.href ?? "/settings"
+}#valor-da-causa-pedido`;
+
 /** Where the firm puts right what ONE waits for, when it is not on the case itself. */
 export function waitingFix(code: string): { href: string; key: string } | null {
-  if (code === "no_signer") return { href: "/settings/autonomia#quem-assina", key: "advance-fix-signer" };
+  if (code === "no_signer") return { href: "/settings/regras#quem-assina", key: "advance-fix-signer" };
   if (code === "no_model") return { href: "/biblioteca", key: "advance-fix-model" };
-  if (code === "claims_missing") {
-    return { href: "/settings/autonomia#valor-da-causa-pedido", key: "advance-fix-claim-default" };
-  }
+  if (code === "claims_missing") return { href: CLAIMS_SETTINGS, key: "advance-fix-claim-default" };
   return null;
 }
 

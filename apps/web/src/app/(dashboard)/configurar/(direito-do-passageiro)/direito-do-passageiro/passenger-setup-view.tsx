@@ -1,14 +1,14 @@
 "use client";
 
-import ClaimValueChoice from "../../../settings/autonomia/claim-value-choice";
 import TestChatCard from "../../../settings/connections/components/test-chat-card";
 import { PASSENGER_SETUP_STEPS, type PassengerSetupStep } from "./passenger-setup-steps";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 
-import { Alert, Box, Button, Grid, TextField, Typography } from "@mui/material";
+import { Alert, Box, Button, Grid, Typography } from "@mui/material";
 
+import ClaimValueChoice from "@/components/firm/claim-value-choice";
 import PartnerInvitePanel from "@/components/partners/partner-invite-panel";
 import { QuickActionTile } from "@/components/product/home-tiles";
 import ModuleIcon from "@/components/product/module-icon";
@@ -17,7 +17,6 @@ import SecondFactorPrompt from "@/components/product/second-factor-prompt";
 import SetupWizard, { type WizardStep } from "@/components/product/setup-wizard";
 import StatusChip from "@/components/product/status-chip";
 import { TILE_TONE } from "@/components/product/tile-tone";
-import WordDownloadButton from "@/components/product/word-download-button";
 import NiLock from "@/icons/nexture/ni-lock";
 import type { SecondFactorState } from "@/lib/ai/approvals";
 import {
@@ -35,10 +34,8 @@ import { answerModuleSetup } from "@/lib/modules/setup-actions";
 import type { FirmPartnersState } from "@/lib/partners/facts";
 import { cn } from "@/lib/utils";
 import type { ConnectionsState } from "@/lib/whatsapp/connections";
-import { paxErrorKey } from "@/modules/direito-do-passageiro/agency/passengers";
-import { CLAUSE_MOST, clauseChange, clauseText } from "@/modules/direito-do-passageiro/agency/setup";
+import FirmClauseFields, { useFirmClause } from "@/modules/direito-do-passageiro/firm-clause";
 import { PASSENGER_MODULE } from "@/modules/direito-do-passageiro/incidents";
-import { saveFirmClause } from "@/modules/direito-do-passageiro/setup-actions";
 
 /** What the passenger module's setup shows (migration 0081), read by `passenger-setup-state.ts`. */
 export type PassengerSetupState =
@@ -155,29 +152,15 @@ function PassengerSetupFlow({ state }: { state: Extract<PassengerSetupState, { k
   };
 
   // ---------- The words of the clause the agencies register ----------
-  const inForce = state.clause?.body ?? null;
-  // Untouched (null), the field shows the words in force or ONE's proposal as the page reads them now.
-  const [clauseDraft, setClauseDraft] = useState<string | null>(null);
-  const clause = clauseDraft ?? inForce ?? state.proposal ?? "";
-  const [clauseError, setClauseError] = useState<string | null>(null);
-  const change = clauseChange(clause, inForce);
-  const fromOne = !inForce && state.proposal !== null && clauseText(clause) === clauseText(state.proposal);
   const clauseEditable = decides && factorOk && !blocked;
-  const saveClause = async (): Promise<boolean> => {
-    setClauseError(null);
-    if (!clauseEditable || change.kind === "same") return true;
-    if (change.kind === "invalid") {
-      setClauseError(t("partner-setup-clause-invalid"));
-      return false;
-    }
-    const result = await saveFirmClause(change.text).catch(() => ({ ok: false as const, code: "failed" }));
-    if (!result.ok) {
-      setClauseError(t(paxErrorKey(result.code)));
-      return false;
-    }
-    refresh();
-    return true;
-  };
+  const clause = useFirmClause({
+    clause: state.clause,
+    proposal: state.proposal,
+    editable: clauseEditable,
+    onSaved: refresh,
+  });
+  const inForce = clause.inForce;
+  const change = clause.change;
 
   // ---------- The partner agency ----------
   const [invitingAgency, setInvitingAgency] = useState(false);
@@ -292,7 +275,7 @@ function PassengerSetupFlow({ state }: { state: Extract<PassengerSetupState, { k
       title: t("pax-setup-clause-title"),
       hint: t("pax-setup-clause-hint"),
       canAdvance: !blocked && (!clauseEditable || change.kind !== "invalid"),
-      onPrimary: saveClause,
+      onPrimary: clause.save,
       primaryLabel:
         clauseEditable && change.kind === "register"
           ? inForce
@@ -301,51 +284,13 @@ function PassengerSetupFlow({ state }: { state: Extract<PassengerSetupState, { k
           : undefined,
       secondary: !inForce && clauseEditable ? { label: t("setup-not-now"), onClick: () => goTo("agencia") } : undefined,
       content: (
-        <Box className="flex flex-col gap-4">
-          {state.clause ? (
-            <Box>
-              <StatusChip tone="positive" label={t("pax-clause-version", { version: state.clause.version })} />
-            </Box>
-          ) : null}
-          {!decides ? (
-            <Alert severity="info" className="neutral bg-background-paper/60!">
-              {t("pax-setup-clause-not-partner")}
-            </Alert>
-          ) : fromOne ? (
-            // What ONE proposes is said as ONE's, with what to check: the firm registers the words.
-            <Alert severity="info" className="neutral bg-background-paper/60!">
-              {t("pax-setup-clause-from-one")}
-            </Alert>
-          ) : null}
-          {!state.clauseRead ? (
-            <Alert severity="warning" className="neutral bg-background-paper/60!">
-              {t("partner-setup-clause-unread")}
-            </Alert>
-          ) : null}
-          <TextField
-            id="module-clause"
-            label={t("pax-clause-label")}
-            value={clause}
-            multiline
-            minRows={8}
-            fullWidth
-            disabled={!clauseEditable}
-            error={Boolean(clauseError) || clauseText(clause).length > CLAUSE_MOST}
-            helperText={clauseError ?? t("pax-clause-count", { count: clauseText(clause).length })}
-            onChange={(event) => {
-              setClauseDraft(event.target.value);
-              if (clauseError) setClauseError(null);
-            }}
-          />
-          <Box className="flex flex-wrap items-center gap-2">
-            <WordDownloadButton name={t("pax-setup-clause-file")} text={clauseText(clause)} />
-            {state.proposal !== null && !fromOne && clauseEditable ? (
-              <Button variant="text" color="grey" size="small" onClick={() => setClauseDraft(state.proposal ?? "")}>
-                {t("partner-setup-clause-restore")}
-              </Button>
-            ) : null}
-          </Box>
-        </Box>
+        <FirmClauseFields
+          draft={clause}
+          clause={state.clause}
+          clauseRead={state.clauseRead}
+          proposal={state.proposal}
+          decides={decides}
+        />
       ),
     },
     agencia: {

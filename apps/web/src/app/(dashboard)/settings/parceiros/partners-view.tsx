@@ -127,7 +127,7 @@ export default function PartnersView({ state, modules }: { state: FirmPartnersSt
               crumbs={[
                 { label: t("settings-home"), href: "/inicio" },
                 { label: t("settings-title"), href: "/settings" },
-                { label: t("settings-partners") },
+                { label: t("settings-module-partners") },
               ]}
               description={t("partners-description")}
             />

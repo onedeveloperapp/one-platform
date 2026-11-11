@@ -1,6 +1,8 @@
 "use client";
 
 import SettingsMenu from "../components/settings-menu";
+import NoticesCard from "./notices-card";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
@@ -10,19 +12,33 @@ import { Alert, Box, Button, Card, CardContent, Drawer, Grid, TextField, Tooltip
 import CardTitle from "@/components/product/card-title";
 import PageHeader from "@/components/product/page-header";
 import QuickActions from "@/components/product/quick-actions";
+import SectionTitle from "@/components/product/section-title";
 import SidePanel from "@/components/product/side-panel";
 import StateLine from "@/components/product/state-line";
 import StatusChip from "@/components/product/status-chip";
 import NiListCircle from "@/icons/nexture/ni-list-circle";
 import NiMessage from "@/icons/nexture/ni-message";
+import type { SecondFactorState } from "@/lib/ai/approvals";
 import type { FirmMessages } from "@/lib/firm/message-actions";
 import { resetFirmMessage, restoreFirmMessage, saveFirmMessage } from "@/lib/firm/message-actions";
 import { type MessageProblem, messageProblem, speaksOfPrice, suggestMessage } from "@/lib/firm/messages";
+import type { FirmNotices } from "@/lib/notices/facts";
 
 type Message = FirmMessages["messages"][number];
 
+/**
+ * The notices the firm's clients get on WhatsApp by themselves (migration 0038), here since 2026-11-11 (they were in
+ * Conexões): anybody of the firm reads them, and who manages the firm turns each on, with the second factor.
+ */
+export type MessagesNotices = {
+  notices: FirmNotices;
+  manager: boolean;
+  supportVisit: boolean;
+  secondFactor: SecondFactorState;
+};
+
 export type MessagesState =
-  | { kind: "ready"; messages: Message[]; editable: boolean }
+  | { kind: "ready"; messages: Message[]; editable: boolean; notices: MessagesNotices | null }
   | { kind: "error" }
   | { kind: "unavailable" }
   | { kind: "no-firm" };
@@ -42,7 +58,9 @@ const PROBLEM_KEY: Record<MessageProblem["code"], string> = {
  * ONE's messages in a conversation and the firm's own words of each (migration 0191, phase 6): what each is, where it
  * goes, the values it carries, the words in force (the firm's or ONE's), and for who decides for the firm the way to
  * write its version in the panel, checked as it is typed with ONE's suggestion one click away, an earlier version put
- * back and ONE's words back with a click. A template outside the 24 hours is written in the notices, never here.
+ * back and ONE's words back with a click. Above them, the notices of a client's lawsuit, which go outside the 24 hours
+ * as templates the WhatsApp approves: everything the client reads from ONE in one page, the number that sends it in
+ * Conexões.
  */
 export default function MessagesView({ state }: { state: MessagesState }) {
   const t = useTranslations("product");
@@ -51,6 +69,7 @@ export default function MessagesView({ state }: { state: MessagesState }) {
   const [editing, setEditing] = useState<Message | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const factorMissing = state.kind === "ready" && state.notices?.secondFactor === "missing";
   const run = async (work: () => Promise<{ ok: boolean; code?: string }>) => {
     setBusy(true);
     setProblem(null);
@@ -110,6 +129,47 @@ export default function MessagesView({ state }: { state: MessagesState }) {
                 {t(problem)}
               </Alert>
             ) : null}
+            {state.notices ? (
+              <>
+                {state.notices.manager && !state.notices.supportVisit && state.notices.secondFactor !== "ok" ? (
+                  <Alert
+                    severity="warning"
+                    className="neutral bg-background-paper/60!"
+                    action={
+                      <Button
+                        color="inherit"
+                        size="small"
+                        href={factorMissing ? "/settings/security" : "/auth/two-factor?next=/settings/mensagens"}
+                        LinkComponent={Link}
+                      >
+                        {t(
+                          factorMissing
+                            ? "autonomy-second-factor-missing-action"
+                            : "autonomy-second-factor-challenge-action",
+                        )}
+                      </Button>
+                    }
+                  >
+                    {t(factorMissing ? "messages-notices-factor-missing" : "messages-notices-factor-challenge")}
+                  </Alert>
+                ) : null}
+                <NoticesCard
+                  notices={state.notices.notices}
+                  blocked={!state.notices.manager || state.notices.supportVisit || state.notices.secondFactor !== "ok"}
+                  onChanged={() => router.refresh()}
+                />
+              </>
+            ) : (
+              <Alert severity="error" className="neutral bg-background-paper/60!">
+                {t("messages-notices-read-error")}
+              </Alert>
+            )}
+            <SectionTitle
+              id="messages-conversation"
+              title={t("messages-conversation-title")}
+              variant="subtitle1"
+              description={t("messages-conversation-description")}
+            />
             {!state.editable ? (
               <Typography variant="body2" className="text-text-secondary">
                 {t("messages-readonly")}
@@ -173,9 +233,6 @@ export default function MessagesView({ state }: { state: MessagesState }) {
                 </CardContent>
               </Card>
             ))}
-            <Typography variant="caption" className="text-text-secondary">
-              {t("messages-templates-note")}
-            </Typography>
           </Grid>
         )}
       </Grid>

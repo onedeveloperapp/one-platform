@@ -4,8 +4,9 @@ import { cookies } from "next/headers";
 import { getTranslations } from "next-intl/server";
 
 import { momentLabel, type SecondFactorState } from "@/lib/ai/approvals";
-import { claimDefaultsOf, firmAutonomyOf } from "@/lib/firm/autonomy";
+import { firmAutonomyOf } from "@/lib/firm/autonomy";
 import { getMemberContext } from "@/lib/member/context";
+import { isPublicationCategory } from "@/lib/publications/publications";
 import { IMPERSONATION_MARKER_COOKIE } from "@flyee/auth";
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -14,40 +15,34 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 /**
- * /settings/autonomia: what the firm lets ONE decide alone (migration 0016).
- * Anybody of the firm reads how each decision is taken now; a partner
- * changes it with the second factor. Read under the person's own session.
+ * /settings/autonomia: what the firm lets ONE decide alone (migration 0016), grouped by the stage of the case, and,
+ * inside the triage of the publications, whether the firm lets ONE's reading be the triage (0035). Anybody of the
+ * firm reads how each decision is taken now; a partner changes it with the second factor. Read under the person's
+ * own session.
  */
 async function loadAutonomy(): Promise<AutonomyState> {
   const context = await getMemberContext();
   if (!context) return { kind: "unavailable" };
   if (!context.firm) return { kind: "no-firm" };
   const firm = context.firm;
-  const [autonomy, team, signers, defaults, assurance, cookieStore, decides, policy, month] = await Promise.all([
+  const [autonomy, team, assurance, cookieStore, decides, policies, triage] = await Promise.all([
     context.supabase.rpc("firm_autonomy", { target_org: firm.id }),
     context.supabase.rpc("firm_team", { target_org: firm.id }),
-    context.supabase.from("firm_signers").select("user_id").eq("org_id", firm.id),
-    context.supabase.from("firm_claim_defaults").select("incident, cents").eq("org_id", firm.id),
     context.supabase.auth.mfa.getAuthenticatorAssuranceLevel(),
     cookies(),
     // Who decides for the firm what a partner decides (0078): a partner, or, with no partner, who manages it.
     context.supabase.rpc("decides_for_firm", { target_org: firm.id }),
-    // Whether the firm accepts a bill in somebody else's name (0123), and the month's packages that carry one.
-    context.supabase.from("organizations").select("third_party_bill").eq("id", firm.id).maybeSingle(),
-    context.supabase.rpc("firm_third_party_bills", { target_org: firm.id }),
+    // Which categories ONE's reading is the triage of (0035), and whether the firm lets it be.
+    context.supabase.from("publication_triage_policies").select("category, mode, sample_percent").eq("mode", "sampled"),
+    context.supabase.from("organizations").select("publication_ai_triage").eq("id", firm.id).maybeSingle(),
   ]);
-  const counted = (month.error ? null : month.data) as { packages?: unknown; third_party?: unknown } | null;
   const decisions = autonomy.error ? null : firmAutonomyOf(autonomy.data);
   if (!decisions) return { kind: "error" };
-  const signing = new Set(((signers.data ?? []) as { user_id: string }[]).map((row) => row.user_id));
-  // Who chose is said by name when the team could be read; the choices are what the page is for, and who
-  // signs is said apart (its card says it could not be read).
+  // Who chose is said by name when the team could be read; the choices are what the page is for.
   const teamRows = (team.error ? [] : (team.data ?? [])) as {
     user_id: string;
     display_name: string | null;
     email: string | null;
-    firm_function: string;
-    oab: { uf?: unknown }[] | null;
   }[];
   const names = new Map(
     teamRows.map((person) => [person.user_id, person.display_name?.trim() || person.email?.split("@")[0] || ""]),
@@ -59,30 +54,17 @@ async function loadAutonomy(): Promise<AutonomyState> {
     partner: !decides.error && decides.data === true,
     secondFactor,
     supportVisit: cookieStore.has(IMPERSONATION_MARKER_COOKIE),
-    signers:
-      team.error || signers.error
-        ? null
-        : teamRows
-            .filter((person) => person.firm_function === "socio" || person.firm_function === "advogado")
-            .map((person) => ({
-              userId: person.user_id,
-              name: names.get(person.user_id) || "",
-              states: (person.oab ?? []).flatMap((registration) =>
-                typeof registration.uf === "string" ? [registration.uf] : [],
-              ),
-              signs: signing.has(person.user_id),
-            })),
-    // The claim the firm asks by default for each kind of problem (0052); its card says when it could not be read.
-    claimDefaults: defaults.error ? null : claimDefaultsOf(defaults.data),
-    thirdParty:
-      policy.error || !policy.data
+    aiTriage:
+      policies.error || triage.error
         ? null
         : {
-            policy: (policy.data as { third_party_bill?: string }).third_party_bill === "refuse" ? "refuse" : "accept",
-            month:
-              counted && typeof counted.packages === "number" && typeof counted.third_party === "number"
-                ? { packages: counted.packages, thirdParty: counted.third_party }
-                : null,
+            // Off until a partner turns it on: only a firm that said yes lets the AI's answer be its triage.
+            firmAllows: (triage.data as { publication_ai_triage?: unknown } | null)?.publication_ai_triage === true,
+            sampled: ((policies.data ?? []) as { category: string; sample_percent: number }[]).flatMap((policy) =>
+              isPublicationCategory(policy.category)
+                ? [{ category: policy.category, samplePercent: policy.sample_percent }]
+                : [],
+            ),
           },
     decisions: decisions.map((decision) => ({
       ...decision,

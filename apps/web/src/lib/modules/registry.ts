@@ -17,6 +17,7 @@ export const {
   caseKindForModel,
   partnerSetupOf,
   firmSetupOf,
+  firmSettingsOf,
 } = MODULES;
 
 /**

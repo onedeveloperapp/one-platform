@@ -1,12 +1,9 @@
 "use client";
 
 import SettingsMenu from "../components/settings-menu";
-import ClaimValueChoice from "./claim-value-choice";
-import SettlementFloorCard from "./settlement-floor-card";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 
 import {
   Alert,
@@ -17,43 +14,36 @@ import {
   Grid,
   Radio,
   RadioGroup,
-  Switch,
   TextField,
   Tooltip,
   Typography,
 } from "@mui/material";
 
-import ThirdPartyBillCard, { type ThirdPartyMonth } from "@/components/firm/third-party-bill-card";
-import { useViewer } from "@/components/layout/viewer-context";
+import AiTriageSection from "@/components/firm/ai-triage-section";
+import DecidesNotice from "@/components/firm/decides-notice";
 import CollapsibleCard, { CollapsibleGroup, CollapsibleGroupToggle } from "@/components/product/collapsible-card";
 import EmptyState from "@/components/product/empty-state";
 import PageHeader from "@/components/product/page-header";
+import SectionTitle from "@/components/product/section-title";
 import StatusChip from "@/components/product/status-chip";
 import NiListCircle from "@/icons/nexture/ni-list-circle";
 import NiRobot from "@/icons/nexture/ni-robot";
 import NiUsers from "@/icons/nexture/ni-users";
 import type { SecondFactorState } from "@/lib/ai/approvals";
 import {
+  type AutonomyDecision,
   autonomyErrorKey,
   type AutonomyMode,
-  type ClaimChoice,
-  claimChoiceOf,
-  type ClaimDefault,
-  claimDefaultChanges,
   DECISION_KEY,
+  decisionsByStage,
   type FirmAutonomy,
   LAWYER_ACTS,
   MODE_KEY,
-  typedClaims,
 } from "@/lib/firm/autonomy";
-import { setFirmAutonomy, setFirmClaimDefault, setFirmSigner } from "@/lib/firm/autonomy-actions";
-import type { ThirdPartyBillPolicy } from "@/lib/firm/third-party-bill-actions";
-import { caseKindLabelKey, firmCaseKinds } from "@/lib/modules/registry";
+import { setFirmAutonomy } from "@/lib/firm/autonomy-actions";
+import type { AiTriage } from "@/lib/publications/facts";
 
 export type AutonomyDecisionView = FirmAutonomy & { changedByName: string | null; changedLabel: string | null };
-
-/** A partner or a lawyer of the firm, the states they are at the bar in, and whether they sign what ONE prepares. */
-export type AutonomySigner = { userId: string; name: string; states: string[]; signs: boolean };
 
 export type AutonomyState =
   | {
@@ -64,34 +54,34 @@ export type AutonomyState =
       secondFactor: SecondFactorState;
       supportVisit: boolean;
       decisions: AutonomyDecisionView[];
-      /** Null when who signs could not be read: its card says so, and the decisions stay. */
-      signers: AutonomySigner[] | null;
-      /** The firm's Valor da Causa Pedido for each kind of problem it gives one for; null when it could not be read. */
-      claimDefaults: ClaimDefault[] | null;
       /**
-       * Whether the firm accepts a bill in somebody else's name with the client's declaration (0123), and, for who
-       * decides for it, the month's filing packages that carry one; null when it could not be read.
+       * Whether the firm lets ONE's reading be the triage of the publications (0035), said inside the decision of
+       * the triage; null when it could not be read.
        */
-      thirdParty: { policy: ThirdPartyBillPolicy; month: ThirdPartyMonth | null } | null;
+      aiTriage: AiTriage | null;
     }
   | { kind: "no-firm" }
   | { kind: "unavailable" }
   | { kind: "error" };
 
+/** A link to a decision opens its card: the triage of the publications is reached from `/publicacoes`. */
+const DECISION_ANCHOR: Partial<Record<AutonomyDecision, string>> = { publication_triage: "triagem-das-publicacoes" };
+
 /**
- * What the firm lets ONE decide alone. A partner comes here to choose, for
- * each decision ONE can take, whether ONE decides, ONE decides with a share
- * checked by a person, or a person decides; everybody else comes to know how
- * the firm works. By default ONE decides and records each decision: success
- * is the firm automating what it trusts and keeping a person where it wants.
- * So the screen opens as the list of decisions with how each one is now, and
- * a person opens the one to read or change.
+ * What the firm lets ONE decide alone, and only that: who signs, the internal deadline and the bill in somebody
+ * else's name are the firm's rules of the cases (`/settings/regras`), and the values by kind of problem are each
+ * module's (its settings). A partner comes here to choose, for each decision ONE can take, whether ONE decides, ONE
+ * decides with a share checked by a person, or a person decides; everybody else comes to know how the firm works.
+ * By default ONE decides and records each decision: success is the firm automating what it trusts and keeping a
+ * person where it wants. So the screen opens as the decisions grouped by the stage of the case each one acts in,
+ * each with how it is now, and a person opens the one to read or change.
  */
 export default function AutonomyView({ state }: { state: AutonomyState }) {
   const t = useTranslations("product");
   const router = useRouter();
   const [openDrawer, setOpenDrawer] = useState(false);
   const ready = state.kind === "ready" ? state : null;
+  const editable = ready !== null && ready.partner && !ready.supportVisit && ready.secondFactor === "ok";
 
   return (
     <Grid container spacing={5} className="items-start">
@@ -161,85 +151,54 @@ export default function AutonomyView({ state }: { state: AutonomyState }) {
 
         {ready && (
           <Grid size={12} className="flex flex-col gap-3">
-            {ready.supportVisit ? (
-              <Alert severity="info" className="neutral bg-background-paper/60!">
-                {t("autonomy-support-visit")}
-              </Alert>
-            ) : !ready.partner ? (
-              <Alert severity="info" className="neutral bg-background-paper/60!">
-                {t("autonomy-partner-only")}
-              </Alert>
-            ) : ready.secondFactor === "missing" ? (
-              <Alert
-                severity="warning"
-                className="neutral bg-background-paper/60!"
-                action={
-                  <Button color="inherit" size="small" href="/settings/security" LinkComponent={Link}>
-                    {t("autonomy-second-factor-missing-action")}
-                  </Button>
-                }
-              >
-                {t("autonomy-second-factor-missing")}
-              </Alert>
-            ) : ready.secondFactor === "challenge" ? (
-              <Alert
-                severity="warning"
-                className="neutral bg-background-paper/60!"
-                action={
-                  <Button
-                    color="inherit"
-                    size="small"
-                    href="/auth/two-factor?next=/settings/autonomia"
-                    LinkComponent={Link}
+            <DecidesNotice
+              decides={ready.partner}
+              supportVisit={ready.supportVisit}
+              secondFactor={ready.secondFactor}
+              next="/settings/autonomia"
+            />
+            {ready.decisions.length === 0 ? (
+              <EmptyState
+                icon={<NiRobot size="large" />}
+                title={t("autonomy-empty-title")}
+                description={t("autonomy-empty-body")}
+              />
+            ) : (
+              <CollapsibleGroup>
+                <CollapsibleGroupToggle className="-my-1" />
+                {decisionsByStage(ready.decisions).map((stage) => (
+                  <Box
+                    key={stage.key}
+                    component="section"
+                    aria-labelledby={`autonomy-stage-${stage.key}`}
+                    className="flex flex-col gap-3 pt-2"
                   >
-                    {t("autonomy-second-factor-challenge-action")}
-                  </Button>
-                }
-              >
-                {t("autonomy-second-factor-challenge")}
-              </Alert>
-            ) : null}
-            <CollapsibleGroup>
-              {ready.decisions.length === 0 ? (
-                <EmptyState
-                  icon={<NiRobot size="large" />}
-                  title={t("autonomy-empty-title")}
-                  description={t("autonomy-empty-body")}
-                />
-              ) : (
-                <>
-                  <CollapsibleGroupToggle className="-my-1" />
-                  {ready.decisions.map((decision) => (
-                    <DecisionCard
-                      key={decision.key}
-                      decision={decision}
-                      editable={ready.partner && !ready.supportVisit && ready.secondFactor === "ok"}
-                      onSaved={() => router.refresh()}
+                    <SectionTitle
+                      id={`autonomy-stage-${stage.key}`}
+                      title={t(stage.title)}
+                      variant="subtitle1"
+                      chip={<StatusChip tone="neutral" label={String(stage.decisions.length)} />}
                     />
-                  ))}
-                </>
-              )}
-              <SignersCard
-                signers={ready.signers}
-                editable={ready.partner && !ready.supportVisit && ready.secondFactor === "ok"}
-                onSaved={() => router.refresh()}
-              />
-              <ClaimValueCard
-                defaults={ready.claimDefaults}
-                editable={ready.partner && !ready.supportVisit && ready.secondFactor === "ok"}
-                onSaved={() => router.refresh()}
-              />
-              <SettlementFloorCard editable={ready.partner && !ready.supportVisit && ready.secondFactor === "ok"} />
-              {ready.thirdParty ? (
-                <ThirdPartyBillCard
-                  policy={ready.thirdParty.policy}
-                  decides={ready.partner}
-                  supportVisit={ready.supportVisit}
-                  month={ready.thirdParty.month}
-                  onSaved={() => router.refresh()}
-                />
-              ) : null}
-            </CollapsibleGroup>
+                    {stage.decisions.map((decision) => (
+                      <DecisionCard
+                        key={decision.key}
+                        decision={decision}
+                        editable={editable}
+                        onSaved={() => router.refresh()}
+                      >
+                        {decision.key === "publication_triage" && ready.aiTriage ? (
+                          <AiTriageSection
+                            aiTriage={ready.aiTriage}
+                            mayDecide={ready.partner && !ready.supportVisit}
+                            onChanged={() => router.refresh()}
+                          />
+                        ) : null}
+                      </DecisionCard>
+                    ))}
+                  </Box>
+                ))}
+              </CollapsibleGroup>
+            )}
           </Grid>
         )}
       </Grid>
@@ -262,11 +221,14 @@ function DecisionCard({
   decision,
   editable,
   onSaved,
+  children,
 }: {
   decision: AutonomyDecisionView;
   /** A partner, outside a support visit, with the second factor confirmed in this session. */
   editable: boolean;
   onSaved: () => void;
+  /** What else the firm says of this decision, in its card (the triage of the publications: the firm's switch). */
+  children?: ReactNode;
 }) {
   const t = useTranslations("product");
   const [saved, setSaved] = useState(false);
@@ -276,6 +238,7 @@ function DecisionCard({
   return (
     <CollapsibleCard
       id={titleId}
+      anchor={DECISION_ANCHOR[decision.key]}
       title={t(words.title)}
       chip={
         <StatusChip
@@ -328,6 +291,7 @@ function DecisionCard({
           {t("autonomy-saved")}
         </Alert>
       )}
+      {children}
     </CollapsibleCard>
   );
 }
@@ -425,339 +389,6 @@ function DecisionChoice({
           onClick={() => void save()}
         >
           {busy ? t("cases-working") : t("autonomy-save")}
-        </Button>
-      </Box>
-    </Box>
-  );
-}
-
-/**
- * Who signs what ONE prepares: the partners and lawyers a partner named. ONE
- * names, for a lawsuit, those of them at the bar in its court's state, and a
- * lawsuit nobody of them can sign waits for one. Closed, it says who signs;
- * it opens by itself while nobody does, since ONE's lawsuits wait for one.
- */
-function SignersCard({
-  signers,
-  editable,
-  onSaved,
-}: {
-  signers: AutonomySigner[] | null;
-  editable: boolean;
-  onSaved: () => void;
-}) {
-  const t = useTranslations("product");
-  const signing = (signers ?? []).filter((signer) => signer.signs);
-
-  return (
-    <CollapsibleCard
-      id="quem-assina-title"
-      anchor="quem-assina"
-      title={t("autonomy-signers-title")}
-      summary={
-        signers === null
-          ? t("autonomy-signers-load-error")
-          : signers.length === 0
-            ? t("autonomy-signers-empty-title")
-            : signing.length > 0
-              ? signing.map((signer) => signer.name).join(", ")
-              : t("autonomy-signers-summary-nobody")
-      }
-      description={t("autonomy-signers-body")}
-      defaultOpen={signers === null || signing.length === 0}
-      bodyClassName="gap-3"
-    >
-      {signers === null ? (
-        <Alert
-          severity="error"
-          className="neutral bg-background-paper/60!"
-          action={
-            <Button color="inherit" size="small" onClick={onSaved}>
-              {t("autonomy-retry")}
-            </Button>
-          }
-        >
-          {t("autonomy-signers-load-error")}
-        </Alert>
-      ) : signers.length === 0 ? (
-        <EmptyState
-          icon={<NiUsers size="large" />}
-          titleAs="h3"
-          title={t("autonomy-signers-empty-title")}
-          description={t("autonomy-signers-empty-body")}
-          action={{ label: t("autonomy-signers-empty-action"), href: "/settings/team" }}
-        />
-      ) : (
-        <SignersList
-          // Who signs as the page read it last: what a partner switched starts again from it.
-          key={signers.map((signer) => `${signer.userId}:${signer.signs}`).join(",")}
-          signers={signers}
-          editable={editable}
-          onSaved={onSaved}
-        />
-      )}
-    </CollapsibleCard>
-  );
-}
-
-/** The signers, each with its switch for a partner. A switch says its new state at once, and is said back as it is once the page is read again. */
-function SignersList({
-  signers,
-  editable,
-  onSaved,
-}: {
-  signers: AutonomySigner[];
-  editable: boolean;
-  onSaved: () => void;
-}) {
-  const t = useTranslations("product");
-  const [busy, setBusy] = useState<string | null>(null);
-  const [problem, setProblem] = useState<string | null>(null);
-  // What a partner just switched, until the page read again says the same.
-  const [switched, setSwitched] = useState<Record<string, boolean>>({});
-  const signs = (signer: AutonomySigner) => switched[signer.userId] ?? signer.signs;
-
-  const change = async (signer: AutonomySigner, value: boolean) => {
-    setBusy(signer.userId);
-    setProblem(null);
-    try {
-      const result = await setFirmSigner(signer.userId, value);
-      if (result.ok) setSwitched((before) => ({ ...before, [signer.userId]: value }));
-      else setProblem(result.code);
-      onSaved();
-    } catch {
-      setProblem("failed");
-    } finally {
-      setBusy(null);
-    }
-  };
-
-  return (
-    <>
-      <Box component="ul" className="m-0 flex list-none flex-col gap-2 p-0">
-        {signers.map((signer) => {
-          const states =
-            signer.states.length > 0
-              ? t("autonomy-signers-states", { states: signer.states.join(", ") })
-              : t("autonomy-signers-no-state");
-          return (
-            <Box component="li" key={signer.userId} className="flex flex-wrap items-center justify-between gap-2">
-              {editable ? (
-                <FormControlLabel
-                  className="m-0"
-                  control={
-                    <Switch
-                      checked={signs(signer)}
-                      disabled={busy !== null}
-                      onChange={(event) => void change(signer, event.target.checked)}
-                    />
-                  }
-                  label={
-                    <Box className="flex flex-col">
-                      <Typography variant="body1">{signer.name}</Typography>
-                      <Typography variant="body2" className="text-text-secondary">
-                        {states}
-                      </Typography>
-                    </Box>
-                  }
-                />
-              ) : (
-                <>
-                  <Box className="min-w-0">
-                    <Typography variant="body1">{signer.name}</Typography>
-                    <Typography variant="body2" className="text-text-secondary">
-                      {states}
-                    </Typography>
-                  </Box>
-                  <StatusChip
-                    tone={signs(signer) ? "positive" : "neutral"}
-                    label={t(signs(signer) ? "autonomy-signers-signs" : "autonomy-signers-does-not")}
-                  />
-                </>
-              )}
-            </Box>
-          );
-        })}
-      </Box>
-      {!signers.some((signer) => signs(signer)) && (
-        <Alert severity="info" className="neutral bg-background-paper/60!">
-          {t("autonomy-signers-none")}
-        </Alert>
-      )}
-      {problem && (
-        <Alert severity="error" className="neutral bg-background-paper/60!" onClose={() => setProblem(null)}>
-          {t(autonomyErrorKey(problem))}
-        </Alert>
-      )}
-    </>
-  );
-}
-
-/** Reais as a person reads them: 10.000,00. */
-const reais = (cents: number): string =>
-  new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(cents / 100);
-
-/**
- * The Valor da Causa Pedido (migrations 0052 and 0064): the value each
- * claimant asks, by kind of problem, or none, and the lawsuits go with no
- * value for the judge to define. Where the firm gives a value, ONE writes it
- * for a claimant with none when the lawsuits are created; a value written on
- * a case is never changed. A partner with the second factor chooses, and
- * saves the whole choice at once, as in the setup of the firm. Closed, it
- * says what the firm gave; it opens by itself only when it could not be read.
- */
-function ClaimValueCard({
-  defaults,
-  editable,
-  onSaved,
-}: {
-  defaults: ClaimDefault[] | null;
-  editable: boolean;
-  onSaved: () => void;
-}) {
-  const t = useTranslations("product");
-  const [saved, setSaved] = useState(false);
-  const kinds = firmCaseKinds(useViewer()?.modules);
-
-  return (
-    <CollapsibleCard
-      id="valor-da-causa-pedido-title"
-      anchor="valor-da-causa-pedido"
-      title={t("autonomy-claims-title")}
-      summary={
-        defaults === null
-          ? t("autonomy-claims-load-error")
-          : defaults.length > 0
-            ? t("autonomy-claims-summary", { count: defaults.length, total: kinds.length })
-            : t("autonomy-claims-summary-none")
-      }
-      description={t("autonomy-claims-body")}
-      defaultOpen={defaults === null}
-      bodyClassName="gap-3"
-    >
-      {defaults === null ? (
-        <Alert
-          severity="error"
-          className="neutral bg-background-paper/60!"
-          action={
-            <Button color="inherit" size="small" onClick={onSaved}>
-              {t("autonomy-retry")}
-            </Button>
-          }
-        >
-          {t("autonomy-claims-load-error")}
-        </Alert>
-      ) : editable ? (
-        <ClaimValueForm
-          // The values as the page read them last: what a partner saved starts again from it.
-          key={defaults.map((row) => `${row.incident}:${row.cents}`).join(",")}
-          defaults={defaults}
-          onSaved={() => {
-            setSaved(true);
-            onSaved();
-          }}
-          onTouched={() => setSaved(false)}
-        />
-      ) : (
-        <Box component="ul" className="m-0 flex list-none flex-col gap-3 p-0">
-          {kinds.map((kind) => {
-            const current = defaults.find((row) => row.incident === kind.key)?.cents ?? null;
-            return (
-              <Box component="li" key={kind.key} className="flex w-full flex-wrap items-center justify-between gap-2">
-                <Typography variant="body1">{t(kind.labelKey)}</Typography>
-                <Typography variant="body1" className={current === null ? "text-text-secondary" : undefined}>
-                  {current === null ? t("autonomy-claims-none") : t("autonomy-claims-value", { value: reais(current) })}
-                </Typography>
-              </Box>
-            );
-          })}
-        </Box>
-      )}
-      {saved && (
-        <Alert severity="success" role="status" className="neutral bg-background-paper/60!">
-          {t("autonomy-claims-saved")}
-        </Alert>
-      )}
-    </CollapsibleCard>
-  );
-}
-
-/** The firm's choice as the form holds it, saved at once: each kind whose value changed, said or taken back. */
-function ClaimValueForm({
-  defaults,
-  onSaved,
-  onTouched,
-}: {
-  defaults: ClaimDefault[];
-  onSaved: () => void;
-  onTouched: () => void;
-}) {
-  const t = useTranslations("product");
-  const kinds = firmCaseKinds(useViewer()?.modules);
-  const [choice, setChoice] = useState<ClaimChoice>(() => claimChoiceOf(defaults));
-  const [typed, setTyped] = useState<Partial<Record<string, string>>>(() => typedClaims(defaults));
-  const [busy, setBusy] = useState(false);
-  // A refusal of the database by its code, or the kind typed with something that is no amount.
-  const [problem, setProblem] = useState<{ code: string } | { invalid: string } | null>(null);
-  const planned = claimDefaultChanges(
-    choice,
-    typed,
-    defaults,
-    kinds.map((kind) => kind.key),
-  );
-  const changed = !planned.ok || planned.changes.length > 0;
-
-  const save = async () => {
-    setProblem(null);
-    if (!planned.ok) {
-      setProblem({ invalid: planned.invalid });
-      return;
-    }
-    setBusy(true);
-    try {
-      for (const change of planned.changes) {
-        const result = await setFirmClaimDefault(change.incident, change.cents);
-        if (!result.ok) {
-          setProblem({ code: result.code });
-          return;
-        }
-      }
-      onSaved();
-    } catch {
-      setProblem({ code: "failed" });
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <Box className="flex flex-col gap-3">
-      <ClaimValueChoice
-        id="autonomy-claim"
-        choice={choice}
-        typed={typed}
-        kinds={kinds}
-        disabled={busy}
-        onChoice={(next) => {
-          setChoice(next);
-          setProblem(null);
-          onTouched();
-        }}
-        onTyped={(incident, value) => {
-          setTyped((before) => ({ ...before, [incident]: value }));
-          onTouched();
-        }}
-      />
-      {problem && (
-        <Alert severity="error" className="neutral bg-background-paper/60!" onClose={() => setProblem(null)}>
-          {"invalid" in problem
-            ? t("claims-invalid", { kind: t(caseKindLabelKey(problem.invalid) ?? "case-incident-other") })
-            : t(autonomyErrorKey(problem.code))}
-        </Alert>
-      )}
-      <Box>
-        <Button variant="contained" size="small" disabled={busy || !changed} onClick={() => void save()}>
-          {busy ? t("cases-working") : t("autonomy-claims-save")}
         </Button>
       </Box>
     </Box>

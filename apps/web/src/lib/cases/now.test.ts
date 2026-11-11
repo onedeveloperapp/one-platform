@@ -301,7 +301,7 @@ describe("caseNow", () => {
         id: "wait:no_signer",
         owner: "firm",
         actor: "partner",
-        href: "/settings/autonomia#quem-assina",
+        href: "/settings/regras#quem-assina",
         since: "2026-11-04T10:00:00Z",
       }),
     ]);

@@ -24,6 +24,6 @@ export async function setThirdPartyBill(
   if (error) return { ok: false, code: "failed" };
   const answer = (data ?? {}) as { ok?: unknown; code?: unknown };
   if (answer.ok !== true) return { ok: false, code: typeof answer.code === "string" ? answer.code : "failed" };
-  revalidatePath("/settings/autonomia");
+  revalidatePath("/settings/regras");
   return { ok: true };
 }

@@ -5,20 +5,18 @@ import { useEffect, useState } from "react";
 
 import { Alert, Box, Button, Typography } from "@mui/material";
 
-import { useViewer } from "@/components/layout/viewer-context";
 import CollapsibleCard from "@/components/product/collapsible-card";
 import { CurrencyField } from "@/components/product/fields";
 import { readSettlementFloors, saveSettlementFloor } from "@/lib/firm/settlement-actions";
-import { firmCaseKinds } from "@/lib/modules/registry";
+import type { CaseKind } from "@/lib/modules/types";
 
 /**
  * The value the firm settles for at least, per kind of problem (migration 0187): what the brief of a hearing says to
  * who goes to it, two business days before. Said by who decides for the firm, with the second factor; a kind left
- * blank says the firm gave no value.
+ * blank says the firm gave no value. Each module's settings show its own kinds of problem, and save only those.
  */
-export default function SettlementFloorCard({ editable }: { editable: boolean }) {
+export default function SettlementFloorCard({ editable, kinds }: { editable: boolean; kinds: readonly CaseKind[] }) {
   const t = useTranslations("product");
-  const kinds = firmCaseKinds(useViewer()?.modules);
   const [values, setValues] = useState<Record<string, string>>({});
   const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState(false);

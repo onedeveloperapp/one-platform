@@ -13,9 +13,9 @@ import type { CaseKind } from "@/lib/modules/types";
  * a value for each kind of problem, which each claimant of a case of that
  * kind asks unless somebody wrote another on the case, or no value, and the
  * lawsuits go with none for the judge to define; a kind left blank goes
- * with none too. The same form in the setup of the firm and in what ONE
- * decides alone, each saving it its own way: it only holds what is chosen
- * and typed.
+ * with none too. The same form in a module's setup and in its settings
+ * (`ClaimValueCard`), each saving it its own way: it only holds what is
+ * chosen and typed.
  */
 export default function ClaimValueChoice({
   id,
@@ -31,7 +31,7 @@ export default function ClaimValueChoice({
   choice: ClaimChoice;
   /** Each kind's value as its field holds it (reais with their decimals). */
   typed: Partial<Record<string, string>>;
-  /** The kinds of problem of the firm's modules (lib/modules/registry.ts), in their order. */
+  /** The kinds of problem of the module (lib/modules/registry.ts), in their order. */
   kinds: readonly CaseKind[];
   disabled: boolean;
   onChoice: (choice: ClaimChoice) => void;

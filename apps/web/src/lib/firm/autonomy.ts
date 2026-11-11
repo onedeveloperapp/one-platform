@@ -111,6 +111,49 @@ export const DECISION_KEY: Record<AutonomyDecision, { title: string; body: strin
   client_receipt: { title: "autonomy-client-receipt", body: "autonomy-client-receipt-body" },
 };
 
+/**
+ * The stages of a case the screen groups the decisions by, in the order a case goes through them (the owner,
+ * 2026-11-11: 22 decisions in one list said nothing of where each one acts). Every decision is in exactly one stage
+ * (a test keeps it).
+ */
+export const AUTONOMY_STAGES: readonly { key: string; title: string; decisions: readonly AutonomyDecision[] }[] = [
+  {
+    key: "atendimento",
+    title: "autonomy-stage-service",
+    decisions: ["reply_client", "open_case_from_chat", "send_client_link"],
+  },
+  {
+    key: "documentos",
+    title: "autonomy-stage-documents",
+    decisions: ["send_signature_papers", "document_check", "chronology"],
+  },
+  {
+    key: "processos",
+    title: "autonomy-stage-lawsuits",
+    decisions: ["create_lawsuits", "start_piece", "piece_text", "file_or_hold"],
+  },
+  { key: "protocolo", title: "autonomy-stage-filing", decisions: ["request_package", "sign_package", "file_lawsuit"] },
+  {
+    key: "publicacoes",
+    title: "autonomy-stage-publications",
+    decisions: ["publication_triage", "publication_deadline", "publication_hearing", "deadline_confirm"],
+  },
+  { key: "resultado", title: "autonomy-stage-outcome", decisions: ["record_outcome", "close_case"] },
+  { key: "financeiro", title: "autonomy-stage-finance", decisions: ["finance_lines", "client_receipt"] },
+  { key: "biblioteca", title: "autonomy-stage-library", decisions: ["model_from_document"] },
+];
+
+/** The decisions of each stage as the firm has them, in the stage's order; a stage with none of them is left out. */
+export function decisionsByStage<T extends { key: AutonomyDecision }>(
+  decisions: readonly T[],
+): { key: string; title: string; decisions: T[] }[] {
+  return AUTONOMY_STAGES.map((stage) => ({
+    key: stage.key,
+    title: stage.title,
+    decisions: stage.decisions.flatMap((key) => decisions.filter((decision) => decision.key === key)),
+  })).filter((stage) => stage.decisions.length > 0);
+}
+
 export const MODE_KEY: Record<AutonomyMode, string> = {
   auto: "autonomy-mode-auto",
   sampled: "autonomy-mode-sampled",

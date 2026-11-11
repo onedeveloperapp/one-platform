@@ -47,6 +47,7 @@ export async function declareLawyerCpf(cpf: string): Promise<SignatureActionResu
   if (error) return { ok: false, code: raisedCode(error.message) };
   const answer = (data ?? {}) as { ok?: boolean; code?: string };
   revalidatePath("/settings/team");
+  revalidatePath("/settings/atuacao");
   return answer.ok ? { ok: true, code: String(answer.code) } : { ok: false, code: String(answer.code ?? "failed") };
 }
 
@@ -129,5 +130,6 @@ export async function endLawyerSignature(connectionId: string): Promise<Signatur
   if (error) return { ok: false, code: raisedCode(error.message) };
   const answer = (data ?? {}) as { ok?: boolean; code?: string };
   revalidatePath("/settings/team");
+  revalidatePath("/settings/atuacao");
   return answer.ok ? { ok: true, code: String(answer.code) } : { ok: false, code: String(answer.code ?? "failed") };
 }

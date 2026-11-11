@@ -177,7 +177,8 @@ export function filingAttentionItems(
       if (own ? !signs : !seesTeam) continue;
       one.push({
         id: `cloud-signature:${need.userId}:${need.state}`,
-        href: "/settings/team#team-cloud-signature",
+        // The person's own authorization is in their practice; a colleague's, in the team.
+        href: own ? "/settings/atuacao#team-cloud-signature" : "/settings/team#team-cloud-signature",
         tag: { key: "pending-tag-cloud-signature" },
         label: {
           key: own ? OWN_KEY[need.state] : OTHER_KEY[need.state],

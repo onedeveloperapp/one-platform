@@ -13,7 +13,7 @@ export const passengerModule: ModuleDefinition = {
   nameKey: "module-passenger",
   caseKinds: PASSENGER_CASE_KINDS,
   // What only this module has, in its area of the firm's app: its partner agencies, the portfolio a firm brings
-  // from the system it used before (a spreadsheet of air-passenger lawsuits) and the value each kind of problem asks.
+  // from the system it used before (a spreadsheet of air-passenger lawsuits) and the module's own settings.
   firmArea: [
     {
       id: "parceiros",
@@ -29,16 +29,26 @@ export const passengerModule: ModuleDefinition = {
       importers: true,
     },
     {
-      id: "configurar",
-      href: "/configurar/direito-do-passageiro",
+      id: "configuracoes",
+      href: "/settings/direito-do-passageiro",
       icon: "NiSettings",
-      labelKey: "module-area-setup",
+      labelKey: "module-area-settings",
+    },
+  ],
+  // The module's own settings, under its name in the settings menu: the values by kind of problem and the words of
+  // the clause its agencies register (one page), and the partner agencies.
+  firmSettings: [
+    {
+      id: "configuracoes",
+      href: "/settings/direito-do-passageiro",
+      icon: "NiSettings",
+      labelKey: "settings-module-settings",
     },
     {
-      id: "valor-da-causa",
-      href: "/settings/autonomia#valor-da-causa-pedido",
-      icon: "NiMoney",
-      labelKey: "module-area-claim-value",
+      id: "parceiros",
+      href: "/settings/parceiros",
+      icon: "NiBuilding",
+      labelKey: "settings-module-partners",
     },
   ],
   testChat: true,

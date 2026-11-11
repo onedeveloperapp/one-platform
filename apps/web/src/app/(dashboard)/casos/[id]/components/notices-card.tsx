@@ -124,7 +124,7 @@ export default function NoticesCard({
       }
       action={
         state.managesFirm ? (
-          <Button variant="outlined" color="grey" size="small" href="/settings/connections#avisos" LinkComponent={Link}>
+          <Button variant="outlined" color="grey" size="small" href="/settings/mensagens#avisos" LinkComponent={Link}>
             {t("case-notices-settings")}
           </Button>
         ) : null

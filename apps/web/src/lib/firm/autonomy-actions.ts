@@ -77,7 +77,7 @@ export async function setFirmClaimDefault(incident: string, cents: number | null
   }
   const answer = (data ?? {}) as { ok?: boolean; code?: string };
   if (!answer.ok) return { ok: false, code: String(answer.code ?? "failed") };
-  revalidatePath("/settings/autonomia");
+  revalidatePath("/settings/direito-do-passageiro");
   if (answer.code === "saved") await queueCaseAdvance(null);
   return { ok: true, code: String(answer.code ?? "saved") };
 }
@@ -107,7 +107,7 @@ export async function setFirmSigner(userId: string, signs: boolean): Promise<Aut
   }
   const answer = (data ?? {}) as { ok?: boolean; code?: string };
   if (!answer.ok) return { ok: false, code: String(answer.code ?? "failed") };
-  revalidatePath("/settings/autonomia");
+  revalidatePath("/settings/regras");
   // The cases that waited for somebody to sign are looked at now.
   if (answer.code === "saved") await queueCaseAdvance(null);
   return { ok: true, code: String(answer.code ?? "saved") };

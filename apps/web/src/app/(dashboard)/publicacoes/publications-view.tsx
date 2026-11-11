@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 
-import { Alert, Box, Button, Card, CardContent, Collapse, Grid, Typography } from "@mui/material";
+import { Alert, Box, Button, Collapse, Grid, Typography } from "@mui/material";
 
 import CollapsibleCard from "@/components/product/collapsible-card";
 import EmptyState from "@/components/product/empty-state";
@@ -32,14 +32,8 @@ import type { Colleague } from "@/lib/hearings/facts";
 import type { CourtZones } from "@/lib/hearings/hearings";
 import { type PageScope, scopeCrumbs } from "@/lib/modules/offer";
 import { countText } from "@/lib/numbers/compare";
-import {
-  readPublicationProgress,
-  requestPublicationsCapture,
-  searchPublications,
-  setFirmAiTriage,
-} from "@/lib/publications/actions";
+import { readPublicationProgress, requestPublicationsCapture, searchPublications } from "@/lib/publications/actions";
 import type {
-  AiTriage,
   CaptureRow,
   PublicationProgress,
   PublicationRow,
@@ -78,7 +72,6 @@ export type PublicationsState =
       /** This environment reads the DJEN. */
       captureOn: boolean;
       /** The person decides whether the AI's word may be the firm's triage: a partner, or, with none, who manages it. */
-      mayDecideAi: boolean;
       /** The acts a term is usually set for, for a deadline counted from a publication. */
       acts: DeadlineAct[];
       /** The firm's people, for who attends a hearing written from a publication. */
@@ -660,9 +653,21 @@ function PublicationsScreen({ state, onReadAgain }: { state: PublicationsState; 
             </Box>
           ) : null}
 
-          {/* How the firm lets the AI triage: a setting of the firm's, after the work of the day. */}
+          {/* How the firm lets ONE triage: said here, set in its one home, the decision of the triage (2026-11-11). */}
           {data.aiTriage.sampled.length > 0 ? (
-            <AiTriageCard aiTriage={data.aiTriage} mayDecide={ready.mayDecideAi} onChanged={onReadAgain} />
+            <Box className="flex flex-wrap items-center gap-2">
+              <StateLine tone={data.aiTriage.firmAllows ? "done" : "info"}>
+                {t(data.aiTriage.firmAllows ? "publications-ai-on-line" : "publications-ai-off-line")}
+              </StateLine>
+              <Button
+                variant="text"
+                size="small"
+                href="/settings/autonomia#triagem-das-publicacoes"
+                LinkComponent={Link}
+              >
+                {t("publications-ai-settings")}
+              </Button>
+            </Box>
           ) : null}
         </Box>
       ) : null}
@@ -882,78 +887,6 @@ function ReadingCard({
 }
 
 /** What each of the six answers means, said once for the whole list, where a keyboard and a finger reach it. */
-/**
- * What the AI's word is, in this firm: the categories the ONE classifies by
- * itself, with the share a person checks, and whether the firm lets it. A
- * partner turns it on or off; anybody else reads it.
- */
-function AiTriageCard({
-  aiTriage,
-  mayDecide,
-  onChanged,
-}: {
-  aiTriage: AiTriage;
-  mayDecide: boolean;
-  onChanged: () => void;
-}) {
-  const t = useTranslations("product");
-  const [pending, startTransition] = useTransition();
-  const [error, setError] = useState<string | null>(null);
-  const switchTo = (enabled: boolean) =>
-    startTransition(async () => {
-      setError(null);
-      try {
-        const result = await setFirmAiTriage(enabled);
-        if (!result.ok) {
-          setError(t(publicationErrorKey(result.code)));
-          return;
-        }
-        onChanged();
-      } catch {
-        setError(t("publication-error-failed"));
-      }
-    });
-  const categories = aiTriage.sampled
-    .map((policy) =>
-      t("publications-ai-share", { category: t(CATEGORY_KEY[policy.category]), share: policy.samplePercent }),
-    )
-    .join(", ");
-  return (
-    <Card component="section" aria-labelledby="publications-ai">
-      <CardContent className="flex flex-col gap-2">
-        <Typography id="publications-ai" variant="subtitle2" component="h2" className="mb-0">
-          {t("publications-ai-title")}
-        </Typography>
-        <Typography variant="body2" className="text-text-secondary">
-          {!aiTriage.firmAllows ? t("publications-ai-off") : t("publications-ai-body", { categories })}
-        </Typography>
-        {mayDecide ? (
-          <Box>
-            <Button
-              variant="outlined"
-              color="grey"
-              size="small"
-              disabled={pending}
-              onClick={() => switchTo(!aiTriage.firmAllows)}
-            >
-              {t(aiTriage.firmAllows ? "publications-ai-disallow" : "publications-ai-allow")}
-            </Button>
-          </Box>
-        ) : (
-          <Typography variant="body2" className="text-text-secondary">
-            {t("publications-ai-partner")}
-          </Typography>
-        )}
-        {error ? (
-          <Alert severity="error" className="neutral bg-background-paper/60!">
-            {error}
-          </Alert>
-        ) : null}
-      </CardContent>
-    </Card>
-  );
-}
-
 function CategoryLegend() {
   const t = useTranslations("product");
   const [open, setOpen] = useState(false);

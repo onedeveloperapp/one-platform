@@ -2,7 +2,15 @@ import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
-import { AUTONOMY_DECISIONS, autonomyErrorKey, DECISION_KEY, firmAutonomyOf, MODE_KEY } from "@/lib/firm/autonomy";
+import {
+  AUTONOMY_DECISIONS,
+  AUTONOMY_STAGES,
+  autonomyErrorKey,
+  DECISION_KEY,
+  decisionsByStage,
+  firmAutonomyOf,
+  MODE_KEY,
+} from "@/lib/firm/autonomy";
 import product from "@flyee/content/messages/pt-BR.json";
 
 const ROOT = path.resolve(process.cwd(), "..", "..");
@@ -83,5 +91,20 @@ describe("what a firm lets ONE decide alone", () => {
     for (const code of ["second_factor", "not_a_partner", "not_allowed_in_support_session", "invalid_mode", "x"]) {
       expect(words[autonomyErrorKey(code)], code).toBeTruthy();
     }
+    for (const stage of AUTONOMY_STAGES) expect(words[stage.title], stage.key).toBeTruthy();
+  });
+
+  it("puts every decision in exactly one stage of the case", () => {
+    const staged = AUTONOMY_STAGES.flatMap((stage) => stage.decisions);
+    expect([...staged].sort()).toEqual([...AUTONOMY_DECISIONS].sort());
+    expect(new Set(staged).size).toBe(staged.length);
+  });
+
+  it("groups the firm's decisions by stage, in the stage's order, leaving out a stage with none", () => {
+    const grouped = decisionsByStage([{ key: "close_case" }, { key: "reply_client" }, { key: "open_case_from_chat" }]);
+    expect(grouped.map((stage) => [stage.key, stage.decisions.map((decision) => decision.key)])).toEqual([
+      ["atendimento", ["reply_client", "open_case_from_chat"]],
+      ["resultado", ["close_case"]],
+    ]);
   });
 });

@@ -299,7 +299,7 @@ export default function CloudSignatureCard({
           <Button
             color="inherit"
             size="small"
-            href={`/auth/two-factor?next=${encodeURIComponent("/settings/team#team-cloud-signature")}`}
+            href={`/auth/two-factor?next=${encodeURIComponent(`${pathname}#team-cloud-signature`)}`}
             LinkComponent={Link}
           >
             {t("connections-second-factor-confirm")}

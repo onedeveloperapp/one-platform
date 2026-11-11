@@ -69,6 +69,12 @@ export type ModuleDefinition = {
    * module's colour, after the firm's core setup and before the home. None for a module with nothing to set up.
    */
   firmSetup?: string;
+  /**
+   * The module's own settings, which the settings menu lists under the module's name for a firm that contracted it:
+   * what only this module's cases read (the Valor da Causa Pedido by kind of problem, the partner agencies), never
+   * in the core's pages. None for a module with nothing of its own to set.
+   */
+  firmSettings?: readonly FirmAreaEntry[];
   /** What only the module has, which its area in the firm's app lists (0078). */
   firmArea: readonly FirmAreaEntry[];
   /** The test chat stands for this module's passenger: its area offers the chat while the firm has it on (0047). */
