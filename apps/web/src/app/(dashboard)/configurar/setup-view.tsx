@@ -30,9 +30,11 @@ import {
   Typography,
 } from "@mui/material";
 
+import OfficeForm from "@/components/firm/office-form";
 import PageHeader from "@/components/product/page-header";
 import SecondFactorPrompt from "@/components/product/second-factor-prompt";
 import SetupWizard, { type WizardStep } from "@/components/product/setup-wizard";
+import SidePanel from "@/components/product/side-panel";
 import StateLine from "@/components/product/state-line";
 import StatusChip from "@/components/product/status-chip";
 import { useEmailReady } from "@/components/product/use-email-ready";
@@ -42,6 +44,7 @@ import type { SecondFactorState } from "@/lib/ai/approvals";
 import { addOabRegistration, answerFirmSetup, inviteToFirm } from "@/lib/firm/actions";
 import { autonomyErrorKey } from "@/lib/firm/autonomy";
 import { setFirmSigner } from "@/lib/firm/autonomy-actions";
+import { type FirmOffice, officeAddressGiven } from "@/lib/firm/office";
 import { personFlowKey } from "@/lib/firm/person-setup";
 import { FIRM_FUNCTIONS, type FirmFunction, formatOab, OAB_STATES, type OabRegistration } from "@/lib/firm/roles";
 import { SETUP_STEPS, setupOpening, type SetupStepKey } from "@/lib/firm/setup-steps";
@@ -84,6 +87,8 @@ export type SetupState =
       papers: { procuracao: SetupPaper; contrato: SetupPaper } | null;
       /** What ONE does with the document the firm sent as each paper (0079), until it saved the firm's model. */
       paperImports: { procuracao: PaperImport | null; contrato: PaperImport | null };
+      /** Where the firm is, as the power of attorney says it (0217). */
+      office: FirmOffice;
       /** The firm's connections as their own screen reads them: the signature account, the test chat, the number. */
       connections: ConnectionsState;
       /**
@@ -206,6 +211,8 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
   // ---------- The second factor ----------
   // Confirmed here, before the page reads the session again: every step goes on from the same moment.
   const [confirmedHere, setConfirmedHere] = useState(false);
+  // Where the firm is opens over the step of the papers (0217): nothing leads away from the setup.
+  const [officeOpen, setOfficeOpen] = useState(false);
   const factor: SecondFactorState = confirmedHere ? "ok" : state.secondFactor;
   // What the database asks the factor for (who signs, the claims, an invitation, a connection) is past its step,
   // so nothing here waits for it; the guard stays for a session that lost it.
@@ -798,6 +805,28 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
                       </Typography>
                     </Box>
                   ) : null}
+                  {/* What the power of attorney says of the firm and its lawyers: the address and the e-mail the CPC
+                      asks of it (arts. 105 and 287), given here or in "Dados do escritório" (0217). */}
+                  {paper === "procuracao" ? (
+                    <Box className="flex flex-wrap items-center gap-2">
+                      <StateLine tone={officeAddressGiven(state.office) ? "done" : "attention"}>
+                        {t(
+                          officeAddressGiven(state.office)
+                            ? "setup-papers-office-given"
+                            : "setup-papers-office-missing",
+                        )}
+                      </StateLine>
+                      {!blocked ? (
+                        <Button variant="text" color="grey" size="small" onClick={() => setOfficeOpen(true)}>
+                          {t(
+                            officeAddressGiven(state.office)
+                              ? "setup-papers-office-change"
+                              : "setup-papers-office-open",
+                          )}
+                        </Button>
+                      ) : null}
+                    </Box>
+                  ) : null}
                   {request ? (
                     <PaperRequestLine
                       request={request}
@@ -990,6 +1019,23 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
             refresh();
           }}
         />
+      ) : null}
+      {officeOpen ? (
+        <SidePanel
+          onClose={() => setOfficeOpen(false)}
+          closeLabel={t("office-close")}
+          title={t("office-title")}
+          description={t("office-panel-subtitle")}
+        >
+          <OfficeForm
+            office={state.office}
+            disabled={blocked}
+            onSaved={() => {
+              setOfficeOpen(false);
+              refresh();
+            }}
+          />
+        </SidePanel>
       ) : null}
     </Box>
   );

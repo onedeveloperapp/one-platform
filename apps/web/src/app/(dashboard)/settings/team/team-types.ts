@@ -1,5 +1,6 @@
 import type { SecondFactorState } from "@/lib/ai/approvals";
 import type { CertificateKind, CourtSystemName } from "@/lib/cases/statements";
+import type { FirmOffice } from "@/lib/firm/office";
 import type { FirmFunction, InvitableRole, OabRegistration, OrgRole } from "@/lib/firm/roles";
 import type { AuthorizationState, SignatureOutcome } from "@/lib/psc/signature";
 
@@ -105,6 +106,8 @@ export type TeamInvitation = {
 
 export type TeamData = {
   firm: { id: string; name: string };
+  /** Where the firm is, as the power of attorney says it (0217); empty fields where it has none. */
+  office: FirmOffice;
   me: { userId: string; role: OrgRole; firmFunction: FirmFunction };
   people: TeamPerson[];
   invitations: TeamInvitation[];

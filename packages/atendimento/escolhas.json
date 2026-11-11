@@ -1,0 +1,48 @@
+{
+  "kit": "whatsapp-support",
+  "modelo": "por-cliente",
+  "marca": {
+    "nome": "ONE",
+    "cor_principal": "#1074C6",
+    "cor_principal_escuro": "#4CA6F0",
+    "fonte": { "familia": "Mulish", "css": "https://fonts.googleapis.com/css2?family=Mulish:wght@400;500;600;700&display=swap" },
+    "logo": "https://one-platform-two.vercel.app/brand/one-lockup-light.svg",
+    "logo_escuro": "https://one-platform-two.vercel.app/brand/one-lockup-dark.svg",
+    "icone": "https://one-platform-two.vercel.app/brand/one-mark.png",
+    "site": "https://one-platform-two.vercel.app",
+    "termos": null,
+    "privacidade": null,
+    "saida": "https://one-platform-two.vercel.app/inicio"
+  },
+  "chatwoot": {
+    "features_off": [
+      "campaigns",
+      "automations",
+      "help_center",
+      "companies",
+      "voice_recorder",
+      "channel_email",
+      "channel_facebook",
+      "channel_website",
+      "channel_instagram",
+      "channel_tiktok",
+      "inbound_emails"
+    ],
+    "esconder": [],
+    "moldura": false,
+    "resolver_apos_horas": 0
+  },
+  "acrescentar": {
+    "links": []
+  },
+  "robo": {
+    "nome": "ONE"
+  },
+  "conferencia": {
+    "telas": [
+      { "nome": "conversas", "caminho": "/app/accounts/{conta}/dashboard" },
+      { "nome": "contatos", "caminho": "/app/accounts/{conta}/contacts" },
+      { "nome": "perfil", "caminho": "/app/accounts/{conta}/profile/settings" }
+    ]
+  }
+}

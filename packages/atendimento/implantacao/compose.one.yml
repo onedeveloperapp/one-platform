@@ -1,0 +1,11 @@
+# O ONE na VPS dividida com o Orkestree: só o Chatwoot, o Postgres e o Redis. O robô do kit e o OpenWA
+# nunca sobem aqui: o ONE fala com a Meta pela API oficial e responde com a própria IA, e o Chatwoot é só o
+# painel da equipe (decisão do dono de 2026-11-09). Vai por cima de compose.yml e compose.compartilhado.yml
+# (COMPOSE_FILE no .env da pilha); o perfil abaixo não é ligado por ninguém.
+
+services:
+  robo:
+    profiles: ["fora-do-one"]
+
+  openwa:
+    profiles: ["fora-do-one"]

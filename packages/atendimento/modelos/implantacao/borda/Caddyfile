@@ -1,0 +1,8 @@
+# Kit whatsapp-support: o proxy da borda. Os domínios de cada pilha ficam em sites/<pilha>.caddy; este
+# arquivo só junta todos. Depois de pôr ou mudar um arquivo em sites/, recarregue o Caddy.
+
+{
+	email {$ACME_EMAIL}
+}
+
+import sites/*.caddy

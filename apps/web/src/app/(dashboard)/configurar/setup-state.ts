@@ -5,6 +5,7 @@ import { cookies } from "next/headers";
 
 import type { SecondFactorState } from "@/lib/ai/approvals";
 import { cloudSigningOffered } from "@/lib/cases/filing-facts";
+import { EMPTY_OFFICE, OFFICE_COLUMNS, officeOf } from "@/lib/firm/office";
 import { isManager, OAB_STATES, type OabRegistration } from "@/lib/firm/roles";
 import type { SetupStepKey } from "@/lib/firm/setup-steps";
 import { loadSetupPapers } from "@/lib/library/facts";
@@ -49,6 +50,7 @@ export async function loadSetupState(
     moduleSetups,
     declaredCpf,
     cloudSigning,
+    office,
   ] = await Promise.all([
     context.supabase.from("oab_registrations").select("id, uf, number, kind").eq("user_id", context.userId),
     context.supabase.from("firm_signers").select("user_id").eq("org_id", firm.id),
@@ -69,6 +71,8 @@ export async function loadSetupState(
     // that fails asks nothing: the team's card asks it when a lawsuit needs it.
     context.supabase.from("lawyer_cpfs").select("user_id").eq("user_id", context.userId).maybeSingle(),
     cloudSigningOffered(context.supabase).catch(() => false),
+    // Where the firm is, for the power of attorney (0217): read apart, so a read that fails leaves it empty.
+    context.supabase.from("organizations").select(OFFICE_COLUMNS).eq("id", firm.id).maybeSingle(),
   ]);
   if (registrations.error || signers.error || organization.error || !organization.data) return { kind: "error" };
 
@@ -97,6 +101,7 @@ export async function loadSetupState(
     isOwner: firm.role === "owner",
     papers,
     paperImports,
+    office: office.error ? EMPTY_OFFICE : officeOf(office.data),
     connections,
     nextSetup: (() => {
       const next = nextModuleSetup(moduleSetups);

@@ -12,6 +12,7 @@ import { cookies } from "next/headers";
 import { momentLabel, type SecondFactorState } from "@/lib/ai/approvals";
 import { isCertificateKind, isCourtSystemName } from "@/lib/cases/statements";
 import { momentWords, ownSignatureNeed, readFilingAttention } from "@/lib/firm/filing-attention";
+import { EMPTY_OFFICE, OFFICE_COLUMNS, officeOf } from "@/lib/firm/office";
 import {
   isFirmFunction,
   isInvitableRole,
@@ -247,7 +248,7 @@ export async function loadTeam(signatureOutcome: string | null, backToCase: stri
   const firm = context.firm;
   const manager = isManager(firm.role);
 
-  const [team, invitations, registrations, certificates] = await Promise.all([
+  const [team, invitations, registrations, certificates, office] = await Promise.all([
     context.supabase.rpc("firm_team", { target_org: firm.id }),
     manager
       ? context.supabase
@@ -271,6 +272,8 @@ export async function loadTeam(signatureOutcome: string | null, backToCase: stri
       .eq("org_id", firm.id)
       .eq("user_id", context.userId)
       .order("system"),
+    // Where the firm is, as the power of attorney says it (0217): a read that fails leaves the fields empty.
+    context.supabase.from("organizations").select(OFFICE_COLUMNS).eq("id", firm.id).maybeSingle(),
   ]);
   if (team.error || invitations.error || registrations.error || certificates.error) return { kind: "error" };
 
@@ -316,6 +319,7 @@ export async function loadTeam(signatureOutcome: string | null, backToCase: stri
   return {
     kind: "ready",
     firm: { id: firm.id, name: firm.name },
+    office: office.error ? EMPTY_OFFICE : officeOf(office.data),
     me: { userId: context.userId, role: firm.role, firmFunction: firm.firmFunction },
     people,
     invitations: open,

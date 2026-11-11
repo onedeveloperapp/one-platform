@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createHash, randomBytes } from "node:crypto";
 
 import { isCertificateKind, isCourtSystemName } from "@/lib/cases/statements";
+import { type FirmOffice, officePayload, officeProblem } from "@/lib/firm/office";
 import { type FirmFunction, type InvitableRole, isFirmFunction, isInvitableRole, OAB_STATES } from "@/lib/firm/roles";
 import { getMemberContext } from "@/lib/member/context";
 import { dateLabel, memberUrl } from "@/lib/messages/format";
@@ -59,6 +60,7 @@ const KNOWN_CODES = [
   "state_already_registered",
   "principal_already_registered",
   "registration_in_use",
+  "invalid_data",
 ] as const;
 
 function codeOf(message: string | null | undefined): string {
@@ -165,6 +167,27 @@ export async function renameFirm(name: string): Promise<FirmActionResult> {
   const { data, error } = await context.supabase.rpc("rename_firm", { target_org: context.firm.id, new_name: name });
   const result = fold(data, error);
   if (result.ok) refreshTeam();
+  return result.ok ? { ok: true, code: result.code } : result;
+}
+
+/**
+ * Says where the caller's firm is, its professional e-mail and its registration at the bar, as the power of attorney
+ * writes them (`set_firm_office`, migration 0217). Owner or admin (the database decides), on the record.
+ */
+export async function saveFirmOffice(office: FirmOffice): Promise<FirmActionResult> {
+  const context = await getMemberContext();
+  if (!context?.firm) return { ok: false, code: "not_authorized" };
+  if (officeProblem(office)) return { ok: false, code: "invalid_data" };
+
+  const { data, error } = await context.supabase.rpc("set_firm_office", {
+    target_org: context.firm.id,
+    payload: officePayload(office),
+  });
+  const result = fold(data, error);
+  if (result.ok) {
+    refreshTeam();
+    revalidatePath("/configurar");
+  }
   return result.ok ? { ok: true, code: result.code } : result;
 }
 

@@ -1,0 +1,25 @@
+# O painel de atendimento do ONE atrás do proxy da borda, na VPS dividida com o Orkestree.
+# Vai para sites/one.caddy na pasta da borda (/opt/atendimento/borda), que não é de nenhum dos dois sistemas.
+# O endereço vem do ambiente do proxy da borda (borda.env): ONE_ATENDIMENTO_HOST. O nome one-chatwoot vem de
+# compose.compartilhado.yml com PILHA=one, na rede borda-one.
+# Feito a partir de modelos/implantacao/borda/sites/pilha.caddy.exemplo do kit whatsapp-support 1.0.0, sem o
+# robô e sem o OpenWA: os avisos do Chatwoot vão direto ao ONE, por endereço público e assinado.
+
+{$ONE_ATENDIMENTO_HOST} {
+	encode gzip
+
+	# A página de instalação do Chatwoot cria o super administrador para quem chegar primeiro. Ela só abre
+	# dos endereços de ONE_INSTALACAO_IPS (o do operador, só no borda.env da VPS); sem a variável, não abre
+	# para ninguém. Depois de criado o super administrador, a variável sai do borda.env.
+	@instalacao {
+		path /installation /installation/*
+		not remote_ip {$ONE_INSTALACAO_IPS:127.0.0.1/32}
+	}
+	handle @instalacao {
+		respond 404
+	}
+
+	handle {
+		reverse_proxy one-chatwoot:3000
+	}
+}

@@ -10,6 +10,7 @@ import CloudSignatureCard from "./cloud-signature-card";
 import FirmCard from "./firm-card";
 import InvitePanel from "./invite-panel";
 import OabCard from "./oab-card";
+import OfficeCard from "./office-card";
 import TeamRoster from "./team-roster";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -244,6 +245,7 @@ export default function TeamView({ state, part }: { state: TeamState; part: Team
         {ready && part === "firm" && (
           <>
             {manager ? <FirmCard data={ready} onChanged={refresh} /> : null}
+            {manager ? <OfficeCard data={ready} onChanged={refresh} /> : null}
             <WeeklyDigestCard />
             <SupportAccessCard />
           </>
