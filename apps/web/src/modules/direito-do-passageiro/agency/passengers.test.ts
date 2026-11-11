@@ -29,13 +29,26 @@ describe("what the agency's screens read", () => {
     expect(
       paxOverviewOf({
         travelers: 3,
+        contacts: 1,
+        leads: 1,
+        with_firm: 1,
         adults_waiting: 1,
         missing_identity: 2,
         upcoming: 0,
         watched: 1,
         consent_term: null,
       }),
-    ).toEqual({ travelers: 3, adultsWaiting: 1, missingIdentity: 2, upcoming: 0, watched: 1, consentTerm: null });
+    ).toEqual({
+      travelers: 3,
+      contacts: 1,
+      leads: 1,
+      withFirm: 1,
+      adultsWaiting: 1,
+      missingIdentity: 2,
+      upcoming: 0,
+      watched: 1,
+      consentTerm: null,
+    });
     expect(paxOverviewOf({ consent_term: 2 }).consentTerm).toBe(2);
     expect(paxOverviewOf(null).travelers).toBe(0);
   });
@@ -51,6 +64,7 @@ describe("what the agency's screens read", () => {
           minor: false,
           consent: "agreed",
           reagree: "phone_changed",
+          stage: "contact",
           kinds: ["identity", "passport"],
           reading: true,
           next_departure: "2026-11-03T14:30:00",
@@ -65,11 +79,17 @@ describe("what the agency's screens read", () => {
       id: "t1",
       consent: "agreed",
       reagree: "phone_changed",
+      stage: "contact",
       kinds: ["identity"],
       reading: true,
       handedOver: false,
       minor: false,
     });
+    // A stage the database did not say, or does not know, is a contact (0194).
+    expect(paxPageOf({ rows: [{ id: "t3", full_name: "Rui Teste", stage: "cliente" }] }).rows[0]?.stage).toBe(
+      "contact",
+    );
+    expect(paxPageOf({ rows: [{ id: "t4", full_name: "Lara Teste", stage: "firm" }] }).rows[0]?.stage).toBe("firm");
   });
 
   it("reads a passenger whole: record, documents, trips, answers and link", () => {

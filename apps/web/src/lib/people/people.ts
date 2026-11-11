@@ -6,10 +6,14 @@ import { cpfMiddle } from "@/lib/search/global-search";
  */
 
 /** The views of the cards of numbers above the list. */
-export const PEOPLE_CARD_VIEWS = ["todos", "ativos", "sem-caso-ativo", "sem-marketing"] as const;
-/** The funnel (0148): where each person stands, the furthest point any of their opportunities reached. */
-export const FUNNEL_VIEWS = ["leads", "clientes", "nao-qualificados", "contatos"] as const;
-export const PEOPLE_VIEWS = [...PEOPLE_CARD_VIEWS, ...FUNNEL_VIEWS] as const;
+export const PEOPLE_LIST_VIEWS = ["todos", "ativos", "sem-caso-ativo", "sem-marketing"] as const;
+/**
+ * The funnel (0148): where each person stands, the furthest point any of their opportunities reached, in its order. The
+ * cards of Pessoas are the funnel (the owner, 2026-11-11): a person enters as a contact and moves by what happens.
+ */
+export const FUNNEL_VIEWS = ["contatos", "leads", "clientes", "nao-qualificados"] as const;
+export const PEOPLE_CARD_VIEWS = FUNNEL_VIEWS;
+export const PEOPLE_VIEWS = [...PEOPLE_LIST_VIEWS, ...FUNNEL_VIEWS] as const;
 export const isFunnelView = (value: unknown): value is (typeof FUNNEL_VIEWS)[number] =>
   (FUNNEL_VIEWS as readonly unknown[]).includes(value);
 export type PeopleView = (typeof PEOPLE_VIEWS)[number];

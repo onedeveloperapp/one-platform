@@ -9,24 +9,23 @@ import { Box, Button, Divider, ListSubheader, Menu, MenuItem } from "@mui/materi
 import AddPanel, { type AddKind } from "@/components/layout/add/add-panel";
 import FinanceAddPanel, { type FinanceAddKind } from "@/components/layout/add/finance-add-panel";
 import { useViewer } from "@/components/layout/viewer-context";
-import { passengerPanelsOf } from "@/components/people/module-people";
+import NewPersonPanel from "@/components/people/new-person-panel";
 import { TILE_TONE, type TileTone } from "@/components/product/tile-tone";
 import NiArrowLeftRight from "@/icons/nexture/ni-arrow-left-right";
 import NiCalendar from "@/icons/nexture/ni-calendar";
 import NiCalendarClock from "@/icons/nexture/ni-calendar-clock";
 import NiChevronDownSmall from "@/icons/nexture/ni-chevron-down-small";
-import NiLuggage from "@/icons/nexture/ni-luggage";
 import NiMoney from "@/icons/nexture/ni-money";
 import NiPlus from "@/icons/nexture/ni-plus";
+import NiUserPlus from "@/icons/nexture/ni-user-plus";
 import NiWallet from "@/icons/nexture/ni-wallet";
 import type { MenuViewer } from "@/lib/firm/menu";
 import type { FirmFunction } from "@/lib/firm/roles";
 import { isSetupPath } from "@/lib/search/global-search";
 import { cn } from "@/lib/utils";
 
-/** A module's passenger the firm registers itself (0170): `passenger:<module>`. */
-type PassengerKind = `passenger:${string}`;
-type MenuKind = AddKind | FinanceAddKind | PassengerKind;
+/** A person the firm registers itself, whatever its modules (2026-11-11). */
+type MenuKind = AddKind | FinanceAddKind | "person";
 type AddEntry = {
   kind: MenuKind;
   label: string;
@@ -43,8 +42,8 @@ const DEADLINE_WRITERS: readonly FirmFunction[] = ["socio", "advogado", "control
 
 /**
  * What may be added from the top, by group, as the drawings of 2026-11-07 group it: the cases', and the books' (Nova
- * receita, Nova despesa, Transferência, 0127) for who writes in them, and the people: each module's passenger the firm
- * registers itself (Novo passageiro, 0170), to anybody of the firm.
+ * receita, Nova despesa, Transferência, 0127) for who writes in them, and the people: "Nova pessoa", the core's, to
+ * anybody of the firm, each module's step offered after it (2026-11-11).
  */
 const GROUPS: readonly AddGroup[] = [
   {
@@ -109,7 +108,6 @@ export default function AddMenu() {
   const viewer = useViewer();
   const pathname = usePathname();
   const router = useRouter();
-  const passengers = passengerPanelsOf(viewer?.modules);
   const menuId = useId();
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   // What was picked waits for the menu to finish closing, which gives the focus back to the button: then the panel
@@ -120,13 +118,15 @@ export default function AddMenu() {
   const peopleGroup: AddGroup = {
     key: "people",
     label: "add-group-people",
-    entries: passengers.map((panel) => ({
-      kind: `passenger:${panel.key}` as PassengerKind,
-      label: panel.label,
-      icon: <NiLuggage size="small" />,
-      tone: "secondary" as TileTone,
-      allowed: () => true,
-    })),
+    entries: [
+      {
+        kind: "person",
+        label: "people-new",
+        icon: <NiUserPlus size="small" />,
+        tone: "primary" as TileTone,
+        allowed: () => true,
+      },
+    ],
   };
   const groups = [GROUPS[0], peopleGroup, ...GROUPS.slice(1)]
     .map((group) => ({
@@ -224,20 +224,18 @@ export default function AddMenu() {
           </Fragment>
         ))}
       </Menu>
-      {adding?.startsWith("passenger:") ? (
-        (() => {
-          const Panel = passengers.find((panel) => adding === `passenger:${panel.key}`)?.Panel;
-          return Panel ? (
-            <Panel
-              key={adding}
-              onClose={() => setAdding(null)}
-              onDone={(personId) => {
-                setAdding(null);
-                router.push(`/pessoas/${personId}`);
-              }}
-            />
-          ) : null;
-        })()
+      {adding === "person" ? (
+        <NewPersonPanel
+          modules={viewer?.modules}
+          onClose={(personId) => {
+            setAdding(null);
+            if (personId) router.refresh();
+          }}
+          onDone={(personId) => {
+            setAdding(null);
+            router.push(`/pessoas/${personId}`);
+          }}
+        />
       ) : adding && FINANCE_KINDS.includes(adding) ? (
         <FinanceAddPanel key={adding} kind={adding as FinanceAddKind} onClose={() => setAdding(null)} />
       ) : adding ? (

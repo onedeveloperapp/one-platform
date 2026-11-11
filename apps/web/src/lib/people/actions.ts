@@ -155,3 +155,37 @@ export async function exportSegment(
   const rows = Array.isArray(answer.answer.rows) ? (answer.answer.rows as Record<string, unknown>[]) : [];
   return { ok: true, columns: wanted, rows };
 }
+
+/**
+ * A person the firm registers itself, whatever its modules (the owner, 2026-11-11: "Nova pessoa"): through the
+ * database's own function, which refuses a support visit and keeps it on the record. A CPF the firm has answers that
+ * person, never a second one. The person starts as a contact; their point in the funnel moves by what happens.
+ */
+export async function createFirmPerson(
+  fields: Record<string, string | null>,
+): Promise<
+  { ok: true; personId: string } | { ok: false; code: string; field: string | null; personId: string | null }
+> {
+  const context = await getMemberContext();
+  if (!context?.firm) return { ok: false, code: "failed", field: null, personId: null };
+  const { data, error } = await context.supabase.rpc("firm_save_person", {
+    target_org: context.firm.id,
+    target_fields: fields ?? {},
+  });
+  if (error) {
+    const support = String(error.message ?? "").includes("not_allowed_in_support_session");
+    return { ok: false, code: support ? "support_visit" : "failed", field: null, personId: null };
+  }
+  const answer = (data ?? {}) as { ok?: boolean; code?: string; field?: string; person_id?: string };
+  const personId = typeof answer.person_id === "string" && UUID.test(answer.person_id) ? answer.person_id : null;
+  if (answer.ok !== true || !personId) {
+    return {
+      ok: false,
+      code: typeof answer.code === "string" ? answer.code : "failed",
+      field: typeof answer.field === "string" ? answer.field : null,
+      personId,
+    };
+  }
+  revalidatePath("/pessoas");
+  return { ok: true, personId };
+}

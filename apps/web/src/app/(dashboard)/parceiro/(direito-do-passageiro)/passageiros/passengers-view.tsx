@@ -17,7 +17,8 @@ import StatusChip from "@/components/product/status-chip";
 import NiDocumentCross from "@/icons/nexture/ni-document-cross";
 import NiLuggage from "@/icons/nexture/ni-luggage";
 import NiPlane from "@/icons/nexture/ni-plane";
-import NiUserCross from "@/icons/nexture/ni-user-cross";
+import NiUser from "@/icons/nexture/ni-user";
+import NiUserCheck from "@/icons/nexture/ni-user-check";
 import NiUsers from "@/icons/nexture/ni-users";
 import { listPassengers } from "@/modules/direito-do-passageiro/agency/actions";
 import { PASSENGER_JOURNEY, passengerStanding, TRIP_STEP_KEY } from "@/modules/direito-do-passageiro/agency/journey";
@@ -33,6 +34,8 @@ import {
   type PaxPage,
   type PaxRow,
   REAGREE_CHIP_KEY,
+  STAGE_KEY,
+  STAGE_TONE,
 } from "@/modules/direito-do-passageiro/agency/passengers";
 import { formatCpf } from "@flyee/fields";
 
@@ -48,15 +51,19 @@ export type PassengersData = {
 
 const FILTER_HINT: Record<PaxFilter, string> = {
   all: "pax-filter-all-hint",
+  contact: "pax-filter-contact-hint",
+  lead: "pax-filter-lead-hint",
+  firm: "pax-filter-firm-hint",
   waiting_consent: "pax-filter-waiting-consent-hint",
   missing_identity: "pax-filter-missing-identity-hint",
   upcoming: "pax-filter-upcoming-hint",
 };
 
 /**
- * The agency's list of passengers. Who works at a travel agency comes here to see who still has to agree on the
- * link, who lacks a document and who flies soon, and to add passengers one by one or from a spreadsheet. The
- * counts above the list are filters; the search travels in a server action, never in the address.
+ * The agency's people (the owner, 2026-11-11: "Pessoas" and "Nova pessoa", as in the firm). Who works at a travel
+ * agency comes here to see where each person stands in the funnel (a contact, a lead who agreed to be followed, with
+ * the firm), who flies soon and who lacks a document, and to add people one by one or from a spreadsheet. The counts
+ * above the list are filters; the search travels in a server action, never in the address.
  */
 export default function PassengersView({ data }: { data: PassengersData | null }) {
   const t = useTranslations("product");
@@ -134,22 +141,19 @@ export default function PassengersView({ data }: { data: PassengersData | null }
     filter: PaxFilter;
     value: number | null;
     icon: React.ReactNode;
-    tone: "primary" | "accent-3" | "accent-2" | "accent-4";
+    tone: "primary" | "secondary" | "accent-3" | "accent-2" | "accent-4";
   }[] = [
-    { filter: "all", value: overview?.travelers ?? null, icon: <NiUsers size="large" />, tone: "primary" },
-    {
-      filter: "waiting_consent",
-      value: overview?.adultsWaiting ?? null,
-      icon: <NiUserCross size="large" />,
-      tone: "accent-3",
-    },
+    // The funnel first, in its order (0194), then who flies soon and who lacks a document.
+    { filter: "contact", value: overview?.contacts ?? null, icon: <NiUser size="large" />, tone: "accent-4" },
+    { filter: "lead", value: overview?.leads ?? null, icon: <NiUsers size="large" />, tone: "primary" },
+    { filter: "firm", value: overview?.withFirm ?? null, icon: <NiUserCheck size="large" />, tone: "secondary" },
+    { filter: "upcoming", value: overview?.upcoming ?? null, icon: <NiPlane size="large" />, tone: "accent-2" },
     {
       filter: "missing_identity",
       value: overview?.missingIdentity ?? null,
       icon: <NiDocumentCross size="large" />,
-      tone: "accent-2",
+      tone: "accent-3",
     },
-    { filter: "upcoming", value: overview?.upcoming ?? null, icon: <NiPlane size="large" />, tone: "accent-4" },
   ];
 
   // Nobody at all is read from the whole list itself, which keeps a passenger whose case the firm opened: a count of
@@ -208,7 +212,7 @@ export default function PassengersView({ data }: { data: PassengersData | null }
         <>
           <Grid size={12} container spacing={2.5}>
             {tiles.map((tile) => (
-              <Grid key={tile.filter} size={{ xs: 6, lg: 3 }}>
+              <Grid key={tile.filter} size={{ xs: 6, lg: "grow" }}>
                 <StatTile
                   onClick={() => choose(tile.filter)}
                   pressed={filter === tile.filter}
@@ -401,16 +405,15 @@ function PassengerRow({ row }: { row: PaxRow }) {
           </Box>
         </Box>
         <Box className="flex flex-wrap gap-1.5">
+          {/* Where they stand in the funnel first (0194); then what holds a contact, and what the row carries. */}
+          <StatusChip label={t(STAGE_KEY[row.stage])} tone={STAGE_TONE[row.stage]} />
+          {progress.reagree ? (
+            <StatusChip label={t(REAGREE_CHIP_KEY)} tone="attention" />
+          ) : row.stage === "contact" && consent !== "none" ? (
+            <StatusChip label={t(CONSENT_KEY[consent])} tone={CONSENT_TONE[consent]} />
+          ) : null}
           {row.minor && <StatusChip label={t("pax-row-minor")} tone="info" />}
           {row.reading && <StatusChip label={t("pax-row-reading")} tone="neutral" />}
-          {progress.withFirm ? (
-            <StatusChip label={t("pax-row-handed-over")} tone="primary" />
-          ) : progress.reagree ? (
-            <StatusChip label={t(REAGREE_CHIP_KEY)} tone="attention" />
-          ) : (
-            <StatusChip label={t(CONSENT_KEY[consent])} tone={CONSENT_TONE[consent]} />
-          )}
-          {progress.hadCase && <StatusChip label={t("pax-row-had-case")} tone="primary" />}
         </Box>
       </Link>
     </Box>

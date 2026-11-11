@@ -28,7 +28,23 @@ export type TripState = (typeof TRIP_STATES)[number];
 export const READING_STATES = ["pending", "working", "done", "failed"] as const;
 export type ReadingState = (typeof READING_STATES)[number];
 
-export const PAX_FILTERS = ["all", "waiting_consent", "missing_identity", "upcoming"] as const;
+/**
+ * Where an agency's passenger stands in the funnel (migration 0194, `pax_stage`), the same funnel as the firm's seen by
+ * the agency (the owner, 2026-11-11): a contact, a lead (their agreement to be followed is in force), or with the firm
+ * (a trip of theirs became a case; the agency is never told whether they signed).
+ */
+export const PAX_STAGES = ["contact", "lead", "firm"] as const;
+export type PaxStage = (typeof PAX_STAGES)[number];
+
+export const PAX_FILTERS = [
+  "all",
+  "contact",
+  "lead",
+  "firm",
+  "upcoming",
+  "missing_identity",
+  "waiting_consent",
+] as const;
 export type PaxFilter = (typeof PAX_FILTERS)[number];
 
 /** How many passengers a page of the list holds. */
@@ -62,6 +78,10 @@ export type Reagree = (typeof REAGREE_REASONS)[number];
 
 export type PaxOverview = {
   travelers: number;
+  /** How many of them are at each stage of the funnel (0194). */
+  contacts: number;
+  leads: number;
+  withFirm: number;
   adultsWaiting: number;
   missingIdentity: number;
   upcoming: number;
@@ -84,6 +104,8 @@ export type PaxRow = {
   reagree: Reagree | null;
   nextDeparture: string | null;
   handedOver: boolean;
+  /** Where they stand in the funnel (0194); a contact where the database did not say. */
+  stage: PaxStage;
   kinds: PaxDocumentKind[];
   reading: boolean;
 };
@@ -195,6 +217,9 @@ export function paxOverviewOf(raw: unknown): PaxOverview {
   const row = record(raw);
   return {
     travelers: whole(row.travelers),
+    contacts: whole(row.contacts),
+    leads: whole(row.leads),
+    withFirm: whole(row.with_firm),
     adultsWaiting: whole(row.adults_waiting),
     missingIdentity: whole(row.missing_identity),
     upcoming: whole(row.upcoming),
@@ -223,6 +248,7 @@ export function paxPageOf(raw: unknown): PaxPage {
         reagree: oneOf(REAGREE_REASONS, row.reagree),
         nextDeparture: text(row.next_departure),
         handedOver: text(row.handed_over_at) !== null,
+        stage: oneOf(PAX_STAGES, row.stage) ?? "contact",
         kinds: list(row.kinds).flatMap((kind) => oneOf(PAX_DOCUMENT_KINDS, kind) ?? []),
         reading: row.reading === true,
       },
@@ -530,9 +556,24 @@ export const READING_KEY: Record<ReadingState, string> = {
 
 export const FILTER_KEY: Record<PaxFilter, string> = {
   all: "pax-filter-all",
+  contact: "pax-filter-contact",
+  lead: "pax-filter-lead",
+  firm: "pax-filter-firm",
   waiting_consent: "pax-filter-waiting-consent",
   missing_identity: "pax-filter-missing-identity",
   upcoming: "pax-filter-upcoming",
+};
+
+/** The words and the tone of each stage of the funnel, as a row's chip says it (0194). */
+export const STAGE_KEY: Record<PaxStage, string> = {
+  contact: "pax-stage-contact",
+  lead: "pax-stage-lead",
+  firm: "pax-stage-firm",
+};
+export const STAGE_TONE: Record<PaxStage, "neutral" | "info" | "positive"> = {
+  contact: "neutral",
+  lead: "info",
+  firm: "positive",
 };
 
 /** The words of a refusal of the agency's functions, of the passenger's link, or of an upload. */

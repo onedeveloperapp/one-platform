@@ -86,23 +86,27 @@ export type ModuleDefinition = {
    */
   partnerHome?: () => Promise<{ default: ComponentType }>;
   /**
-   * The passenger the firm registers itself (0170), from Pessoas and from "Adicionar": the module's panel, loaded when
-   * it opens, which starts from the documents and has ONE follow the trip. None for a module with no such passenger.
+   * What the module does with a person the firm just registered (the owner, 2026-11-11): the core registers anybody as
+   * "Nova pessoa", whatever the modules, and then offers each module's step ("Acompanhar uma viagem"), loaded when it
+   * opens. None for a module with nothing to do with a new person.
    */
-  firmPassenger?: {
-    /** The words of its entry ("Novo passageiro"), a key of the product's messages. */
+  personStep?: {
+    /** The words of the step ("Acompanhar uma viagem") and of what it does, keys of the product's messages. */
     label: string;
-    panel: () => Promise<{ default: ComponentType<FirmPassengerPanelProps> }>;
+    description: string;
+    panel: () => Promise<{ default: ComponentType<PersonStepPanelProps> }>;
   };
   /** What the module shows on a person's page (the trips ONE follows of them, 0170), loaded when it is shown. */
   personSection?: () => Promise<{ default: ComponentType<{ personId: string; personName: string }> }>;
 };
 
-/** What the core hands the module's panel of a passenger the firm registers (`firmPassenger`). */
-export type FirmPassengerPanelProps = {
-  /** A person of the firm already: only their trip is asked. */
+/** What the core hands a module's step for a person of the firm (`personStep`). */
+export type PersonStepPanelProps = {
+  /** A person of the firm already: only what the module needs is asked. */
   personId?: string | null;
   personName?: string | null;
+  /** The documents the core read the person from, for the module to keep with what it does (the identity). */
+  documents?: readonly { fileId: string; kind: string }[];
   onClose: () => void;
   /** The person the trip is of, once ONE follows it. */
   onDone: (personId: string) => void;

@@ -21,7 +21,7 @@ import NiTicket from "@/icons/nexture/ni-ticket";
 import { documentReadingOf, prefillErrorKey } from "@/lib/cases/document-prefill";
 import { type PersonField, personFields, type PersonValues, personValues } from "@/lib/cases/forms";
 import { dropUnsaved, sendForReading } from "@/lib/cases/prefill-browser";
-import type { FirmPassengerPanelProps } from "@/lib/modules/types";
+import type { PersonStepPanelProps } from "@/lib/modules/types";
 import { passengerConsentWords, registerPassenger } from "@/modules/direito-do-passageiro/passengers/actions";
 import {
   AGREEMENT_HOW_KEY,
@@ -61,9 +61,10 @@ const todayInBrazil = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Americ
 export default function NewPassengerPanel({
   personId = null,
   personName = null,
+  documents: carried = [],
   onClose,
   onDone,
-}: FirmPassengerPanelProps) {
+}: PersonStepPanelProps) {
   const t = useTranslations("product");
   const known = Boolean(personId);
   const slots: readonly DocSlot[] = known ? ["ticket"] : ["identity", "ticket"];
@@ -180,9 +181,13 @@ export default function NewPassengerPanel({
     }
     setBusy(true);
     setProblem(null);
-    const documents = slots
-      .map((slot) => ({ fileId: docs[slot]?.fileId ?? null, kind: slot }))
-      .filter((item): item is { fileId: string; kind: DocSlot } => Boolean(item.fileId));
+    // The documents the core read the person from (the identity) go with the trip too, into the case its yes opens.
+    const documents = [
+      ...carried,
+      ...slots
+        .map((slot) => ({ fileId: docs[slot]?.fileId ?? null, kind: slot }))
+        .filter((item): item is { fileId: string; kind: DocSlot } => Boolean(item.fileId)),
+    ];
     const result = await registerPassenger({
       personId: personId ?? saved,
       person: known || saved ? undefined : personFields(person, FIELDS),

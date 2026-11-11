@@ -9,7 +9,7 @@ import { useEffect, useRef, useState } from "react";
 import { Alert, Box, Button, Card, CardContent, Grid, Typography } from "@mui/material";
 
 import { useViewer } from "@/components/layout/viewer-context";
-import { passengerPanelsOf } from "@/components/people/module-people";
+import NewPersonPanel from "@/components/people/new-person-panel";
 import CardTitle from "@/components/product/card-title";
 import EmptyState from "@/components/product/empty-state";
 import ListBar from "@/components/product/list-bar";
@@ -19,9 +19,10 @@ import PageHeader from "@/components/product/page-header";
 import StatusChip from "@/components/product/status-chip";
 import IllustrationSupport from "@/icons/illustrations/illustration-support";
 import NiChartBar from "@/icons/nexture/ni-chart-bar";
-import NiCheckSquare from "@/icons/nexture/ni-check-square";
 import NiChevronRightSmall from "@/icons/nexture/ni-chevron-right-small";
-import NiCrossSquare from "@/icons/nexture/ni-cross-square";
+import NiUser from "@/icons/nexture/ni-user";
+import NiUserCheck from "@/icons/nexture/ni-user-check";
+import NiUserCross from "@/icons/nexture/ni-user-cross";
 import NiUsers from "@/icons/nexture/ni-users";
 import { REASON_KEY } from "@/lib/cases/qualification";
 import { caseKindLabelKey } from "@/lib/modules/registry";
@@ -67,14 +68,15 @@ const POINT_TONE: Record<FunnelPoint, "positive" | "info" | "attention" | "neutr
   contato: "neutral",
 };
 
+// The cards are the funnel, in its order (the owner, 2026-11-11).
 const VIEW_LOOK: Record<
   (typeof PEOPLE_CARD_VIEWS)[number],
   { tone: "primary" | "secondary" | "accent-3" | "accent-4"; icon: React.ReactNode }
 > = {
-  todos: { tone: "primary", icon: <NiUsers size="medium" /> },
-  ativos: { tone: "secondary", icon: <NiCheckSquare size="medium" /> },
-  "sem-caso-ativo": { tone: "accent-4", icon: <NiChartBar size="medium" /> },
-  "sem-marketing": { tone: "accent-3", icon: <NiCrossSquare size="medium" /> },
+  contatos: { tone: "accent-4", icon: <NiUser size="medium" /> },
+  leads: { tone: "primary", icon: <NiUsers size="medium" /> },
+  clientes: { tone: "secondary", icon: <NiUserCheck size="medium" /> },
+  "nao-qualificados": { tone: "accent-3", icon: <NiUserCross size="medium" /> },
 };
 
 /**
@@ -87,10 +89,8 @@ export default function PeopleView({ state }: { state: PeopleState }) {
   const router = useRouter();
   const viewer = useViewer();
   const ready = state.kind === "ready" ? state : null;
-  // 0170: a passenger the firm registers itself, from each module the firm works in that has one.
-  const panels = passengerPanelsOf(viewer?.modules);
-  const [adding, setAdding] = useState<string | null>(null);
-  const Adding = panels.find((panel) => panel.key === adding)?.Panel ?? null;
+  // "Nova pessoa", whatever the modules: the core registers, and each module offers its step after (2026-11-11).
+  const [adding, setAdding] = useState(false);
   const [search, setSearch] = useState("");
   const [shown, setShown] = useState<PeoplePage | null>(ready?.page ?? null);
   const [more, setMore] = useState(0);
@@ -174,17 +174,9 @@ export default function PeopleView({ state }: { state: PeopleState }) {
                   icon={VIEW_LOOK[key].icon}
                   tone={VIEW_LOOK[key].tone}
                   label={t(PEOPLE_VIEW_KEY[key])}
-                  value={String(
-                    key === "todos"
-                      ? numbers.registered
-                      : key === "ativos"
-                        ? numbers.active
-                        : key === "sem-caso-ativo"
-                          ? numbers.inactive
-                          : numbers.marketingOff,
-                  )}
+                  value={String(ready.page.counts[key] ?? 0)}
                   pressed={view === key}
-                  onClick={() => router.push(key === "todos" ? "/pessoas" : `/pessoas?ver=${key}`)}
+                  onClick={() => router.push(view === key ? "/pessoas" : `/pessoas?ver=${key}`)}
                 />
               </Grid>
             ))}
@@ -242,20 +234,7 @@ export default function PeopleView({ state }: { state: PeopleState }) {
             }))}
             view={view}
             onView={(key) => router.push(key === "todos" ? "/pessoas" : `/pessoas?ver=${key}`)}
-            create={
-              panels.length === 0
-                ? undefined
-                : panels.length === 1
-                  ? { label: t(panels[0].label), onClick: () => setAdding(panels[0].key) }
-                  : {
-                      label: t("people-new"),
-                      actions: panels.map((panel) => ({
-                        key: panel.key,
-                        label: t(panel.label),
-                        onClick: () => setAdding(panel.key),
-                      })),
-                    }
-            }
+            create={{ label: t("people-new"), onClick: () => setAdding(true) }}
             search={{
               label: t("list-bar-search"),
               placeholder: t("people-search-placeholder"),
@@ -348,11 +327,15 @@ export default function PeopleView({ state }: { state: PeopleState }) {
           <SegmentsCard segments={ready.segments} term={ready.term} factor={ready.factor} numbers={numbers} />
         </>
       ) : null}
-      {Adding ? (
-        <Adding
-          onClose={() => setAdding(null)}
+      {adding ? (
+        <NewPersonPanel
+          modules={viewer?.modules}
+          onClose={(personId) => {
+            setAdding(false);
+            if (personId) router.refresh();
+          }}
           onDone={(personId) => {
-            setAdding(null);
+            setAdding(false);
             router.push(`/pessoas/${personId}`);
           }}
         />

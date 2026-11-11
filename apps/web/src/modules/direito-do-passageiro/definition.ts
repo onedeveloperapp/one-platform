@@ -58,9 +58,13 @@ export const passengerModule: ModuleDefinition = {
   // On the agency's home, its passengers in progress, each with where they are along their way, and their flights as
   // they happen, once each agreed (0084).
   partnerHome: () => import("./agency/partner-home-section"),
-  // The firm's own passengers (0170): registered from their documents, their trip followed as an agency's passenger's
-  // is; and on a person's page, the trips ONE follows of them.
-  firmPassenger: { label: "passenger-new", panel: () => import("./passengers/new-passenger-panel") },
+  // What this module does with a person the firm registered (0170; "Nova pessoa" is the core's since 2026-11-11):
+  // ONE follows a trip of theirs, as an agency's passenger's is; and on a person's page, the trips ONE follows.
+  personStep: {
+    label: "passenger-step-trip",
+    description: "passenger-step-trip-body",
+    panel: () => import("./passengers/new-passenger-panel"),
+  },
   personSection: () => import("./passengers/person-trips"),
   // What a firm sets up of this module, after the core and before the home (0081): the Valor da Causa Pedido of the
   // air-passenger problems, the words of the clause its agencies register, and the partner agency.
@@ -69,7 +73,7 @@ export const passengerModule: ModuleDefinition = {
     {
       id: "parceiro-passageiros",
       href: "/parceiro/passageiros",
-      icon: "NiLuggage",
+      icon: "NiUsers",
       labelKey: "menu-parceiro-passageiros",
       descriptionKey: "menu-parceiro-passageiros-description",
     },
