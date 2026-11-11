@@ -82,9 +82,14 @@ const product = messages.product as Record<string, string>;
  * The values a check constraint allows, in its order, as the latest migration that writes it says (0022, then a later
  * one that widens it: 0123 adds the declaration of residence to the kinds of a document).
  */
+// Read once: two hundred migrations read again for every constraint ran past the test's time on a busy machine.
+let migrationTexts: string[] | null = null;
+const migrations = (): string[] =>
+  (migrationTexts ??= MIGRATION_FILES.map((name) => fs.readFileSync(path.join(MIGRATIONS_DIR, name), "utf8")));
+
 function allowed(constraint: string): string[] {
   const marker = `constraint ${constraint} check`;
-  const latest = MIGRATION_FILES.map((name) => fs.readFileSync(path.join(MIGRATIONS_DIR, name), "utf8"))
+  const latest = migrations()
     .filter((text) => text.includes(marker))
     .at(-1);
   expect(latest, constraint).toBeTruthy();

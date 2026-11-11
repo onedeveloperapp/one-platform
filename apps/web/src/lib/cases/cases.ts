@@ -510,6 +510,29 @@ export function requiredFor(
   return entry?.essential ?? setting?.required_documents ?? [];
 }
 
+/**
+ * The documents by problem of a case's version of its module (0212), from the database's answer
+ * (`case_module_version`, or `case_version_documents` for the backend): an object by kind of problem, or null.
+ */
+export function versionDocumentsOf(raw: unknown): Record<string, unknown> | null {
+  const answer = raw && typeof raw === "object" && !Array.isArray(raw) ? (raw as Record<string, unknown>) : null;
+  if (!answer) return null;
+  // The member's reading answers the version beside its documents; the backend's, the documents alone.
+  const documents = "ok" in answer ? (answer.ok === true ? answer.documents : null) : answer;
+  return documents && typeof documents === "object" && !Array.isArray(documents)
+    ? (documents as Record<string, unknown>)
+    : null;
+}
+
+/** The cases' setting with the documents by problem of the case's version in place of its own, when there is one. */
+export function withVersionDocuments(
+  setting: unknown,
+  documents: Record<string, unknown> | null,
+): Record<string, unknown> {
+  const base = setting && typeof setting === "object" ? (setting as Record<string, unknown>) : {};
+  return documents ? { ...base, documents_by_problem: documents } : base;
+}
+
 export type CaseDocumentState = { kind: string; party_id: string | null; status: string };
 
 export type Missing =

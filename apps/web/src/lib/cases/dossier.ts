@@ -175,6 +175,8 @@ export type DossierFacts = {
    * arrived, in the order they happened, already in words (`evidenceTimeline`); and how many proofs it holds.
    */
   moments?: { lines: string[]; proofs: number };
+  /** The version of its module the case was opened under, and the one it reads when that one was withdrawn (0212). */
+  moduleVersion?: string | null;
 };
 
 /** The zone a dossier is written in, and its name for people. A dossier travels: its hours are not its reader's. */
@@ -322,6 +324,7 @@ export function buildDossier(facts: DossierFacts): {
         { label: "Ocorrência", value: facts.incident },
         { label: "Companhia", value: facts.airline ?? "não registrada" },
         { label: "Dia do voo", value: facts.flightDate ?? "não registrado" },
+        ...(facts.moduleVersion ? [{ label: "Versão do módulo", value: facts.moduleVersion }] : []),
       ],
     },
     list(

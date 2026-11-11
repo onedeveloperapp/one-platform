@@ -237,6 +237,13 @@ export const leftMenuItems: MenuItem[] = [
         description: "menu-admin-calendar-description",
       },
       {
+        id: "admin-modules",
+        icon: "NiCatalog",
+        label: "menu-admin-modules",
+        href: "/admin/modulos",
+        description: "menu-admin-modules-description",
+      },
+      {
         id: "admin-content",
         icon: "NiBook",
         label: "menu-admin-content",

@@ -11,6 +11,8 @@ import {
   type PersonData,
   type RequiredDocument,
   requiredFor,
+  versionDocumentsOf,
+  withVersionDocuments,
 } from "@/lib/cases/cases";
 import { draftBlocks } from "@/lib/cases/drafts";
 import { queueDraftWork } from "@/lib/cases/drafts-work";
@@ -172,7 +174,7 @@ async function loadLawsuitFacts(service: SupabaseClient, caseId: string): Promis
   // The client's account, as the database reads it (0090): the piece asked right after the lawsuits is written from it.
   const told = await service.rpc("case_account_state", { target_case: caseId });
   if (told.error) throw new Error("account unreadable");
-  const [parties, documents, segments, settings, wages, courts, systems] = await Promise.all([
+  const [parties, documents, segments, settings, wages, courts, systems, version] = await Promise.all([
     service
       .from("case_parties")
       .select("id, person_id, role, guardian_id, claim_cents, created_at::text")
@@ -188,11 +190,14 @@ async function loadLawsuitFacts(service: SupabaseClient, caseId: string): Promis
     service.from("minimum_wages").select("valid_from::text, cents, act"),
     service.from("courts").select("acronym, uf"),
     service.from("court_systems").select("court, proceeding_kind, system, confirmed"),
+    // The documents by problem of the version of the module the case was opened under (0212).
+    service.rpc("case_version_documents", { target_case: caseId }),
   ]);
   if (parties.error || documents.error || segments.error || settings.error || wages.error || courts.error) {
     throw new Error("case facts unreadable");
   }
   if (systems.error) throw new Error("court systems unreadable");
+  if (version.error) throw new Error("module version unreadable");
   const partyRows = (
     (parties.data ?? []) as {
       id: string;
@@ -248,7 +253,7 @@ async function loadLawsuitFacts(service: SupabaseClient, caseId: string): Promis
     segments: segments.count ?? 0,
     // 0177: the essentials of the case's kind of problem.
     required: requiredFor(
-      setting("cases") as Parameters<typeof requiredFor>[0],
+      withVersionDocuments(setting("cases"), versionDocumentsOf(version.data)) as Parameters<typeof requiredFor>[0],
       row.incident as string | null,
     ) as RequiredDocument[],
     wages: ((wages.data ?? []) as { valid_from: string; cents: number; act: string }[]).map((wage) => ({

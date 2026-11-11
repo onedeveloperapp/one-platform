@@ -115,6 +115,8 @@
     "menu-prazos-description": "Os prazos dos processos, contados pelo calendário de cada tribunal",
     "menu-admin-calendar": "Calendário forense",
     "menu-admin-calendar-description": "Feriados, suspensões e expediente parcial de cada tribunal",
+    "menu-admin-modules": "Versões dos módulos",
+    "menu-admin-modules-description": "O que os casos de cada módulo leem, em versões publicadas",
     "menu-admin-content": "Conteúdo padrão",
     "menu-admin-content-description": "Os modelos de peça e as fontes que o ONE dá a todos os escritórios",
     "menu-agenda": "Agenda",

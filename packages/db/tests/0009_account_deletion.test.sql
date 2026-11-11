@@ -284,6 +284,8 @@ select is(
     'approvals.task',
     'cases.airline_iata',
     'cases.module',
+    -- The version of its module a case was opened under (0212) is platform data, never deleted once published.
+    'cases.module_version_id',
     'client_consents.term_id',
     'client_notices.kind', 'closing_goals.module_key',
     'consent_acceptances.term_id',
@@ -307,6 +309,8 @@ select is(
     'impersonation_sessions.actor_id',
     'issued_documents.file_id',
     'leads.consent_term_id',
+    -- A version of a module (0212) names its module, which is never deleted.
+    'module_versions.module',
     'partner_invitations.module_key',
     'partner_links.module_key',
     'proceedings.court',

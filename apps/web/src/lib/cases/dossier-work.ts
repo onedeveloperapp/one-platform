@@ -13,6 +13,7 @@ import {
   type RegistryResult,
 } from "@/lib/cases/dossier";
 import { evidenceTimeline, readEvidenceKit } from "@/lib/cases/evidence-moments";
+import { moduleVersionWords } from "@/lib/cases/module-version";
 import { CHANNEL_KEY, isComplaintChannel, isComplaintOutcome, OUTCOME_KEY } from "@/lib/cases/statements";
 import { caseKindLabelKey } from "@/lib/modules/registry";
 import { loadFlightChecks, type SourceView } from "@/modules/direito-do-passageiro/flights/facts";
@@ -189,6 +190,9 @@ export async function loadDossierFacts(
   const kitRead = await supabase.rpc("case_evidence_moments", { target_org: firm.id, target_case: caseId });
   if (kitRead.error) throw new Error("the evidence kit could not be read");
   const kit = readEvidenceKit(kitRead.data);
+  // The version of its module the case was opened under (0212); one that could not be read is left out.
+  const versionRead = await supabase.rpc("case_module_version", { target_org: firm.id, target_case: caseId });
+  const moduleVersion = moduleVersionWords(versionRead.error ? null : versionRead.data);
   const wallWords = (time: { wall: string; basis: string } | null | undefined): string | null => {
     const at = time ? hour(time.wall) : null;
     if (!at) return null;
@@ -255,6 +259,7 @@ export async function loadDossierFacts(
 
   return {
     moments: kit ? { lines: evidenceTimeline(kit, (kind) => kindWord(kind)), proofs: kit.proofs.length } : undefined,
+    moduleVersion,
     firm: firm.name,
     caseLabel: caseLabel(row.seq),
     issuedOn: moment(new Date().toISOString()) ?? "",

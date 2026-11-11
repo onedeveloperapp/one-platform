@@ -20,7 +20,16 @@ import { cookies } from "next/headers";
 import { momentLabel, type SecondFactorState } from "@/lib/ai/approvals";
 import { pendingApprovalsOf, type PendingRow } from "@/lib/ai/pending-approvals";
 import { caseAdvanceOf } from "@/lib/cases/advance";
-import { CAUSES, isCaseStatus, linksOwedOf, ORIGINS, type RequiredDocument, requiredFor } from "@/lib/cases/cases";
+import {
+  CAUSES,
+  isCaseStatus,
+  linksOwedOf,
+  ORIGINS,
+  type RequiredDocument,
+  requiredFor,
+  versionDocumentsOf,
+  withVersionDocuments,
+} from "@/lib/cases/cases";
 import { dispensablesOf } from "@/lib/cases/client-documents";
 import { readCheckAnswer } from "@/lib/cases/document-check";
 import { readQuality } from "@/lib/cases/document-quality";
@@ -285,7 +294,12 @@ export async function loadCase(id: string): Promise<CaseState> {
     supabase.from("airlines").select("iata, name").eq("active", true).order("name"),
     supabase.from("courts").select("acronym, name, uf").order("uf"),
     supabase.from("court_systems").select("court, proceeding_kind, system, confirmed, notes, file_types"),
-    supabase.from("platform_settings").select("value").eq("key", "cases").maybeSingle(),
+    // The cases' setting, and the documents by problem of the version of the module the case was opened under (0212),
+    // which the case reads in its place. A version that could not be read leaves the setting's.
+    Promise.all([
+      supabase.from("platform_settings").select("value").eq("key", "cases").maybeSingle(),
+      supabase.rpc("case_module_version", { target_org: firm, target_case: id }),
+    ]).then(([read, version]) => ({ ...read, documents: versionDocumentsOf(version.error ? null : version.data) })),
     supabase
       .from("signature_envelopes")
       .select(
@@ -569,7 +583,7 @@ export async function loadCase(id: string): Promise<CaseState> {
 
   // 0177: the essentials of this case's kind of problem.
   const required = requiredFor(
-    setting.data?.value as Parameters<typeof requiredFor>[0],
+    withVersionDocuments(setting.data?.value, setting.documents) as Parameters<typeof requiredFor>[0],
     typeof row.incident === "string" ? row.incident : null,
   ) as RequiredDocument[];
 
