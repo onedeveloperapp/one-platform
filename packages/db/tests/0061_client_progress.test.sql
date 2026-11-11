@@ -137,7 +137,7 @@ insert into public.wa_conversations (org_id, number_id, contact_wa_id, last_inbo
 select ok(
   (select array_agg(kind order by position) = array['hearing_change', 'hearing_reminder', 'payment_alert', 'lawsuit_update',
                                                     'document_refused', 'flight_problem', 'case_received', 'lawsuit_filed',
-                                                    'case_questions']
+                                                    'case_questions', 'trip_departure', 'trip_arrival', 'welcome']
    from public.notice_kinds)
   and (select params = array['first_name', 'firm', 'next'] from public.notice_kinds where kind = 'case_received')
   and (select params = array['first_name', 'firm', 'lawsuit', 'court'] from public.notice_kinds where kind = 'lawsuit_filed')
@@ -151,8 +151,8 @@ select ok(
 );
 
 select ok(
-  (select count(*) = 9 from public.firm_notice_kinds k where k.org_id = 'b6100000-0000-4000-8000-00000000000a' and k.enabled)
-  and (select count(*) = 9 from public.firm_notice_kinds k where k.org_id = 'b6100000-0000-4000-8000-00000000000b' and k.enabled),
+  (select count(*) = 12 from public.firm_notice_kinds k where k.org_id = 'b6100000-0000-4000-8000-00000000000a' and k.enabled)
+  and (select count(*) = 12 from public.firm_notice_kinds k where k.org_id = 'b6100000-0000-4000-8000-00000000000b' and k.enabled),
   'the test chat approves and turns on every kind, so a tester follows the whole course'
 );
 

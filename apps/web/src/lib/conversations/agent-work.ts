@@ -39,6 +39,15 @@ import {
   type TurnFile,
   turnFilesOf,
 } from "@/lib/conversations/agent";
+import {
+  INTAKE_TASK,
+  intakeFactsOf,
+  intakeInput,
+  intakeMissing,
+  intakeQualificationInput,
+  intakeQuestion,
+  intakeReadingOf,
+} from "@/lib/conversations/intake";
 import { supabaseFileStore } from "@/lib/files/store";
 import { soon } from "@/lib/jobs/soon";
 import { deliverOutbox } from "@/lib/whatsapp/send";
@@ -46,6 +55,7 @@ import { createServiceClient } from "@flyee/auth/service";
 import { BRAND } from "@flyee/content";
 import { normalizeImage } from "@flyee/documents/normalize";
 import type { FileStore } from "@flyee/documents/types";
+import { qualify } from "@flyee/rules/qualification";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 /**
@@ -376,6 +386,111 @@ async function openCase(service: SupabaseClient, held: Held, context: TurnContex
   throw new Error(`the case could not be opened: ${String(answer.code)}`);
 }
 
+/**
+ * Who wrote with no alert of ONE's and no case (0176): what they told is read, the facts gathered are kept, the next
+ * one missing is asked, and once nothing is the rule decides: the case opened with the client's link, or the firm's
+ * word that the problem does not qualify. Answers whether the intake took the turn; one that is not about a flight
+ * leaves it to ONE's usual answer. A read that fails never stops the turn.
+ */
+async function takeIntake(
+  service: SupabaseClient,
+  held: Held,
+  context: TurnContext,
+  report: TurnReport,
+): Promise<boolean> {
+  const { data: row, error: readError } = await service
+    .from("wa_conversations")
+    .select("intake, intake_case_id")
+    .eq("id", held.conversationId)
+    .maybeSingle();
+  if (readError || !row || row.intake_case_id) return false;
+  const known = intakeFactsOf(row.intake);
+  if (known.result?.outcome === "not_qualified") return false;
+  const run = await runFirmTask({
+    orgId: context.orgId,
+    task: INTAKE_TASK,
+    input: intakeInput(context, known, today()),
+    subject: { type: "wa_conversation", id: held.conversationId },
+    idempotencyKey: `intake:${held.conversationId}:${held.claim}`,
+  }).catch(() => null);
+  if (!run || run.kind !== "finished") return false;
+  const reading = intakeReadingOf(run.output);
+  const started = Object.keys(known).length > 0;
+  if (!reading || (!reading.flight && !started)) return false;
+  const kept = await rpc(service, "record_conversation_intake", {
+    target_conversation: held.conversationId,
+    target_claim: held.claim,
+    target_facts: reading.facts,
+  });
+  if (kept.ok !== true) return false;
+  const facts = intakeFactsOf(kept.facts);
+
+  const missing = intakeMissing(facts);
+  if (missing.length > 0) {
+    await say(service, held, intakeQuestion(missing[0], !started));
+    report.answered += 1;
+    return true;
+  }
+  const verdict = qualify(intakeQualificationInput(facts, today()));
+  if (verdict.outcome === "not_qualified") {
+    const answer = await rpc(service, "one_intake_not_qualified", {
+      target_conversation: held.conversationId,
+      target_claim: held.claim,
+      target_result: verdict,
+      target_body: notQualifiedMessage(facts.nome ?? context.contactName ?? ""),
+    });
+    if (answer.code === "not_qualified") await send(service, answer.message_id);
+    report.answered += 1;
+    return true;
+  }
+  if (verdict.outcome !== "qualifies") {
+    // What the rule cannot decide (a change of class, another problem, a fact it lacks): a person of the firm weighs it.
+    await say(service, held, calledMessage).catch(() => undefined);
+    await callPerson(
+      service,
+      held,
+      "Um passageiro contou um problema que a regra não decide sozinha: uma pessoa do escritório avalia.",
+    );
+    report.called += 1;
+    return true;
+  }
+  const token = randomBytes(32).toString("base64url");
+  const answer = await rpc(service, "one_open_case_from_intake", {
+    target_conversation: held.conversationId,
+    target_claim: held.claim,
+    target_token_hash: createHash("sha256").update(token, "utf8").digest("hex"),
+    target_body: caseStepsMessage({
+      passengerName: facts.nome ?? "",
+      url: `${BRAND.siteUrl}/c/${token}`,
+      minors: [],
+      agency: null,
+    }),
+  });
+  if (answer.code === "opened" || answer.code === "opened_without_link") {
+    report.opened += 1;
+    if (answer.code === "opened") await send(service, answer.message_id);
+    else
+      await say(service, held, caseOpenedNoLinkMessage(facts.nome ?? "").replace("{caso}", String(answer.seq ?? "")));
+    if (typeof answer.case_id === "string") {
+      const interviewId = await startInterview(service, answer.case_id).catch(() => null);
+      if (interviewId) await advanceInterview(service, interviewId).catch(() => undefined);
+    }
+    return true;
+  }
+  if (answer.code === "by_person") {
+    await say(service, held, byPersonMessage(facts.nome ?? ""));
+    await callPerson(
+      service,
+      held,
+      "Um passageiro quer seguir, e abrir o caso pela conversa espera uma pessoa do escritório.",
+    );
+    report.called += 1;
+    return true;
+  }
+  // A case of the contact goes on already, or the facts did not hold: ONE's usual answer carries the conversation.
+  return false;
+}
+
 /** The passenger's answer to the alert, kept; a no is ended kindly, a stop in silence. */
 async function answerAlert(
   service: SupabaseClient,
@@ -488,6 +603,13 @@ async function takeTurn(service: SupabaseClient, held: Held, report: TurnReport)
     const quick = context.alert && words.length > 0 ? quickAnswer(words[words.length - 1]) : null;
     if (context.alert && quick) {
       await answerAlert(service, held, context, quick, report);
+    } else if (
+      words.length > 0 &&
+      !context.alert &&
+      context.cases.length === 0 &&
+      (await takeIntake(service, held, context, report))
+    ) {
+      // ONE took them in (0176): asked what is missing, or decided.
     } else if (words.length > 0) {
       const run = await runFirmTask({
         orgId: context.orgId,
