@@ -3,6 +3,7 @@ import "server-only";
 import type { Sweep } from "@/lib/jobs/schedule";
 import { settleTripDay } from "@/modules/direito-do-passageiro/flight-alerts/trip-day-work";
 import { watchTrips } from "@/modules/direito-do-passageiro/flight-alerts/watch";
+import { settleWelcomes } from "@/modules/direito-do-passageiro/flight-alerts/welcome-work";
 import { tellFlightAlerts } from "@/modules/direito-do-passageiro/flight-alerts/work";
 import { flightStatusProvider } from "@/modules/direito-do-passageiro/flights/status";
 
@@ -35,6 +36,16 @@ export const flightAlertSweeps: Sweep[] = [
     when: { every: 5 },
     whileUsed: true,
     run: async (service) => ({ ...(await settleTripDay(service)) }),
+  },
+  /**
+   * The passenger's welcome (0174): once per WhatsApp and firm, after the passenger agreed, as the firm's template;
+   * one just agreed is written right after (`queueWelcome`). The database keeps each. Counts only.
+   */
+  {
+    key: "passenger-welcome",
+    when: { every: 5 },
+    whileUsed: true,
+    run: async (service) => ({ ...(await settleWelcomes(service)) }),
   },
   {
     key: "flight-watch",

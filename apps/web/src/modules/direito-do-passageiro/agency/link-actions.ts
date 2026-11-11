@@ -10,6 +10,7 @@ import { openAgreement } from "@/modules/direito-do-passageiro/agency/link";
 import { PAX_DOCUMENT_KINDS } from "@/modules/direito-do-passageiro/agency/passengers";
 import { removeForgottenBytes } from "@/modules/direito-do-passageiro/agency/retention-work";
 import { finishPaxUpload } from "@/modules/direito-do-passageiro/agency/uploads";
+import { queueWelcome } from "@/modules/direito-do-passageiro/flight-alerts/welcome-work";
 import { createServiceClient } from "@flyee/auth/service";
 
 /**
@@ -78,11 +79,10 @@ export async function answerAgreement(input: {
   if (error) return { ok: false, code: "failed" };
   const answer = (data ?? {}) as { ok?: boolean; code?: string; followed?: number };
   if (!answer.ok) return { ok: false, code: String(answer.code ?? "failed") };
-  return {
-    ok: true,
-    code: String(answer.code ?? input.answer),
-    followed: Math.max(0, Number(answer.followed ?? 0) || 0),
-  };
+  const followed = Math.max(0, Number(answer.followed ?? 0) || 0);
+  // 0174: a yes that ONE now follows owes the passenger's welcome, in the firm's name.
+  if (answer.code === "agreed" && followed > 0) queueWelcome();
+  return { ok: true, code: String(answer.code ?? input.answer), followed };
 }
 
 /** The first half of sending a document on the link: the reservation, and the signed address the bytes go to. */

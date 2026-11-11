@@ -145,6 +145,20 @@ describe.skipIf(!DB_URL)("a passenger the firm registers itself", () => {
     expect(trips?.[0]).toMatchObject({ status: "watching", test: true, documents: 1 });
     tripId = trips?.[0]?.id ?? "";
 
+    // 0174: the passenger is welcomed in the firm's name, once.
+    const { settleWelcomes } = await import("@/modules/direito-do-passageiro/flight-alerts/welcome-work");
+    expect(await settleWelcomes(backend() as never, { tripId })).toMatchObject({ queued: 1 });
+    expect(await settleWelcomes(backend() as never, { tripId })).toMatchObject({ owed: 0, queued: 0 });
+    const welcomes = await sql.unsafe(
+      `select m.template_name, m.body from public.wa_messages m join public.wa_conversations c on c.id = m.conversation_id
+       where m.org_id = $1 and c.contact_wa_id = '5500988880001' and m.direction = 'out' and m.template_name like 'one_boas_vindas%'`,
+      [FIRM],
+    );
+    expect(welcomes).toHaveLength(1);
+    expect(String(welcomes[0].body)).toContain(
+      "Olá, Mariana. Aqui é o assistente automático do escritório Souza Advogados.",
+    );
+
     const { readTestChat } = await import("@/lib/test-chat/actions");
     const read = await readTestChat(TOKEN);
     expect(read.ok && read.view.trips.map((trip) => [trip.label, trip.passengerName])).toEqual([

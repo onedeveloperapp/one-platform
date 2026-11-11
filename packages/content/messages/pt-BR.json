@@ -8667,7 +8667,9 @@
     "notice-kind-trip-departure": "Boa viagem",
     "notice-kind-trip-departure-when": "Cerca de duas horas antes de cada trecho de uma viagem que o ONE acompanha, uma vez por trecho: deseja boa viagem e diz que o escritório acompanha o voo. Não vai de um trecho cujo problema o passageiro já foi avisado.",
     "notice-kind-trip-arrival": "Chegada da viagem",
-    "notice-kind-trip-arrival-when": "Meia hora depois da chegada de cada trecho, uma vez por trecho: pergunta se correu tudo bem e convida o passageiro a contar o que deu errado. Não vai de um trecho cancelado ou cujo problema ele já foi avisado."
+    "notice-kind-trip-arrival-when": "Meia hora depois da chegada de cada trecho, uma vez por trecho: pergunta se correu tudo bem e convida o passageiro a contar o que deu errado. Não vai de um trecho cancelado ou cujo problema ele já foi avisado.",
+    "notice-kind-welcome": "Boas-vindas ao passageiro",
+    "notice-kind-welcome-when": "Uma vez por WhatsApp, logo que o passageiro cadastrado pela agência ou pelo escritório concorda: diz que o escritório acompanha os voos e o que a companhia aérea deve pelas regras da ANAC, com o que guardar se algo der errado."
   },
   "auth": {
     "continue": "Continuar",

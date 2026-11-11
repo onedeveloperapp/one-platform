@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import { getMemberContext } from "@/lib/member/context";
 import { isSupportVisit } from "@/lib/whatsapp/session";
+import { queueWelcome } from "@/modules/direito-do-passageiro/flight-alerts/welcome-work";
 import type { PassengerLeg } from "@/modules/direito-do-passageiro/passengers/passengers";
 
 /**
@@ -75,7 +76,14 @@ export async function registerPassenger(input: {
   });
   refresh(personId);
   if (error) return { ok: false, code: raised(error.message), personId };
-  const answer = (data ?? {}) as { ok?: boolean; code?: string; field?: string; leg?: number; test?: boolean };
+  const answer = (data ?? {}) as {
+    ok?: boolean;
+    code?: string;
+    field?: string;
+    leg?: number;
+    test?: boolean;
+    trip_id?: string;
+  };
   if (!answer.ok) {
     return {
       ok: false,
@@ -85,6 +93,8 @@ export async function registerPassenger(input: {
       personId,
     };
   }
+  // 0174: the passenger the firm just registered is welcomed in the firm's name, once.
+  if (typeof answer.trip_id === "string") queueWelcome(answer.trip_id);
   return { ok: true, personId, reused, test: answer.test === true };
 }
 

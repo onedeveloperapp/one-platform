@@ -463,6 +463,10 @@ insert into public.tracked_legs (org_id, trip_id, position, flight_number, origi
 insert into public.flight_alerts (org_id, trip_id, kind, rule_version) values
   ('b1000000-0000-4000-8000-00000000000a', 'ae900000-0000-4000-8000-00000000000a', 'cancelled', 'flight-problem-v1'),
   ('b1000000-0000-4000-8000-00000000000b', 'ae900000-0000-4000-8000-00000000000b', 'cancelled', 'flight-problem-v1');
+-- The welcome ONE wrote to a passenger, or kept why it did not (0174).
+insert into public.passenger_welcomes (org_id, phone, trip_id, status, reason) values
+  ('b1000000-0000-4000-8000-00000000000a', '5500988880001', 'ae900000-0000-4000-8000-00000000000a', 'skipped', 'no_template'),
+  ('b1000000-0000-4000-8000-00000000000b', '5500988880002', 'ae900000-0000-4000-8000-00000000000b', 'skipped', 'no_template');
 -- The word of a journey's day ONE wrote, or kept why it did not (0173).
 insert into public.trip_day_messages (org_id, trip_id, journey, kind, status, reason) values
   ('b1000000-0000-4000-8000-00000000000a', 'ae900000-0000-4000-8000-00000000000a', 1, 'departure', 'skipped', 'not_released'),
@@ -629,7 +633,7 @@ select is(
     'finance_statement_lines', 'finance_statements', 'firm_autonomy', 'firm_calendars',
     'firm_claim_defaults', 'firm_invitations', 'firm_marketing_terms', 'firm_modules', 'firm_notice_kinds', 'firm_one_work_cost', 'firm_one_work_minutes', 'firm_signers', 'flight_alerts', 'flight_checks', 'flight_segments', 'free_justice_answers', 'hearings', 'import_batches', 'import_rows', 'invoices',
     'issued_documents', 'lawsuit_facts', 'lawyer_signature_uses', 'legal_sources', 'marketing_segments', 'memberships',
-    'money_releases', 'money_shares', 'money_statements', 'movements', 'notice_optins', 'notice_stops', 'onboarding_state', 'partner_invitations', 'partner_links', 'pax_firm_clauses',
+    'money_releases', 'money_shares', 'money_statements', 'movements', 'notice_optins', 'notice_stops', 'onboarding_state', 'partner_invitations', 'partner_links', 'passenger_welcomes', 'pax_firm_clauses',
     'people', 'person_data_requests',
     'proceeding_lawyers', 'proceeding_parties', 'proceeding_tracking', 'proceedings', 'publication_readings', 'publications', 'record_versions',
     'residence_declarations', 'signature_envelopes',
@@ -805,7 +809,7 @@ select is(
     'filing_package_items', 'filing_packages',
     'filing_receipts', 'filing_submissions', 'finance_access', 'firm_autonomy', 'firm_calendars', 'firm_claim_defaults', 'firm_marketing_terms', 'firm_modules', 'firm_notice_kinds', 'firm_signers', 'flight_alerts', 'flight_checks', 'flight_segments', 'free_justice_answers', 'hearings', 'import_batches',
     'import_rows', 'invoices', 'issued_documents', 'lawsuit_facts', 'lawyer_signature_uses', 'legal_sources',
-    'memberships', 'movements', 'notice_optins', 'notice_stops', 'partner_links', 'pax_firm_clauses', 'people', 'proceeding_lawyers', 'proceeding_parties', 'proceeding_tracking', 'proceedings',
+    'memberships', 'movements', 'notice_optins', 'notice_stops', 'partner_links', 'passenger_welcomes', 'pax_firm_clauses', 'people', 'proceeding_lawyers', 'proceeding_parties', 'proceeding_tracking', 'proceedings',
     'publication_readings', 'publications',
     'residence_declarations', 'signature_envelopes',
     'subscriptions', 'template_imports', 'test_chats', 'tracked_legs', 'tracked_trip_documents', 'tracked_trips', 'trip_day_messages',
@@ -849,7 +853,7 @@ select is(
     'finance_statement_lines', 'finance_statements', 'firm_autonomy', 'firm_calendars',
     'firm_claim_defaults', 'firm_invitations', 'firm_marketing_terms', 'firm_modules', 'firm_notice_kinds', 'firm_one_work_cost', 'firm_one_work_minutes', 'firm_signers', 'flight_alerts', 'flight_checks', 'flight_segments', 'free_justice_answers', 'hearings', 'import_batches', 'import_rows', 'invoices',
     'issued_documents', 'lawsuit_facts', 'lawyer_signature_uses', 'legal_sources', 'marketing_segments', 'memberships',
-    'money_releases', 'money_shares', 'money_statements', 'movements', 'notice_optins', 'notice_stops', 'onboarding_state', 'partner_invitations', 'partner_links', 'pax_firm_clauses',
+    'money_releases', 'money_shares', 'money_statements', 'movements', 'notice_optins', 'notice_stops', 'onboarding_state', 'partner_invitations', 'partner_links', 'passenger_welcomes', 'pax_firm_clauses',
     'people', 'person_data_requests',
     'proceeding_lawyers', 'proceeding_parties', 'proceeding_tracking', 'proceedings', 'publication_readings', 'publications', 'record_versions',
     'residence_declarations', 'signature_envelopes',
