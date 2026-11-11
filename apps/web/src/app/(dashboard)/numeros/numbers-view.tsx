@@ -27,6 +27,7 @@ import {
 
 import CardTitle from "@/components/product/card-title";
 import EmptyState from "@/components/product/empty-state";
+import InfoHint from "@/components/product/info-hint";
 import NumberCard from "@/components/product/number-card";
 import PageHeader from "@/components/product/page-header";
 import IllustrationAnalytics from "@/icons/illustrations/illustration-analytics";
@@ -69,6 +70,7 @@ const DIMENSION_KEY: Record<Dimension, string> = {
   comarca: "numbers-dimension-comarca",
   unit: "numbers-dimension-unit",
   kind: "numbers-dimension-kind",
+  lawyer: "numbers-dimension-lawyer",
 };
 const KIND_WORDS: Record<string, string> = { juizado: "numbers-kind-juizado", comum: "numbers-kind-comum" };
 const RESULT_KEY: Record<string, string> = {
@@ -257,6 +259,7 @@ export default function NumbersView({ state }: { state: NumbersState }) {
                   tone="accent-4"
                   label={t("numbers-to-judgment")}
                   value={all.daysToJudgment === null ? "" : t("numbers-days", { count: all.daysToJudgment })}
+                  hint={all.judgmentRange ? t("numbers-margin", all.judgmentRange) : undefined}
                 />
               </Grid>
               <Grid size={{ xs: 6, lg: 3 }}>
@@ -291,6 +294,18 @@ export default function NumbersView({ state }: { state: NumbersState }) {
                         <TableCell align="right">{t("numbers-col-value")}</TableCell>
                         <TableCell align="right">{t("numbers-to-judgment")}</TableCell>
                         <TableCell align="right">{t("numbers-col-own-time")}</TableCell>
+                        <TableCell align="right">
+                          <Box component="span" className="inline-flex items-center gap-1">
+                            {t("numbers-col-settlement")}
+                            <InfoHint label={t("numbers-col-settlement-hint")} />
+                          </Box>
+                        </TableCell>
+                        <TableCell align="right">
+                          <Box component="span" className="inline-flex items-center gap-1">
+                            {t("numbers-col-alike")}
+                            <InfoHint label={t("numbers-col-alike-hint")} />
+                          </Box>
+                        </TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
@@ -529,7 +544,11 @@ function GroupRow({
         </TableCell>
         <TableCell align="right">
           {sample(
-            group.daysToJudgment === null ? null : t("numbers-days", { count: group.daysToJudgment }),
+            group.daysToJudgment === null
+              ? null
+              : group.judgmentRange
+                ? t("numbers-days-margin", { count: group.daysToJudgment, ...group.judgmentRange })
+                : t("numbers-days", { count: group.daysToJudgment }),
             group.judged,
           )}
         </TableCell>
@@ -539,10 +558,25 @@ function GroupRow({
             group.lawsuits,
           )}
         </TableCell>
+        <TableCell align="right">
+          {sample(
+            group.settlementRange
+              ? t("numbers-money-range", {
+                  median: formatCents(group.settlementRange.median),
+                  low: formatCents(group.settlementRange.low),
+                  high: formatCents(group.settlementRange.high),
+                })
+              : null,
+            group.settlements,
+          )}
+        </TableCell>
+        <TableCell align="right">
+          {sample(group.alike === null ? null : `${Math.round(group.alike)}%`, group.alikeSample)}
+        </TableCell>
       </TableRow>
       {open ? (
         <TableRow>
-          <TableCell colSpan={6}>
+          <TableCell colSpan={8}>
             <Box className="flex flex-col gap-1">
               {rows
                 .filter((row) => ids.has(row.id))

@@ -3,6 +3,8 @@ import {
   cohorts,
   groupStats,
   median,
+  medianInterval,
+  quartiles,
   readLawsuitRows,
   statsOf,
   winsProjection,
@@ -185,5 +187,67 @@ describe("the result of each claim, over the judgments (0193)", () => {
     });
     expect(claimStats(unchecked, true)).toEqual([]);
     expect(claimStats(unchecked, false)[0].decided).toBe(1);
+  });
+});
+
+describe("the margins, the settlements and the lawyers (M5, 0210)", () => {
+  it("gives the middle half of a list, and nothing of fewer than five", () => {
+    expect(quartiles([10, 20, 30, 40])).toBeNull();
+    expect(quartiles([10, 20, 30, 40, 50])).toEqual({ low: 20, median: 30, high: 40 });
+  });
+
+  it("gives the margin of a median at 95% only where the sample holds its ranks", () => {
+    expect(medianInterval([1, 2, 3, 4, 5])).toBeNull();
+    // Six to eight lawsuits: the margin is the whole sample.
+    expect(medianInterval([90, 100, 110, 120, 130, 140])).toEqual({ low: 90, high: 140 });
+    // Twenty: the sixth and the fifteenth.
+    const twenty = Array.from({ length: 20 }, (_, index) => (index + 1) * 10);
+    expect(medianInterval(twenty)).toEqual({ low: 60, high: 150 });
+  });
+
+  it("says the range of the settlements per claimant, the margin of the days to the judgment and how alike the pieces were", () => {
+    const settled = readLawsuitRows({
+      rows: [
+        row("s1", { settled: true, settled_cents: 300000, claimants: 1, alike: 40 }),
+        row("s2", { settled: true, settled_cents: 800000, claimants: 2, alike: 60 }),
+        row("s3", { settled: true, settled_cents: 500000, claimants: 1, alike: 70 }),
+        row("s4", { settled: true, settled_cents: 600000, claimants: 1, alike: 90 }),
+        row("s5", { settled: true, settled_cents: 700000, claimants: 1, alike: 95 }),
+        row("s6", { settled: true, settled_cents: null }),
+        ...[30, 60, 90, 120, 150, 180].map((late, index) =>
+          row(`j${index}`, {
+            result: "procedente",
+            judged_on: new Date(Date.parse("2026-03-01T12:00:00Z") + late * 86_400_000).toISOString().slice(0, 10),
+          }),
+        ),
+      ],
+    });
+    const stats = statsOf("LA", settled, false);
+    // A settlement with no value recorded is no part of the range; one of two claimants is split between them.
+    expect(stats.settlements).toBe(5);
+    expect(stats.settlementRange).toEqual({ low: 400000, median: 500000, high: 600000 });
+    expect(stats.daysToJudgment).toBe(105);
+    expect(stats.judgmentRange).toEqual({ low: 30, high: 180 });
+    expect(stats.alike).toBe(70);
+    expect(stats.alikeSample).toBe(5);
+  });
+
+  it("counts a lawsuit for each of its lawyers, and one with none as not recorded", () => {
+    const byLawyer = groupStats(
+      readLawsuitRows({
+        rows: [
+          row("l1", { lawyers: ["Ana Teste", "Davi Teste"] }),
+          row("l2", { lawyers: ["Ana Teste"] }),
+          row("l3", {}),
+        ],
+      }),
+      "lawyer",
+      false,
+    );
+    expect(byLawyer.map((group) => [group.key, group.lawsuits])).toEqual([
+      ["Ana Teste", 2],
+      ["", 1],
+      ["Davi Teste", 1],
+    ]);
   });
 });

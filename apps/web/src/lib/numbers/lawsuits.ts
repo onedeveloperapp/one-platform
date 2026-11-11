@@ -34,9 +34,15 @@ export type LawsuitRow = {
   /** What its judgment decided of each claim (0193), and how many claimants it has. */
   claims: FactClaim[];
   claimants: number;
+  /** What the settlement gave, in all, when the lawsuit ended in one with its value recorded. */
+  settledCents: number | null;
+  /** Who of the firm is its lawyer, by name (0210); a lawsuit may have several. */
+  lawyers: string[];
+  /** How alike its approved piece was to the firm's most alike one, in a hundred (0210); null with none. */
+  alike: number | null;
 };
 
-export const DIMENSIONS = ["airline", "incident", "court", "comarca", "unit", "kind"] as const;
+export const DIMENSIONS = ["airline", "incident", "court", "comarca", "unit", "kind", "lawyer"] as const;
 export type Dimension = (typeof DIMENSIONS)[number];
 
 /** No average, median or rate of fewer than this many lawsuits. */
@@ -82,6 +88,11 @@ export function readLawsuitRows(raw: unknown): LawsuitRow[] {
         isTest: row.is_test === true,
         claims: factClaimsOf(row.claims),
         claimants: typeof row.claimants === "number" && row.claimants > 0 ? row.claimants : 1,
+        settledCents: typeof row.settled_cents === "number" && row.settled_cents > 0 ? row.settled_cents : null,
+        lawyers: Array.isArray(row.lawyers)
+          ? row.lawyers.filter((name): name is string => typeof name === "string" && name.trim() !== "")
+          : [],
+        alike: typeof row.alike === "number" && row.alike >= 0 && row.alike <= 100 ? row.alike : null,
       },
     ];
   });
@@ -96,6 +107,37 @@ export function median(values: readonly number[]): number | null {
   const sorted = [...values].sort((a, b) => a - b);
   const middle = Math.floor(sorted.length / 2);
   return sorted.length % 2 === 1 ? sorted[middle]! : Math.round((sorted[middle - 1]! + sorted[middle]!) / 2);
+}
+
+/** A value at a share of a sorted list, between its neighbours. */
+const at = (sorted: readonly number[], share: number): number => {
+  const position = (sorted.length - 1) * share;
+  const below = Math.floor(position);
+  const above = Math.ceil(position);
+  return Math.round(sorted[below]! + (sorted[above]! - sorted[below]!) * (position - below));
+};
+
+/** Where the middle half of a list lies (its quartiles) and its median; null with fewer than the sample. */
+export function quartiles(values: readonly number[]): { low: number; median: number; high: number } | null {
+  if (values.length < MIN_SAMPLE) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  return { low: at(sorted, 0.25), median: median(sorted)!, high: at(sorted, 0.75) };
+}
+
+/**
+ * The margin of a median at 95% confidence: the two values of the sample between which the median of all lawsuits
+ * like these lies, by the ranks the binomial gives (nothing assumed of the times' shape). Null with fewer than the
+ * sample, or while the sample is too small for those ranks to fall inside it.
+ */
+export function medianInterval(values: readonly number[]): { low: number; high: number } | null {
+  const n = values.length;
+  if (n < MIN_SAMPLE) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  const spread = (1.96 * Math.sqrt(n)) / 2;
+  const lower = Math.round(n / 2 - spread);
+  const upper = Math.round(1 + n / 2 + spread);
+  if (lower < 1 || upper > n) return null;
+  return { low: sorted[lower - 1]!, high: sorted[upper - 1]! };
 }
 
 /** A judgment the numbers count: any, or only one a person checked. */
@@ -117,6 +159,14 @@ export type Stats = {
   daysToMoney: number | null;
   /** The firm's own time: from the case opening to the filing. */
   daysToFiling: number | null;
+  /** The margin of the days to the judgment, at 95% confidence; null while the sample is too small for one. */
+  judgmentRange: { low: number; high: number } | null;
+  /** The settlements with their value, per claimant: how many, the median and the middle half. */
+  settlements: number;
+  settlementRange: { low: number; median: number; high: number } | null;
+  /** The median of how alike the approved pieces were to the firm's most alike one, in a hundred, and of how many. */
+  alike: number | null;
+  alikeSample: number;
   unchecked: number;
   ids: string[];
 };
@@ -128,6 +178,11 @@ export function statsOf(key: string, rows: readonly LawsuitRow[], checkedOnly: b
   const values = judged
     .filter((row) => judgment(row, checkedOnly) !== "improcedente" && row.valueCents !== null && row.valueCents > 0)
     .map((row) => row.valueCents!);
+  const toJudgment = judged.filter((row) => row.judgedOn).map((row) => days(row.filedOn, row.judgedOn!));
+  const settledValues = rows
+    .filter((row) => row.settled && row.settledCents !== null)
+    .map((row) => Math.round(row.settledCents! / Math.max(row.claimants, 1)));
+  const alike = rows.filter((row) => row.alike !== null).map((row) => row.alike!);
   return {
     key,
     lawsuits: rows.length,
@@ -139,7 +194,12 @@ export function statsOf(key: string, rows: readonly LawsuitRow[], checkedOnly: b
     successRate: judged.length >= MIN_SAMPLE ? (won + partial) / judged.length : null,
     valuePerClaimant:
       values.length >= MIN_SAMPLE ? Math.round(values.reduce((acc, value) => acc + value, 0) / values.length) : null,
-    daysToJudgment: median(judged.filter((row) => row.judgedOn).map((row) => days(row.filedOn, row.judgedOn!))),
+    daysToJudgment: median(toJudgment),
+    judgmentRange: medianInterval(toJudgment),
+    settlements: settledValues.length,
+    settlementRange: quartiles(settledValues),
+    alike: median(alike),
+    alikeSample: alike.length,
     daysToMoney: median(rows.filter((row) => row.paidOn).map((row) => days(row.filedOn, row.paidOn!))),
     daysToFiling: median(
       rows.filter((row) => row.openedOn).map((row) => Math.max(days(row.openedOn!, row.filedOn), 0)),
@@ -160,7 +220,9 @@ const keyOf = (row: LawsuitRow, dimension: Dimension): string =>
           ? row.comarca
           : dimension === "unit"
             ? row.unit
-            : row.kind) ?? "";
+            : dimension === "kind"
+              ? row.kind
+              : (row.lawyers[0] ?? null)) ?? "";
 
 /** How the judgments decided one claim (0193): of the judged lawsuits that decided it, how many granted and for how much. */
 export type ClaimStats = {
@@ -213,8 +275,10 @@ export const withinPeriod = (rows: readonly LawsuitRow[], from: string | null, t
 export function groupStats(rows: readonly LawsuitRow[], dimension: Dimension, checkedOnly: boolean): Stats[] {
   const groups = new Map<string, LawsuitRow[]>();
   for (const row of rows) {
-    const key = keyOf(row, dimension);
-    groups.set(key, [...(groups.get(key) ?? []), row]);
+    // A lawsuit with several lawyers counts for each of them; one with none, for "not recorded".
+    const keys =
+      dimension === "lawyer" ? (row.lawyers.length > 0 ? [...new Set(row.lawyers)] : [""]) : [keyOf(row, dimension)];
+    for (const key of keys) groups.set(key, [...(groups.get(key) ?? []), row]);
   }
   return [...groups.entries()]
     .map(([key, list]) => statsOf(key, list, checkedOnly))
