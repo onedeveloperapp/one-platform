@@ -1,3 +1,9 @@
+# Codex reads AGENTS.md only up to this many bytes (32 KiB by default). The
+# rules come first and the project state last (scripts/sync-agent-harness.mjs).
+# ONE's rules take about 75 KB, so 96 KiB lets Codex read all of them;
+# `npm run harness:check` fails when AGENTS.md passes this limit.
+project_doc_max_bytes = 98304
+
 [features]
 hooks = true
 

@@ -1,6 +1,6 @@
 # Marketing layer boundaries
 
-> **State after M0 (2026-10-08).** The public site is a provisional ONE site in Portuguese: a home, the waitlist, contact, help, blog and the legal pages. The pages that sold flyee.club are gone. The `marketing-page` skill and `docs/DESIGN.md` were written for that product: their examples (the app store, the terminal, the founders offer, an English twin of every page) no longer apply, while the rules below do.
+> The `marketing-page` skill and `docs/DESIGN.md` were written for flyee.club: their examples (the app store, the terminal, the founders offer, an English twin of every page) do not apply to ONE, while their rules do. How the site came to be is in `apps/web/ARCHITECTURE.md`.
 
 - **One design system.** Every public page composes the primitives in `apps/web/src/components/marketing/`: `Section`/`Container`/`SectionHeader` plus the archetypes listed in `catalog.json`. Never hand-tuned per-page spacing or widths, never a parallel stylesheet vocabulary.
 - The `marketing-page` skill is MANDATORY for any create/edit/add-section under `app/[locale]/(marketing)`, `app/[locale]/(funil)` or `components/marketing`. The `PreToolUse` hook (`.claude/hooks/marketing-guard.mjs`) loads it automatically on Write/Edit in all three, and the `PostToolUse` lint (`.claude/hooks/marketing-lint.mjs`) checks every written file there. A file changed by a script bypasses both hooks: load the skill yourself and run the lint on it by hand.

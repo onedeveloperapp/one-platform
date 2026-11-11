@@ -11,6 +11,47 @@ const targetRoot = join(repoRoot, ".agents", "skills");
 const agentsFile = join(repoRoot, "AGENTS.md");
 const checkOnly = process.argv.includes("--check");
 
+// Every Claude session loads CLAUDE.md whole, so the build log lives in
+// docs/HISTORICO.md and "Where things stand" keeps only what every session
+// needs (moved on 2026-11-11, when CLAUDE.md had reached 569 KB). Codex reads
+// AGENTS.md only up to `project_doc_max_bytes` and drops the rest, so the mirror
+// puts the rules first and the state last.
+const CLAUDE_MAX_CHARS = 40_000;
+const STATE_HEADING = "## Where things stand";
+const STATE_MAX_CHARS = 3_000;
+// The whole mirror must fit in what .codex/config.toml lets Codex read. ONE's
+// rules (root, apps/web and .claude/rules) take about 75 KB after the moves of
+// 2026-11-11, so ONE reads 96 KiB where orkestree and flyee read 64 KiB.
+const CODEX_RAISED_DOC_BYTES = 96 * 1024;
+
+/** The `project_doc_max_bytes` .codex/config.toml sets at its top level, or null. */
+function codexDocLimit() {
+  const path = join(repoRoot, ".codex", "config.toml");
+  if (!existsSync(path)) return null;
+  const top = readFileSync(path, "utf8").replace(/\r\n/g, "\n").split(/^\s*\[/m)[0];
+  const match = top.match(/^\s*project_doc_max_bytes\s*=\s*(\d+)\s*$/m);
+  return match ? Number(match[1]) : null;
+}
+
+function readSource(relativePath) {
+  const path = join(repoRoot, relativePath);
+  if (!existsSync(path)) return "";
+  return readFileSync(path, "utf8").trim().replace(/\r\n/g, "\n");
+}
+
+/** CLAUDE.md split into its rules and its "Where things stand" section. */
+function splitState(claude) {
+  const lines = claude.split("\n");
+  const start = lines.findIndex((line) => line.trim().startsWith(STATE_HEADING));
+  if (start < 0) return { rules: claude, state: "" };
+  let end = lines.findIndex((line, index) => index > start && line.startsWith("## "));
+  if (end < 0) end = lines.length;
+  return {
+    rules: [...lines.slice(0, start), ...lines.slice(end)].join("\n").replace(/\n{3,}/g, "\n\n").trim(),
+    state: lines.slice(start, end).join("\n").trim(),
+  };
+}
+
 function frontmatter(content, sourcePath) {
   const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/);
   if (!match) throw new Error(`Missing YAML frontmatter: ${sourcePath}`);
@@ -30,7 +71,7 @@ function canonicalSection(relativePath) {
 }
 
 function rootAgentsFile() {
-  const sources = ["CLAUDE.md"];
+  const sources = [];
   for (const app of ["apps/web/CLAUDE.md"]) {
     if (existsSync(join(repoRoot, app))) sources.push(app);
   }
@@ -66,9 +107,16 @@ both agents. Codex discovers them through \`.codex/config.toml\`. Treat every
 continuing and review advisories before the final response. After changing any
 harness source, run \`npm run harness:check\` and \`npm run harness:test\`.
 
+The rules come first and the project state of \`CLAUDE.md\` ("Where things
+stand") last, because Codex reads at most \`project_doc_max_bytes\` of this
+file. The build log is \`docs/HISTORICO.md\`.
+
 Path frontmatter in the included rule files defines their scope.`;
 
-  return `${preamble}${sources.map(canonicalSection).filter(Boolean).join("")}\n`;
+  const { rules, state } = splitState(readSource("CLAUDE.md"));
+  const rulesSection = rules ? `\n\n===== CLAUDE.md =====\n\n${rules}` : "";
+  const stateSection = state ? `\n\n===== CLAUDE.md: Where things stand =====\n\n${state}` : "";
+  return `${preamble}${rulesSection}${sources.map(canonicalSection).filter(Boolean).join("")}${stateSection}\n`;
 }
 
 function skillNames(root) {
@@ -115,15 +163,46 @@ for (const [skill, bridge] of expected) {
 const removed = skillNames(targetRoot).filter((skill) => !expected.has(skill));
 if (!checkOnly) removed.forEach(removeGeneratedSkill);
 
+const sizeProblems = [];
+const stateChars = splitState(readSource("CLAUDE.md")).state.length;
+if (stateChars > STATE_MAX_CHARS) {
+  sizeProblems.push(
+    `CLAUDE.md: "Where things stand" has ${stateChars} characters, more than ${STATE_MAX_CHARS}. ` +
+      `Move what a part delivered to the end of docs/HISTORICO.md and keep only what every session needs.`,
+  );
+}
+const claudeChars = readSource("CLAUDE.md").length;
+if (claudeChars > CLAUDE_MAX_CHARS) {
+  sizeProblems.push(
+    `CLAUDE.md has ${claudeChars} characters, more than ${CLAUDE_MAX_CHARS}. Every session loads it whole: ` +
+      `move history to docs/HISTORICO.md.`,
+  );
+}
+const totalBytes = Buffer.byteLength(expectedAgentsFile, "utf8");
+const docLimit = codexDocLimit();
+if (docLimit === null || docLimit < CODEX_RAISED_DOC_BYTES) {
+  sizeProblems.push(
+    `.codex/config.toml must set project_doc_max_bytes = ${CODEX_RAISED_DOC_BYTES} at its top level, ` +
+      `or Codex reads only the first 32 KiB of AGENTS.md.`,
+  );
+} else if (totalBytes > docLimit) {
+  sizeProblems.push(
+    `AGENTS.md takes ${totalBytes} bytes, more than the ${docLimit} bytes Codex reads: Codex drops the end. ` +
+      `Move how an area works, or the record of a screen, to apps/web/ARCHITECTURE.md, or history to docs/HISTORICO.md.`,
+  );
+}
+for (const problem of sizeProblems) console.error(problem);
+
 if (checkOnly && (stale.length || removed.length)) {
   if (stale.length) console.error(`Stale or missing Codex skill bridges: ${stale.join(", ")}`);
   if (removed.length) console.error(`Orphaned Codex skill bridges: ${removed.join(", ")}`);
   console.error("Run `npm run harness:sync` and commit the generated changes.");
   process.exit(1);
 }
+if (sizeProblems.length) process.exit(1);
 
 if (!checkOnly) {
-  console.log(`Codex harness synchronized (${sourceSkills.length} skills).`);
+  console.log(`Codex harness synchronized (${sourceSkills.length} skills; AGENTS.md ${totalBytes} bytes).`);
 } else {
-  console.log(`Codex harness is synchronized (${sourceSkills.length} skills).`);
+  console.log(`Codex harness is synchronized (${sourceSkills.length} skills; AGENTS.md ${totalBytes} bytes).`);
 }
