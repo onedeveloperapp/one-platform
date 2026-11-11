@@ -6,6 +6,8 @@ import { tablesToBackUp } from "@flyee/backup/tables";
 
 const BUCKET = "backups";
 const DEFAULT_RETENTION_DAYS = 30;
+/** The most rows one archive holds: a larger table goes in parts, so what is held in memory is one part. */
+const PART_ROWS = 50_000;
 
 export type BackupTrigger = "cron" | "manual";
 
@@ -20,7 +22,9 @@ export const isBackupConfigured = () =>
 
 /**
  * Export every public table to `<run-id>/<table>.jsonl.gz` in the private
- * `backups` bucket and record the run in backup_runs (migration 0002).
+ * `backups` bucket (a table of more than PART_ROWS rows in parts,
+ * `<table>.part-0002.jsonl.gz` after the first) and record the run in
+ * backup_runs (migration 0002).
  *
  * This is a LOGICAL DATA backup (rows as JSONL, one file per table) meant
  * for operational visibility and quick data recovery: it does not carry
@@ -57,14 +61,16 @@ export async function runBackup(options: { trigger: BackupTrigger }): Promise<Ba
     let totalRows = 0;
     let totalBytes = 0;
     for (const table of tables) {
-      const { archive, rows } = await exportTable(sql, table);
-      const { error: uploadError } = await storage.upload(`${runId}/${table}.jsonl.gz`, archive, {
-        contentType: "application/gzip",
-        upsert: true,
+      await exportTable(sql, table, async (archive, rows, part) => {
+        const name = part === 1 ? `${table}.jsonl.gz` : `${table}.part-${String(part).padStart(4, "0")}.jsonl.gz`;
+        const { error: uploadError } = await storage.upload(`${runId}/${name}`, archive, {
+          contentType: "application/gzip",
+          upsert: true,
+        });
+        if (uploadError) throw new Error(`upload ${name}: ${uploadError.message}`);
+        totalRows += rows;
+        totalBytes += archive.byteLength;
       });
-      if (uploadError) throw new Error(`upload ${table}: ${uploadError.message}`);
-      totalRows += rows;
-      totalBytes += archive.byteLength;
     }
 
     await sql`
@@ -95,32 +101,53 @@ export async function runBackup(options: { trigger: BackupTrigger }): Promise<Ba
 }
 
 /**
- * One table as gzipped JSONL. Rows are compressed as the cursor hands them
- * over, so what is held in memory is the compressed archive, never the whole
- * table as text.
+ * One table as gzipped JSONL, in parts of at most PART_ROWS rows, each handed over (and uploaded) before the next is
+ * read: rows are compressed as the cursor hands them over, and what is held in memory is one part's archive, never
+ * the whole table. A table with no rows is one empty part, so every table of the run has its file.
  */
-async function exportTable(sql: postgres.Sql, table: string): Promise<{ archive: Buffer; rows: number }> {
-  const gzip = createGzip();
-  const chunks: Buffer[] = [];
-  gzip.on("data", (chunk: Buffer) => chunks.push(chunk));
-  const finished = new Promise<void>((resolve, reject) => {
-    gzip.on("end", resolve);
-    gzip.on("error", reject);
-  });
+async function exportTable(
+  sql: postgres.Sql,
+  table: string,
+  onPart: (archive: Buffer, rows: number, part: number) => Promise<void>,
+): Promise<void> {
+  let part = 1;
+  let gzip = createGzip();
+  let chunks: Buffer[] = [];
+  let partRows = 0;
+  const listen = (stream: ReturnType<typeof createGzip>, sink: Buffer[]) => {
+    stream.on("data", (chunk: Buffer) => sink.push(chunk));
+    return new Promise<void>((resolve, reject) => {
+      stream.on("end", resolve);
+      stream.on("error", reject);
+    });
+  };
+  let finished = listen(gzip, chunks);
+  const close = async () => {
+    gzip.end();
+    await finished;
+    await onPart(Buffer.concat(chunks), partRows, part);
+  };
 
-  let rows = 0;
   await sql`select * from ${sql(table)}`.cursor(500, async (batch) => {
     let text = "";
     for (const row of batch) {
-      text += `${rows > 0 ? "\n" : ""}${JSON.stringify(row)}`;
-      rows += 1;
+      text += `${partRows > 0 ? "\n" : ""}${JSON.stringify(row)}`;
+      partRows += 1;
     }
     // Waits for the compressor to take the batch before the next one is read.
     if (!gzip.write(text, "utf8")) await new Promise((resolve) => gzip.once("drain", resolve));
+    if (partRows >= PART_ROWS) {
+      await close();
+      part += 1;
+      gzip = createGzip();
+      chunks = [];
+      partRows = 0;
+      finished = listen(gzip, chunks);
+    }
   });
-  gzip.end();
-  await finished;
-  return { archive: Buffer.concat(chunks), rows };
+  // The last part, or the one empty part of a table with no rows; a table that ended exactly at a part's edge has
+  // nothing left to close.
+  if (partRows > 0 || part === 1) await close();
 }
 
 /** Delete runs (rows + archives) older than BACKUP_RETENTION_DAYS (default 30). */

@@ -1,6 +1,7 @@
 "use client";
 
 import { loadFirmDossier } from "../actions";
+import FirmOperationSection from "./firm-operation";
 import type { PersonAction, PersonTarget } from "./person-actions";
 import Link from "next/link";
 import { useEffect, useState } from "react";
@@ -52,6 +53,9 @@ import {
 /** What each limit of `org_entitlements` means, in the operator's words. Limits are data: an unknown key shows as itself. */
 const LIMIT_LABEL: Record<string, string> = {
   assentos_max: "Lugares na equipe",
+  processos_ativos_max: "Processos ativos",
+  whatsapp_numeros_max: "Números de WhatsApp",
+  monitor_voo: "Monitor de voo",
 };
 
 const SOURCE_LABEL: Record<string, string> = {
@@ -173,6 +177,8 @@ export function FirmDossierBody({
           ]}
         />
       </Section>
+
+      <FirmOperationSection orgId={firm.orgId} />
 
       <Section title="Equipe">
         {team.length === 0 ? (

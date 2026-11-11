@@ -134,6 +134,9 @@ select is(
     -- Each court's channel to file by machine, the operator's data (0101): read through the backend's functions.
     'court_filing_channels',
     'djen_probes',
+    -- The copy of the firms' files and the removals it owes (0205): the backend's alone.
+    'file_copies',
+    'file_copy_removals',
     'hearing_event_removals',
     'lead_submissions',
     -- What the market's reading plans, and the decisions it read (0190): read through their functions, in numbers.

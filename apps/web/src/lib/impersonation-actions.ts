@@ -91,6 +91,17 @@ export async function startImpersonation(userId: string, reason: string): Promis
     return { ok: false, error: "Superadmin accounts cannot be impersonated." };
   }
 
+  // The firm's data are its clients': a visit into a firm needs the firm's authorization in force (0203). The
+  // database refuses the visit's record without it too; asking first keeps a session from being minted for nothing.
+  const { data: access } = await operatorClient.rpc("admin_support_access_for", { target_user: userId });
+  if ((access as { authorized?: boolean } | null)?.authorized !== true) {
+    return {
+      ok: false,
+      error:
+        "O escritório desta pessoa não autorizou o suporte agora. Peça a autorização: quem administra o escritório é avisado e decide.",
+    };
+  }
+
   // generateLink does NOT send an email and does not invalidate anything the
   // user already has — it just mints a one-time token we redeem ourselves.
   const { data: link, error: linkError } = await service.auth.admin.generateLink({
@@ -143,7 +154,12 @@ export async function startImpersonation(userId: string, reason: string): Promis
     // access, so it must not survive.
     await impersonatedClient.auth.signOut({ scope: "local" });
     await clearImpersonationCookies();
-    return { ok: false, error: `Support session rejected: ${recordError.message}` };
+    return {
+      ok: false,
+      error: recordError.message.includes("support_not_authorized")
+        ? "O escritório desta pessoa não autorizou o suporte agora."
+        : `Support session rejected: ${recordError.message}`,
+    };
   }
 
   // Her own access log must read "support access", not an unexplained sign-in
