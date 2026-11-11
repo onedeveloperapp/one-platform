@@ -24,6 +24,7 @@ import { readModuleOffer } from "@/lib/modules/offer-read";
 import { getActivationFacts, isSetupAnswered, onboardingFlowKey, waitsFirstCase } from "@/lib/onboarding";
 import { readOneWork } from "@/lib/one-work/read";
 import { brasiliaMonth, monthTotals } from "@/lib/one-work/work";
+import { readDjenOutage } from "@/lib/publications/djen-watch";
 import { IMPERSONATION_MARKER_COOKIE } from "@flyee/auth";
 import { getOnboardingState } from "@flyee/onboarding";
 
@@ -104,6 +105,7 @@ async function loadHome(): Promise<
     oneWork,
     finance,
     outcomes,
+    djen,
   ] = await Promise.all([
     context.supabase.rpc("firm_today", { target_org: firm.id }),
     context.supabase.rpc("firm_pending", { target_org: firm.id }),
@@ -159,6 +161,10 @@ async function loadHome(): Promise<
     context.supabase
       .rpc("firm_outcome_attention", { target_org: firm.id })
       .then(({ data, error }) => (error ? null : outcomeAttentionOf(data))),
+    // The DJEN silent for more than a day (0201), as the center says it.
+    context.supabase
+      .rpc("firm_djen_outage", { target_org: firm.id })
+      .then(({ data, error }) => (error ? null : readDjenOutage(data))),
   ]);
   if (manager && facts && !isSetupAnswered(facts)) return { kind: "setup", setup: await loadSetupState(context) };
   // Read failures owe nothing: a registration that could not be read is never said to be missing.
@@ -206,6 +212,7 @@ async function loadHome(): Promise<
             acks ? { acks, viewer: { userId: context.userId, firmFunction: firm.firmFunction } } : null,
             finance,
             outcomes,
+            djen,
           ),
         )
       : null,

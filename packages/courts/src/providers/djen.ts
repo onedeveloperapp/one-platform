@@ -1,5 +1,6 @@
 import { oabNumberKey, oabStateKey } from "@flyee/courts/oab";
-import type { DjenClient, DjenCommunication, OabRegistration } from "@flyee/courts/types";
+import { hostOfLink, isEmptyText, kindOfCommunication, systemOfHost } from "@flyee/courts/djen-systems";
+import type { DjenClient, DjenCommunication, DjenProbe, OabRegistration } from "@flyee/courts/types";
 
 /**
  * The DJEN (Diário de Justiça Eletrônico Nacional, CNJ Resolution 455/2022)
@@ -143,6 +144,7 @@ type Item = {
   link?: unknown;
   nomeOrgao?: unknown;
   nomeClasse?: unknown;
+  codigoClasse?: unknown;
   ativo?: unknown;
   motivo_cancelamento?: unknown;
   data_cancelamento?: unknown;
@@ -327,6 +329,45 @@ export class DjenHttpClient implements DjenClient {
     return [...found.values(), ...unkeyed].sort(
       (a, b) => a.availableOn.localeCompare(b.availableOn) || a.hash.localeCompare(b.hash),
     );
+  }
+
+  async probe(input: { court: string; day: string }): Promise<DjenProbe> {
+    const court = input.court.trim().toUpperCase();
+    if (!/^[A-Z0-9]{2,8}$/.test(court) || !/^\d{4}-\d{2}-\d{2}$/.test(input.day)) throw new DjenInvalidQueryError("days");
+    const query = new URLSearchParams({
+      siglaTribunal: court,
+      dataDisponibilizacaoInicio: input.day,
+      dataDisponibilizacaoFim: input.day,
+      pagina: "1",
+      itensPorPagina: String(PAGE_SIZE),
+    });
+    const response = await this.get(`${this.baseUrl}/api/v1/comunicacao?${query}`);
+    if (response.status === 429) throw new DjenRateLimitedError();
+    if (!response.ok) throw new DjenUnavailableError(response.status);
+    let body: Page;
+    try {
+      body = (await response.json()) as Page;
+    } catch {
+      throw new DjenUnavailableError(response.status, "unreadable");
+    }
+    const items = body && Array.isArray(body.items) ? body.items : null;
+    if (!items || (body.status !== undefined && body.status !== "success")) {
+      throw new DjenUnavailableError(response.status, "not_a_listing");
+    }
+    const probe: DjenProbe = { items: items.length, withoutText: 0, systems: {} };
+    for (const item of items) {
+      if (isEmptyText(text(item.texto))) probe.withoutText += 1;
+      const kind = kindOfCommunication({
+        classCode: Number.isFinite(Number(item.codigoClasse)) ? Number(item.codigoClasse) : null,
+        className: text(item.nomeClasse),
+        unit: text(item.nomeOrgao),
+      });
+      const system = systemOfHost(hostOfLink(text(item.link).trim()));
+      if (!kind || !system) continue;
+      const bucket = (probe.systems[kind] ??= {});
+      bucket[system] = (bucket[system] ?? 0) + 1;
+    }
+    return probe;
   }
 
   private async get(url: string): Promise<Response> {

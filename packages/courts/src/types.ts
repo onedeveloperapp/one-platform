@@ -55,6 +55,18 @@ export type DjenCommunication = {
   cancelReason: string | null;
 };
 
+/**
+ * What one look at the public API saw of a court on a day (the platform's watch over the DJEN): whether it answered,
+ * how many communications the first page held, how many of them came with no text, and, by the kind of lawsuit each
+ * is of, which system their links point to.
+ */
+export type DjenProbe = {
+  items: number;
+  withoutText: number;
+  /** Links by kind of lawsuit and system: `{ juizado: { projudi: 40, pje: 3 } }`. A communication of no known kind is left out. */
+  systems: Partial<Record<"juizado" | "comum", Partial<Record<"projudi" | "eproc" | "pje" | "esaj" | "outro", number>>>>;
+};
+
 export interface DjenClient {
   /**
    * Every communication addressed to a lawyer and made available on or after
@@ -77,6 +89,11 @@ export interface DjenClient {
    * communication by its hash: what it gives by the hash is its certificate.)
    */
   certificateUrl(hash: string): string;
+  /**
+   * One look at what a court made available on a day (its first page): the platform's watch over the DJEN. An API
+   * that does not answer, refuses or answers what is no listing is an error, as in a listing; one call, never a wait.
+   */
+  probe(input: { court: string; day: string }): Promise<DjenProbe>;
 }
 
 /**

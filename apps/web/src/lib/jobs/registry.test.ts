@@ -43,6 +43,7 @@ describe("the platform's sweeps (2026-11-04)", () => {
         "finance-receipts",
         "finance-retention",
         "finance-series",
+        "djen-watch",
         "flight-alerts",
         "flight-checks",
         "flight-watch",
@@ -56,6 +57,7 @@ describe("the platform's sweeps (2026-11-04)", () => {
         "lawsuit-outcomes",
         "market-reading",
         "agenda-digests",
+        "weekly-digests",
         "client-money",
         "finance-closing",
         "maintenance",
@@ -85,7 +87,7 @@ describe("the platform's sweeps (2026-11-04)", () => {
   it("run while ONE is used only where two servers at once do nothing twice", () => {
     const clockOnly = SWEEPS.filter((sweep) => !sweep.whileUsed).map((sweep) => sweep.key);
     // One lane at the DJEN and at the tribunal, a month of ANAC's record downloaded once, and the upkeep.
-    for (const key of ["djen-capture", "court-tracking", "flight-checks", "backup", "newsletter"]) {
+    for (const key of ["djen-capture", "djen-watch", "court-tracking", "flight-checks", "backup", "newsletter"]) {
       expect(clockOnly, key).toContain(key);
     }
     // What a person waits on is also swept while ONE is used.

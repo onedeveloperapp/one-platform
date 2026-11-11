@@ -10,6 +10,7 @@ import { readPublicationAcks } from "@/lib/firm/publication-acks";
 import { readFirmToday, todayViewerOf } from "@/lib/firm/today";
 import { sweepWhileUsed } from "@/lib/jobs/while-used";
 import { getMemberContext } from "@/lib/member/context";
+import { readDjenOutage } from "@/lib/publications/djen-watch";
 
 export type PendingRead =
   | { ok: true; groups: PendingGroup[]; badge: number; late: boolean }
@@ -29,7 +30,7 @@ export async function readPendingCenter(): Promise<PendingRead> {
   // run now and then, after the answer (lib/jobs/while-used.ts).
   sweepWhileUsed();
 
-  const [today, pending, decisions, filing, cloudSigning, acks, finance, outcomes] = await Promise.all([
+  const [today, pending, decisions, filing, cloudSigning, acks, finance, outcomes, djen] = await Promise.all([
     context.supabase.rpc("firm_today", { target_org: context.firm.id }),
     context.supabase.rpc("firm_pending", { target_org: context.firm.id }),
     // Each decision that waits, placed where it is decided; unread, the center counts them as before.
@@ -49,6 +50,10 @@ export async function readPendingCenter(): Promise<PendingRead> {
     context.supabase
       .rpc("firm_outcome_attention", { target_org: context.firm.id })
       .then(({ data, error }) => (error ? null : outcomeAttentionOf(data))),
+    // The DJEN silent for more than a day (0201); unread, the center says the rest as before.
+    context.supabase
+      .rpc("firm_djen_outage", { target_org: context.firm.id })
+      .then(({ data, error }) => (error ? null : readDjenOutage(data))),
   ]);
   const todayRead = today.error ? null : readFirmToday(today.data);
   const pendingRead = pending.error ? null : readFirmPending(pending.data);
@@ -77,6 +82,7 @@ export async function readPendingCenter(): Promise<PendingRead> {
     acks ? { acks, viewer: { userId: context.userId, firmFunction: context.firm.firmFunction } } : null,
     finance,
     outcomes,
+    djen,
   );
   return { ok: true, groups, badge: pendingBadge(groups), late: pendingLate(groups) };
 }

@@ -13,6 +13,9 @@
  *   grammatical gender of that name;
  * - a date, an amount or a duration arrives already formatted for the reader.
  */
+/** "1 caso novo", "3 casos novos". */
+const plural = (n: number, one: string, many: string): string => `${n} ${n === 1 ? one : many}`;
+
 export const emailCopy = {
   shell: {
     /** The line under every message. */
@@ -185,6 +188,49 @@ export const emailCopy = {
         : `Você recebe os prazos e as audiências de que responde em ${firm} nos dias úteis de manhã, quando há algo.`,
     calendar: "O que vale é o ONE: um calendário assinado pode levar horas para mostrar uma mudança.",
     unsubscribe: "Parar este e-mail",
+  },
+
+  weeklyDigest: {
+    subject: (firm: string, week: string) => `A semana de ${firm} no ONE: ${week}`,
+    preview: (opened: number, closings: number, filed: number) =>
+      `${plural(opened, "caso novo", "casos novos")} · ${plural(closings, "fechamento", "fechamentos")} · ${plural(filed, "ação ajuizada", "ações ajuizadas")}`,
+    heading: (week: string) => `A semana de ${week}`,
+    tests: "O escritório ainda não tem casos reais: estes números contam os casos de teste.",
+    casesTitle: "Casos",
+    opened: (n: number) => plural(n, "caso novo", "casos novos"),
+    closings: (n: number) => plural(n, "fechamento", "fechamentos"),
+    filed: (n: number) => plural(n, "ação ajuizada", "ações ajuizadas"),
+    ended: (n: number) => plural(n, "caso encerrado", "casos encerrados"),
+    before: (n: number) => `na semana anterior, ${n}`,
+    going: (n: number) => `${plural(n, "caso em andamento", "casos em andamento")} agora`,
+    outcomesTitle: "Resultados",
+    won: (n: number) => plural(n, "sentença procedente", "sentenças procedentes"),
+    partial: (n: number) => plural(n, "sentença parcialmente procedente", "sentenças parcialmente procedentes"),
+    lost: (n: number) => plural(n, "sentença improcedente", "sentenças improcedentes"),
+    settlements: (n: number) => plural(n, "acordo", "acordos"),
+    final: (n: number) => plural(n, "trânsito em julgado", "trânsitos em julgado"),
+    received: (n: number, money: string) =>
+      `${plural(n, "valor liberado recebido", "valores liberados recebidos")}, somando ${money}`,
+    aheadTitle: "Nesta semana",
+    deadlines: (n: number) => `${plural(n, "prazo vence", "prazos vencem")} nesta semana`,
+    hearings: (n: number) => `${plural(n, "audiência", "audiências")} nesta semana`,
+    waitingTitle: "Esperando o escritório",
+    overdue: (n: number) => `${plural(n, "prazo passou", "prazos passaram")} do dia sem ser concluído`,
+    stagnant: (n: number) => `${plural(n, "caso está parado", "casos estão parados")} além do limite da etapa`,
+    decisions: (n: number) => `${plural(n, "resposta da IA espera", "respostas da IA esperam")} uma pessoa`,
+    awareness: (n: number) =>
+      `${plural(n, "publicação triada pelo ONE espera", "publicações triadas pelo ONE esperam")} a ciência de um advogado`,
+    oneTitle: "O que o ONE fez",
+    one: (tasks: number, hours: string) =>
+      `${plural(tasks, "tarefa", "tarefas")}, cerca de ${hours} de trabalho de uma pessoa, pelas estimativas do escritório`,
+    hours: (minutes: number) =>
+      minutes < 60 ? "menos de 1 hora" : plural(Math.round(minutes / 60), "hora", "horas"),
+    nothing: "Nada nesta semana.",
+    open: "Ver no ONE",
+    button: "Abrir o ONE",
+    reason: (firm: string) =>
+      `Você recebe este resumo às segundas-feiras de manhã porque decide pelo escritório ${firm}. Ele traz só números: os casos estão no ONE.`,
+    unsubscribe: "Parar este resumo",
   },
 
   newsletter: {

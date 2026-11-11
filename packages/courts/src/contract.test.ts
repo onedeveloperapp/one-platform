@@ -127,6 +127,54 @@ function djenContract(name: string, make: (published: FakeDjenEntry[]) => DjenCl
       assert.deepEqual(await client.listByOab({ ...ANA, since: "2026-10-06", until: "2026-10-05" }), []);
     });
 
+    it("looks at what a court made available on a day: how many, how many with no text, and the systems by kind", async () => {
+      const client = make([
+        ...PUBLISHED,
+        {
+          hash: "hash0101abcdefghijklmnopqrstuv",
+          court: "TJGO",
+          cnj: "10003012720998090100",
+          availableOn: "2026-10-08",
+          kind: "Intimação",
+          text: "Intime-se.",
+          link: "https://projudi.tjgo.jus.br/BuscaProcesso?id=1",
+          unit: "1º Juizado Especial Cível de Goiânia",
+          className: "Procedimento do Juizado Especial Cível",
+          lawyers: [BRUNO],
+        },
+        {
+          hash: "hash0102abcdefghijklmnopqrstuv",
+          court: "TJGO",
+          cnj: "10003021220998090100",
+          availableOn: "2026-10-08",
+          kind: "Intimação",
+          text: "<p> </p>",
+          link: "https://pje.tjgo.jus.br/consulta?id=2",
+          unit: "2º Juizado Especial Cível de Goiânia",
+          className: "Procedimento do Juizado Especial Cível",
+          lawyers: [BRUNO],
+        },
+        {
+          hash: "hash0103abcdefghijklmnopqrstuv",
+          court: "TJSP",
+          cnj: "10003039420998260100",
+          availableOn: "2026-10-08",
+          kind: "Intimação",
+          text: "Cite-se.",
+          link: "https://eproc1g.tjsp.jus.br/x",
+          unit: "1ª Vara Cível",
+          className: "Procedimento Comum Cível",
+          lawyers: [BRUNO],
+        },
+      ]);
+      const probe = await client.probe({ court: "TJGO", day: "2026-10-08" });
+      assert.equal(probe.items, 2);
+      assert.equal(probe.withoutText, 1);
+      assert.deepEqual(probe.systems, { juizado: { projudi: 1, pje: 1 } });
+      const none = await client.probe({ court: "TJGO", day: "2026-10-05" });
+      assert.deepEqual(none, { items: 0, withoutText: 0, systems: {} });
+    });
+
     it("answers a lawyer with nothing published with an empty list, not an error", async () => {
       const client = make(PUBLISHED);
       assert.deepEqual(await client.listByOab({ uf: "RJ", number: "1", since: "2026-01-01" }), []);
@@ -250,12 +298,15 @@ function djenStandIn(
     const size = Number(url.searchParams.get("itensPorPagina") ?? "100");
     // The API holds a communication once: a hash published twice is the same.
     const unique = [...new Map(published.map((entry) => [entry.hash, entry])).values()];
+    const court = url.searchParams.get("siglaTribunal");
     const matching = unique
       .filter(
         (entry) =>
           entry.availableOn >= from &&
           entry.availableOn <= until &&
-          entry.lawyers.some((lawyer) => lawyer.number === number && (!uf || lawyer.uf === uf)),
+          (court
+            ? entry.court === court
+            : entry.lawyers.some((lawyer) => lawyer.number === number && (!uf || lawyer.uf === uf))),
       )
       // Newest first, as a gazette lists: the client is the one that orders.
       .sort((a, b) => b.availableOn.localeCompare(a.availableOn));
@@ -307,11 +358,21 @@ describe("the fake DJEN", () => {
     const client = new FakeDjenClient(PUBLISHED);
     await client.listByOab({ ...ANA, since: "2026-10-01" });
     await client.listByOab({ ...ANA, since: "2026-10-01" });
-    assert.deepEqual(client.calls, { listByOab: 2 });
+    assert.deepEqual(client.calls, { listByOab: 2, probe: 0 });
   });
 });
 
 describe("the DJEN through its public API", () => {
+  it("a look the API refuses is an outage, never a day with nothing", async () => {
+    const server = djenStandIn(PUBLISHED, { statuses: [500] });
+    const client = new DjenHttpClient({ fetch: server.fetcher, today: () => "2026-10-09", sleep: async () => undefined });
+    await assert.rejects(client.probe({ court: "TJGO", day: "2026-10-08" }), DjenUnavailableError);
+    const busy = djenStandIn(PUBLISHED, { statuses: [429] });
+    const again = new DjenHttpClient({ fetch: busy.fetcher, today: () => "2026-10-09", sleep: async () => undefined });
+    await assert.rejects(again.probe({ court: "TJGO", day: "2026-10-08" }), DjenRateLimitedError);
+    assert.equal(busy.calls.length, 1);
+  });
+
   /** Many communications for one lawyer, one a day back from the 9th of October 2026 and around again. */
   const many = (count: number): FakeDjenEntry[] =>
     Array.from({ length: count }, (_, index) => ({

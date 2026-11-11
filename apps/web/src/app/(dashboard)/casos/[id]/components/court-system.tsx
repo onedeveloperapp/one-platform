@@ -2,14 +2,17 @@
 
 import type { CaseProceeding, CaseState } from "../case-types";
 import { useTranslations } from "next-intl";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { Alert, Box, Button, Dialog, DialogActions, DialogContent, TextField, Typography } from "@mui/material";
 
 import DialogHeader from "@/components/product/dialog-header";
+import StateLine from "@/components/product/state-line";
 import StatusChip from "@/components/product/status-chip";
 import { decideCourtSystem } from "@/lib/cases/actions";
 import { caseErrorKey } from "@/lib/cases/cases";
+import type { CourtSystemSignal } from "@/lib/publications/djen-watch";
+import { readSystemSignal } from "@/lib/publications/djen-watch-actions";
 
 type Ready = Extract<CaseState, { kind: "ready" }>;
 
@@ -55,6 +58,21 @@ export default function CourtSystem({
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
+  // The DJEN's recent links of the lawsuit's court and kind (0201), read while its system waits for the firm's word.
+  const [signal, setSignal] = useState<CourtSystemSignal | null>(null);
+  const asksSignal = proceeding.status === "planned" && !proceeding.systemApproval && Boolean(proceeding.court);
+  useEffect(() => {
+    if (!asksSignal || !proceeding.court) return;
+    let live = true;
+    void readSystemSignal(proceeding.court, proceeding.kind)
+      .then((answer) => {
+        if (live) setSignal(answer);
+      })
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [asksSignal, proceeding.court, proceeding.kind]);
 
   if (proceeding.status !== "planned") return null;
 
@@ -127,6 +145,15 @@ export default function CourtSystem({
         <Typography variant="body2" className="text-text-secondary">
           {t("case-proceeding-system-may-err")}
         </Typography>
+      )}
+      {signal && !approval && signal.seenSystem !== proceeding.system && (
+        <StateLine tone="attention">
+          {t("case-proceeding-system-signal", {
+            system: SYSTEM_KEY[signal.seenSystem] ? t(SYSTEM_KEY[signal.seenSystem]) : signal.seenSystem,
+            percent: signal.percent,
+            total: signal.total,
+          })}
+        </StateLine>
       )}
       {approval && (
         <Typography variant="body2" className="text-text-secondary">

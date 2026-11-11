@@ -480,6 +480,16 @@ describe("the center of what waits for somebody", () => {
     ).toBe("pending-case-waits(days=2,reason=advance-waiting-claims-missing())");
   });
 
+  it("tells who works the deadlines of a DJEN silent for more than a day, and nobody else", () => {
+    const outage = { downSince: "2026-10-21T08:00:00Z", downDay: "2026-10-21" };
+    const groups = pendingGroups(NOTHING, QUIET, PARTNER, NOW, null, null, null, null, null, outage);
+    expect(ids(groups, "one")).toEqual(["djen-outage"]);
+    const line = groups.find((group) => group.key === "one")?.items[0];
+    expect(line?.label).toEqual({ key: "pending-djen-down", values: { day: "21/10/2026" } });
+    expect(line?.href).toBe("/publicacoes#leitura");
+    expect(pendingGroups(NOTHING, QUIET, ATTENDANCE, NOW, null, null, null, null, null, outage)).toEqual([]);
+  });
+
   it("has words for every line it can show", () => {
     const today: FirmToday = {
       ...NOTHING,

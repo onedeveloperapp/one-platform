@@ -16,6 +16,7 @@ import { deadlineSweeps } from "@/lib/deadlines/jobs";
 import { fileSweeps } from "@/lib/files/jobs";
 import { financeSweeps } from "@/lib/finance/jobs";
 import { moneySweeps } from "@/lib/finance/money-work";
+import { weeklyDigestSweeps } from "@/lib/firm/weekly-digest-work";
 import { hearingBriefSweeps } from "@/lib/hearings/brief-work";
 import { hearingSweeps } from "@/lib/hearings/jobs";
 import { importSweeps } from "@/lib/import/jobs";
@@ -28,6 +29,7 @@ import { moduleSweeps } from "@/lib/modules/jobs";
 import { newsletterSweeps } from "@/lib/newsletter-jobs";
 import { noticeSweeps } from "@/lib/notices/jobs";
 import { publicationActionSweeps } from "@/lib/publications/action-work";
+import { djenWatchSweeps } from "@/lib/publications/djen-watch-work";
 import { publicationSweeps } from "@/lib/publications/jobs";
 import { signatureSweeps } from "@/lib/signatures/jobs";
 import { whatsappSweeps } from "@/lib/whatsapp/jobs";
@@ -49,6 +51,7 @@ export const SWEEPS: readonly Sweep[] = [
   ...hearingBriefSweeps,
   ...publicationSweeps,
   ...publicationActionSweeps,
+  ...djenWatchSweeps,
   ...courtSweeps,
   ...librarySweeps,
   ...signatureSweeps,
@@ -60,6 +63,7 @@ export const SWEEPS: readonly Sweep[] = [
   ...outcomeSweeps,
   ...amountSweeps,
   ...agendaSweeps,
+  ...weeklyDigestSweeps,
   ...moneySweeps,
   ...billingSweeps,
   ...leadSweeps,

@@ -10,6 +10,7 @@
     "./fake": "./src/fake.ts",
     "./filing": "./src/filing.ts",
     "./oab": "./src/oab.ts",
+    "./djen-systems": "./src/djen-systems.ts",
     "./providers/djen": "./src/providers/djen.ts",
     "./providers/projudi": "./src/providers/projudi.ts",
     "./providers/mni": "./src/providers/mni.ts",

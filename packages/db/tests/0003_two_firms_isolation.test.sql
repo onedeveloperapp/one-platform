@@ -441,6 +441,9 @@ insert into public.agenda_preferences (org_id, user_id, digest_off) values
 insert into public.agenda_digests (org_id, user_id, day, status, items) values
   ('b1000000-0000-4000-8000-00000000000a', 'a1000000-0000-4000-8000-000000000001', date '2026-11-10', 'sent', 2),
   ('b1000000-0000-4000-8000-00000000000b', 'a1000000-0000-4000-8000-000000000004', date '2026-11-10', 'sent', 2);
+insert into public.weekly_digests (org_id, user_id, week, status, items) values
+  ('b1000000-0000-4000-8000-00000000000a', 'a1000000-0000-4000-8000-000000000001', date '2026-11-09', 'sent', 4),
+  ('b1000000-0000-4000-8000-00000000000b', 'a1000000-0000-4000-8000-000000000004', date '2026-11-09', 'sent', 4);
 -- The fee terms, the fees and a cost of each firm's case (0131).
 insert into public.fee_terms (org_id, incident, success_percent) values
   ('b1000000-0000-4000-8000-00000000000a', 'delay', 30),
@@ -683,7 +686,7 @@ select is(
     'residence_declarations', 'signature_envelopes',
     'subscriptions', 'template_imports', 'test_chats', 'tracked_legs', 'tracked_trip_documents', 'tracked_trips', 'trip_day_messages',
     'wa_contacts',
-    'wa_conversation_events', 'wa_conversations', 'wa_messages', 'wa_numbers', 'wa_optouts', 'wa_templates'
+    'wa_conversation_events', 'wa_conversations', 'wa_messages', 'wa_numbers', 'wa_optouts', 'wa_templates', 'weekly_digests'
   ],
   'and of their own firm exactly what an owner should'
 );
@@ -903,7 +906,7 @@ select is(
     'residence_declarations', 'signature_envelopes',
     'subscriptions', 'template_imports', 'test_chats', 'tracked_legs', 'tracked_trip_documents', 'tracked_trips', 'trip_day_messages',
     'wa_contacts',
-    'wa_conversation_events', 'wa_conversations', 'wa_messages', 'wa_numbers', 'wa_optouts', 'wa_templates'
+    'wa_conversation_events', 'wa_conversations', 'wa_messages', 'wa_numbers', 'wa_optouts', 'wa_templates', 'weekly_digests'
   ],
   'and of their own firm the same an owner of firm A reads of theirs'
 );

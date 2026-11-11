@@ -10,6 +10,7 @@ import ContactFormEmail from "./templates/contact-form";
 import FirmInvitationEmail from "./templates/firm-invitation";
 import AccountantPackageEmail from "./templates/accountant-package";
 import HearingBriefEmail from "./templates/hearing-brief";
+import WeeklyDigestEmail from "./templates/weekly-digest";
 import PartnerInvitationEmail from "./templates/partner-invitation";
 import KitReceiptEmail from "./templates/kit-receipt";
 import LeadConfirmEmail from "./templates/lead-confirm";
@@ -18,6 +19,7 @@ import NewsletterEmail from "./templates/newsletter";
 import SubscriptionActiveEmail from "./templates/subscription-active";
 import SubscriptionCanceledEmail from "./templates/subscription-canceled";
 import TermEndingEmail from "./templates/term-ending";
+import { weeklyDigestItems, weeklyDigestSections } from "./weekly";
 
 const LOCALES: EmailLocale[] = ["pt-BR"];
 const APP = "https://one.example/inicio";
@@ -35,6 +37,16 @@ async function textOf(element: ReactElement): Promise<string> {
 /** The address as it is written inside an HTML attribute. */
 const inHtml = (url: string) => url.replaceAll("&", "&amp;");
 
+/** A week of a firm, as the database answers it (migration 0200). */
+const WEEK = {
+  testsCounted: false,
+  cases: { opened: 3, openedBefore: 1, closings: 2, closingsBefore: 0, filed: 1, filedBefore: 0, ended: 0, endedBefore: 0, going: 14 },
+  outcomes: { won: 1, partial: 0, lost: 0, settlements: 1, final: 0, received: 1, receivedCents: 412350 },
+  ahead: { deadlines: 2, hearings: 0 },
+  waiting: { overdue: 0, stagnant: 1, decisions: 0, awareness: 0 },
+  one: { tasks: 41, minutes: 610 },
+};
+
 /** Every template in a language, with the props a real send would carry. */
 function every(locale: EmailLocale): Record<string, ReactElement> {
   return {
@@ -47,6 +59,15 @@ function every(locale: EmailLocale): Record<string, ReactElement> {
       today: [{ text: "Prazo fatal: Réplica · Caso 12", url: APP, changed: false }],
       next: [{ text: "Audiência de conciliação · Caso 12 · quarta-feira às 14:30", url: null, changed: true }],
       agendaUrl: APP,
+      unsubscribeUrl: UNSUBSCRIBE,
+    }),
+    "weekly-digest": createElement(WeeklyDigestEmail, {
+      locale,
+      firmName: "Lima Advocacia",
+      weekLabel: "2 a 8 de novembro",
+      facts: WEEK,
+      links: { cases: APP, outcomes: APP, ahead: APP, waiting: APP, one: APP },
+      homeUrl: APP,
       unsubscribeUrl: UNSUBSCRIBE,
     }),
     "firm-invitation": createElement(FirmInvitationEmail, {
@@ -140,7 +161,7 @@ describe("e-mail templates", () => {
     for (const locale of LOCALES) {
       for (const [name, element] of Object.entries(every(locale))) {
         const html = await render(element);
-        const stoppable = name === "newsletter" || name === "agenda-digest";
+        const stoppable = name === "newsletter" || name === "agenda-digest" || name === "weekly-digest";
         expect(html.includes(inHtml(UNSUBSCRIBE)), `${name} (${locale})`).toBe(stoppable);
       }
     }
@@ -149,6 +170,45 @@ describe("e-mail templates", () => {
   it("writes in Portuguese whatever language a profile or a contact carries", () => {
     expect(toEmailLocale("en")).toBe("pt-BR");
     expect(toEmailLocale(null)).toBe("pt-BR");
+  });
+});
+
+describe("the weekly digest", () => {
+  const links = { cases: APP, outcomes: APP, ahead: APP, waiting: APP, one: APP };
+
+  it("says each count with the week before, leaves out what is zero and says a part with nothing", async () => {
+    const text = await textOf(
+      createElement(WeeklyDigestEmail, {
+        locale: "pt-BR",
+        firmName: "Lima Advocacia",
+        weekLabel: "2 a 8 de novembro",
+        facts: WEEK,
+        links,
+        homeUrl: APP,
+        unsubscribeUrl: UNSUBSCRIBE,
+      }),
+    );
+    expect(text).toContain("3 casos novos (na semana anterior, 1)");
+    expect(text).toContain("1 valor liberado recebido, somando R$ 4.123,50");
+    expect(text).toContain("41 tarefas, cerca de 10 horas");
+    expect(text).not.toContain("audiência");
+    expect(text).not.toContain("casos encerrados");
+  });
+
+  it("counts what the week tells, never the cases going alone", () => {
+    const quiet = {
+      ...WEEK,
+      cases: { ...WEEK.cases, opened: 0, openedBefore: 0, closings: 0, filed: 0 },
+      outcomes: { won: 0, partial: 0, lost: 0, settlements: 0, final: 0, received: 0, receivedCents: 0 },
+      ahead: { deadlines: 0, hearings: 0 },
+      waiting: { overdue: 0, stagnant: 0, decisions: 0, awareness: 0 },
+      one: { tasks: 0, minutes: 0 },
+    };
+    expect(weeklyDigestItems(quiet)).toBe(0);
+    expect(weeklyDigestItems(WEEK)).toBe(53);
+    expect(weeklyDigestSections("pt-BR", quiet, links).find((s) => s.key === "outcomes")?.lines).toEqual([
+      "Nada nesta semana.",
+    ]);
   });
 });
 

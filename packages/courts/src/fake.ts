@@ -1,9 +1,11 @@
+import { hostOfLink, isEmptyText, kindOfCommunication, systemOfHost } from "@flyee/courts/djen-systems";
 import { oabNumberKey, oabStateKey } from "@flyee/courts/oab";
 import type {
   CourtMovement,
   CourtProceeding,
   DjenClient,
   DjenCommunication,
+  DjenProbe,
   FilingChannel,
   FilingOutcome,
   LawsuitFiling,
@@ -38,7 +40,10 @@ export class FakeDjenClient implements DjenClient {
   private readonly stored = new Map<string, Stored>();
 
   /** How many times it was asked, so a test of the capture can prove it paces and does not repeat. */
-  readonly calls = { listByOab: 0 };
+  readonly calls = { listByOab: 0, probe: 0 };
+
+  /** What the next looks of the watch meet instead of an answer (an outage), while it is set. */
+  probeError: Error | null = null;
 
   constructor(entries: FakeDjenEntry[] = []) {
     for (const entry of entries) this.publish(entry);
@@ -73,6 +78,26 @@ export class FakeDjenClient implements DjenClient {
 
   certificateUrl(hash: string): string {
     return `https://djen.invalid/api/v1/comunicacao/${encodeURIComponent(hash)}/certidao`;
+  }
+
+  async probe(input: { court: string; day: string }): Promise<DjenProbe> {
+    this.calls.probe += 1;
+    if (this.probeError) throw this.probeError;
+    const court = input.court.trim().toUpperCase();
+    const found = [...this.stored.values()]
+      .map(({ communication }) => communication)
+      .filter((communication) => communication.court === court && communication.availableOn === input.day)
+      .slice(0, 100);
+    const probe: DjenProbe = { items: found.length, withoutText: 0, systems: {} };
+    for (const communication of found) {
+      if (isEmptyText(communication.text)) probe.withoutText += 1;
+      const kind = kindOfCommunication({ className: communication.className, unit: communication.unit });
+      const system = systemOfHost(hostOfLink(communication.link));
+      if (!kind || !system) continue;
+      const bucket = (probe.systems[kind] ??= {});
+      bucket[system] = (bucket[system] ?? 0) + 1;
+    }
+    return probe;
   }
 }
 

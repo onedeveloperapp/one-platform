@@ -3,6 +3,7 @@
 import AiPricesAdmin from "./ai-prices-admin";
 import AutonomyHoldCard from "./autonomy-hold-card";
 import DjenHealthCard from "./djen-health-card";
+import DjenWatchCard from "./djen-watch-card";
 import ExecutorCheckCard from "./executor-check-card";
 import FlightReleaseCard from "./flight-release-card";
 import MarketCard from "./market-card";
@@ -393,6 +394,9 @@ export default function AiConsoleView({ state }: { state: AiConsoleState }) {
 
         <Grid size={12}>
           <DjenHealthCard health={djen} captureOn={djenCaptureOn} />
+        </Grid>
+        <Grid size={12}>
+          <DjenWatchCard captureOn={djenCaptureOn} />
         </Grid>
         <Grid size={12}>
           <MarketCard captureOn={marketCaptureOn} />

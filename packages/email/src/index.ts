@@ -20,9 +20,17 @@ import SubscriptionCanceledEmail, {
   type SubscriptionCanceledEmailProps,
 } from "./templates/subscription-canceled";
 import TermEndingEmail, { type TermEndingEmailProps } from "./templates/term-ending";
+import WeeklyDigestEmail, { type WeeklyDigestEmailProps } from "./templates/weekly-digest";
 
 export { toEmailLocale, type EmailLocale } from "./locale";
 export type { AgendaDigestLine } from "./templates/agenda-digest";
+export {
+  type WeeklyDigestFacts,
+  type WeeklyDigestLinks,
+  type WeeklyDigestSection,
+  weeklyDigestItems,
+  weeklyDigestSections,
+} from "./weekly";
 export { BATCH_LIMIT, emailEnv, isEmailConfigured, type SendResult } from "./send";
 export type {
   AccessEndedEmailProps,
@@ -37,6 +45,7 @@ export type {
   SubscriptionActiveEmailProps,
   SubscriptionCanceledEmailProps,
   TermEndingEmailProps,
+  WeeklyDigestEmailProps,
 };
 
 /*
@@ -159,6 +168,15 @@ export const sendAgendaDigestEmail = (to: string, props: AgendaDigestEmailProps)
     to,
     subject: emailCopyFor(props.locale).agendaDigest.subject(props.dayLabel),
     react: createElement(AgendaDigestEmail, props),
+    unsubscribeUrl: props.unsubscribeUrl,
+  });
+
+/** The partner's weekly digest (migration 0200), on Monday mornings; stopped in one click. */
+export const sendWeeklyDigestEmail = (to: string, props: WeeklyDigestEmailProps): Promise<SendResult> =>
+  send({
+    to,
+    subject: emailCopyFor(props.locale).weeklyDigest.subject(props.firmName, props.weekLabel),
+    react: createElement(WeeklyDigestEmail, props),
     unsubscribeUrl: props.unsubscribeUrl,
   });
 

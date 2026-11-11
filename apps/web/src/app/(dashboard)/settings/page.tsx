@@ -5,6 +5,7 @@ import EmailsCard from "./components/emails-card";
 import MemberCard from "./components/member-card";
 import ProfileCard from "./components/profile-card";
 import SettingsMenu from "./components/settings-menu";
+import WeeklyDigestCard from "./components/weekly-digest-card";
 import WhatsappCard from "./components/whatsapp-card";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
@@ -78,6 +79,7 @@ export default function Settings() {
             <WhatsappCard />
             <MemberCard />
             <EmailsCard />
+            <WeeklyDigestCard />
             <AccountCard />
           </>
         )}

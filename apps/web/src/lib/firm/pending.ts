@@ -5,6 +5,7 @@ import { type FinanceAttention, financeAttentionGroups } from "@/lib/finance/att
 import { type FilingAttention, filingAttentionItems, type FilingViewer } from "@/lib/firm/filing-attention";
 import { type AckViewer, publicationAckItems, type PublicationAcks } from "@/lib/firm/publication-acks";
 import { type FirmToday, type TodayNeed, todayNeeds, type TodayViewer } from "@/lib/firm/today";
+import type { DjenOutage } from "@/lib/publications/djen-watch";
 import { formatCnj } from "@flyee/rules/cnj";
 
 /**
@@ -374,6 +375,8 @@ export function pendingGroups(
   finance: FinanceAttention | null = null,
   /** What the lawsuits' results ask of the firm's people (0130); null when it could not be read. */
   outcomes: OutcomeAttention | null = null,
+  /** The DJEN that does not answer for more than a day (0201), for who works the deadlines; null otherwise. */
+  djenOutage: DjenOutage | null = null,
 ): PendingGroup[] {
   const groups: Record<PendingGroupKey, PendingItem[]> = { late: [], today: [], one: [], review: [] };
   const needs = withDecisions(todayNeeds(today, viewer), decisions);
@@ -621,6 +624,18 @@ export function pendingGroups(
   // What the results ask of a person (0130): the lawyers' awareness, a release's value, a fact to confirm, a case
   // ready to close, a case ONE closed.
   if (outcomes) groups.one.push(...outcomeAttentionItems(outcomes));
+  // The DJEN silent for more than a day (0201): ONE tries again by itself, and a term may run meanwhile, so who works
+  // the deadlines looks at the intimations in the court's own system.
+  if (djenOutage && viewer.worksDeadlines) {
+    groups.one.push({
+      id: "djen-outage",
+      href: "/publicacoes#leitura",
+      tag: { key: "pending-tag-publication" },
+      label: { key: "pending-djen-down", values: { day: dayLabel(djenOutage.downDay) } },
+      detail: { key: "pending-djen-down-detail" },
+      count: 1,
+    });
+  }
 
   // Every other need of the home, in the home's own order, in its group (the deadlines, hearings and papers
   // were placed above, split by how soon).

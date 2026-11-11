@@ -133,6 +133,7 @@ select is(
     'connection_secrets',
     -- Each court's channel to file by machine, the operator's data (0101): read through the backend's functions.
     'court_filing_channels',
+    'djen_probes',
     'hearing_event_removals',
     'lead_submissions',
     -- What the market's reading plans, and the decisions it read (0190): read through their functions, in numbers.

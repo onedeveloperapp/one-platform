@@ -165,6 +165,7 @@ function recordingDjen(entries: FakeDjenEntry[], fail?: (asked: Asked, call: num
       return fake.listByOab(input);
     },
     certificateUrl: (hash) => fake.certificateUrl(hash),
+    probe: (input) => fake.probe(input),
   };
   return { client, asked };
 }
