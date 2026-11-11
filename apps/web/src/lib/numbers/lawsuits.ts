@@ -13,6 +13,8 @@ export type LawsuitRow = {
   incident: string | null;
   court: string;
   comarca: string | null;
+  /** The vara or juizado the court records (0168). */
+  unit: string | null;
   kind: string;
   filedOn: string;
   openedOn: string | null;
@@ -28,7 +30,7 @@ export type LawsuitRow = {
   isTest: boolean;
 };
 
-export const DIMENSIONS = ["airline", "incident", "court", "comarca", "kind"] as const;
+export const DIMENSIONS = ["airline", "incident", "court", "comarca", "unit", "kind"] as const;
 export type Dimension = (typeof DIMENSIONS)[number];
 
 /** No average, median or rate of fewer than this many lawsuits. */
@@ -58,6 +60,7 @@ export function readLawsuitRows(raw: unknown): LawsuitRow[] {
         incident: text(row.incident),
         court: text(row.court) ?? "",
         comarca: text(row.comarca),
+        unit: text(row.unit),
         kind: text(row.kind) ?? "",
         filedOn: filed.slice(0, 10),
         openedOn: text(row.opened_on)?.slice(0, 10) ?? null,
@@ -147,7 +150,9 @@ const keyOf = (row: LawsuitRow, dimension: Dimension): string =>
         ? row.court
         : dimension === "comarca"
           ? row.comarca
-          : row.kind) ?? "";
+          : dimension === "unit"
+            ? row.unit
+            : row.kind) ?? "";
 
 /** The rows of a period: filed from `from` to `to`, both optional. */
 export const withinPeriod = (rows: readonly LawsuitRow[], from: string | null, to: string | null): LawsuitRow[] =>
@@ -225,4 +230,62 @@ export function readMargins(raw: unknown): Margin[] | null {
       },
     ];
   });
+}
+
+export type ProjectedMonth = {
+  /** "YYYY-MM": the month a judgment is expected in; the first is this month, holding what is already past due. */
+  month: string;
+  judgments: number;
+  /** The judgments expected won in whole or in part, by each court's own rate: a figure with one decimal. */
+  wins: number;
+};
+
+export type Projection = {
+  months: ProjectedMonth[];
+  /** Lawsuits waiting for judgment that the firm's history cannot project (fewer than the sample in their court). */
+  unprojected: number;
+};
+
+const addDays = (day: string, count: number): string =>
+  new Date(Date.parse(`${day}T12:00:00Z`) + count * 86_400_000).toISOString().slice(0, 10);
+
+/**
+ * The judgments and wins of the months ahead, from the firm's own history: each lawsuit still waiting for its
+ * judgment (none, no settlement, its case not ended) expects it the median days after its filing its court took, and
+ * wins it by the rate its court gave; a court with fewer than the sample judged projects nothing of its lawsuits,
+ * which are counted apart. A judgment already past its expected day is counted in this month. An estimate of the
+ * firm's own numbers, never a promise of a result.
+ */
+export function winsProjection(
+  rows: readonly LawsuitRow[],
+  checkedOnly: boolean,
+  today: string,
+  monthsAhead = 6,
+): Projection {
+  const byCourt = new Map<string, LawsuitRow[]>();
+  for (const row of rows) byCourt.set(row.court, [...(byCourt.get(row.court) ?? []), row]);
+  const courtStats = new Map([...byCourt.entries()].map(([court, list]) => [court, statsOf(court, list, checkedOnly)]));
+  const first = today.slice(0, 7);
+  const months: ProjectedMonth[] = Array.from({ length: monthsAhead }, (_, index) => {
+    const date = new Date(Date.UTC(Number(first.slice(0, 4)), Number(first.slice(5, 7)) - 1 + index, 1));
+    return { month: date.toISOString().slice(0, 7), judgments: 0, wins: 0 };
+  });
+  let unprojected = 0;
+  for (const row of rows) {
+    if (judgment(row, checkedOnly) !== null || row.result !== null || row.settled || row.closed) continue;
+    const stats = courtStats.get(row.court);
+    if (!stats || stats.daysToJudgment === null || stats.successRate === null) {
+      unprojected += 1;
+      continue;
+    }
+    const expected = addDays(row.filedOn, stats.daysToJudgment).slice(0, 7);
+    const slot = months.find((month) => month.month === (expected < first ? first : expected));
+    if (!slot) continue;
+    slot.judgments += 1;
+    slot.wins += stats.successRate;
+  }
+  return {
+    months: months.map((month) => ({ ...month, wins: Math.round(month.wins * 10) / 10 })),
+    unprojected,
+  };
 }

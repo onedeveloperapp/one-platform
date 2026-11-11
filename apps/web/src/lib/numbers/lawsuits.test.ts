@@ -1,4 +1,4 @@
-import { cohorts, groupStats, median, readLawsuitRows, statsOf, withinPeriod } from "./lawsuits";
+import { cohorts, groupStats, median, readLawsuitRows, statsOf, winsProjection, withinPeriod } from "./lawsuits";
 import { describe, expect, it } from "vitest";
 
 // Every lawsuit here is invented.
@@ -83,5 +83,44 @@ describe("the firm's numbers", () => {
       ["2026-03", 5, 0, 1],
     ]);
     expect(withinPeriod(rows, "2026-04-01", null).map((item) => item.id)).toEqual(["6"]);
+  });
+});
+
+describe("the unit and the projection of judgments (0168)", () => {
+  // Five lawsuits of TJGO judged 92 days after filing, four won: a rate of 80 percent.
+  const judged = [1, 2, 3, 4, 5].map((n) =>
+    row(`j${n}`, {
+      filed_on: "2026-01-01",
+      result: n === 5 ? "improcedente" : "procedente",
+      judged_on: "2026-04-03",
+      unit: "1º Juizado Especial Cível",
+    }),
+  );
+  const waiting = [
+    row("w1", { filed_on: "2026-09-15" }),
+    row("w2", { filed_on: "2026-07-01" }),
+    row("w3", { filed_on: "2026-10-01", court: "TJSP" }),
+    row("w4", { filed_on: "2026-09-20", settled: true }),
+  ];
+  const lawsuits = readLawsuitRows({ rows: [...judged, ...waiting] });
+
+  it("groups by the unit the court records", () => {
+    const groups = groupStats(lawsuits, "unit", false);
+    expect(groups.map((group) => [group.key, group.lawsuits])).toEqual([
+      ["1º Juizado Especial Cível", 5],
+      ["", 4],
+    ]);
+  });
+
+  it("expects each waiting judgment the court's median days after its filing, won by the court's rate", () => {
+    const projection = winsProjection(lawsuits, false, "2026-11-10", 3);
+    // w2 was due in October and counts in this month; w1 is due in December.
+    expect(projection.months).toEqual([
+      { month: "2026-11", judgments: 1, wins: 0.8 },
+      { month: "2026-12", judgments: 1, wins: 0.8 },
+      { month: "2027-01", judgments: 0, wins: 0 },
+    ]);
+    // TJSP has no judged lawsuit of the firm to project from; a settled lawsuit waits for nothing.
+    expect(projection.unprojected).toBe(1);
   });
 });

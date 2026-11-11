@@ -48,6 +48,7 @@ import {
   MIN_SAMPLE,
   type Stats,
   statsOf,
+  winsProjection,
   withinPeriod,
 } from "@/lib/numbers/lawsuits";
 import { formatCents } from "@flyee/rules/finance";
@@ -63,6 +64,7 @@ const DIMENSION_KEY: Record<Dimension, string> = {
   incident: "numbers-dimension-incident",
   court: "numbers-dimension-court",
   comarca: "numbers-dimension-comarca",
+  unit: "numbers-dimension-unit",
   kind: "numbers-dimension-kind",
 };
 const KIND_WORDS: Record<string, string> = { juizado: "numbers-kind-juizado", comum: "numbers-kind-comum" };
@@ -93,6 +95,16 @@ export default function NumbersView({ state }: { state: NumbersState }) {
   const all = useMemo(() => statsOf("", rows, checkedOnly), [rows, checkedOnly]);
   const groups = useMemo(() => groupStats(rows, dimension, checkedOnly), [rows, dimension, checkedOnly]);
   const months = useMemo(() => cohorts(rows, checkedOnly), [rows, checkedOnly]);
+  // The judgments and wins of the months ahead, from the firm's own history, over every lawsuit (never the period's).
+  const projection = useMemo(
+    () =>
+      winsProjection(
+        state.kind === "ready" ? state.rows : [],
+        checkedOnly,
+        new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date()),
+      ),
+    [state, checkedOnly],
+  );
 
   const keyWords = (key: string) =>
     key === ""
@@ -114,6 +126,7 @@ export default function NumbersView({ state }: { state: NumbersState }) {
         { title: t("numbers-dimension-airline") },
         { title: t("numbers-dimension-court") },
         { title: t("numbers-dimension-comarca") },
+        { title: t("numbers-dimension-unit") },
         { title: t("numbers-col-filed"), kind: "date" },
         { title: t("numbers-col-result") },
         { title: t("numbers-col-judged"), kind: "date" },
@@ -126,6 +139,7 @@ export default function NumbersView({ state }: { state: NumbersState }) {
         row.airline ?? "",
         row.court,
         row.comarca ?? "",
+        row.unit ?? "",
         row.filedOn,
         row.result ? t(RESULT_KEY[row.result]!) : row.settled ? t("people-outcome-settlement") : "",
         row.judgedOn ?? "",
@@ -342,6 +356,42 @@ export default function NumbersView({ state }: { state: NumbersState }) {
                     </TableBody>
                   </Table>
                 </TableContainer>
+              </CardContent>
+            </Card>
+
+            <Card component="section" aria-labelledby="numbers-projection">
+              <CardContent className="flex flex-col gap-3">
+                <CardTitle
+                  id="numbers-projection"
+                  icon={<NiFolder size="medium" />}
+                  title={t("numbers-projection-title")}
+                  description={t("numbers-projection-description")}
+                />
+                <TableContainer>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>{t("numbers-col-month")}</TableCell>
+                        <TableCell align="right">{t("numbers-col-judgments-expected")}</TableCell>
+                        <TableCell align="right">{t("numbers-col-wins-expected")}</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {projection.months.map((month) => (
+                        <TableRow key={month.month}>
+                          <TableCell>{`${month.month.slice(5, 7)}/${month.month.slice(0, 4)}`}</TableCell>
+                          <TableCell align="right">{month.judgments}</TableCell>
+                          <TableCell align="right">{String(month.wins).replace(".", ",")}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+                {projection.unprojected > 0 ? (
+                  <Typography variant="caption" className="text-text-secondary">
+                    {t("numbers-projection-unprojected", { count: projection.unprojected, min: MIN_SAMPLE })}
+                  </Typography>
+                ) : null}
               </CardContent>
             </Card>
 
