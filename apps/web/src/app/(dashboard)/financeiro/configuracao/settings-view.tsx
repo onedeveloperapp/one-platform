@@ -2,6 +2,7 @@
 
 import FinanceGate from "../finance-gate";
 import type { FinanceState } from "../load-finance";
+import AccountantCard from "./accountant-card";
 import FeeTermsCard from "./fee-terms-card";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -302,6 +303,8 @@ function Settings({ state }: { state: Ready }) {
         factor={state.factor}
         contract={state.feeContract ?? null}
       />
+
+      <AccountantCard accountant={state.accountant} configures={configures} factor={state.factor} />
 
       <Card component="section" aria-labelledby="finance-settings-money-path">
         <CardContent className="flex flex-col gap-4">

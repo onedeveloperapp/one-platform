@@ -130,6 +130,16 @@ export const emailCopy = {
     },
   },
 
+  accountantPackage: {
+    subject: (firm: string, month: string) => `${firm}: pacote do contador de ${month}`,
+    preview: (firm: string, month: string) => `Os relatórios de ${month} de ${firm}`,
+    heading: "Pacote do mês",
+    body: (sender: string | null, firm: string, month: string) =>
+      `${sender ? `${sender}, de ${firm},` : firm} enviou o pacote de ${month}: o resultado do mês, o fluxo de caixa, o movimento do mês e os dados das notas fiscais, na planilha anexa.`,
+    managerial:
+      "São relatórios gerenciais do escritório, não a escrituração contábil nem o Livro Caixa. Cada caso aparece pelo número, sem o nome do cliente.",
+    reply: "Para responder, responda este e-mail: a resposta vai para quem enviou.",
+  },
   partnerInvitation: {
     /** `firm` invites the agency `partner`; for a colleague, `firm` is null and `partner` invites. */
     subject: (partner: string, firm: string | null) =>

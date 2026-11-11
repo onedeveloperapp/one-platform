@@ -8,6 +8,7 @@ import { type FinanceAttention, readFinanceAttention } from "@/lib/finance/atten
 import { type FinanceBill, type FinanceSeries, readFinanceSeries } from "@/lib/finance/bills";
 import type { FinanceHome, FinanceLevel } from "@/lib/finance/books";
 import {
+  type FinanceAccountant,
   type FinanceAccountRow,
   type FinanceCategory,
   type FinanceCostCenter,
@@ -15,6 +16,7 @@ import {
   type FinanceLine,
   type FinancePerson,
   readFinanceAccess,
+  readFinanceAccountant,
   readFinanceBills,
   readFinanceEntries,
   readFinanceHome,
@@ -63,6 +65,8 @@ export type FinanceState =
       feeTerms: FeeTerms[] | null;
       /** The name of the firm's fee contract in the library, which ONE reads the terms from (0160). */
       feeContract: string | null;
+      /** The firm's accountant (0166), when the page shows them; null when none is registered or unread. */
+      accountant: FinanceAccountant | null;
       readLabel: string;
     }
   /** The books are not open yet: who decides for the firm opens them; anybody else is told so. */
@@ -78,7 +82,14 @@ export type FinanceState =
  * the home of the books and their registrations always, and what the page lists (`with`).
  */
 export async function loadFinance(
-  withData: { entries?: boolean; lines?: boolean; people?: boolean; bills?: boolean; terms?: boolean } = {},
+  withData: {
+    entries?: boolean;
+    lines?: boolean;
+    people?: boolean;
+    bills?: boolean;
+    terms?: boolean;
+    accountant?: boolean;
+  } = {},
 ): Promise<FinanceState> {
   const context = await getMemberContext();
   if (!context) return { kind: "unavailable" };
@@ -136,6 +147,10 @@ export async function loadFinance(
   if ((withData.entries && !entries) || (withData.lines && !lines) || (withData.bills && !bills)) {
     return { kind: "error" };
   }
+  // The firm's accountant and the latest sendings of the package (0166).
+  const accountantRead =
+    withData.accountant || withData.terms ? await readFinanceAccountant(context.supabase, context.firm.id) : null;
+  const accountant = accountantRead === "error" ? null : accountantRead;
   // The firm's fee contract, which ONE reads the terms from (0160): the default first.
   const feeContract = withData.terms
     ? await context.supabase
@@ -201,6 +216,7 @@ export async function loadFinance(
     receipts,
     feeTerms,
     feeContract,
+    accountant: withData.accountant || withData.terms ? accountant : null,
     readLabel: momentLabel(new Date().toISOString(), context.profile.timezone),
   };
 }

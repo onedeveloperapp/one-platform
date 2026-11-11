@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
+import type { MonthMovement } from "@/lib/finance/accountant-package";
 import {
   type Forecast,
   type InvoiceData,
@@ -107,18 +108,6 @@ export async function saveFinanceBudget(
     target_months: Math.min(Math.max(Math.trunc(Number(months) || 1), 1), 12),
   });
 }
-
-/** A movement of the month for the accountant's package (0164): never a name, only the case's number. */
-export type MonthMovement = {
-  day: string;
-  account: string;
-  kind: string;
-  category: string | null;
-  center: string | null;
-  cents: number;
-  caseSeq: number | null;
-  byOne: boolean;
-};
 
 const one = <T>(value: T | T[] | null | undefined): T | null =>
   Array.isArray(value) ? (value[0] ?? null) : (value ?? null);

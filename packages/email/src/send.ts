@@ -28,6 +28,8 @@ export type Message = {
    * large mailbox does not treat a summary or a newsletter as unsolicited.
    */
   unsubscribeUrl?: string;
+  /** Files that go with the message: a workbook the firm sends its accountant (migration 0166). */
+  attachments?: { filename: string; content: Uint8Array }[];
 };
 
 function payload(message: Message) {
@@ -37,6 +39,14 @@ function payload(message: Message) {
     subject: message.subject,
     react: message.react,
     ...(message.replyTo ? { replyTo: message.replyTo } : {}),
+    ...(message.attachments && message.attachments.length > 0
+      ? {
+          attachments: message.attachments.map((file) => ({
+            filename: file.filename,
+            content: Buffer.from(file.content),
+          })),
+        }
+      : {}),
     ...(message.unsubscribeUrl
       ? {
           headers: {

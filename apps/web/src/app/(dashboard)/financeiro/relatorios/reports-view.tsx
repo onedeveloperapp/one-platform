@@ -26,6 +26,7 @@ import CardTitle from "@/components/product/card-title";
 import ConfirmActionDialog from "@/components/product/confirm-action-dialog";
 import EmptyState from "@/components/product/empty-state";
 import { CurrencyField } from "@/components/product/fields";
+import OutcomeDialog from "@/components/product/outcome-dialog";
 import PageHeader from "@/components/product/page-header";
 import SecondFactorPrompt from "@/components/product/second-factor-prompt";
 import SidePanel from "@/components/product/side-panel";
@@ -38,13 +39,13 @@ import NiDocumentFull from "@/icons/nexture/ni-document-full";
 import NiMoney from "@/icons/nexture/ni-money";
 import { writeWorkbook, XLSX_TYPE } from "@/lib/export/xlsx-write";
 import { savedFileName, saveFile } from "@/lib/files/save-file";
-import { ENTRY_KIND_KEY } from "@/lib/finance/books";
+import { sendAccountantPackage } from "@/lib/finance/accountant-actions";
+import { accountantPackage, FLOW_KEY, LINE_KEY, type MonthMovement } from "@/lib/finance/accountant-package";
 import { openFinanceDocument } from "@/lib/finance/document-actions";
 import { dropUnsavedFinance, sendInvoiceDocument } from "@/lib/finance/document-browser";
 import {
   budgetStanding,
   DRE_ORDER,
-  type DreLine,
   flowTotal,
   type Forecast,
   type InvoiceData,
@@ -54,7 +55,6 @@ import {
 } from "@/lib/finance/reports";
 import {
   closeFinanceMonth,
-  type MonthMovement,
   readFinanceMonthMovement,
   readFinanceReports,
   recordFinanceInvoice,
@@ -64,25 +64,19 @@ import {
 import { formatCents, parseCents } from "@flyee/rules/finance";
 import { formatDayBr } from "@flyee/rules/person";
 
-const LINE_KEY: Record<DreLine, string> = {
-  receita: "reports-line-revenue",
-  deducao: "reports-line-deductions",
-  custo: "reports-line-costs",
-  despesa: "reports-line-expenses",
-  financeiro: "reports-line-financial",
-};
-const FLOW_KEY: Record<string, string> = {
-  operacional: "reports-flow-operating",
-  investimento: "reports-flow-investing",
-  financiamento: "reports-flow-financing",
-  clientes: "reports-flow-clients",
-};
 const ERROR_KEY: Record<string, string> = {
   not_allowed: "reports-error-not-allowed",
   second_factor: "reports-error-second-factor",
   not_green: "reports-error-not-green",
   month_open: "reports-error-month-open",
   invalid_data: "reports-error-invalid",
+  support_visit: "reports-error-support",
+};
+const SEND_ERROR_KEY: Record<string, string> = {
+  no_accountant: "reports-package-send-no-accountant",
+  email_off: "reports-package-send-email-off",
+  not_allowed: "reports-error-not-allowed",
+  second_factor: "reports-error-second-factor",
   support_visit: "reports-error-support",
 };
 const failedKey = (code: string) => (code === "not_reader" ? "reports-not-reader" : "reports-load-error");
@@ -108,9 +102,17 @@ export default function ReportsView({
   configures,
   factor: sessionFactor,
   categories,
+  operates,
+  accountant,
+  emailOn,
 }: {
   /** Who configures the books sets the budget (0163). */
   configures: boolean;
+  /** Who operates the books sends the month's package to the firm's accountant (0166). */
+  operates: boolean;
+  accountant: { name: string; email: string } | null;
+  /** Whether an e-mail leaves ONE where it runs. */
+  emailOn: boolean;
   factor: "ok" | "challenge" | "missing";
   /** The chart's categories of income and expense in force, which a budget is set on. */
   categories: BudgetCategory[];
@@ -127,6 +129,8 @@ export default function ReportsView({
   const [reopening, setReopening] = useState(false);
   const [invoicing, setInvoicing] = useState<InvoiceData | null>(null);
   const [budgeting, setBudgeting] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [sentTo, setSentTo] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -182,62 +186,9 @@ export default function ReportsView({
       setProblem(t("reports-package-failed"));
       return;
     }
-    const dreRows = DRE_ORDER.map((line) => [t(LINE_KEY[line]), lineTotal(report.current, line) / 100]);
-    const bytes = writeWorkbook([
-      {
-        sheet: t("reports-dre-title"),
-        columns: [{ title: t("reports-col-line") }, { title: t("reports-col-month"), kind: "number" }],
-        rows: [
-          ...dreRows,
-          [t("reports-line-losses"), -report.current.losses / 100],
-          [t("reports-line-result"), result(report.current) / 100],
-          [t("reports-line-distribution"), -report.current.distribution / 100],
-        ],
-      },
-      {
-        sheet: t("reports-dfc-title"),
-        columns: [{ title: t("reports-col-line") }, { title: t("reports-col-month"), kind: "number" }],
-        rows: report.current.dfc.map((row) => [t(FLOW_KEY[row.line] ?? "reports-flow-operating"), row.cents / 100]),
-      },
-      {
-        sheet: t("reports-movement-title"),
-        columns: [
-          { title: t("reports-col-day"), kind: "date" },
-          { title: t("reports-col-account") },
-          { title: t("reports-col-kind") },
-          { title: t("reports-col-category") },
-          { title: t("reports-col-center") },
-          { title: t("reports-col-value"), kind: "number" },
-          { title: t("reports-col-case") },
-          { title: t("reports-col-by-one") },
-        ],
-        rows: movement.map((row) => [
-          row.day,
-          row.account,
-          t(ENTRY_KIND_KEY[row.kind as keyof typeof ENTRY_KIND_KEY] ?? "finance-kind-expense"),
-          row.category ?? "",
-          row.center ?? t("reports-no-center"),
-          row.cents / 100,
-          row.caseSeq !== null ? `#${row.caseSeq}` : "",
-          row.byOne ? t("reports-yes") : "",
-        ]),
-      },
-      {
-        sheet: t("reports-invoices-title"),
-        columns: [
-          { title: t("reports-col-taker") },
-          { title: t("reports-col-value"), kind: "number" },
-          { title: t("reports-col-competence"), kind: "date" },
-          { title: t("reports-col-invoice") },
-        ],
-        rows: (ready.invoices ?? []).map((item) => [
-          item.caseSeq !== null ? `#${item.caseSeq}` : t("reports-no-case"),
-          item.cents / 100,
-          item.competence,
-          item.invoice?.number ?? "",
-        ]),
-      },
-    ]);
+    const bytes = writeWorkbook(
+      accountantPackage({ report, invoices: ready.invoices ?? [], movement, say: (key, values) => t(key, values) }),
+    );
     saveFile(bytes, savedFileName(`${t("reports-package")} ${month}`, "xlsx", t("reports-package")), XLSX_TYPE);
   };
 
@@ -267,6 +218,11 @@ export default function ReportsView({
             {report ? (
               <Button variant="outlined" color="grey" loading={packing} onClick={() => void download()}>
                 {t("reports-package-download")}
+              </Button>
+            ) : null}
+            {report && operates && accountant && emailOn ? (
+              <Button variant="outlined" color="grey" onClick={() => setSending(true)}>
+                {t("reports-package-send")}
               </Button>
             ) : null}
           </Box>
@@ -430,6 +386,7 @@ export default function ReportsView({
                   layout="row"
                   framed={false}
                   title={t("reports-budget-none")}
+                  titleAs="h3"
                 />
               ) : (
                 <TableContainer>
@@ -691,6 +648,41 @@ export default function ReportsView({
           }}
         />
       ) : null}
+      {sending && accountant ? (
+        <ConfirmActionDialog
+          title={t("reports-package-send-title", { month: month.split("-").reverse().join("/") })}
+          intro={t("reports-package-send-intro", { name: accountant.name, email: accountant.email })}
+          consequences={[t("reports-package-send-holds"), t("reports-package-send-kept")]}
+          confirmLabel={t("reports-package-send")}
+          cancelLabel={t("reports-cancel")}
+          onClose={() => setSending(false)}
+          onConfirm={async () => {
+            const answer = await sendAccountantPackage(month);
+            if (!answer.ok) {
+              return answer.code === "daily_limit"
+                ? t("reports-package-send-limit", { count: answer.limit ?? 0 })
+                : t(SEND_ERROR_KEY[answer.code] ?? "reports-package-send-failed");
+            }
+            setSending(false);
+            setSentTo(answer.email);
+            return null;
+          }}
+        />
+      ) : null}
+      <OutcomeDialog
+        open={sentTo !== null}
+        title={t("reports-package-sent-title")}
+        lines={[
+          {
+            key: "to",
+            icon: <NiDocumentFull size="small" />,
+            text: t("reports-package-sent-to", { email: sentTo ?? "", month: month.split("-").reverse().join("/") }),
+          },
+          { key: "kept", icon: <NiChartBar size="small" />, text: t("reports-package-sent-kept") },
+        ]}
+        closeLabel={t("reports-understood")}
+        onClose={() => setSentTo(null)}
+      />
       {budgeting && report ? (
         <BudgetPanel
           month={month}

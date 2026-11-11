@@ -4,6 +4,7 @@ import { emailCopyFor } from "./copy";
 import type { EmailLocale } from "./locale";
 import { emailEnv, isEmailConfigured, send, sendBatch, type SendResult } from "./send";
 import AccessEndedEmail, { type AccessEndedEmailProps } from "./templates/access-ended";
+import AccountantPackageEmail, { type AccountantPackageEmailProps } from "./templates/accountant-package";
 import AgendaDigestEmail, { type AgendaDigestEmailProps } from "./templates/agenda-digest";
 import ContactFormEmail, { type ContactFormEmailProps } from "./templates/contact-form";
 import FirmInvitationEmail, { type FirmInvitationEmailProps } from "./templates/firm-invitation";
@@ -24,6 +25,7 @@ export type { AgendaDigestLine } from "./templates/agenda-digest";
 export { BATCH_LIMIT, emailEnv, isEmailConfigured, type SendResult } from "./send";
 export type {
   AccessEndedEmailProps,
+  AccountantPackageEmailProps,
   AgendaDigestEmailProps,
   CancelCause,
   ContactFormEmailProps,
@@ -125,6 +127,24 @@ export const sendPartnerInvitationEmail = (
  * A person's e-mail of the morning (migration 0132): their deadlines and hearings of the day and of the next 48 hours.
  * The reader may stop it, so it carries the one-click exit in its header too.
  */
+/**
+ * The accountant's package of a month (migration 0166), the workbook attached, to the accountant the firm registered.
+ * A reply goes to who of the firm sent it.
+ */
+export const sendAccountantPackageEmail = (
+  to: string,
+  props: AccountantPackageEmailProps,
+  file: { filename: string; content: Uint8Array },
+  replyTo?: string | null,
+): Promise<SendResult> =>
+  send({
+    to,
+    ...(replyTo ? { replyTo } : {}),
+    subject: emailCopyFor(props.locale).accountantPackage.subject(props.firmName, props.monthLabel),
+    react: createElement(AccountantPackageEmail, props),
+    attachments: [file],
+  });
+
 export const sendAgendaDigestEmail = (to: string, props: AgendaDigestEmailProps): Promise<SendResult> =>
   send({
     to,

@@ -8,6 +8,7 @@ import AccessEndedEmail from "./templates/access-ended";
 import AgendaDigestEmail from "./templates/agenda-digest";
 import ContactFormEmail from "./templates/contact-form";
 import FirmInvitationEmail from "./templates/firm-invitation";
+import AccountantPackageEmail from "./templates/accountant-package";
 import PartnerInvitationEmail from "./templates/partner-invitation";
 import KitReceiptEmail from "./templates/kit-receipt";
 import LeadConfirmEmail from "./templates/lead-confirm";
@@ -54,6 +55,12 @@ function every(locale: EmailLocale): Record<string, ReactElement> {
       functionLabel: "Advocacia",
       acceptUrl: INVITATION,
       expiresLabel: "15 de outubro de 2026",
+    }),
+    "accountant-package": createElement(AccountantPackageEmail, {
+      locale,
+      firmName: "Lima Advocacia",
+      monthLabel: "outubro de 2026",
+      senderName: "Ana Lima",
     }),
     "partner-invitation": createElement(PartnerInvitationEmail, {
       locale,
@@ -158,9 +165,9 @@ describe("the receipt", () => {
   });
 
   it("mentions the tax invoice only for a purchase that has one", async () => {
-    expect(await textOf(createElement(KitReceiptEmail, { ...base, untilLabel: null, fiscalNote: false }))).not.toContain(
-      "Asaas",
-    );
+    expect(
+      await textOf(createElement(KitReceiptEmail, { ...base, untilLabel: null, fiscalNote: false })),
+    ).not.toContain("Asaas");
     expect(await textOf(createElement(KitReceiptEmail, { ...base, untilLabel: null, fiscalNote: true }))).toContain(
       "Asaas",
     );

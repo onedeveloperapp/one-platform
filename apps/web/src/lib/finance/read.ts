@@ -334,3 +334,40 @@ export async function readFinanceBills(
     ];
   });
 }
+
+/** The firm's accountant (0166), with the latest sendings of the month's package. */
+export type FinanceAccountant = {
+  name: string;
+  email: string;
+  office: string | null;
+  crc: string | null;
+  sends: { month: string; status: "sending" | "sent" | "failed"; at: string }[];
+};
+
+export async function readFinanceAccountant(
+  supabase: SupabaseClient,
+  firmId: string,
+): Promise<FinanceAccountant | null | "error"> {
+  const [accountant, sends] = await Promise.all([
+    supabase.from("finance_accountants").select("name, email, office, crc").eq("org_id", firmId).maybeSingle(),
+    supabase
+      .from("finance_package_sends")
+      .select("month, status, requested_at")
+      .eq("org_id", firmId)
+      .order("requested_at", { ascending: false })
+      .limit(5),
+  ]);
+  if (accountant.error || sends.error) return "error";
+  if (!accountant.data) return null;
+  return {
+    name: String(accountant.data.name),
+    email: String(accountant.data.email),
+    office: (accountant.data.office as string | null) ?? null,
+    crc: (accountant.data.crc as string | null) ?? null,
+    sends: (sends.data ?? []).flatMap((row) =>
+      row.status === "sending" || row.status === "sent" || row.status === "failed"
+        ? [{ month: String(row.month).slice(0, 7), status: row.status, at: String(row.requested_at) }]
+        : [],
+    ),
+  };
+}
