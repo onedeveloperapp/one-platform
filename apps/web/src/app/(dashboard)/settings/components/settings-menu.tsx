@@ -7,6 +7,7 @@ import { useViewer } from "@/components/layout/viewer-context";
 import NiBuilding from "@/icons/nexture/ni-building";
 import NiCheckSquare from "@/icons/nexture/ni-check-square";
 import NiEraser from "@/icons/nexture/ni-eraser";
+import NiMessage from "@/icons/nexture/ni-message";
 import NiPlug from "@/icons/nexture/ni-plug";
 import NiRobot from "@/icons/nexture/ni-robot";
 import NiUser from "@/icons/nexture/ni-user";
@@ -22,7 +23,8 @@ export type SettingsMenuActive =
   | "autonomy"
   | "connections"
   | "partners"
-  | "data";
+  | "data"
+  | "messages";
 
 type GroupProps = { label: string };
 
@@ -99,6 +101,12 @@ export default function SettingsMenu({ active }: { active: SettingsMenuActive })
               label={t("settings-autonomy")}
               icon={<NiRobot size="medium" />}
               selected={active === "autonomy"}
+            />
+            <Item
+              href="/settings/mensagens"
+              label={t("settings-messages")}
+              icon={<NiMessage size="medium" />}
+              selected={active === "messages"}
             />
             <Item
               href="/settings/parceiros"

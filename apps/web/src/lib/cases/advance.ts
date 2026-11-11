@@ -50,6 +50,10 @@ export const ADVANCE_WAITING = [
   "account_incomplete",
   "account_contested",
   "account_failed",
+  "prior_complaint_owed",
+  "prior_complaint_waiting",
+  "facts_unconfirmed",
+  "facts_corrected",
   "unavailable",
   "step_failed",
   "stuck",
@@ -115,6 +119,14 @@ export const WAIT_PLACE: Record<AdvanceWaiting, WaitPlace> = {
   account_incomplete: CLIENT("statements"),
   account_contested: ONE("statements"),
   account_failed: FIRM("lawyer", "statements"),
+  // The unit asks a complaint before the lawsuit (0180): the client makes it on consumidor.gov.br and gives the
+  // protocol on their link, then the channel's days run for the airline's answer.
+  prior_complaint_owed: CLIENT("complaints"),
+  prior_complaint_waiting: CLIENT("complaints"),
+  // The client confirms the facts of the initial on their link (0182); one they corrected after a lawyer approved the
+  // piece is a lawyer's to reopen.
+  facts_unconfirmed: CLIENT("drafts"),
+  facts_corrected: FIRM("lawyer", "drafts"),
   unavailable: ONE(null),
   step_failed: ONE(null),
   stuck: FIRM("anyone", null),
@@ -220,6 +232,10 @@ const WAITING_KEY: Record<AdvanceWaiting, string> = {
   account_incomplete: "advance-waiting-account-incomplete",
   account_contested: "advance-waiting-account-contested",
   account_failed: "advance-waiting-account-failed",
+  prior_complaint_owed: "advance-waiting-prior-complaint-owed",
+  prior_complaint_waiting: "advance-waiting-prior-complaint-waiting",
+  facts_unconfirmed: "advance-waiting-facts-unconfirmed",
+  facts_corrected: "advance-waiting-facts-corrected",
   unavailable: "advance-waiting-unavailable",
   step_failed: "advance-waiting-step-failed",
   stuck: "advance-waiting-stuck",
@@ -261,6 +277,10 @@ const WAITING_TAG_KEY: Record<AdvanceWaiting, string> = {
   account_incomplete: "advance-tag-account",
   account_contested: "advance-tag-account",
   account_failed: "advance-tag-account",
+  prior_complaint_owed: "advance-tag-prior-complaint",
+  prior_complaint_waiting: "advance-tag-prior-complaint",
+  facts_unconfirmed: "advance-tag-facts",
+  facts_corrected: "advance-tag-facts",
   unavailable: "advance-tag-error",
   step_failed: "advance-tag-error",
   stuck: "advance-tag-error",
@@ -297,6 +317,8 @@ export function waitingHref(code: string, caseId: string): string {
   if (code === "system_unapproved") return `/casos/${caseId}#case-proceedings`;
   // The client's account, its order of the facts and what was asked of it are in "O que aconteceu" (0090).
   if (code.startsWith("account_")) return `/casos/${caseId}#case-statements`;
+  // The complaint before the lawsuit its unit asks, made by the client and waited for (0180).
+  if (code.startsWith("prior_complaint_")) return `/casos/${caseId}#case-complaints`;
   return waitingFix(code)?.href ?? `/casos/${caseId}`;
 }
 

@@ -21,6 +21,8 @@ import CollapsibleCard from "@/components/product/collapsible-card";
 import ConfirmActionDialog from "@/components/product/confirm-action-dialog";
 import DialogHeader from "@/components/product/dialog-header";
 import EmptyState from "@/components/product/empty-state";
+import { CurrencyField } from "@/components/product/fields";
+import StateLine from "@/components/product/state-line";
 import StatusChip, { type StatusTone } from "@/components/product/status-chip";
 import IllustrationSupport from "@/icons/illustrations/illustration-support";
 import { caseErrorKey } from "@/lib/cases/cases";
@@ -57,6 +59,9 @@ const OUTCOME_TONE: Record<ComplaintOutcome, StatusTone> = {
  * the attempt to settle. A case has one or two of these: a short list, and a
  * dialog to record each.
  */
+const brl = (cents: number) =>
+  new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(cents / 100);
+
 export default function ComplaintCard({
   state,
   writable,
@@ -89,6 +94,9 @@ export default function ComplaintCard({
   };
 
   const anyOverdue = state.complaints.some((complaint) => complaintOverdue(complaint, state.today));
+  // The complaint the unit of a lawsuit asks before it (0180), which ONE guides the client to make on the link.
+  const prior = state.priorComplaint && state.priorComplaint.state !== "not_required" ? state.priorComplaint : null;
+  const priorUnits = prior?.units.join(", ") ?? "";
 
   return (
     <CollapsibleCard
@@ -101,7 +109,15 @@ export default function ComplaintCard({
               .map((complaint) => `${t(CHANNEL_KEY[complaint.channel])}: ${t(OUTCOME_KEY[complaint.outcome])}`)
               .join(" · ")
       }
-      chip={anyOverdue ? <StatusChip tone="attention" label={t("case-complaint-overdue")} /> : null}
+      chip={
+        anyOverdue ? (
+          <StatusChip tone="attention" label={t("case-complaint-overdue")} />
+        ) : prior?.state === "owed" ? (
+          <StatusChip tone="info" label={t("case-prior-complaint-chip-owed")} />
+        ) : prior?.state === "waiting" ? (
+          <StatusChip tone="info" label={t("case-prior-complaint-chip-waiting")} />
+        ) : null
+      }
       description={t("case-complaints-body")}
       action={
         writable && state.complaints.length > 0 ? (
@@ -110,13 +126,25 @@ export default function ComplaintCard({
           </Button>
         ) : null
       }
-      defaultOpen={opensOnArrival(state.case.status, "complaints", anyOverdue)}
+      defaultOpen={opensOnArrival(state.case.status, "complaints", anyOverdue || prior?.state === "owed")}
     >
       {problem && (
         <Alert severity="error" className="neutral bg-background-paper/60!" onClose={() => setProblem(null)}>
           {t(caseErrorKey(problem))}
         </Alert>
       )}
+      {prior ? (
+        <StateLine tone={prior.state === "done" ? "done" : "waiting"}>
+          {prior.state === "owed"
+            ? t("case-prior-complaint-owed", { units: priorUnits })
+            : prior.state === "waiting"
+              ? t("case-prior-complaint-waiting", {
+                  units: priorUnits,
+                  due: formatDayBr(prior.complaint?.dueOn ?? null) ?? "",
+                })
+              : t("case-prior-complaint-done", { units: priorUnits })}
+        </StateLine>
+      ) : null}
 
       {state.complaints.length === 0 ? (
         <EmptyState
@@ -150,6 +178,10 @@ export default function ComplaintCard({
                           : complaint.answerDueOn
                             ? t("case-complaint-due-line", { day: formatDayBr(complaint.answerDueOn) ?? "" })
                             : null,
+                        complaint.paidCents !== null
+                          ? t("case-complaint-paid-line", { value: brl(complaint.paidCents) })
+                          : null,
+                        complaint.byClient ? t("case-complaint-by-client") : null,
                       ]
                         .filter(Boolean)
                         .join(" · ")}
@@ -244,6 +276,7 @@ function ComplaintDialog({
   const [answeredOn, setAnsweredOn] = useState(complaint?.answeredOn ?? "");
   const [outcome, setOutcome] = useState<ComplaintOutcome>(complaint?.outcome ?? "pending");
   const [notes, setNotes] = useState(complaint?.notes ?? "");
+  const [paid, setPaid] = useState(complaint?.paidCents != null ? String(complaint.paidCents / 100) : "");
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
 
@@ -259,7 +292,20 @@ function ComplaintDialog({
       const result = await saveAdminComplaint({
         caseId: state.case.id,
         complaintId: complaint?.id ?? null,
-        fields: { channel, protocol, filed_on: filedOn, answer_due_on: due, answered_on: answeredOn, outcome, notes },
+        fields: {
+          channel,
+          protocol,
+          filed_on: filedOn,
+          answer_due_on: due,
+          answered_on: answeredOn,
+          outcome,
+          notes,
+          // What the airline paid, only of a complaint it settled (0180).
+          paid_cents:
+            outcome === "settled" && paid.trim() !== "" && Number.isFinite(Number(paid))
+              ? String(Math.round(Number(paid) * 100))
+              : "",
+        },
       });
       if (!result.ok) {
         setProblem(result.code);
@@ -375,6 +421,22 @@ function ComplaintDialog({
                 ))}
               </TextField>
             </Grid>
+            {outcome === "settled" ? (
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <CurrencyField
+                  fullWidth
+                  size="small"
+                  id="case-complaint-paid"
+                  name="case-complaint-paid"
+                  label={t("case-complaint-paid")}
+                  helperText={t("case-complaint-paid-help")}
+                  currencySymbol="R$"
+                  value={paid}
+                  disabled={busy}
+                  onChange={(event) => setPaid(event.target.value)}
+                />
+              </Grid>
+            ) : null}
             <Grid size={12}>
               <TextField
                 fullWidth

@@ -183,6 +183,7 @@ export const HEARING_FIELDS = [
   "link",
   "attendee_user_id",
   "attendee_name",
+  "attendee_phone",
   "publication_id",
   "note",
   "outcome",

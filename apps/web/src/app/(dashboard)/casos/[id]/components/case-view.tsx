@@ -14,6 +14,7 @@ import DraftsCard from "./drafts-card";
 import FeesCard from "./fees-card";
 import FilingCard from "./filing-card";
 import HearingsCard from "./hearings-card";
+import IntermediatePiecesCard from "./intermediate-pieces-card";
 import JourneyCard from "./journey-card";
 import MoneyCard from "./money-card";
 import NoticesCard from "./notices-card";
@@ -87,6 +88,7 @@ const LOOKS: Record<CaseSection, CardLook> = {
   deadlines: { icon: <NiCalendarClock size="medium" />, tone: "accent-2" },
   hearings: { icon: <NiCalendar size="medium" />, tone: "accent-2" },
   publications: { icon: <NiInbox size="medium" />, tone: "accent-2" },
+  pieces: { icon: <NiDocumentFull size="medium" />, tone: "secondary" },
   drafts: { icon: <NiDocumentFull size="medium" />, tone: "secondary" },
   filing: { icon: <NiSendRight size="medium" />, tone: "secondary" },
   link: { icon: <NiLink size="medium" />, tone: "accent-1" },
@@ -375,6 +377,7 @@ export default function CaseView({ state: read }: { state: CaseState }) {
               <FilingCard state={state} writable={writable} onChanged={refresh} />
               <HearingsCard state={state} writable={writable} onChanged={refresh} />
               <PublicationsCard state={state} writable={writable} onChanged={refresh} />
+              <IntermediatePiecesCard state={state} writable={writable} onChanged={refresh} />
               <OutcomeCard state={state} writable={writable} onChanged={refresh} />
               <MoneyCard state={state} />
               <FeesCard state={state} writable={writable} onChanged={refresh} />

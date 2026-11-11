@@ -23,6 +23,8 @@ import CollapsibleCard from "@/components/product/collapsible-card";
 import DialogHeader from "@/components/product/dialog-header";
 import EmptyState from "@/components/product/empty-state";
 import ItemRows, { type ItemRow } from "@/components/product/item-rows";
+import SectionTitle from "@/components/product/section-title";
+import StateLine from "@/components/product/state-line";
 import StatusChip from "@/components/product/status-chip";
 import IllustrationDocumentation from "@/icons/illustrations/illustration-documentation";
 import NiDocumentCross from "@/icons/nexture/ni-document-cross";
@@ -37,6 +39,7 @@ import {
   isDocumentKind,
 } from "@/lib/cases/cases";
 import { processingErrorKey, readDataDiffers, type ReadDiffer } from "@/lib/cases/document-check";
+import { recordDocumentNotHave } from "@/lib/cases/document-needs-actions";
 import { PHOTO_PROBLEM_KEY } from "@/lib/cases/document-quality";
 import { documentLine, orderDocuments } from "@/lib/cases/document-rows";
 import { SECTION_ANCHOR } from "@/lib/cases/now";
@@ -75,6 +78,15 @@ const SOURCE_KEY: Record<CaseDocument["source"], string> = {
  * suggestion is shown where the person decides; accepting or refusing here
  * is what decides it, the legs a ticket carries included.
  */
+/** Where a dispensable document stands, in words. */
+const DISPENSABLE_STATE_KEY: Record<"sent" | "not_have" | "expired" | "asked" | "later", string> = {
+  sent: "case-documents-dispensable-sent",
+  later: "case-documents-dispensable-later",
+  not_have: "case-documents-dispensable-not-have",
+  expired: "case-documents-dispensable-expired",
+  asked: "case-documents-dispensable-asked",
+};
+
 export default function DocumentsCard({
   state,
   writable,
@@ -98,6 +110,11 @@ export default function DocumentsCard({
       doing: t("case-action-document-upload-doing"),
       done: t("case-action-document-upload-done"),
       failed: t("case-action-document-upload-failed"),
+    },
+    notHave: {
+      doing: t("case-action-document-not-have-doing"),
+      done: t("case-action-document-not-have-done"),
+      failed: t("case-action-document-not-have-failed"),
     },
   };
   // Opening a file only reads: it stays free while an action runs.
@@ -383,6 +400,49 @@ export default function DocumentsCard({
             { key: "done", title: t("case-documents-decided"), rows: ordered.done.map(asLine), shown: 3 },
           ]}
         />
+      ) : null}
+
+      {/* 0177: what helps the case and does not hold it, asked once of the client. */}
+      {state.dispensables && state.dispensables.length > 0 ? (
+        <Box className="flex flex-col gap-2">
+          <SectionTitle
+            id="case-documents-dispensable"
+            as="h3"
+            variant="subtitle2"
+            title={t("case-documents-dispensable-title")}
+            description={t("case-documents-dispensable-hint")}
+          />
+          {state.dispensables.map((item) => (
+            <StateLine
+              key={item.kind}
+              tone={item.state === "sent" ? "done" : item.state === "asked" ? "waiting" : "info"}
+              status={t(DISPENSABLE_STATE_KEY[item.state])}
+              action={
+                writable && item.state === "asked" ? (
+                  <Button
+                    variant="text"
+                    color="grey"
+                    size="small"
+                    disabled={action.busy}
+                    loading={action.pending(`not-have-${item.kind}`)}
+                    onClick={() =>
+                      action.run(`not-have-${item.kind}`, words.notHave, async () => {
+                        setProblem(null);
+                        const result = await recordDocumentNotHave(state.case.id, item.kind);
+                        if (!result.ok) setProblem(result.code);
+                        return result.ok;
+                      })
+                    }
+                  >
+                    {t("case-documents-not-have")}
+                  </Button>
+                ) : undefined
+              }
+            >
+              {item.label.charAt(0).toUpperCase() + item.label.slice(1)}
+            </StateLine>
+          ))}
+        </Box>
       ) : null}
 
       {writable && (

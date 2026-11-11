@@ -1,6 +1,7 @@
 "use client";
 
 import type { CaseState } from "../case-types";
+import JudgmentPathBlock from "./judgment-path-block";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 
@@ -26,8 +27,10 @@ import {
   lawsuitOutcome,
   RESULT_KEY,
 } from "@/lib/cases/outcomes";
+import { AMOUNT_STEP_KEY, type LawsuitAmount } from "@/lib/courts/amount";
 import { formatCnj } from "@flyee/rules/cnj";
 import { formatCents, parseCents } from "@flyee/rules/finance";
+import { formatDayBr } from "@flyee/rules/person";
 
 type Ready = Extract<CaseState, { kind: "ready" }>;
 
@@ -310,6 +313,8 @@ export default function OutcomeCard({
                 label={t(OUTCOME_KEY[lawsuitOutcome(all)])}
               />
             </Box>
+            <AmountLine amount={state.amounts.find((item) => item.proceedingId === lawsuit.id) ?? null} />
+            <JudgmentPathBlock state={state} proceedingId={lawsuit.id} writable={writable} onChanged={onChanged} />
             {all.length === 0 ? (
               <StateLine tone="info">{t("outcome-none")}</StateLine>
             ) : own.length === 0 ? null : (
@@ -611,5 +616,42 @@ function ReceivedPanel({
         </Box>
       </Box>
     </SidePanel>
+  );
+}
+
+const brl = (cents: number) =>
+  new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(cents / 100);
+
+/**
+ * What the condemnation is worth today and what to ask for it (0184): ONE's computation by Lei 14.905/2024, with the
+ * Banco Central's rates, said as ONE's and that it may err.
+ */
+function AmountLine({ amount }: { amount: LawsuitAmount | null }) {
+  const t = useTranslations("product");
+  if (!amount) return null;
+  const stepKey = AMOUNT_STEP_KEY[amount.step];
+  const tone = amount.step === "levantamento" ? "done" : amount.step === "aguardar" ? "waiting" : "attention";
+  return (
+    <Box className="flex flex-col gap-1">
+      <StateLine tone="info">
+        {t("amount-due", {
+          total: brl(amount.totalCents),
+          corrected: brl(amount.correctedCents),
+          interest: brl(amount.interestCents),
+          day: formatDayBr(amount.asOf) ?? "",
+        })}
+      </StateLine>
+      <StateLine tone={tone}>
+        {t(stepKey, {
+          deposited: brl(amount.depositedCents),
+          short: brl(amount.shortCents),
+          fine: brl(amount.fineCents),
+        })}
+      </StateLine>
+      {amount.needsTerms ? <StateLine tone="info">{t("amount-needs-terms")}</StateLine> : null}
+      {amount.missing.length > 0 ? (
+        <StateLine tone="info">{t("amount-missing", { months: amount.missing.join(", ") })}</StateLine>
+      ) : null}
+    </Box>
   );
 }

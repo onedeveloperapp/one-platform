@@ -9,6 +9,7 @@ import AgendaDigestEmail from "./templates/agenda-digest";
 import ContactFormEmail from "./templates/contact-form";
 import FirmInvitationEmail from "./templates/firm-invitation";
 import AccountantPackageEmail from "./templates/accountant-package";
+import HearingBriefEmail from "./templates/hearing-brief";
 import PartnerInvitationEmail from "./templates/partner-invitation";
 import KitReceiptEmail from "./templates/kit-receipt";
 import LeadConfirmEmail from "./templates/lead-confirm";
@@ -55,6 +56,13 @@ function every(locale: EmailLocale): Record<string, ReactElement> {
       functionLabel: "Advocacia",
       acceptUrl: INVITATION,
       expiresLabel: "15 de outubro de 2026",
+    }),
+    "hearing-brief": createElement(HearingBriefEmail, {
+      locale,
+      firmName: "Lima Advocacia",
+      caseSeq: 12,
+      whenLabel: "quinta-feira, 12 de novembro, às 14:30",
+      lines: ["Fatos: o voo atrasou seis horas.", "Acordo: no mínimo R$ 3.000,00."],
     }),
     "accountant-package": createElement(AccountantPackageEmail, {
       locale,

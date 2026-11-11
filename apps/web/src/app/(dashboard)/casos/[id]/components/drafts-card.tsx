@@ -2,6 +2,7 @@
 
 import type { CaseDraft, CaseProceeding, CaseState } from "../case-types";
 import { type CaseActionWords, sentence, useCaseAction } from "./case-action";
+import PieceFactsLine from "./piece-facts-line";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useEffect, useMemo, useState, useTransition } from "react";
@@ -166,7 +167,8 @@ export default function DraftsCard({
   // The draft open in the editor, by its id: it stays open whatever the page reads meanwhile.
   const [editing, setEditing] = useState<string | null>(null);
   const [reading, setReading] = useState<{ draft: CaseDraft; title: string } | null>(null);
-  const drafts = state.pieces.drafts;
+  // The initial alone: the pieces of a lawsuit the court has are the card of their own (0189).
+  const drafts = state.pieces.drafts.filter((draft) => draft.pieceKind === "inicial");
   // A piece is written while its lawsuit is still to be filed: one the court already has is here only
   // when a piece was written for it.
   const lawsuits = state.proceedings.filter(
@@ -249,17 +251,24 @@ export default function DraftsCard({
         />
       ) : (
         lawsuits.map((proceeding) => (
-          <Lawsuit
-            key={proceeding.id}
-            state={state}
-            proceeding={proceeding}
-            title={titleOf(proceeding)}
-            drafts={drafts.filter((draft) => draft.proceedingId === proceeding.id)}
-            writable={writable}
-            onChanged={onChanged}
-            onEdit={setEditing}
-            onRead={(draft) => setReading({ draft, title: titleOf(proceeding) })}
-          />
+          <Box key={proceeding.id} className="flex flex-col gap-2">
+            <Lawsuit
+              state={state}
+              proceeding={proceeding}
+              title={titleOf(proceeding)}
+              drafts={drafts.filter((draft) => draft.proceedingId === proceeding.id)}
+              writable={writable}
+              onChanged={onChanged}
+              onEdit={setEditing}
+              onRead={(draft) => setReading({ draft, title: titleOf(proceeding) })}
+            />
+            {/* The client's check of the facts of the piece (0182): the filing waits for it. */}
+            <PieceFactsLine
+              state={state}
+              draftIds={drafts.filter((draft) => draft.proceedingId === proceeding.id).map((draft) => draft.id)}
+              writable={writable}
+            />
+          </Box>
         ))
       )}
 
@@ -994,7 +1003,7 @@ type Preview = {
  * saved without asking, and it stays open whatever happens to the draft
  * meanwhile, so that what was typed can always be copied.
  */
-function DraftDialog({
+export function DraftDialog({
   state,
   draft,
   title,
@@ -1839,7 +1848,7 @@ function Changes({ blocks }: { blocks: readonly ChangeBlock[] }) {
  * was given up or turned down, kept so that what was written is not lost
  * with it.
  */
-function DraftReader({ draft, title, onClose }: { draft: CaseDraft; title: string; onClose: () => void }) {
+export function DraftReader({ draft, title, onClose }: { draft: CaseDraft; title: string; onClose: () => void }) {
   const t = useTranslations("product");
   const [read, setRead] = useState<{ text: string; version: number } | null>(null);
   const [errorCode, setErrorCode] = useState<string | null>(null);

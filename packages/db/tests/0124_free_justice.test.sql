@@ -72,6 +72,10 @@ insert into public.case_drafts (id, org_id, case_id, proceeding_id, template_nam
                                 checked_version, auto_approval_owed)
 values ('ac240000-0000-4000-8000-000000000001', 'b1240000-0000-4000-8000-00000000000a', 'c1240000-0000-4000-8000-000000000001',
         'f1240000-0000-4000-8000-000000000001', 'Inicial', 'Texto do modelo da inicial.', 'ai', 'proposed', 1, 1, true);
+-- The client confirmed the facts of the piece (0182): what this file reads is free justice alone.
+insert into public.piece_fact_checks (org_id, case_id, draft_id, version, status, facts)
+values ('b1240000-0000-4000-8000-00000000000a', 'c1240000-0000-4000-8000-000000000001',
+        'ac240000-0000-4000-8000-000000000001', 1, 'confirmed', 'Você comprou a passagem.');
 insert into public.case_draft_versions (org_id, draft_id, version, author, body) values
   ('b1240000-0000-4000-8000-00000000000a', 'ac240000-0000-4000-8000-000000000001', 1, 'ai',
    E'I. DA GRATUIDADE DA JUSTIÇA\n\n[[GRATUIDADE]]\n\nIV. DOS PEDIDOS\n\ne) a produção de provas.\n\n[[PEDIDO_GRATUIDADE]]\n\nDá-se à causa o valor.');
@@ -227,6 +231,9 @@ insert into public.proceedings (id, org_id, case_id, kind, court, status) values
 insert into public.case_drafts (id, org_id, case_id, proceeding_id, template_name, template_body, mode, status, version, checked_version)
 values ('ac240000-0000-4000-8000-000000000002', 'b1240000-0000-4000-8000-00000000000a', 'c1240000-0000-4000-8000-000000000001',
         'f1240000-0000-4000-8000-000000000002', 'Inicial', 'Texto do modelo da inicial.', 'ai', 'proposed', 1, 1);
+insert into public.piece_fact_checks (org_id, case_id, draft_id, version, status, facts)
+values ('b1240000-0000-4000-8000-00000000000a', 'c1240000-0000-4000-8000-000000000001',
+        'ac240000-0000-4000-8000-000000000002', 1, 'confirmed', 'Você comprou a passagem.');
 insert into public.case_draft_versions (org_id, draft_id, version, author, body) values
   ('b1240000-0000-4000-8000-00000000000a', 'ac240000-0000-4000-8000-000000000002', 1, 'ai', E'A.\n\n[[GRATUIDADE]]\n\nB.');
 select ok(

@@ -5,6 +5,7 @@ import AutonomyHoldCard from "./autonomy-hold-card";
 import DjenHealthCard from "./djen-health-card";
 import ExecutorCheckCard from "./executor-check-card";
 import FlightReleaseCard from "./flight-release-card";
+import MarketCard from "./market-card";
 import ShadowTriageCard from "./shadow-triage-card";
 import TaskAutonomyDialog from "./task-autonomy-dialog";
 import TaskInstructionsDialog from "./task-instructions-dialog";
@@ -68,6 +69,7 @@ export type AiConsoleState = ConsoleState<{
   flights: FlightWatchStatus;
   flightSourceOn: boolean;
   djenCaptureOn: boolean;
+  marketCaptureOn: boolean;
   readiness: { fake: boolean; configured: Record<string, boolean> };
   /** False without SUPABASE_SERVICE_ROLE_KEY: no run can be started from here. */
   serviceAvailable: boolean;
@@ -161,6 +163,7 @@ export default function AiConsoleView({ state }: { state: AiConsoleState }) {
     flights,
     flightSourceOn,
     djenCaptureOn,
+    marketCaptureOn,
     readiness,
     serviceAvailable,
   } = state;
@@ -390,6 +393,9 @@ export default function AiConsoleView({ state }: { state: AiConsoleState }) {
 
         <Grid size={12}>
           <DjenHealthCard health={djen} captureOn={djenCaptureOn} />
+        </Grid>
+        <Grid size={12}>
+          <MarketCard captureOn={marketCaptureOn} />
         </Grid>
         <Grid size={12}>
           <ShadowTriageCard measure={triage} onChanged={refresh} />

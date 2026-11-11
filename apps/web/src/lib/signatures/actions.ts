@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { randomBytes } from "node:crypto";
 
+import { queueInterview } from "@/lib/cases/interview-work";
 import { getVault } from "@/lib/connections/vault";
 import { supabaseFileStore } from "@/lib/files/store";
 import { isManager } from "@/lib/firm/roles";
@@ -254,7 +255,11 @@ export async function confirmSignature(
     target_document: documentId,
   });
   const result = fold(data, error, () => ({}));
-  if (result.ok) refresh(caseId);
+  if (result.ok) {
+    refresh(caseId);
+    // What ONE asks after the signature (0181): the interview starts now, not at the next sweep.
+    queueInterview({ caseId });
+  }
   return result;
 }
 
@@ -324,6 +329,7 @@ export async function simulateTestSignature(caseId: string, envelopeId: string):
       return { ok: false, code };
     }
     refresh(caseId);
+    queueInterview({ caseId });
     return { ok: true, code: "signed" } as SignatureResult;
   } catch {
     await takeBackFile(store, reserved.fileId, reserved.storagePath).catch(() => undefined);

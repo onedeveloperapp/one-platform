@@ -8,6 +8,7 @@ import { submitFilings } from "@/lib/cases/filing-submit-work";
 import { buildClaimedPackage, claimFilingPackages } from "@/lib/cases/filing-work";
 import { answerFromStatement, sweepInterviews } from "@/lib/cases/interview-work";
 import { claimPackageSignatures, signClaimedPackage, signFilingPackages } from "@/lib/cases/package-signature-work";
+import { pieceFactsRound } from "@/lib/cases/piece-facts-work";
 import { askAccountQuestions, claimCaseStatements, processClaimedStatement } from "@/lib/cases/statements-work";
 import type { Sweep } from "@/lib/jobs/schedule";
 
@@ -89,6 +90,17 @@ export const caseSweeps: Sweep[] = [
     when: { every: 5 },
     whileUsed: true,
     run: (service, until) => sweepInterviews(service, until),
+  },
+  /**
+   * The client's check of the facts of the initial (migration 0182): the facts of a ready piece written in plain
+   * words for the client, and the client told in the conversation ONE holds, and reminded once; also while ONE is
+   * used, since the database claims each check under a number.
+   */
+  {
+    key: "piece-facts",
+    when: { every: 5 },
+    whileUsed: true,
+    run: (service, until) => pieceFactsRound(service, until),
   },
   /**
    * The filing packages (migration 0027): a package a person or ONE asked for

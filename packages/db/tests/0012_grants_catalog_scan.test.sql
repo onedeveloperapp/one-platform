@@ -79,9 +79,9 @@ select is(
     'client_link_course',
     'client_link_discard_upload',
     'client_link_finish',
-    'client_link_finish_statement', 'client_link_finish_upload', 'client_link_free_justice', 'client_link_interview', 'client_link_interview_answer',
+    'client_link_finish_statement', 'client_link_finish_upload', 'client_link_free_justice', 'client_link_interview', 'client_link_interview_answer', 'client_link_judgment_paths',
     'client_link_notices',
-    'client_link_open', 'client_link_remove_segment', 'client_link_reserve_signed', 'client_link_reserve_statement',
+    'client_link_open', 'client_link_piece_facts', 'client_link_prior_complaint', 'client_link_publication_news', 'client_link_remove_segment', 'client_link_reserve_signed', 'client_link_reserve_statement',
     'client_link_reserve_upload', 'client_link_residence',
     'client_link_save_person', 'client_link_save_segment', 'client_link_signature_original', 'client_link_signatures',
     'client_link_statements', 'client_link_terms', 'client_link_write_statement',
@@ -135,6 +135,9 @@ select is(
     'court_filing_channels',
     'hearing_event_removals',
     'lead_submissions',
+    -- What the market's reading plans, and the decisions it read (0190): read through their functions, in numbers.
+    'market_captures',
+    'market_decisions',
     'meta_attribution',
     'newsletter_deliveries',
     -- A passenger's link of an agency (0070): read through its functions, by the agency and by its token.

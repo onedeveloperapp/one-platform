@@ -8,6 +8,7 @@ import type {
   FilingOutcome,
   LawsuitFiling,
   OabRegistration,
+  PetitionFiling,
   ProceedingRead,
   ProceedingSource,
 } from "@flyee/courts/types";
@@ -214,6 +215,35 @@ export class FakeFilingChannel implements FilingChannel {
       receipt: new TextEncoder().encode(`%PDF-1.4\n% Recibo do tribunal simulado, protocolo ${protocol}\n%%EOF\n`),
       at: this.clock(),
       message: "Petição recebida pelo tribunal simulado.",
+    };
+  }
+
+  /** Petitions into a lawsuit that reached it: taken, refused, or whose answer was lost. */
+  readonly petitions: PetitionFiling[] = [];
+
+  async filePetition(filing: PetitionFiling): Promise<FilingOutcome> {
+    const failing = this.next;
+    this.next = null;
+    if (failing === "unavailable") return { kind: "unavailable", reason: "fake_unreachable" };
+    this.petitions.push(filing);
+    if (failing === "unknown") return { kind: "unknown", reason: "fake_no_answer" };
+    const problems: string[] = [];
+    if (!/^\d{20}$/.test(filing.caseNumber)) problems.push("o número do processo não é um número CNJ");
+    if (filing.documents.length === 0) problems.push("a petição não tem documento");
+    filing.documents.forEach((document, index) => {
+      if (!isPdf(document.pdf)) problems.push(`o documento ${index + 1} não é um PDF`);
+    });
+    if (problems.length > 0) {
+      return { kind: "refused", protocol: null, message: `O tribunal simulado não recebeu: ${problems.join("; ")}.` };
+    }
+    const protocol = `FAKE-P-${this.petitions.length}`;
+    return {
+      kind: "filed",
+      protocol,
+      caseNumber: filing.caseNumber,
+      receipt: new TextEncoder().encode(`%PDF-1.4\n% Recibo do tribunal simulado, protocolo ${protocol}\n%%EOF\n`),
+      at: this.clock(),
+      message: "Petição juntada pelo tribunal simulado.",
     };
   }
 }

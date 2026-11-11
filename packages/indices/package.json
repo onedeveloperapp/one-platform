@@ -1,0 +1,16 @@
+{
+  "name": "@flyee/indices",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "The monthly rates a condemnation is updated by (the IPCA and the Selic) behind an interface: the Banco Central's public series (SGS) and a fake, under one contract.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./types": "./src/types.ts",
+    "./fake": "./src/fake.ts",
+    "./providers/bcb": "./src/providers/bcb.ts"
+  },
+  "scripts": {
+    "test": "node --experimental-strip-types --test src/contract.test.ts"
+  }
+}

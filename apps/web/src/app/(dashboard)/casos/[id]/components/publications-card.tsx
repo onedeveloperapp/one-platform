@@ -2,6 +2,7 @@
 
 import type { CaseState } from "../case-types";
 import { sentence, useCaseAction } from "./case-action";
+import PublicationActionBox from "./publication-action-box";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 
@@ -140,29 +141,32 @@ export default function PublicationsCard({
       opener: line.action === "open" && mayTriage && opener ? t(opener) : undefined,
       openLabel: t("case-rows-pub-open-label", { day }),
       content: () => (
-        <PublicationCard
-          inline
-          row={row}
-          progress={null}
-          acts={state.deadlineActs}
-          colleagues={state.colleagues}
-          courtZones={state.courtZones}
-          mayTriage={mayTriage}
-          said={said[row.id] ?? null}
-          seen={seen[row.id] === true}
-          onSaid={(value) => {
-            setSaid((current) => ({ ...current, [row.id]: value }));
-            onChanged();
-          }}
-          onSeen={() => {
-            setSeen((current) => ({ ...current, [row.id]: true }));
-            onChanged();
-          }}
-          onAcknowledged={() => {
-            setAcked((current) => ({ ...current, [row.id]: true }));
-            onChanged();
-          }}
-        />
+        <>
+          <PublicationActionBox view={state.publicationActions.find((item) => item.publicationId === row.id) ?? null} />
+          <PublicationCard
+            inline
+            row={row}
+            progress={null}
+            acts={state.deadlineActs}
+            colleagues={state.colleagues}
+            courtZones={state.courtZones}
+            mayTriage={mayTriage}
+            said={said[row.id] ?? null}
+            seen={seen[row.id] === true}
+            onSaid={(value) => {
+              setSaid((current) => ({ ...current, [row.id]: value }));
+              onChanged();
+            }}
+            onSeen={() => {
+              setSeen((current) => ({ ...current, [row.id]: true }));
+              onChanged();
+            }}
+            onAcknowledged={() => {
+              setAcked((current) => ({ ...current, [row.id]: true }));
+              onChanged();
+            }}
+          />
+        </>
       ),
     };
   };

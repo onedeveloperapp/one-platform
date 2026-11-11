@@ -4,9 +4,13 @@ import ClientCivilCourt from "./client-civil-court";
 import ClientCourse from "./client-course";
 import ClientFreeJustice from "./client-free-justice";
 import ClientInterview from "./client-interview";
+import ClientJudgment from "./client-judgment";
 import ClientMarketing from "./client-marketing";
 import ClientMoney from "./client-money";
 import ClientNotices from "./client-notices";
+import ClientPieceFacts from "./client-piece-facts";
+import ClientPriorComplaint from "./client-prior-complaint";
+import ClientPublicationNews from "./client-publication-news";
 import ClientReceipts from "./client-receipts";
 import ClientResidence from "./client-residence";
 import ClientStatements from "./client-statements";
@@ -59,6 +63,7 @@ import type { ClientLinkView, ClientPerson, ClientTasks } from "@/lib/cases/clie
 import {
   addClientDependent,
   assignClientUpload,
+  clientNotHave,
   discardClientUpload,
   finishClientLink,
   finishClientUpload,
@@ -266,6 +271,10 @@ export default function ClientFolder({
       />
       {/* A bill in somebody else's name the firm accepted asks who the holder is (0123), right under the documents. */}
       <ClientResidence token={token} items={tasks.residence} editable={editable} onSaved={() => router.refresh()} />
+      <ClientPriorComplaint token={token} view={tasks.priorComplaint} onSaved={() => router.refresh()} />
+      <ClientPieceFacts token={token} items={tasks.pieceFacts} onSaved={() => router.refresh()} />
+      <ClientJudgment token={token} items={tasks.judgments} onSaved={() => router.refresh()} />
+      <ClientPublicationNews items={tasks.publicationNews} />
       <People
         token={token}
         people={view.people}
@@ -1103,6 +1112,21 @@ function Documents({
   const standing = documentsStanding(needs, view.documents);
   // What was sent that answers no need (a receipt, a photo of what happened): listed after the needs, as it came.
   const extras = extraDocuments(needs, view.documents);
+  // 0177: what helps the case and does not hold it, asked once: the client sends it or says they do not have it.
+  const dispensables = (view.dispensables ?? []).filter((item) => item.state === "asked" || item.state === "not_have");
+  const notHave = async (kind: string) => {
+    const key = `dispensable-${kind}`;
+    setBusy({ key, insist: false });
+    setProblem(null);
+    const result = await clientNotHave(token, kind).catch(() => ({ ok: false as const, code: "failed" }));
+    setBusy(null);
+    if (!result.ok) {
+      setProblem({ key, code: result.code });
+      return;
+    }
+    back.current = key;
+    onSaved();
+  };
   const nameOf = (partyId: string | null) =>
     partyId ? (view.people.find((person) => person.party_id === partyId)?.full_name ?? null) : null;
   const kindOf = (kind: string) => t(DOCUMENT_KIND_KEY[kind as DocumentKind] ?? DOCUMENT_KIND_KEY.other);
@@ -1186,7 +1210,7 @@ function Documents({
 
         {/* One line per document: what it is and whose, how it stands on the right, and a button only where a
             file is still owed. */}
-        {needs.length + extras.length > 0 && (
+        {needs.length + extras.length + dispensables.length > 0 && (
           <Box component="ul" className="divide-grey-100 m-0 flex list-none flex-col divide-y p-0">
             {needs.map((need) => {
               const sent = documentsFor(need, view.documents);
@@ -1228,6 +1252,60 @@ function Documents({
                   </StateLine>
                   {poorNotice(need.key)}
                   {problemOf(need.key)}
+                </Box>
+              );
+            })}
+            {dispensables.map((item) => {
+              const key = `dispensable-${item.kind}`;
+              const sending = busy?.key === key && !busy.insist;
+              return (
+                <Box
+                  component="li"
+                  key={key}
+                  ref={(line: HTMLElement | null) => {
+                    lines.current[key] = line;
+                  }}
+                  tabIndex={-1}
+                  className="flex flex-col gap-2 py-3 first:pt-0 last:pb-0"
+                >
+                  <StateLine
+                    tone={sending ? "waiting" : item.state === "not_have" ? "info" : "attention"}
+                    icon={sending ? <NiUploadCloud size="medium" /> : undefined}
+                    status={
+                      sending
+                        ? t("client-documents-sending")
+                        : item.state === "not_have"
+                          ? t("client-documents-not-had")
+                          : t("client-documents-optional")
+                    }
+                    action={
+                      editable && item.state === "asked" && !poor[key] ? (
+                        <Box className="flex flex-wrap gap-2">
+                          <Button
+                            variant="contained"
+                            size="small"
+                            disabled={busy !== null}
+                            onClick={() => pick(key, item.kind as DocumentKind, holder?.party_id ?? null)}
+                          >
+                            {t("client-documents-send")}
+                          </Button>
+                          <Button
+                            variant="text"
+                            color="grey"
+                            size="small"
+                            disabled={busy !== null}
+                            onClick={() => void notHave(item.kind)}
+                          >
+                            {t("client-documents-not-have")}
+                          </Button>
+                        </Box>
+                      ) : undefined
+                    }
+                  >
+                    <DocumentWords kind={item.label.charAt(0).toUpperCase() + item.label.slice(1)} name={null} />
+                  </StateLine>
+                  {poorNotice(key)}
+                  {problemOf(key)}
                 </Box>
               );
             })}

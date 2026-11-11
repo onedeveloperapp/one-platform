@@ -38,6 +38,8 @@
     "@flyee/fields": "*",
     "@flyee/flights": "*",
     "@flyee/identity": "*",
+    "@flyee/indices": "*",
+    "@flyee/jurimetrics": "*",
     "@flyee/jobs": "*",
     "@flyee/knowledge": "*",
     "@flyee/onboarding": "*",

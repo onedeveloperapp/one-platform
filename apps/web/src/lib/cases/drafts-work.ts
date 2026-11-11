@@ -119,6 +119,39 @@ const fileName = (title: string | null): string =>
       .slice(0, 150) || "Peça"
   }.pdf`;
 
+/**
+ * What an intermediate piece of a lawsuit the court has adds to the case's facts (0189): its kind and what it is, the
+ * lawsuit, the publication that asked for it, the judgment and the amounts, and where the airline's defence is kept
+ * (for a réplica). Null for the initial. Throws when it cannot be read: a piece is never taken for the initial.
+ */
+type PieceFacts = { name: string; facts: Record<string, unknown>; defensePath: string | null };
+async function intermediateFacts(service: SupabaseClient, draftId: string, claim: number): Promise<PieceFacts | null> {
+  const { data, error } = await service.rpc("intermediate_piece_facts", { target_draft: draftId, target_claim: claim });
+  if (error) throw new Error(`intermediate_piece_facts failed: ${error.message}`);
+  if (!data || typeof data !== "object" || Array.isArray(data)) return null;
+  const { contestacao, ...facts } = data as Record<string, unknown>;
+  const defense = (contestacao ?? null) as { storage_path?: unknown } | null;
+  return {
+    name: String(facts.nome ?? "Peça"),
+    facts,
+    defensePath: typeof defense?.storage_path === "string" ? defense.storage_path : null,
+  };
+}
+
+/** The theses of a piece's unit, once released (0190); null while they are in the shadow or cannot be read. */
+async function unitTheses(service: SupabaseClient, draftId: string): Promise<unknown[] | null> {
+  const { data, error } = await service.rpc("unit_theses_for_piece", { target_draft: draftId });
+  return !error && Array.isArray(data) && data.length > 0 ? data : null;
+}
+
+/** The airline's defence as the model reads it: a PDF, never anything else. */
+async function defenseAttachment(service: SupabaseClient, path: string | null) {
+  if (!path) return [];
+  const bytes = await supabaseFileStore(service).get(path);
+  if (!bytes || new TextDecoder().decode(bytes.subarray(0, 5)) !== "%PDF-") return [];
+  return [{ kind: "document" as const, mime: "application/pdf", dataBase64: Buffer.from(bytes).toString("base64") }];
+}
+
 /** Does the work a claimed draft is owed and records what came of it. Never throws for what a model or a file did. */
 export async function workClaimedDraft(service: SupabaseClient, held: DraftClaim): Promise<DraftOutcome> {
   const { data, error } = await service.rpc("case_draft_to_work", {
@@ -164,10 +197,24 @@ export async function workClaimedDraft(service: SupabaseClient, held: DraftClaim
       interviewForPiece(service, row.case_id).catch(() => null),
       pieceEssentials(service, row.case_id),
     ]);
+    // An intermediate piece (0189) reads its own facts beside the case's, and the defence for a réplica.
+    const piece = await intermediateFacts(service, row.draft_id, row.claim);
     const facts =
       typeof row.facts === "object" && row.facts !== null
-        ? { ...(row.facts as Record<string, unknown>), ...(interview ?? {}), essenciais: essentials }
+        ? {
+            ...(row.facts as Record<string, unknown>),
+            ...(interview ?? {}),
+            essenciais: essentials,
+            ...(piece ? { peca_intermediaria: piece.facts } : {}),
+          }
         : row.facts;
+    const attachments = piece ? await defenseAttachment(service, piece.defensePath) : [];
+    // The theses its unit's decisions rest on, once the operator released their reading (0190): nothing otherwise.
+    const theses = await unitTheses(service, row.draft_id);
+    if (theses && typeof facts === "object" && facts !== null) {
+      (facts as Record<string, unknown>).teses_da_unidade = theses;
+    }
+    const head = piece ? `Peça intermediária: ${piece.name}.\n\n` : "";
     if (row.work === "generate") {
       if (!row.template || !row.run_key) return record("failed", { code: "nothing_to_write" });
       input = { template: row.template, facts, library: row.library };
@@ -187,7 +234,7 @@ export async function workClaimedDraft(service: SupabaseClient, held: DraftClaim
       orgId: row.org_id,
       task: DRAFT_TASK,
       input,
-      messages: [{ role: "user", content: briefing }],
+      messages: [{ role: "user", content: head + briefing, ...(attachments.length > 0 ? { attachments } : {}) }],
       subject: { type: "case_draft", id: row.draft_id },
       // The same for a work claimed again after its run succeeded, another once a run of it failed: the
       // database says which (`case_draft_to_work`), and each rewriting asked for has runs of its own.
@@ -223,6 +270,8 @@ export async function workClaimedDraft(service: SupabaseClient, held: DraftClaim
 
   // The approved text as a PDF of the firm's own: nothing of the platform is printed on it.
   if (!row.body) return record("failed", { code: "no_text" });
+  // An intermediate piece is kept as its own document, never the case's petition (0189).
+  const issuedPiece = await intermediateFacts(service, row.draft_id, row.claim);
   let pdf: Uint8Array;
   try {
     pdf = await renderTextPdf({
@@ -257,9 +306,28 @@ export async function workClaimedDraft(service: SupabaseClient, held: DraftClaim
   // document pointing at it. From here on the file may be the petition even when the answer gets lost on
   // the way (this call then throws, and nothing is taken back): it is taken back only when the database
   // said the piece was not issued, record first, and the database refuses to forget a file a document names.
-  const outcome = await record("issued", {
-    payload: { file_id: reserved.fileId, sha256: measure.sha256, bytes: measure.bytes, pages: measure.pages ?? 1 },
-  });
+  const payload = { file_id: reserved.fileId, sha256: measure.sha256, bytes: measure.bytes, pages: measure.pages ?? 1 };
+  if (issuedPiece) {
+    const { data: kept, error: keptError } = await service.rpc("record_piece_issued", {
+      target_draft: row.draft_id,
+      target_claim: row.claim,
+      target_payload: payload,
+    });
+    if (keptError) throw new Error(`record_piece_issued failed: ${keptError.message}`);
+    const answer = (kept ?? {}) as { ok?: boolean; code?: string };
+    if (answer.ok) {
+      // A piece the lawyer decided to file is filed right after (its filing is owed from here).
+      await import("@/lib/cases/pieces-work").then(
+        ({ queuePieceFilings }) => queuePieceFilings(),
+        () => undefined,
+      );
+      return "issued";
+    }
+    if (answer.code === "not_working") return "not_held";
+    await takeBackFile(store, reserved.fileId, reserved.storagePath);
+    return record("failed", { code: answer.code ?? "refused" });
+  }
+  const outcome = await record("issued", { payload });
   if (outcome !== "issued") await takeBackFile(store, reserved.fileId, reserved.storagePath);
   // A petition may let ONE ask for the filing package of its lawsuit (0039): the case is looked at right after.
   // Loaded when needed: the worker of a case reaches the pieces' own.

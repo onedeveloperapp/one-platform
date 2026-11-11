@@ -3,6 +3,7 @@ import type { AirlineOption } from "../cases-types";
 import type { PendingApproval, SecondFactorState } from "@/lib/ai/approvals";
 import type { AccountState } from "@/lib/cases/account";
 import type { CaseStatus, Cause, LinkOwed, Origin, PersonData, RequiredDocument } from "@/lib/cases/cases";
+import type { Dispensable } from "@/lib/cases/client-documents";
 import type { CheckAnswer } from "@/lib/cases/document-check";
 import type { DocumentQuality } from "@/lib/cases/document-quality";
 import type { CaseDossier, CaseDraft, CasePieces } from "@/lib/cases/draft-facts";
@@ -12,7 +13,10 @@ import type { CaseFiling } from "@/lib/cases/filing-facts";
 import type { FreeJusticeNeed } from "@/lib/cases/free-justice";
 import type { InterviewView } from "@/lib/cases/interview";
 import type { StageMoment } from "@/lib/cases/journey";
+import type { JudgmentPath } from "@/lib/cases/judgment-paths";
 import type { LawsuitFact } from "@/lib/cases/outcomes";
+import type { CasePieceFacts } from "@/lib/cases/piece-facts";
+import type { PriorComplaint } from "@/lib/cases/prior-complaint";
 import type { CasePulse } from "@/lib/cases/pulse";
 import type { CaseQualification } from "@/lib/cases/qualification";
 import type { ReadFields } from "@/lib/cases/read-fields";
@@ -20,6 +24,7 @@ import type { ResidenceView } from "@/lib/cases/residence";
 import type { Ceiling, LawyerCauses, WeatherAssessment } from "@/lib/cases/rules";
 import type { CaseAudio, CaseComplaint, CaseStatement } from "@/lib/cases/statement-facts";
 import type { ComplaintChannel } from "@/lib/cases/statements";
+import type { LawsuitAmount } from "@/lib/courts/amount";
 import type { CourseFacts } from "@/lib/courts/course-facts";
 import type { CaseDeadlines, DeadlineAct } from "@/lib/deadlines/facts";
 import type { AutonomyDecision, AutonomyMode } from "@/lib/firm/autonomy";
@@ -27,6 +32,7 @@ import type { FirmFunction } from "@/lib/firm/roles";
 import type { CaseHearings, Colleague } from "@/lib/hearings/facts";
 import type { CourtZones } from "@/lib/hearings/hearings";
 import type { CaseNotices } from "@/lib/notices/facts";
+import type { PublicationActionView } from "@/lib/publications/actions-read";
 import type { PublicationRow } from "@/lib/publications/facts";
 import type { FlightChecks } from "@/modules/direito-do-passageiro/flights/facts";
 
@@ -112,6 +118,9 @@ export type CaseProceeding = {
   court: string | null;
   comarca: string | null;
   unit: string | null;
+  /** ONE named the unit from the platform's table of the court's units (migration 0179), and what the table says of it. */
+  unitByOne: boolean;
+  unitTable: { confirmed: boolean; wholeComarca: boolean; priorComplaint: boolean } | null;
   system: string | null;
   cnj: string | null;
   forumBasis: string | null;
@@ -258,6 +267,20 @@ export type CaseState =
        * where its declaration stands; null when they could not be read.
        */
       residence: ResidenceView[] | null;
+      /** The dispensable documents of the case's kind of problem and where each stands (0177); null when unread. */
+      dispensables: Dispensable[] | null;
+      /** The complaint before the lawsuit the case's units ask (0180); null when it could not be read. */
+      priorComplaint: PriorComplaint | null;
+      /** The client's check of the facts of each piece (0182); null when it could not be read. */
+      pieceFacts: CasePieceFacts | null;
+      /** What each condemnation is worth today and the next step, as ONE computed it (0184). */
+      amounts: LawsuitAmount[];
+      /** What may follow each judgment, the client's word and the lawyer's decision (0185). */
+      judgmentPaths: JudgmentPath[];
+      /** What ONE read each publication of the case asks (0186). */
+      publicationActions: PublicationActionView[];
+      /** The brief ONE wrote of each hearing for who goes to it (0187). */
+      hearingBriefs: { hearingId: string; body: string; madeAt: string; emailed: boolean }[];
       /** Each claimant's word on free justice in the civil court (0125); null when it could not be read. */
       freeJustice: FreeJusticeNeed[] | null;
       /** What each lawsuit came to (0130): its facts, ONE's and the firm's; null when they could not be read. */

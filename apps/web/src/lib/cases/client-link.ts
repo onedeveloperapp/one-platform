@@ -4,7 +4,11 @@ import { type AccountState, accountStateOf } from "@/lib/cases/account";
 import type { PersonData, RequiredDocument } from "@/lib/cases/cases";
 import { type ClientFreeJustice, clientFreeJusticeOf } from "@/lib/cases/free-justice";
 import { type InterviewView, interviewViewOf } from "@/lib/cases/interview";
+import { type ClientJudgment, clientJudgmentsOf } from "@/lib/cases/judgment-paths";
+import { type ClientPieceFacts, clientPieceFactsOf } from "@/lib/cases/piece-facts";
+import { type PriorComplaint, priorComplaintOf } from "@/lib/cases/prior-complaint";
 import { createAnonClient } from "@/lib/public-content";
+import { type ClientPublicationNews, clientPublicationNewsOf } from "@/lib/publications/actions-read";
 
 /**
  * What a client's link shows (`client_link_open`, migration 0022), read with
@@ -69,7 +73,12 @@ export type ClientLinkView =
       segments: ClientSegment[];
       documents: ClientDocument[];
       required_documents: RequiredDocument[];
+      /** The dispensable documents of the case's kind of problem, and where each stands (0177). */
+      dispensables?: ClientDispensable[];
     };
+
+/** A dispensable document of a case (0177): asked once, and the case goes on with "não tenho" or after some days. */
+export type ClientDispensable = { kind: string; label: string; state: "sent" | "not_have" | "expired" | "asked" };
 
 /** A token is what a link carries: 43 characters of base64url. Anything else opens nothing. */
 export const isTokenShape = (token: string): boolean => /^[A-Za-z0-9_-]{32,128}$/.test(token);
@@ -219,6 +228,14 @@ export type ClientTasks = {
   agency: string | null;
   /** The interview of the case (0095), one question per screen; null with none, or when it could not be read. */
   interview: InterviewView | null;
+  /** The complaint before the lawsuit the case's unit asks (0180); null when none is asked or it could not be read. */
+  priorComplaint: PriorComplaint | null;
+  /** The facts of the case's pieces the client is asked to confirm (0182). */
+  pieceFacts: ClientPieceFacts[];
+  /** The judgments of the client's lawsuits and their word on an appeal's costs (0185). */
+  judgments: ClientJudgment[];
+  /** What the publications of the case mean for the client, and what the firm asks of them (0186). */
+  publicationNews: ClientPublicationNews[];
   /** What the link asks about a bill in somebody else's name (0123); none when it could not be read. */
   residence: ClientResidenceItem[];
   /** What the link asks about free justice in the civil court (0125); null when it could not be read. */
@@ -241,21 +258,43 @@ export async function readClientTasks(token: string): Promise<ClientTasks> {
       interview: null,
       residence: [],
       freeJustice: null,
+      priorComplaint: null,
+      pieceFacts: [],
+      judgments: [],
+      publicationNews: [],
     };
   }
-  const [signatures, terms, statements, course, notices, civil, agency, interview, residence, justice] =
-    await Promise.all([
-      supabase.rpc("client_link_signatures", { target_token: token }),
-      supabase.rpc("client_link_terms", { target_token: token }),
-      supabase.rpc("client_link_statements", { target_token: token }),
-      supabase.rpc("client_link_course", { target_token: token }),
-      supabase.rpc("client_link_notices", { target_token: token }),
-      supabase.rpc("client_link_civil_court", { target_token: token }),
-      supabase.rpc("client_link_agency", { target_token: token }),
-      supabase.rpc("client_link_interview", { target_token: token }),
-      supabase.rpc("client_link_residence", { target_token: token }),
-      supabase.rpc("client_link_free_justice", { target_token: token }),
-    ]);
+  const [
+    signatures,
+    terms,
+    statements,
+    course,
+    notices,
+    civil,
+    agency,
+    interview,
+    residence,
+    justice,
+    complaint,
+    facts,
+    judged,
+    news,
+  ] = await Promise.all([
+    supabase.rpc("client_link_signatures", { target_token: token }),
+    supabase.rpc("client_link_terms", { target_token: token }),
+    supabase.rpc("client_link_statements", { target_token: token }),
+    supabase.rpc("client_link_course", { target_token: token }),
+    supabase.rpc("client_link_notices", { target_token: token }),
+    supabase.rpc("client_link_civil_court", { target_token: token }),
+    supabase.rpc("client_link_agency", { target_token: token }),
+    supabase.rpc("client_link_interview", { target_token: token }),
+    supabase.rpc("client_link_residence", { target_token: token }),
+    supabase.rpc("client_link_free_justice", { target_token: token }),
+    supabase.rpc("client_link_prior_complaint", { target_token: token }),
+    supabase.rpc("client_link_piece_facts", { target_token: token }),
+    supabase.rpc("client_link_judgment_paths", { target_token: token }),
+    supabase.rpc("client_link_publication_news", { target_token: token }),
+  ]);
   const owned = residence.error ? null : (residence.data as { ok?: boolean; items?: unknown } | null);
   const handed = agency.data as { ok?: boolean; agency?: unknown; finished?: unknown } | null;
   const asked = civil.data as { ok?: boolean; items?: unknown } | null;
@@ -299,5 +338,12 @@ export async function readClientTasks(token: string): Promise<ClientTasks> {
           )
         : [],
     freeJustice: justice.error ? null : clientFreeJusticeOf(justice.data),
+    pieceFacts: facts.error ? [] : clientPieceFactsOf(facts.data),
+    judgments: judged.error ? [] : clientJudgmentsOf(judged.data),
+    publicationNews: news.error ? [] : clientPublicationNewsOf(news.data),
+    priorComplaint: (() => {
+      const read = complaint.error ? null : priorComplaintOf(complaint.data);
+      return read && read.state !== "not_required" ? read : null;
+    })(),
   };
 }

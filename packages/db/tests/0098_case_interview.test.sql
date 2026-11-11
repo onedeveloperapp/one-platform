@@ -33,6 +33,11 @@ insert into public.memberships (org_id, user_id, role, firm_function) values
   ('b9800000-0000-4000-8000-00000000000a', 'a9800000-0000-4000-8000-000000000001', 'owner', 'socio'),
   ('b9800000-0000-4000-8000-00000000000a', 'a9800000-0000-4000-8000-000000000002', 'member', 'atendimento'),
   ('b9800000-0000-4000-8000-00000000000b', 'a9800000-0000-4000-8000-000000000003', 'owner', 'advogado');
+-- The papers are kept to a person here, so the interview is owed right away (0181: where ONE sends them, it waits
+-- for the signature; pgTAP 0179).
+insert into public.firm_autonomy (org_id, decision, mode) values
+  ('b9800000-0000-4000-8000-00000000000a', 'send_signature_papers', 'approval'),
+  ('b9800000-0000-4000-8000-00000000000b', 'send_signature_papers', 'approval');
 
 insert into public.connections (id, org_id, provider, external_id, label, status, connected_by, connected_at) values
   ('d9800000-0000-4000-8000-00000000000a', 'b9800000-0000-4000-8000-00000000000a', 'whatsapp', 'waba-entrevista-a', 'WhatsApp A',

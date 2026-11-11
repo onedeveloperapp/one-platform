@@ -15,6 +15,7 @@ import {
   Typography,
 } from "@mui/material";
 
+import { PhoneField } from "@/components/product/fields";
 import SidePanel from "@/components/product/side-panel";
 import NiCalendar from "@/icons/nexture/ni-calendar";
 import { saveHearing } from "@/lib/hearings/actions";
@@ -109,6 +110,7 @@ export default function HearingPanel({
   const [link, setLink] = useState(editing?.link ?? "");
   const [attendee, setAttendee] = useState<string>(editing?.attendeeUserId ?? (editing?.attendee ? OTHER : NOBODY));
   const [attendeeName, setAttendeeName] = useState(editing && !editing.attendeeUserId ? (editing.attendee ?? "") : "");
+  const [attendeePhone, setAttendeePhone] = useState("");
   const [notes, setNotes] = useState(editing?.notes ?? "");
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<{ code: string; field: string | null } | null>(null);
@@ -145,6 +147,7 @@ export default function HearingPanel({
         link: showsLink ? link : null,
         attendeeUserId: attendee && attendee !== OTHER ? attendee : null,
         attendeeName: attendee === OTHER ? attendeeName : null,
+        attendeePhone: attendee === OTHER ? attendeePhone : null,
         notes,
         publicationId: editing ? null : (subject?.publicationId ?? null),
       });
@@ -161,7 +164,7 @@ export default function HearingPanel({
   };
 
   const fieldError = (field: string) => (problem?.field === field ? t(hearingErrorKey(problem.code)) : undefined);
-  const shownFields = new Set(["day", "time", "place", "link", "attendee_name", "time_zone"]);
+  const shownFields = new Set(["day", "time", "place", "link", "attendee_name", "attendee_phone", "time_zone"]);
 
   return (
     <SidePanel
@@ -335,6 +338,22 @@ export default function HearingPanel({
               onChange={(event) => setAttendeeName(event.target.value.slice(0, 120))}
               error={Boolean(fieldError("attendee_name"))}
               helperText={fieldError("attendee_name")}
+            />
+          ) : null}
+          {attendee === OTHER ? (
+            <PhoneField
+              fullWidth
+              size="small"
+              id="hearing-attendee-phone"
+              label={t("hearing-field-attendee-phone")}
+              value={attendeePhone}
+              disabled={busy}
+              onChange={(event) => setAttendeePhone(event.target.value)}
+              error={Boolean(fieldError("attendee_phone"))}
+              helperText={
+                fieldError("attendee_phone") ??
+                t(editing ? "hearing-field-attendee-phone-keep" : "hearing-field-attendee-phone-help")
+              }
             />
           ) : null}
           <TextField

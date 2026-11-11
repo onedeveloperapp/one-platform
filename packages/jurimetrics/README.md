@@ -1,0 +1,11 @@
+# @flyee/jurimetrics
+
+How the courts decide passengers' lawsuits against airlines, read from public decisions: phase 5 of the case journey plan (the jurimetry). It serves to prepare a piece and to project, never to choose a judge: distribution is by lottery (CPC, art. 285) and the natural judge holds (CF, art. 5º, XXXVII and LIII).
+
+- `types.ts`: the interface (`MarketSource.decisionsOn({ court, party, day })`), each decision with its unit, its judge, the airline as the court writes it, the result, the moral damages set, the kind of problem and whether the lawsuit was extinguished for want of a prior complaint. Never a passenger: no name, no person's number and no lawsuit's number (which leads to the parties) is kept.
+- `read.ts`: the rule that reads a decision from its text (`mercado-v1`): the result by the outcome rule's reading of the operative part (`resultado-v1` of `@flyee/rules/outcome`) or the lawsuit extinguished, the moral value, the problem by its words, the judge from the signature's line, an appeal's panel by the unit's name. The grounds are handed out with identifiers taken out, for a reading at that moment, and never kept.
+- `providers/djen.ts`: the DJEN's public API (no key), by party (`nomeParte`) and court (`siglaTribunal`), a day at a time, a page of 100 at a time, each call waiting its turn (the API counts calls per address: 20 a window, by its reference); a day that holds more than the pages one reading takes is said incomplete. Written from the same reference as `@flyee/courts/providers/djen` (read on 2026-10-08 and checked on 2026-10-09 by the shape of its answers); the search by party was not run against the API yet.
+- `fake.ts`: decisions given per court, party and day, read by the same rule.
+- `contract.test.ts`: what any source must do, the DJEN's answers scripted in their shapes.
+
+The paid sources (Predictus, Escavador, Judit) join after a comparative test with trial keys, and the DataJud only after the CNJ's authorization (its terms forbid commercial use): each is the owner's to obtain.

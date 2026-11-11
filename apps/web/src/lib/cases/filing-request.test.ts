@@ -133,6 +133,21 @@ describe("the lawsuit as a court's channel takes it (0101)", () => {
     });
   });
 
+  it("marks the priority of an elderly claimant by the court's code, and none the court did not give", () => {
+    const elder = { ...raw().claimants[0], birth_date: "1950-03-01" };
+    const coded = submissionOf(
+      raw({ claimants: [elder], codes: { ...raw().codes, priorities: { elderly: "IDOSO-GO" } } }),
+    );
+    const marked = coded ? lawsuitFilingOf(coded, files, now) : null;
+    expect(marked?.ok && marked.filing.priorities).toEqual(["IDOSO-GO"]);
+    const uncoded = submissionOf(raw({ claimants: [elder] }));
+    const plain = uncoded ? lawsuitFilingOf(uncoded, files, now) : null;
+    expect(plain?.ok && plain.filing.priorities).toEqual([]);
+    const young = submissionOf(raw({ codes: { ...raw().codes, priorities: { elderly: "IDOSO-GO" } } }));
+    const none = young ? lawsuitFilingOf(young, files, now) : null;
+    expect(none?.ok && none.filing.priorities).toEqual([]);
+  });
+
   it("never sends a court a code its table lacks, and the test court takes its placeholders", () => {
     const missing = submissionOf(raw({ codes: { classes: { juizado: 436 } } }));
     const refused = missing ? lawsuitFilingOf(missing, files, now) : null;

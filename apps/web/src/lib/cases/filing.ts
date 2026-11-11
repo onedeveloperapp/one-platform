@@ -145,9 +145,12 @@ export const FILING_LABEL: Record<FilingKind, string> = {
   income_proof: "Comprovante de renda",
   ticket: "Bilhete",
   boarding_pass: "Cartão de embarque",
+  baggage_report: "Registro de irregularidade de bagagem",
   receipt: "Comprovante de despesa",
   evidence: "Prova",
   contract: "Contrato",
+  defense: "Contestação",
+  intermediate_petition: "Petição",
   other: "Documento",
 };
 
@@ -159,7 +162,9 @@ export const FILING_LABEL: Record<FilingKind, string> = {
 export function defaultFilingDocuments(documents: readonly { id: string; kind: string; status: string }[]): string[] {
   return documents
     .filter(
-      (document) => document.status === "accepted" && document.kind !== "petition" && document.kind !== "contract",
+      (document) =>
+        document.status === "accepted" &&
+        !["petition", "contract", "defense", "intermediate_petition"].includes(document.kind),
     )
     .map((document) => document.id);
 }

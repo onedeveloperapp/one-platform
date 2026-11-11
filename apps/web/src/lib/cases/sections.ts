@@ -13,6 +13,7 @@ export const CASE_SECTIONS = [
   "deadlines",
   "hearings",
   "publications",
+  "pieces",
   "drafts",
   "filing",
   "link",
@@ -39,7 +40,7 @@ const STAGE_SECTIONS: Record<CaseStatus, readonly CaseSection[]> = {
   signature: ["documents", "signatures", "link"],
   drafting: ["proceedings", "drafts", "filing"],
   ready: ["proceedings", "drafts", "filing"],
-  filed: ["proceedings", "publications", "deadlines", "hearings", "notices"],
+  filed: ["proceedings", "publications", "pieces", "deadlines", "hearings", "notices"],
   closed: [],
   declined: [],
 };

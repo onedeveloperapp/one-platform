@@ -45,6 +45,11 @@ export const DOCUMENT_KINDS = [
   "income_proof",
   "contract",
   "petition",
+  // The airline's report of a bag's irregularity (RIB), essential for a bag's problem (0177).
+  "baggage_report",
+  // The airline's defence, sent by the firm for the réplica, and an intermediate piece ONE wrote (0189).
+  "defense",
+  "intermediate_petition",
   "other",
 ] as const;
 export type DocumentKind = (typeof DOCUMENT_KINDS)[number];
@@ -55,6 +60,7 @@ export const CLIENT_DOCUMENT_KINDS: readonly DocumentKind[] = [
   "address_proof",
   "ticket",
   "boarding_pass",
+  "baggage_report",
   "receipt",
   "evidence",
   "other",
@@ -143,6 +149,9 @@ export const DOCUMENT_KIND_KEY: Record<DocumentKind, string> = {
   income_proof: "case-document-income-proof",
   contract: "case-document-contract",
   petition: "case-document-petition",
+  baggage_report: "case-document-baggage-report",
+  defense: "case-document-defense",
+  intermediate_petition: "case-document-intermediate-petition",
   other: "case-document-other",
 };
 
@@ -299,6 +308,23 @@ export const EVENT_KEY: Record<string, string> = {
   hearing_held: "case-event-hearing-held",
   hearing_cancelled: "case-event-hearing-cancelled",
   hearing_reopened: "case-event-hearing-reopened",
+  amount_step: "case-event-amount-step",
+  document_not_had: "case-event-document-not-had",
+  facts_asked: "case-event-facts-asked",
+  facts_waived: "case-event-facts-waived",
+  hearing_brief: "case-event-hearing-brief",
+  hearing_brief_sent: "case-event-hearing-brief-sent",
+  hearing_result_asked: "case-event-hearing-result-asked",
+  piece_requested: "case-event-piece-requested",
+  piece_issued: "case-event-piece-issued",
+  piece_decided: "case-event-piece-decided",
+  piece_filed: "case-event-piece-filed",
+  piece_filing_failed: "case-event-piece-filing-failed",
+  hearing_reported: "case-event-hearing-reported",
+  judgment_path_answered: "case-event-judgment-path-answered",
+  judgment_path_decided: "case-event-judgment-path-decided",
+  publication_action: "case-event-publication-action",
+  referral_asked: "case-event-referral-asked",
 };
 
 /** The words for a refusal the backend made by measuring a file (migration 0018), not a person. */
@@ -465,6 +491,24 @@ export const ADULT_FIELDS = [
 export const MINOR_FIELDS = ["full_name", "cpf", "birth_date"] as const satisfies readonly (keyof PersonData)[];
 
 export type RequiredDocument = { kind: DocumentKind; per: "claimant" | "holder" | "case"; or?: DocumentKind[] };
+
+/**
+ * The essentials of a kind of problem (0177, `cases.documents_by_problem`): a bag's entry for a bag's problem, else
+ * the default, else the setting's old list. The same reading as the database's `case_required_documents`.
+ */
+export function requiredFor(
+  setting:
+    | {
+        required_documents?: RequiredDocument[];
+        documents_by_problem?: Record<string, { essential?: RequiredDocument[] }>;
+      }
+    | null
+    | undefined,
+  incident: string | null | undefined,
+): RequiredDocument[] {
+  const entry = setting?.documents_by_problem?.[String(incident ?? "").startsWith("baggage") ? "baggage" : "default"];
+  return entry?.essential ?? setting?.required_documents ?? [];
+}
 
 export type CaseDocumentState = { kind: string; party_id: string | null; status: string };
 
@@ -698,6 +742,9 @@ const ERROR_KEYS: Record<string, string> = {
   free_justice_unanswered: "case-error-free-justice-unanswered",
   free_justice_unsigned: "case-error-free-justice-unsigned",
   free_justice_mark_missing: "case-error-free-justice-mark-missing",
+  // The client's word on the facts of the initial (0182).
+  facts_unconfirmed: "case-error-facts-unconfirmed",
+  facts_corrected: "case-error-facts-corrected",
   // The court system ONE named for a lawsuit and the firm's word on it (0066).
   system_unapproved: "case-error-system-unapproved",
   system_refused: "case-error-system-refused",

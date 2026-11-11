@@ -2,6 +2,7 @@ import CalendarConsoleView from "./calendar-console-view";
 
 import { loadCalendarConsole } from "@/lib/admin/calendar";
 import { loadCourtSystemRefusals } from "@/lib/admin/court-systems";
+import { loadProfiledCourtUnits } from "@/lib/admin/court-units";
 import { loadConsole } from "@/lib/admin/session";
 import { todayInBrasilia } from "@/lib/deadlines/deadlines";
 
@@ -34,6 +35,8 @@ export default async function CalendarConsolePage({
     thisYear,
     // What the firms did not approve of the systems ONE named (0066): a list that could not be read is said so.
     systems: await loadCourtSystemRefusals(supabase).catch(() => null),
+    // The units of each comarca with the profile the operator wrote (0179, 0180): a list that could not be read is said so.
+    units: await loadProfiledCourtUnits(supabase).catch(() => null),
   }));
   return <CalendarConsoleView state={state} />;
 }

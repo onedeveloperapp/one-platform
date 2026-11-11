@@ -83,6 +83,11 @@ export type HearingInput = {
   link?: string | null;
   attendeeUserId?: string | null;
   attendeeName?: string | null;
+  /**
+   * The WhatsApp of an attendee from outside the firm (0187), for ONE to know their report of the hearing. Empty
+   * keeps what is on record; a colleague's hearing takes it off.
+   */
+  attendeePhone?: string | null;
   notes?: string | null;
   /** The publication of the lawsuit it came from. */
   publicationId?: string | null;
@@ -99,6 +104,8 @@ export async function saveHearing(input: HearingInput): Promise<HearingActionRes
   if (!isHearingMode(input.mode)) return { ok: false, code: "invalid_data", field: "mode" };
   if (!DAY.test(String(input.day ?? ""))) return { ok: false, code: "invalid_data", field: "day" };
   if (!TIME.test(String(input.time ?? ""))) return { ok: false, code: "invalid_data", field: "time" };
+  const phone = typeof input.attendeePhone === "string" ? input.attendeePhone.replace(/\D/g, "") : "";
+  if (phone && !/^[0-9]{10,13}$/.test(phone)) return { ok: false, code: "invalid_data", field: "attendee_phone" };
   const fields = {
     kind: input.kind,
     mode: input.mode,
@@ -120,6 +127,10 @@ export async function saveHearing(input: HearingInput): Promise<HearingActionRes
   const result = fold(data, error);
   if (!result.ok) return result;
   const id = result.id ?? hearingId;
+  // Who goes from outside the firm is known by their WhatsApp; a colleague by the one on their profile.
+  if (id && (phone ? fields.attendee_name : hearingId && !fields.attendee_name)) {
+    await context.supabase.rpc("set_hearing_attendee_phone", { target_hearing: id, target_phone: phone || null });
+  }
   if (id && result.code !== "unchanged") {
     await settleHearingSync(id, result.calendar === true);
     // The client is told by the notices: a test case's at once, a real case's after its minutes (0103).

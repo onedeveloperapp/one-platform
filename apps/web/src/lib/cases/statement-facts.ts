@@ -80,6 +80,10 @@ export type CaseComplaint = {
   answeredOn: string | null;
   outcome: ComplaintOutcome;
   notes: string | null;
+  /** What the airline paid when it settled (0180), in cents. */
+  paidCents: number | null;
+  /** The client made it on their link, guided by ONE (0180). */
+  byClient: boolean;
 };
 
 export type StatementFacts = {
@@ -144,7 +148,7 @@ export async function loadStatementFacts(
       .order("created_at"),
     supabase
       .from("admin_complaints")
-      .select("id, channel, protocol, filed_on, answer_due_on, answered_on, outcome, notes")
+      .select("id, channel, protocol, filed_on, answer_due_on, answered_on, outcome, notes, paid_cents, by_client")
       .eq("case_id", caseId)
       .eq("org_id", firmId)
       .order("created_at"),
@@ -300,6 +304,8 @@ export async function loadStatementFacts(
         answered_on: string | null;
         outcome: string;
         notes: string | null;
+        paid_cents: number | null;
+        by_client: boolean | null;
       }[]
     ).map((row) => ({
       id: row.id,
@@ -310,6 +316,8 @@ export async function loadStatementFacts(
       answeredOn: row.answered_on,
       outcome: isComplaintOutcome(row.outcome) ? row.outcome : "pending",
       notes: row.notes,
+      paidCents: typeof row.paid_cents === "number" ? row.paid_cents : null,
+      byClient: row.by_client === true,
     })),
     complaintAnswerDays,
   };

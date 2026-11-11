@@ -98,18 +98,20 @@ describe("the piece of a lawsuit, as the app names it", () => {
   });
 
   it("names the marks the database fills, tells the AI of each, and has words for each", () => {
-    // The latest filler (0029, 0064, then 0125 with the request for free justice), and the instructions as 0029 wrote
-    // them and the version 0125 publishes names the marks it added.
+    // The latest filler (0029, 0064, 0125 with the request for free justice, then 0178 with the priority of an elderly
+    // claimant), and the instructions as 0029 wrote them and the versions 0125 and 0178 publish name the marks added.
     const justice = fs.readFileSync(path.join(ROOT, "packages/db/migrations/0125_free_justice.sql"), "utf8");
-    const filler = justice.slice(
-      justice.indexOf("create or replace function public.case_draft_filled("),
-      justice.indexOf("$$;", justice.indexOf("create or replace function public.case_draft_filled(")),
+    const priority = fs.readFileSync(path.join(ROOT, "packages/db/migrations/0178_priority.sql"), "utf8");
+    const filler = priority.slice(
+      priority.indexOf("create or replace function public.case_draft_filled("),
+      priority.indexOf("$$;", priority.indexOf("create or replace function public.case_draft_filled(")),
     );
     const filled = new Set([...filler.matchAll(/replace\(filled, '\[\[([A-Z_]+)\]\]'/g)].map((match) => match[1]));
     expect([...filled].sort()).toEqual([...DRAFT_MARKS].sort());
     const prompt =
       (/\$prompt\$([\s\S]*?)\$prompt\$/.exec(MIGRATION)?.[1] ?? "") +
-      justice.slice(justice.indexOf("A fifth version of `caso.peca.minuta`"));
+      justice.slice(justice.indexOf("A fifth version of `caso.peca.minuta`")) +
+      priority.slice(priority.indexOf("A sixth version of `caso.peca.minuta`"));
     for (const mark of DRAFT_MARKS) {
       expect(prompt, mark).toContain(`[[${mark}]]`);
       expect(product[DRAFT_MARK_KEY[mark]], mark).toBeTruthy();

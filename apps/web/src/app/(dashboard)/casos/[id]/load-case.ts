@@ -20,7 +20,8 @@ import { cookies } from "next/headers";
 import { momentLabel, type SecondFactorState } from "@/lib/ai/approvals";
 import { pendingApprovalsOf, type PendingRow } from "@/lib/ai/pending-approvals";
 import { caseAdvanceOf } from "@/lib/cases/advance";
-import { CAUSES, isCaseStatus, linksOwedOf, ORIGINS, type RequiredDocument } from "@/lib/cases/cases";
+import { CAUSES, isCaseStatus, linksOwedOf, ORIGINS, type RequiredDocument, requiredFor } from "@/lib/cases/cases";
+import { dispensablesOf } from "@/lib/cases/client-documents";
 import { readCheckAnswer } from "@/lib/cases/document-check";
 import { readQuality } from "@/lib/cases/document-quality";
 import { loadCasePieces } from "@/lib/cases/draft-facts";
@@ -29,7 +30,10 @@ import { cloudSigningOffered, loadCaseFilings } from "@/lib/cases/filing-facts";
 import { freeJusticeOf } from "@/lib/cases/free-justice";
 import { cpfLookup } from "@/lib/cases/identity";
 import { courtPublicationsOf, stageMomentsOf } from "@/lib/cases/journey";
+import { judgmentPathsOf } from "@/lib/cases/judgment-paths";
 import { lawsuitFactsOf } from "@/lib/cases/outcomes";
+import { casePieceFactsOf } from "@/lib/cases/piece-facts";
+import { priorComplaintOf } from "@/lib/cases/prior-complaint";
 import { casePulseOf } from "@/lib/cases/pulse";
 import { readCaseQualification } from "@/lib/cases/qualification";
 import { readFieldsOf } from "@/lib/cases/read-fields";
@@ -38,6 +42,7 @@ import { loadCivilCourt, loadRuleFacts } from "@/lib/cases/rule-facts";
 import { assessWeather, caseDomicile, smallClaimsCeiling, tripPlaces } from "@/lib/cases/rules";
 import { loadStatementFacts } from "@/lib/cases/statement-facts";
 import { CHRONOLOGY_TASK, TRANSCRIPTION_TASK } from "@/lib/cases/statements";
+import { lawsuitAmountsOf } from "@/lib/courts/amount";
 import { loadCourseFacts } from "@/lib/courts/course-facts";
 import { caseDeadlines, deadlineActs } from "@/lib/deadlines/facts";
 import { type AutonomyDecision, type AutonomyMode, firmAutonomyOf } from "@/lib/firm/autonomy";
@@ -46,6 +51,7 @@ import { caseHearings, colleagues, courtZones } from "@/lib/hearings/facts";
 import { getMemberContext } from "@/lib/member/context";
 import { isCaseKindOf } from "@/lib/modules/registry";
 import { caseNotices } from "@/lib/notices/facts";
+import { publicationActionsOf } from "@/lib/publications/actions-read";
 import { loadCasePublications } from "@/lib/publications/facts";
 import { loadFlightChecks } from "@/modules/direito-do-passageiro/flights/facts";
 import { weatherProvider } from "@/modules/direito-do-passageiro/flights/weather";
@@ -216,6 +222,13 @@ export async function loadCase(id: string): Promise<CaseState> {
     costs,
     fees,
     financeAccess,
+    documentNeeds,
+    priorComplaint,
+    pieceFacts,
+    amounts,
+    judgmentPaths,
+    publicationActions,
+    hearingBriefs,
   ] = await Promise.all([
     supabase
       .from("case_parties")
@@ -247,7 +260,7 @@ export async function loadCase(id: string): Promise<CaseState> {
     supabase
       .from("proceedings")
       .select(
-        "id, kind, court, comarca, unit, system, cnj, forum_basis, forum_reason, forum_city, comarca_checked, status, filed_at, system_by_one, system_approved_by, system_approved_at, system_refused_by, system_refused_at, system_refused_reason, created_by_one, proceeding_parties(party_id), proceeding_lawyers(user_id)",
+        "id, kind, court, comarca, unit, system, cnj, forum_basis, forum_reason, forum_city, comarca_checked, status, filed_at, system_by_one, system_approved_by, system_approved_at, system_refused_by, system_refused_at, system_refused_reason, created_by_one, unit_by_one, court_units(confirmed, scope, prior_complaint), proceeding_parties(party_id), proceeding_lawyers(user_id)",
       )
       .eq("case_id", id)
       .eq("org_id", firm)
@@ -322,6 +335,31 @@ export async function loadCase(id: string): Promise<CaseState> {
       )
       .eq("case_id", id),
     supabase.rpc("firm_finance_access", { target_org: firm }),
+    // The dispensable documents of the case and where each stands (0177).
+    supabase.rpc("case_document_needs", { target_case: id }),
+    // The complaint before the lawsuit its unit asks, and where it stands (0180).
+    supabase.rpc("case_prior_complaint_view", { target_case: id }),
+    // The client's check of the facts of each piece (0182).
+    supabase.rpc("case_piece_facts", { target_case: id }),
+    // What each condemnation is worth today and the next step (0184).
+    supabase
+      .from("lawsuit_amounts")
+      .select(
+        "proceeding_id, as_of, corrected_cents, interest_cents, total_cents, missing, needs_terms, deposited_cents, next_step, short_cents, fine_cents",
+      )
+      .eq("case_id", id),
+    // What may follow each judgment (0185).
+    supabase
+      .from("judgment_paths")
+      .select("id, proceeding_id, fact_id, client_agrees, client_via, decision, decision_reason, decided_at")
+      .eq("case_id", id),
+    // What each publication of the case asks, as ONE read it (0186).
+    supabase
+      .from("publication_actions")
+      .select("publication_id, status, action, firm_summary, client_summary, reason, pending")
+      .eq("case_id", id),
+    // The brief of each hearing for who goes to it (0187).
+    supabase.from("hearing_briefs").select("hearing_id, body, made_at, emailed_at").eq("case_id", id),
   ]);
   if (
     parties.error ||
@@ -529,12 +567,36 @@ export async function loadCase(id: string): Promise<CaseState> {
     ];
   });
 
-  const required = ((setting.data?.value as { required_documents?: RequiredDocument[] } | null)?.required_documents ??
-    []) as RequiredDocument[];
+  // 0177: the essentials of this case's kind of problem.
+  const required = requiredFor(
+    setting.data?.value as Parameters<typeof requiredFor>[0],
+    typeof row.incident === "string" ? row.incident : null,
+  ) as RequiredDocument[];
 
   return {
     kind: "ready",
     residence: residence.error ? null : residenceViewsOf(residence.data),
+    dispensables: documentNeeds.error ? null : dispensablesOf(documentNeeds.data),
+    priorComplaint: priorComplaint.error ? null : priorComplaintOf(priorComplaint.data),
+    pieceFacts: pieceFacts.error ? null : casePieceFactsOf(pieceFacts.data),
+    amounts: amounts.error ? [] : lawsuitAmountsOf(amounts.data),
+    judgmentPaths: judgmentPaths.error ? [] : judgmentPathsOf(judgmentPaths.data),
+    publicationActions: publicationActions.error ? [] : publicationActionsOf(publicationActions.data),
+    hearingBriefs: hearingBriefs.error
+      ? []
+      : (
+          (hearingBriefs.data ?? []) as {
+            hearing_id: string;
+            body: string;
+            made_at: string;
+            emailed_at: string | null;
+          }[]
+        ).map((row) => ({
+          hearingId: row.hearing_id,
+          body: row.body,
+          madeAt: row.made_at,
+          emailed: row.emailed_at !== null,
+        })),
     freeJustice: freeJustice.error ? null : freeJusticeOf(freeJustice.data),
     outcomes: outcomes.error ? null : lawsuitFactsOf(outcomes.data),
     costs: costs.error ? null : caseCostsOf(costs.data),
@@ -605,7 +667,7 @@ export async function loadCase(id: string): Promise<CaseState> {
       check: checkOf(document.ai_runs),
     })),
     proceedings: (
-      (proceedings.data ?? []) as {
+      (proceedings.data ?? []) as unknown as {
         id: string;
         kind: CaseProceeding["kind"];
         court: string | null;
@@ -626,6 +688,11 @@ export async function loadCase(id: string): Promise<CaseState> {
         system_refused_at: string | null;
         system_refused_reason: string | null;
         created_by_one: boolean | null;
+        unit_by_one: boolean | null;
+        court_units:
+          | { confirmed: boolean; scope: string; prior_complaint: string | null }
+          | { confirmed: boolean; scope: string; prior_complaint: string | null }[]
+          | null;
         proceeding_parties: { party_id: string }[];
         proceeding_lawyers: { user_id: string }[];
       }[]
@@ -635,6 +702,15 @@ export async function loadCase(id: string): Promise<CaseState> {
       court: proceeding.court,
       comarca: proceeding.comarca,
       unit: proceeding.unit,
+      unitByOne: proceeding.unit_by_one === true,
+      unitTable: ((unitRow) =>
+        unitRow
+          ? {
+              confirmed: unitRow.confirmed === true,
+              wholeComarca: unitRow.scope === "comarca",
+              priorComplaint: unitRow.prior_complaint === "required",
+            }
+          : null)(one(proceeding.court_units)),
       system: proceeding.system,
       cnj: proceeding.cnj,
       forumBasis: proceeding.forum_basis,

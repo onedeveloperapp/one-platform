@@ -58,7 +58,12 @@ export function caseStepsMessage(input: {
   minors: string[];
   /** The partner agency whose record came with the case; null for a passenger of the firm's own. */
   agency?: string | null;
+  /** ONE sends the power of attorney once the documents are accepted, and asks its questions after it is signed (0181). */
+  signFirst?: boolean;
 }): string {
+  const questions = input.signFirst
+    ? "Assine a procuração que vai aparecer no seu link. Depois disso, vou fazer aqui algumas perguntas sobre o que aconteceu, uma de cada vez."
+    : "Responda aqui as perguntas que vou fazer agora sobre o que aconteceu, uma de cada vez.";
   const name = firstNameOf(input.passengerName) || input.passengerName;
   const others = input.minors.map((minor) => firstNameOf(minor) || minor).filter(Boolean);
   const list = new Intl.ListFormat("pt-BR", { style: "long", type: "conjunction" });
@@ -68,7 +73,7 @@ export function caseStepsMessage(input: {
       `Pronto, ${name}. O escritório abriu o seu caso, número {caso}, com os dados e os documentos que vieram de ${input.agency}. Os próximos passos:`,
       `1. Abra o seu link: ${input.url}`,
       `2. Confira ${theirs} e os documentos que vieram da agência, e corrija o que estiver errado.`,
-      "3. Responda aqui as perguntas que vou fazer agora sobre o que aconteceu, uma de cada vez.",
+      `3. ${questions}`,
       "4. Quando estiver tudo certo, avise no fim da página que terminou: o escritório só segue com o seu caso depois disso.",
       "O link é só seu. Se alguém mais viajou com você, me diga aqui.",
     ].join("\n");
@@ -83,7 +88,7 @@ export function caseStepsMessage(input: {
     `1. Abra o seu link: ${input.url}`,
     `2. Envie ${identities}, um comprovante de endereço e o cartão de embarque ou o bilhete.`,
     `3. Confira ${whose}, que o escritório leu nos documentos, e complete o que faltar.`,
-    "4. Responda aqui as perguntas que vou fazer agora sobre o que aconteceu, uma de cada vez.",
+    `4. ${questions}`,
     "O link é só seu. Se alguém mais viajou com você, me diga aqui.",
   ].join("\n");
 }

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 
-import { Alert, Box, Button } from "@mui/material";
+import { Alert, Box, Button, Typography } from "@mui/material";
 
 import HearingCard from "@/components/hearings/hearing-card";
 import HearingPanel from "@/components/hearings/hearing-panel";
@@ -110,7 +110,7 @@ export default function HearingsCard({
       ) : (
         <Box component="ul" className="m-0 flex list-none flex-col gap-3 p-0">
           {hearings.upcoming.map((row) => (
-            <Box component="li" key={`${row.id}:${row.revision}:${row.status}`}>
+            <Box component="li" key={`${row.id}:${row.revision}:${row.status}`} className="flex flex-col gap-2">
               <HearingCard
                 row={row}
                 now={hearings.now}
@@ -121,6 +121,7 @@ export default function HearingsCard({
                 embedded
                 onChanged={onChanged}
               />
+              <HearingBriefBox brief={state.hearingBriefs.find((brief) => brief.hearingId === row.id) ?? null} />
             </Box>
           ))}
         </Box>
@@ -195,5 +196,36 @@ export default function HearingsCard({
         />
       ) : null}
     </CollapsibleCard>
+  );
+}
+
+/**
+ * The brief ONE wrote for who goes to the hearing (0187), two business days before: shown on the case one click away,
+ * said as ONE's and whether it went by e-mail.
+ */
+function HearingBriefBox({ brief }: { brief: { body: string; emailed: boolean } | null }) {
+  const t = useTranslations("product");
+  const [open, setOpen] = useState(false);
+  if (!brief) return null;
+  return (
+    <Box className="flex flex-col gap-1">
+      <Box>
+        <Button variant="text" color="grey" size="small" className="-ml-2" onClick={() => setOpen((now) => !now)}>
+          {open ? t("hearing-brief-hide") : t("hearing-brief-show")}
+        </Button>
+      </Box>
+      {open ? (
+        <Box className="border-grey-100 bg-grey-25 flex flex-col gap-1 rounded-xl border p-3">
+          {brief.body.split("\n").map((line, index) => (
+            <Typography key={index} variant="body2">
+              {line}
+            </Typography>
+          ))}
+          <Typography variant="caption" className="text-text-secondary">
+            {t(brief.emailed ? "hearing-brief-emailed" : "hearing-brief-kept")}
+          </Typography>
+        </Box>
+      ) : null}
+    </Box>
   );
 }

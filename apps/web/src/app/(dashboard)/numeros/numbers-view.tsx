@@ -1,5 +1,6 @@
 "use client";
 
+import MarketCard from "./market-card";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useMemo, useState } from "react";
@@ -394,6 +395,9 @@ export default function NumbersView({ state }: { state: NumbersState }) {
                 ) : null}
               </CardContent>
             </Card>
+
+            {/* How the market decides by unit, beside the firm's own numbers above (0190, item 5.5). */}
+            <MarketCard courts={[...new Set(state.rows.map((row) => row.court).filter(Boolean))].sort()} />
 
             {state.margins ? (
               <Card component="section" aria-labelledby="numbers-margins">

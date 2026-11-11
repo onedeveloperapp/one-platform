@@ -5,6 +5,7 @@ import { settleDeadlineCounts } from "@/lib/deadlines/count-work";
 import { soon } from "@/lib/jobs/soon";
 import { settleFirmNotices } from "@/lib/notices/work";
 import { tellPublicationAcks } from "@/lib/publications/ack-notices";
+import { queuePublicationActions } from "@/lib/publications/action-work";
 import { TRIAGE_TASK, triageBriefing, triageFailure, triageText } from "@/lib/publications/publications";
 import { queuePublicationReading } from "@/lib/publications/reading-work";
 import { createServiceClient } from "@flyee/auth/service";
@@ -108,6 +109,8 @@ export type TriageFollow = (publicationId: string, orgId: string) => Promise<voi
  */
 const followTriageHere: TriageFollow = async (publicationId, orgId) => {
   await queuePublicationReading(publicationId);
+  // What the publication asks, read by ONE right after its triage (0186).
+  queuePublicationActions();
   soon("publication-acks", () => tellPublicationAcks(createServiceClient(), Date.now() + 20_000, publicationId));
   await settleFirmNotices(orgId);
 };

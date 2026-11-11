@@ -2,6 +2,7 @@
 
 import SettingsMenu from "../components/settings-menu";
 import ClaimValueChoice from "./claim-value-choice";
+import SettlementFloorCard from "./settlement-floor-card";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -228,6 +229,7 @@ export default function AutonomyView({ state }: { state: AutonomyState }) {
                 editable={ready.partner && !ready.supportVisit && ready.secondFactor === "ok"}
                 onSaved={() => router.refresh()}
               />
+              <SettlementFloorCard editable={ready.partner && !ready.supportVisit && ready.secondFactor === "ok"} />
               {ready.thirdParty ? (
                 <ThirdPartyBillCard
                   policy={ready.thirdParty.policy}

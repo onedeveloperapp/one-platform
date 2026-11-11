@@ -4,6 +4,7 @@ import type { CaseProceeding, CaseState } from "../case-types";
 import { useCaseAction } from "./case-action";
 import CourtCourse from "./court-course";
 import CourtSystem from "./court-system";
+import MarketProfile from "./market-profile";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 
@@ -222,6 +223,25 @@ export default function ProceedingsCard({
                 </StateLine>
               )
             ) : null}
+            {proceeding.status === "planned" && proceeding.unitByOne && proceeding.unit ? (
+              // ONE named the unit from the platform's table of the comarca's units (0179); the piece addresses it.
+              <Typography variant="body2" className="text-text-secondary">
+                {[
+                  t(
+                    proceeding.unitTable?.wholeComarca === false
+                      ? "case-proceeding-unit-by-one"
+                      : "case-proceeding-unit-by-one-comarca",
+                    { unit: proceeding.unit },
+                  ),
+                  proceeding.unitTable && !proceeding.unitTable.confirmed
+                    ? t("case-proceeding-unit-unconfirmed")
+                    : null,
+                  proceeding.unitTable?.priorComplaint ? t("case-proceeding-unit-prior-complaint") : null,
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
+              </Typography>
+            ) : null}
             {proceeding.cnj && (
               <Typography variant="body2" className="font-mono">
                 {[
@@ -283,6 +303,8 @@ export default function ProceedingsCard({
               writable={writable}
               onChanged={onChanged}
             />
+            {/* How its unit and judge usually decide, from the market's public decisions (0190): only to prepare. */}
+            {proceeding.court ? <MarketProfile proceedingId={proceeding.id} /> : null}
             {writable && (
               <Box className="flex flex-wrap gap-2 pt-1">
                 <Button variant="outlined" color="grey" size="small" onClick={() => setEditing(proceeding)}>

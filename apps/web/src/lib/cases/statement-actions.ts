@@ -260,6 +260,7 @@ const COMPLAINT_FIELDS = [
   "answered_on",
   "outcome",
   "notes",
+  "paid_cents",
 ] as const;
 
 export async function saveAdminComplaint(input: {

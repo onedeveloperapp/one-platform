@@ -1,7 +1,7 @@
 import "server-only";
 
 import { MniFilingChannel } from "@flyee/courts/providers/mni";
-import type { FilingChannel, FilingOutcome, LawsuitFiling } from "@flyee/courts/types";
+import type { FilingChannel, FilingOutcome, LawsuitFiling, PetitionFiling } from "@flyee/courts/types";
 
 /**
  * The channel ONE files a lawsuit through (migration 0101): the court's own
@@ -27,6 +27,24 @@ export class TestCourtChannel implements FilingChannel {
       receipt,
       at: new Date(),
       message: "Recebido pelo tribunal de teste do ONE.",
+    };
+  }
+
+  /** A petition into a test lawsuit: joined under the lawsuit's own number, with a receipt that says no court got it. */
+  async filePetition(filing: PetitionFiling): Promise<FilingOutcome> {
+    const protocol = `TESTE-P-${filing.caseNumber.slice(0, 7)}-${Date.now().toString(36).toUpperCase()}`;
+    return {
+      kind: "filed",
+      protocol,
+      caseNumber: filing.caseNumber,
+      receipt: new TextEncoder().encode(
+        `%PDF-1.4
+% Recibo do tribunal de teste do ONE, protocolo ${protocol}. Nenhum tribunal recebeu esta petição.
+%%EOF
+`,
+      ),
+      at: new Date(),
+      message: "Petição juntada pelo tribunal de teste do ONE.",
     };
   }
 }

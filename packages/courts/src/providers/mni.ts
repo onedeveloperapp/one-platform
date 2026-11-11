@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 
 import { brasiliaInstant } from "@flyee/courts/providers/projudi";
-import type { FilingChannel, FilingDocument, FilingOutcome, FilingParty, LawsuitFiling } from "@flyee/courts/types";
+import type { FilingChannel, FilingDocument, FilingOutcome, FilingParty, LawsuitFiling, PetitionFiling } from "@flyee/courts/types";
 import { parseXml, type XmlElement } from "@flyee/courts/xml";
 
 /**
@@ -239,6 +239,31 @@ export function mniFilingProblems(filing: LawsuitFiling): string[] {
   return problems;
 }
 
+/** What keeps a petition into a lawsuit the court has from being one the MNI can carry. Empty when it can be sent. */
+export function mniPetitionProblems(filing: PetitionFiling): string[] {
+  const problems: string[] = [];
+  const say = (problem: string) => {
+    if (!problems.includes(problem)) problems.push(problem);
+  };
+  const texts: string[] = [];
+  if (!isCnj(filing.caseNumber)) say("o número do processo não é um número CNJ");
+  if (filing.documents.length === 0) say("a petição não tem documento");
+  const ids = new Set<string>();
+  filing.documents.forEach((document, index) => {
+    const label = `o documento ${index + 1}`;
+    texts.push(document.id, document.description, document.typeCode);
+    if (blank(document.id)) say(`${label} não tem id`);
+    else if (ids.has(document.id)) say(`dois documentos têm o mesmo id`);
+    ids.add(document.id);
+    if (!/^\d+$/.test(document.typeCode)) say(`${label} não tem o código nacional do seu tipo`);
+    if (!isPdf(document.pdf)) say(`${label} não é um PDF`);
+    if (document.signature) texts.push(document.signature.certificatePem);
+  });
+  if (!isValidDate(filing.sentAt)) say("a data de envio não é uma data");
+  if (texts.some((text) => NOT_XML.test(text))) say("um texto da petição tem um caractere que o XML não carrega");
+  return problems;
+}
+
 // ---------- The request ----------
 
 const ESCAPE_TEXT: Record<string, string> = {
@@ -429,6 +454,8 @@ export function mniFilingEnvelope(filing: LawsuitFiling, auth: MniAuth = {}): st
           element("int:codigoNacional", {}, String(subject.code)),
         ]),
       ),
+      // The priorities come before the value of the cause in the header (MNI 2.2.2, tipoCabecalhoProcesso).
+      ...(filing.priorities ?? []).map((code) => element("int:prioridade", {}, code)),
       ...(filing.value === null ? [] : [element("int:valorCausa", {}, filing.value.toFixed(2))]),
       element("int:orgaoJulgador", {
         codigoOrgao: filing.judgingBody.code.trim(),
@@ -442,6 +469,29 @@ export function mniFilingEnvelope(filing: LawsuitFiling, auth: MniAuth = {}): st
     ...(auth.idManifestante ? [element("tip:idManifestante", {}, auth.idManifestante)] : []),
     ...(auth.senhaManifestante ? [element("tip:senhaManifestante", {}, auth.senhaManifestante)] : []),
     basics,
+    ...filing.documents.map(filingDocument),
+    element("tip:dataEnvio", {}, mniDateTime(filing.sentAt)),
+  ]);
+  return (
+    `<?xml version="1.0" encoding="UTF-8"?>` +
+    `<soapenv:Envelope xmlns:soapenv="${SOAP_ENVELOPE_NS}" xmlns:ser="${MNI_SERVICE_NS}"` +
+    ` xmlns:tip="${MNI_SERVICE_TYPES_NS}" xmlns:int="${MNI_MODEL_NS}">` +
+    `<soapenv:Body>${operation}</soapenv:Body></soapenv:Envelope>`
+  );
+}
+
+/**
+ * The SOAP 1.1 envelope of `entregarManifestacaoProcessual` for a petition into a lawsuit the court has: its number
+ * (`numeroProcesso`, the schema's choice beside `dadosBasicos`) and the documents. Throws `MniFilingInputError` for a
+ * petition the MNI cannot carry.
+ */
+export function mniPetitionEnvelope(filing: PetitionFiling, auth: MniAuth = {}): string {
+  const problems = mniPetitionProblems(filing);
+  if (problems.length > 0) throw new MniFilingInputError(problems);
+  const operation = element("ser:entregarManifestacaoProcessual", {}, [
+    ...(auth.idManifestante ? [element("tip:idManifestante", {}, auth.idManifestante)] : []),
+    ...(auth.senhaManifestante ? [element("tip:senhaManifestante", {}, auth.senhaManifestante)] : []),
+    element("tip:numeroProcesso", {}, filing.caseNumber),
     ...filing.documents.map(filingDocument),
     element("tip:dataEnvio", {}, mniDateTime(filing.sentAt)),
   ]);
@@ -658,6 +708,29 @@ export class MniFilingChannel implements FilingChannel {
     if (problems.length > 0) {
       return { kind: "refused", protocol: null, message: `Não enviado ao tribunal: ${problems.join("; ")}.` };
     }
+    return this.send(
+      mniFilingEnvelope(filing, {
+        idManifestante: this.config.idManifestante,
+        senhaManifestante: this.config.senhaManifestante,
+      }),
+    );
+  }
+
+  async filePetition(filing: PetitionFiling): Promise<FilingOutcome> {
+    const problems = mniPetitionProblems(filing);
+    if (problems.length > 0) {
+      return { kind: "refused", protocol: null, message: `Não enviado ao tribunal: ${problems.join("; ")}.` };
+    }
+    return this.send(
+      mniPetitionEnvelope(filing, {
+        idManifestante: this.config.idManifestante,
+        senhaManifestante: this.config.senhaManifestante,
+      }),
+    );
+  }
+
+  /** Posts an envelope and reads what it came to, as the class says. */
+  private async send(body: string): Promise<FilingOutcome> {
     let url: URL;
     try {
       url = new URL(this.config.endpoint);
@@ -674,10 +747,7 @@ export class MniFilingChannel implements FilingChannel {
         soapaction: `"${MNI_FILING_SOAP_ACTION}"`,
         accept: "text/xml, application/soap+xml",
       },
-      body: mniFilingEnvelope(filing, {
-        idManifestante: this.config.idManifestante,
-        senhaManifestante: this.config.senhaManifestante,
-      }),
+      body,
       // A redirect is never followed: a POST sent again elsewhere, or turned into a GET, is not this filing.
       redirect: "manual",
       signal: AbortSignal.timeout(this.config.timeoutMs ?? 120_000),

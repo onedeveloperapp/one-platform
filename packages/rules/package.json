@@ -21,12 +21,15 @@
     "./person": "./src/person.ts",
     "./proceedings": "./src/proceedings.ts",
     "./qualification": "./src/qualification.ts",
+    "./specificities": "./src/specificities.ts",
     "./state-count": "./src/state-count.ts",
     "./stock": "./src/stock.ts",
     "./suspension": "./src/suspension.ts",
-    "./weather": "./src/weather.ts"
+    "./weather": "./src/weather.ts",
+    "./paths": "./src/paths.ts",
+    "./update": "./src/update.ts"
   },
   "scripts": {
-    "test": "node --experimental-strip-types --test src/rules.test.ts src/domain.test.ts src/deadlines.test.ts src/flight-problem.test.ts src/interview.test.ts src/judgment.test.ts src/stock.test.ts src/finance.test.ts src/boleto.test.ts src/outcome.test.ts src/internal-deadline.test.ts src/payout.test.ts src/qualification.test.ts"
+    "test": "node --experimental-strip-types --test src/rules.test.ts src/domain.test.ts src/deadlines.test.ts src/flight-problem.test.ts src/interview.test.ts src/judgment.test.ts src/stock.test.ts src/finance.test.ts src/boleto.test.ts src/outcome.test.ts src/internal-deadline.test.ts src/payout.test.ts src/qualification.test.ts src/specificities.test.ts src/paths-update.test.ts"
   }
 }

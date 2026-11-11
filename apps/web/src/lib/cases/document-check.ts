@@ -49,6 +49,9 @@ const KIND_FOR_MODEL: Record<DocumentKind, string> = {
     "comprovante de renda (holerite, extrato de benefício do INSS, declaração do imposto de renda ou carteira de trabalho)",
   contract: "contrato",
   petition: "petição do processo",
+  baggage_report: "registro de irregularidade de bagagem da companhia aérea (RIB ou PIR)",
+  defense: "contestação da companhia aérea",
+  intermediate_petition: "petição do processo",
   other: "outro documento do caso",
 };
 

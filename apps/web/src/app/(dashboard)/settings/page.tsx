@@ -5,6 +5,7 @@ import EmailsCard from "./components/emails-card";
 import MemberCard from "./components/member-card";
 import ProfileCard from "./components/profile-card";
 import SettingsMenu from "./components/settings-menu";
+import WhatsappCard from "./components/whatsapp-card";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
@@ -74,6 +75,7 @@ export default function Settings() {
         {isSupabaseConfigured && (
           <>
             <ProfileCard />
+            <WhatsappCard />
             <MemberCard />
             <EmailsCard />
             <AccountCard />

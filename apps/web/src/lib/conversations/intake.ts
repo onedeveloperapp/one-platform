@@ -25,10 +25,23 @@ export type IntakeFacts = {
   atraso_horas?: string;
   aviso?: string;
   nome?: string;
+  /** Who referred the person, as they said it (0183). */
+  indicado_por?: string;
   result?: { outcome?: string };
 };
 
-const KEYS = ["problema", "companhia", "voo", "data", "origem", "destino", "atraso_horas", "aviso", "nome"] as const;
+const KEYS = [
+  "problema",
+  "companhia",
+  "voo",
+  "data",
+  "origem",
+  "destino",
+  "atraso_horas",
+  "aviso",
+  "nome",
+  "indicado_por",
+] as const;
 
 /** What the task read: whether it is a problem with a flight, and the facts it found. Null for an answer that is not. */
 export function intakeReadingOf(raw: unknown): { flight: boolean; facts: Record<string, string> } | null {

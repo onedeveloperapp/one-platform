@@ -206,6 +206,9 @@ const DOCUMENT_PHRASE_KEY: Record<DocumentKind, string> = {
   income_proof: "case-now-document-income-proof",
   contract: "case-now-document-contract",
   petition: "case-now-document-petition",
+  baggage_report: "case-now-document-baggage-report",
+  defense: "case-now-document-defense",
+  intermediate_petition: "case-now-document-intermediate-petition",
   other: "case-now-document",
 };
 
@@ -1235,6 +1238,7 @@ export const SECTION_ANCHOR: Record<CaseSection, string> = {
   deadlines: "case-deadlines",
   hearings: "case-hearings",
   publications: "case-publications",
+  pieces: "case-pieces",
   drafts: "case-drafts",
   filing: "case-filing",
   link: "case-link",

@@ -235,6 +235,23 @@ insert into public.hearings (org_id, case_id, proceeding_id, kind, starts_at, ti
    'conciliacao', now() + interval '20 days', 'America/Sao_Paulo', 'videoconferencia'),
   ('b1000000-0000-4000-8000-00000000000b', 'a3000000-0000-4000-8000-00000000000b', 'a8000000-0000-4000-8000-00000000000b',
    'una', now() + interval '30 days', 'America/Sao_Paulo', 'presencial');
+-- The brief of each hearing and what who went reported of it (0187), and the value each firm settles for.
+insert into public.hearing_briefs (org_id, case_id, hearing_id, body)
+select h.org_id, h.case_id, h.id, 'Resumo de teste para a audiência.' from public.hearings h
+where h.org_id in ('b1000000-0000-4000-8000-00000000000a', 'b1000000-0000-4000-8000-00000000000b');
+insert into public.hearing_reports (org_id, case_id, hearing_id, result)
+select h.org_id, h.case_id, h.id, 'nao_sei' from public.hearings h
+where h.org_id in ('b1000000-0000-4000-8000-00000000000a', 'b1000000-0000-4000-8000-00000000000b');
+insert into public.hearing_staff_messages (org_id, hearing_id, kind, status, reason)
+select h.org_id, h.id, 'hearing_result', 'skipped', 'no_phone' from public.hearings h
+where h.org_id in ('b1000000-0000-4000-8000-00000000000a', 'b1000000-0000-4000-8000-00000000000b');
+-- Each firm's own words of a message of ONE's (0191).
+insert into public.firm_message_texts (org_id, key, version, body) values
+  ('b1000000-0000-4000-8000-00000000000a', 'declined', 1, 'Tudo bem, {nome}. Volte quando quiser.'),
+  ('b1000000-0000-4000-8000-00000000000b', 'declined', 1, 'Tudo bem, {nome}. Volte quando quiser.');
+insert into public.firm_settlement_floors (org_id, incident, cents) values
+  ('b1000000-0000-4000-8000-00000000000a', 'delay', 300000),
+  ('b1000000-0000-4000-8000-00000000000b', 'delay', 300000);
 insert into public.firm_calendars (org_id, connection_id, calendar_id, name) values
   ('b1000000-0000-4000-8000-00000000000a', 'd1000000-0000-4000-8000-00000000000a', 'agenda-a@group.calendar.invalid', 'Audiências A'),
   ('b1000000-0000-4000-8000-00000000000b', 'd1000000-0000-4000-8000-00000000000b', 'agenda-b@group.calendar.invalid', 'Audiências B');
@@ -470,6 +487,10 @@ insert into public.tracked_legs (org_id, trip_id, position, flight_number, origi
 insert into public.flight_alerts (org_id, trip_id, kind, rule_version) values
   ('b1000000-0000-4000-8000-00000000000a', 'ae900000-0000-4000-8000-00000000000a', 'cancelled', 'flight-problem-v1'),
   ('b1000000-0000-4000-8000-00000000000b', 'ae900000-0000-4000-8000-00000000000b', 'cancelled', 'flight-problem-v1');
+-- A dispensable document the client said they do not have (0177).
+insert into public.case_document_answers (org_id, case_id, kind, said_by) values
+  ('b1000000-0000-4000-8000-00000000000a', 'a3000000-0000-4000-8000-00000000000a', 'receipt', 'client'),
+  ('b1000000-0000-4000-8000-00000000000b', 'a3000000-0000-4000-8000-00000000000b', 'receipt', 'client');
 -- The welcome ONE wrote to a passenger, or kept why it did not (0174).
 insert into public.passenger_welcomes (org_id, phone, trip_id, status, reason) values
   ('b1000000-0000-4000-8000-00000000000a', '5500988880001', 'ae900000-0000-4000-8000-00000000000a', 'skipped', 'no_template'),
@@ -516,6 +537,11 @@ insert into public.publications (org_id, hash, court, cnj, available_on, kind, b
    array['a1000000-0000-4000-8000-000000000002']::uuid[]),
   ('b1000000-0000-4000-8000-00000000000b', 'hashdeteste000001abcdefghijkl', 'TJGO', '50002023920998090051', current_date, 'Intimação', 'Texto de teste.',
    array['a1000000-0000-4000-8000-000000000004']::uuid[]);
+-- What a publication asks, as ONE read it (0186).
+insert into public.publication_actions (org_id, publication_id, case_id)
+select p.org_id, p.id, case p.org_id when 'b1000000-0000-4000-8000-00000000000a' then 'a3000000-0000-4000-8000-00000000000a'::uuid
+                                     else 'a3000000-0000-4000-8000-00000000000b'::uuid end
+from public.publications p where p.hash = 'hashdeteste000001abcdefghijkl';
 -- What ONE read of a publication (0040).
 insert into public.publication_readings (publication_id, org_id, kind)
 select p.id, p.org_id, 'deadline' from public.publications p where p.hash = 'hashdeteste000001abcdefghijkl';
@@ -535,6 +561,17 @@ insert into public.case_drafts (id, org_id, case_id, proceeding_id, template_id,
 insert into public.case_draft_versions (org_id, draft_id, version, author, body) values
   ('b1000000-0000-4000-8000-00000000000a', 'ac000000-0000-4000-8000-00000000000a', 1, 'template', 'Modelo de teste do escritório A, com o texto de uma peça.'),
   ('b1000000-0000-4000-8000-00000000000b', 'ac000000-0000-4000-8000-00000000000b', 1, 'template', 'Modelo de teste do escritório B, com o texto de uma peça.');
+-- What a condemnation is worth today, as ONE computed it (0184).
+insert into public.lawsuit_amounts (org_id, case_id, proceeding_id, rule, principal_cents, correction_from, interest_from, as_of,
+                                    corrected_cents, interest_cents, total_cents, next_step) values
+  ('b1000000-0000-4000-8000-00000000000a', 'a3000000-0000-4000-8000-00000000000a', 'a8000000-0000-4000-8000-00000000000a',
+   'atualizacao-v1', 100000, current_date, current_date, current_date, 100000, 0, 100000, 'aguardar'),
+  ('b1000000-0000-4000-8000-00000000000b', 'a3000000-0000-4000-8000-00000000000b', 'a8000000-0000-4000-8000-00000000000b',
+   'atualizacao-v1', 100000, current_date, current_date, current_date, 100000, 0, 100000, 'aguardar');
+-- The facts of a piece the client was asked to confirm (0182).
+insert into public.piece_fact_checks (org_id, case_id, draft_id, version, status, facts) values
+  ('b1000000-0000-4000-8000-00000000000a', 'a3000000-0000-4000-8000-00000000000a', 'ac000000-0000-4000-8000-00000000000a', 1, 'asked', 'Você comprou a passagem.'),
+  ('b1000000-0000-4000-8000-00000000000b', 'a3000000-0000-4000-8000-00000000000b', 'ac000000-0000-4000-8000-00000000000b', 1, 'asked', 'Você comprou a passagem.');
 insert into public.case_draft_citations (org_id, draft_id, version, position, kind, number, article, key, raw) values
   ('b1000000-0000-4000-8000-00000000000a', 'ac000000-0000-4000-8000-00000000000a', 1, 0, 'lei', '8078', '14', 'lei::8078#14', 'art. 14 da Lei nº 8078'),
   ('b1000000-0000-4000-8000-00000000000b', 'ac000000-0000-4000-8000-00000000000b', 1, 0, 'lei', '8078', '14', 'lei::8078#14', 'art. 14 da Lei nº 8078');
@@ -630,7 +667,7 @@ select is(
   (select array_agg(table_name order by table_name)
    from pg_temp.firm_rows('b1000000-0000-4000-8000-00000000000a') where visible > 0),
   array[
-    'admin_complaints', 'agenda_digests', 'agenda_preferences', 'ai_runs', 'approvals', 'audit_events', 'billing_operations', 'case_advances', 'case_costs', 'case_documents',
+    'admin_complaints', 'agenda_digests', 'agenda_preferences', 'ai_runs', 'approvals', 'audit_events', 'billing_operations', 'case_advances', 'case_costs', 'case_document_answers', 'case_documents',
     'case_draft_citations', 'case_draft_versions', 'case_drafts', 'case_events', 'case_fee_splits', 'case_fees', 'case_interview_answers', 'case_interviews',
     'case_papers', 'case_parties', 'case_statements',
     'case_weather', 'cases', 'certificate_inventory', 'civil_court_answers', 'client_consents', 'client_links', 'client_notices', 'client_payment_accounts', 'closing_goals', 'connections',
@@ -638,11 +675,11 @@ select is(
     'deadlines', 'djen_captures', 'dossiers', 'draft_templates', 'entitlement_grants', 'fee_terms', 'files', 'filing_package_items', 'filing_packages',
     'filing_receipts', 'filing_submissions', 'finance_access', 'finance_accountants', 'finance_accounts', 'finance_bill_payments', 'finance_bills', 'finance_budgets', 'finance_categories', 'finance_closings', 'finance_cost_centers', 'finance_entries', 'finance_imports', 'finance_invoices', 'finance_package_sends', 'finance_receipts', 'finance_rules', 'finance_series',
     'finance_statement_lines', 'finance_statements', 'firm_autonomy', 'firm_calendars',
-    'firm_claim_defaults', 'firm_invitations', 'firm_marketing_terms', 'firm_modules', 'firm_notice_kinds', 'firm_one_work_cost', 'firm_one_work_minutes', 'firm_signers', 'flight_alerts', 'flight_checks', 'flight_segments', 'free_justice_answers', 'hearings', 'import_batches', 'import_rows', 'invoices',
-    'issued_documents', 'lawsuit_facts', 'lawyer_signature_uses', 'legal_sources', 'marketing_segments', 'memberships',
+    'firm_claim_defaults', 'firm_invitations', 'firm_marketing_terms', 'firm_message_texts', 'firm_modules', 'firm_notice_kinds', 'firm_one_work_cost', 'firm_one_work_minutes', 'firm_settlement_floors', 'firm_signers', 'flight_alerts', 'flight_checks', 'flight_segments', 'free_justice_answers', 'hearing_briefs', 'hearing_reports', 'hearing_staff_messages', 'hearings', 'import_batches', 'import_rows', 'invoices',
+    'issued_documents', 'judgment_paths', 'lawsuit_amounts', 'lawsuit_facts', 'lawyer_signature_uses', 'legal_sources', 'marketing_segments', 'memberships',
     'money_releases', 'money_shares', 'money_statements', 'movements', 'notice_optins', 'notice_stops', 'onboarding_state', 'partner_invitations', 'partner_links', 'passenger_welcomes', 'pax_firm_clauses',
     'people', 'person_data_requests',
-    'proceeding_lawyers', 'proceeding_parties', 'proceeding_tracking', 'proceedings', 'publication_readings', 'publications', 'record_versions',
+    'piece_fact_checks', 'proceeding_lawyers', 'proceeding_parties', 'proceeding_tracking', 'proceedings', 'publication_actions', 'publication_readings', 'publications', 'record_versions',
     'residence_declarations', 'signature_envelopes',
     'subscriptions', 'template_imports', 'test_chats', 'tracked_legs', 'tracked_trip_documents', 'tracked_trips', 'trip_day_messages',
     'wa_contacts',
@@ -808,16 +845,16 @@ select is(
   (select array_agg(table_name order by table_name)
    from pg_temp.firm_rows('b1000000-0000-4000-8000-00000000000a') where visible > 0),
   array[
-    'admin_complaints', 'ai_runs', 'approvals', 'case_advances', 'case_costs', 'case_documents', 'case_draft_citations', 'case_draft_versions',
+    'admin_complaints', 'ai_runs', 'approvals', 'case_advances', 'case_costs', 'case_document_answers', 'case_documents', 'case_draft_citations', 'case_draft_versions',
     'case_drafts', 'case_events', 'case_interview_answers', 'case_interviews', 'case_papers', 'case_parties', 'case_statements',
     'case_weather', 'cases', 'certificate_inventory', 'civil_court_answers', 'client_consents',
     'client_links', 'client_notices', 'closing_goals',
     'consent_acceptances', 'deadlines', 'djen_captures', 'dossiers', 'draft_templates', 'entitlement_grants', 'files',
     'filing_package_items', 'filing_packages',
-    'filing_receipts', 'filing_submissions', 'finance_access', 'firm_autonomy', 'firm_calendars', 'firm_claim_defaults', 'firm_marketing_terms', 'firm_modules', 'firm_notice_kinds', 'firm_signers', 'flight_alerts', 'flight_checks', 'flight_segments', 'free_justice_answers', 'hearings', 'import_batches',
-    'import_rows', 'invoices', 'issued_documents', 'lawsuit_facts', 'lawyer_signature_uses', 'legal_sources',
-    'memberships', 'movements', 'notice_optins', 'notice_stops', 'partner_links', 'passenger_welcomes', 'pax_firm_clauses', 'people', 'proceeding_lawyers', 'proceeding_parties', 'proceeding_tracking', 'proceedings',
-    'publication_readings', 'publications',
+    'filing_receipts', 'filing_submissions', 'finance_access', 'firm_autonomy', 'firm_calendars', 'firm_claim_defaults', 'firm_marketing_terms', 'firm_message_texts', 'firm_modules', 'firm_notice_kinds', 'firm_settlement_floors', 'firm_signers', 'flight_alerts', 'flight_checks', 'flight_segments', 'free_justice_answers', 'hearing_briefs', 'hearing_reports', 'hearing_staff_messages', 'hearings', 'import_batches',
+    'import_rows', 'invoices', 'issued_documents', 'judgment_paths', 'lawsuit_amounts', 'lawsuit_facts', 'lawyer_signature_uses', 'legal_sources',
+    'memberships', 'movements', 'notice_optins', 'notice_stops', 'partner_links', 'passenger_welcomes', 'pax_firm_clauses', 'people', 'piece_fact_checks', 'proceeding_lawyers', 'proceeding_parties', 'proceeding_tracking', 'proceedings',
+    'publication_actions', 'publication_readings', 'publications',
     'residence_declarations', 'signature_envelopes',
     'subscriptions', 'template_imports', 'test_chats', 'tracked_legs', 'tracked_trip_documents', 'tracked_trips', 'trip_day_messages',
     'wa_contacts', 'wa_conversation_events', 'wa_conversations', 'wa_messages', 'wa_numbers', 'wa_optouts', 'wa_templates'
@@ -850,7 +887,7 @@ select is(
   (select array_agg(table_name order by table_name)
    from pg_temp.firm_rows('b1000000-0000-4000-8000-00000000000b') where visible > 0),
   array[
-    'admin_complaints', 'agenda_digests', 'agenda_preferences', 'ai_runs', 'approvals', 'audit_events', 'billing_operations', 'case_advances', 'case_costs', 'case_documents',
+    'admin_complaints', 'agenda_digests', 'agenda_preferences', 'ai_runs', 'approvals', 'audit_events', 'billing_operations', 'case_advances', 'case_costs', 'case_document_answers', 'case_documents',
     'case_draft_citations', 'case_draft_versions', 'case_drafts', 'case_events', 'case_fee_splits', 'case_fees', 'case_interview_answers', 'case_interviews',
     'case_papers', 'case_parties', 'case_statements',
     'case_weather', 'cases', 'certificate_inventory', 'civil_court_answers', 'client_consents', 'client_links', 'client_notices', 'client_payment_accounts', 'closing_goals', 'connections',
@@ -858,11 +895,11 @@ select is(
     'deadlines', 'djen_captures', 'dossiers', 'draft_templates', 'entitlement_grants', 'fee_terms', 'files', 'filing_package_items', 'filing_packages',
     'filing_receipts', 'filing_submissions', 'finance_access', 'finance_accountants', 'finance_accounts', 'finance_bill_payments', 'finance_bills', 'finance_budgets', 'finance_categories', 'finance_closings', 'finance_cost_centers', 'finance_entries', 'finance_imports', 'finance_invoices', 'finance_package_sends', 'finance_receipts', 'finance_rules', 'finance_series',
     'finance_statement_lines', 'finance_statements', 'firm_autonomy', 'firm_calendars',
-    'firm_claim_defaults', 'firm_invitations', 'firm_marketing_terms', 'firm_modules', 'firm_notice_kinds', 'firm_one_work_cost', 'firm_one_work_minutes', 'firm_signers', 'flight_alerts', 'flight_checks', 'flight_segments', 'free_justice_answers', 'hearings', 'import_batches', 'import_rows', 'invoices',
-    'issued_documents', 'lawsuit_facts', 'lawyer_signature_uses', 'legal_sources', 'marketing_segments', 'memberships',
+    'firm_claim_defaults', 'firm_invitations', 'firm_marketing_terms', 'firm_message_texts', 'firm_modules', 'firm_notice_kinds', 'firm_one_work_cost', 'firm_one_work_minutes', 'firm_settlement_floors', 'firm_signers', 'flight_alerts', 'flight_checks', 'flight_segments', 'free_justice_answers', 'hearing_briefs', 'hearing_reports', 'hearing_staff_messages', 'hearings', 'import_batches', 'import_rows', 'invoices',
+    'issued_documents', 'judgment_paths', 'lawsuit_amounts', 'lawsuit_facts', 'lawyer_signature_uses', 'legal_sources', 'marketing_segments', 'memberships',
     'money_releases', 'money_shares', 'money_statements', 'movements', 'notice_optins', 'notice_stops', 'onboarding_state', 'partner_invitations', 'partner_links', 'passenger_welcomes', 'pax_firm_clauses',
     'people', 'person_data_requests',
-    'proceeding_lawyers', 'proceeding_parties', 'proceeding_tracking', 'proceedings', 'publication_readings', 'publications', 'record_versions',
+    'piece_fact_checks', 'proceeding_lawyers', 'proceeding_parties', 'proceeding_tracking', 'proceedings', 'publication_actions', 'publication_readings', 'publications', 'record_versions',
     'residence_declarations', 'signature_envelopes',
     'subscriptions', 'template_imports', 'test_chats', 'tracked_legs', 'tracked_trip_documents', 'tracked_trips', 'trip_day_messages',
     'wa_contacts',

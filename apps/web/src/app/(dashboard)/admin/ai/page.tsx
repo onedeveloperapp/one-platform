@@ -13,6 +13,7 @@ import {
 import { loadConsole } from "@/lib/admin/session";
 import { providerReadiness } from "@/lib/ai/executor";
 import { isDjenCaptureOn } from "@/lib/courts/djen";
+import { isMarketCaptureOn } from "@/lib/jurimetrics/capture";
 import { flightStatusProvider } from "@/modules/direito-do-passageiro/flights/status";
 
 export const metadata = { title: "IA" };
@@ -57,6 +58,7 @@ export default async function AdminAiPage() {
       flights,
       flightSourceOn: flightStatusProvider() !== null,
       djenCaptureOn: isDjenCaptureOn(),
+      marketCaptureOn: isMarketCaptureOn(),
       readiness: providerReadiness(),
       serviceAvailable: Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY),
     };

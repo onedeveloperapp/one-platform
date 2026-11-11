@@ -110,6 +110,9 @@ describe.skipIf(!DB_URL)("ONE in the conversation, from the first word on a flig
       insert into public.organizations (id, name, slug, created_by) values ('${FIRM}', 'Souza Advogados', 'souza-one-conversa', '${ANA}');
       insert into public.memberships (org_id, user_id, role, firm_function) values
         ('${FIRM}', '${ANA}', 'owner', 'socio'), ('${FIRM}', '${BIA}', 'member', 'atendimento');
+      -- The papers are kept to a person here, so ONE asks its questions right after the yes, as a firm that sends
+      -- no papers by ONE has it (0181: where ONE sends them, the questions wait for the signature; pgTAP 0179).
+      insert into public.firm_autonomy (org_id, decision, mode) values ('${FIRM}', 'send_signature_papers', 'approval');
       insert into public.connections (id, org_id, provider, external_id, label, status, connected_by, connected_at) values
         ('${CONNECTION}', '${FIRM}', 'whatsapp', 'test-waba-conversa', 'Chat de teste', 'connected', '${ANA}', now());
     `);

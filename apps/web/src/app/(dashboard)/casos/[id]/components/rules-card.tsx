@@ -23,6 +23,7 @@ import {
 import CollapsibleCard from "@/components/product/collapsible-card";
 import { CurrencyField } from "@/components/product/fields";
 import SectionTitle from "@/components/product/section-title";
+import StateLine from "@/components/product/state-line";
 import StatusChip, { type StatusTone } from "@/components/product/status-chip";
 import { caseErrorKey } from "@/lib/cases/cases";
 import { createPlannedProceedings, readCaseWeather, saveSuspension, setPartyClaim } from "@/lib/cases/rule-actions";
@@ -39,6 +40,7 @@ import {
 import { opensOnArrival } from "@/lib/cases/sections";
 import { caseKindLabelKey } from "@/lib/modules/registry";
 import { planProceedings } from "@flyee/rules/proceedings";
+import { specificitiesOf } from "@flyee/rules/specificities";
 import { STATED_CAUSES, type StatedCause, type SuspensionRisk, triageSuspension } from "@flyee/rules/suspension";
 import type { WeatherSign } from "@flyee/rules/weather";
 
@@ -89,6 +91,11 @@ export default function RulesCard({
   const t = useTranslations("product");
   const { rules } = state;
   const claimants = state.parties.filter((party) => party.role === "claimant");
+  // 3.3: the priority of an elderly claimant, by the birth date on record (`especificidades-v1`), which the piece asks.
+  const priority = specificitiesOf(
+    claimants.map((party) => ({ name: party.person.full_name, birthDate: party.person.birth_date })),
+    state.today,
+  );
 
   const [claims, setClaims] = useState<Record<string, string>>(() =>
     Object.fromEntries(
@@ -216,6 +223,13 @@ export default function RulesCard({
         mayRelease={writable && state.lawyer && !state.supportVisit}
         onChanged={onChanged}
       />
+      {priority.priority !== "none" && (
+        <StateLine tone="info">
+          {t(priority.priority === "elderly_80" ? "case-priority-special" : "case-priority-elderly", {
+            people: priority.people.map((person) => t("case-priority-person", person)).join(", "),
+          })}
+        </StateLine>
+      )}
 
       <Box className="flex flex-col gap-3">
         <Typography variant="subtitle2" component="h3" className="mb-0">

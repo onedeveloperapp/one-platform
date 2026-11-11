@@ -80,6 +80,7 @@ export const DRAFT_MARKS = [
   "ADVOGADOS",
   "GRATUIDADE",
   "PEDIDO_GRATUIDADE",
+  "PRIORIDADE",
 ] as const;
 export const DRAFT_MARK_KEY: Record<(typeof DRAFT_MARKS)[number], string> = {
   PARTES: "draft-mark-partes",
@@ -91,6 +92,7 @@ export const DRAFT_MARK_KEY: Record<(typeof DRAFT_MARKS)[number], string> = {
   ADVOGADOS: "draft-mark-advogados",
   GRATUIDADE: "draft-mark-gratuidade",
   PEDIDO_GRATUIDADE: "draft-mark-pedido-gratuidade",
+  PRIORIDADE: "draft-mark-prioridade",
 };
 
 /**

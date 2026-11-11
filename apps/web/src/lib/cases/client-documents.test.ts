@@ -1,8 +1,15 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
 
-import { documentNeeds, type PersonData } from "@/lib/cases/cases";
-import { documentsStanding, extraDocuments, isOwed, latestRefusal, needStanding } from "@/lib/cases/client-documents";
+import { documentNeeds, type PersonData, requiredFor } from "@/lib/cases/cases";
+import {
+  dispensablesOf,
+  documentsStanding,
+  extraDocuments,
+  isOwed,
+  latestRefusal,
+  needStanding,
+} from "@/lib/cases/client-documents";
 
 // Invented people of an invented case.
 const person = (person_id: string, party_id: string, full_name: string): PersonData => ({
@@ -124,5 +131,41 @@ describe("latestRefusal", () => {
     const second = { ...doc("identity", "party-ana", "rejected", "2026-11-03T11:00:00Z"), id: "b" };
     expect(latestRefusal([second, first])?.id).toBe("b");
     expect(latestRefusal([{ ...doc("identity", "party-ana", "accepted"), id: "c" }])).toBeNull();
+  });
+});
+
+describe("the dispensable documents of a case (0177)", () => {
+  it("reads where each stands, leaving out what is not one", () => {
+    expect(
+      dispensablesOf({
+        dispensable: [
+          { kind: "receipt", label: "comprovantes", state: "asked" },
+          { kind: "evidence", label: "prints", state: "not_have" },
+          { kind: "photo", label: "x", state: "maybe" },
+        ],
+      }),
+    ).toEqual([
+      { kind: "receipt", label: "comprovantes", state: "asked" },
+      { kind: "evidence", label: "prints", state: "not_have" },
+    ]);
+    expect(dispensablesOf(null)).toEqual([]);
+  });
+});
+
+describe("the essentials of a kind of problem (0177)", () => {
+  const setting = {
+    required_documents: [{ kind: "identity" as const, per: "claimant" as const }],
+    documents_by_problem: {
+      default: { essential: [{ kind: "ticket" as const, per: "case" as const }] },
+      baggage: { essential: [{ kind: "baggage_report" as const, per: "case" as const }] },
+    },
+  };
+  it("takes a bag's entry for a bag's problem, the default for the rest, and the old list with neither", () => {
+    expect(requiredFor(setting, "baggage_lost").map((rule) => rule.kind)).toEqual(["baggage_report"]);
+    expect(requiredFor(setting, "delay").map((rule) => rule.kind)).toEqual(["ticket"]);
+    expect(requiredFor({ required_documents: setting.required_documents }, "delay").map((rule) => rule.kind)).toEqual([
+      "identity",
+    ]);
+    expect(requiredFor(null, "delay")).toEqual([]);
   });
 });

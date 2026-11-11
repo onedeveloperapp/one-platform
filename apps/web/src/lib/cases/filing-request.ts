@@ -1,4 +1,5 @@
 import type { FilingDocument, FilingParty, LawsuitFiling } from "@flyee/courts/types";
+import { specificitiesOf } from "@flyee/rules/specificities";
 
 /**
  * What ONE sends a court to file a lawsuit (migration 0101): the lawsuit as
@@ -15,6 +16,8 @@ export type SubmissionChannel = "mni" | "test_court";
 type Person = {
   name: string;
   cpf: string | null;
+  /** The birth date on record, for the priority of processing (`especificidades-v1`). */
+  birthDate?: string | null;
   street: string | null;
   number: string | null;
   complement: string | null;
@@ -105,6 +108,7 @@ export function submissionOf(value: unknown): SubmissionToSend | null {
       return {
         name: text(person.name) ?? "",
         cpf: digits(person.cpf),
+        birthDate: text(person.birth_date),
         street: text(person.street),
         number: text(person.number),
         complement: text(person.complement),
@@ -237,6 +241,20 @@ export function lawsuitFilingOf(sub: SubmissionToSend, fileOf: FileOf, now: Date
     });
   }
   if (missing.length > 0) return { ok: false, code: "court_codes_missing", missing };
+
+  // 3.3: the priority of an elderly claimant, by the court's own code of it; none where the court gave none (the
+  // petition asks it anyway), never a code guessed. The test court takes its placeholder.
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(now);
+  const priority = specificitiesOf(
+    sub.claimants.map((person) => ({ name: person.name, birthDate: person.birthDate ?? null })),
+    today,
+  ).priority;
+  const priorityCode =
+    priority === "none"
+      ? null
+      : (codeOf(sub.codes.priorities, priority) ??
+        (priority === "elderly_80" ? codeOf(sub.codes.priorities, "elderly") : null) ??
+        (test ? "IDOSO" : null));
   if (documents.length === 0 || sub.items[0]?.documentKind !== "petition") return { ok: false, code: "no_petition" };
   if (sub.claimants.length === 0) return { ok: false, code: "no_claimant" };
   if (!sub.defendant) return { ok: false, code: "no_defendant" };
@@ -296,6 +314,7 @@ export function lawsuitFilingOf(sub: SubmissionToSend, fileOf: FileOf, now: Date
       plaintiffs,
       defendants,
       documents,
+      priorities: priorityCode ? [priorityCode] : [],
       sentAt: now,
     },
   };

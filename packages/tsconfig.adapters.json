@@ -26,6 +26,8 @@
     "courts/src",
     "flights/src",
     "identity/src",
+    "indices/src",
+    "jurimetrics/src",
     "signatures/src",
     "whatsapp/src",
     "connectors/src",

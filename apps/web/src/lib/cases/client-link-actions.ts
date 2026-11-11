@@ -8,9 +8,12 @@ import { isTokenShape } from "@/lib/cases/client-link";
 import { finishLinkUpload, takeBackClientUpload } from "@/lib/cases/client-uploads";
 import { readLinkUpload } from "@/lib/cases/document-prefill-work";
 import { queueDocumentProcessing } from "@/lib/cases/documents-work";
+import { queueDraftWork } from "@/lib/cases/drafts-work";
 import { queueInterview } from "@/lib/cases/interview-work";
+import { queuePieceFacts } from "@/lib/cases/piece-facts-work";
 import { relationInputOf } from "@/lib/cases/residence";
 import { queueStatementWork } from "@/lib/cases/statements-work";
+import { queueReferralAsks } from "@/lib/conversations/referral-work";
 import { FIRM_FILES_BUCKET, supabaseFileStore } from "@/lib/files/store";
 import { settleNotices } from "@/lib/notices/work";
 import { createAnonClient } from "@/lib/public-content";
@@ -537,6 +540,23 @@ export async function answerFreeJustice(token: string, partyId: string, asks: bo
   return result;
 }
 
+// ---------- A document the client does not have (migration 0177) ----------
+
+/**
+ * The client says on their link they do not have a dispensable document (the receipts, the prints or photos): the
+ * case goes on without it, and ONE is woken to look at the case again.
+ */
+export async function clientNotHave(token: string, kind: string): Promise<ClientResult> {
+  const closed = await refusal(token);
+  if (closed) return closed;
+  if (kind !== "receipt" && kind !== "evidence") return { ok: false, code: "failed" };
+  const backend = service();
+  if (!backend) return unavailable;
+  const result = fold(await backend.rpc("client_link_not_have", { target_token: token, target_kind: kind }), nothing);
+  if (result.ok) await queueCaseAdvance(null);
+  return result;
+}
+
 // ---------- A bill in somebody else's name (migration 0123) ----------
 
 /**
@@ -565,6 +585,101 @@ export async function answerResidence(token: string, declarationId: string, inpu
       target_note: read.note,
       target_holder: read.holder,
       target_evidence: evidence,
+    }),
+    nothing,
+  );
+  if (result.ok) await queueCaseAdvance(null);
+  return result;
+}
+
+// ---------- The judgment and an appeal's costs (migration 0185) ----------
+
+/** The client says they know what an appeal costs and agree with it, or not. */
+export async function answerClientJudgment(token: string, pathId: string, agrees: boolean): Promise<ClientResult> {
+  const closed = await refusal(token);
+  if (closed) return closed;
+  if (!isId(pathId)) return { ok: false, code: "not_found" };
+  const backend = service();
+  if (!backend) return unavailable;
+  return fold(
+    await backend.rpc("client_link_answer_judgment_path", {
+      target_token: token,
+      target_path: pathId,
+      target_agrees: agrees === true,
+    }),
+    nothing,
+  );
+}
+
+// ---------- The facts of the initial (migration 0182) ----------
+
+/** The client confirms the facts of a piece, or says what is wrong in their own words. */
+export async function answerClientFacts(
+  token: string,
+  checkId: string,
+  confirmed: boolean,
+  note: string,
+): Promise<ClientResult> {
+  const closed = await refusal(token);
+  if (closed) return closed;
+  if (!isId(checkId)) return { ok: false, code: "not_found" };
+  const backend = service();
+  if (!backend) return unavailable;
+  const reply = await backend.rpc("client_link_answer_facts", {
+    target_token: token,
+    target_check: checkId,
+    target_confirmed: confirmed === true,
+    target_note: confirmed ? null : String(note ?? "").slice(0, 2000),
+  });
+  const answer = (reply.data ?? {}) as { ok?: boolean; draft_id?: unknown; sent_back?: unknown; code?: unknown };
+  const result = fold(reply, nothing);
+  if (result.ok && typeof answer.draft_id === "string") {
+    if (confirmed) queuePieceFacts(answer.draft_id);
+    else if (answer.sent_back === true) await queueDraftWork(answer.draft_id);
+  }
+  return result;
+}
+
+// ---------- The complaint before the lawsuit (migration 0180) ----------
+
+/** The client gives the protocol of the complaint they made at consumidor.gov.br, and the day they made it. */
+export async function recordClientComplaint(token: string, protocol: string, filedOn: string): Promise<ClientResult> {
+  const closed = await refusal(token);
+  if (closed) return closed;
+  const day = typeof filedOn === "string" && /^\d{4}-\d{2}-\d{2}$/.test(filedOn) ? filedOn : null;
+  if (!day) return { ok: false, code: "invalid_date" };
+  const backend = service();
+  if (!backend) return unavailable;
+  const result = fold(
+    await backend.rpc("client_link_record_complaint", {
+      target_token: token,
+      target_protocol: String(protocol ?? "").slice(0, 120),
+      target_filed_on: day,
+    }),
+    nothing,
+  );
+  if (result.ok) await queueCaseAdvance(null);
+  return result;
+}
+
+/** The client says what the airline answered: it settled (with what it paid, if it paid) or answered and settled nothing. */
+export async function answerClientComplaint(
+  token: string,
+  outcome: "answered" | "settled",
+  paidCents: number | null,
+): Promise<ClientResult> {
+  const closed = await refusal(token);
+  if (closed) return closed;
+  if (outcome !== "answered" && outcome !== "settled") return { ok: false, code: "invalid_outcome" };
+  const paid = paidCents === null ? null : Math.round(Number(paidCents));
+  if (paid !== null && (!Number.isFinite(paid) || paid < 0)) return { ok: false, code: "invalid_value" };
+  const backend = service();
+  if (!backend) return unavailable;
+  const result = fold(
+    await backend.rpc("client_link_complaint_answer", {
+      target_token: token,
+      target_outcome: outcome,
+      target_paid_cents: outcome === "settled" ? paid : null,
     }),
     nothing,
   );
@@ -872,6 +987,8 @@ export async function clientMoney(
   });
   const answer = (data ?? {}) as { ok?: boolean; code?: string };
   if (error || answer.ok !== true) return { ok: false, code: answer.code ?? "failed" };
+  // The client said their money arrived: ONE thanks them and asks for a referral (0183).
+  if (confirm) queueReferralAsks();
   return { ok: true, money: readMoney(data) };
 }
 

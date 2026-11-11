@@ -4,13 +4,22 @@ import { createHash, randomBytes } from "node:crypto";
 
 import { type AccountState, accountStateOf } from "@/lib/cases/account";
 import { lawsuitsWaiting } from "@/lib/cases/advance";
-import { caseMissing, firstNameOf, type MissingParty, type PersonData, type RequiredDocument } from "@/lib/cases/cases";
+import {
+  caseMissing,
+  firstNameOf,
+  type MissingParty,
+  type PersonData,
+  type RequiredDocument,
+  requiredFor,
+} from "@/lib/cases/cases";
 import { draftBlocks } from "@/lib/cases/drafts";
 import { queueDraftWork } from "@/lib/cases/drafts-work";
 import { queueFilingPackage } from "@/lib/cases/filing-work";
 import { caseQualification } from "@/lib/cases/qualification";
 import { lawsuitPlan, type MinimumWage, type RuleParty } from "@/lib/cases/rules";
 import { supabaseFileStore } from "@/lib/files/store";
+import { fillMessage } from "@/lib/firm/messages";
+import { firmMessageTextOfCase } from "@/lib/firm/messages-read";
 import { soon } from "@/lib/jobs/soon";
 import { WHATSAPP_COPY } from "@/lib/messages/whatsapp-copy";
 import { openReservedEnvelopes } from "@/lib/signatures/work";
@@ -142,7 +151,7 @@ async function qualifyCase(
 async function loadLawsuitFacts(service: SupabaseClient, caseId: string): Promise<LawsuitFacts | null> {
   const { data: row, error } = await service
     .from("cases")
-    .select("id, family_choice, partnership_id")
+    .select("id, family_choice, partnership_id, incident")
     .eq("id", caseId)
     .maybeSingle();
   if (error) throw new Error("case unreadable");
@@ -237,7 +246,11 @@ async function loadLawsuitFacts(service: SupabaseClient, caseId: string): Promis
     }),
     documents: (documents.data ?? []) as { kind: string; party_id: string | null; status: string }[],
     segments: segments.count ?? 0,
-    required: (setting("cases").required_documents ?? []) as RequiredDocument[],
+    // 0177: the essentials of the case's kind of problem.
+    required: requiredFor(
+      setting("cases") as Parameters<typeof requiredFor>[0],
+      row.incident as string | null,
+    ) as RequiredDocument[],
     wages: ((wages.data ?? []) as { valid_from: string; cents: number; act: string }[]).map((wage) => ({
       validFrom: wage.valid_from,
       cents: Number(wage.cents),
@@ -535,18 +548,23 @@ async function sayReceived(service: SupabaseClient, held: HeldAdvance): Promise<
     paper_waiting?: unknown;
     finished?: unknown;
   }[];
+  // The firm's own words of it, when it wrote them (0191); ONE's otherwise.
+  const firmWords = await firmMessageTextOfCase(service, held.caseId, "case_received");
   for (const person of people) {
     if (typeof person.person_id !== "string") continue;
+    const firstName = firstNameOf(typeof person.full_name === "string" ? person.full_name : null);
     const { data: told, error: refused } = await service.rpc("advance_say_received", {
       target_case: held.caseId,
       target_claim: held.claim,
       target_person: person.person_id,
-      target_body: WHATSAPP_COPY["pt-BR"].caseReceived({
-        firstName: firstNameOf(typeof person.full_name === "string" ? person.full_name : null),
-        paperWaiting: person.paper_waiting === true,
-        // A client who did not say they finished hears that their case has what it needs (0057).
-        finished: person.finished !== false,
-      }),
+      target_body: firmWords
+        ? fillMessage(firmWords, { nome: firstName })
+        : WHATSAPP_COPY["pt-BR"].caseReceived({
+            firstName,
+            paperWaiting: person.paper_waiting === true,
+            // A client who did not say they finished hears that their case has what it needs (0057).
+            finished: person.finished !== false,
+          }),
     });
     if (refused) {
       said.failed = true;
@@ -649,6 +667,19 @@ export async function advanceClaimedCase(
     if (Array.isArray(redo.drafts)) {
       asked.drafts.push(...redo.drafts.filter((id): id is string => typeof id === "string"));
     }
+    // The complaint before the lawsuit its unit asks (0180): one past its days unanswered is closed by ONE, and
+    // what ONE waits for of it before a piece is said when nothing else is.
+    const { data: complaintData, error: complaintError } = await service.rpc("advance_prior_complaint", {
+      target_case: held.caseId,
+      target_claim: held.claim,
+    });
+    if (complaintError) throw new Error("prior complaint failed");
+    const complaint = (complaintData ?? {}) as { ok?: boolean; code?: string; waiting?: unknown };
+    if (!complaint.ok && complaint.code === "not_working") {
+      await deliverMessages(asked.messages, follow);
+      return "lost";
+    }
+    const complaintWaiting = typeof complaint.waiting === "string" ? complaint.waiting : null;
     const { data, error } = await service.rpc("advance_case_steps", {
       target_case: held.caseId,
       target_claim: held.claim,
@@ -675,7 +706,8 @@ export async function advanceClaimedCase(
     asked.packages = Array.isArray(steps.packages)
       ? steps.packages.filter((id): id is string => typeof id === "string")
       : [];
-    waiting = waiting ?? (typeof steps.waiting === "string" ? steps.waiting : null) ?? papersWaiting;
+    waiting =
+      waiting ?? (typeof steps.waiting === "string" ? steps.waiting : null) ?? complaintWaiting ?? papersWaiting;
     // A step that failed (whatever ONE says first) is a failure of the look: tried again later each time, then
     // said to need a person.
     if (steps.failed === true) failed = true;

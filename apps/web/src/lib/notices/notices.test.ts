@@ -23,7 +23,8 @@ import { renderTemplate } from "@flyee/whatsapp/rules";
 const ROOT = path.resolve(__dirname, "../../../../..");
 // The kinds were made in 0038, one more joined in 0047 (ONE's first word when a flight has a problem), two in
 // 0055 (what the client sent arrived, and the lawsuit was filed), one in 0095 (the interview asks to go on) and two
-// in 0173 (the day of a trip: a good trip, and how it went), and the passenger's welcome in 0174.
+// in 0173 (the day of a trip: a good trip, and how it went), the passenger's welcome in 0174, and two in 0188 (to who
+// goes to a hearing: its brief, and its result).
 const MIGRATION = [
   "0038_client_notices.sql",
   "0047_test_chat.sql",
@@ -31,6 +32,7 @@ const MIGRATION = [
   "0095_case_interview.sql",
   "0173_trip_day.sql",
   "0174_passenger_welcome.sql",
+  "0188_hearing_staff_messages.sql",
 ]
   .map((file) => fs.readFileSync(path.join(ROOT, "packages/db/migrations", file), "utf8"))
   .join("\n");

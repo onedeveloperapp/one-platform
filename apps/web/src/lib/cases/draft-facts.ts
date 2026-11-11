@@ -84,6 +84,25 @@ export type CaseDraft = {
   oneRedo: "asking" | "rewriting" | null;
   /** When it last changed: the day a draft given up was given up. */
   updatedLabel: string;
+  /** The kind of piece: `inicial`, or an intermediate piece of a lawsuit the court has (0189). */
+  pieceKind: string;
+  /** What an intermediate piece carries besides its text (0189): ONE's recommendation, the decision, its filing. */
+  piece: {
+    recommendation: "file" | "hold" | null;
+    recommendationReason: string | null;
+    waitsFor: "defense" | null;
+    decision: "file" | "hold" | null;
+    decisionReason: string | null;
+    decidedBy: string | null;
+    decidedLabel: string | null;
+    filingStatus: "owed" | "sent" | "filed" | "refused" | "failed" | "unknown" | null;
+    filingMessage: string | null;
+    filedLabel: string | null;
+    filedHow: "one" | "lawyer" | null;
+    filedProtocol: string | null;
+    receiptFileId: string | null;
+    fromPublication: boolean;
+  } | null;
 };
 
 /** A model of the firm a draft may be asked from. */
@@ -105,6 +124,10 @@ export type CaseDossier = {
 export type CasePieces = {
   /** Every draft of the case, the latest first. */
   drafts: CaseDraft[];
+  /** The kinds of intermediate piece a person may ask for (0189), in order. */
+  pieceKinds: { slug: string; name: string }[];
+  /** What keeps ONE from filing each intermediate piece issued, by its id (null: ONE files it). */
+  pieceFilings: Record<string, string | null>;
   templates: TemplateChoice[];
   /** From how alike on (in a hundred) the screen calls attention to a piece. */
   alikeAttention: number;
@@ -115,6 +138,21 @@ export type CasePieces = {
 
 type DraftRow = {
   id: string;
+  piece_kind: string | null;
+  recommendation: string | null;
+  recommendation_reason: string | null;
+  waits_for: string | null;
+  decision: string | null;
+  decision_reason: string | null;
+  decided_by: string | null;
+  decided_at: string | null;
+  filing_status: string | null;
+  filing_message: string | null;
+  filed_at: string | null;
+  filed_how: string | null;
+  filed_protocol: string | null;
+  receipt_file_id: string | null;
+  publication_id: string | null;
   proceeding_id: string;
   template_name: string;
   status: string;
@@ -138,7 +176,7 @@ type DraftRow = {
 };
 
 const DRAFT_COLUMNS =
-  "id, proceeding_id, template_name, status, work, run_id, version, checked_version, revision_note, revision_by, revision_at, revisions, alike, approved_at, approved_by, approved_auto, document_id, requested_by, requested_auto, requested_at, updated_at";
+  "id, piece_kind, recommendation, recommendation_reason, waits_for, decision, decision_reason, decided_by, decided_at, filing_status, filing_message, filed_at, filed_how, filed_protocol, receipt_file_id, publication_id, proceeding_id, template_name, status, work, run_id, version, checked_version, revision_note, revision_by, revision_at, revisions, alike, approved_at, approved_by, approved_auto, document_id, requested_by, requested_auto, requested_at, updated_at";
 
 /** How long a work may be owed before the screen says a job is late. */
 const SLOW_MINUTES = 8;
@@ -203,6 +241,12 @@ export async function loadCasePieces(
     supabase.from("platform_settings").select("value").eq("key", "drafts").maybeSingle(),
   ]);
   if (drafts.error || templates.error || dossiers.error) throw new Error("pieces could not be read");
+  // The kinds of intermediate piece, and what keeps ONE from filing each issued one (0189): a read that fails says
+  // nothing of them, and the case reads as before.
+  const [kinds, filings] = await Promise.all([
+    supabase.from("piece_kinds").select("slug, name").order("position"),
+    supabase.rpc("case_piece_filings", { target_case: caseId }),
+  ]);
 
   const rows = (drafts.data ?? []) as DraftRow[];
   // One draft in course per lawsuit, so the ones that wait for a lawyer are a few at most.
@@ -340,6 +384,16 @@ export async function loadCasePieces(
   };
 
   return {
+    pieceKinds: kinds.error ? [] : ((kinds.data ?? []) as { slug: string; name: string }[]),
+    pieceFilings:
+      !filings.error && filings.data && typeof filings.data === "object" && !Array.isArray(filings.data)
+        ? Object.fromEntries(
+            Object.entries(filings.data as Record<string, unknown>).map(([id, blocker]) => [
+              id,
+              typeof blocker === "string" ? blocker : null,
+            ]),
+          )
+        : {},
     drafts: rows.flatMap((row) => {
       if (!isDraftStatus(row.status)) return [];
       const checked = row.checked_version !== null && row.checked_version === row.version;
@@ -401,6 +455,35 @@ export async function loadCasePieces(
           requestedAuto: row.requested_auto === true,
           oneRedo: row.status === "proposed" ? (redoOf.get(row.id) ?? null) : null,
           updatedLabel: momentLabel(row.updated_at, timeZone),
+          pieceKind: row.piece_kind ?? "inicial",
+          piece:
+            (row.piece_kind ?? "inicial") === "inicial"
+              ? null
+              : {
+                  recommendation:
+                    row.recommendation === "file" || row.recommendation === "hold" ? row.recommendation : null,
+                  recommendationReason: row.recommendation_reason,
+                  waitsFor: row.waits_for === "defense" ? "defense" : null,
+                  decision: row.decision === "file" || row.decision === "hold" ? row.decision : null,
+                  decisionReason: row.decision_reason,
+                  decidedBy: row.decided_by ? names.get(row.decided_by) || null : null,
+                  decidedLabel: row.decided_at ? momentLabel(row.decided_at, timeZone) : null,
+                  filingStatus:
+                    row.filing_status === "owed" ||
+                    row.filing_status === "sent" ||
+                    row.filing_status === "filed" ||
+                    row.filing_status === "refused" ||
+                    row.filing_status === "failed" ||
+                    row.filing_status === "unknown"
+                      ? row.filing_status
+                      : null,
+                  filingMessage: row.filing_message,
+                  filedLabel: row.filed_at ? momentLabel(row.filed_at, timeZone) : null,
+                  filedHow: row.filed_how === "one" || row.filed_how === "lawyer" ? row.filed_how : null,
+                  filedProtocol: row.filed_protocol,
+                  receiptFileId: row.receipt_file_id,
+                  fromPublication: row.publication_id !== null,
+                },
         } satisfies CaseDraft,
       ];
     }),

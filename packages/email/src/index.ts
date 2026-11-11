@@ -5,6 +5,7 @@ import type { EmailLocale } from "./locale";
 import { emailEnv, isEmailConfigured, send, sendBatch, type SendResult } from "./send";
 import AccessEndedEmail, { type AccessEndedEmailProps } from "./templates/access-ended";
 import AccountantPackageEmail, { type AccountantPackageEmailProps } from "./templates/accountant-package";
+import HearingBriefEmail, { type HearingBriefEmailProps } from "./templates/hearing-brief";
 import AgendaDigestEmail, { type AgendaDigestEmailProps } from "./templates/agenda-digest";
 import ContactFormEmail, { type ContactFormEmailProps } from "./templates/contact-form";
 import FirmInvitationEmail, { type FirmInvitationEmailProps } from "./templates/firm-invitation";
@@ -143,6 +144,14 @@ export const sendAccountantPackageEmail = (
     subject: emailCopyFor(props.locale).accountantPackage.subject(props.firmName, props.monthLabel),
     react: createElement(AccountantPackageEmail, props),
     attachments: [file],
+  });
+
+/** The brief of a hearing for who goes to it (migration 0187), two business days before. */
+export const sendHearingBriefEmail = (to: string, props: HearingBriefEmailProps): Promise<SendResult> =>
+  send({
+    to,
+    subject: emailCopyFor(props.locale).hearingBrief.subject(props.caseSeq, props.whenLabel),
+    react: createElement(HearingBriefEmail, props),
   });
 
 export const sendAgendaDigestEmail = (to: string, props: AgendaDigestEmailProps): Promise<SendResult> =>

@@ -15,9 +15,11 @@ import {
   MniFilingInputError,
   mniFilingProblems,
   mniInstant,
+  mniPetitionEnvelope,
+  mniPetitionProblems,
   readMniFilingAnswer,
 } from "./providers/mni.ts";
-import type { FilingChannel, FilingOutcome, LawsuitFiling } from "./types.ts";
+import type { FilingChannel, FilingOutcome, LawsuitFiling, PetitionFiling } from "./types.ts";
 import { parseXml, type XmlElement } from "./xml.ts";
 
 // ---------- An invented lawsuit: people nobody is, numbers of 2099, the CPFs the manuals use ----------
@@ -488,6 +490,15 @@ describe("the MNI's envelope", () => {
     );
   });
 
+  it("marks a priority of processing by the court's code, after the subjects and before the value", () => {
+    const basics = one(operationOf(mniFilingEnvelope(lawsuit({ priorities: ["IDOSO"] }))), "tip:dadosBasicos");
+    const order = basics.children.map((child) => child.name);
+    assert.equal(one(basics, "int:prioridade").text, "IDOSO");
+    assert.ok(order.indexOf("int:prioridade") > order.lastIndexOf("int:assunto"));
+    assert.ok(order.indexOf("int:prioridade") < order.indexOf("int:valorCausa"));
+    assert.equal(named(one(operationOf(mniFilingEnvelope(lawsuit())), "tip:dadosBasicos"), "int:prioridade").length, 0);
+  });
+
   it("leaves out what the filing does not hold", () => {
     const text = mniFilingEnvelope(lawsuit({ value: null, competence: null }));
     const basics = one(operationOf(text), "tip:dadosBasicos");
@@ -854,5 +865,53 @@ describe("the MNI's request, and what each answer comes to", () => {
     );
     assert.equal(empty.kind, "refused");
     assert.equal(standIn.calls.length, 0);
+  });
+});
+
+// ---------- A petition into a lawsuit the court has ----------
+
+function petition(overrides: Partial<PetitionFiling> = {}): PetitionFiling {
+  return {
+    caseNumber: tjgoNumber(7),
+    documents: [{ id: "peca-1", typeCode: "57", description: "Réplica", pdf: pdf("réplica"), signature: null }],
+    sentAt: new Date("2026-11-11T13:00:00.000Z"),
+    ...overrides,
+  };
+}
+
+describe("a petition into a lawsuit the court has", () => {
+  it("names the lawsuit by its number, never its basic data, and carries the documents", () => {
+    const operation = operationOf(mniPetitionEnvelope(petition()));
+    assert.equal(one(operation, "tip:numeroProcesso").text, tjgoNumber(7));
+    assert.equal(named(operation, "tip:dadosBasicos").length, 0);
+    assert.equal(named(operation, "tip:documento").length, 1);
+  });
+
+  it("is never written for a number that is not one, nor with no document", () => {
+    assert.deepEqual(mniPetitionProblems(petition({ caseNumber: "123" })), ["o número do processo não é um número CNJ"]);
+    assert.ok(mniPetitionProblems(petition({ documents: [] })).includes("a petição não tem documento"));
+    assert.throws(() => mniPetitionEnvelope(petition({ caseNumber: "123" })), MniFilingInputError);
+  });
+
+  it("is filed through the MNI with the court's protocol, and refused before sending when it cannot be carried", async () => {
+    const standIn = courtStandIn(() =>
+      reply(soap(resposta({ sucesso: "true", mensagem: "Petição juntada.", protocolo: "TJGO-PET-1" }))),
+    );
+    const channel = new MniFilingChannel({ endpoint: MNI_TJGO_ENDPOINT, fetch: standIn.run });
+    const outcome = filedOf(await channel.filePetition(petition()));
+    assert.equal(outcome.protocol, "TJGO-PET-1");
+    assert.equal(standIn.calls[0].body, mniPetitionEnvelope(petition()));
+    const refused = await channel.filePetition(petition({ documents: [] }));
+    assert.equal(refused.kind, "refused");
+    assert.equal(standIn.calls.length, 1);
+  });
+
+  it("is kept by the fake court, filed under the lawsuit's own number, and lost when told to", async () => {
+    const fake = new FakeFilingChannel();
+    const outcome = filedOf(await fake.filePetition(petition()));
+    assert.equal(outcome.caseNumber, tjgoNumber(7));
+    assert.equal(fake.petitions.length, 1);
+    fake.failNext("unknown");
+    assert.equal((await fake.filePetition(petition())).kind, "unknown");
   });
 });

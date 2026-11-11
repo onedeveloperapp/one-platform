@@ -147,6 +147,8 @@ describe.skipIf(!DB_URL)("any passenger on the firm's WhatsApp", () => {
       atraso_horas: "",
       aviso: "",
       nome: "",
+      // Who referred the person (0183): the task's second version answers it, empty when nobody did.
+      indicado_por: "",
     };
     model.intake = () => ({ assunto: "problema_voo", problema: "delay", ...empty });
     await writes(LUCAS, "Oi, meu voo atrasou muito ontem");
@@ -203,6 +205,7 @@ describe.skipIf(!DB_URL)("any passenger on the firm's WhatsApp", () => {
       atraso_horas: "2",
       aviso: "",
       nome: "Rita Teste",
+      indicado_por: "",
     });
     await writes(RITA, "Meu voo G3 1450 de Brasília para o Rio atrasou duas horas anteontem. Rita Teste");
     expect(await takeConversationTurns(backend() as never)).toMatchObject({ claimed: 1, opened: 0, failed: 0 });
@@ -230,6 +233,7 @@ describe.skipIf(!DB_URL)("any passenger on the firm's WhatsApp", () => {
       atraso_horas: "",
       aviso: "",
       nome: "",
+      indicado_por: "",
     });
     model.conversation = () => ({
       intencao: "pergunta",

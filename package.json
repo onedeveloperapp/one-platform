@@ -25,7 +25,7 @@
     "test:documents": "npm test -w @flyee/documents",
     "test:rules": "npm test -w @flyee/rules",
     "test:knowledge": "npm test -w @flyee/knowledge",
-    "test:adapters": "npm test -w @flyee/courts -w @flyee/flights -w @flyee/identity -w @flyee/signatures -w @flyee/whatsapp -w @flyee/calendar -w @flyee/psc",
+    "test:adapters": "npm test -w @flyee/courts -w @flyee/flights -w @flyee/identity -w @flyee/signatures -w @flyee/whatsapp -w @flyee/calendar -w @flyee/psc -w @flyee/indices -w @flyee/jurimetrics",
     "test": "npm run test:ai && npm run test:billing && npm run test:email && npm run test:backup && npm run test:connectors && npm run test:documents && npm run test:rules && npm run test:knowledge && npm run test:adapters && npm run test:web",
     "test:web": "npm run test -w @flyee/web",
     "test:browser": "npm run test:browser -w @flyee/web",

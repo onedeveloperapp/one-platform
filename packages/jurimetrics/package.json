@@ -1,0 +1,17 @@
+{
+  "name": "@flyee/jurimetrics",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "How courts decide passengers' lawsuits, read from public decisions behind an interface: the DJEN's public API by party and court, and a fake, under one contract. Keeps the decision, the unit, the judge and the airline, never a passenger.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./types": "./src/types.ts",
+    "./read": "./src/read.ts",
+    "./fake": "./src/fake.ts",
+    "./providers/djen": "./src/providers/djen.ts"
+  },
+  "scripts": {
+    "test": "node --experimental-strip-types --test src/contract.test.ts"
+  }
+}

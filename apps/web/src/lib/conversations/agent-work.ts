@@ -4,6 +4,7 @@ import { createHash, randomBytes } from "node:crypto";
 
 import { runFirmTask } from "@/lib/ai/executor";
 import { accountThanksMessage } from "@/lib/cases/account";
+import { firstNameOf } from "@/lib/cases/cases";
 import { base64, MODEL_IMAGE, processCaseDocuments, queueDocumentProcessing } from "@/lib/cases/documents-work";
 import {
   advanceInterview,
@@ -39,6 +40,7 @@ import {
   type TurnFile,
   turnFilesOf,
 } from "@/lib/conversations/agent";
+import { takeHearingReport } from "@/lib/conversations/hearing-report-work";
 import {
   INTAKE_TASK,
   intakeFactsOf,
@@ -49,6 +51,8 @@ import {
   intakeReadingOf,
 } from "@/lib/conversations/intake";
 import { supabaseFileStore } from "@/lib/files/store";
+import { fillMessage } from "@/lib/firm/messages";
+import { firmMessageText } from "@/lib/firm/messages-read";
 import { soon } from "@/lib/jobs/soon";
 import { deliverOutbox } from "@/lib/whatsapp/send";
 import { createServiceClient } from "@flyee/auth/service";
@@ -104,7 +108,28 @@ async function rpc(
   return (data ?? {}) as Record<string, unknown>;
 }
 
+/** Whether the passenger signs the power of attorney before ONE's questions (0181); a read that fails says no. */
+async function signsFirst(service: SupabaseClient, orgId: string): Promise<boolean> {
+  const answer = await rpc(service, "firm_signs_first", { target_org: orgId }).catch(() => null);
+  return answer?.signs_first === true;
+}
+
 /** ONE says something of its own in the conversation, and it is sent. */
+/** The firm's own words of one of ONE's messages, its values written in (0191); ONE's own words otherwise. */
+async function wordsOf(
+  service: SupabaseClient,
+  orgId: string,
+  key: string,
+  fallback: string,
+  values: Record<string, string> = {},
+): Promise<string> {
+  const firm = await firmMessageText(service, orgId, key).catch(() => null);
+  return firm ? fillMessage(firm, values) : fallback;
+}
+
+/** A passenger's first name, as the messages greet them. */
+const greeting = (name: string | null | undefined): string => firstNameOf(name ?? "") || (name ?? "");
+
 async function say(service: SupabaseClient, held: Held, body: string): Promise<void> {
   const answer = await rpc(service, "one_say", {
     target_conversation: held.conversationId,
@@ -316,7 +341,9 @@ async function openCase(service: SupabaseClient, held: Held, context: TurnContex
       target_claim: held.claim,
       target_alert: alert.alertId,
       target_result: verdict,
-      target_body: notQualifiedMessage(alert.passengerName),
+      target_body: await wordsOf(service, context.orgId, "not_qualified", notQualifiedMessage(alert.passengerName), {
+        nome: greeting(alert.passengerName),
+      }),
     });
     if (answer.code === "not_qualified") {
       await send(service, answer.message_id);
@@ -335,18 +362,26 @@ async function openCase(service: SupabaseClient, held: Held, context: TurnContex
     throw new Error(`the answer could not be kept: ${String(answer.code)}`);
   }
   const agency = await agencyOfAlert(service, alert.alertId);
+  const signFirst = await signsFirst(service, context.orgId);
   const token = randomBytes(32).toString("base64url");
   const answer = await rpc(service, "one_open_case_from_alert", {
     target_conversation: held.conversationId,
     target_claim: held.claim,
     target_alert: alert.alertId,
     target_token_hash: createHash("sha256").update(token, "utf8").digest("hex"),
-    target_body: caseStepsMessage({
-      passengerName: alert.passengerName,
-      url: `${BRAND.siteUrl}/c/${token}`,
-      minors: minorsOf(context, today()),
-      agency,
-    }),
+    target_body: await wordsOf(
+      service,
+      context.orgId,
+      "link_steps",
+      caseStepsMessage({
+        passengerName: alert.passengerName,
+        url: `${BRAND.siteUrl}/c/${token}`,
+        minors: minorsOf(context, today()),
+        agency,
+        signFirst,
+      }),
+      { nome: greeting(alert.passengerName), link: `${BRAND.siteUrl}/c/${token}` },
+    ),
   });
   // The documents an agency handed over to the case (0071) are checked right after, as a client's are; the sweep
   // takes what that did not finish.
@@ -437,7 +472,13 @@ async function takeIntake(
       target_conversation: held.conversationId,
       target_claim: held.claim,
       target_result: verdict,
-      target_body: notQualifiedMessage(facts.nome ?? context.contactName ?? ""),
+      target_body: await wordsOf(
+        service,
+        context.orgId,
+        "not_qualified",
+        notQualifiedMessage(facts.nome ?? context.contactName ?? ""),
+        { nome: greeting(facts.nome ?? context.contactName) },
+      ),
     });
     if (answer.code === "not_qualified") await send(service, answer.message_id);
     report.answered += 1;
@@ -445,7 +486,9 @@ async function takeIntake(
   }
   if (verdict.outcome !== "qualifies") {
     // What the rule cannot decide (a change of class, another problem, a fact it lacks): a person of the firm weighs it.
-    await say(service, held, calledMessage).catch(() => undefined);
+    await say(service, held, await wordsOf(service, context.orgId, "called_person", calledMessage)).catch(
+      () => undefined,
+    );
     await callPerson(
       service,
       held,
@@ -454,17 +497,25 @@ async function takeIntake(
     report.called += 1;
     return true;
   }
+  const signFirst = await signsFirst(service, context.orgId);
   const token = randomBytes(32).toString("base64url");
   const answer = await rpc(service, "one_open_case_from_intake", {
     target_conversation: held.conversationId,
     target_claim: held.claim,
     target_token_hash: createHash("sha256").update(token, "utf8").digest("hex"),
-    target_body: caseStepsMessage({
-      passengerName: facts.nome ?? "",
-      url: `${BRAND.siteUrl}/c/${token}`,
-      minors: [],
-      agency: null,
-    }),
+    target_body: await wordsOf(
+      service,
+      context.orgId,
+      "link_steps",
+      caseStepsMessage({
+        passengerName: facts.nome ?? "",
+        url: `${BRAND.siteUrl}/c/${token}`,
+        minors: [],
+        agency: null,
+        signFirst,
+      }),
+      { nome: greeting(facts.nome), link: `${BRAND.siteUrl}/c/${token}` },
+    ),
   });
   if (answer.code === "opened" || answer.code === "opened_without_link") {
     report.opened += 1;
@@ -508,7 +559,14 @@ async function answerAlert(
     target_claim: held.claim,
     target_answer: answer,
   });
-  if (kept.ok && answer === "no") await say(service, held, declinedMessage(context.alert?.passengerName ?? ""));
+  if (kept.ok && answer === "no") {
+    const name = context.alert?.passengerName ?? "";
+    await say(
+      service,
+      held,
+      await wordsOf(service, context.orgId, "declined", declinedMessage(name), { nome: greeting(name) }),
+    );
+  }
 }
 
 /** One turn of a claimed conversation. Throws when it could not be done now: the turn is given back. */
@@ -520,6 +578,17 @@ async function takeTurn(service: SupabaseClient, held: Held, report: TurnReport)
     }),
   );
   if (!context) return;
+
+  // Who went to a hearing for the firm reports its result here (0187): a member by the WhatsApp of their profile, or an
+  // attendee from outside by the one on the hearing. Anybody else is answered as usual.
+  if (
+    await takeHearingReport(service, held, context, lastClientWords(context.messages), (body) =>
+      say(service, held, body),
+    ).catch(() => false)
+  ) {
+    report.answered += 1;
+    return;
+  }
 
   // What the passenger sent as files joins the case before anything is answered.
   const joinedFiles = await joinFiles(service, held, context);
@@ -620,7 +689,9 @@ async function takeTurn(service: SupabaseClient, held: Held, report: TurnReport)
       });
       if (run.kind !== "finished") {
         // A model that did not answer now: a person carries the conversation on rather than the passenger waiting.
-        await say(service, held, calledMessage).catch(() => undefined);
+        await say(service, held, await wordsOf(service, context.orgId, "called_person", calledMessage)).catch(
+          () => undefined,
+        );
         await callPerson(service, held, "O ONE não conseguiu responder agora.");
         report.called += 1;
       } else {
@@ -654,7 +725,10 @@ async function takeTurn(service: SupabaseClient, held: Held, report: TurnReport)
             }
           }
           if (!answer || answer.callPerson || answer.intent === "parar") {
-            if (!reply) await say(service, held, calledMessage).catch(() => undefined);
+            if (!reply)
+              await say(service, held, await wordsOf(service, context.orgId, "called_person", calledMessage)).catch(
+                () => undefined,
+              );
             await callPerson(
               service,
               held,

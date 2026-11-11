@@ -21,9 +21,14 @@ export const FILING_ORDER = [
   "income_proof",
   "ticket",
   "boarding_pass",
+  "baggage_report",
   "receipt",
   "evidence",
   "contract",
+  // The airline's defence and an intermediate piece (0189): documents of a lawsuit the court has, never of a package
+  // the person did not choose them for.
+  "defense",
+  "intermediate_petition",
   "other",
 ] as const;
 export type FilingKind = (typeof FILING_ORDER)[number];

@@ -56,3 +56,22 @@ export function latestRefusal<D extends CaseDocumentState & { created_at: string
       null,
     );
 }
+
+/** A dispensable document of a case (0177): asked once; the case goes on with "não tenho" or after some days. */
+/** `later`: asked only once the case is signed (0181), where ONE sends the papers. */
+export type Dispensable = { kind: string; label: string; state: "sent" | "not_have" | "expired" | "asked" | "later" };
+
+const DISPENSABLE_STATES: readonly Dispensable["state"][] = ["sent", "not_have", "expired", "asked", "later"];
+
+/** The dispensables as the database answers them (`case_document_needs`); what is not one is left out. */
+export function dispensablesOf(raw: unknown): Dispensable[] {
+  const list = (raw as { dispensable?: unknown } | null)?.dispensable;
+  if (!Array.isArray(list)) return [];
+  return list.flatMap((item): Dispensable[] => {
+    const row = (item ?? {}) as Record<string, unknown>;
+    const state = row.state as Dispensable["state"];
+    return typeof row.kind === "string" && typeof row.label === "string" && DISPENSABLE_STATES.includes(state)
+      ? [{ kind: row.kind, label: row.label, state }]
+      : [];
+  });
+}

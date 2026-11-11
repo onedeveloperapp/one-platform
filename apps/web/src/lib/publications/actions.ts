@@ -6,6 +6,7 @@ import { isDjenCaptureOn } from "@/lib/courts/djen";
 import { settleDeadlineCounts } from "@/lib/deadlines/count-work";
 import { getMemberContext } from "@/lib/member/context";
 import { settleFirmNotices } from "@/lib/notices/work";
+import { queuePublicationActions } from "@/lib/publications/action-work";
 import { queueFirmCapture } from "@/lib/publications/capture";
 import {
   findPublications,
@@ -117,6 +118,8 @@ export async function triagePublication(input: {
   if (!ready) return { ...result, reading: null };
   try {
     await queuePublicationReading(input.publicationId);
+    // What the publication asks, read by ONE right after its triage (0186).
+    queuePublicationActions();
   } catch {
     // The sweep reads it.
   }

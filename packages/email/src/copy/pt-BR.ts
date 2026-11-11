@@ -158,6 +158,14 @@ export const emailCopy = {
     ignore: "Não esperava este convite? Ignore esta mensagem: nada acontece sem o seu aceite.",
   },
 
+  hearingBrief: {
+    subject: (caseSeq: number, when: string) => `Resumo para a audiência do caso ${caseSeq}, ${when}`,
+    preview: (caseSeq: number, when: string) => `Caso ${caseSeq}: audiência ${when}`,
+    heading: (caseSeq: number) => `Audiência do caso ${caseSeq}`,
+    intro: (when: string) => `A audiência é ${when}. O ONE preparou o que vale ter em mãos:`,
+    mayErr: "O resumo é do ONE e pode errar: confira no caso antes da audiência.",
+    reason: (firm: string) => `Você recebe este resumo porque vai a esta audiência por ${firm}.`,
+  },
   agendaDigest: {
     subject: (day: string) => `Sua agenda de ${day} no ONE`,
     /** The line a mail client shows beside the subject. */

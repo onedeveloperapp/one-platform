@@ -211,6 +211,20 @@ export type LawsuitFiling = {
   defendants: FilingParty[];
   /** The petition first, then the documents, in the order of the filing package. */
   documents: FilingDocument[];
+  /** The court's codes of the lawsuit's priorities of processing (an elderly party's); none when it has none. */
+  priorities?: string[];
+  sentAt: Date;
+};
+
+/**
+ * A petition into a lawsuit the court already has (an intermediate piece: a manifestation, the réplica, an appeal, the
+ * cumprimento), as a court's filing channel takes it: the lawsuit's number and the documents, the petition first.
+ */
+export type PetitionFiling = {
+  /** The lawsuit's CNJ number, 20 digits. */
+  caseNumber: string;
+  /** The petition first, then what goes with it. */
+  documents: FilingDocument[];
   sentAt: Date;
 };
 
@@ -238,4 +252,6 @@ export interface FilingChannel {
   /** Which channel this is ("mni", "fake", "test_court"). */
   readonly name: string;
   fileLawsuit(filing: LawsuitFiling): Promise<FilingOutcome>;
+  /** A petition into a lawsuit the court has, by its number: the same outcomes, `caseNumber` the lawsuit's own. */
+  filePetition(filing: PetitionFiling): Promise<FilingOutcome>;
 }
