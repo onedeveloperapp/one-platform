@@ -60,6 +60,32 @@ const list = (value: unknown): Record<string, unknown>[] =>
     ? value.filter((item): item is Record<string, unknown> => typeof item === "object" && item !== null)
     : [];
 
+/** The firm's internal days (0132), and the days of each act it set apart (0167). */
+export type InternalDays = { days: number; byAct: Record<string, number> };
+
+const dayCount = (value: unknown): number | null =>
+  typeof value === "number" && Number.isInteger(value) && value >= 0 && value <= 15 ? value : null;
+
+/** The firm's internal days as the database writes them, an act's days kept only when they are days. */
+export function internalDaysFrom(days: unknown, byAct: unknown): InternalDays {
+  const acts =
+    typeof byAct === "object" && byAct !== null && !Array.isArray(byAct) ? (byAct as Record<string, unknown>) : {};
+  return {
+    days: dayCount(days) ?? 0,
+    byAct: Object.fromEntries(
+      Object.entries(acts).flatMap(([act, value]) =>
+        dayCount(value) === null ? [] : [[act, dayCount(value) as number]],
+      ),
+    ),
+  };
+}
+
+/** How many days before its fatal day a deadline of an act has its internal one: the act's, else the firm's. */
+export function internalDaysFor(rule: InternalDays | number, act: string | null | undefined): number {
+  if (typeof rule === "number") return rule;
+  return act && act in rule.byAct ? rule.byAct[act] : rule.days;
+}
+
 /** The internal day of a deadline: from its fatal day back over the days its count saw, never before its first. */
 export function internalDayOf(
   dueOn: string,
@@ -75,7 +101,7 @@ export function internalDayOf(
 }
 
 /** The items the database answered (`agenda_items`), each deadline with its internal day by the firm's days. */
-export function readAgendaItems(raw: unknown, internalDays: number): AgendaItems {
+export function readAgendaItems(raw: unknown, internalDays: InternalDays | number): AgendaItems {
   const answer = (typeof raw === "object" && raw !== null ? raw : {}) as Record<string, unknown>;
   const deadlines = list(answer.deadlines).flatMap((row): AgendaDeadline[] => {
     const id = text(row.id);
@@ -89,7 +115,12 @@ export function readAgendaItems(raw: unknown, internalDays: number): AgendaItems
         title: text(row.title) ?? "",
         status: row.status,
         dueOn,
-        internalOn: internalDayOf(dueOn, row.explanation, text(row.starts_on), internalDays),
+        internalOn: internalDayOf(
+          dueOn,
+          row.explanation,
+          text(row.starts_on),
+          internalDaysFor(internalDays, text(row.act)),
+        ),
         caseId: text(row.case_id),
         caseSeq: typeof row.case_seq === "number" ? row.case_seq : null,
         isTest: row.is_test === true,

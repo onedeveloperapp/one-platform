@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createHash } from "node:crypto";
 
-import { addDays, readAgendaItems } from "@/lib/agenda/agenda";
+import { addDays, internalDaysFrom, readAgendaItems } from "@/lib/agenda/agenda";
 import { agendaEvents, writeIcs } from "@/lib/agenda/ics";
 import { todayInBrasilia } from "@/lib/deadlines/deadlines";
 import { createServiceClient } from "@flyee/auth/service";
@@ -25,7 +25,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ tok
   if (error) return new NextResponse("Unavailable", { status: 503, headers: { "Cache-Control": "no-store" } });
   if (!data) return new NextResponse("Not found", { status: 404, headers: { "Cache-Control": "no-store" } });
   const feed = data as Record<string, unknown>;
-  const days = typeof feed.internal_days === "number" ? feed.internal_days : 0;
+  const days = internalDaysFrom(feed.internal_days, feed.internal_by_act);
   const items = readAgendaItems(feed, days);
   const userId = typeof feed.user_id === "string" ? feed.user_id : "";
   const today = todayInBrasilia();

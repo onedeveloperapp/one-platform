@@ -8125,6 +8125,8 @@
     "agenda-internal-days": "{count, plural, one {# dia útil antes} other {# dias úteis antes}}",
     "agenda-internal-save": "Salvar",
     "agenda-internal-saved": "Prazo interno salvo para todo o escritório.",
+    "agenda-internal-acts-body": "Um ato pode ter outro prazo interno. Os demais seguem o do escritório.",
+    "agenda-internal-act-firm": "{count, plural, =0 {Como o escritório (sem prazo interno)} one {Como o escritório (# dia)} other {Como o escritório (# dias)}}",
     "deadlines-views-group": "Prazos",
     "agenda-views-group": "Audiências",
     "agenda-hearings-title": "Lista de audiências",

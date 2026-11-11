@@ -4,6 +4,8 @@ import {
   digestFor,
   digestHour,
   internalDayOf,
+  internalDaysFor,
+  internalDaysFrom,
   localOf,
   monthGrid,
   rangeOf,
@@ -229,5 +231,24 @@ describe("the calendar link", () => {
     const folded = foldLine(long);
     expect(folded.split("\r\n ").join("")).toBe(long);
     expect(folded.split("\r\n").every((line) => new TextEncoder().encode(line).length <= 75)).toBe(true);
+  });
+});
+
+describe("the internal days of each act (0167)", () => {
+  it("reads the firm's days and the acts' days, keeping only days", () => {
+    expect(internalDaysFrom(2, { contestacao: 5, recurso: 0, nada: "x", demais: 99 })).toEqual({
+      days: 2,
+      byAct: { contestacao: 5, recurso: 0 },
+    });
+    expect(internalDaysFrom(null, null)).toEqual({ days: 0, byAct: {} });
+  });
+
+  it("takes the act's days, else the firm's, and the act's zero switches it off", () => {
+    const rule = { days: 2, byAct: { contestacao: 5, recurso: 0 } };
+    expect(internalDaysFor(rule, "contestacao")).toBe(5);
+    expect(internalDaysFor(rule, "recurso")).toBe(0);
+    expect(internalDaysFor(rule, "manifestacao")).toBe(2);
+    expect(internalDaysFor(rule, null)).toBe(2);
+    expect(internalDaysFor(3, "contestacao")).toBe(3);
   });
 });

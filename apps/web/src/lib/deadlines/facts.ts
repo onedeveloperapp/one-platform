@@ -1,5 +1,6 @@
 import "server-only";
 
+import { type InternalDays, internalDaysFor, internalDaysFrom } from "@/lib/agenda/agenda";
 import { momentLabel } from "@/lib/ai/approvals";
 import {
   type CalendarDayRow,
@@ -257,22 +258,23 @@ async function firmDeadlines(
  * How many of the court's business days before the fatal deadline the firm's internal one comes (0132): zero when it
  * switched it off, or when it cannot be read (nothing is said then, rather than a wrong day).
  */
-export async function firmInternalDays(supabase: SupabaseClient, firmId: string): Promise<number> {
+export async function firmInternalDays(supabase: SupabaseClient, firmId: string): Promise<InternalDays> {
   const { data, error } = await supabase
     .from("organizations")
-    .select("internal_deadline_days")
+    .select("internal_deadline_days, internal_deadline_by_act")
     .eq("id", firmId)
     .maybeSingle();
-  if (error || !data) return 0;
-  const days = (data as { internal_deadline_days?: unknown }).internal_deadline_days;
-  return typeof days === "number" && Number.isInteger(days) && days > 0 ? days : 0;
+  if (error || !data) return { days: 0, byAct: {} };
+  const row = data as { internal_deadline_days?: unknown; internal_deadline_by_act?: unknown };
+  return internalDaysFrom(row.internal_deadline_days, row.internal_deadline_by_act);
 }
 
-/** Each open deadline with its internal day, by the firm's days. */
-function withInternal(rows: DeadlineRow[], days: number): DeadlineRow[] {
+/** Each open deadline with its internal day, by its act's days or the firm's (0167). */
+function withInternal(rows: DeadlineRow[], rule: InternalDays): DeadlineRow[] {
   return rows.map((row) => {
     const open = row.status === "proposed" || row.status === "confirmed";
     const first = row.count?.startsOn ?? null;
+    const days = internalDaysFor(rule, row.act);
     return {
       ...row,
       internalOn:

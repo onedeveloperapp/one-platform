@@ -1,6 +1,14 @@
 import "server-only";
 
-import { addDays, digestFor, digestHour, type DigestLine, readAgendaItems, weekdayNumber } from "@/lib/agenda/agenda";
+import {
+  addDays,
+  digestFor,
+  digestHour,
+  type DigestLine,
+  internalDaysFrom,
+  readAgendaItems,
+  weekdayNumber,
+} from "@/lib/agenda/agenda";
 import type { Sweep, SweepReport } from "@/lib/jobs/schedule";
 import { BRAND } from "@flyee/content";
 import { type AgendaDigestLine, isEmailConfigured, sendAgendaDigestEmail } from "@flyee/email";
@@ -61,6 +69,7 @@ type Owed = {
   org_id: string;
   firm_name: string;
   internal_days: number;
+  internal_by_act?: unknown;
   people: { user_id: string; email: string; name: string; stop_token: string | null; whole_firm: boolean }[] | null;
   items: unknown;
 };
@@ -86,7 +95,7 @@ export async function agendaDigestRound(
     if (firms.length === 0) break;
     let progressed = false;
     for (const firm of firms) {
-      const items = readAgendaItems(firm.items, firm.internal_days);
+      const items = readAgendaItems(firm.items, internalDaysFrom(firm.internal_days, firm.internal_by_act));
       for (const person of firm.people ?? []) {
         if (Date.now() >= until) return report;
         const digest = digestFor(items, { userId: person.user_id, wholeFirm: person.whole_firm }, day, now);

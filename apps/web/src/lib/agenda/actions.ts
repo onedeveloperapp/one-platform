@@ -3,7 +3,15 @@
 import { revalidatePath } from "next/cache";
 import { createHash, randomBytes } from "node:crypto";
 
-import { addDays, type AgendaItems, digestFor, digestHour, isBusinessDay, readAgendaItems } from "@/lib/agenda/agenda";
+import {
+  addDays,
+  type AgendaItems,
+  digestFor,
+  digestHour,
+  internalDaysFrom,
+  isBusinessDay,
+  readAgendaItems,
+} from "@/lib/agenda/agenda";
 import { dayWords, lineWords } from "@/lib/agenda/digest-work";
 import { getMemberContext } from "@/lib/member/context";
 import { BRAND } from "@flyee/content";
@@ -20,6 +28,10 @@ export type AgendaRead =
       ok: true;
       items: AgendaItems;
       internalDays: number;
+      /** The days of each act the firm set apart from its days (0167). */
+      internalByAct: Record<string, number>;
+      /** The acts of the list, for who sets the days of each. */
+      acts: { slug: string; name: string }[];
       me: { id: string; wholeFirm: boolean; digestOn: boolean; calendarAt: string | null; setsInternalDays: boolean };
     }
   | { ok: false; code: string };
@@ -40,12 +52,18 @@ export async function readAgenda(from: string, to: string, module: string | null
   if (error) return { ok: false, code: "failed" };
   const answer = (data ?? {}) as Record<string, unknown>;
   if (answer.ok !== true) return { ok: false, code: typeof answer.code === "string" ? answer.code : "failed" };
-  const days = typeof answer.internal_days === "number" ? answer.internal_days : 0;
+  const internal = internalDaysFrom(answer.internal_days, answer.internal_by_act);
   const me = (answer.me ?? {}) as Record<string, unknown>;
+  const { data: acts } =
+    me.sets_internal_days === true
+      ? await context.supabase.from("deadline_acts").select("slug, name").eq("active", true).order("position")
+      : { data: [] };
   return {
     ok: true,
-    items: readAgendaItems(answer, days),
-    internalDays: days,
+    items: readAgendaItems(answer, internal),
+    internalDays: internal.days,
+    internalByAct: internal.byAct,
+    acts: ((acts ?? []) as { slug: string; name: string }[]).map((act) => ({ slug: act.slug, name: act.name })),
     me: {
       id: typeof me.id === "string" ? me.id : "",
       wholeFirm: me.whole_firm === true,
@@ -71,6 +89,13 @@ async function call(
   revalidatePath("/agenda");
   revalidatePath("/prazos");
   return { ok: true, answer };
+}
+
+/** A partner or the controladoria says the internal days of one act, or takes them off (null) for the firm's (0167). */
+export async function setInternalDeadlineDaysForAct(act: string, days: number | null): Promise<Result> {
+  if (!/^[a-z][a-z0-9_]{1,59}$/.test(String(act ?? ""))) return { ok: false, code: "invalid_data" };
+  if (days !== null && (!Number.isInteger(days) || days < 0 || days > 15)) return { ok: false, code: "invalid_data" };
+  return call("set_internal_deadline_days_for_act", { target_act: act, target_days: days });
 }
 
 /** A partner or the controladoria says how many business days before the fatal deadline the internal one comes. */

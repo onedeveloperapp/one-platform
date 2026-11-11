@@ -16,6 +16,7 @@ import {
   readAgenda,
   setAgendaDigest,
   setInternalDeadlineDays,
+  setInternalDeadlineDaysForAct,
   startAgendaCalendar,
 } from "@/lib/agenda/actions";
 
@@ -44,6 +45,9 @@ export default function AgendaSubscribePanel({ onClose }: { onClose: () => void 
   const t = useTranslations("product");
   const [me, setMe] = useState<Me | null>(null);
   const [days, setDays] = useState<number | null>(null);
+  // The days of each act the firm set apart from its own (0167).
+  const [byAct, setByAct] = useState<Record<string, number>>({});
+  const [acts, setActs] = useState<{ slug: string; name: string }[]>([]);
   const [failed, setFailed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
@@ -60,6 +64,8 @@ export default function AgendaSubscribePanel({ onClose }: { onClose: () => void 
         if (!answer.ok) return setFailed(true);
         setMe(answer.me);
         setDays(answer.internalDays);
+        setByAct(answer.internalByAct);
+        setActs(answer.acts);
       })
       .catch(() => live && setFailed(true));
     return () => {
@@ -254,6 +260,43 @@ export default function AgendaSubscribePanel({ onClose }: { onClose: () => void 
                   </Button>
                 </Box>
                 {daysSaved ? <StateLine tone="done">{t("agenda-internal-saved")}</StateLine> : null}
+                {acts.length > 0 ? (
+                  <Box className="flex flex-col gap-3 pt-2">
+                    <Typography variant="body2" className="text-text-secondary">
+                      {t("agenda-internal-acts-body")}
+                    </Typography>
+                    {acts.map((act) => (
+                      <TextField
+                        key={act.slug}
+                        select
+                        size="small"
+                        label={act.name}
+                        value={act.slug in byAct ? String(byAct[act.slug]) : "firm"}
+                        disabled={busy}
+                        onChange={(event) => {
+                          const chosen = event.target.value === "firm" ? null : Number(event.target.value);
+                          void run(
+                            () => setInternalDeadlineDaysForAct(act.slug, chosen),
+                            () =>
+                              setByAct((current) => {
+                                const next = { ...current };
+                                if (chosen === null) delete next[act.slug];
+                                else next[act.slug] = chosen;
+                                return next;
+                              }),
+                          );
+                        }}
+                      >
+                        <MenuItem value="firm">{t("agenda-internal-act-firm", { count: days })}</MenuItem>
+                        {[0, 1, 2, 3, 4, 5, 7, 10].map((count) => (
+                          <MenuItem key={count} value={String(count)}>
+                            {count === 0 ? t("agenda-internal-off") : t("agenda-internal-days", { count })}
+                          </MenuItem>
+                        ))}
+                      </TextField>
+                    ))}
+                  </Box>
+                ) : null}
               </Box>
             ) : null}
           </>
