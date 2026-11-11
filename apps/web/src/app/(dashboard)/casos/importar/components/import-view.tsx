@@ -1,6 +1,7 @@
 "use client";
 
 import type { ImportBatchView, ImportState } from "../import-types";
+import DjenLawsuitsCard from "./djen-lawsuits-card";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -152,6 +153,7 @@ export default function ImportView({ state }: { state: ImportState }) {
           action={{ label: t("import-back-to-cases"), href: "/casos" }}
         />
       )}
+      {state.kind === "ready" && <DjenLawsuitsCard />}
       {state.kind === "ready" && <ImportWizard state={state} />}
     </Box>
   );

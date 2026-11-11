@@ -7,6 +7,7 @@ import DjenWatchCard from "./djen-watch-card";
 import ExecutorCheckCard from "./executor-check-card";
 import FlightReleaseCard from "./flight-release-card";
 import MarketCard from "./market-card";
+import OabXrayCard from "./oab-xray-card";
 import ShadowTriageCard from "./shadow-triage-card";
 import TaskAutonomyDialog from "./task-autonomy-dialog";
 import TaskInstructionsDialog from "./task-instructions-dialog";
@@ -400,6 +401,9 @@ export default function AiConsoleView({ state }: { state: AiConsoleState }) {
         </Grid>
         <Grid size={12}>
           <MarketCard captureOn={marketCaptureOn} />
+        </Grid>
+        <Grid size={12}>
+          <OabXrayCard />
         </Grid>
         <Grid size={12}>
           <ShadowTriageCard measure={triage} onChanged={refresh} />
