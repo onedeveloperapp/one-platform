@@ -19,6 +19,8 @@ export const NOTICE_KINDS = [
   "case_received",
   "lawsuit_filed",
   "case_questions",
+  "trip_departure",
+  "trip_arrival",
 ] as const;
 export type NoticeKind = (typeof NOTICE_KINDS)[number];
 export const isNoticeKind = (value: unknown): value is NoticeKind =>
@@ -35,6 +37,8 @@ export const KIND_KEY: Record<NoticeKind, { label: string; when: string }> = {
   case_received: { label: "notice-kind-case-received", when: "notice-kind-case-received-when" },
   lawsuit_filed: { label: "notice-kind-lawsuit-filed", when: "notice-kind-lawsuit-filed-when" },
   case_questions: { label: "notice-kind-case-questions", when: "notice-kind-case-questions-when" },
+  trip_departure: { label: "notice-kind-trip-departure", when: "notice-kind-trip-departure-when" },
+  trip_arrival: { label: "notice-kind-trip-arrival", when: "notice-kind-trip-arrival-when" },
 };
 
 /** What each value of a kind's text is, as the firm's form names it beside its number. */

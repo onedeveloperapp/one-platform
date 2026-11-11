@@ -8663,7 +8663,11 @@
     "partners-passengers-converted": "Viraram caso",
     "lead-agency-title": "Veio da agência {agency}",
     "lead-agency-day": "Concordou em {day} que os dados viessem ao escritório. O ONE acompanha estas viagens pela agência.",
-    "passenger-trip-rest-followed": "O ONE acompanha o resto da viagem"
+    "passenger-trip-rest-followed": "O ONE acompanha o resto da viagem",
+    "notice-kind-trip-departure": "Boa viagem",
+    "notice-kind-trip-departure-when": "Cerca de duas horas antes de cada trecho de uma viagem que o ONE acompanha, uma vez por trecho: deseja boa viagem e diz que o escritório acompanha o voo. Não vai de um trecho cujo problema o passageiro já foi avisado.",
+    "notice-kind-trip-arrival": "Chegada da viagem",
+    "notice-kind-trip-arrival-when": "Meia hora depois da chegada de cada trecho, uma vez por trecho: pergunta se correu tudo bem e convida o passageiro a contar o que deu errado. Não vai de um trecho cancelado ou cujo problema ele já foi avisado."
   },
   "auth": {
     "continue": "Continuar",

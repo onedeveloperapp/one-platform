@@ -28,6 +28,7 @@ import { supabaseInbox } from "@/lib/whatsapp/inbox";
 import { queueMediaFetch } from "@/lib/whatsapp/media";
 import { isSupportVisit } from "@/lib/whatsapp/session";
 import { localOf } from "@/modules/direito-do-passageiro/flight-alerts/source";
+import { settleTripDay } from "@/modules/direito-do-passageiro/flight-alerts/trip-day-work";
 import { watchTrips } from "@/modules/direito-do-passageiro/flight-alerts/watch";
 import { evaluateTrip, tellFlightAlerts } from "@/modules/direito-do-passageiro/flight-alerts/work";
 import { flightStatusProvider } from "@/modules/direito-do-passageiro/flights/status";
@@ -445,6 +446,10 @@ export async function runTestTool(
       legs: legs.legs,
       delayMinutes: typeof legs.delay_minutes === "number" ? legs.delay_minutes : 240,
     });
+    // A leg the tester made leave or land owes its journey's word of the day now (0173): no wait for the clock.
+    for (const leg of legsOfTool) {
+      if ("event" in leg) await settleTripDay(service, { tripId, event: { kind: leg.event, position: leg.position } });
+    }
     // The flight went on as it should: nothing to tell, and the agency sees it step by step.
     if (!found.problem) return { ok: true, code: tool.legs.every((leg) => "event" in leg) ? "moved" : "quiet" };
     if (!found.alertId) return { ok: true, code: "already" };

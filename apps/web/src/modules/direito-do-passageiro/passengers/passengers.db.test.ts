@@ -287,4 +287,52 @@ describe.skipIf(!DB_URL)("a passenger the firm registers itself", () => {
     );
     expect(kept).toEqual({ status: "case_opened", open: 0 });
   });
+
+  it("wishes a good trip as the flight leaves and asks how it went once it lands (0173)", async () => {
+    const { registerPassenger } = await import("@/modules/direito-do-passageiro/passengers/actions");
+    const { runTestTool } = await import("@/lib/test-chat/actions");
+    const day = new Date(Date.now() + 5 * 86_400_000).toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
+    expect(
+      await registerPassenger({
+        personId,
+        legs: [
+          {
+            flight_number: "G31450",
+            origin_iata: "BSB",
+            destination_iata: "GIG",
+            scheduled_departure_local: `${day}T14:00`,
+            scheduled_arrival_local: `${day}T15:45`,
+          },
+        ],
+        how: "telefone",
+        documents: [],
+      }),
+    ).toMatchObject({ ok: true, test: true });
+    const [{ id: trip }] = await sql.unsafe(
+      `select id from public.tracked_trips where org_id = $1 and label = 'escritorio'`,
+      [FIRM],
+    );
+    const [{ since }] = await sql.unsafe(`select now()::text as since`);
+    const templates = async () =>
+      (
+        await sql.unsafe(
+          `select m.template_name from public.wa_messages m join public.wa_conversations c on c.id = m.conversation_id
+           where m.org_id = $1 and c.contact_wa_id = '5500988880001' and m.direction = 'out' and m.kind = 'template'
+             and m.created_at > $2::timestamptz
+           order by m.created_at`,
+          [FIRM, since],
+        )
+      ).map((row) => String(row.template_name).replace(/_\d+$/, ""));
+
+    expect(await runTestTool(TOKEN, String(trip), "depart")).toMatchObject({ ok: true });
+    expect(await templates()).toEqual(["one_boa_viagem"]);
+    expect(await runTestTool(TOKEN, String(trip), "land")).toMatchObject({ ok: true });
+    expect(await templates()).toEqual(["one_boa_viagem", "one_chegada"]);
+    // Each once: the flight landing again writes nothing new.
+    const [written] = await sql.unsafe(
+      `select count(*)::int as n from public.trip_day_messages where trip_id = $1 and status = 'sent'`,
+      [trip],
+    );
+    expect(written.n).toBe(2);
+  });
 });
