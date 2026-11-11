@@ -245,6 +245,8 @@ select ok(
   'a partner of a firm says whether the AI''s answer is the firm''s triage, and with it off each publication waits for a person'
 );
 
+-- The firm let the support in (0203): a visit opens only under its authorization.
+insert into public.support_authorizations (org_id, ends_at) values ('bd800000-0000-4000-8000-00000000000a', now() + interval '1 day');
 insert into public.impersonation_sessions (actor_id, target_user_id, target_org_id, reason, session_id, expires_at)
 values ('ad800000-0000-4000-8000-000000000009', 'ad800000-0000-4000-8000-000000000001', 'bd800000-0000-4000-8000-00000000000a',
         'Conferindo a triagem', 'fe800000-0000-4000-8000-000000000001', now() + interval '30 minutes');
