@@ -48,7 +48,7 @@ export const SUBSCRIPTION_STATUS_LABEL: Record<string, string> = {
 
 export const PERIOD_LABEL: Record<string, string> = { monthly: "mensal", yearly: "anual", weekly: "semanal" };
 
-export const PROVIDER_LABEL: Record<string, string> = { asaas: "Asaas", stripe: "Stripe" };
+export const PROVIDER_LABEL: Record<string, string> = { asaas: "Asaas", stripe: "Stripe (do produto anterior)" };
 
 export const GRANT_KIND_LABEL: Record<string, string> = { kit: "acesso", license: "licença", comp: "cortesia" };
 

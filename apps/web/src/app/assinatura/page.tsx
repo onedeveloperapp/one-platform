@@ -1,7 +1,6 @@
 import CheckoutForm from "./checkout-form";
 import PixPaymentPanel from "./pix-payment-panel";
 import { Metadata } from "next";
-import { cookies } from "next/headers";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getLocale, getTranslations } from "next-intl/server";
@@ -9,8 +8,6 @@ import { getLocale, getTranslations } from "next-intl/server";
 import { Alert, Box, Button, Paper, Typography } from "@mui/material";
 
 import Logo from "@/components/logo/logo";
-import { COOKIE_KEYS } from "@/constants";
-import { resolveCurrency } from "@/lib/billing-currency";
 import { getMaxInstallments } from "@/lib/billing-settings";
 import { campaignQuery, pickCampaignParams } from "@/lib/campaign-params";
 import { getGuaranteeDays } from "@/lib/guarantee";
@@ -34,27 +31,21 @@ const PENDING_KIT_WINDOW_MS = 24 * 60 * 60 * 1000;
  * public page gets a checkout, not the settings hub. Nothing on this page
  * navigates anywhere except forward, plus one deliberate way out.
  *
- * `?plan=<slug>` names what is bought; without it the door is the kit, in the
- * member's currency (`kit` in BRL, `kit-usd` in USD). The plan's currency
- * decides the provider and therefore the form: BRL asks for the CPF/CNPJ and
- * the payment method, USD continues to Stripe's own page (docs/BILLING.md).
+ * `?plan=<slug>` names the tier bought; without it the firm chooses its tier on
+ * the billing screen first. ONE bills in reais through Asaas, so the form asks
+ * for the CPF/CNPJ and the payment method; the one-time access of the previous
+ * product is never sold.
  */
 export default async function AssinaturaPage({
   searchParams,
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const [params, t, locale, cookieStore] = await Promise.all([
-    searchParams,
-    getTranslations("product"),
-    getLocale(),
-    cookies(),
-  ]);
+  const [params, t, locale] = await Promise.all([searchParams, getTranslations("product"), getLocale()]);
   const rawSlug = Array.isArray(params.plan) ? params.plan[0] : params.plan;
   const requestedSlug = typeof rawSlug === "string" ? rawSlug.trim() : "";
   // The campaign of THIS purchase, forwarded from the landing link.
   const campaign = pickCampaignParams(params);
-  const currency = resolveCurrency({ cookie: cookieStore.get(COOKIE_KEYS.currency)?.value, locale });
 
   const supabase = await createClient();
   const {
@@ -113,18 +104,11 @@ export default async function AssinaturaPage({
     .from("plans")
     .select("id, slug, name, kind, family, tier, period, price_cents, currency, is_free, access_months")
     .eq("is_active", true);
-  const { data: planRow } = requestedSlug
-    ? await planQuery.eq("slug", requestedSlug).maybeSingle()
-    : await planQuery
-        .eq("kind", "access")
-        .eq("family", "kit")
-        .eq("currency", currency)
-        .eq("is_public", true)
-        .order("sort")
-        .limit(1)
-        .maybeSingle();
+  // No tier named: the firm chooses one where the tiers are shown.
+  if (!requestedSlug) redirect("/settings/billing");
+  const { data: planRow } = await planQuery.eq("slug", requestedSlug).maybeSingle();
 
-  if (!planRow || planRow.is_free) {
+  if (!planRow || planRow.is_free || planRow.kind === "access") {
     return (
       <Shell>
         <Typography variant="h1" component="h1" className="mb-0">
@@ -141,7 +125,7 @@ export default async function AssinaturaPage({
   }
 
   const oneTime = planRow.kind === "access";
-  const planCurrency = planRow.currency === "USD" ? "USD" : "BRL";
+  const planCurrency = "BRL";
   const suffix = planRow.period ? t(`billing-period-${planRow.period}` as never) : t("billing-one-time");
   const priceLabel = `${formatPrice(Number(planRow.price_cents), planCurrency, locale)} ${suffix}`;
 

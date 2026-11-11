@@ -8,9 +8,8 @@ import type { PaymentMethod } from "@flyee/billing/types";
  * is a public endpoint, and the values that reach the provider are settled
  * here. The rules, all of them money:
  *
- *  - **Methods belong to a currency.** PIX and a chosen card exist only in BRL
- *    (Asaas); a USD purchase goes to Stripe's own checkout, which picks the
- *    method itself.
+ *  - **Methods belong to a currency.** PIX and a chosen card exist in BRL,
+ *    the one currency ONE sells in (Asaas).
  *  - **Installments only on a card.** Pix has no instalment concept at Asaas;
  *    asking for 5x on Pix would silently produce five separate charges the
  *    customer has to pay by hand, which is not what either side agreed to.

@@ -4,7 +4,7 @@
  * root entry, which pulls the provider SDKs into the browser bundle. Keep this
  * file free of imports.
  */
-export type BillingProviderName = "stripe" | "asaas";
+export type BillingProviderName = "asaas";
 /**
  * `recurring`: a subscription (club, pro). `access`: a one-time purchase that
  * leaves an entitlement grant (the kit).
@@ -250,6 +250,11 @@ export interface PaymentProvider {
   scheduleCancellation(providerSubscriptionId: string, currentPeriodEnd?: Date): Promise<{ currentPeriodEnd?: Date }>;
   /** Undo a previously scheduled cancellation while the subscription is still active. */
   resumeSubscription(providerSubscriptionId: string): Promise<void>;
+  /**
+   * A change of tier on the subscription in force: its value from the next charge on, the charges generated and not
+   * paid following it. Never a new subscription: the firm keeps its day of charge and its history.
+   */
+  changeSubscription(input: { providerSubscriptionId: string; priceCents: number; description?: string }): Promise<void>;
   cancelSubscription(providerSubscriptionId: string): Promise<void>;
   /**
    * A hosted page where the customer updates the card behind a live

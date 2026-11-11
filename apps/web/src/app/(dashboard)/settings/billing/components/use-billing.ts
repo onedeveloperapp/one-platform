@@ -10,6 +10,10 @@ export type OrgLite = { id: string; name: string; role: string };
 
 export interface SubscriptionInfo {
   id: string;
+  /** The firm the subscription is of. */
+  orgId: string;
+  /** Whether its tier changes on the subscription in force (an Asaas subscription that renews, 0202). */
+  changeable: boolean;
   status: string;
   adminSuspended: boolean;
   planId: string;
@@ -54,10 +58,12 @@ export interface PlanRow {
   currency: string;
   trialDays: number;
   isFree: boolean;
-  /** The same offer across periods and currencies: `free`, `kit`, `club`, `pro`. */
+  /** The same offer across periods: its monthly and yearly plans share it. */
   family: string;
-  /** The rung of the ladder (`kit`, `club`, `pro`); null for the free plan. */
+  /** The tier, a slug the operator writes (0202); null for the free plan. */
   tier: string | null;
+  /** The order of the tier among the tiers, the higher the more it allows (0202). */
+  rank: number;
   /** Not a subscription tier: an add-on (none are sold today). */
   isAddon: boolean;
   /** How long a one-time access lasts, in months; null when it has no end (and for every recurring plan). */
@@ -225,7 +231,7 @@ export function useBilling() {
         supabase
           .from("subscriptions")
           .select(
-            "id, status, admin_suspended, plan_id, period, current_period_end, trial_ends_at, cancel_at_period_end, cancellation_requested_at, renews, plans(name, kind, is_free), subscription_modules(module_id, status, modules(name))",
+            "id, org_id, status, admin_suspended, plan_id, period, provider, provider_subscription_id, current_period_end, trial_ends_at, cancel_at_period_end, cancellation_requested_at, renews, plans(name, kind, is_free), subscription_modules(module_id, status, modules(name))",
           )
           .eq("org_id", currentOrgId)
           .in("status", ["trialing", "active", "past_due"])
@@ -282,6 +288,8 @@ export function useBilling() {
             | null) ?? [];
         subscription = {
           id: sub.id,
+          orgId: sub.org_id,
+          changeable: sub.provider === "asaas" && Boolean(sub.provider_subscription_id) && sub.renews !== false,
           status: sub.status,
           adminSuspended: sub.admin_suspended,
           planId: sub.plan_id,
@@ -313,6 +321,7 @@ export function useBilling() {
         isFree: p.is_free,
         family: p.family,
         tier: p.tier,
+        rank: Number(p.rank ?? 0) || 0,
         isAddon: Boolean(p.is_addon),
         isPublic: p.is_public !== false,
         limits: (p.limits as Record<string, unknown> | null) ?? {},

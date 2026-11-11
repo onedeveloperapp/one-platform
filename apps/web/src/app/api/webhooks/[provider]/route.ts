@@ -20,7 +20,7 @@ import {
   type BillingPeriod,
   type CheckoutCoupon,
   getProvider,
-  isTier,
+  isTierSlug,
 } from "@flyee/billing";
 
 type ServiceClient = ReturnType<typeof createServiceClient>;
@@ -85,11 +85,10 @@ async function findSubscription(
   const orgId = "metadata" in event ? event.metadata.org_id : undefined;
   if (orgId) {
     const planId = "metadata" in event ? event.metadata.plan_id : undefined;
-    // The plan filter is what keeps the fallback honest. Stripe's checkout
-    // session returns no subscription id, so the local row starts with none
-    // and this fallback is the ONLY match — picking "the most recent
-    // incomplete row" then activated whichever plan was opened last, not the
-    // one that was actually paid.
+    // The plan filter is what keeps the fallback honest: a checkout whose
+    // subscription id never reached the local row is matched by its plan, never
+    // by "the most recent incomplete row", which would activate whichever plan
+    // was opened last, not the one that was actually paid.
     let query = supabase.from("subscriptions").select("*").eq("org_id", orgId).eq("status", "incomplete");
     if (planId) query = query.eq("plan_id", planId);
     const { data, error } = await query.order("created_at", { ascending: false }).limit(1).maybeSingle();
@@ -148,12 +147,12 @@ async function cancelSupersededAtProvider(
 ) {
   for (const row of rows) {
     if (!row.provider_subscription_id) continue;
-    if (row.provider !== "stripe" && row.provider !== "asaas") continue;
+    if (row.provider !== "asaas") continue;
     if (row.provider === keep.keepProvider && row.provider_subscription_id === keep.keepProviderSubscriptionId) {
       continue;
     }
     try {
-      await getProvider(row.provider).cancelSubscription(row.provider_subscription_id);
+      await getProvider("asaas").cancelSubscription(row.provider_subscription_id);
     } catch (error) {
       // The customer is now being charged twice and nothing in the product
       // knows it: this has to be reviewable in /admin/audit.
@@ -450,7 +449,7 @@ async function handleEvent(supabase: ServiceClient, event: BillingEvent) {
           supabase,
           sub.org_id,
           "subscription.started",
-          isTier(plan?.tier) ? { offer: plan.tier } : {},
+          isTierSlug(plan?.tier) ? { offer: plan.tier } : {},
         );
         await trackUpsellPurchase(supabase, sub.org_id, plan?.tier);
       }
@@ -688,7 +687,7 @@ async function handleEvent(supabase: ServiceClient, event: BillingEvent) {
             supabase,
             sub.org_id,
             "subscription.started",
-            isTier(plan?.tier) ? { offer: plan.tier } : {},
+            isTierSlug(plan?.tier) ? { offer: plan.tier } : {},
             event.paidAt,
           );
           await trackUpsellPurchase(supabase, sub.org_id, plan?.tier, event.paidAt);
@@ -1004,7 +1003,8 @@ export const maxDuration = 120;
 
 export async function POST(request: Request, { params }: { params: Promise<{ provider: string }> }) {
   const { provider: providerName } = await params;
-  if (providerName !== "stripe" && providerName !== "asaas") {
+  // ONE bills through Asaas alone.
+  if (providerName !== "asaas") {
     return new NextResponse("Unknown provider", { status: 404 });
   }
 
@@ -1025,8 +1025,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ pro
 
   let events: BillingEvent[];
   try {
-    events = await getProvider(providerName).parseWebhook(rawBody, {
-      "stripe-signature": request.headers.get("stripe-signature"),
+    events = await getProvider("asaas").parseWebhook(rawBody, {
       "asaas-access-token": request.headers.get("asaas-access-token"),
     });
   } catch {

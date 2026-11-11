@@ -8,7 +8,7 @@ import type {
   PixCharge,
 } from "../types";
 import type { PaymentMethod } from "../types";
-import { applyDiscount, invoiceDescription, packCheckoutReference, parseCheckoutReference } from "../types";
+import { applyDiscount, invoiceDescription, packCheckoutReference, parseCheckoutReference } from "@flyee/billing/types";
 
 const PERIOD_TO_CYCLE: Record<BillingPeriod, string> = {
   weekly: "WEEKLY",
@@ -551,6 +551,24 @@ export class AsaasProvider implements PaymentProvider {
       body: JSON.stringify({ endDate: isoDate(lastRenewalDate) }),
     });
     return { currentPeriodEnd };
+  }
+
+  // A change of tier (ONE, M3): the subscription's value from its next charge on, and the charges already generated
+  // and not paid follow it (`updatePendingPayments`), as the reference of "Atualizar assinatura existente" says.
+  async changeSubscription(input: {
+    providerSubscriptionId: string;
+    priceCents: number;
+    description?: string;
+  }): Promise<void> {
+    if (!Number.isInteger(input.priceCents) || input.priceCents <= 0) throw new Error("invalid_price");
+    await asaasFetch(`/subscriptions/${input.providerSubscriptionId}`, {
+      method: "PUT",
+      body: JSON.stringify({
+        value: input.priceCents / 100,
+        updatePendingPayments: true,
+        ...(input.description ? { description: input.description.slice(0, 500) } : {}),
+      }),
+    });
   }
 
   async resumeSubscription(providerSubscriptionId: string): Promise<void> {

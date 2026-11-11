@@ -134,9 +134,8 @@ export default function CouponsAdmin() {
       // currency accept it (validate_coupon); a percentage applies to any.
       currency: fixed ? form.currency : null,
       plan_families: form.plan_families.length > 0 ? form.plan_families : null,
-      // Both providers apply a code on every cycle (Stripe mirrors it as a
-      // `forever` coupon, Asaas bills the discounted value), so that is what
-      // is stored: the record says what the member is actually charged.
+      // Asaas bills the discounted value on every cycle, so that is what is
+      // stored: the record says what the firm is actually charged.
       duration: "forever",
       duration_months: null,
       max_redemptions: form.max_redemptions === "" ? null : Number(form.max_redemptions),
@@ -308,10 +307,7 @@ export default function CouponsAdmin() {
               <SelectField
                 label="Moeda do desconto"
                 value={form.currency}
-                options={[
-                  { value: "BRL", label: "Reais (BRL) · só planos em real" },
-                  { value: "USD", label: "Dólares (USD) · só planos em dólar" },
-                ]}
+                options={[{ value: "BRL", label: "Reais (BRL) · só planos em real" }]}
                 onChange={(v) => setForm({ ...form, currency: v })}
               />
             )}
@@ -341,8 +337,8 @@ export default function CouponsAdmin() {
               ))}
             </Box>
             <Alert severity="info" className="neutral bg-background-paper/60! my-2">
-              O desconto vale em todos os ciclos enquanto a assinatura durar: é o que os dois provedores aplicam (o
-              Asaas cobra o valor com desconto, a Stripe espelha um cupom permanente). No kit, vale no pagamento único.
+              O desconto vale em todos os ciclos enquanto a assinatura durar: o Asaas cobra o valor com desconto. Ao
+              mudar de faixa, a assinatura passa ao preço da nova faixa, sem o cupom.
             </Alert>
             <Field
               label="Máximo de resgates (vazio = ilimitado)"

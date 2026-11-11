@@ -8,6 +8,7 @@ import InvoicesCard from "./components/invoices-card";
 import PaymentRecoveryCard from "./components/payment-recovery-card";
 import PendingCheckoutCard from "./components/pending-checkout-card";
 import PlansGrid from "./components/plans-grid";
+import UsageCard from "./components/usage-card";
 import { useBilling } from "./components/use-billing";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -18,7 +19,7 @@ import { Alert, Box, Breadcrumbs, Button, CircularProgress, Drawer, Grid, Toolti
 
 import NiListCircle from "@/icons/nexture/ni-list-circle";
 import { resolveCurrency } from "@/lib/billing-currency";
-import { readCurrencyCookie, writeCurrencyCookie } from "@/lib/currency-cookie";
+import { readCurrencyCookie } from "@/lib/currency-cookie";
 import { remoteError, remoteLoading, type RemoteState, remoteSuccess } from "@/lib/remote-state";
 import type { BillingCurrency } from "@flyee/billing/currency";
 
@@ -75,11 +76,6 @@ export default function BillingSettings() {
   useEffect(() => {
     void loadCheckoutAvailability(currency);
   }, [currency, loadCheckoutAvailability]);
-
-  const changeCurrency = (next: BillingCurrency) => {
-    writeCurrencyCookie(next);
-    setCurrency(next);
-  };
 
   const checkoutAvailable = checkoutState.status === "success" ? checkoutState.data.available : undefined;
   const maxInstallments = checkoutState.status === "success" ? checkoutState.data.maxInstallments : 1;
@@ -206,11 +202,11 @@ export default function BillingSettings() {
               canManage={canManage}
               onChanged={refreshDetails}
             />
+            {canManage ? <UsageCard orgId={currentOrg.id} /> : null}
             <PlansGrid
               subscription={subscription}
               plans={plans}
               currency={currency}
-              onCurrencyChange={changeCurrency}
               entitlements={entitlements}
               canManage={canManage}
               checkoutAvailable={checkoutState.status === "success" && checkoutAvailable === true}

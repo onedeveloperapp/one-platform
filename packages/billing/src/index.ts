@@ -1,36 +1,24 @@
 import { providerNameForCurrency } from "./currency";
 import { AsaasProvider, asaasPixAvailable } from "./providers/asaas";
-import { StripeProvider } from "./providers/stripe";
 import type { BillingProviderName, PaymentProvider } from "./types";
 
 export * from "./currency";
 export * from "./entitlements";
 export * from "./types";
 
-export const isStripeConfigured = Boolean(process.env.STRIPE_SECRET_KEY);
 export const isAsaasConfigured = Boolean(process.env.ASAAS_API_KEY);
 
 /** Providers available in this deployment, in display order. */
 export function configuredProviders(): BillingProviderName[] {
-  const providers: BillingProviderName[] = [];
-  if (isStripeConfigured) providers.push("stripe");
-  if (isAsaasConfigured) providers.push("asaas");
-  return providers;
+  return isAsaasConfigured ? ["asaas"] : [];
 }
 
 /**
- * The provider that charges a currency in THIS deployment: BRL through Asaas,
- * USD through Stripe (`./currency`). Null when that provider is not
- * configured, and then the plans in that currency are not on sale here. The
- * money is never rerouted to the other provider: a BRL price charged by
- * Stripe would skip the PIX, the installments and the NFS-e the buyer was
- * promised.
+ * The provider that charges a currency in THIS deployment: BRL through Asaas. Null when Asaas is not configured, or
+ * for a currency ONE does not sell in.
  */
 export function providerForCurrency(currency: string | null | undefined): BillingProviderName | null {
-  const name = providerNameForCurrency(currency);
-  if (name === "asaas") return isAsaasConfigured ? "asaas" : null;
-  if (name === "stripe") return isStripeConfigured ? "stripe" : null;
-  return null;
+  return providerNameForCurrency(currency) === "asaas" && isAsaasConfigured ? "asaas" : null;
 }
 
 /**
@@ -52,11 +40,6 @@ export async function isPixAvailable(): Promise<boolean> {
   return asaasPixAvailable();
 }
 
-export function getProvider(name: BillingProviderName): PaymentProvider {
-  switch (name) {
-    case "stripe":
-      return new StripeProvider();
-    case "asaas":
-      return new AsaasProvider();
-  }
+export function getProvider(_name: BillingProviderName = "asaas"): PaymentProvider {
+  return new AsaasProvider();
 }

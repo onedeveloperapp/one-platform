@@ -77,6 +77,7 @@ describe("the platform's sweeps (2026-11-04)", () => {
         "signatures",
         "template-imports",
         "trip-day",
+        "usage-meter",
         "vault-upkeep",
         "whatsapp-media",
         "whatsapp-outbox",

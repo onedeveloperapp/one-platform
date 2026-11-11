@@ -4,10 +4,8 @@ import { type BillingCurrency, currencyForLocale, isBillingCurrency } from "@fly
  * Which currency a visitor sees and buys in (docs/BILLING.md). Pure, so the
  * middleware, the pages and the server actions share one answer.
  *
- * The visitor's own choice wins (the `moeda` cookie, set from a `?moeda=`
- * link or the currency switch); without one, the language decides:
- * Portuguese reads BRL, English reads USD. The currency then decides the
- * provider (BRL Asaas, USD Stripe), never the other way round.
+ * ONE sells in reais only, through Asaas: a `moeda` cookie or link of another
+ * currency is not one ONE sells in, and the answer is BRL.
  */
 
 /** The link parameter that picks the currency (`/planos?moeda=USD`), captured by the middleware. */

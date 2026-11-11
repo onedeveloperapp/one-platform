@@ -1,6 +1,7 @@
 "use client";
 
 import { type AppliedCoupon, validateCouponCode } from "../actions";
+import { changeTier } from "../actions-plan";
 import type { PlanRow, SubscriptionInfo, WorkspaceEntitlements } from "./use-billing";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -26,64 +27,59 @@ import {
   Typography,
 } from "@mui/material";
 
+import SecondFactorPrompt from "@/components/product/second-factor-prompt";
 import { COOKIE_KEYS } from "@/constants";
 import NiCheck from "@/icons/nexture/ni-check";
-import { accessTermParts } from "@/lib/access-term";
-import { splitInstallments } from "@/lib/installments";
 import { clearCouponCookie, normalizeCouponCode, readCouponCookie, writeCouponCookie } from "@/lib/offer-link";
 import { type OfferKind, trackOffer } from "@/lib/product-events";
 import { cn } from "@/lib/utils";
 import { type BillingCurrency, formatPrice } from "@flyee/billing/currency";
-import { enabledFeatures, type EntitlementKey, limitOf } from "@flyee/billing/entitlements";
+import { type CeilingKey, ceilingsOf, enabledFeatures, type FeatureKey } from "@flyee/billing/entitlements";
 import { applyDiscount } from "@flyee/billing/types";
-
-/** The plural-aware key of a term ("1 ano", "18 meses"); both literals, so the message pruner sees them. */
-const termKey = (months: number) =>
-  accessTermParts(months).unit === "years" ? "access-term-years" : "access-term-months";
 
 type Period = "monthly" | "yearly";
 
-/** The recurring rungs, in ladder order. The kit (a one-time access plan) leads. */
-const RECURRING_FAMILIES = ["club", "pro"] as const;
+/** Each ceiling a tier sets, in the words of the grid. */
+const CEILING_LABEL: Record<CeilingKey, string> = {
+  processos_ativos_max: "billing-ceiling-processos_ativos_max",
+  assentos_max: "billing-ceiling-assentos_max",
+  whatsapp_numeros_max: "billing-ceiling-whatsapp_numeros_max",
+};
 
-const OTHER_CURRENCY: Record<BillingCurrency, BillingCurrency> = { BRL: "USD", USD: "BRL" };
-
-/** The on/off rights; devices are a count, rendered apart. */
-type FeatureKey = Exclude<EntitlementKey, "devices">;
-
-/** What each on/off right reads as on a card. */
+/** Each right a tier or an add-on turns on. */
 const FEATURE_LABEL: Record<FeatureKey, string> = {
-  catalog_access: "billing-feature-catalog_access",
-  advanced_lessons: "billing-feature-advanced_lessons",
-  recipes: "billing-feature-recipes",
-  roadmap_vote: "billing-feature-roadmap_vote",
-  meetings: "billing-feature-meetings",
-  commercial_license: "billing-feature-commercial_license",
-  open_the_hood: "billing-feature-open_the_hood",
+  monitor_voo: "billing-feature-monitor_voo",
+};
+
+/** Why a change of tier did not go, in the screen's words. */
+const CHANGE_ERROR: Record<string, string> = {
+  not_allowed: "billing-change-tier-not-allowed",
+  support_visit: "billing-change-tier-support",
+  canceling: "billing-change-tier-canceling",
+  provider_unavailable: "billing-change-tier-provider",
+  unrecorded: "billing-change-tier-unrecorded",
 };
 
 /**
- * The ladder on the billing screen (docs/BILLING.md): the one-time kit, then
- * the subscription and Pro, monthly or yearly, in the member's currency.
- * Buying always continues on the focused checkout (`/assinatura?plan=`), the
- * one place that asks for the fiscal data and the payment method; this grid
- * only chooses. Phase 5 rebuilds the screen around the member's rung.
+ * ONE's tiers on the billing screen (migration 0202): the public plans of the
+ * chosen period, in the order of their tier's rank, each with the ceilings it
+ * sets and the rights it turns on, in reais. A firm with no subscription goes
+ * on to the focused checkout (`/assinatura?plan=`), the one place that asks for
+ * the fiscal data and the payment method; a firm subscribed changes its tier
+ * on the subscription in force (`changeTier`), with the second factor, and a
+ * plan of the other period starts a new subscription, as before.
  */
 export default function PlansGrid({
   subscription,
   plans,
   currency,
-  onCurrencyChange,
-  entitlements,
   canManage,
   checkoutAvailable,
-  maxInstallments = 1,
   offerSlug,
 }: {
   subscription: SubscriptionInfo | null;
   plans: PlanRow[];
   currency: BillingCurrency;
-  onCurrencyChange: (currency: BillingCurrency) => void;
   entitlements: WorkspaceEntitlements;
   canManage: boolean;
   checkoutAvailable: boolean;
@@ -98,9 +94,14 @@ export default function PlansGrid({
 }) {
   const t = useTranslations("product");
   const locale = useLocale();
-  const formatDate = (value: string) => new Intl.DateTimeFormat(locale).format(new Date(value));
   const router = useRouter();
   const [confirming, setConfirming] = useState<PlanRow | null>(null);
+  // A change of tier on the subscription in force, and what came of it.
+  const [changing, setChanging] = useState<PlanRow | null>(null);
+  const [changeBusy, setChangeBusy] = useState(false);
+  const [changeError, setChangeError] = useState<string | null>(null);
+  const [factor, setFactor] = useState<"missing" | "challenge" | null>(null);
+  const [changed, setChanged] = useState<string | null>(null);
   const [coupon, setCoupon] = useState<AppliedCoupon | null>(null);
   const [couponInput, setCouponInput] = useState("");
   const [couponOpen, setCouponOpen] = useState(false);
@@ -120,27 +121,24 @@ export default function PlansGrid({
     currentPlan?.period === "yearly" || offerPlan?.period === "yearly" ? "yearly" : "monthly",
   );
 
-  const inCurrency = paidPlans.filter((plan) => plan.currency === currency && plan.isPublic);
-  const kitPlan = inCurrency.find((plan) => plan.kind === "access" && plan.family === "kit") ?? null;
-  const familyPlan = (family: string, wanted: Period) =>
-    inCurrency.find((plan) => plan.kind === "recurring" && plan.family === family && plan.period === wanted) ?? null;
-  const recurringPlans = RECURRING_FAMILIES.map((family) => familyPlan(family, period)).filter(
-    (plan): plan is PlanRow => plan !== null,
+  const inCurrency = paidPlans.filter(
+    (plan) => plan.currency === currency && plan.isPublic && plan.kind === "recurring" && !plan.isAddon,
   );
-  // The yearly saving, from real prices, for the toggle label.
-  const savings = RECURRING_FAMILIES.map((family) => {
-    const monthly = familyPlan(family, "monthly");
-    const yearly = familyPlan(family, "yearly");
-    if (!monthly || !yearly || monthly.priceCents <= 0) return 0;
-    return Math.round((1 - yearly.priceCents / (monthly.priceCents * 12)) * 100);
-  }).filter((value) => value > 0);
+  const periodPlans = (wanted: Period) =>
+    inCurrency.filter((plan) => plan.period === wanted).sort((a, b) => a.rank - b.rank || a.priceCents - b.priceCents);
+  const recurringPlans = periodPlans(period);
+  // The yearly saving, from real prices, for the toggle label: each tier's yearly plan against twelve of its monthly.
+  const savings = periodPlans("yearly")
+    .map((yearly) => {
+      const monthly = periodPlans("monthly").find((plan) => plan.family === yearly.family);
+      if (!monthly || monthly.priceCents <= 0) return 0;
+      return Math.round((1 - yearly.priceCents / (monthly.priceCents * 12)) * 100);
+    })
+    .filter((value) => value > 0);
   const yearlySaving = savings.length > 0 ? Math.min(...savings) : 0;
 
   const shownPlans = [
-    ...(offerPlan && offerPlan.id !== kitPlan?.id && !recurringPlans.some((plan) => plan.id === offerPlan.id)
-      ? [offerPlan]
-      : []),
-    ...(kitPlan ? [kitPlan] : []),
+    ...(offerPlan && !recurringPlans.some((plan) => plan.id === offerPlan.id) ? [offerPlan] : []),
     ...recurringPlans,
   ];
 
@@ -201,17 +199,38 @@ export default function PlansGrid({
   const checkoutHref = (plan: PlanRow) => `/assinatura?plan=${encodeURIComponent(plan.slug)}`;
 
   /**
-   * Switching plans starts a NEW subscription and retires the current one when
-   * the new one is paid — no proration at either provider. Whoever is
-   * mid-cycle throws away days she already paid for, so she is told first.
+   * A firm subscribed changes its tier on the subscription in force (same period): Asaas takes the new value from the
+   * next charge on. A plan of the other period starts a new subscription and retires the current one when it is paid,
+   * with no proration, so she is told first. A firm with none goes to the checkout.
    */
   const choose = (plan: PlanRow) => {
     trackOffer("upsell.clicked", "billing", (plan.tier ?? undefined) as OfferKind | undefined);
-    if (plan.kind === "recurring" && currentPlan && currentPlan.kind === "recurring" && currentPlan.id !== plan.id) {
+    if (currentPlan && currentPlan.kind === "recurring" && currentPlan.id !== plan.id) {
+      if (plan.period === currentPlan.period && subscription?.changeable) {
+        setChanging(plan);
+        setChangeError(null);
+        return;
+      }
       setConfirming(plan);
       return;
     }
     router.push(checkoutHref(plan));
+  };
+
+  const confirmChange = async () => {
+    if (!changing || !subscription) return;
+    setChangeBusy(true);
+    setChangeError(null);
+    const result = await changeTier(subscription.orgId, changing.id);
+    setChangeBusy(false);
+    if (result.ok) {
+      setChanging(null);
+      setChanged(result.planName || changing.name);
+      router.refresh();
+      return;
+    }
+    if (result.code === "second_factor") setFactor(result.factor ?? "challenge");
+    setChangeError(result.code);
   };
 
   if (!canManage || shownPlans.length === 0) {
@@ -240,13 +259,13 @@ export default function PlansGrid({
                 {offerPlan ? t("billing-offer-body") : t("billing-plans-body")}
               </Typography>
             </Box>
-            <Button variant="text" color="grey" size="small" onClick={() => onCurrencyChange(OTHER_CURRENCY[currency])}>
-              {t("billing-currency-switch", {
-                currency: t(OTHER_CURRENCY[currency] === "USD" ? "billing-currency-usd" : "billing-currency-brl"),
-              })}
-            </Button>
           </Box>
 
+          {changed ? (
+            <Alert severity="success" className="neutral" onClose={() => setChanged(null)}>
+              {t("billing-tier-changed", { plan: changed })}
+            </Alert>
+          ) : null}
           {offerMissing && <Alert severity="info">{t("billing-offer-unavailable")}</Alert>}
           {couponError === "link_invalid" && <Alert severity="info">{t("billing-coupon-link-invalid")}</Alert>}
           {coupon ? (
@@ -327,14 +346,12 @@ export default function PlansGrid({
 
           <Grid container spacing={2.5}>
             {shownPlans.map((plan) => {
-              const isKit = plan.kind === "access";
-              const current = !isKit && subscription?.planId === plan.id;
-              const owned = isKit && entitlements.hasKit;
+              const current = subscription?.planId === plan.id;
               const isOffer = plan.id === offerPlan?.id;
               const planCoupon = couponFor(plan);
               const discountedCents = applyDiscount(plan.priceCents, planCoupon);
               const discounted = discountedCents !== plan.priceCents;
-              const devices = limitOf(plan.limits, "devices");
+              const sameTierPeriod = Boolean(currentPlan && plan.period === currentPlan.period);
               return (
                 <Grid key={plan.id} size={{ xs: 12, md: 4 }}>
                   <Card
@@ -350,33 +367,13 @@ export default function PlansGrid({
                         {current && (
                           <Chip label={t("billing-current-chip")} size="small" color="success" variant="outlined" />
                         )}
-                        {owned && (
-                          <Chip
-                            label={
-                              entitlements.accessEndsAt
-                                ? t("billing-kit-owned-until", { date: formatDate(entitlements.accessEndsAt) })
-                                : t("billing-kit-owned")
-                            }
-                            size="small"
-                            color="success"
-                            variant="outlined"
-                          />
-                        )}
                         {isOffer && !current && <Chip label={t("billing-offer-chip")} size="small" color="primary" />}
                       </Box>
                       <Typography variant="h4" component="p">
                         {money(plan, discountedCents)}
                         <Typography component="span" variant="body2" className="text-text-secondary">
                           {" "}
-                          {plan.period
-                            ? t(`billing-period-${plan.period}` as never)
-                            : plan.accessMonths
-                              ? t("billing-access-term", {
-                                  term: t(termKey(plan.accessMonths), {
-                                    count: accessTermParts(plan.accessMonths).count,
-                                  }),
-                                })
-                              : t("billing-one-time")}
+                          {plan.period ? t(`billing-period-${plan.period}` as never) : t("billing-one-time")}
                         </Typography>
                       </Typography>
                       {/* The coupon is named beside the price it gives; the list
@@ -387,20 +384,23 @@ export default function PlansGrid({
                           {t("billing-price-coupon", { code: planCoupon.code })}
                         </Typography>
                       ) : null}
-                      {plan.kind === "access" && currency === "BRL" && maxInstallments > 1 ? (
-                        <Typography variant="body2" className="text-text-secondary">
-                          {t("billing-installments", {
-                            count: maxInstallments,
-                            amount: money(plan, splitInstallments(discountedCents, maxInstallments).each),
-                          })}
-                        </Typography>
-                      ) : null}
                       {plan.description && (
                         <Typography variant="body2" className="text-text-secondary">
                           {plan.description}
                         </Typography>
                       )}
                       <Box component="ul" className="m-0 flex flex-1 list-none flex-col gap-1 p-0">
+                        {ceilingsOf(plan.limits).map(({ key, value }) => (
+                          <Typography
+                            key={key}
+                            component="li"
+                            variant="body2"
+                            className="text-text-secondary flex items-start gap-1.5"
+                          >
+                            <NiCheck size="small" className="text-primary mt-0.5 flex-none" />
+                            {t(CEILING_LABEL[key], { count: value })}
+                          </Typography>
+                        ))}
                         {enabledFeatures(plan.limits).map((key) => (
                           <Typography
                             key={key}
@@ -409,40 +409,21 @@ export default function PlansGrid({
                             className="text-text-secondary flex items-start gap-1.5"
                           >
                             <NiCheck size="small" className="text-primary mt-0.5 flex-none" />
-                            {t(FEATURE_LABEL[key as FeatureKey])}
+                            {t(FEATURE_LABEL[key])}
                           </Typography>
                         ))}
-                        {devices > 0 && (
-                          <Typography
-                            component="li"
-                            variant="body2"
-                            className="text-text-secondary flex items-start gap-1.5"
-                          >
-                            <NiCheck size="small" className="text-primary mt-0.5 flex-none" />
-                            {t("billing-feature-devices", { count: devices })}
-                          </Typography>
-                        )}
                       </Box>
                       {current ? (
                         <Button variant="outlined" disabled>
                           {t("billing-current-chip")}
                         </Button>
-                      ) : owned && !checkoutAvailable ? (
-                        <Button variant="outlined" disabled>
-                          {t("billing-kit-owned")}
-                        </Button>
-                      ) : owned ? (
-                        // Buying the access again renews it: the new term starts when the current one ends.
-                        <Button variant="outlined" onClick={() => choose(plan)}>
-                          {t("billing-renew-kit")}
-                        </Button>
                       ) : checkoutAvailable ? (
-                        <Button variant={isOffer || isKit ? "contained" : "outlined"} onClick={() => choose(plan)}>
-                          {isKit
-                            ? t("billing-buy-kit")
-                            : currentPlan && currentPlan.kind === "recurring"
-                              ? t("billing-switch-plan")
-                              : t("billing-subscribe")}
+                        <Button variant={isOffer ? "contained" : "outlined"} onClick={() => choose(plan)}>
+                          {currentPlan && currentPlan.kind === "recurring"
+                            ? sameTierPeriod
+                              ? t("billing-change-tier")
+                              : t("billing-switch-plan")
+                            : t("billing-subscribe")}
                         </Button>
                       ) : (
                         <Button
@@ -488,6 +469,48 @@ export default function PlansGrid({
           </Button>
           <Button variant="contained" onClick={() => confirming && router.push(checkoutHref(confirming))}>
             {t("billing-switch-confirm")}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* A change of tier on the subscription in force: the new value from the next charge on, the day of charge
+          kept. The second factor is asked here, in place. */}
+      <Dialog
+        open={Boolean(changing)}
+        onClose={changeBusy ? undefined : () => setChanging(null)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>{t("billing-change-tier-title", { plan: changing?.name ?? "" })}</DialogTitle>
+        <DialogContent className="flex flex-col gap-3">
+          <DialogContentText>
+            {t("billing-change-tier-body", {
+              current: currentPlan?.name ?? "",
+              next: changing?.name ?? "",
+              price: changing ? money(changing, changing.priceCents) : "",
+            })}
+          </DialogContentText>
+          {factor ? (
+            <SecondFactorPrompt
+              state={factor}
+              onConfirmed={() => {
+                setFactor(null);
+                setChangeError(null);
+              }}
+            />
+          ) : null}
+          {changeError && changeError !== "second_factor" ? (
+            <Alert severity="error" className="neutral">
+              {t(CHANGE_ERROR[changeError] ?? "billing-change-tier-error")}
+            </Alert>
+          ) : null}
+        </DialogContent>
+        <DialogActions>
+          <Button color="grey" onClick={() => setChanging(null)} disabled={changeBusy}>
+            {t("cancel")}
+          </Button>
+          <Button variant="contained" onClick={() => void confirmChange()} disabled={changeBusy || factor !== null}>
+            {changeBusy ? t("loading") : t("billing-change-tier-confirm")}
           </Button>
         </DialogActions>
       </Dialog>

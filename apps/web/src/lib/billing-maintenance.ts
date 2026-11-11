@@ -53,11 +53,8 @@ export async function retireAbandonedCheckouts(): Promise<{ retired: number; fai
   let failed = 0;
   for (const subscription of stale ?? []) {
     try {
-      if (
-        subscription.provider_subscription_id &&
-        (subscription.provider === "stripe" || subscription.provider === "asaas")
-      ) {
-        await getProvider(subscription.provider).cancelSubscription(subscription.provider_subscription_id);
+      if (subscription.provider_subscription_id && subscription.provider === "asaas") {
+        await getProvider("asaas").cancelSubscription(subscription.provider_subscription_id);
       }
       const { error: updateError } = await supabase
         .from("subscriptions")

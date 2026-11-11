@@ -1,4 +1,4 @@
-import { type EntitlementKey, hasEntitlement, isTier, type Tier } from "@flyee/billing/entitlements";
+import { type EntitlementKey, hasEntitlement, isTierSlug } from "@flyee/billing/entitlements";
 
 /**
  * What the member's workspace is entitled to, as `org_entitlements(org)`
@@ -8,14 +8,14 @@ import { type EntitlementKey, hasEntitlement, isTier, type Tier } from "@flyee/b
  * re-derive it from `subscriptions` or `entitlement_grants`: a second opinion
  * about the same workspace is how two screens end up disagreeing.
  *
- * Screens branch on `tier` and on keys (`has("advanced_lessons")`), never on
- * plan names or slugs.
+ * Screens branch on keys (`has("monitor_voo")`) and on whether there is a tier,
+ * never on a plan's name: a tier is a slug the operator writes (migration 0202).
  */
 export type EntitlementSource = {
   /** `grant` (kit, courtesy), `subscription`, `free` or `provisional` (a PIX being confirmed). */
   type: string;
   planId: string | null;
-  tier: Tier | null;
+  tier: string | null;
 };
 
 export type Entitlements = {
@@ -26,8 +26,8 @@ export type Entitlements = {
   /** Still unlocked while a failed renewal is retried. */
   pastDueGrace: boolean;
   graceEndsAt: string | null;
-  /** The highest rung any live source grants; null = nothing bought. */
-  tier: Tier | null;
+  /** The tier of the live source of the highest rank; null = nothing bought. */
+  tier: string | null;
   sources: EntitlementSource[];
   limits: Record<string, unknown>;
   /** Whether a right is on; always false while the workspace is inactive. */
@@ -54,11 +54,11 @@ export function toEntitlements(raw: RpcEntitlements): Entitlements {
     status: raw.status ?? null,
     pastDueGrace: Boolean(raw.past_due_grace),
     graceEndsAt: raw.grace_ends_at ?? null,
-    tier: isTier(raw.tier) ? raw.tier : null,
+    tier: isTierSlug(raw.tier) ? raw.tier : null,
     sources: (raw.sources ?? []).map((source) => ({
       type: source.type ?? "unknown",
       planId: source.plan_id ?? null,
-      tier: isTier(source.tier) ? source.tier : null,
+      tier: isTierSlug(source.tier) ? source.tier : null,
     })),
     limits,
     has: (key) => active && hasEntitlement(limits, key),

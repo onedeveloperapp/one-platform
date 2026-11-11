@@ -12,19 +12,11 @@ import NiBadge from "@/icons/nexture/ni-badge";
 import { trackOffer } from "@/lib/product-events";
 import { cn } from "@/lib/utils";
 import { MenuType } from "@/types";
-import type { Tier } from "@flyee/billing/entitlements";
 
 const BILLING_HREF = "/settings/billing?source=menu&feature=plans";
 
-/** The rung's name, never the plan's: a kit owner on the free subscription row is still a kit owner. */
-const TIER_LABEL = {
-  kit: "menu-plan-kit",
-  club: "menu-plan-club",
-  pro: "menu-plan-pro",
-} as const satisfies Record<Tier, string>;
-
 /**
- * The workspace's rung on the ladder, at the foot of the nav rail.
+ * Whether the firm subscribes to a tier of ONE, at the foot of the nav rail.
  *
  * Deliberately a STATE READOUT, not a promotion: it names the rung, and only
  * adds a "compare plans" line for a workspace that has bought nothing. The
@@ -52,7 +44,8 @@ export default function PlanIndicator({ menuType }: { menuType: MenuType }) {
 
   if (loading || !entitlements) return null;
 
-  const planLabel = entitlements.active && entitlements.tier ? t(TIER_LABEL[entitlements.tier]) : t("menu-plan-free");
+  // A tier is data (0202): the menu says the firm subscribes, and the billing screen names its tier.
+  const planLabel = entitlements.active && entitlements.tier ? t("menu-plan-subscribed") : t("menu-plan-free");
   const title = t("menu-plan-current", { plan: planLabel });
   const minimal = menuType === MenuType.Minimal;
   // In the list the plan lines up with the items' icons and labels; on the icon rails it sits centred under them.

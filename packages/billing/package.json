@@ -3,21 +3,20 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Per-organization billing behind a provider interface: Asaas (BRL) and Stripe (USD) for the one-time kit, subscriptions, coupons and entitlement grants.",
+  "description": "ONE's own subscription billing behind a provider interface: Asaas in BRL, with a fake and a contract test; plans, coupons, add-ons and entitlement grants.",
   "exports": {
     ".": "./src/index.ts",
     "./public": "./src/public.ts",
     "./types": "./src/types.ts",
     "./currency": "./src/currency.ts",
     "./entitlements": "./src/entitlements.ts",
-    "./stripe": "./src/providers/stripe.ts",
+    "./fake": "./src/fake.ts",
     "./asaas": "./src/providers/asaas.ts"
   },
   "dependencies": {
-    "@flyee/auth": "*",
-    "stripe": "^18.0.0"
+    "@flyee/auth": "*"
   },
   "scripts": {
-    "test": "node --experimental-strip-types --test src/billing-core.test.ts"
+    "test": "node --experimental-strip-types --test src/billing-core.test.ts src/contract.test.ts"
   }
 }

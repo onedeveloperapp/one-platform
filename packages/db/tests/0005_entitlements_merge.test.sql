@@ -38,6 +38,9 @@ insert into public.plans (slug, name, kind, family, tier, period, price_cents, c
    '{"assentos_max": 5, "recurso_a": 1, "recurso_b": 1}', null),
   ('teste-maior', 'Plano maior de teste', 'recurring', 'teste-maior', 'pro', 'yearly', 59700, 'BRL', false, 30,
    '{"assentos_max": 10, "recurso_a": 1, "recurso_b": 1, "recurso_c": 1}', null);
+-- The order of the tiers is data (0202): each plan says its rank.
+update public.plans set rank = case slug when 'teste-acesso' then 1 when 'teste-mensal' then 2 when 'teste-maior' then 3 end
+where slug in ('teste-acesso', 'teste-mensal', 'teste-maior');
 
 create temporary table snap (name text primary key, payload jsonb);
 grant select, insert on snap to authenticated, service_role;

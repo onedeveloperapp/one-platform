@@ -1,39 +1,28 @@
 /**
- * Reading what a workspace may use. Pure and import-free (client-safe through
- * `@flyee/billing/entitlements`).
+ * Reading what a firm may use. Pure and import-free (client-safe through `@flyee/billing/entitlements`).
  *
- * The answer itself comes from the database, `org_entitlements(org)`
- * (migration 0004), which merges the free floor, every live grant (the kit),
- * the live subscription and its add-ons. This module only reads that answer:
- * screens branch on keys and tiers, never on plan names or slugs.
+ * The answer itself comes from the database, `org_entitlements(org)` (redefined in migration 0202), which merges the
+ * free floor, every live grant, the live subscription and its add-ons, and names the firm's tier by the rank of its
+ * plan. This module only reads that answer: screens branch on keys, never on a plan's name or slug.
  */
 
 /**
- * The rights a plan, a grant or an add-on carries, as keys of `limits`
- * (migration 0018). Numbers: 0 means off; `devices` is a ceiling.
+ * ONE's rights, as keys of a plan's `limits`. The ceilings are counts (`processos_ativos_max`: the firm's open cases
+ * that are not a test; `assentos_max`: the people of its team; `whatsapp_numeros_max`: its numbers at the vendor);
+ * `monitor_voo` is the flight monitor, sold as an add-on (1 on, 0 off).
  */
-export const ENTITLEMENT_KEYS = [
-  "catalog_access",
-  "devices",
-  "advanced_lessons",
-  "recipes",
-  "roadmap_vote",
-  "meetings",
-  "commercial_license",
-  "open_the_hood",
-] as const;
+export const CEILING_KEYS = ["processos_ativos_max", "assentos_max", "whatsapp_numeros_max"] as const;
+export type CeilingKey = (typeof CEILING_KEYS)[number];
 
-export type EntitlementKey = (typeof ENTITLEMENT_KEYS)[number];
+export const FEATURE_KEYS = ["monitor_voo"] as const;
+export type FeatureKey = (typeof FEATURE_KEYS)[number];
 
-/** The rungs of the ladder, cheapest first. */
-export const TIERS = ["kit", "club", "pro"] as const;
+export type EntitlementKey = CeilingKey | FeatureKey;
+export const ENTITLEMENT_KEYS: readonly EntitlementKey[] = [...CEILING_KEYS, ...FEATURE_KEYS];
 
-export type Tier = (typeof TIERS)[number];
-
-export const TIER_RANK: Record<Tier, number> = { kit: 1, club: 2, pro: 3 };
-
-export const isTier = (value: unknown): value is Tier =>
-  typeof value === "string" && (TIERS as readonly string[]).includes(value);
+/** A tier is data: a slug the operator writes on a plan (`essencial`, `escritorio`), ordered by the plan's rank. */
+export const isTierSlug = (value: unknown): value is string =>
+  typeof value === "string" && /^[a-z0-9][a-z0-9-]{1,39}$/.test(value);
 
 /** The value of a key; 0 when it is absent or not a number. */
 export function limitOf(limits: Record<string, unknown> | null | undefined, key: string): number {
@@ -46,20 +35,15 @@ export function hasEntitlement(limits: Record<string, unknown> | null | undefine
   return limitOf(limits, key) > 0;
 }
 
-/** The highest rung among some sources; null when none is a paid rung. */
-export function tierOf(tiers: readonly (string | null | undefined)[]): Tier | null {
-  let best: Tier | null = null;
-  for (const tier of tiers) {
-    if (isTier(tier) && (!best || TIER_RANK[tier] > TIER_RANK[best])) best = tier;
-  }
-  return best;
+/** The on/off rights a plan has on, in display order. */
+export function enabledFeatures(limits: Record<string, unknown> | null | undefined): FeatureKey[] {
+  return FEATURE_KEYS.filter((key) => hasEntitlement(limits, key));
 }
 
-/**
- * The on/off rights a plan has on, in display order: what a pricing card
- * lists (one `pricing-feature-<key>` string each). `devices` is left out
- * because it is a count, rendered with its own number.
- */
-export function enabledFeatures(limits: Record<string, unknown> | null | undefined): EntitlementKey[] {
-  return ENTITLEMENT_KEYS.filter((key) => key !== "devices" && hasEntitlement(limits, key));
+/** The ceilings a plan sets, in display order, each with its count; a ceiling the plan does not set is left out. */
+export function ceilingsOf(limits: Record<string, unknown> | null | undefined): { key: CeilingKey; value: number }[] {
+  return CEILING_KEYS.flatMap((key) => {
+    const value = limitOf(limits, key);
+    return value > 0 ? [{ key, value }] : [];
+  });
 }

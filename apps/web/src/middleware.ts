@@ -30,8 +30,8 @@ const PUBLIC_PREFIXES = [
   // work even when the session it is ending is already gone — otherwise the
   // way out redirects to sign-in and the operator is stuck.
   "/api/impersonation/exit",
-  // Provider callbacks that authenticate THEMSELVES (Asaas token / Stripe
-  // signature / Inngest signing key), so they must NOT hit the auth redirect.
+  // Provider callbacks that authenticate THEMSELVES (the Asaas token, the
+  // Inngest signing key), so they must NOT hit the auth redirect.
   "/api/webhooks",
   "/api/inngest",
   // The API of a travel agency, partner of a firm in the passenger module: each call carries the agency's key,

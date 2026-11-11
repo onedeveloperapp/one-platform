@@ -31,7 +31,7 @@ import {
   applyDiscount,
   type CheckoutPlan,
   getProvider,
-  isTier,
+  isTierSlug,
   type PaymentMethod,
   type PixCharge,
   providerForCurrency,
@@ -135,8 +135,7 @@ const CHECKOUT_RETURN = { billing: "/settings/billing", home: "/inicio" } as con
  * Starts a purchase: a subscription (club, Pro) or the one-time kit
  * (docs/BILLING.md).
  *
- * The plan's currency picks the provider (BRL Asaas, USD Stripe), and only
- * Asaas needs the payer's CPF/CNPJ. A subscription writes its pending row now,
+ * ONE bills in reais through Asaas, which needs the payer's CPF/CNPJ. A subscription writes its pending row now,
  * with the price, currency and coupon it was SOLD at (the snapshot that later
  * price edits never touch); the kit writes nothing but the operation, because
  * its right is granted by the webhook on the paid invoice, never here.
@@ -183,7 +182,8 @@ export async function startCheckout(input: {
       loadPayer(supabase, input.orgId),
       getMaxInstallments(),
     ]);
-    if (!planRow || planRow.is_free || planRow.is_addon) {
+    // ONE sells its subscription only: a one-time access of the previous product is never sold again.
+    if (!planRow || planRow.is_free || planRow.is_addon || planRow.kind === "access") {
       logBillingFailure("plan_not_purchasable", { orgId: input.orgId, planId: input.planId, found: Boolean(planRow) });
       return { error: "unavailable" };
     }
@@ -374,7 +374,7 @@ export async function startCheckout(input: {
         actorId: actor,
         orgId: input.orgId,
         event: "checkout.started",
-        properties: isTier(planRow.tier) ? { offer: planRow.tier } : {},
+        properties: isTierSlug(planRow.tier) ? { offer: planRow.tier } : {},
       });
 
       // Server-side (no Pixel runs on the app); reuses the request's _fbp/_fbc

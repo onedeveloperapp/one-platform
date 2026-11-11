@@ -1,6 +1,6 @@
 "use server";
 
-import { appOrigin, logBillingFailure, requireOrgManager } from "./billing-server";
+import { logBillingFailure, requireOrgManager } from "./billing-server";
 
 import { recordAudit } from "@/lib/audit";
 import { getProvider } from "@flyee/billing";
@@ -28,9 +28,9 @@ export async function abandonPendingCheckout(orgId: string, subscriptionId: stri
     // Local state is already correct. Stopping the provider is what actually
     // prevents the charge, but a failure here must not undo the cancellation
     // the customer just asked for — it is logged and swept by the reaper.
-    if (result.providerSubscriptionId && (result.provider === "stripe" || result.provider === "asaas")) {
+    if (result.providerSubscriptionId && result.provider === "asaas") {
       try {
-        await getProvider(result.provider).cancelSubscription(result.providerSubscriptionId);
+        await getProvider("asaas").cancelSubscription(result.providerSubscriptionId);
       } catch (providerError) {
         logBillingFailure("abandon_provider_cancel_failed", { orgId, subscriptionId }, providerError);
       }
@@ -52,10 +52,8 @@ export type PaymentRecoveryResult = { url?: string; error?: "unavailable" | "not
 /**
  * Where a workspace with a failed charge actually pays.
  *
- * Two providers, two shapes: Stripe has a hosted Billing Portal for the card
- * behind the subscription; Asaas bills per charge, so the failed invoice's own
- * hosted URL IS the payment page. Prefer the portal, fall back to the invoice,
- * and say "unavailable" only when neither exists.
+ * Asaas bills per charge, so the failed invoice's own hosted URL IS the
+ * payment page; "unavailable" only when there is none.
  */
 export async function startPaymentRecovery(orgId: string): Promise<PaymentRecoveryResult> {
   try {
@@ -70,18 +68,7 @@ export async function startPaymentRecovery(orgId: string): Promise<PaymentRecove
       .limit(1)
       .maybeSingle();
 
-    if (sub?.provider === "stripe" && sub.provider_customer_id) {
-      const url = await getProvider("stripe").billingPortalUrl?.({
-        providerCustomerId: sub.provider_customer_id,
-        providerSubscriptionId: sub.provider_subscription_id ?? undefined,
-        returnUrl: `${await appOrigin()}/settings/billing`,
-      });
-      if (url) return { url };
-    }
-
-    // The most recent unpaid invoice OF THIS SUBSCRIPTION — for Asaas this is
-    // the payment page, and for Stripe the fallback when the portal has no
-    // configuration yet. Scoped to the subscription so an unrelated failed
+    // The most recent unpaid invoice OF THIS SUBSCRIPTION is the payment page. Scoped to the subscription so an unrelated failed
     // charge on the same workspace is never handed over as "your plan".
     let invoiceQuery = supabase
       .from("invoices")
@@ -93,7 +80,7 @@ export async function startPaymentRecovery(orgId: string): Promise<PaymentRecove
     const { data: invoice } = await invoiceQuery.order("created_at", { ascending: false }).limit(1).maybeSingle();
     if (invoice?.invoice_url) return { url: invoice.invoice_url };
 
-    // Nothing to recover: no failed charge on file and no portal.
+    // Nothing to recover: no failed charge on file.
     if (sub?.status !== "past_due") return { error: "not_needed" };
     return { error: "unavailable" };
   } catch {

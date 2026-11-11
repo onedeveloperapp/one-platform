@@ -33,10 +33,12 @@ type PlanForm = {
   name: string;
   description: string;
   kind: string;
-  /** The offer across periods and currencies: kit, club, pro, free. */
+  /** The offer across periods: the monthly and yearly plans of a tier share it. */
   family: string;
-  /** The rung it grants; empty for the free plan and add-ons. */
+  /** The tier it grants, a slug written here (0202); empty for the free plan and add-ons. */
   tier: string;
+  /** The order of the tier among the tiers, the higher the more it allows (0202). */
+  rank: number;
   period: string;
   /** Amount in currency units as a numeric string ("199.9"); converted to cents on save. */
   price: string;
@@ -71,6 +73,7 @@ const EMPTY: PlanForm = {
   kind: "recurring",
   family: "",
   tier: "",
+  rank: 1,
   period: "monthly",
   price: "",
   currency: "BRL",
@@ -126,6 +129,7 @@ export default function PlansAdmin() {
       kind: row.kind as string,
       family: (row.family as string) ?? "",
       tier: (row.tier as string) ?? "",
+      rank: Number(row.rank ?? 0) || 0,
       period: (row.period as string) ?? "none",
       price: row.price_cents ? String((row.price_cents as number) / 100) : "",
       currency: row.currency as string,
@@ -154,13 +158,14 @@ export default function PlansAdmin() {
       slug: form.slug.trim(),
       name: form.name.trim(),
       description: form.description || null,
-      kind: form.kind,
       family: form.family.trim(),
-      tier: form.tier || null,
-      // A one-time access purchase has no period; the database refuses one.
-      period: form.kind === "access" || form.period === "none" ? null : form.period,
+      tier: form.tier.trim() || null,
+      rank: Math.max(0, Math.round(Number(form.rank) || 0)),
+      // ONE sells its subscription only: every plan written here recurs, in reais.
+      kind: "recurring",
+      period: form.period === "none" ? "monthly" : form.period,
       price_cents: Math.round(Number(form.price) * 100) || 0,
-      currency: form.currency,
+      currency: "BRL",
       trial_days: Number(form.trial_days) || 0,
       is_free: form.is_free,
       is_active: form.is_active,
@@ -324,56 +329,36 @@ export default function PlansAdmin() {
             <Field label="Nome" value={form.name} onChange={(v) => setForm({ ...form, name: v })} />
             <Field label="Slug" value={form.slug} onChange={(v) => setForm({ ...form, slug: v })} />
             <Field label="Descrição" value={form.description} onChange={(v) => setForm({ ...form, description: v })} />
-            <SelectField
-              label="Tipo"
-              value={form.kind}
-              options={[
-                { value: "recurring", label: "Assinatura (recorrente)" },
-                { value: "access", label: "Acesso (pagamento único)" },
-              ]}
-              onChange={(v) => setForm({ ...form, kind: v })}
-            />
             <Field
-              label="Família (kit, club, pro, free)"
+              label="Família (os planos mensal e anual da mesma faixa a compartilham)"
               value={form.family}
               onChange={(v) => setForm({ ...form, family: v })}
             />
-            <SelectField
-              label="Degrau"
-              value={form.tier || "none"}
-              options={[
-                { value: "kit", label: "Acesso" },
-                { value: "club", label: "Assinatura" },
-                { value: "pro", label: "Pro (antigo, fora da vitrine)" },
-                { value: "none", label: "Nenhum (grátis ou adicional)" },
-              ]}
-              onChange={(v) => setForm({ ...form, tier: v === "none" ? "" : v })}
+            <Field
+              label="Faixa (slug: essencial, escritorio; vazio para o grátis e os adicionais)"
+              value={form.tier}
+              onChange={(v) => setForm({ ...form, tier: v })}
             />
-            <SelectField
-              label="Moeda"
-              value={form.currency}
-              options={[
-                { value: "BRL", label: "Reais (BRL · Asaas)" },
-                { value: "USD", label: "Dólares (USD · Stripe)" },
-              ]}
-              onChange={(v) => setForm({ ...form, currency: v })}
+            <Field
+              label="Ordem da faixa (quanto maior, mais ela permite)"
+              type="number"
+              value={form.rank}
+              onChange={(v) => setForm({ ...form, rank: Number(v) })}
             />
             <SelectField
               label="Período"
-              value={form.kind === "access" ? "none" : form.period}
+              value={form.period === "none" ? "monthly" : form.period}
               options={[
-                { value: "weekly", label: "Semanal" },
                 { value: "monthly", label: "Mensal" },
                 { value: "yearly", label: "Anual" },
-                { value: "none", label: "Nenhum (pagamento único)" },
               ]}
               onChange={(v) => setForm({ ...form, period: v })}
             />
             <CurrencyField
-              label={`Preço (${form.currency})`}
+              label="Preço (BRL)"
               size="small"
               name="price"
-              currencySymbol={CURRENCY_SYMBOLS[form.currency] ?? `${form.currency} `}
+              currencySymbol={CURRENCY_SYMBOLS.BRL}
               value={form.price}
               onChange={(event) => setForm({ ...form, price: event.target.value })}
             />
@@ -383,7 +368,11 @@ export default function PlansAdmin() {
               value={form.trial_days}
               onChange={(v) => setForm({ ...form, trial_days: Number(v) })}
             />
-            <Field label="Limites (JSON)" value={form.limits} onChange={(v) => setForm({ ...form, limits: v })} />
+            <Field
+              label="Limites (JSON: processos_ativos_max, assentos_max, whatsapp_numeros_max, monitor_voo)"
+              value={form.limits}
+              onChange={(v) => setForm({ ...form, limits: v })}
+            />
             <Field
               label="Ordem"
               type="number"

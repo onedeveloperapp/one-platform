@@ -444,6 +444,13 @@ insert into public.agenda_digests (org_id, user_id, day, status, items) values
 insert into public.weekly_digests (org_id, user_id, week, status, items) values
   ('b1000000-0000-4000-8000-00000000000a', 'a1000000-0000-4000-8000-000000000001', date '2026-11-09', 'sent', 4),
   ('b1000000-0000-4000-8000-00000000000b', 'a1000000-0000-4000-8000-000000000004', date '2026-11-09', 'sent', 4);
+-- What each firm used on a day, and an alert of its tier's ceiling (0202).
+insert into public.usage_ledger (org_id, day, metric, value) values
+  ('b1000000-0000-4000-8000-00000000000a', date '2026-11-10', 'processos_ativos', 3),
+  ('b1000000-0000-4000-8000-00000000000b', date '2026-11-10', 'processos_ativos', 3);
+insert into public.usage_alerts (org_id, month, metric, percent, value, ceiling) values
+  ('b1000000-0000-4000-8000-00000000000a', date '2026-11-01', 'processos_ativos', 80, 3, 3),
+  ('b1000000-0000-4000-8000-00000000000b', date '2026-11-01', 'processos_ativos', 80, 3, 3);
 -- The fee terms, the fees and a cost of each firm's case (0131).
 insert into public.fee_terms (org_id, incident, success_percent) values
   ('b1000000-0000-4000-8000-00000000000a', 'delay', 30),
@@ -684,7 +691,7 @@ select is(
     'people', 'person_data_requests',
     'piece_fact_checks', 'proceeding_lawyers', 'proceeding_parties', 'proceeding_tracking', 'proceedings', 'publication_actions', 'publication_readings', 'publications', 'record_versions',
     'residence_declarations', 'signature_envelopes',
-    'subscriptions', 'template_imports', 'test_chats', 'tracked_legs', 'tracked_trip_documents', 'tracked_trips', 'trip_day_messages',
+    'subscriptions', 'template_imports', 'test_chats', 'tracked_legs', 'tracked_trip_documents', 'tracked_trips', 'trip_day_messages', 'usage_alerts', 'usage_ledger',
     'wa_contacts',
     'wa_conversation_events', 'wa_conversations', 'wa_messages', 'wa_numbers', 'wa_optouts', 'wa_templates', 'weekly_digests'
   ],
@@ -859,7 +866,7 @@ select is(
     'memberships', 'movements', 'notice_optins', 'notice_stops', 'partner_links', 'passenger_welcomes', 'pax_firm_clauses', 'people', 'piece_fact_checks', 'proceeding_lawyers', 'proceeding_parties', 'proceeding_tracking', 'proceedings',
     'publication_actions', 'publication_readings', 'publications',
     'residence_declarations', 'signature_envelopes',
-    'subscriptions', 'template_imports', 'test_chats', 'tracked_legs', 'tracked_trip_documents', 'tracked_trips', 'trip_day_messages',
+    'subscriptions', 'template_imports', 'test_chats', 'tracked_legs', 'tracked_trip_documents', 'tracked_trips', 'trip_day_messages', 'usage_alerts', 'usage_ledger',
     'wa_contacts', 'wa_conversation_events', 'wa_conversations', 'wa_messages', 'wa_numbers', 'wa_optouts', 'wa_templates'
   ],
   'and of their own firm less than the owner: no audit trail, no history, no invitations, no checkout, no vendor accounts'
@@ -904,7 +911,7 @@ select is(
     'people', 'person_data_requests',
     'piece_fact_checks', 'proceeding_lawyers', 'proceeding_parties', 'proceeding_tracking', 'proceedings', 'publication_actions', 'publication_readings', 'publications', 'record_versions',
     'residence_declarations', 'signature_envelopes',
-    'subscriptions', 'template_imports', 'test_chats', 'tracked_legs', 'tracked_trip_documents', 'tracked_trips', 'trip_day_messages',
+    'subscriptions', 'template_imports', 'test_chats', 'tracked_legs', 'tracked_trip_documents', 'tracked_trips', 'trip_day_messages', 'usage_alerts', 'usage_ledger',
     'wa_contacts',
     'wa_conversation_events', 'wa_conversations', 'wa_messages', 'wa_numbers', 'wa_optouts', 'wa_templates', 'weekly_digests'
   ],
