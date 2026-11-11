@@ -32,12 +32,20 @@ insert into public.memberships (org_id, user_id, role, firm_function) values
   ('b2120000-0000-4000-8000-00000000000a', 'a2120000-0000-4000-8000-000000000001', 'owner', 'socio'),
   ('b2120000-0000-4000-8000-00000000000b', 'a2120000-0000-4000-8000-000000000003', 'owner', 'socio');
 
+-- A module of the test's own, with one published version only.
+insert into public.product_modules (key, name) values ('modulo-de-teste', 'Módulo de teste');
+insert into public.module_versions (module, version, status, manifest, note, published_at)
+values ('modulo-de-teste', 1, 'published', public.module_snapshot('modulo-de-teste'), 'Única versão do teste.', now());
+
 create temp table v (name text primary key, id uuid);
 grant select, insert on v to authenticated, service_role;
-insert into v select 'v1', id from public.module_versions where module = 'direito-do-passageiro' and version = 1;
+insert into v select 'only', id from public.module_versions where module = 'modulo-de-teste';
+-- The version in force, whichever number a later migration gave it.
+insert into v select 'v1', id from public.module_versions
+where module = 'direito-do-passageiro' and status = 'published' order by version desc limit 1;
 
 select is((select status from public.module_versions where id = (select id from v where name = 'v1')), 'published',
-  'version 1 is what was in force, published');
+  'the module has a published version in force');
 
 insert into public.cases (id, org_id, seq, module, incident, status) values
   ('c2120000-0000-4000-8000-000000000001', 'b2120000-0000-4000-8000-00000000000a', 1, 'direito-do-passageiro', 'delay', 'documents');
@@ -92,9 +100,9 @@ select is((public.start_ai_run('b2120000-0000-4000-8000-00000000000a', 'atendime
 reset role;
 
 -- A published version is never edited nor deleted.
-select throws_ok($$update public.module_versions set manifest = manifest || '{"x": 1}'::jsonb where version = 2 and module = 'direito-do-passageiro'$$,
+select throws_ok($$update public.module_versions set manifest = manifest || '{"x": 1}'::jsonb where id = (select id from v where name = 'v2')$$,
   '23514', null, 'a published version is never edited');
-select throws_ok($$delete from public.module_versions where version = 2 and module = 'direito-do-passageiro'$$,
+select throws_ok($$delete from public.module_versions where id = (select id from v where name = 'v2')$$,
   '23514', null, 'a published version is never deleted');
 
 -- Withdrawn for a defect, its cases read the latest published; the last published stays.
@@ -102,18 +110,24 @@ select set_config('request.jwt.claims', '{"sub":"a2120000-0000-4000-8000-0000000
 set local role authenticated;
 select is((select public.admin_withdraw_module_version((select id from v where name = 'v2'), 'Lista errada') ->> 'code'),
   'withdrawn', 'the operator withdraws a version with its reason');
-select is((select public.admin_withdraw_module_version((select id from v where name = 'v1'), 'Teste') ->> 'code'),
+select is((select public.admin_withdraw_module_version((select id from v where name = 'only'), 'Teste') ->> 'code'),
   'last_published', 'the last published version is never withdrawn');
 reset role;
 select ok(jsonb_array_length(public.case_required_documents('c2120000-0000-4000-8000-000000000002')) > 1,
   'the cases of a withdrawn version read the latest published');
 
 -- Lima reads the version of its case; Rocha nothing.
+create temp table expected on commit drop as
+select jsonb_build_object('ok', true, 'module', 'direito-do-passageiro',
+  'version', (select version from public.module_versions where id = (select id from v where name = 'v2')),
+  'withdrawn', true,
+  'reads', (select version from public.module_versions where id = (select id from v where name = 'v1'))) as answer;
+grant select on expected to authenticated;
 select set_config('request.jwt.claims', '{"sub":"a2120000-0000-4000-8000-000000000001","role":"authenticated"}', true);
 set local role authenticated;
 select is((select public.case_module_version('b2120000-0000-4000-8000-00000000000a', 'c2120000-0000-4000-8000-000000000002')
   - 'documents' - 'module_name'),
-  '{"ok": true, "module": "direito-do-passageiro", "version": 2, "withdrawn": true, "reads": 1}'::jsonb,
+  (select answer from expected),
   'the firm reads the version its case was opened under and the one it reads');
 reset role;
 select set_config('request.jwt.claims', '{"sub":"a2120000-0000-4000-8000-000000000003","role":"authenticated"}', true);
