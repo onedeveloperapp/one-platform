@@ -167,6 +167,7 @@ describe("the dossier of a case", () => {
       "O que foi aceito",
       "O que foi assinado",
       "O que a pessoa contou",
+      "Provas do momento",
       "O que foi tentado antes da ação",
       "Documentos aceitos pelo escritório",
       "Processos",
@@ -314,6 +315,7 @@ describe("the dossier of a case", () => {
     ]) {
       expect(section(blocks, heading).trim(), heading).toMatch(/^Nada registrado\./);
     }
+    expect(section(blocks, "Provas do momento")).toContain("Nada registrado.");
     const about = section(blocks, "O caso");
     expect(about).toContain("Companhia: não registrada");
     expect(about).toContain("Dia do voo: não registrado");
@@ -334,6 +336,19 @@ describe("the dossier of a case", () => {
     );
   });
 
+  it("lays out the evidence kit in the order it happened, and says nothing was sent when no proof was", () => {
+    const lines = [
+      "22/10/2099, 08:10: partida prevista do voo LA 3456 de GYN para GRU",
+      "22/10/2099, 09:05: chegou ao ONE prova",
+    ];
+    const kit = buildDossier(facts({ moments: { lines, proofs: 1 } }));
+    for (const line of lines) expect(section(kit.blocks, "Provas do momento")).toContain(line);
+    expect(kit.summary.proofs).toBe(1);
+    // The legs alone are no kit: with no proof, the section says nothing was sent.
+    const none = buildDossier(facts({ moments: { lines: lines.slice(0, 1), proofs: 0 } }));
+    expect(section(none.blocks, "Provas do momento")).toContain("Nada registrado.");
+  });
+
   it("keeps beside the dossier what it holds by counts, never the values", () => {
     const { summary } = buildDossier(facts());
     expect(summary).toEqual({
@@ -347,6 +362,7 @@ describe("the dossier of a case", () => {
       statements_confirmed: 1,
       complaints: 1,
       documents: 2,
+      proofs: 0,
     });
     expect(Object.values(summary).every((count) => Number.isInteger(count))).toBe(true);
   });

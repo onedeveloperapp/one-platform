@@ -170,6 +170,11 @@ export type DossierFacts = {
   complaints: { channel: string; protocol: string | null; filedOn: string | null; outcome: string }[];
   documents: { kind: string; person: string | null; acceptedOn: string | null; fingerprint: string | null }[];
   proceedings: { kind: string; forum: string | null; number: string | null; filedOn: string | null }[];
+  /**
+   * The evidence kit (0209): the legs' moments, ONE's words about the flight and each proof of the moment as it
+   * arrived, in the order they happened, already in words (`evidenceTimeline`); and how many proofs it holds.
+   */
+  moments?: { lines: string[]; proofs: number };
 };
 
 /** The zone a dossier is written in, and its name for people. A dossier travels: its hours are not its reader's. */
@@ -401,6 +406,13 @@ export function buildDossier(facts: DossierFacts): {
       ),
     ),
 
+    { kind: "heading", text: "Provas do momento" },
+    {
+      kind: "paragraph",
+      text: `Cada prova do momento do problema (fotos, recibos, cartões de embarque) traz o momento em que chegou ao ONE, pelo relógio da plataforma, e a impressão digital do arquivo, que muda se qualquer parte dele mudar. Quando a foto registra a hora em que foi tirada, ela aparece ao lado, como o aparelho a registrou. Os horários estão no ${facts.zone}.`,
+    },
+    list(facts.moments && facts.moments.proofs > 0 ? facts.moments.lines : []),
+
     { kind: "heading", text: "O que foi tentado antes da ação" },
     list(
       facts.complaints.map((complaint) =>
@@ -462,6 +474,7 @@ export function buildDossier(facts: DossierFacts): {
       statements_confirmed: facts.statements.filter((statement) => statement.confirmedOn).length,
       complaints: facts.complaints.length,
       documents: facts.documents.length,
+      proofs: facts.moments?.proofs ?? 0,
     },
   };
 }

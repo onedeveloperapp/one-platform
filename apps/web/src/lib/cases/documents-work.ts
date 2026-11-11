@@ -10,6 +10,7 @@ import { createServiceClient } from "@flyee/auth/service";
 import { takeBackFile } from "@flyee/documents/files";
 import { measureFile } from "@flyee/documents/measure";
 import { imagesToPdf, normalizeImage } from "@flyee/documents/normalize";
+import { photoTakenAt } from "@flyee/documents/taken";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 /**
@@ -63,6 +64,9 @@ export async function claimCaseDocuments(
   return ((data ?? []) as { document_id: string }[]).map((row) => row.document_id);
 }
 
+/** The kinds that are proofs of the moment of the problem, whose photo's own moment is kept (0209). */
+const PROOF_KINDS = new Set(["evidence", "receipt", "boarding_pass"]);
+
 /** The reduced photo the model reads: enough to read a document, far fewer tokens than a phone photo. */
 export const MODEL_IMAGE = { maxPixels: 1568, quality: 80 };
 
@@ -114,6 +118,24 @@ export async function processClaimedDocument(service: SupabaseClient, documentId
     if (photo) {
       await keepQuality(service, row.document_id, photo);
       quality = readQuality(photo);
+    }
+  }
+
+  // When a proof of the moment says it was taken (0209): read once from the original's EXIF and kept beside
+  // the moment ONE received it, never in its place. A photo that says nothing is left saying nothing.
+  if (plan.normalize && PROOF_KINDS.has(row.kind)) {
+    const taken = await photoTakenAt(original);
+    if (taken) {
+      await service
+        .rpc("keep_document_taken", {
+          target_document: row.document_id,
+          target_local: taken.local,
+          target_offset: taken.offset,
+        })
+        .then(
+          () => undefined,
+          () => undefined,
+        );
     }
   }
 

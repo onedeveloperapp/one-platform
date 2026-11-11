@@ -1302,7 +1302,16 @@ function Documents({
                       ) : undefined
                     }
                   >
-                    <DocumentWords kind={item.label.charAt(0).toUpperCase() + item.label.slice(1)} name={null} />
+                    <DocumentWords
+                      kind={item.label.charAt(0).toUpperCase() + item.label.slice(1)}
+                      name={null}
+                      // What ONE keeps of a proof of the moment (0209): the hour it arrives, said where it is asked.
+                      detail={
+                        item.state === "asked" && (item.kind === "evidence" || item.kind === "receipt")
+                          ? t("client-documents-moment")
+                          : null
+                      }
+                    />
                   </StateLine>
                   {poorNotice(key)}
                   {problemOf(key)}

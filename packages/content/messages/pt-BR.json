@@ -9181,6 +9181,7 @@
     "case-documents-dispensable-asked": "Pedido ao cliente",
     "case-documents-dispensable-later": "Pedido ao cliente depois que ele assinar a procuração",
     "case-documents-not-have": "O cliente não tem",
+    "client-documents-moment": "O ONE registra o dia e a hora em que cada foto ou recibo chega.",
     "case-action-document-not-have-doing": "Registrando que o cliente não tem",
     "case-action-document-not-have-done": "Registrado: o caso segue sem esse documento.",
     "case-action-document-not-have-failed": "Não foi possível registrar agora."

@@ -541,4 +541,60 @@ describe.skipIf(!DB_URL)("the photo of a document, measured where it arrives", (
     expect(await keepQuality(backend() as never, documentId, again as never)).toBe("already");
     expect((await documentOf(documentId))?.quality?.problems).toEqual(["too_dark"]);
   });
+
+  it("keeps when a proof of the moment says it was taken, and the kit lays it beside the moment ONE received it", async () => {
+    const { processCaseDocuments } = await import("@/lib/cases/documents-work");
+    const { measureFile } = await import("@flyee/documents/measure");
+    const sharp = (await import("sharp")).default;
+    // A photo of the board whose camera wrote when it was taken, with its offset.
+    const board = new Uint8Array(
+      await sharp(sharpPhoto)
+        .jpeg()
+        .withExif({ IFD2: { DateTimeOriginal: "2099:10:22 09:03:10", OffsetTimeOriginal: "-03:00" } })
+        .toBuffer(),
+    );
+    const reserved = await call(backend(), "reserve_file", {
+      target_org: FIRM,
+      target_purpose: "upload",
+      target_name: "painel.jpg",
+      target_mime: "image/jpeg",
+      target_bytes: board.byteLength,
+    });
+    bucket.set(String(reserved.storage_path), board);
+    const measure = await measureFile(board);
+    await call(backend(), "confirm_file", {
+      target_file: reserved.file_id,
+      target_sha256: measure.sha256,
+      target_bytes: measure.bytes,
+      target_detected_mime: measure.detectedMime,
+      target_pages: measure.pages,
+    });
+    const attached = await call(asAna(), "attach_case_document", {
+      target_case: caseId,
+      target_file: reserved.file_id,
+      target_kind: "evidence",
+      target_party: partyId,
+    });
+    expect(attached.code).toBe("attached");
+    const documentId = String(attached.document_id);
+    await call(asAna(), "decide_case_document", { target_document: documentId, target_decision: "accepted" });
+
+    expect(await processCaseDocuments(backend() as never, 1, documentId)).toEqual({ done: 1, other: 0 });
+    const [kept] = (await sql.unsafe(
+      `select taken_local::text as taken_local, taken_offset from public.case_documents where id = $1`,
+      [documentId],
+    )) as unknown as { taken_local: string | null; taken_offset: string | null }[];
+    expect(kept).toEqual({ taken_local: "2099-10-22 09:03:10", taken_offset: "-03:00" });
+
+    // The firm reads its kit: the proof with the moment ONE received it, the moment it says it was taken and its
+    // fingerprint; another firm reads nothing of it.
+    const { readEvidenceKit } = await import("@/lib/cases/evidence-moments");
+    const { data, error } = await asAna().rpc("case_evidence_moments", { target_org: FIRM, target_case: caseId });
+    expect(error).toBeNull();
+    const proof = readEvidenceKit(data)?.proofs.find((row) => row.id === documentId);
+    expect(proof).toMatchObject({ kind: "evidence", source: "firm", takenOffset: "-03:00", sha256: measure.sha256 });
+    expect(proof?.takenLocal).toBe("2099-10-22T09:03:10");
+    const other = await asDavi().rpc("case_evidence_moments", { target_org: FIRM, target_case: caseId });
+    expect(other.error).not.toBeNull();
+  });
 });

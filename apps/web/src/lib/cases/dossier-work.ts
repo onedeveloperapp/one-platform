@@ -12,6 +12,7 @@ import {
   maskCpf,
   type RegistryResult,
 } from "@/lib/cases/dossier";
+import { evidenceTimeline, readEvidenceKit } from "@/lib/cases/evidence-moments";
 import { CHANNEL_KEY, isComplaintChannel, isComplaintOutcome, OUTCOME_KEY } from "@/lib/cases/statements";
 import { caseKindLabelKey } from "@/lib/modules/registry";
 import { loadFlightChecks, type SourceView } from "@/modules/direito-do-passageiro/flights/facts";
@@ -184,6 +185,10 @@ export async function loadDossierFacts(
   const legs = (segments.data ?? []) as LegRow[];
   // What the official record says of each leg: read under the same session, and a failed read fails the dossier.
   const checks = await loadFlightChecks(supabase, firm.id, caseId, legs, null);
+  // The evidence kit (0209): read under the same session, and a failed read fails the dossier.
+  const kitRead = await supabase.rpc("case_evidence_moments", { target_org: firm.id, target_case: caseId });
+  if (kitRead.error) throw new Error("the evidence kit could not be read");
+  const kit = readEvidenceKit(kitRead.data);
   const wallWords = (time: { wall: string; basis: string } | null | undefined): string | null => {
     const at = time ? hour(time.wall) : null;
     if (!at) return null;
@@ -249,6 +254,7 @@ export async function loadDossierFacts(
     word(DOCUMENT_KIND_KEY[kind as keyof typeof DOCUMENT_KIND_KEY], "Documento");
 
   return {
+    moments: kit ? { lines: evidenceTimeline(kit, (kind) => kindWord(kind)), proofs: kit.proofs.length } : undefined,
     firm: firm.name,
     caseLabel: caseLabel(row.seq),
     issuedOn: moment(new Date().toISOString()) ?? "",
