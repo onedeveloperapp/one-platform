@@ -66,12 +66,23 @@ export async function reopenFinanceMonth(month: string, reason: string): Promise
   });
 }
 
-export async function recordFinanceInvoice(entryId: string, number: string, issuedOn: string): Promise<Result> {
+export async function recordFinanceInvoice(
+  entryId: string,
+  number: string,
+  issuedOn: string,
+  fileId: string | null = null,
+): Promise<Result> {
   if (!/^[0-9a-f-]{36}$/i.test(entryId) || !/^\d{4}-\d{2}-\d{2}$/.test(issuedOn))
     return { ok: false, code: "invalid_data" };
   return call(
     "record_finance_invoice",
-    { target_entry: entryId, target_number: String(number ?? "").slice(0, 40), target_issued_on: issuedOn },
+    {
+      target_entry: entryId,
+      target_number: String(number ?? "").slice(0, 40),
+      target_issued_on: issuedOn,
+      // The invoice's file it was read from, kept with it (0165).
+      target_file: fileId && /^[0-9a-f-]{36}$/i.test(fileId) ? fileId : null,
+    },
     false,
   );
 }

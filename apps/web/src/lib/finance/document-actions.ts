@@ -11,6 +11,7 @@ import {
   type FinanceDocumentRead,
   readFinanceDocumentOutput,
 } from "@/lib/finance/documents";
+import { INVOICE_TASK, invoiceBriefing, type InvoiceRead, readInvoiceOutput } from "@/lib/finance/invoice-reading";
 import { getMemberContext } from "@/lib/member/context";
 import { createServiceClient } from "@flyee/auth/service";
 
@@ -132,6 +133,72 @@ export async function readFinanceDocument(input: {
   });
   if (result.kind === "finished") {
     return { ok: true, read: readFinanceDocumentOutput(result.output, { categories, today: today() }) };
+  }
+  if (result.kind === "replayed") return { ok: false, code: "read_running" };
+  return { ok: false, code: result.code };
+}
+
+export type InvoiceAnswer = { ok: true; read: InvoiceRead } | { ok: false; code: string };
+
+/**
+ * The invoice the firm issued, read by ONE for "Registrar a nota emitida" (migration 0165): the file the person sent
+ * as a document of the books, measured now, within the books' readings of a day, read against the fee it is of.
+ * Nothing is written here: the person records the invoice, with the file.
+ */
+export async function readFinanceInvoice(input: { fileId: string; entryId: string }): Promise<InvoiceAnswer> {
+  const context = await getMemberContext();
+  if (!context?.firm || !isId(input?.fileId) || !isId(input?.entryId)) return { ok: false, code: "not_found" };
+
+  const finished = await finishUpload(context, input.fileId);
+  if (!finished.ok) return { ok: false, code: finished.code };
+
+  const { data: allowed, error } = await context.supabase.rpc("finance_document_reading_allowed", {
+    target_org: context.firm.id,
+  });
+  if (error) return { ok: false, code: "failed" };
+  const answer = (allowed ?? {}) as { ok?: boolean; code?: string };
+  if (answer.ok !== true) return { ok: false, code: String(answer.code ?? "failed") };
+
+  const { data: entry } = await context.supabase
+    .from("finance_entries")
+    .select("id, cents")
+    .eq("id", input.entryId)
+    .eq("org_id", context.firm.id)
+    .maybeSingle();
+  if (!entry) return { ok: false, code: "not_found" };
+  const entryCents = Number(entry.cents);
+
+  let service: ReturnType<typeof createServiceClient>;
+  try {
+    service = createServiceClient();
+  } catch {
+    return { ok: false, code: "backend_not_configured" };
+  }
+  const { data: file } = await service
+    .from("files")
+    .select("id, storage_path, detected_mime, sha256, status, purpose")
+    .eq("id", input.fileId)
+    .eq("org_id", context.firm.id)
+    .maybeSingle();
+  if (!file || file.status !== "stored" || file.purpose !== "finance") return { ok: false, code: "not_found" };
+  const mime = String(file.detected_mime ?? "").toLowerCase();
+  if (!IMAGE_MIMES.includes(mime) && mime !== "application/pdf") return { ok: false, code: "unsupported_type" };
+  const bytes = await supabaseFileStore(service).get(String(file.storage_path));
+  if (!bytes) return { ok: false, code: "not_found" };
+  const attachment = await attachmentOf(bytes, mime);
+  if ("code" in attachment) return { ok: false, code: attachment.code };
+
+  const result = await runFirmTask({
+    orgId: context.firm.id,
+    task: INVOICE_TASK,
+    // What is hashed for the record: the fee it is of and the file's own hash, never its bytes nor its name.
+    input: { entry: input.entryId, sha256: file.sha256 ?? null },
+    messages: [{ role: "user", content: invoiceBriefing(entryCents), attachments: [attachment] }],
+    requestedBy: context.userId,
+    subject: { type: "file", id: input.fileId },
+  });
+  if (result.kind === "finished") {
+    return { ok: true, read: readInvoiceOutput(result.output, { today: today(), entryCents }) };
   }
   if (result.kind === "replayed") return { ok: false, code: "read_running" };
   return { ok: false, code: result.code };

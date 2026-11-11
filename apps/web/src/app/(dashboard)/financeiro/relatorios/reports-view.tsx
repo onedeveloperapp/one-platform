@@ -21,6 +21,7 @@ import {
   Typography,
 } from "@mui/material";
 
+import DocumentSlot, { type SlotState } from "@/components/cases/document-slot";
 import CardTitle from "@/components/product/card-title";
 import ConfirmActionDialog from "@/components/product/confirm-action-dialog";
 import EmptyState from "@/components/product/empty-state";
@@ -30,6 +31,7 @@ import SecondFactorPrompt from "@/components/product/second-factor-prompt";
 import SidePanel from "@/components/product/side-panel";
 import StateLine from "@/components/product/state-line";
 import StatusChip from "@/components/product/status-chip";
+import { TILE_TONE } from "@/components/product/tile-tone";
 import IllustrationPerformance from "@/icons/illustrations/illustration-performance";
 import NiChartBar from "@/icons/nexture/ni-chart-bar";
 import NiDocumentFull from "@/icons/nexture/ni-document-full";
@@ -37,6 +39,8 @@ import NiMoney from "@/icons/nexture/ni-money";
 import { writeWorkbook, XLSX_TYPE } from "@/lib/export/xlsx-write";
 import { savedFileName, saveFile } from "@/lib/files/save-file";
 import { ENTRY_KIND_KEY } from "@/lib/finance/books";
+import { openFinanceDocument } from "@/lib/finance/document-actions";
+import { dropUnsavedFinance, sendInvoiceDocument } from "@/lib/finance/document-browser";
 import {
   budgetStanding,
   DRE_ORDER,
@@ -150,6 +154,13 @@ export default function ReportsView({
     }
     await load();
     return answer;
+  };
+
+  // The invoice's file opens in a new tab, by a link of a minute (0165).
+  const openInvoice = async (fileId: string) => {
+    const link = await openFinanceDocument(fileId);
+    if (link.ok) window.open(link.url, "_blank", "noopener,noreferrer");
+    else setProblem(t("reports-invoice-open-failed"));
   };
 
   const ready = state.kind === "ready" ? state : null;
@@ -631,7 +642,20 @@ export default function ReportsView({
                         </Typography>
                       </Box>
                       {item.invoice ? (
-                        <StateLine tone="done">
+                        <StateLine
+                          tone="done"
+                          action={
+                            item.invoice.fileId ? (
+                              <Button
+                                size="small"
+                                variant="text"
+                                onClick={() => void openInvoice(item.invoice!.fileId!)}
+                              >
+                                {t("reports-invoice-open")}
+                              </Button>
+                            ) : undefined
+                          }
+                        >
                           {t("reports-invoice-issued", { number: item.invoice.number })}
                         </StateLine>
                       ) : (
@@ -685,9 +709,10 @@ export default function ReportsView({
         <InvoicePanel
           item={invoicing}
           onClose={() => setInvoicing(null)}
-          onSave={async (number, issuedOn) => {
-            const answer = await act(() => recordFinanceInvoice(invoicing.entryId, number, issuedOn));
+          onSave={async (number, issuedOn, fileId) => {
+            const answer = await act(() => recordFinanceInvoice(invoicing.entryId, number, issuedOn, fileId));
             if (answer.ok) setInvoicing(null);
+            return answer.ok;
           }}
         />
       ) : null}
@@ -695,6 +720,10 @@ export default function ReportsView({
   );
 }
 
+/**
+ * The invoice the firm issued for a fee received: its PDF or photo first, which ONE reads into the number and the day
+ * (0165) and which is kept with the invoice; typing them is the other way in.
+ */
 function InvoicePanel({
   item,
   onClose,
@@ -702,40 +731,112 @@ function InvoicePanel({
 }: {
   item: InvoiceData;
   onClose: () => void;
-  onSave: (number: string, issuedOn: string) => Promise<void>;
+  onSave: (number: string, issuedOn: string, fileId: string | null) => Promise<boolean>;
 }) {
   const t = useTranslations("product");
   const [number, setNumber] = useState("");
   const [issuedOn, setIssuedOn] = useState(item.competence);
   const [busy, setBusy] = useState(false);
+  const [slot, setSlot] = useState<SlotState>({ kind: "empty" });
+  const [fileName, setFileName] = useState<string | null>(null);
+  const [fileId, setFileId] = useState<string | null>(null);
+  const [read, setRead] = useState<{ number?: string; day?: string }>({});
+  const reading = slot.kind === "sending" || slot.kind === "reading";
+
+  const close = () => {
+    dropUnsavedFinance([fileId]);
+    onClose();
+  };
+
+  const sendInvoice = async (file: File) => {
+    dropUnsavedFinance([fileId]);
+    setFileId(null);
+    setFileName(file.name);
+    setSlot({ kind: "reading" });
+    const sent = await sendInvoiceDocument(file, item.entryId);
+    setFileId(sent.fileId);
+    if (!sent.ok) {
+      setSlot({ kind: "failed", sentence: t("reports-invoice-read-failed") });
+      return;
+    }
+    const filled: { number?: string; day?: string } = {};
+    if (sent.read.isInvoice && sent.read.number) {
+      setNumber(sent.read.number);
+      filled.number = sent.read.number;
+    }
+    if (sent.read.isInvoice && sent.read.issuedOn) {
+      setIssuedOn(sent.read.issuedOn);
+      filled.day = sent.read.issuedOn;
+    }
+    setRead(filled);
+    const sentence = !sent.read.isInvoice
+      ? t("reports-invoice-read-other")
+      : sent.read.matches === false
+        ? t("reports-invoice-read-other-value", { value: formatCents(sent.read.cents), fee: formatCents(item.cents) })
+        : filled.number
+          ? t("reports-invoice-read-ok", { number: filled.number })
+          : t("reports-invoice-read-nothing");
+    setSlot({
+      kind: "read",
+      tone: sent.read.isInvoice && sent.read.matches !== false && filled.number ? "positive" : "attention",
+      sentence: [sentence, sent.read.note].filter(Boolean).join(" "),
+    });
+  };
+
   return (
     <SidePanel
-      onClose={onClose}
+      onClose={close}
       closeLabel={t("reports-cancel")}
       icon={<NiDocumentFull size="medium" />}
-      busy={busy}
+      busy={busy || reading}
       title={t("reports-invoice-record")}
       description={t("reports-invoice-body", { value: formatCents(item.cents) })}
       onSubmit={() => {
         setBusy(true);
-        void onSave(number, issuedOn).finally(() => setBusy(false));
+        void onSave(number, issuedOn, fileId)
+          .then((saved) => {
+            if (saved) setFileId(null);
+          })
+          .finally(() => setBusy(false));
       }}
       actions={
         <>
-          <Button type="submit" variant="contained" disabled={busy || number.trim() === ""}>
+          <Button type="submit" variant="contained" disabled={busy || reading || number.trim() === ""}>
             {t("reports-save")}
           </Button>
-          <Button variant="text" color="grey" onClick={onClose} disabled={busy}>
+          <Button variant="text" color="grey" onClick={close} disabled={busy}>
             {t("reports-cancel")}
           </Button>
         </>
       }
     >
       <Box className="flex flex-col gap-4">
+        <Box component="ul" className="m-0 flex list-none flex-col gap-3 p-0">
+          <DocumentSlot
+            id="finance-invoice-doc"
+            icon={<NiDocumentFull size="medium" className={TILE_TONE.primary.text} />}
+            title={t("reports-invoice-slot")}
+            hint={t("reports-invoice-slot-hint")}
+            state={slot}
+            fileName={fileName}
+            primary={!fileId && number.trim() === ""}
+            disabled={busy}
+            labels={{
+              send: t("prefill-send"),
+              again: t("prefill-again"),
+              sending: t("prefill-sending"),
+              reading: t("prefill-reading"),
+              read: t("prefill-read"),
+              failed: t("prefill-failed"),
+            }}
+            onFile={(file) => void sendInvoice(file)}
+          />
+        </Box>
         <TextField
           label={t("reports-invoice-number")}
           value={number}
           onChange={(event) => setNumber(event.target.value.slice(0, 40))}
+          helperText={read.number !== undefined && read.number === number ? t("reports-invoice-field-read") : undefined}
         />
         <TextField
           type="date"
@@ -743,6 +844,7 @@ function InvoicePanel({
           value={issuedOn}
           onChange={(event) => setIssuedOn(event.target.value)}
           slotProps={{ inputLabel: { shrink: true } }}
+          helperText={read.day !== undefined && read.day === issuedOn ? t("reports-invoice-field-read") : undefined}
         />
         <StateLine tone="info">{t("reports-invoice-note")}</StateLine>
       </Box>

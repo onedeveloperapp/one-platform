@@ -190,7 +190,7 @@ export type InvoiceData = {
   description: string;
   competence: string;
   caseSeq: number | null;
-  invoice: { number: string; issuedOn: string } | null;
+  invoice: { number: string; issuedOn: string; fileId: string | null } | null;
 };
 
 export function readInvoices(raw: unknown): InvoiceData[] | null {
@@ -209,7 +209,7 @@ export function readInvoices(raw: unknown): InvoiceData[] | null {
         caseSeq: typeof row.case_seq === "number" ? row.case_seq : null,
         invoice:
           invoice && text(invoice.number)
-            ? { number: text(invoice.number)!, issuedOn: text(invoice.issued_on) ?? "" }
+            ? { number: text(invoice.number)!, issuedOn: text(invoice.issued_on) ?? "", fileId: text(invoice.file_id) }
             : null,
       },
     ];
