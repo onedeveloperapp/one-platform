@@ -181,7 +181,7 @@ export async function beginFinanceStatement(
     endsOn: string | null;
     balanceCents: number | null;
     balanceOn: string | null;
-    format?: "ofx" | "csv" | "xlsx";
+    format?: "ofx" | "csv" | "xlsx" | "pdf";
   },
 ): Promise<FinanceResult<{ statementId: string }>> {
   if (!isId(accountId)) return { ok: false, code: "invalid_data", field: "account" };
@@ -196,7 +196,7 @@ export async function beginFinanceStatement(
         ends_on: fields.endsOn ?? "",
         balance_cents: fields.balanceCents === null ? "" : String(fields.balanceCents),
         balance_on: fields.balanceOn ?? "",
-        format: fields.format === "csv" || fields.format === "xlsx" ? fields.format : "ofx",
+        format: fields.format === "csv" || fields.format === "xlsx" || fields.format === "pdf" ? fields.format : "ofx",
       },
     },
     (answer) => ({ statementId: String(answer.statement_id) }),

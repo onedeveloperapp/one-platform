@@ -12,6 +12,7 @@ import {
   readFinanceDocumentOutput,
 } from "@/lib/finance/documents";
 import { INVOICE_TASK, invoiceBriefing, type InvoiceRead, readInvoiceOutput } from "@/lib/finance/invoice-reading";
+import { readStatementPdfOutput, STATEMENT_PDF_TASK, type StatementPdfRead } from "@/lib/finance/statement-pdf";
 import { getMemberContext } from "@/lib/member/context";
 import { createServiceClient } from "@flyee/auth/service";
 
@@ -200,6 +201,61 @@ export async function readFinanceInvoice(input: { fileId: string; entryId: strin
   if (result.kind === "finished") {
     return { ok: true, read: readInvoiceOutput(result.output, { today: today(), entryCents }) };
   }
+  if (result.kind === "replayed") return { ok: false, code: "read_running" };
+  return { ok: false, code: result.code };
+}
+
+/**
+ * A statement or a card bill in PDF, read by ONE for the conciliation (migration 0169): the file the person sent as a
+ * document of the books, measured now, within the books' readings of a day; what comes back is kept only when its lines
+ * add up to the balances the document prints. Nothing is written here: the lines go to the books as an OFX's do.
+ */
+export async function readStatementPdf(input: {
+  fileId: string;
+}): Promise<{ ok: true; read: StatementPdfRead } | { ok: false; code: string }> {
+  const context = await getMemberContext();
+  if (!context?.firm || !isId(input?.fileId)) return { ok: false, code: "not_found" };
+
+  const finished = await finishUpload(context, input.fileId);
+  if (!finished.ok) return { ok: false, code: finished.code };
+
+  const { data: allowed, error } = await context.supabase.rpc("finance_document_reading_allowed", {
+    target_org: context.firm.id,
+  });
+  if (error) return { ok: false, code: "failed" };
+  const answer = (allowed ?? {}) as { ok?: boolean; code?: string };
+  if (answer.ok !== true) return { ok: false, code: String(answer.code ?? "failed") };
+
+  let service: ReturnType<typeof createServiceClient>;
+  try {
+    service = createServiceClient();
+  } catch {
+    return { ok: false, code: "backend_not_configured" };
+  }
+  const { data: file } = await service
+    .from("files")
+    .select("id, storage_path, detected_mime, sha256, status, purpose")
+    .eq("id", input.fileId)
+    .eq("org_id", context.firm.id)
+    .maybeSingle();
+  if (!file || file.status !== "stored" || file.purpose !== "finance") return { ok: false, code: "not_found" };
+  if (String(file.detected_mime ?? "").toLowerCase() !== "application/pdf")
+    return { ok: false, code: "unsupported_type" };
+  const bytes = await supabaseFileStore(service).get(String(file.storage_path));
+  if (!bytes) return { ok: false, code: "not_found" };
+  const attachment = await attachmentOf(bytes, "application/pdf");
+  if ("code" in attachment) return { ok: false, code: attachment.code };
+
+  const result = await runFirmTask({
+    orgId: context.firm.id,
+    task: STATEMENT_PDF_TASK,
+    // What is hashed for the record: the file's own hash, never its bytes nor its name.
+    input: { sha256: file.sha256 ?? null },
+    messages: [{ role: "user", content: "O extrato ou a fatura em PDF vai anexo.", attachments: [attachment] }],
+    requestedBy: context.userId,
+    subject: { type: "file", id: input.fileId },
+  });
+  if (result.kind === "finished") return { ok: true, read: readStatementPdfOutput(result.output) };
   if (result.kind === "replayed") return { ok: false, code: "read_running" };
   return { ok: false, code: result.code };
 }

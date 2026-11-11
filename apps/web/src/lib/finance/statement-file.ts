@@ -9,7 +9,7 @@ import { occurrenceKeys, statementFromTable, statementHeaderScore } from "@/lib/
 import { readSpreadsheet } from "@/lib/import/read";
 import { type OfxLine, readOfx } from "@flyee/rules/finance";
 
-export type StatementFormat = "ofx" | "csv" | "xlsx";
+export type StatementFormat = "ofx" | "csv" | "xlsx" | "pdf";
 
 /** What the screen sends of a statement: its days, the bank's balance when it says one, and its lines. */
 export type ReadStatement = {
@@ -45,7 +45,7 @@ function decode(bytes: Uint8Array): string {
   }
 }
 
-async function sha256(bytes: Uint8Array): Promise<string> {
+export async function sha256(bytes: Uint8Array): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", bytes);
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
@@ -60,7 +60,7 @@ function looksOfx(bytes: Uint8Array): boolean {
  * The lines of a spreadsheet each with an id: the export's own (a column of ids), or the hash of its key and of how
  * many times that key came before it in the file.
  */
-async function withIds(lines: readonly OfxLine[]): Promise<OfxLine[]> {
+export async function withIds(lines: readonly OfxLine[]): Promise<OfxLine[]> {
   const keys = occurrenceKeys(lines);
   const encoder = new TextEncoder();
   return Promise.all(

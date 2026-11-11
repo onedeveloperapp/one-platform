@@ -47,6 +47,7 @@ import {
   money,
   operatesBooks,
 } from "@/lib/finance/books";
+import { sendStatementPdf } from "@/lib/finance/document-browser";
 import type { FinanceLine } from "@/lib/finance/read";
 import { readStatementFile, type StatementFile } from "@/lib/finance/statement-file";
 import { memoWords } from "@flyee/rules/finance";
@@ -94,6 +95,12 @@ const FILE_KEY: Record<string, string> = {
   file_pdf: "finance-import-pdf",
   file_columns_unknown: "finance-import-columns-unknown",
   file_spreadsheet: "finance-import-spreadsheet",
+  file_pdf_not_statement: "finance-import-pdf-not-statement",
+  file_pdf_no_lines: "finance-import-no-lines",
+  file_pdf_no_balances: "finance-import-pdf-no-balances",
+  file_pdf_too_many: "finance-import-pdf-too-many",
+  file_pdf_unbalanced: "finance-import-pdf-unreadable",
+  file_pdf_failed: "finance-import-pdf-failed",
 };
 
 type Imported = {
@@ -283,12 +290,29 @@ function ImportCard({ registrations, onDone }: { registrations: FinanceRegistrat
   const [outcome, setOutcome] = useState<Imported | null>(null);
   const input = useRef<HTMLInputElement | null>(null);
 
+  const [readingPdf, setReadingPdf] = useState(false);
+  const [difference, setDifference] = useState<number | null>(null);
   const choose = async (chosen: File) => {
     setProblem(null);
     setFile(null);
+    setDifference(null);
     const read = await readStatementFile(chosen);
-    if (!read.ok) setProblem(`file_${read.code}`);
-    else setFile(read);
+    if (read.ok) return setFile(read);
+    if (read.code !== "pdf") return setProblem(`file_${read.code}`);
+    // A PDF is read by ONE on the server, and comes back only when its lines add up (0169).
+    setReadingPdf(true);
+    try {
+      const sent = await sendStatementPdf(chosen);
+      if (sent.ok) setFile(sent);
+      else {
+        setProblem(sent.code.startsWith("pdf_") ? `file_${sent.code}` : "file_pdf_failed");
+        if ("differenceCents" in sent && typeof sent.differenceCents === "number") setDifference(sent.differenceCents);
+      }
+    } catch {
+      setProblem("file_pdf_failed");
+    } finally {
+      setReadingPdf(false);
+    }
   };
 
   const send = async () => {
@@ -353,13 +377,19 @@ function ImportCard({ registrations, onDone }: { registrations: FinanceRegistrat
                 </MenuItem>
               ))}
             </TextField>
-            <Button variant="outlined" color="grey" disabled={busy} onClick={() => input.current?.click()}>
+            <Button
+              variant="outlined"
+              color="grey"
+              disabled={busy || readingPdf}
+              loading={readingPdf}
+              onClick={() => input.current?.click()}
+            >
               {t("finance-import-choose")}
             </Button>
             <input
               ref={input}
               type="file"
-              accept=".ofx,.qfx,.csv,.txt,.xlsx,application/x-ofx,text/plain,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+              accept=".ofx,.qfx,.csv,.txt,.xlsx,.pdf,application/x-ofx,text/plain,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/pdf"
               hidden
               aria-label={t("finance-import-choose")}
               onChange={(event) => {
@@ -395,9 +425,13 @@ function ImportCard({ registrations, onDone }: { registrations: FinanceRegistrat
             </Box>
           </Box>
         ) : null}
+        {readingPdf ? <StateLine tone="waiting">{t("finance-import-pdf-reading")}</StateLine> : null}
+        {file?.format === "pdf" ? <StateLine tone="info">{t("finance-import-pdf-read")}</StateLine> : null}
         {problem ? (
           <Alert severity="error" className="neutral bg-background-paper/60!" role="alert">
-            {t(FILE_KEY[problem] ?? financeErrorKey(problem))}
+            {problem === "file_pdf_unbalanced" && difference !== null
+              ? t("finance-import-pdf-unbalanced", { value: money(Math.abs(difference)) })
+              : t(FILE_KEY[problem] ?? financeErrorKey(problem))}
           </Alert>
         ) : null}
         <Typography variant="caption" className="text-text-secondary">

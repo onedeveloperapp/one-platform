@@ -3,10 +3,12 @@ import {
   dropFinanceUpload,
   readFinanceDocument,
   readFinanceInvoice,
+  readStatementPdf,
   startFinanceUpload,
 } from "@/lib/finance/document-actions";
 import type { FinanceDocumentRead } from "@/lib/finance/documents";
 import type { InvoiceRead } from "@/lib/finance/invoice-reading";
+import { sha256, type StatementFile, withIds } from "@/lib/finance/statement-file";
 
 /**
  * How a document of the books leaves the browser (migration 0140): the reservation, the bytes straight to storage,
@@ -58,6 +60,44 @@ export async function sendInvoiceDocument(file: File, entryId: string): Promise<
   const read = await readFinanceInvoice({ fileId: started.fileId, entryId });
   if (read.ok) return { ok: true, fileId: started.fileId, read: read.read };
   return { ok: false, code: read.code, fileId: FILE_REFUSED.includes(read.code) ? null : started.fileId };
+}
+
+/**
+ * A statement or a card bill in PDF, sent for ONE's reading (0169): the PDF goes up as a document of the books (taken
+ * back by the sweep after a day), and what comes back, when it adds up, is a statement as the screen sends any: its
+ * lines with their ids, the file's own hash, the format `pdf`.
+ */
+export async function sendStatementPdf(
+  file: File,
+): Promise<StatementFile | { ok: false; code: string; differenceCents?: number }> {
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const started = await startFinanceUpload({ name: file.name, mime: "application/pdf", bytes: file.size });
+  if (!started.ok) return { ok: false, code: started.code };
+  const uploaded = await uploadToSignedUrl({
+    storagePath: started.storagePath,
+    uploadToken: started.uploadToken,
+    file,
+    contentType: "application/pdf",
+  });
+  if (!uploaded) return { ok: false, code: "not_uploaded" };
+  const answer = await readStatementPdf({ fileId: started.fileId });
+  if (!answer.ok) return { ok: false, code: answer.code };
+  if (!answer.read.ok) {
+    return { ok: false, code: `pdf_${answer.read.code}`, differenceCents: answer.read.differenceCents };
+  }
+  const read = answer.read;
+  return {
+    ok: true,
+    statement: {
+      startsOn: read.startsOn,
+      endsOn: read.endsOn,
+      balance: read.balance,
+      lines: await withIds(read.lines),
+    },
+    sha256: await sha256(bytes),
+    fileName: file.name.slice(0, 200),
+    format: "pdf",
+  };
 }
 
 /** The documents a form read and never saved go, when the form is closed or another is sent in their place. */

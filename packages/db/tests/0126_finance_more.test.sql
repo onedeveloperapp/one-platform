@@ -88,7 +88,7 @@ select ok(
 
 select pg_temp.as_person('a1260000-0000-4000-8000-000000000004', 'pdf',
   format($$public.begin_finance_statement('b1260000-0000-4000-8000-00000000000a', %L, %L::jsonb)$$,
-    pg_temp.got('bank', '{account_id}'), jsonb_build_object('file_name', 'extrato.pdf', 'sha256', repeat('e', 64), 'format', 'pdf')));
+    pg_temp.got('bank', '{account_id}'), jsonb_build_object('file_name', 'extrato.doc', 'sha256', repeat('e', 64), 'format', 'doc')));
 select pg_temp.as_person('a1260000-0000-4000-8000-000000000004', 'csv',
   format($$public.begin_finance_statement('b1260000-0000-4000-8000-00000000000a', %L, %L::jsonb)$$,
     pg_temp.got('bank', '{account_id}'), jsonb_build_object('file_name', 'extrato.csv', 'sha256', repeat('d', 64), 'format', 'csv',
