@@ -94,6 +94,15 @@ describe.skipIf(!DB_URL)("what a lawsuit came to", () => {
     ]);
     expect(facts.every((fact) => fact.by_one === true)).toBe(true);
     expect(String(facts[0].words)).toContain("JULGO PROCEDENTE");
+    // What the judgment decided of each claim it names (0193): the moral damages, each claimant's.
+    const [judgment] = (await sql.unsafe(
+      `select claims, claims_read_at is not null as read from public.lawsuit_facts where case_id = $1 and kind = 'sentenca'`,
+      [CASE],
+    )) as Row[];
+    expect(judgment.claims).toEqual([
+      { claim: "danos_morais", result: "concedido", cents: 500000, per_claimant: true },
+    ]);
+    expect(judgment.read).toBe(true);
     // Read again, nothing is recorded twice.
     const again = await outcomesRound(backend as never, Date.now() + 20_000);
     expect(again.recorded).toBe(0);

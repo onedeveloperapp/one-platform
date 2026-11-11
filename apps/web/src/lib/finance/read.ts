@@ -288,7 +288,7 @@ export async function readFinanceBills(
   const { data, error } = await supabase
     .from("finance_bills")
     .select(
-      "id, direction, status, counterparty, description, category_id, case_id, cents, paid_cents, due_on, competence_on, paid_on, typed_line, series_index, series_total, closed_reason, file_id, source, by_one, finance_categories(name), finance_bill_payments(by_one, extra_cents, discount_cents, undone_at)",
+      "id, direction, status, counterparty, description, category_id, case_id, cents, paid_cents, due_on, competence_on, paid_on, typed_line, series_index, series_total, closed_reason, file_id, source, by_one, finance_categories(name), finance_bill_payments(id, paid_on, by_one, extra_cents, discount_cents, fine_cents, interest_cents, split_by, undone_at)",
     )
     .eq("org_id", firmId)
     .order("due_on", { ascending: false })
@@ -299,9 +299,14 @@ export async function readFinanceBills(
     if (!status || (row.direction !== "pay" && row.direction !== "receive")) return [];
     const payments = (
       (row.finance_bill_payments ?? []) as {
+        id?: string;
+        paid_on?: string;
         by_one?: boolean;
         extra_cents?: number;
         discount_cents?: number;
+        fine_cents?: number;
+        interest_cents?: number;
+        split_by?: string | null;
         undone_at?: string | null;
       }[]
     ).filter((payment) => !payment.undone_at);
@@ -327,6 +332,16 @@ export async function readFinanceBills(
         byOne: payments.some((payment) => payment.by_one === true),
         extraCents: payments.reduce((sum, payment) => sum + Number(payment.extra_cents ?? 0), 0),
         discountCents: payments.reduce((sum, payment) => sum + Number(payment.discount_cents ?? 0), 0),
+        latePayments: payments
+          .filter((payment) => Number(payment.extra_cents ?? 0) > 0 && payment.id)
+          .map((payment) => ({
+            id: String(payment.id),
+            paidOn: String(payment.paid_on ?? ""),
+            extraCents: Number(payment.extra_cents ?? 0),
+            fineCents: Number(payment.fine_cents ?? 0),
+            interestCents: Number(payment.interest_cents ?? 0),
+            splitBy: payment.split_by === "person" || payment.split_by === "contract" ? payment.split_by : null,
+          })),
         fileId: (row.file_id as string | null) ?? null,
         seriesByOne: row.source === "series" && row.by_one === true,
         source: (row.source as string | null) ?? null,

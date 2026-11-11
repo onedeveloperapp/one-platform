@@ -7,6 +7,17 @@
 export type BillDirection = "pay" | "receive";
 export type BillStatus = "open" | "paid" | "cancelled" | "renegotiated" | "written_off";
 
+/** A payment that paid more than its bill (0192): its fine and its interest, once somebody split it. */
+export type LatePayment = {
+  id: string;
+  paidOn: string;
+  extraCents: number;
+  fineCents: number;
+  interestCents: number;
+  /** Who split it: a person, or ONE by the contract of the case's fees; null while nobody did. */
+  splitBy: "person" | "contract" | null;
+};
+
 export type FinanceBill = {
   id: string;
   direction: BillDirection;
@@ -30,6 +41,8 @@ export type FinanceBill = {
   /** The interest and fine, and the discount, of its payments. */
   extraCents: number;
   discountCents: number;
+  /** Its payments that paid more than it, each with its fine and interest (0192). */
+  latePayments: LatePayment[];
   /** The document it was read from, kept with it (0140). */
   fileId?: string | null;
   /** A bill ONE wrote for a series it made (0151). */
@@ -39,6 +52,41 @@ export type FinanceBill = {
   /** The fine and the monthly interest of the case's fee contract, on a fee receivable paid late (0159). */
   lateTerms?: { finePercent: number; interestPercent: number } | null;
 };
+
+/** What a bill's payments paid above it (0192): the fines, the interest, and what nobody split. */
+export function lateChargesOf(bill: Pick<FinanceBill, "latePayments">): {
+  fineCents: number;
+  interestCents: number;
+  unsplitCents: number;
+  byContract: boolean;
+} {
+  type Late = { fineCents: number; interestCents: number; unsplitCents: number; byContract: boolean };
+  return bill.latePayments.reduce<Late>(
+    (sum, payment) => ({
+      fineCents: sum.fineCents + payment.fineCents,
+      interestCents: sum.interestCents + payment.interestCents,
+      unsplitCents: sum.unsplitCents + (payment.splitBy ? 0 : payment.extraCents),
+      byContract: sum.byContract || payment.splitBy === "contract",
+    }),
+    { fineCents: 0, interestCents: 0, unsplitCents: 0, byContract: false },
+  );
+}
+
+/**
+ * How a fee contract splits what was paid above a bill (0192, as `finance_contract_split`): the contract's fine on what
+ * was owed, at most the extra, and the rest as interest; null where the contract has no late terms, or no interest and
+ * the extra is more than its fine.
+ */
+export function contractSplit(
+  owedCents: number,
+  extraCents: number,
+  terms: { finePercent: number; interestPercent: number } | null | undefined,
+): { fineCents: number; interestCents: number } | null {
+  if (!terms || extraCents <= 0 || (terms.finePercent <= 0 && terms.interestPercent <= 0)) return null;
+  const fineCents = Math.min(Math.round((owedCents * terms.finePercent) / 100), extraCents);
+  if (terms.interestPercent <= 0 && fineCents !== extraCents) return null;
+  return { fineCents, interestCents: extraCents - fineCents };
+}
 
 export type BillStanding =
   | { kind: "paid"; on: string | null }

@@ -18,8 +18,10 @@ import NiScale from "@/icons/nexture/ni-scale";
 import { setCaseStatus } from "@/lib/cases/actions";
 import { acknowledgeCaseClosure, actOnLawsuitFact, saveLawsuitFact } from "@/lib/cases/outcome-actions";
 import {
+  CLAIM_KEY,
   FACT_KEY,
   FACT_KINDS,
+  type FactClaim,
   type FactKind,
   factValue,
   type LawsuitFact,
@@ -30,6 +32,7 @@ import {
 import { AMOUNT_STEP_KEY, type LawsuitAmount } from "@/lib/courts/amount";
 import { formatCnj } from "@flyee/rules/cnj";
 import { formatCents, parseCents } from "@flyee/rules/finance";
+import { CLAIM_KINDS, type ClaimKind } from "@flyee/rules/outcome";
 import { formatDayBr } from "@flyee/rules/person";
 
 type Ready = Extract<CaseState, { kind: "ready" }>;
@@ -107,6 +110,7 @@ function FactLine({
         <StateLine tone="info">{t("outcome-corrected", { reason: fact.correctedReason ?? "" })}</StateLine>
       ) : (
         <>
+          {fact.claims.length > 0 ? <ClaimLines claims={fact.claims} /> : null}
           {fact.byOne ? (
             <Box>
               <StatusChip tone="neutral" label={t("outcome-by-one")} />
@@ -383,6 +387,33 @@ export default function OutcomeCard({
   );
 }
 
+/** What a judgment decided of each claim it names (0193): granted with its value, or denied. */
+function ClaimLines({ claims }: { claims: readonly FactClaim[] }) {
+  const t = useTranslations("product");
+  return (
+    <Box component="ul" className="m-0 flex list-none flex-col gap-0.5 p-0" aria-label={t("outcome-claims")}>
+      {claims.map((claim) => (
+        <Typography key={claim.claim} component="li" variant="body2" className="text-text-secondary">
+          {claim.result === "negado"
+            ? t("outcome-claim-denied", { claim: t(CLAIM_KEY[claim.claim]) })
+            : claim.cents
+              ? t(claim.perClaimant ? "outcome-claim-granted-each" : "outcome-claim-granted-value", {
+                  claim: t(CLAIM_KEY[claim.claim]),
+                  value: formatCents(claim.cents),
+                })
+              : t("outcome-claim-granted", { claim: t(CLAIM_KEY[claim.claim]) })}
+        </Typography>
+      ))}
+    </Box>
+  );
+}
+
+type ClaimDraft = { result: "" | "concedido" | "negado"; value: string };
+const NO_CLAIMS = Object.fromEntries(CLAIM_KINDS.map((claim) => [claim, { result: "", value: "" }])) as Record<
+  ClaimKind,
+  ClaimDraft
+>;
+
 /** A fact recorded by hand: its lawsuit, kind, result or who appealed, day and value. */
 function FactPanel({
   caseId,
@@ -403,9 +434,12 @@ function FactPanel({
   const [day, setDay] = useState(today());
   const [value, setValue] = useState("");
   const [perClaimant, setPerClaimant] = useState(false);
+  // What the judgment decided of each claim (0193): left blank, granted with its value, or denied.
+  const [claims, setClaims] = useState<Record<ClaimKind, ClaimDraft>>(NO_CLAIMS);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const valued = kind === "sentenca" || kind === "acordo" || kind === "alvara" || kind === "deposito";
+  const claimValued = CLAIM_KINDS.some((claim) => claims[claim].result === "concedido" && claims[claim].value.trim());
 
   const save = async () => {
     setBusy(true);
@@ -419,6 +453,20 @@ function FactPanel({
         happenedOn: day,
         cents: valued ? cents : null,
         perClaimant: kind === "sentenca" && perClaimant,
+        claims:
+          kind === "sentenca"
+            ? CLAIM_KINDS.flatMap((claim) => {
+                const draft = claims[claim];
+                if (!draft.result) return [];
+                return [
+                  {
+                    claim,
+                    result: draft.result,
+                    cents: draft.result === "concedido" && draft.value.trim() ? parseCents(draft.value) : null,
+                  },
+                ];
+              })
+            : [],
       });
       if (answer.ok) onSaved();
       else setProblem(t(errorKey(answer.code)));
@@ -522,7 +570,43 @@ function FactPanel({
             />
           ) : null}
         </Box>
-        {kind === "sentenca" && value.trim() ? (
+        {kind === "sentenca" ? (
+          <Box className="flex flex-col gap-3">
+            <Typography variant="subtitle2" component="h3">
+              {t("outcome-claims")}
+            </Typography>
+            {CLAIM_KINDS.map((claim) => (
+              <Box key={claim} className="grid gap-4 sm:grid-cols-2">
+                <TextField
+                  select
+                  label={t(CLAIM_KEY[claim])}
+                  value={claims[claim].result}
+                  onChange={(event) =>
+                    setClaims((now) => ({
+                      ...now,
+                      [claim]: { ...now[claim], result: event.target.value as ClaimDraft["result"] },
+                    }))
+                  }
+                >
+                  <MenuItem value="">{t("outcome-claim-unsaid")}</MenuItem>
+                  <MenuItem value="concedido">{t("outcome-claim-option-granted")}</MenuItem>
+                  <MenuItem value="negado">{t("outcome-claim-option-denied")}</MenuItem>
+                </TextField>
+                {claims[claim].result === "concedido" ? (
+                  <CurrencyField
+                    label={t("outcome-claim-value", { claim: t(CLAIM_KEY[claim]) })}
+                    currencySymbol="R$"
+                    value={claims[claim].value}
+                    onChange={(event) =>
+                      setClaims((now) => ({ ...now, [claim]: { ...now[claim], value: event.target.value } }))
+                    }
+                  />
+                ) : null}
+              </Box>
+            ))}
+          </Box>
+        ) : null}
+        {kind === "sentenca" && (value.trim() || claimValued) ? (
           <TextField
             select
             label={t("outcome-field-per-claimant")}

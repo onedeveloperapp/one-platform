@@ -1,4 +1,13 @@
-import { cohorts, groupStats, median, readLawsuitRows, statsOf, winsProjection, withinPeriod } from "./lawsuits";
+import {
+  claimStats,
+  cohorts,
+  groupStats,
+  median,
+  readLawsuitRows,
+  statsOf,
+  winsProjection,
+  withinPeriod,
+} from "./lawsuits";
 import { describe, expect, it } from "vitest";
 
 // Every lawsuit here is invented.
@@ -122,5 +131,59 @@ describe("the unit and the projection of judgments (0168)", () => {
     ]);
     // TJSP has no judged lawsuit of the firm to project from; a settled lawsuit waits for nothing.
     expect(projection.unprojected).toBe(1);
+  });
+});
+
+describe("the result of each claim, over the judgments (0193)", () => {
+  const morals = (cents: number, perClaimant = false) => ({
+    claim: "danos_morais",
+    result: "concedido",
+    cents,
+    per_claimant: perClaimant,
+  });
+  const judged = readLawsuitRows({
+    rows: [
+      row("m1", { result: "procedente", judged_on: "2026-06-01", claims: [morals(500000, true)] }),
+      row("m2", { result: "procedente", judged_on: "2026-06-02", claims: [morals(600000)], claimants: 2 }),
+      row("m3", {
+        result: "parcial",
+        judged_on: "2026-06-03",
+        claims: [morals(400000, true), { claim: "danos_materiais", result: "negado" }],
+      }),
+      row("m4", { result: "parcial", judged_on: "2026-06-04", claims: [morals(200000, true)] }),
+      row("m5", {
+        result: "improcedente",
+        judged_on: "2026-06-05",
+        claims: [{ claim: "danos_morais", result: "negado" }],
+      }),
+      row("m6", { result: "procedente", judged_on: "2026-06-06", claims: [morals(800000, true)] }),
+      // Not judged: its claims count for nothing.
+      row("m7", { claims: [morals(900000, true)] }),
+    ],
+  });
+
+  it("says how often each claim was granted and its median value per claimant, never of fewer than five", () => {
+    const stats = claimStats(judged, false);
+    expect(stats.map((item) => item.claim)).toEqual(["danos_morais", "danos_materiais"]);
+    const [moral, material] = stats;
+    expect([moral.decided, moral.granted, moral.grantRate]).toEqual([6, 5, 5 / 6]);
+    // 5.000, 3.000 (6.000 for two claimants), 4.000, 2.000, 8.000: the median is 4.000.
+    expect(moral.valuePerClaimant).toBe(400000);
+    expect([material.decided, material.granted, material.grantRate, material.valuePerClaimant]).toEqual([
+      1,
+      0,
+      null,
+      null,
+    ]);
+  });
+
+  it("leaves out a judgment nobody checked when asked", () => {
+    const unchecked = readLawsuitRows({
+      rows: [
+        row("u1", { result: "procedente", judged_on: "2026-06-01", judged_checked: false, claims: [morals(100000)] }),
+      ],
+    });
+    expect(claimStats(unchecked, true)).toEqual([]);
+    expect(claimStats(unchecked, false)[0].decided).toBe(1);
   });
 });

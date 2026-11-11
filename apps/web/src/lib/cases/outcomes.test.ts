@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  factClaimsOf,
   factValue,
   lawsuitFactsOf,
   lawsuitOutcome,
@@ -80,5 +81,39 @@ describe("what each lawsuit came to (0130)", () => {
       if (item.detail) expect(product[item.detail.key], item.detail.key).toBeTruthy();
     }
     expect(outcomeAttentionOf(null)).toBeNull();
+  });
+});
+
+describe("the result of each claim of a judgment (0193)", () => {
+  it("reads each claim the database keeps, leaving out what it does not know", () => {
+    expect(
+      factClaimsOf([
+        { claim: "danos_morais", result: "concedido", cents: 500000, per_claimant: true },
+        { claim: "danos_materiais", result: "negado", cents: 90000, per_claimant: true },
+        { claim: "honra", result: "concedido" },
+        { claim: "restituicao", result: "talvez" },
+        null,
+      ]),
+    ).toEqual([
+      { claim: "danos_morais", result: "concedido", cents: 500000, perClaimant: true },
+      { claim: "danos_materiais", result: "negado", cents: null, perClaimant: false },
+    ]);
+    expect(factClaimsOf(null)).toEqual([]);
+  });
+
+  it("gives a judgment its claims, and any other fact none", () => {
+    const [judgment, final] = lawsuitFactsOf([
+      {
+        id: "1",
+        proceeding_id: "p",
+        kind: "sentenca",
+        result: "parcial",
+        happened_on: "2026-10-01",
+        claims: [{ claim: "lucros_cessantes", result: "negado" }],
+      },
+      { id: "2", proceeding_id: "p", kind: "transito", happened_on: "2026-10-20", claims: [{ claim: "danos_morais" }] },
+    ]);
+    expect(judgment.claims).toEqual([{ claim: "lucros_cessantes", result: "negado", cents: null, perClaimant: false }]);
+    expect(final.claims).toEqual([]);
   });
 });

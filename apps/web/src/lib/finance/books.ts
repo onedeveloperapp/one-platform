@@ -260,6 +260,7 @@ const FIELD_KEY: Record<string, string> = {
   repeat: "finance-field-repeat",
   how: "finance-field-how",
   installments: "finance-field-installments",
+  late: "finance-field-late",
   discount: "finance-field-discount",
 };
 export const financeFieldKey = (field: string | null | undefined): string | null =>

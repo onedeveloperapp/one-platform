@@ -5,7 +5,9 @@ import {
   billNumbers,
   billOrder,
   billStanding,
+  contractSplit,
   type FinanceBill,
+  lateChargesOf,
   readFinanceSeries,
   receivableAging,
 } from "@/lib/finance/bills";
@@ -30,6 +32,7 @@ const bill = (overrides: Partial<FinanceBill>): FinanceBill => ({
   closedReason: null,
   byOne: false,
   extraCents: 0,
+  latePayments: [],
   discountCents: 0,
   ...overrides,
 });
@@ -137,5 +140,44 @@ describe("the bills to pay and to receive (0129)", () => {
         nextDueOn: "2026-12-10",
       },
     ]);
+  });
+
+  it("adds the fines and the interest of a bill's payments, and what nobody split (0192)", () => {
+    expect(
+      lateChargesOf({
+        latePayments: [
+          {
+            id: "p1",
+            paidOn: "2026-10-05",
+            extraCents: 3000,
+            fineCents: 2000,
+            interestCents: 1000,
+            splitBy: "contract",
+          },
+          { id: "p2", paidOn: "2026-11-05", extraCents: 900, fineCents: 0, interestCents: 0, splitBy: null },
+        ],
+      }),
+    ).toEqual({ fineCents: 2000, interestCents: 1000, unsplitCents: 900, byContract: true });
+    expect(lateChargesOf({ latePayments: [] })).toEqual({
+      fineCents: 0,
+      interestCents: 0,
+      unsplitCents: 0,
+      byContract: false,
+    });
+  });
+
+  it("splits what was paid above a fee by its contract, as the database does (0192)", () => {
+    const terms = { finePercent: 2, interestPercent: 1 };
+    expect(contractSplit(100000, 3000, terms)).toEqual({ fineCents: 2000, interestCents: 1000 });
+    // The fine is at most what was paid above it.
+    expect(contractSplit(100000, 1500, terms)).toEqual({ fineCents: 1500, interestCents: 0 });
+    // A contract with no interest splits only an extra that is exactly its fine.
+    expect(contractSplit(100000, 2000, { finePercent: 2, interestPercent: 0 })).toEqual({
+      fineCents: 2000,
+      interestCents: 0,
+    });
+    expect(contractSplit(100000, 2500, { finePercent: 2, interestPercent: 0 })).toBeNull();
+    expect(contractSplit(100000, 3000, null)).toBeNull();
+    expect(contractSplit(100000, 0, terms)).toBeNull();
   });
 });

@@ -4,7 +4,14 @@ import type { Sweep } from "@/lib/jobs/schedule";
 import { soon } from "@/lib/jobs/soon";
 import { plainText } from "@/lib/publications/publications";
 import { createServiceClient } from "@flyee/auth/service";
-import { certifiesFinal, movementFact, readJudgment, readRelease } from "@flyee/rules/outcome";
+import {
+  certifiesFinal,
+  type ClaimReading,
+  movementFact,
+  readClaims,
+  readJudgment,
+  readRelease,
+} from "@flyee/rules/outcome";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 /**
@@ -35,6 +42,15 @@ function movementReading(title: string, detail: string | null): Record<string, u
   }
 }
 
+/** The claims of a judgment as the database takes them (0193). */
+const claimsOut = (claims: readonly ClaimReading[]) =>
+  claims.map((claim) => ({
+    claim: claim.claim,
+    result: claim.result,
+    cents: claim.cents ? String(claim.cents) : "",
+    per_claimant: claim.perClaimant,
+  }));
+
 /** What the rule reads of a publication: the judgment's result and value, a settlement, or a release's value. */
 function publicationReading(category: string, body: string): Record<string, unknown> | null {
   if (category === "pagamento") {
@@ -53,12 +69,13 @@ function publicationReading(category: string, body: string): Record<string, unkn
         cents: judgment.cents ? String(judgment.cents) : "",
         per_claimant: judgment.perClaimant,
         words: judgment.words,
+        claims: claimsOut(judgment.claims),
       };
 }
 
 /** A round of the reading: movements, then publications, then the cases ready to close. Counts only. */
 export async function outcomesRound(service: SupabaseClient, until: number): Promise<Record<string, number>> {
-  const counts = { movements: 0, publications: 0, recorded: 0, closed: 0 };
+  const counts = { movements: 0, publications: 0, recorded: 0, closed: 0, claims: 0 };
   while (Date.now() < until) {
     const { data, error } = await service
       .from("movements")
@@ -127,6 +144,28 @@ export async function outcomesRound(service: SupabaseClient, until: number): Pro
       if (recordError) throw new Error(`record_publication_final failed: ${recordError.code ?? "unknown"}`);
       counts.publications += 1;
       if ((answer as { code?: string } | null)?.code === "recorded") counts.recorded += 1;
+    }
+    if (rows.length < BATCH) break;
+  }
+  // The judgments read before the result of each claim was (0193): read again once, from the words kept on them.
+  while (Date.now() < until) {
+    const { data, error } = await service
+      .from("lawsuit_facts")
+      .select("id, words")
+      .eq("kind", "sentenca")
+      .is("claims_read_at", null)
+      .is("corrected_at", null)
+      .order("created_at", { ascending: true })
+      .limit(BATCH);
+    if (error) throw new Error(`judgments to read the claims of failed: ${error.code ?? "unknown"}`);
+    const rows = (data ?? []) as { id: string; words: string | null }[];
+    for (const row of rows) {
+      const { error: recordError } = await service.rpc("record_fact_claims", {
+        target_fact: row.id,
+        target_claims: claimsOut(readClaims(row.words ?? "")),
+      });
+      if (recordError) throw new Error(`record_fact_claims failed: ${recordError.code ?? "unknown"}`);
+      counts.claims += 1;
     }
     if (rows.length < BATCH) break;
   }

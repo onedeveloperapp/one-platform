@@ -4,7 +4,7 @@ import type { FinanceRegistrations } from "../load-finance";
 import { useTranslations } from "next-intl";
 import { useMemo, useState } from "react";
 
-import { Alert, Box, Button, MenuItem, TextField } from "@mui/material";
+import { Alert, Box, Button, MenuItem, TextField, Typography } from "@mui/material";
 
 import DocumentSlot, { type SlotState } from "@/components/cases/document-slot";
 import { CurrencyField } from "@/components/product/fields";
@@ -15,8 +15,8 @@ import NiCalendarClock from "@/icons/nexture/ni-calendar-clock";
 import NiDocumentFull from "@/icons/nexture/ni-document-full";
 import NiMoney from "@/icons/nexture/ni-money";
 import NiReceipt from "@/icons/nexture/ni-receipt";
-import { renegotiateFinanceBill, saveFinanceBill, settleFinanceBill } from "@/lib/finance/actions";
-import { type BillDirection, billRest, type FinanceBill } from "@/lib/finance/bills";
+import { renegotiateFinanceBill, saveFinanceBill, settleFinanceBill, splitFinancePayment } from "@/lib/finance/actions";
+import { type BillDirection, billRest, contractSplit, type FinanceBill } from "@/lib/finance/bills";
 import { financeErrorKey, financeFieldKey, money } from "@/lib/finance/books";
 import { dropUnsavedFinance, sendFinanceDocument } from "@/lib/finance/document-browser";
 import { FINANCE_DOCUMENT_KIND_KEY, type FinanceDocumentRead } from "@/lib/finance/documents";
@@ -420,13 +420,23 @@ export function SettlePanel({
   const [paidOn, setPaidOn] = useState(today());
   const [value, setValue] = useState(centsText(owed));
   const [discount, setDiscount] = useState(false);
+  // The fine the person typed of what was paid above the bill (0192); null while untouched, the contract's then.
+  const [fineText, setFineText] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<{ code: string; field?: string } | null>(null);
   const cents = parseCents(value) ?? 0;
   const short = cents > 0 && cents < owed;
+  const extra = cents > owed ? cents - owed : 0;
+  const byContract = extra > 0 && paidOn > bill.dueOn ? contractSplit(owed, extra, bill.lateTerms) : null;
+  const fineShown = fineText ?? (byContract ? centsText(byContract.fineCents) : "");
+  const fine = fineShown.trim() ? parseCents(fineShown) : null;
+  const interest = fine !== null && fine <= extra ? extra - fine : null;
 
   const save = async () => {
     if (!cents || cents <= 0) return setProblem({ code: "invalid_data", field: "cents" });
+    if (extra > 0 && fineShown.trim() && (fine === null || fine < 0 || fine > extra)) {
+      return setProblem({ code: "invalid_data", field: "late" });
+    }
     setBusy(true);
     setProblem(null);
     try {
@@ -435,6 +445,7 @@ export function SettlePanel({
         paidOn,
         cents,
         discountCents: short && discount ? owed - cents : 0,
+        late: extra > 0 && fine !== null && interest !== null ? { fineCents: fine, interestCents: interest } : null,
       });
       if (result.ok) onSaved(result.status);
       else setProblem({ code: result.code, field: result.field });
@@ -513,6 +524,163 @@ export function SettlePanel({
             <MenuItem value="open">{t("finance-bill-rest-open", { value: money(owed - cents) })}</MenuItem>
             <MenuItem value="discount">{t("finance-bill-rest-discount", { value: money(owed - cents) })}</MenuItem>
           </TextField>
+        ) : null}
+        {extra > 0 ? (
+          <LateFields
+            extra={extra}
+            fine={fineShown}
+            interest={interest}
+            onFine={setFineText}
+            note={
+              fineText === null && byContract ? t("finance-bill-split-contract-hint") : t("finance-bill-split-hint")
+            }
+          />
+        ) : null}
+      </Box>
+    </SidePanel>
+  );
+}
+
+/** What was paid above a bill, said as its fine (typed) and its interest (the rest), each a field of its own (0192). */
+function LateFields({
+  extra,
+  fine,
+  interest,
+  onFine,
+  note,
+}: {
+  extra: number;
+  fine: string;
+  interest: number | null;
+  onFine: (value: string) => void;
+  note: string;
+}) {
+  const t = useTranslations("product");
+  return (
+    <Box className="flex flex-col gap-3">
+      <StateLine tone="info">{t("finance-bill-settle-extra", { value: money(extra) })}</StateLine>
+      <Box className="grid gap-4 sm:grid-cols-2">
+        <CurrencyField
+          label={t("finance-bill-field-fine")}
+          currencySymbol="R$"
+          value={fine}
+          onChange={(event) => onFine(event.target.value)}
+        />
+        <TextField
+          label={t("finance-bill-field-interest")}
+          value={interest !== null ? money(interest) : ""}
+          slotProps={{ input: { readOnly: true }, inputLabel: { shrink: true } }}
+        />
+      </Box>
+      <Typography variant="caption" className="text-text-secondary">
+        {note}
+      </Typography>
+    </Box>
+  );
+}
+
+/**
+ * Who operates the books says how much of what a payment paid above its bill was the fine and how much the interest
+ * (0192): a payment nobody split, or one ONE split by the contract. Saving with no fine takes the split back.
+ */
+export function SplitPanel({
+  bill,
+  onClose,
+  onSaved,
+}: {
+  bill: FinanceBill;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const t = useTranslations("product");
+  const payments = bill.latePayments;
+  const [paymentId, setPaymentId] = useState((payments.find((payment) => !payment.splitBy) ?? payments[0])?.id ?? "");
+  const payment = payments.find((item) => item.id === paymentId) ?? null;
+  const [fineText, setFineText] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<{ code: string; field?: string } | null>(null);
+  const extra = payment?.extraCents ?? 0;
+  const fineShown = fineText ?? (payment?.splitBy ? centsText(payment.fineCents) : "");
+  const fine = fineShown.trim() ? parseCents(fineShown) : null;
+  const interest = fine !== null && fine <= extra ? extra - fine : null;
+
+  const save = async () => {
+    if (!payment) return;
+    if (fineShown.trim() && (fine === null || fine < 0 || fine > extra)) {
+      return setProblem({ code: "invalid_data", field: "late" });
+    }
+    setBusy(true);
+    setProblem(null);
+    try {
+      const result = await splitFinancePayment(
+        payment.id,
+        fine !== null && interest !== null ? { fineCents: fine, interestCents: interest } : null,
+      );
+      if (result.ok) onSaved();
+      else setProblem({ code: result.code, field: result.field });
+    } catch {
+      setProblem({ code: "failed" });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <SidePanel
+      onClose={onClose}
+      closeLabel={t("finance-cancel")}
+      icon={<NiMoney size="medium" />}
+      tone="secondary"
+      busy={busy}
+      title={t("finance-bill-split-title")}
+      description={t("finance-bill-split-body")}
+      onSubmit={() => void save()}
+      actions={
+        <>
+          <Button type="submit" variant="contained" disabled={busy || !payment}>
+            {busy ? t("finance-saving") : t("finance-save")}
+          </Button>
+          <Button variant="text" color="grey" onClick={onClose} disabled={busy}>
+            {t("finance-cancel")}
+          </Button>
+        </>
+      }
+    >
+      <Box className="flex flex-col gap-5">
+        <StateLine tone="info">
+          {[bill.counterparty ?? bill.description ?? bill.category, bill.dueOn.split("-").reverse().join("/")]
+            .filter(Boolean)
+            .join(" · ")}
+        </StateLine>
+        <Problem problem={problem} />
+        {payments.length > 1 ? (
+          <TextField
+            select
+            label={t("finance-bill-split-payment")}
+            value={paymentId}
+            onChange={(event) => {
+              setPaymentId(event.target.value);
+              setFineText(null);
+            }}
+          >
+            {payments.map((item) => (
+              <MenuItem key={item.id} value={item.id}>
+                {t("finance-bill-split-payment-option", {
+                  day: item.paidOn.split("-").reverse().join("/"),
+                  value: money(item.extraCents),
+                })}
+              </MenuItem>
+            ))}
+          </TextField>
+        ) : null}
+        {payment ? (
+          <LateFields
+            extra={extra}
+            fine={fineShown}
+            interest={interest}
+            onFine={setFineText}
+            note={payment.splitBy === "contract" ? t("finance-bill-split-contract") : t("finance-bill-split-clear")}
+          />
         ) : null}
       </Box>
     </SidePanel>

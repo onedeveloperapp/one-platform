@@ -6,10 +6,19 @@
  */
 import type { PendingItem } from "@/lib/firm/pending";
 import { formatCents } from "@flyee/rules/finance";
+import { CLAIM_KINDS, type ClaimKind } from "@flyee/rules/outcome";
 
 export const FACT_KINDS = ["sentenca", "acordo", "transito", "recurso", "deposito", "alvara", "arquivamento"] as const;
 export type FactKind = (typeof FACT_KINDS)[number];
 export type FactResult = "procedente" | "parcial" | "improcedente";
+
+/** What a judgment decided of one claim it names (0193, `pedidos-v1`): granted with its value, or denied. */
+export type FactClaim = {
+  claim: ClaimKind;
+  result: "concedido" | "negado";
+  cents: number | null;
+  perClaimant: boolean;
+};
 
 export type LawsuitFact = {
   id: string;
@@ -32,12 +41,41 @@ export type LawsuitFact = {
   receivedByOne?: boolean;
   corrected: boolean;
   correctedReason: string | null;
+  /** What a judgment decided of each claim it names (0193). */
+  claims: FactClaim[];
 };
 
 const text = (value: unknown): string | null => (typeof value === "string" && value !== "" ? value : null);
 const integer = (value: unknown): number | null => {
   const parsed = typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN;
   return Number.isFinite(parsed) ? Math.trunc(parsed) : null;
+};
+
+/** The claims of a judgment as the database keeps them; one this code does not know is left out. */
+export function factClaimsOf(raw: unknown): FactClaim[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.flatMap((item): FactClaim[] => {
+    const row = (item ?? {}) as Record<string, unknown>;
+    const claim = CLAIM_KINDS.find((known) => known === row.claim);
+    if (!claim || (row.result !== "concedido" && row.result !== "negado")) return [];
+    const cents = row.result === "concedido" ? integer(row.cents) : null;
+    return [
+      {
+        claim,
+        result: row.result,
+        cents: cents && cents > 0 ? cents : null,
+        perClaimant: row.result === "concedido" && row.per_claimant === true,
+      },
+    ];
+  });
+}
+
+/** The words of each claim. */
+export const CLAIM_KEY: Record<ClaimKind, string> = {
+  danos_morais: "outcome-claim-danos-morais",
+  danos_materiais: "outcome-claim-danos-materiais",
+  lucros_cessantes: "outcome-claim-lucros-cessantes",
+  restituicao: "outcome-claim-restituicao",
 };
 
 /** The rows of `lawsuit_facts`, read; a row this code does not know is left out. */
@@ -75,6 +113,7 @@ export function lawsuitFactsOf(raw: unknown): LawsuitFact[] {
         receivedByOne: row.received_by_one === true,
         corrected: row.corrected_at !== null && row.corrected_at !== undefined,
         correctedReason: text(row.corrected_reason),
+        claims: kind === "sentenca" ? factClaimsOf(row.claims) : [],
       },
     ];
   });

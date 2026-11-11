@@ -106,7 +106,145 @@ export type JudgmentReading = {
   perClaimant: boolean;
   /** The words of the court the reading comes from, at most 400 characters. */
   words: string;
+  /** What the operative part decided of each claim it names (`pedidos-v1`); none for a settlement. */
+  claims: ClaimReading[];
 };
+
+/**
+ * The result of each claim of a lawsuit (`pedidos-v1`): what the operative part of a judgment decided of each request
+ * of the petition it names (moral damages, material damages, lost profits, the refund of the ticket), granted with
+ * the value set beside it or denied. Only what a clause of the operative part says: a claim it does not name is not
+ * read, and a clause that names a claim with no decision in it decides nothing.
+ */
+export const CLAIMS_RULE = "pedidos-v1";
+
+export type ClaimKind = "danos_morais" | "danos_materiais" | "lucros_cessantes" | "restituicao";
+export const CLAIM_KINDS: readonly ClaimKind[] = ["danos_morais", "danos_materiais", "lucros_cessantes", "restituicao"];
+
+export type ClaimReading = {
+  claim: ClaimKind;
+  result: "concedido" | "negado";
+  /** The value set beside a claim granted, in cents. */
+  cents: number | null;
+  /** The value is each claimant's. */
+  perClaimant: boolean;
+};
+
+/** Where a text names each claim, on the folded text. A "danos morais e materiais" names both. */
+const CLAIM_MENTIONS: readonly (readonly [ClaimKind, RegExp])[] = [
+  [
+    "danos_morais",
+    /\bdanos? mora(?:is|l)\b|\bdanos? extrapatrimonia(?:is|l)\b|\bdanos? materia(?:is|l) e mora(?:is|l)\b/g,
+  ],
+  ["danos_materiais", /\bdanos? materia(?:is|l)\b|\bdanos? emergentes?\b|\bdanos? mora(?:is|l) e materia(?:is|l)\b/g],
+  ["lucros_cessantes", /\blucros? cessantes?\b/g],
+  [
+    "restituicao",
+    /\brestitu\w*|\breembols\w*|\bdevolucao d[oa]s? (?:valor|valores|quantia|passage\w*|bilhete\w*)|\bdevolver\b/g,
+  ],
+];
+
+/** A decision in a clause: denied first, so "deixo de condenar" is never read as a condemnation. */
+const DECISION =
+  /\b(deixo de conden\w*|nao conden\w*|improcedente\w*|rejeit\w*|indefir\w*|indefer\w*|nao acolh\w*|afast\w*|nego)\b|\b(conden\w*|procedentes?|pag(?:ar|amento)|acolh\w*|defir\w*|defer\w*)\b/g;
+
+/** What may stand between a claim's name and the value that follows it ("danos morais de R$", ", arbitrados em R$"). */
+const VALUE_GAP =
+  /^[\s,:]*(?:no valor de|na quantia de|no importe de|no montante de|o valor de|a quantia de|arbitrad\w* em|fixad\w* em|de|em)?[\s,:]*$/;
+
+const PER_CLAIMANT = /^[^;.]{0,80}?(?:por|para cada|a cada) (?:autor|autora|parte autora|requerente|passageir)/;
+
+/** A text folded for the rule with its length kept, so a place in it is the same place in the court's words. */
+function foldKeepingPlaces(text: string): string {
+  return text
+    .split("")
+    .map((char) => {
+      const folded = char.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
+      return folded.length === 1 ? folded : char.toLowerCase().slice(0, 1) || " ";
+    })
+    .join("");
+}
+
+/** The claims a judgment's operative part decided (`pedidos-v1`): each named claim once, in the order it is named. */
+export function readClaims(text: string): ClaimReading[] {
+  const raw = String(text ?? "")
+    .normalize("NFC")
+    .replace(/\s+/g, " ");
+  const folded = foldKeepingPlaces(raw);
+  const marks = [
+    ...folded.matchAll(/ante o exposto|isto posto|diante do exposto|pelo exposto|posto isso|em face do exposto/g),
+  ];
+  const from = marks.length ? (marks[marks.length - 1].index ?? 0) : 0;
+  const claims = new Map<ClaimKind, ClaimReading>();
+  // Each clause of the operative part on its own: a sentence, a part after a semicolon, an item of a list.
+  const clauseBreak = /[.;](?=\s)|\s[a-z]\)\s|\s[ivx]+\s?[-)]\s/g;
+  const cuts = [
+    from,
+    ...[...folded.slice(from).matchAll(clauseBreak)].map((match) => from + (match.index ?? 0) + 1),
+    folded.length,
+  ];
+  for (let index = 0; index + 1 < cuts.length; index += 1) {
+    const start = cuts[index];
+    const clause = folded.slice(start, cuts[index + 1]);
+    const clauseRaw = raw.slice(start, cuts[index + 1]);
+    const mentions = CLAIM_MENTIONS.flatMap(([claim, pattern]) =>
+      [...clause.matchAll(pattern)].map((match) => ({
+        claim,
+        at: match.index ?? 0,
+        end: (match.index ?? 0) + match[0].length,
+        word: match[0],
+      })),
+    ).sort((x, y) => x.at - y.at);
+    if (mentions.length === 0) continue;
+    const decisions = [...clause.matchAll(DECISION)].map((match) => ({
+      at: match.index ?? 0,
+      end: (match.index ?? 0) + match[0].length,
+      granted: match[1] === undefined,
+    }));
+    const values = [...clauseRaw.matchAll(/r\$\s*(?:[0-9]{1,3}(?:\.[0-9]{3})*|[0-9]+),[0-9]{2}/gi)].map((match) => ({
+      at: match.index ?? 0,
+      end: (match.index ?? 0) + match[0].length,
+      cents: centsOf(match[0]),
+    }));
+    const mentionBetween = (low: number, high: number, self: number) =>
+      mentions.some((other, place) => place !== self && other.at >= low && other.at < high);
+    mentions.forEach((mention, place) => {
+      if (claims.has(mention.claim)) return;
+      const before = decisions.filter((decision) => decision.end <= mention.at).pop();
+      const after = decisions.find((decision) => decision.at >= mention.end);
+      const verb = mention.claim === "restituicao" && /^(?:restituir|reembolsar|devolver)$/.test(mention.word);
+      const granted = before ? before.granted : after ? after.granted : verb ? true : null;
+      if (granted === null) return;
+      let cents: number | null = null;
+      let valueEnd = -1;
+      if (granted) {
+        const next = values.find((value) => value.at >= mention.end);
+        const prev = [...values].reverse().find((value) => value.end <= mention.at);
+        const nextFits = (most: number) =>
+          next && next.at - mention.end <= most && !mentionBetween(mention.end, next.at, place) ? next : null;
+        const prevFits =
+          prev && mention.at - prev.end <= 200 && !mentionBetween(prev.end, mention.at, place) ? prev : null;
+        const chosen =
+          mention.claim === "restituicao"
+            ? (nextFits(120) ?? prevFits)
+            : next && VALUE_GAP.test(clause.slice(mention.end, next.at)) && !mentionBetween(mention.end, next.at, place)
+              ? next
+              : (prevFits ?? nextFits(160));
+        if (chosen) {
+          cents = chosen.cents;
+          valueEnd = chosen.end;
+        }
+      }
+      claims.set(mention.claim, {
+        claim: mention.claim,
+        result: granted ? "concedido" : "negado",
+        cents,
+        perClaimant: cents !== null && PER_CLAIMANT.test(clause.slice(valueEnd)),
+      });
+    });
+  }
+  return [...claims.values()];
+}
 
 /** A value written "R$ 5.000,00" as cents. */
 function centsOf(text: string): number | null {
@@ -134,7 +272,7 @@ export function readJudgment(text: string): JudgmentReading | null {
   const operativeRaw = raw.slice(from);
   if (/homolog\w* (o |por sentenca o |por sentenca )?acordo/.test(operative)) {
     const cents = centsOf(operativeRaw);
-    return { result: "acordo", cents, perClaimant: false, words: operativeRaw.slice(0, 400).trim() };
+    return { result: "acordo", cents, perClaimant: false, words: operativeRaw.slice(0, 400).trim(), claims: [] };
   }
   const verb = /julgo (parcialmente )?(im)?procedente|julgo procedente em parte/.exec(operative);
   if (!verb) return null;
@@ -152,7 +290,7 @@ export function readJudgment(text: string): JudgmentReading | null {
     }
   }
   const start = Math.max((verb.index ?? 0) - 40, 0);
-  return { result, cents, perClaimant, words: operativeRaw.slice(start, start + 400).trim() };
+  return { result, cents, perClaimant, words: operativeRaw.slice(start, start + 400).trim(), claims: readClaims(raw) };
 }
 
 /**

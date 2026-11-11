@@ -422,7 +422,14 @@ async function attachFinanceDocument(kind: "bill" | "entry", recordId: string, f
 /** Registers a payment or a receipt of a bill, in part or whole, or with a discount (0129). */
 export async function settleFinanceBill(
   billId: string,
-  fields: { accountId: string; paidOn: string; cents: number; discountCents: number },
+  fields: {
+    accountId: string;
+    paidOn: string;
+    cents: number;
+    discountCents: number;
+    /** What was paid above the bill, said as its fine and its interest (0192); null leaves it to the contract. */
+    late?: { fineCents: number; interestCents: number } | null;
+  },
 ): Promise<FinanceResult<{ status: string }>> {
   if (!isId(billId) || !isId(fields.accountId)) return { ok: false, code: "invalid_data", field: "account" };
   if (!Number.isSafeInteger(fields.cents) || fields.cents <= 0)
@@ -436,6 +443,8 @@ export async function settleFinanceBill(
         paid_on: fields.paidOn,
         cents: String(fields.cents),
         discount_cents: fields.discountCents > 0 ? String(fields.discountCents) : "",
+        fine_cents: fields.late ? String(fields.late.fineCents) : "",
+        interest_cents: fields.late ? String(fields.late.interestCents) : "",
       },
     },
     (answer) => ({ status: String(answer.status ?? "") }),
@@ -443,6 +452,30 @@ export async function settleFinanceBill(
   // A client's bill received owes its receipt (0152): ONE issues it after the answer, never waited for.
   if (settled.ok) queueFinanceReceipts();
   return settled;
+}
+
+/**
+ * Who operates the books says how much of what a payment paid above its bill was the fine and how much the interest
+ * (0192, the second factor); null takes the split back.
+ */
+export async function splitFinancePayment(
+  paymentId: string,
+  split: { fineCents: number; interestCents: number } | null,
+): Promise<FinanceResult> {
+  if (!isId(paymentId)) return { ok: false, code: "not_found" };
+  if (
+    split &&
+    (!Number.isSafeInteger(split.fineCents) ||
+      !Number.isSafeInteger(split.interestCents) ||
+      split.fineCents < 0 ||
+      split.interestCents < 0)
+  ) {
+    return { ok: false, code: "invalid_data", field: "late" };
+  }
+  return call("split_finance_payment", {
+    target_payment: paymentId,
+    fields: split ? { fine_cents: String(split.fineCents), interest_cents: String(split.interestCents) } : {},
+  });
 }
 
 /** Who operates the books asks for the receipt of a bill: kept to a person by the firm, or one that failed (0152). */

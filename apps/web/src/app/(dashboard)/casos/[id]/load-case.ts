@@ -317,7 +317,7 @@ export async function loadCase(id: string): Promise<CaseState> {
     supabase
       .from("lawsuit_facts")
       .select(
-        "id, proceeding_id, kind, result, appeal_by, release_kind, cents, per_claimant, happened_on, words, by_one, confirmed, ack_owed, acked_at, received_cents, received_on, received_by_one, corrected_at, corrected_reason",
+        "id, proceeding_id, kind, result, appeal_by, release_kind, cents, per_claimant, happened_on, words, by_one, confirmed, ack_owed, acked_at, received_cents, received_on, received_by_one, corrected_at, corrected_reason, claims",
       )
       .eq("case_id", id)
       .order("happened_on", { ascending: true })

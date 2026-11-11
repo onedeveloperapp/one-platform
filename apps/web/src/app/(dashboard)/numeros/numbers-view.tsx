@@ -36,10 +36,12 @@ import NiClock from "@/icons/nexture/ni-clock";
 import NiFolder from "@/icons/nexture/ni-folder";
 import NiMoney from "@/icons/nexture/ni-money";
 import { caseLabel } from "@/lib/cases/cases";
+import { CLAIM_KEY } from "@/lib/cases/outcomes";
 import { writeXlsx, XLSX_TYPE } from "@/lib/export/xlsx-write";
 import { savedFileName, saveFile } from "@/lib/files/save-file";
 import { caseKindLabelKey } from "@/lib/modules/registry";
 import {
+  claimStats,
   cohorts,
   type Dimension,
   DIMENSIONS,
@@ -96,6 +98,8 @@ export default function NumbersView({ state }: { state: NumbersState }) {
   const all = useMemo(() => statsOf("", rows, checkedOnly), [rows, checkedOnly]);
   const groups = useMemo(() => groupStats(rows, dimension, checkedOnly), [rows, dimension, checkedOnly]);
   const months = useMemo(() => cohorts(rows, checkedOnly), [rows, checkedOnly]);
+  // What the judgments decided of each claim (0193): how often each was granted, and for how much.
+  const claims = useMemo(() => claimStats(rows, checkedOnly), [rows, checkedOnly]);
   // The judgments and wins of the months ahead, from the firm's own history, over every lawsuit (never the period's).
   const projection = useMemo(
     () =>
@@ -307,6 +311,52 @@ export default function NumbersView({ state }: { state: NumbersState }) {
                 <Typography variant="caption" className="text-text-secondary">
                   {t("numbers-own-time-note")}
                 </Typography>
+              </CardContent>
+            </Card>
+
+            <Card component="section" aria-labelledby="numbers-claims">
+              <CardContent className="flex flex-col gap-3">
+                <CardTitle
+                  id="numbers-claims"
+                  icon={<NiChartBar size="medium" />}
+                  title={t("numbers-claims-title")}
+                  description={t("numbers-claims-description")}
+                />
+                {claims.length === 0 ? (
+                  <Typography variant="body2" className="text-text-secondary">
+                    {t("numbers-claims-empty")}
+                  </Typography>
+                ) : (
+                  <TableContainer>
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>{t("numbers-col-claim")}</TableCell>
+                          <TableCell align="right">{t("numbers-col-decided")}</TableCell>
+                          <TableCell align="right">{t("numbers-col-granted")}</TableCell>
+                          <TableCell align="right">{t("numbers-col-grant-rate")}</TableCell>
+                          <TableCell align="right">{t("numbers-col-claim-value")}</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {claims.map((claim) => (
+                          <TableRow key={claim.claim}>
+                            <TableCell>{t(CLAIM_KEY[claim.claim])}</TableCell>
+                            <TableCell align="right">{claim.decided}</TableCell>
+                            <TableCell align="right">{claim.granted}</TableCell>
+                            <TableCell align="right">{sample(percent(claim.grantRate), claim.decided)}</TableCell>
+                            <TableCell align="right">
+                              {sample(
+                                claim.valuePerClaimant === null ? null : formatCents(claim.valuePerClaimant),
+                                claim.granted,
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                )}
               </CardContent>
             </Card>
 

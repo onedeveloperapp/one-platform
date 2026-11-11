@@ -1,7 +1,15 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { againstClient, certifiesFinal, endsLawsuit, movementFact, readJudgment, readRelease } from "./outcome.ts";
+import {
+  againstClient,
+  certifiesFinal,
+  endsLawsuit,
+  movementFact,
+  readClaims,
+  readJudgment,
+  readRelease,
+} from "./outcome.ts";
 
 describe("what a lawsuit came to, read by rule", () => {
   it("reads the facts a court's movements say", () => {
@@ -50,6 +58,67 @@ describe("what a lawsuit came to, read by rule", () => {
     assert.deepEqual([settled?.result, settled?.cents], ["acordo", 450000]);
 
     assert.equal(readJudgment("Intime-se a parte autora para se manifestar."), null);
+  });
+
+  it("reads what the operative part decided of each claim, with the value beside it (pedidos-v1)", () => {
+    // One clause, two claims and two values, each value before its claim.
+    assert.deepEqual(
+      readClaims(
+        "Ante o exposto, JULGO PARCIALMENTE PROCEDENTES os pedidos para condenar a ré ao pagamento de R$ 5.000,00 a título de danos morais e de R$ 1.234,56 a título de danos materiais, corrigidos desde a citação.",
+      ),
+      [
+        { claim: "danos_morais", result: "concedido", cents: 500000, perClaimant: false },
+        { claim: "danos_materiais", result: "concedido", cents: 123456, perClaimant: false },
+      ],
+    );
+    // Each value after its claim, a denial in its own sentence, and a value each claimant's.
+    assert.deepEqual(
+      readClaims(
+        "Isto posto, condeno a requerida a pagar, a título de danos morais, R$ 4.000,00 (quatro mil reais) para cada autor. Julgo improcedente o pedido de danos materiais, não comprovados.",
+      ),
+      [
+        { claim: "danos_morais", result: "concedido", cents: 400000, perClaimant: true },
+        { claim: "danos_materiais", result: "negado", cents: null, perClaimant: false },
+      ],
+    );
+    // A denial and a grant in one clause; the refund with its value after the verb; "deixo de condenar" is a denial.
+    assert.deepEqual(
+      readClaims(
+        "Diante do exposto, julgo improcedente o pedido de lucros cessantes e procedente o de danos morais, condenando a ré a pagar R$ 6.000,00, e a restituir à autora o valor de R$ 850,00 referente às passagens; deixo de condenar a ré em danos materiais.",
+      ),
+      [
+        { claim: "lucros_cessantes", result: "negado", cents: null, perClaimant: false },
+        { claim: "danos_morais", result: "concedido", cents: 600000, perClaimant: false },
+        { claim: "restituicao", result: "concedido", cents: 85000, perClaimant: false },
+        { claim: "danos_materiais", result: "negado", cents: null, perClaimant: false },
+      ],
+    );
+    // "danos morais e materiais" names both; a mention with no decision in its clause decides nothing.
+    assert.deepEqual(
+      readClaims(
+        "Pelo exposto, JULGO IMPROCEDENTES os pedidos de danos morais e materiais. Sobre os danos morais não incidem juros.",
+      ),
+      [
+        { claim: "danos_morais", result: "negado", cents: null, perClaimant: false },
+        { claim: "danos_materiais", result: "negado", cents: null, perClaimant: false },
+      ],
+    );
+    // Only the operative part: the reasoning before "ante o exposto" is not read.
+    assert.deepEqual(
+      readClaims(
+        "A autora pede danos materiais de R$ 900,00, que rejeito por falta de prova. Ante o exposto, condeno a ré a pagar R$ 3.000,00 por danos morais.",
+      ),
+      [{ claim: "danos_morais", result: "concedido", cents: 300000, perClaimant: false }],
+    );
+    assert.deepEqual(readClaims("Ante o exposto, julgo procedente o pedido. Sem custas."), []);
+    // The judgment's reading carries them, and a settlement has none.
+    assert.equal(
+      readJudgment(
+        "Ante o exposto, JULGO PROCEDENTE o pedido para condenar a ré a pagar R$ 5.000,00 a título de danos morais.",
+      )?.claims.length,
+      1,
+    );
+    assert.deepEqual(readJudgment("Pelo exposto, HOMOLOGO o acordo, no valor de R$ 4.500,00.")?.claims, []);
   });
 
   it("ends a lawsuit only on its definitive archiving, and says a denial is against the client", () => {

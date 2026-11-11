@@ -2,7 +2,7 @@
 
 import FinanceGate from "../finance-gate";
 import type { FinanceState } from "../load-finance";
-import { BillPanel, RenegotiatePanel, SettlePanel } from "./bill-panels";
+import { BillPanel, RenegotiatePanel, SettlePanel, SplitPanel } from "./bill-panels";
 import ImportPanel from "./import-panel";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -41,6 +41,7 @@ import {
   type BillView,
   type FinanceBill,
   type FinanceSeries,
+  lateChargesOf,
   receivableAging,
 } from "@/lib/finance/bills";
 import { configuresBooks, dayLabel, financeErrorKey, money, operatesBooks } from "@/lib/finance/books";
@@ -111,6 +112,7 @@ export default function BillsView({ state }: { state: FinanceState }) {
   const [writing, setWriting] = useState<Writing | null>(null);
   const [settling, setSettling] = useState<FinanceBill | null>(null);
   const [renegotiating, setRenegotiating] = useState<FinanceBill | null>(null);
+  const [splitting, setSplitting] = useState<FinanceBill | null>(null);
   const [closing, setClosing] = useState<Closing | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [stopping, setStopping] = useState<FinanceSeries | null>(null);
@@ -249,12 +251,40 @@ export default function BillsView({ state }: { state: FinanceState }) {
     }
   };
 
+  // What a payment paid above its bill is split into its fine and its interest by who operates the books (0192).
+  const splitAction = (bill: FinanceBill): QuickAction[] =>
+    writes && bill.latePayments.length > 0
+      ? [{ key: "split", label: t("finance-bill-split"), onClick: () => setSplitting(bill) }]
+      : [];
+  const lateLine = (bill: FinanceBill) => {
+    const late = lateChargesOf(bill);
+    const parts = [
+      late.fineCents > 0 ? t("finance-bill-fine", { value: money(late.fineCents) }) : null,
+      late.interestCents > 0 ? t("finance-bill-interest", { value: money(late.interestCents) }) : null,
+      late.unsplitCents > 0 ? t("finance-bill-extra-unsplit", { value: money(late.unsplitCents) }) : null,
+    ].filter(Boolean);
+    if (parts.length === 0) return null;
+    return (
+      <>
+        <Typography variant="body2" className="text-text-secondary">
+          {parts.join(" · ")}
+        </Typography>
+        {late.byContract ? (
+          <Typography variant="caption" className="text-text-secondary">
+            {t("finance-bill-split-contract")}
+          </Typography>
+        ) : null}
+      </>
+    );
+  };
+
   const actionsOf = (bill: FinanceBill): QuickAction[] =>
     bill.status !== "open"
-      ? [...documentAction(bill), ...receiptAction(bill)]
+      ? [...documentAction(bill), ...receiptAction(bill), ...splitAction(bill)]
       : [
           ...documentAction(bill),
           ...receiptAction(bill),
+          ...splitAction(bill),
           ...(bill.paidCents === 0
             ? [{ key: "edit", label: t("finance-bill-edit"), onClick: () => setWriting({ kind: "edit", bill }) }]
             : []),
@@ -503,11 +533,7 @@ export default function BillsView({ state }: { state: FinanceState }) {
                         .join(" · ")}
                     </Typography>
                     {standingLine(bill)}
-                    {bill.extraCents > 0 ? (
-                      <Typography variant="body2" className="text-text-secondary">
-                        {t("finance-bill-extra", { value: money(bill.extraCents) })}
-                      </Typography>
-                    ) : null}
+                    {bill.extraCents > 0 ? lateLine(bill) : null}
                     {bill.discountCents > 0 ? (
                       <Typography variant="body2" className="text-text-secondary">
                         {t("finance-bill-discount", { value: money(bill.discountCents) })}
@@ -571,6 +597,17 @@ export default function BillsView({ state }: { state: FinanceState }) {
           onClose={() => setSettling(null)}
           onSaved={() => {
             setSettling(null);
+            router.refresh();
+          }}
+        />
+      ) : null}
+      {splitting ? (
+        <SplitPanel
+          bill={splitting}
+          onClose={() => setSplitting(null)}
+          onSaved={() => {
+            setSplitting(null);
+            setNote(t("finance-bill-split-saved"));
             router.refresh();
           }}
         />

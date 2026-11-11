@@ -4,6 +4,9 @@
  * the month a lawsuit was filed. What ONE read and nobody checked is counted, and may be left out.
  */
 
+import { type FactClaim, factClaimsOf } from "@/lib/cases/outcomes";
+import { CLAIM_KINDS, type ClaimKind } from "@flyee/rules/outcome";
+
 export type LawsuitRow = {
   id: string;
   caseId: string;
@@ -28,6 +31,9 @@ export type LawsuitRow = {
   closed: boolean;
   unchecked: number;
   isTest: boolean;
+  /** What its judgment decided of each claim (0193), and how many claimants it has. */
+  claims: FactClaim[];
+  claimants: number;
 };
 
 export const DIMENSIONS = ["airline", "incident", "court", "comarca", "unit", "kind"] as const;
@@ -74,6 +80,8 @@ export function readLawsuitRows(raw: unknown): LawsuitRow[] {
         closed: row.closed === true,
         unchecked: typeof row.unchecked === "number" ? row.unchecked : 0,
         isTest: row.is_test === true,
+        claims: factClaimsOf(row.claims),
+        claimants: typeof row.claimants === "number" && row.claimants > 0 ? row.claimants : 1,
       },
     ];
   });
@@ -153,6 +161,49 @@ const keyOf = (row: LawsuitRow, dimension: Dimension): string =>
           : dimension === "unit"
             ? row.unit
             : row.kind) ?? "";
+
+/** How the judgments decided one claim (0193): of the judged lawsuits that decided it, how many granted and for how much. */
+export type ClaimStats = {
+  claim: ClaimKind;
+  /** The judged lawsuits whose judgment decided this claim. */
+  decided: number;
+  granted: number;
+  /** Granted, of the decided; null with fewer than the sample. */
+  grantRate: number | null;
+  /** The median value granted per claimant; null with fewer than the sample of values. */
+  valuePerClaimant: number | null;
+  ids: string[];
+};
+
+/** Each claim the judgments decided, in the order of the kinds, those no judgment decided left out (0193). */
+export function claimStats(rows: readonly LawsuitRow[], checkedOnly: boolean): ClaimStats[] {
+  return CLAIM_KINDS.flatMap((kind): ClaimStats[] => {
+    const decided = rows.flatMap((row) => {
+      if (!judgment(row, checkedOnly)) return [];
+      const claim = row.claims.find((item) => item.claim === kind);
+      return claim ? [{ row, claim }] : [];
+    });
+    if (decided.length === 0) return [];
+    const granted = decided.filter((item) => item.claim.result === "concedido");
+    const values = granted
+      .filter((item) => item.claim.cents !== null)
+      .map((item) =>
+        item.claim.perClaimant
+          ? (item.claim.cents as number)
+          : Math.round((item.claim.cents as number) / Math.max(item.row.claimants, 1)),
+      );
+    return [
+      {
+        claim: kind,
+        decided: decided.length,
+        granted: granted.length,
+        grantRate: decided.length >= MIN_SAMPLE ? granted.length / decided.length : null,
+        valuePerClaimant: median(values),
+        ids: decided.map((item) => item.row.id),
+      },
+    ];
+  });
+}
 
 /** The rows of a period: filed from `from` to `to`, both optional. */
 export const withinPeriod = (rows: readonly LawsuitRow[], from: string | null, to: string | null): LawsuitRow[] =>

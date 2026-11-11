@@ -39,6 +39,8 @@ export async function saveLawsuitFact(
     happenedOn: string;
     cents: number | null;
     perClaimant: boolean;
+    /** What a judgment decided of each claim (0193). */
+    claims?: { claim: string; result: "concedido" | "negado"; cents: number | null }[];
   },
 ): Promise<OutcomeResult> {
   if (!isId(proceedingId)) return { ok: false, code: "not_found" };
@@ -53,6 +55,12 @@ export async function saveLawsuitFact(
         happened_on: fields.happenedOn,
         cents: fields.cents && fields.cents > 0 ? String(fields.cents) : "",
         per_claimant: fields.perClaimant,
+        claims: (fields.claims ?? []).map((claim) => ({
+          claim: claim.claim,
+          result: claim.result,
+          cents: claim.result === "concedido" && claim.cents && claim.cents > 0 ? String(claim.cents) : "",
+          per_claimant: fields.perClaimant,
+        })),
       },
     },
     caseId,
