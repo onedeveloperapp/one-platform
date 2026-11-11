@@ -103,6 +103,20 @@ export function intakeQuestion(ask: IntakeAsk, first: boolean): string {
   return first ? `${INTAKE_OPENING} ${QUESTIONS[ask]}` : QUESTIONS[ask];
 }
 
+/**
+ * The follow-up of a lead who stopped answering (migration 0207): the question still missing, said again, opened
+ * with a word that does not press. Null when nothing is missing (the intake is the database's to decide then).
+ */
+export function leadFollowupText(facts: IntakeFacts, count: number): string | null {
+  const ask = intakeMissing(facts)[0];
+  if (!ask) return null;
+  const opening =
+    count === 0
+      ? "Oi, ainda posso te ajudar com o que aconteceu no seu voo."
+      : "Sigo por aqui, se quiser continuar a avaliação do seu caso. Se preferir não receber mais mensagens, responda SAIR.";
+  return `${opening} ${QUESTIONS[ask]}`;
+}
+
 /** What the rule of qualification reads of an intake (`qualificacao-v1`). */
 export function intakeQualificationInput(facts: IntakeFacts, today: string): QualificationInput {
   const problem: QualificationProblem = isQualificationProblem(facts.problema) ? facts.problema : "other";

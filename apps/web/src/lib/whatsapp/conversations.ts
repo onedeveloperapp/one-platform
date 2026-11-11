@@ -129,6 +129,12 @@ export function eventWords(event: ThreadEvent): {
       return { key: "inbox-event-not-qualified", values: {} };
     case "stopped":
       return { key: "inbox-event-stopped", values: {} };
+    case "lead_followup":
+      return { key: "inbox-event-lead-followup", values: {} };
+    case "came_from_ad":
+      return event.reason
+        ? { key: "inbox-event-came-from-ad", values: { headline: event.reason } }
+        : { key: "inbox-event-came-from-ad-plain", values: {} };
     default:
       return { key: "inbox-event-other", values: {} };
   }

@@ -40,7 +40,8 @@ export function verifySignature(rawBody: string, signatureHeader: string | null 
 
 type Json = Record<string, unknown>;
 
-const isObject = (value: unknown): value is Json => typeof value === "object" && value !== null && !Array.isArray(value);
+const isObject = (value: unknown): value is Json =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
 const list = (value: unknown): Json[] => (Array.isArray(value) ? value.filter(isObject) : []);
 const text = (value: unknown): string | null => (typeof value === "string" && value !== "" ? value : null);
 const digits = (value: unknown): string => String(value ?? "").replace(/\D/g, "");
@@ -135,6 +136,7 @@ export function parseWebhook(body: unknown): WhatsAppEvent[] {
           const id = text(message.id);
           if (!from || !id) continue;
           const context = isObject(message.context) ? message.context : {};
+          const referral = isObject(message.referral) ? message.referral : null;
           events.push({
             type: "message",
             phoneNumberId,
@@ -144,6 +146,17 @@ export function parseWebhook(body: unknown): WhatsAppEvent[] {
             ...contentOf(message),
             replyTo: text(context.id),
             timestamp: moment(message.timestamp),
+            ...(referral
+              ? {
+                  adReferral: {
+                    sourceType: text(referral.source_type),
+                    sourceId: text(referral.source_id),
+                    sourceUrl: text(referral.source_url),
+                    headline: text(referral.headline),
+                    ctwaClid: text(referral.ctwa_clid),
+                  },
+                }
+              : {}),
           });
         }
         for (const status of list(value.statuses)) {

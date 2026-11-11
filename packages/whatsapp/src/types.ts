@@ -153,6 +153,15 @@ export interface InboundMedia {
   filename: string | null;
 }
 
+/** The ad or post a person's first message came from (Meta's `referral`): nothing of the person. */
+export type AdReferral = {
+  sourceType: string | null;
+  sourceId: string | null;
+  sourceUrl: string | null;
+  headline: string | null;
+  ctwaClid: string | null;
+};
+
 /** One thing a webhook delivery says, already read into the platform's own words. */
 export type WhatsAppEvent =
   /** A person wrote to a firm's number. */
@@ -168,6 +177,11 @@ export type WhatsAppEvent =
       media: InboundMedia | null;
       replyTo: string | null;
       timestamp: Date | null;
+      /**
+       * The ad or post the conversation was opened from ("click to WhatsApp"), as Meta's `referral` names it; only
+       * on a message that came from one.
+       */
+      adReferral?: AdReferral;
     }
   /** What became of a message the firm sent. */
   | {

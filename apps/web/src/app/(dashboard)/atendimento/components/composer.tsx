@@ -27,6 +27,7 @@ import {
   sendErrorKey,
   type TemplateOption,
 } from "@/lib/whatsapp/conversations";
+import { checkMessage, type MessageFinding } from "@flyee/whatsapp/rules";
 import { renderTemplate } from "@flyee/whatsapp/rules";
 
 /** The longest text the vendor carries in one message. */
@@ -43,6 +44,13 @@ const MAX_CAPTION = 1024;
  * person asked to stop, or in a support visit. Each of those says why, and
  * what to do about it.
  */
+/** What each finding of the rule of advertising asks the person to look at. */
+const FLAG_KEY: Record<MessageFinding, string> = {
+  promises_result: "inbox-flagged-promises_result",
+  speaks_of_price: "inbox-flagged-speaks_of_price",
+  presses: "inbox-flagged-presses",
+};
+
 export default function Composer({
   mode,
   conversation,
@@ -60,6 +68,8 @@ export default function Composer({
 }) {
   const t = useTranslations("product");
   const [text, setText] = useState("");
+  // What the rule of advertising flagged in the text about to go (`publicidade-v1`), shown before it goes.
+  const [flagged, setFlagged] = useState<MessageFinding[] | null>(null);
   const [templateId, setTemplateId] = useState("");
   const [values, setValues] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
@@ -108,7 +118,13 @@ export default function Composer({
       return;
     }
     if (!text.trim()) return;
-    void send({ conversationId: conversation.id, kind: "text", body: text });
+    const findings = checkMessage(text);
+    if (findings.length > 0 && flagged === null) {
+      setFlagged(findings);
+      return;
+    }
+    setFlagged(null);
+    void send({ conversationId: conversation.id, kind: "text", body: text, flagged: findings });
   };
 
   const attach = async (file: File) => {
@@ -161,6 +177,20 @@ export default function Composer({
 
   const feedback = (
     <>
+      {flagged && flagged.length > 0 ? (
+        <Alert
+          severity="warning"
+          className="neutral bg-background-paper/60!"
+          action={
+            <Button color="grey" size="small" disabled={busy} onClick={sendText}>
+              {t("inbox-flagged-send")}
+            </Button>
+          }
+          onClose={() => setFlagged(null)}
+        >
+          {t("inbox-flagged", { count: flagged.length })} {flagged.map((code) => t(FLAG_KEY[code])).join(" ")}
+        </Alert>
+      ) : null}
       {outcome === "queued" ? (
         <Alert
           severity="info"
@@ -350,6 +380,7 @@ export default function Composer({
           onChange={(event) => {
             setText(event.target.value);
             setErrorCode(null);
+            setFlagged(null);
           }}
           onKeyDown={(event) => {
             // Enter sends; with Shift it breaks the line. While a word is being composed (an accent, an input method) it does neither.

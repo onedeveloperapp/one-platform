@@ -60,6 +60,7 @@ import { BRAND } from "@flyee/content";
 import { normalizeImage } from "@flyee/documents/normalize";
 import type { FileStore } from "@flyee/documents/types";
 import { qualify } from "@flyee/rules/qualification";
+import { checkMessage } from "@flyee/whatsapp/rules";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 /**
@@ -711,8 +712,22 @@ async function takeTurn(service: SupabaseClient, held: Held, report: TurnReport)
         } else if (run.approvalId) {
           // The firm keeps ONE's answers to a person: this one waits in the queue for "Enviar".
         } else {
-          const reply = cleanReply(answer?.reply);
-          if (reply) {
+          const drafted = cleanReply(answer?.reply);
+          // What the bar's rules on advertising weigh (a promise, a price, pressure) never goes as ONE's own word: a
+          // person of the firm continues (`publicidade-v1`).
+          const flagged = drafted ? checkMessage(drafted) : [];
+          const reply = flagged.length > 0 ? null : drafted;
+          if (flagged.length > 0) {
+            await say(service, held, await wordsOf(service, context.orgId, "called_person", calledMessage)).catch(
+              () => undefined,
+            );
+            await callPerson(
+              service,
+              held,
+              "A resposta do ONE falaria de resultado, de preço ou pediria pressa: uma pessoa do escritório responde.",
+            );
+            report.called += 1;
+          } else if (reply) {
             const sent = await rpc(service, "one_reply", {
               target_conversation: held.conversationId,
               target_claim: held.claim,
@@ -724,7 +739,7 @@ async function takeTurn(service: SupabaseClient, held: Held, report: TurnReport)
               await send(service, sent.message_id);
             }
           }
-          if (!answer || answer.callPerson || answer.intent === "parar") {
+          if (flagged.length === 0 && (!answer || answer.callPerson || answer.intent === "parar")) {
             if (!reply)
               await say(service, held, await wordsOf(service, context.orgId, "called_person", calledMessage)).catch(
                 () => undefined,

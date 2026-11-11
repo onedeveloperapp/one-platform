@@ -6,6 +6,7 @@ import {
   intakeQualificationInput,
   intakeQuestion,
   intakeReadingOf,
+  leadFollowupText,
 } from "@/lib/conversations/intake";
 import { qualify } from "@flyee/rules/qualification";
 
@@ -65,5 +66,27 @@ describe("who writes to the firm with no alert", () => {
     expect(qualify(short).outcome).toBe("not_qualified");
     const told = intakeQualificationInput({ problema: "cancellation", data: "2099-10-22", aviso: "early" }, TODAY);
     expect(told.notice).toBe("early");
+  });
+});
+
+describe("the follow-up of a lead who stopped answering (0207)", () => {
+  it("asks again what is still missing, the second time saying how to stop", () => {
+    const first = leadFollowupText({ problema: "cancellation" }, 0);
+    expect(first).toBe(
+      "Oi, ainda posso te ajudar com o que aconteceu no seu voo. Qual era o número do voo e a companhia aérea? Se não souber o número, diga de qual cidade para qual cidade era o voo.",
+    );
+    const second = leadFollowupText({ problema: "cancellation", voo: "AD 4040" }, 1);
+    expect(second).toContain("responda SAIR");
+    expect(second).toContain("Em que dia era o voo?");
+    for (const text of [first, second]) expect(text).not.toMatch(/[—–!]/);
+  });
+
+  it("says nothing when the intake lacks nothing", () => {
+    expect(
+      leadFollowupText(
+        { problema: "cancellation", voo: "AD 4040", data: "2099-10-22", aviso: "late", nome: "Maria Teste" },
+        0,
+      ),
+    ).toBeNull();
   });
 });

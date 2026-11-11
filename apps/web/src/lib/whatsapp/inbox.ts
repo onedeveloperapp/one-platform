@@ -138,6 +138,24 @@ export function supabaseInbox(service: SupabaseClient): WhatsAppInbox {
         }),
       );
       if (answer.code === "received") {
+        // The ad the conversation came from, kept once (0207); a failure here never holds the message back.
+        if (event.adReferral && typeof answer.conversation_id === "string") {
+          await service
+            .rpc("wa_record_ad_referral", {
+              target_conversation: answer.conversation_id,
+              target_referral: {
+                source_type: event.adReferral.sourceType,
+                source_id: event.adReferral.sourceId,
+                source_url: event.adReferral.sourceUrl,
+                headline: event.adReferral.headline,
+                ctwa_clid: event.adReferral.ctwaClid,
+              },
+            })
+            .then(
+              () => undefined,
+              () => undefined,
+            );
+        }
         await askForLinks(service, route.orgId, event.from);
         await askForTurn(answer.conversation_id);
       }

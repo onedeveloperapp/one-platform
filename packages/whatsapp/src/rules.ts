@@ -81,6 +81,27 @@ const PROMISES_RESULT =
  */
 const SPEAKS_OF_PRICE = /\b(gratis|gratuit[oa]s?|sem custo|nao cobramos|desconto|promocao|honorarios?)\b/;
 
+/** Words that press the person to decide now, which the same rules count as soliciting. */
+const PRESSES =
+  /\b(so hoje|somente hoje|ultima chance|ultimas vagas|vagas limitadas|por tempo limitado|corra|nao perca|aproveite)\b/;
+
+export type MessageFinding = "promises_result" | "speaks_of_price" | "presses";
+
+/**
+ * What a message to a person says that the bar's rules on advertising weigh (CFOAB, Provimento 205/2021): a promise
+ * of a result, a price, a fee, a gratuity or a discount, and pressure to decide now (`publicidade-v1`). A rule of
+ * words: it says what to look at, and decides nothing by itself; ONE never sends an answer of its own that it flags,
+ * and a person is shown what it flags before sending.
+ */
+export function checkMessage(body: string): MessageFinding[] {
+  const words = plain(body);
+  const findings: MessageFinding[] = [];
+  if (PROMISES_RESULT.test(words)) findings.push("promises_result");
+  if (SPEAKS_OF_PRICE.test(words)) findings.push("speaks_of_price");
+  if (PRESSES.test(words)) findings.push("presses");
+  return findings;
+}
+
 /**
  * Checks a template before it is submitted to the vendor.
  *

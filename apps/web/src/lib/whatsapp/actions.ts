@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
+import { recordAudit } from "@/lib/audit";
 import { discardUpload, downloadUrl, finishUpload, startUpload } from "@/lib/files/uploads";
 import { isManager } from "@/lib/firm/roles";
 import { getMemberContext } from "@/lib/member/context";
@@ -76,6 +77,8 @@ export async function sendMessage(input: {
   body?: string | null;
   templateId?: string | null;
   templateParams?: string[] | null;
+  /** What the rule of advertising flagged in the text and the person sent all the same (`publicidade-v1`). */
+  flagged?: string[] | null;
 }): Promise<ActionResult> {
   const context = await getMemberContext();
   if (!context?.firm || !UUID.test(input.conversationId)) return { ok: false, code: "not_found" };
@@ -94,6 +97,16 @@ export async function sendMessage(input: {
   if (error) return { ok: false, code: codeOf(error.message) };
   const reserved = (data ?? {}) as { ok?: boolean; code?: string; message_id?: string };
   if (!reserved.ok || !reserved.message_id) return { ok: false, code: codeOf(reserved.code) };
+  // Sent after the person read what the rule flagged: on the record by the rule's codes, never the text.
+  const flagged = (input.flagged ?? []).filter((code) => /^[a-z_]{3,40}$/.test(code)).slice(0, 5);
+  if (flagged.length > 0) {
+    await recordAudit(context.supabase, "whatsapp.message_flagged_sent", {
+      orgId: context.firm.id,
+      entityType: "wa_message",
+      entityId: reserved.message_id,
+      metadata: { flagged },
+    }).catch(() => undefined);
+  }
   return deliverReserved(reserved.message_id);
 }
 

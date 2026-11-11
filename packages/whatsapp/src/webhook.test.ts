@@ -74,6 +74,45 @@ test("a person's text is read with who sent it, to which number, and when", () =
   ]);
 });
 
+test("a message that came from an ad carries the ad, and nothing of the person beyond what any message has", () => {
+  const events = parseWebhook(
+    change(
+      "messages",
+      withNumber({
+        contacts: [{ profile: { name: "Maria Teste" }, wa_id: "5562999990001" }],
+        messages: [
+          {
+            from: "5562999990001",
+            id: "wamid.AD1",
+            timestamp: "1760000000",
+            type: "text",
+            text: { body: "Quero saber sobre o meu voo cancelado." },
+            referral: {
+              source_url: "https://fb.me/anuncio-teste",
+              source_id: "120000000000001",
+              source_type: "ad",
+              headline: "Voo cancelado? Fale com o escritório",
+              body: "Texto do anúncio",
+              media_type: "image",
+              ctwa_clid: "clique-de-teste",
+            },
+          },
+        ],
+      }),
+    ),
+  );
+  assert.equal(events.length, 1);
+  const event = events[0];
+  assert.ok(event && event.type === "message");
+  assert.deepEqual(event.adReferral, {
+    sourceType: "ad",
+    sourceId: "120000000000001",
+    sourceUrl: "https://fb.me/anuncio-teste",
+    headline: "Voo cancelado? Fale com o escritório",
+    ctwaClid: "clique-de-teste",
+  });
+});
+
 test("a document, a photo and a tapped button are read as what they are", () => {
   const events = parseWebhook(
     change(
@@ -85,7 +124,13 @@ test("a document, a photo and a tapped button are read as what they are", () => 
             id: "wamid.D1",
             timestamp: "1760000001",
             type: "document",
-            document: { caption: "meu bilhete", filename: "bilhete.pdf", mime_type: "application/pdf", sha256: "x", id: "media-9" },
+            document: {
+              caption: "meu bilhete",
+              filename: "bilhete.pdf",
+              mime_type: "application/pdf",
+              sha256: "x",
+              id: "media-9",
+            },
           },
           {
             from: "5562999990001",
@@ -109,15 +154,17 @@ test("a document, a photo and a tapped button are read as what they are", () => 
   );
   assert.equal(events.length, 4);
   const [document, image, button, unknown] = events;
-  assert.deepEqual(
-    document.type === "message" && [document.kind, document.body, document.media],
-    ["document", "meu bilhete", { id: "media-9", mimeType: "application/pdf", filename: "bilhete.pdf" }],
-  );
+  assert.deepEqual(document.type === "message" && [document.kind, document.body, document.media], [
+    "document",
+    "meu bilhete",
+    { id: "media-9", mimeType: "application/pdf", filename: "bilhete.pdf" },
+  ]);
   assert.deepEqual(image.type === "message" && [image.kind, image.body, image.media?.id], ["image", null, "media-10"]);
-  assert.deepEqual(
-    button.type === "message" && [button.kind, button.body, button.replyTo],
-    ["interactive", "Sim, pode ser", "wamid.OUT1"],
-  );
+  assert.deepEqual(button.type === "message" && [button.kind, button.body, button.replyTo], [
+    "interactive",
+    "Sim, pode ser",
+    "wamid.OUT1",
+  ]);
   // A kind this code does not know is kept as unsupported, never dropped: the person did write something.
   assert.equal(unknown.type === "message" && unknown.kind, "unsupported");
 });
@@ -175,8 +222,22 @@ test("what the firm types on its phone arrives as an echo, and an edit or a dele
       "smb_message_echoes",
       withNumber({
         message_echoes: [
-          { from: "5562900000001", to: "5562999990001", id: "wamid.E1", timestamp: "1760000020", type: "text", text: { body: "Mandei pelo celular." } },
-          { from: "5562900000001", to: "5562999990001", id: "wamid.E2", timestamp: "1760000021", type: "revoke", revoke: { original_message_id: "wamid.E1" } },
+          {
+            from: "5562900000001",
+            to: "5562999990001",
+            id: "wamid.E1",
+            timestamp: "1760000020",
+            type: "text",
+            text: { body: "Mandei pelo celular." },
+          },
+          {
+            from: "5562900000001",
+            to: "5562999990001",
+            id: "wamid.E2",
+            timestamp: "1760000021",
+            type: "revoke",
+            revoke: { original_message_id: "wamid.E1" },
+          },
         ],
       }),
     ),
@@ -206,13 +267,24 @@ test("the contacts of the firm's phone arrive added or removed", () => {
             action: "add",
             metadata: { timestamp: "1760000030" },
           },
-          { type: "contact", contact: { phone_number: "5562977770004" }, action: "remove", metadata: { timestamp: "1760000031" } },
+          {
+            type: "contact",
+            contact: { phone_number: "5562977770004" },
+            action: "remove",
+            metadata: { timestamp: "1760000031" },
+          },
         ],
       }),
     ),
   );
   assert.deepEqual(events, [
-    { type: "contact", phoneNumberId: "phone-1", contact: "5562977770003", name: "Carlos do voo de Recife", action: "add" },
+    {
+      type: "contact",
+      phoneNumberId: "phone-1",
+      contact: "5562977770003",
+      name: "Carlos do voo de Recife",
+      action: "add",
+    },
     { type: "contact", phoneNumberId: "phone-1", contact: "5562977770004", name: null, action: "remove" },
   ]);
 });
@@ -229,8 +301,23 @@ test("the shared history arrives in pieces, each message with its side and what 
               {
                 id: "5562999990001",
                 messages: [
-                  { from: "5562999990001", id: "wamid.H1", timestamp: "1750000000", type: "text", text: { body: "Bom dia." }, history_context: { status: "READ" } },
-                  { from: "5562900000001", to: "5562999990001", id: "wamid.H2", timestamp: "1750000100", type: "text", text: { body: "Bom dia, Maria." }, history_context: { status: "DELIVERED" } },
+                  {
+                    from: "5562999990001",
+                    id: "wamid.H1",
+                    timestamp: "1750000000",
+                    type: "text",
+                    text: { body: "Bom dia." },
+                    history_context: { status: "READ" },
+                  },
+                  {
+                    from: "5562900000001",
+                    to: "5562999990001",
+                    id: "wamid.H2",
+                    timestamp: "1750000100",
+                    type: "text",
+                    text: { body: "Bom dia, Maria." },
+                    history_context: { status: "DELIVERED" },
+                  },
                   { from: "5562999990001", id: "wamid.H3", timestamp: "1750000200", type: "media_placeholder" },
                 ],
               },
@@ -246,7 +333,12 @@ test("the shared history arrives in pieces, each message with its side and what 
   if (history.type !== "history") return;
   assert.equal(history.progress, 55);
   assert.deepEqual(
-    history.threads[0].messages.map((message) => [message.providerMessageId, message.direction, message.status, message.body]),
+    history.threads[0].messages.map((message) => [
+      message.providerMessageId,
+      message.direction,
+      message.status,
+      message.body,
+    ]),
     [
       ["wamid.H1", "in", "read", "Bom dia."],
       ["wamid.H2", "out", "delivered", "Bom dia, Maria."],
@@ -280,7 +372,9 @@ test("what happens to an account and to a template is read with the account it b
       },
     ],
   });
-  assert.deepEqual(removed, [{ type: "account", wabaId: "waba-1", event: "PARTNER_REMOVED", reason: "PRIMARY_INACTIVITY" }]);
+  assert.deepEqual(removed, [
+    { type: "account", wabaId: "waba-1", event: "PARTNER_REMOVED", reason: "PRIMARY_INACTIVITY" },
+  ]);
 
   const template = parseWebhook(
     change("message_template_status_update", {
@@ -329,7 +423,15 @@ test("a category the vendor gave a template is read when the change was made, ne
 });
 
 test("what is not a WhatsApp delivery, or has a shape this code does not know, yields nothing and never throws", () => {
-  for (const body of [null, "texto", 42, [], {}, { object: "page", entry: [] }, { object: "whatsapp_business_account" }]) {
+  for (const body of [
+    null,
+    "texto",
+    42,
+    [],
+    {},
+    { object: "page", entry: [] },
+    { object: "whatsapp_business_account" },
+  ]) {
     assert.deepEqual(parseWebhook(body), []);
   }
   assert.deepEqual(parseWebhook(change("messages", { messages: [{ from: "5562999990001", id: "wamid.X" }] })), []);

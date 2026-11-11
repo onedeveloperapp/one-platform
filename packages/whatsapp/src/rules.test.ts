@@ -1,7 +1,15 @@
+import { checkMessage } from "./rules.ts";
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { checkTemplate, isWindowOpen, paramCountOf, placeholdersOf, renderTemplate, type TemplateDraft } from "./rules.ts";
+import {
+  checkTemplate,
+  isWindowOpen,
+  paramCountOf,
+  placeholdersOf,
+  renderTemplate,
+  type TemplateDraft,
+} from "./rules.ts";
 
 const found = (draft: TemplateDraft) => checkTemplate(draft).map((finding) => `${finding.severity}:${finding.code}`);
 
@@ -92,4 +100,11 @@ test("a promise of result, a word about price and the marketing category are poi
     ),
     true,
   );
+});
+
+test("a message is checked for what the bar's rules on advertising weigh, by its words", () => {
+  assert.deepEqual(checkMessage("Com certeza você recebe a indenização, garantimos 100%."), ["promises_result"]);
+  assert.deepEqual(checkMessage("A consulta é grátis e sem custo."), ["speaks_of_price"]);
+  assert.deepEqual(checkMessage("Só hoje: últimas vagas para entrar com a ação."), ["presses"]);
+  assert.deepEqual(checkMessage("Recebemos os seus documentos. O escritório vai analisar o seu caso."), []);
 });

@@ -55,6 +55,7 @@ describe("the platform's sweeps (2026-11-04)", () => {
         "hearing-calendar",
         "import-sweep",
         "lawsuit-amounts",
+        "lead-followups",
         "lawsuit-outcomes",
         "market-reading",
         "agenda-digests",
