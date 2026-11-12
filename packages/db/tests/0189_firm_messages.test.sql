@@ -35,6 +35,9 @@ $$ select payload ->> got.field from res where res.name = got.name; $$;
 create function pg_temp.sign_in(who uuid) returns void language sql as
 $$ select set_config('request.jwt.claims', jsonb_build_object('sub', who, 'role', 'authenticated')::text, true); $$;
 
+-- Since 0236 no text needs a value: the link's is required here, inside this test, to see a missing one refused.
+update public.one_messages set required = array['link'] where key = 'link_steps';
+
 select pg_temp.sign_in('a1890000-0000-4000-8000-000000000001');
 set local role authenticated;
 insert into res values ('no_link', public.save_firm_message('b1890000-0000-4000-8000-00000000000a', 'link_steps',

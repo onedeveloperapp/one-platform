@@ -302,18 +302,38 @@ async function joinFiles(service: SupabaseClient, held: Held, context: TurnConte
       paper: paper.kind,
       status,
       reason: typeof decided?.rejected_reason === "string" ? decided.rejected_reason : null,
+      named: status === "accepted" ? await nameTakenFrom(service, joined.document_id).catch(() => null) : null,
     });
   }
 
   const said = filesMessage(outcomes);
-  // What came of the files, and the next document owed, in one message (0230).
-  const next = outcomes.some((outcome) => outcome.kind === "paper")
-    ? await nextPaper(service, held, context).catch(() => null)
-    : null;
+  // What came of the files, and the next document owed, in one message (0230); after a paper refused, its reason
+  // already says what to send, and the next one waits for it (0236).
+  const papers = outcomes.filter((outcome) => outcome.kind === "paper");
+  const next =
+    papers.length > 0 && !papers.some((outcome) => outcome.status === "rejected")
+      ? await nextPaper(service, held, context).catch(() => null)
+      : null;
   const message = [said, next].filter(Boolean).join("\n");
   if (message) await say(service, held, message);
   for (const statementId of statements) await workStatement(statementId);
   return true;
+}
+
+/** The person's name an accepted identity wrote in place of the one typed (0236); null when it wrote none. */
+async function nameTakenFrom(service: SupabaseClient, documentId: string): Promise<string | null> {
+  const { data: event } = await service
+    .from("case_events")
+    .select("data")
+    .eq("kind", "person_named_by_document")
+    .contains("data", { document: documentId })
+    .limit(1)
+    .maybeSingle();
+  const person = (event as { data?: { person?: unknown } } | null)?.data?.person;
+  if (typeof person !== "string") return null;
+  const { data } = await service.from("people").select("full_name").eq("id", person).maybeSingle();
+  const name = (data as { full_name?: unknown } | null)?.full_name;
+  return typeof name === "string" && name.trim() ? name.trim() : null;
 }
 
 /** The documents the case this conversation gathers still owes, as the database says it; null with no case. */
@@ -1093,7 +1113,6 @@ async function openFromIntake(
       intakeOpenedMessage({
         passengerName: facts.nome ?? "",
         firm: context.firm,
-        url,
         children: children.map((child) => child.name),
         adults: adults.map((adult) => adult.name),
       }),

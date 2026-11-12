@@ -245,18 +245,26 @@ describe("who travelled along (0234)", () => {
 });
 
 describe("the case an intake opened (0234)", () => {
-  it("asks the child's paper later and the adult to write themself", async () => {
+  it("asks the identity alone, with no link, the child's paper later and the adult to write themself (0236)", async () => {
     const { intakeOpenedMessage } = await import("@/lib/conversations/agent");
+    expect(
+      intakeOpenedMessage({ passengerName: "Nídia Teste", firm: "Souza Advogados", children: [], adults: [] }),
+    ).toBe(
+      [
+        "Pronto, Nídia. O seu caso está aberto no escritório Souza Advogados.",
+        "Agora mande aqui a foto do seu documento de identidade, RG ou CNH, com a frente e o verso.",
+      ].join("\n"),
+    );
     const message = intakeOpenedMessage({
       passengerName: "Nídia Teste",
       firm: "Souza Advogados",
-      url: "https://one.invalid/c/x",
       children: ["Pedro Teste"],
       adults: ["Ana Teste"],
     });
-    expect(message).toContain("Pronto, Nídia. O seu caso está aberto no escritório Souza Advogados.");
-    expect(message).toContain("a certidão de nascimento ou o RG de Pedro, que entra no seu caso com você.");
-    expect(message).toContain("Para Ana, que também viajou: peça que escreva para este número.");
-    expect(message).not.toMatch(/[—–!]/);
+    expect(message).toContain("Depois vou pedir o documento de Pedro.");
+    expect(message).toContain(
+      "Ana também viajou: peça que escreva para este número, porque cada adulto tem o próprio caso.",
+    );
+    expect(message).not.toMatch(/https?:|[—–!]/);
   });
 });

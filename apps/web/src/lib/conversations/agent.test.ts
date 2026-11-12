@@ -181,6 +181,12 @@ describe("ONE in a conversation", () => {
     ]);
     expect(message).not.toMatch(/[–—!]/);
     expect(fileLine({ kind: "no_case" })).toBe("Recebi o arquivo. Ele fica aqui na conversa para o escritório ver.");
+    // An identity whose name took the place of the one typed says the name it gave (0236).
+    expect(
+      fileLine({ kind: "paper", paper: "identity", status: "accepted", reason: null, named: "Nidya Farias de Castro" }),
+    ).toBe(
+      "Recebi o documento de identidade e já juntei ao seu caso. Vou usar o nome como está nele: Nidya Farias de Castro.",
+    );
     expect(filesMessage([])).toBeNull();
   });
 

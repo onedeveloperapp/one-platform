@@ -451,10 +451,10 @@ reset role;
 
 -- The second version reads what a document says of its person (0063), the third writes its address as names (0065),
 -- the fourth reads the purchase on a ticket and the expense on a receipt (0091), the fifth no longer refuses a bill
--- in somebody else's name for the name on it (0123).
+-- in somebody else's name for the name on it (0123), the sixth no identity for its name (0236).
 select ok(
   (select array_agg(v.version::text || ':' || v.is_active::text order by v.version)
-   from public.prompt_versions v where v.task = 'caso.documento.conferencia') = array['1:false', '2:false', '3:false', '4:false', '5:true']
+   from public.prompt_versions v where v.task = 'caso.documento.conferencia') = array['1:false', '2:false', '3:false', '4:false', '5:false', '6:true']
   and (select v.system_prompt like '%nunca a data de expedição nem a de validade%'
               and v.system_prompt like '%bairro e cidade (cada um escrito como um nome%'
               and v.output_schema -> 'properties' ? 'dados_lidos'

@@ -209,10 +209,11 @@ describe.skipIf(!DB_URL)("any passenger on the firm's WhatsApp", () => {
       phone: LUCAS,
       linked: true,
     });
-    const steps = (await sentTo(LUCAS)).find((body) => body.includes("/c/")) ?? "";
+    const steps = (await sentTo(LUCAS)).find((body) => body.includes("O seu caso está aberto")) ?? "";
     expect(steps).toContain("Pronto, Lucas. O seu caso está aberto no escritório Souza Advogados.");
-    expect(steps).toContain("Primeiro, a foto do seu documento de identidade");
-    expect(steps).not.toMatch(/número \d/);
+    expect(steps).toContain("Agora mande aqui a foto do seu documento de identidade");
+    // No link and no case number while ONE asks the first document (0236).
+    expect(steps).not.toMatch(/\/c\/|número \d/);
   });
 
   it("has Lucas check his data in the chat once his documents were accepted, and asks what no document gives", async () => {

@@ -94,13 +94,13 @@ export function caseStepsMessage(input: {
 
 /**
  * The case an intake opened at the person's "Quero seguir" (0227): no case number (it says nothing to the client),
- * the documents asked here in the chat, the identity first, and the link only as another place to do the same. A child
- * who travelled along is in the case and their paper is asked later; an adult is asked to write themself (0234).
+ * and only the first document, the identity, asked here in the chat, with no link to divert the person from sending
+ * it (the owner, 2026-11-12): the link comes later, where a screen is needed. A child who travelled along is in the
+ * case and their paper is asked later; an adult is asked to write themself (0234).
  */
 export function intakeOpenedMessage(input: {
   passengerName: string;
   firm: string;
-  url: string;
   children: string[];
   adults: string[];
 }): string {
@@ -109,15 +109,12 @@ export function intakeOpenedMessage(input: {
   const list = new Intl.ListFormat("pt-BR", { style: "long", type: "conjunction" });
   const firsts = (names: string[]) => list.format(names.map((item) => firstNameOf(item) || item));
   return [
-    `Pronto, ${name}. O seu caso está aberto ${firm}. Agora preciso de alguns documentos, um de cada vez, e você pode mandar as fotos aqui mesmo.`,
-    "Primeiro, a foto do seu documento de identidade, RG ou CNH, com a frente e o verso.",
-    input.children.length > 0
-      ? `Depois vou pedir também a certidão de nascimento ou o RG de ${firsts(input.children)}, que entra no seu caso com você.`
-      : null,
+    `Pronto, ${name}. O seu caso está aberto ${firm}.`,
+    "Agora mande aqui a foto do seu documento de identidade, RG ou CNH, com a frente e o verso.",
+    input.children.length > 0 ? `Depois vou pedir o documento de ${firsts(input.children)}.` : null,
     input.adults.length > 0
-      ? `Para ${firsts(input.adults)}, que também viajou: peça que escreva para este número. Cada adulto conta o próprio caso e assina a própria procuração.`
+      ? `${firsts(input.adults)} também viajou: peça que escreva para este número, porque cada adulto tem o próprio caso.`
       : null,
-    `Se preferir uma tela, o seu link mostra o mesmo: ${input.url}. O link é só seu.`,
   ]
     .filter(Boolean)
     .join("\n");
@@ -340,7 +337,14 @@ export function fileRole(file: TurnFile): "paper" | "statement" | "not_taken" | 
 
 /** What became of a file of the turn, for ONE's words of it. */
 export type FileOutcome =
-  | { kind: "paper"; paper: PaperKind; status: "accepted" | "rejected" | "waiting"; reason: string | null }
+  | {
+      kind: "paper";
+      paper: PaperKind;
+      status: "accepted" | "rejected" | "waiting";
+      reason: string | null;
+      /** The name an accepted identity gave the person in place of the one typed (0236). */
+      named?: string | null;
+    }
   | { kind: "statement" }
   | { kind: "no_case" }
   | { kind: "failed" }
@@ -362,6 +366,9 @@ export function fileLine(outcome: FileOutcome): string {
   switch (outcome.kind) {
     case "paper": {
       const paper = PAPER_WORDS[outcome.paper];
+      if (outcome.status === "accepted" && outcome.named?.trim()) {
+        return `Recebi ${paper} e já juntei ao seu caso. Vou usar o nome como está nele: ${outcome.named.trim()}.`;
+      }
       if (outcome.status === "accepted") return `Recebi ${paper} e já juntei ao seu caso. Está tudo certo.`;
       if (outcome.status === "rejected") {
         const reason = cleanReply(outcome.reason, 400);
