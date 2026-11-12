@@ -1,6 +1,7 @@
 import "server-only";
 
 import { getVault } from "@/lib/connections/vault";
+import { tellSignatureLinks } from "@/lib/conversations/signature-links-work";
 import { supabaseFileStore } from "@/lib/files/store";
 import { takeBackFile } from "@flyee/documents/files";
 import { measureFile } from "@flyee/documents/measure";
@@ -127,6 +128,8 @@ export async function openReservedEnvelopes(
       // Anything else: nobody can tell whether ZapSign opened it. It stays claimed and becomes uncertain.
     }
   }
+  // The links just opened go to the people who sign in the chat, now (0231); the sweep takes what this did not.
+  if (opened > 0) await tellSignatureLinks(service).catch(() => undefined);
   return { opened, failed };
 }
 

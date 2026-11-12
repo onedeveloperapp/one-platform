@@ -5,11 +5,12 @@ import { connect, DB_URL, type Row, type Sql, standIn } from "@/lib/testing/embe
 import type { AiProviderName } from "@flyee/ai/types";
 
 /**
- * Any passenger on the firm's WhatsApp (migration 0176), with the app's own worker against a real database, the test
- * number where the vendor stands and the model told what to answer: somebody who writes with no alert and no case
- * about a delay is asked what is missing, one question at a time; once nothing is, the rule qualifies it and ONE opens
- * the case with the client's link; a delay too short is told kindly and kept as not qualified; and a word that is no
- * problem with a flight goes to ONE's usual answer.
+ * Any passenger on the firm's WhatsApp (migrations 0176 and 0227), with the app's own worker against a real database,
+ * the test number where the vendor stands and the model told what to answer: somebody who writes with no alert and no
+ * case about a delay is asked what is missing, one question at a time, the name first; once nothing is, ONE sums it up,
+ * the person confirms, the rule qualifies it, ONE offers to go on, and the case opens with the client's link only at
+ * their yes; a no is kept kindly and a later word brings the offer back; a delay too short is told kindly and kept as
+ * not qualified; and a word that is no problem with a flight goes to ONE's usual answer.
  *
  * It runs only when a migrated database is at hand (`npm run test:db:roundtrip`); otherwise it is skipped.
  *
@@ -52,6 +53,7 @@ const CONNECTION = "de976000-0000-4000-8000-00000000000a";
 const LUCAS = "5500988880007";
 const RITA = "5500988880008";
 const BETO = "5500988880009";
+const DORA = "5500988880010";
 let numberId = "";
 
 async function call(name: string, args: Row): Promise<Row> {
@@ -135,9 +137,9 @@ describe.skipIf(!DB_URL)("any passenger on the firm's WhatsApp", () => {
     await sql.end({ timeout: 5 });
   });
 
-  it("asks what is missing of a delay one question at a time, and opens the case once nothing is", async () => {
+  it("asks what is missing one question at a time, sums it up, and opens the case only at the person's yes", async () => {
     const { takeConversationTurns } = await import("@/lib/conversations/agent-work");
-    const { INTAKE_OPENING } = await import("@/lib/conversations/intake");
+    const { intakeOpening } = await import("@/lib/conversations/intake");
     const empty = {
       companhia: "",
       voo: "",
@@ -147,16 +149,19 @@ describe.skipIf(!DB_URL)("any passenger on the firm's WhatsApp", () => {
       atraso_horas: "",
       aviso: "",
       nome: "",
-      // Who referred the person (0183): the task's second version answers it, empty when nobody did.
+      // Who referred the person (0183) and who travelled along (0227), empty when not told.
       indicado_por: "",
+      acompanhantes: "",
     };
+    const countCases = async () =>
+      Number((await sql.unsafe(`select count(*)::int as n from public.cases where org_id = $1`, [FIRM]))[0].n);
     model.intake = () => ({ assunto: "problema_voo", problema: "delay", ...empty });
     await writes(LUCAS, "Oi, meu voo atrasou muito ontem");
     expect(await takeConversationTurns(backend() as never)).toMatchObject({ claimed: 1, answered: 1, failed: 0 });
     const first = await sentTo(LUCAS);
     expect(first).toHaveLength(1);
-    expect(first[0].startsWith(INTAKE_OPENING)).toBe(true);
-    expect(first[0]).toContain("Qual era o número do voo e a companhia aérea?");
+    expect(first[0].startsWith(intakeOpening("Souza Advogados"))).toBe(true);
+    expect(first[0]).toContain("Sinto muito pelo atraso. Como posso te chamar?");
 
     model.intake = () => ({
       assunto: "problema_voo",
@@ -169,8 +174,24 @@ describe.skipIf(!DB_URL)("any passenger on the firm's WhatsApp", () => {
       destino: "REC",
       atraso_horas: "6",
       nome: "Lucas Teste Lima",
+      acompanhantes: "nenhum",
     });
-    await writes(LUCAS, "Era o LA 3456 de Guarulhos para Recife, cheguei seis horas depois. Sou o Lucas Teste Lima");
+    await writes(
+      LUCAS,
+      "Sou o Lucas Teste Lima. Era o LA 3456 de Guarulhos para Recife, cheguei seis horas depois, sozinho",
+    );
+    expect(await takeConversationTurns(backend() as never)).toMatchObject({ answered: 1, opened: 0, failed: 0 });
+    const summary = (await sentTo(LUCAS)).at(-1) ?? "";
+    expect(summary).toContain("Confere, Lucas.");
+    expect(summary).toContain("Só você viajou. Está certo?\n1. Está certo\n2. Corrigir");
+    expect(await countCases()).toBe(0);
+
+    await writes(LUCAS, "1");
+    expect(await takeConversationTurns(backend() as never)).toMatchObject({ answered: 1, opened: 0, failed: 0 });
+    expect((await sentTo(LUCAS)).at(-1)).toContain("Quer que o escritório siga com o seu caso?\n1. Quero seguir");
+    expect(await countCases()).toBe(0);
+
+    await writes(LUCAS, "Quero seguir");
     expect(await takeConversationTurns(backend() as never)).toMatchObject({ opened: 1, failed: 0 });
     const [opened] = await sql.unsafe(
       `select c.incident, c.airline_iata, c.flight_date::text as day, c.origin, p.full_name, p.phone,
@@ -188,8 +209,42 @@ describe.skipIf(!DB_URL)("any passenger on the firm's WhatsApp", () => {
       phone: LUCAS,
       linked: true,
     });
-    const after = await sentTo(LUCAS);
-    expect(after.some((body) => body.includes("/c/"))).toBe(true);
+    const steps = (await sentTo(LUCAS)).find((body) => body.includes("/c/")) ?? "";
+    expect(steps).toContain("Pronto, Lucas. O seu caso está aberto no escritório Souza Advogados.");
+    expect(steps).toContain("Primeiro, a foto do seu documento de identidade");
+    expect(steps).not.toMatch(/número \d/);
+  });
+
+  it("keeps a no kindly, and opens the case when the person comes back to go on", async () => {
+    const { takeConversationTurns } = await import("@/lib/conversations/agent-work");
+    model.intake = () => ({
+      assunto: "problema_voo",
+      problema: "cancellation",
+      companhia: "AD",
+      voo: "AD 4040",
+      data: day(-3),
+      origem: "VCP",
+      destino: "BSB",
+      atraso_horas: "",
+      aviso: "late",
+      nome: "Dora",
+      indicado_por: "",
+      acompanhantes: "nenhum",
+    });
+    await writes(DORA, "Oi, sou a Dora. O AD 4040 de Viracopos para Brasília foi cancelado 10 horas antes, viajei só");
+    await takeConversationTurns(backend() as never);
+    await writes(DORA, "Está certo");
+    await takeConversationTurns(backend() as never);
+    await writes(DORA, "3");
+    expect(await takeConversationTurns(backend() as never)).toMatchObject({ opened: 0, failed: 0 });
+    expect((await sentTo(DORA)).at(-1)).toBe(
+      "Tudo bem, Dora. O escritório não vai seguir com este caso. Se mudar de ideia, é só escrever aqui.",
+    );
+    await writes(DORA, "Oi de novo");
+    expect(await takeConversationTurns(backend() as never)).toMatchObject({ opened: 0, failed: 0 });
+    expect((await sentTo(DORA)).at(-1)).toContain("Quer que o escritório siga com o seu caso?");
+    await writes(DORA, "1");
+    expect(await takeConversationTurns(backend() as never)).toMatchObject({ opened: 1, failed: 0 });
   });
 
   it("tells a delay too short kindly, and keeps the person as not qualified", async () => {
@@ -206,8 +261,11 @@ describe.skipIf(!DB_URL)("any passenger on the firm's WhatsApp", () => {
       aviso: "",
       nome: "Rita Teste",
       indicado_por: "",
+      acompanhantes: "nenhum",
     });
-    await writes(RITA, "Meu voo G3 1450 de Brasília para o Rio atrasou duas horas anteontem. Rita Teste");
+    await writes(RITA, "Meu voo G3 1450 de Brasília para o Rio atrasou duas horas anteontem. Rita Teste, viajei só");
+    expect(await takeConversationTurns(backend() as never)).toMatchObject({ claimed: 1, opened: 0, failed: 0 });
+    await writes(RITA, "sim");
     expect(await takeConversationTurns(backend() as never)).toMatchObject({ claimed: 1, opened: 0, failed: 0 });
     const [kept] = await sql.unsafe(
       `select f.point from public.people p join public.people_funnel($1) f on f.person_id = p.id
@@ -215,9 +273,9 @@ describe.skipIf(!DB_URL)("any passenger on the firm's WhatsApp", () => {
       [FIRM],
     );
     expect(kept).toEqual({ point: "nao_qualificado" });
-    expect(await sentTo(RITA)).toHaveLength(1);
+    expect(await sentTo(RITA)).toHaveLength(2);
     const [cases] = await sql.unsafe(`select count(*)::int as n from public.cases where org_id = $1`, [FIRM]);
-    expect(cases.n).toBe(1);
+    expect(cases.n).toBe(2);
   });
 
   it("leaves what is no problem with a flight to ONE's usual answer", async () => {
@@ -234,6 +292,7 @@ describe.skipIf(!DB_URL)("any passenger on the firm's WhatsApp", () => {
       aviso: "",
       nome: "",
       indicado_por: "",
+      acompanhantes: "",
     });
     model.conversation = () => ({
       intencao: "pergunta",

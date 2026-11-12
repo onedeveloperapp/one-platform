@@ -64,7 +64,8 @@ describe("ONE in a conversation", () => {
       url: "https://one.invalid/c/token",
       minors: ["Laura Teste"],
     });
-    expect(message).toContain("Pronto, Rafael. O escritório abriu o seu caso, número {caso}.");
+    expect(message).toContain("Pronto, Rafael. O escritório abriu o seu caso.");
+    expect(message).not.toContain("{caso}");
     expect(message).toContain("1. Abra o seu link: https://one.invalid/c/token");
     // The documents first: the firm reads each person's data in them, and the passenger confirms what was read.
     expect(message).toContain(

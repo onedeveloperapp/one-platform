@@ -198,7 +198,7 @@ describe.skipIf(!DB_URL)("ONE in the conversation, from the first word on a flig
     const steps = sent[1];
     expect(steps).toMatchObject({ by_one: true, model: false, sent_by: null });
     expect(["sent", "delivered"]).toContain(steps.status);
-    expect(String(steps.body)).toContain(`Pronto, Mariana. O escritório abriu o seu caso, número ${opened.seq}.`);
+    expect(String(steps.body)).toContain("Pronto, Mariana. O escritório abriu o seu caso.");
     expect(String(steps.body)).toMatch(/1\. Abra o seu link: \S+\/c\/[A-Za-z0-9_-]{43}/);
     expect(String(steps.body)).toContain("Responda aqui as perguntas que vou fazer agora sobre o que aconteceu");
     expect(String(steps.body)).not.toMatch(/[–—!]/);
@@ -382,6 +382,8 @@ describe.skipIf(!DB_URL)("ONE in the conversation, from the first word on a flig
       [
         "Recebi o documento de identidade e já juntei ao seu caso. Está tudo certo.",
         "Recebi o seu áudio e juntei ao seu caso como o relato do que aconteceu. Depois você vai ver os fatos em ordem no seu link, para confirmar.",
+        // The next document owed, asked in the same message (0230).
+        "Agora um comprovante de endereço recente: conta de luz, água, telefone ou internet. Se estiver no nome de outra pessoa da casa, pode mandar assim mesmo.",
       ].join("\n"),
     );
     const events = await sql.unsafe(

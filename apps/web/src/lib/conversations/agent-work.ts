@@ -27,6 +27,7 @@ import {
   type FileOutcome,
   fileRole,
   filesMessage,
+  intakeOpenedMessage,
   lastClientWords,
   minorsOf,
   modelAnswerOf,
@@ -42,14 +43,23 @@ import {
 } from "@/lib/conversations/agent";
 import { takeHearingReport } from "@/lib/conversations/hearing-report-work";
 import {
+  choiceOf,
+  CORRECTION_QUESTION,
   INTAKE_TASK,
+  intakeDoubts,
+  type IntakeFacts,
   intakeFactsOf,
   intakeInput,
   intakeMissing,
+  type IntakeNames,
+  intakeOffer,
   intakeQualificationInput,
   intakeQuestion,
   intakeReadingOf,
+  intakeSummary,
+  OPTIONS,
 } from "@/lib/conversations/intake";
+import { nextPaperAsk, NOT_HAVE_LINE, type PapersOwed, papersOwedOf, saysNotHave } from "@/lib/conversations/papers";
 import { supabaseFileStore } from "@/lib/files/store";
 import { fillMessage } from "@/lib/firm/messages";
 import { firmMessageText } from "@/lib/firm/messages-read";
@@ -253,9 +263,50 @@ async function joinFiles(service: SupabaseClient, held: Held, context: TurnConte
     });
   }
 
-  const message = filesMessage(outcomes);
+  const said = filesMessage(outcomes);
+  // What came of the files, and the next document owed, in one message (0230).
+  const next = outcomes.some((outcome) => outcome.kind === "paper")
+    ? await nextPaper(service, held, context).catch(() => null)
+    : null;
+  const message = [said, next].filter(Boolean).join("\n");
   if (message) await say(service, held, message);
   for (const statementId of statements) await workStatement(statementId);
+  return true;
+}
+
+/** The documents the case this conversation gathers still owes, as the database says it; null with no case. */
+async function papersOwed(service: SupabaseClient, held: Held): Promise<PapersOwed | null> {
+  return papersOwedOf(
+    await rpc(service, "conversation_papers_owed", {
+      target_conversation: held.conversationId,
+      target_claim: held.claim,
+    }),
+  );
+}
+
+/** Whether ONE already asked the dispensable documents in this conversation. */
+const dispensablesAsked = (context: TurnContext): boolean =>
+  context.messages.some((message) => message.author === "one" && message.text.endsWith(NOT_HAVE_LINE));
+
+/** What ONE asks next of the documents (0230): the next one owed, the dispensable ones, or that the signature comes. */
+async function nextPaper(service: SupabaseClient, held: Held, context: TurnContext): Promise<string | null> {
+  const papers = await papersOwed(service, held);
+  return papers ? nextPaperAsk(papers, { dispensablesAsked: dispensablesAsked(context) }) : null;
+}
+
+/**
+ * The client's "Não tenho" to the dispensable documents ONE asked (0230): kept as their word, as on their link, and
+ * said back. Answers whether it took the turn.
+ */
+async function takeNotHave(service: SupabaseClient, held: Held, context: TurnContext, reply: string): Promise<boolean> {
+  const lastOne = [...context.messages].reverse().find((message) => message.author === "one");
+  if (!lastOne || !lastOne.text.endsWith(NOT_HAVE_LINE) || !saysNotHave(reply)) return false;
+  const kept = await rpc(service, "one_dispensables_not_had", {
+    target_conversation: held.conversationId,
+    target_claim: held.claim,
+  });
+  if (kept.ok !== true) return false;
+  await say(service, held, "Tudo bem, anotei que você não tem. O escritório segue com o que já tem.");
   return true;
 }
 
@@ -393,12 +444,7 @@ async function openCase(service: SupabaseClient, held: Held, context: TurnContex
   if (answer.code === "opened" || answer.code === "opened_without_link") {
     report.opened += 1;
     if (answer.code === "opened") await send(service, answer.message_id);
-    else
-      await say(
-        service,
-        held,
-        caseOpenedNoLinkMessage(alert.passengerName).replace("{caso}", String(answer.seq ?? "")),
-      );
+    else await say(service, held, caseOpenedNoLinkMessage(alert.passengerName));
     // The interview starts right after the next steps, here, one question at a time (0095).
     if (typeof answer.case_id === "string") {
       const interviewId = await startInterview(service, answer.case_id).catch(() => null);
@@ -422,11 +468,49 @@ async function openCase(service: SupabaseClient, held: Held, context: TurnContex
   throw new Error(`the case could not be opened: ${String(answer.code)}`);
 }
 
+/** The airline and the two cities an intake names, as the platform's tables have them; null where unknown. */
+async function intakeNames(service: SupabaseClient, facts: IntakeFacts): Promise<IntakeNames> {
+  const said = (facts.companhia ?? "").trim();
+  const prefix = (facts.voo ?? "").replace(/\s/g, "").toUpperCase().slice(0, 2);
+  let airline: string | null = null;
+  const { data: airlines } = await service.from("airlines").select("iata, name").eq("active", true);
+  const rows = ((airlines ?? []) as { iata: string; name: string }[]).filter((row) => row.name);
+  const low = said.toLowerCase();
+  const found =
+    rows.find((row) => row.iata === said.toUpperCase()) ??
+    rows.find((row) => low !== "" && row.name.toLowerCase() === low) ??
+    rows.find((row) => low.length >= 3 && row.name.toLowerCase().startsWith(low)) ??
+    rows.find((row) => prefix.length === 2 && row.iata === prefix);
+  if (found) airline = found.name;
+  else if (/^[\p{L} ]{3,40}$/u.test(said)) airline = said;
+  const codes = [facts.origem, facts.destino].filter((code): code is string => !!code && /^[A-Za-z]{3}$/.test(code));
+  const cities = new Map<string, string>();
+  if (codes.length > 0) {
+    const { data } = await service
+      .from("airports")
+      .select("iata, city, name")
+      .in(
+        "iata",
+        codes.map((code) => code.toUpperCase()),
+      );
+    for (const row of (data ?? []) as { iata: string; city: string | null; name: string }[]) {
+      cities.set(row.iata, row.city || row.name);
+    }
+  }
+  const city = (code: string | undefined) => (code ? (cities.get(code.toUpperCase()) ?? code.toUpperCase()) : null);
+  return { airline, origin: city(facts.origem), destination: city(facts.destino) };
+}
+
+type Keep = (facts: Record<string, string>, clear?: string[]) => Promise<IntakeFacts | null>;
+type Tell = (body: string) => Promise<boolean>;
+
 /**
- * Who wrote with no alert of ONE's and no case (0176): what they told is read, the facts gathered are kept, the next
- * one missing is asked, and once nothing is the rule decides: the case opened with the client's link, or the firm's
- * word that the problem does not qualify. Answers whether the intake took the turn; one that is not about a flight
- * leaves it to ONE's usual answer. A read that fails never stops the turn.
+ * Who wrote with no alert of ONE's and no case (0176), as the chat's script has it (0227): what they told is read and
+ * the next thing missing asked, one question at a time, its options numbered; once nothing is, ONE sums it up for them
+ * to confirm; confirmed, the rule decides: the firm's word that it does not qualify, a person when the rule cannot say,
+ * or the offer with the firm's words on its fees. The case opens only at their "Quero seguir". Answers whether the
+ * intake took the turn; one that is not about a flight leaves it to ONE's usual answer. A read that fails never stops
+ * the turn.
  */
 async function takeIntake(
   service: SupabaseClient,
@@ -442,31 +526,77 @@ async function takeIntake(
   if (readError || !row || row.intake_case_id) return false;
   const known = intakeFactsOf(row.intake);
   if (known.result?.outcome === "not_qualified") return false;
-  const run = await runFirmTask({
-    orgId: context.orgId,
-    task: INTAKE_TASK,
-    input: intakeInput(context, known, today()),
-    subject: { type: "wa_conversation", id: held.conversationId },
-    idempotencyKey: `intake:${held.conversationId}:${held.claim}`,
-  }).catch(() => null);
-  if (!run || run.kind !== "finished") return false;
-  const reading = intakeReadingOf(run.output);
-  const started = Object.keys(known).length > 0;
-  if (!reading || (!reading.flight && !started)) return false;
-  const kept = await rpc(service, "record_conversation_intake", {
-    target_conversation: held.conversationId,
-    target_claim: held.claim,
-    target_facts: reading.facts,
-  });
-  if (kept.ok !== true) return false;
-  const facts = intakeFactsOf(kept.facts);
+  const reply = lastClientWords(context.messages).join(" ");
+  const started = Object.keys(known).some((key) => key !== "result");
+  const keep: Keep = async (facts, clear = []) => {
+    const kept = await rpc(service, "record_conversation_intake", {
+      target_conversation: held.conversationId,
+      target_claim: held.claim,
+      target_facts: facts,
+      target_clear: clear,
+    });
+    return kept.ok === true ? intakeFactsOf(kept.facts) : null;
+  };
+  const tell: Tell = async (body) => {
+    await say(service, held, body);
+    report.answered += 1;
+    return true;
+  };
+
+  // After the questions, what the reply chose decides first.
+  if (known.etapa === "oferta" || known.etapa === "duvidas" || known.etapa === "recusou") {
+    return takeOffer(service, held, context, report, known, reply, keep, tell);
+  }
+  if (known.etapa === "resumo") {
+    const choice = choiceOf(OPTIONS.resumo, reply);
+    if (choice === "certo") return decideIntake(service, held, context, report, known, keep, tell);
+    if (choice === "corrigir") {
+      if (!(await keep({ etapa: "corrigir" }))) return false;
+      return tell(CORRECTION_QUESTION);
+    }
+  }
+
+  // A choice among the options of the question that waits is the answer itself; anything else, the task reads.
+  const asked = known.etapa ? null : intakeMissing(known)[0];
+  const options = asked === "problema" || asked === "aviso" || asked === "acompanhantes" ? OPTIONS[asked] : null;
+  const choice = options && asked ? choiceOf(options, reply) : null;
+  let facts: IntakeFacts | null;
+  if (choice && asked) {
+    facts = await keep({ [asked]: choice });
+  } else {
+    const run = await runFirmTask({
+      orgId: context.orgId,
+      task: INTAKE_TASK,
+      input: intakeInput(context, known, today()),
+      subject: { type: "wa_conversation", id: held.conversationId },
+      idempotencyKey: `intake:${held.conversationId}:${held.claim}`,
+    }).catch(() => null);
+    if (!run || run.kind !== "finished") return false;
+    const reading = intakeReadingOf(run.output);
+    if (!reading || (!reading.flight && !started)) return false;
+    facts = await keep(reading.facts);
+  }
+  if (!facts) return false;
 
   const missing = intakeMissing(facts);
   if (missing.length > 0) {
-    await say(service, held, intakeQuestion(missing[0], !started));
-    report.answered += 1;
-    return true;
+    if (facts.etapa) await keep({}, ["etapa"]);
+    return tell(intakeQuestion({ ask: missing[0], first: !started, firm: context.firm, before: known, after: facts }));
   }
+  if (!(await keep({ etapa: "resumo" }))) return false;
+  return tell(intakeSummary(facts, await intakeNames(service, facts)));
+}
+
+/** The summary confirmed: the rule decides, and a problem that qualifies is offered with the firm's words on its fees. */
+async function decideIntake(
+  service: SupabaseClient,
+  held: Held,
+  context: TurnContext,
+  report: TurnReport,
+  facts: IntakeFacts,
+  keep: Keep,
+  tell: Tell,
+): Promise<boolean> {
   const verdict = qualify(intakeQualificationInput(facts, today()));
   if (verdict.outcome === "not_qualified") {
     const answer = await rpc(service, "one_intake_not_qualified", {
@@ -498,8 +628,63 @@ async function takeIntake(
     report.called += 1;
     return true;
   }
-  const signFirst = await signsFirst(service, context.orgId);
+  if (!(await keep({ etapa: "oferta" }))) return false;
+  const names = await intakeNames(service, facts);
+  const fees = await firmMessageText(service, context.orgId, "fees");
+  return tell(
+    intakeOffer({ airline: names.airline, fees: fees ? fillMessage(fees, { nome: greeting(facts.nome) }) : null }),
+  );
+}
+
+/** The person's answer to the offer: the case opened, a no kept kindly, the firm's answers to doubts, or a person. */
+async function takeOffer(
+  service: SupabaseClient,
+  held: Held,
+  context: TurnContext,
+  report: TurnReport,
+  facts: IntakeFacts,
+  reply: string,
+  keep: Keep,
+  tell: Tell,
+): Promise<boolean> {
+  const choice = choiceOf(facts.etapa === "duvidas" ? OPTIONS.duvidas : OPTIONS.oferta, reply);
+  if (choice === "seguir") return openFromIntake(service, held, context, report, facts);
+  if (choice === "agora_nao") {
+    if (!(await keep({ etapa: "recusou" }))) return false;
+    const name = facts.nome ?? context.contactName ?? "";
+    return tell(await wordsOf(service, context.orgId, "declined", declinedMessage(name), { nome: greeting(name) }));
+  }
+  if (facts.etapa === "recusou") {
+    // Who said no and writes again is offered again: "Se mudar de ideia, é só escrever aqui".
+    return decideIntake(service, held, context, report, facts, keep, tell);
+  }
+  const faq = facts.etapa === "oferta" ? await firmMessageText(service, context.orgId, "faq") : null;
+  if (faq && choice !== "pessoa") {
+    if (!(await keep({ etapa: "duvidas" }))) return false;
+    return tell(intakeDoubts(fillMessage(faq, { nome: greeting(facts.nome) })));
+  }
+  await say(service, held, await wordsOf(service, context.orgId, "called_person", calledMessage)).catch(
+    () => undefined,
+  );
+  await callPerson(
+    service,
+    held,
+    "O passageiro tem uma dúvida antes de seguir com o caso: uma pessoa do escritório responde.",
+  );
+  report.called += 1;
+  return true;
+}
+
+/** The person's "Quero seguir": the case opened with the client's link, the documents asked here in the chat. */
+async function openFromIntake(
+  service: SupabaseClient,
+  held: Held,
+  context: TurnContext,
+  report: TurnReport,
+  facts: IntakeFacts,
+): Promise<boolean> {
   const token = randomBytes(32).toString("base64url");
+  const url = `${BRAND.siteUrl}/c/${token}`;
   const answer = await rpc(service, "one_open_case_from_intake", {
     target_conversation: held.conversationId,
     target_claim: held.claim,
@@ -508,21 +693,19 @@ async function takeIntake(
       service,
       context.orgId,
       "link_steps",
-      caseStepsMessage({
+      intakeOpenedMessage({
         passengerName: facts.nome ?? "",
-        url: `${BRAND.siteUrl}/c/${token}`,
-        minors: [],
-        agency: null,
-        signFirst,
+        firm: context.firm,
+        url,
+        companions: !!facts.acompanhantes && facts.acompanhantes !== "nenhum" && facts.acompanhantes !== "mais",
       }),
-      { nome: greeting(facts.nome), link: `${BRAND.siteUrl}/c/${token}` },
+      { nome: greeting(facts.nome), link: url },
     ),
   });
   if (answer.code === "opened" || answer.code === "opened_without_link") {
     report.opened += 1;
     if (answer.code === "opened") await send(service, answer.message_id);
-    else
-      await say(service, held, caseOpenedNoLinkMessage(facts.nome ?? "").replace("{caso}", String(answer.seq ?? "")));
+    else await say(service, held, caseOpenedNoLinkMessage(facts.nome ?? ""));
     if (typeof answer.case_id === "string") {
       const interviewId = await startInterview(service, answer.case_id).catch(() => null);
       if (interviewId) await advanceInterview(service, interviewId).catch(() => undefined);
@@ -539,8 +722,21 @@ async function takeIntake(
     report.called += 1;
     return true;
   }
-  // A case of the contact goes on already, or the facts did not hold: ONE's usual answer carries the conversation.
-  return false;
+  if (answer.code === "has_case" || answer.code === "already_opened") {
+    // A case of the contact goes on already: ONE's usual answer carries the conversation.
+    return false;
+  }
+  // The facts did not hold (no name the firm's records take, a problem of no kind): a person opens it.
+  await say(service, held, await wordsOf(service, context.orgId, "called_person", calledMessage)).catch(
+    () => undefined,
+  );
+  await callPerson(
+    service,
+    held,
+    "Um passageiro quer seguir, mas o caso não abriu sozinho: uma pessoa do escritório abre.",
+  );
+  report.called += 1;
+  return true;
 }
 
 /** The passenger's answer to the alert, kept; a no is ended kindly, a stop in silence. */
@@ -593,6 +789,20 @@ async function takeTurn(service: SupabaseClient, held: Held, report: TurnReport)
 
   // What the passenger sent as files joins the case before anything is answered.
   const joinedFiles = await joinFiles(service, held, context);
+
+  // The client's "Não tenho" to the dispensable documents ONE asked (0230).
+  if (
+    !joinedFiles &&
+    (await takeNotHave(service, held, context, lastClientWords(context.messages).join(" ")).catch(() => false))
+  ) {
+    report.answered += 1;
+    await rpc(service, "record_conversation_turn", {
+      target_conversation: held.conversationId,
+      target_claim: held.claim,
+      target_through: context.through,
+    });
+    return;
+  }
 
   // ONE asked here what the client's account is missing (0092): what they write now is their answer, unless it is
   // their plain answer to an alert.

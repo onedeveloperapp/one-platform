@@ -79,6 +79,7 @@ describe("the platform's sweeps (2026-11-04)", () => {
         "purge-leads",
         "referral-asks",
         "session-limits",
+        "signature-links",
         "signatures",
         "template-imports",
         "trip-day",

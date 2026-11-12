@@ -128,7 +128,7 @@ select ok(
 reset role;
 
 select ok(
-  not has_function_privilege('authenticated', 'public.record_conversation_intake(uuid, integer, jsonb)', 'EXECUTE')
+  not has_function_privilege('authenticated', 'public.record_conversation_intake(uuid, integer, jsonb, text[])', 'EXECUTE')
   and not has_function_privilege('authenticated', 'public.one_open_case_from_intake(uuid, integer, text, text)', 'EXECUTE')
   and not has_function_privilege('authenticated', 'public.one_intake_not_qualified(uuid, integer, jsonb, text)', 'EXECUTE')
   and exists (select 1 from public.prompt_versions v where v.task = 'atendimento.entrada' and v.is_active),

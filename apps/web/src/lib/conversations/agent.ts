@@ -46,8 +46,7 @@ export function quickAnswer(text: string | null | undefined): QuickAnswer | null
 }
 
 /**
- * The message after a yes: the case's number (marked `{caso}`, the database writes it), the link and the next
- * steps, the documents first: the firm reads each person's data in them (migration 0063), and the passenger
+ * The message after a yes: the link and the next steps (no case number since 0227: it says nothing to the client), the documents first: the firm reads each person's data in them (migration 0063), and the passenger
  * confirms what was read and completes the rest. A passenger of a partner agency (0071) sent nothing yet but has
  * it all: the agency's data and documents came with the case, so the steps are to check them, tell what happened
  * and say they finished, which ONE waits for before it goes on.
@@ -70,7 +69,7 @@ export function caseStepsMessage(input: {
   if (input.agency) {
     const theirs = others.length === 0 ? "os seus dados" : `os seus dados e os de ${list.format(others)}`;
     return [
-      `Pronto, ${name}. O escritório abriu o seu caso, número {caso}, com os dados e os documentos que vieram de ${input.agency}. Os próximos passos:`,
+      `Pronto, ${name}. O escritório abriu o seu caso com os dados e os documentos que vieram de ${input.agency}. Os próximos passos:`,
       `1. Abra o seu link: ${input.url}`,
       `2. Confira ${theirs} e os documentos que vieram da agência, e corrija o que estiver errado.`,
       `3. ${questions}`,
@@ -84,7 +83,7 @@ export function caseStepsMessage(input: {
       : `a foto do documento de identidade de cada um (${list.format(["o seu", ...others.map((other) => `o de ${other}`)])})`;
   const whose = others.length === 0 ? "os seus dados" : `os seus dados e os de ${list.format(others)}`;
   return [
-    `Pronto, ${name}. O escritório abriu o seu caso, número {caso}. Os próximos passos:`,
+    `Pronto, ${name}. O escritório abriu o seu caso. Os próximos passos:`,
     `1. Abra o seu link: ${input.url}`,
     `2. Envie ${identities}, um comprovante de endereço e o cartão de embarque ou o bilhete.`,
     `3. Confira ${whose}, que o escritório leu nos documentos, e complete o que faltar.`,
@@ -93,9 +92,31 @@ export function caseStepsMessage(input: {
   ].join("\n");
 }
 
+/**
+ * The case an intake opened at the person's "Quero seguir" (0227): no case number (it says nothing to the client),
+ * the documents asked here in the chat, the identity first, and the link only as another place to do the same.
+ */
+export function intakeOpenedMessage(input: {
+  passengerName: string;
+  firm: string;
+  url: string;
+  companions: boolean;
+}): string {
+  const name = firstNameOf(input.passengerName) || input.passengerName;
+  const firm = input.firm.trim() ? `no escritório ${input.firm.trim()}` : "no escritório";
+  return [
+    `Pronto, ${name}. O seu caso está aberto ${firm}. Agora preciso de alguns documentos, um de cada vez, e você pode mandar as fotos aqui mesmo.`,
+    "Primeiro, a foto do seu documento de identidade, RG ou CNH, com a frente e o verso.",
+    input.companions ? "Depois vou pedir também os documentos de quem viajou com você." : null,
+    `Se preferir uma tela, o seu link mostra o mesmo: ${input.url}. O link é só seu.`,
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
 /** The case opened with no link: the firm sends it. */
 export const caseOpenedNoLinkMessage = (passengerName: string): string =>
-  `Pronto, ${firstNameOf(passengerName) || passengerName}. O escritório abriu o seu caso, número {caso}. Uma pessoa do escritório vai te enviar o link para os próximos passos.`;
+  `Pronto, ${firstNameOf(passengerName) || passengerName}. O escritório abriu o seu caso. Uma pessoa do escritório vai te enviar o link para os próximos passos.`;
 
 /** A yes the firm keeps to a person. */
 export const byPersonMessage = (passengerName: string): string =>

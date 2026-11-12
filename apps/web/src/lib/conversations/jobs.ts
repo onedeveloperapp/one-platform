@@ -1,6 +1,7 @@
 import "server-only";
 
 import { takeConversationTurns } from "@/lib/conversations/agent-work";
+import { signatureLinkSweeps } from "@/lib/conversations/signature-links-work";
 import type { Sweep } from "@/lib/jobs/schedule";
 
 /**
@@ -16,4 +17,6 @@ export const conversationSweeps: Sweep[] = [
     whileUsed: true,
     run: async (service) => ({ ...(await takeConversationTurns(service, { limit: 5 })) }),
   },
+  // The links to sign, in the chat (0231).
+  ...signatureLinkSweeps,
 ];
