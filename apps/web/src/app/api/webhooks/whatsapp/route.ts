@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { timingSafeEqual } from "node:crypto";
 
-import { metaPlatform } from "@/lib/whatsapp/config";
+import { metaApp } from "@/lib/whatsapp/config";
 import { handleDelivery } from "@/lib/whatsapp/inbox";
 
 /**
@@ -25,7 +25,7 @@ const sameText = (left: string, right: string): boolean => {
 
 /** The vendor checks that the address is ours before it posts anything: it sends a token and expects its challenge back. */
 export async function GET(request: Request) {
-  const platform = metaPlatform();
+  const platform = metaApp();
   const params = new URL(request.url).searchParams;
   const challenge = params.get("hub.challenge") ?? "";
   if (

@@ -9,10 +9,14 @@ import { getMemberContext } from "@/lib/member/context";
 import { readWhatsAppSettings } from "@/lib/whatsapp/config";
 import {
   connectMetaNumber,
+  connectMetaNumberByToken,
+  connectOpenWaNumber,
   type ConnectResult,
   connectSimulatedNumber,
   disconnectWhatsApp,
   finishMetaRegistration,
+  type OpenWaLinkState,
+  openWaLinkState,
   syncAccountTemplates,
 } from "@/lib/whatsapp/connect";
 import { deliverOutbox } from "@/lib/whatsapp/send";
@@ -314,6 +318,48 @@ export async function connectWithSignup(input: {
   });
   refresh();
   return result;
+}
+
+/**
+ * A number connected with the firm's own token at Meta: the account's id, the number's id, the
+ * permanent token of a system user of the firm's business, and the six digits when the number is
+ * not on the Cloud API yet. The token goes straight to the vault and is never returned nor logged.
+ */
+export async function connectWithToken(input: {
+  token: string;
+  wabaId: string;
+  phoneNumberId: string;
+  registrationCode?: string | null;
+}): Promise<ConnectResult> {
+  const context = await getMemberContext();
+  if (!context?.firm) return { ok: false, code: "not_authorized" };
+  const digits = String(input.registrationCode ?? "").replace(/\D/g, "");
+  const result = await connectMetaNumberByToken(context, {
+    token: String(input.token ?? ""),
+    wabaId: String(input.wabaId ?? "").trim(),
+    phoneNumberId: String(input.phoneNumberId ?? "").trim(),
+    registrationCode: digits || null,
+  });
+  refresh();
+  return result;
+}
+
+/** Starts linking the firm's number by WhatsApp Web (0221): the unofficial way, after the risk was accepted on the screen. */
+export async function connectWithOpenWa(): Promise<ConnectResult> {
+  const context = await getMemberContext();
+  if (!context?.firm) return { ok: false, code: "not_authorized" };
+  const result = await connectOpenWaNumber(context);
+  refresh();
+  return result;
+}
+
+/** How the linking of a number of OpenWA stands: its QR, its state, or the number connected. */
+export async function readOpenWaLink(connectionId: string): Promise<OpenWaLinkState> {
+  const context = await getMemberContext();
+  if (!context?.firm || !UUID.test(String(connectionId ?? ""))) return { ok: false, code: "connection_not_found" };
+  const state = await openWaLinkState(context, connectionId);
+  if (state.ok && state.code === "connected") refresh();
+  return state;
 }
 
 export async function finishRegistration(input: {

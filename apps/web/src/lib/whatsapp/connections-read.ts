@@ -9,7 +9,7 @@ import { isManager } from "@/lib/firm/roles";
 import { getMemberContext } from "@/lib/member/context";
 import { firmNotices } from "@/lib/notices/facts";
 import { testChatCardOf } from "@/lib/test-chat/test-chat";
-import { isSimulatorOn, signupWindowConfig } from "@/lib/whatsapp/config";
+import { isSimulatorOn, metaApp, openWaPlatform, signupWindowConfig } from "@/lib/whatsapp/config";
 import type {
   AccountTemplateRow,
   ConnectedNumber,
@@ -84,6 +84,7 @@ export async function loadConnections(agenda: string | null): Promise<Connection
     firmCalendar,
     notices,
     testChat,
+    testFirm,
   ] = await Promise.all([
     supabase
       .from("connections")
@@ -131,6 +132,14 @@ export async function loadConnections(agenda: string | null): Promise<Connection
       ({ data, error }) => (error ? null : testChatCardOf(data)),
       () => null,
     ),
+    // A test firm's link (0220): a read that failed hides its card, and the rest of the screen stands.
+    supabase.rpc("firm_test_tools", { target_org: firm.id }).then(
+      ({ data, error }) => {
+        const token = !error && data && typeof data === "object" ? (data as { token?: unknown }).token : null;
+        return typeof token === "string" && /^[A-Za-z0-9_-]{32,64}$/.test(token) ? token : null;
+      },
+      () => null,
+    ),
   ]);
   if (
     connections.error ||
@@ -151,7 +160,14 @@ export async function loadConnections(agenda: string | null): Promise<Connection
   const list: ConnectedNumber[] = numberRows.map((row) => ({
     id: row.id,
     connectionId: row.connection_id,
-    provider: row.provider === "simulator" ? "simulator" : row.provider === "test" ? "test" : "meta",
+    provider:
+      row.provider === "simulator"
+        ? "simulator"
+        : row.provider === "test"
+          ? "test"
+          : row.provider === "openwa"
+            ? "openwa"
+            : "meta",
     phoneLabel: phoneLabel(row.display_phone_number),
     verifiedName: row.verified_name,
     mode: row.mode === "coexistence" ? "coexistence" : "cloud",
@@ -179,6 +195,11 @@ export async function loadConnections(agenda: string | null): Promise<Connection
         ? [{ connectionId: row.id, phoneLabel: phoneLabel(display) }]
         : [];
     });
+
+  // A number being linked by WhatsApp Web (0221): its connection has a session and no number yet.
+  const openWaPending =
+    connectionRows.find((row) => row.status === "connected" && !withNumber.has(row.id) && row.metadata?.openwa === true)
+      ?.id ?? null;
 
   const activeConnections = new Set(
     list.filter((number) => number.status === "active").map((number) => number.connectionId),
@@ -208,7 +229,13 @@ export async function loadConnections(agenda: string | null): Promise<Connection
     ),
     secondFactor,
     supportVisit: cookieStore.has(IMPERSONATION_MARKER_COOKIE),
-    environment: { simulator: isSimulatorOn(), vault: getVault().ok, signup },
+    environment: {
+      simulator: isSimulatorOn(),
+      vault: getVault().ok,
+      signup,
+      token: metaApp() !== null,
+      openwa: openWaPlatform() !== null,
+    },
     signature: signatureRow
       ? {
           connectionId: signatureRow.id,
@@ -239,5 +266,9 @@ export async function loadConnections(agenda: string | null): Promise<Connection
           sinceLabel: testChat.startedAt ? momentLabel(testChat.startedAt, timeZone) : null,
         }
       : null,
+    testFirm: testFirm
+      ? { toolsUrl: `${BRAND.siteUrl}/t/${testFirm}`, courtUrl: `${BRAND.siteUrl}/t/${testFirm}/tribunal` }
+      : null,
+    openWaPending: openWaPending ? { connectionId: openWaPending } : null,
   };
 }

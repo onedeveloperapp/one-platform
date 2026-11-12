@@ -7,8 +7,9 @@ import { isManager } from "@/lib/firm/roles";
 import type { MemberContext } from "@/lib/member/context";
 import {
   isSimulatorOn,
+  metaApp,
   metaAppConfig,
-  metaPlatform,
+  openWaPlatform,
   readWhatsAppSettings,
   type WhatsAppSettings,
 } from "@/lib/whatsapp/config";
@@ -16,6 +17,7 @@ import { providerFor } from "@/lib/whatsapp/provider";
 import { connectionRefusal } from "@/lib/whatsapp/session";
 import { createServiceClient } from "@flyee/auth/service";
 import type { Vault } from "@flyee/connectors/vault";
+import { BRAND } from "@flyee/content";
 import {
   exchangeSignupCode,
   getNumberInfo,
@@ -26,6 +28,7 @@ import {
   subscribeApp,
   unsubscribeApp,
 } from "@flyee/whatsapp/providers/meta";
+import { openWaSessions } from "@flyee/whatsapp/providers/openwa";
 import type { AccountTemplate, WhatsAppProviderName } from "@flyee/whatsapp/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -374,8 +377,10 @@ async function finishMetaNumber(
   number: MetaNumber,
   onBusinessApp: boolean,
   registrationCode: string | null,
+  /** The number is on the Cloud API already (registered in the firm's WhatsApp Manager): six digits only when given. */
+  registered = false,
 ): Promise<ConnectResult> {
-  if (!onBusinessApp) {
+  if (!onBusinessApp && !(registered && !registrationCode)) {
     // Used once, here, and kept nowhere: the firm chooses it and the firm keeps it.
     if (!registrationCode || !REGISTRATION_CODE.test(registrationCode)) {
       return { ok: false, code: "registration_code_needed", connectionId: place.connectionId };
@@ -422,7 +427,7 @@ export async function connectMetaNumber(
   input: { code: string; wabaId: string; phoneNumberId?: string | null; registrationCode?: string | null },
 ): Promise<ConnectResult> {
   if (!context.firm || !isManager(context.firm.role)) return { ok: false, code: "not_authorized" };
-  const platform = metaPlatform();
+  const platform = metaApp();
   if (!platform) return { ok: false, code: "meta_not_configured" };
   if (!input.code || input.code.length > 2000 || !VENDOR_ID.test(input.wabaId))
     return { ok: false, code: "invalid_signup" };
@@ -493,6 +498,101 @@ export async function connectMetaNumber(
   return finishMetaNumber(context, env, app, token, place, number, info.onBusinessApp, input.registrationCode ?? null);
 }
 
+/** A token of the Graph API as Meta writes it: letters and digits, long. Nothing about it is ever logged. */
+const META_TOKEN = /^[A-Za-z0-9_-]{40,1024}$/;
+
+/**
+ * A number connected with the firm's own token at Meta, while the platform's signup window is not
+ * open (it needs the platform to be a Tech Provider at Meta). Who manages the firm creates, in the
+ * firm's business at Meta, a system user with the platform's app and the WhatsApp account, and its
+ * permanent token with `whatsapp_business_messaging` and `whatsapp_business_management`; then gives
+ * here the account's id, the number's id and that token. The token is checked against the account
+ * before it is kept: it must read the account, and the number must be one of the account's. From
+ * there the steps are the signup's: sealed in the vault, the platform's app on the account's
+ * webhooks, the number registered (unless it is on the Cloud API already and no six digits were
+ * given), recorded and its templates brought. A number that also lives on the phone app connects
+ * only through the signup window, which is what moves it to the coexistence.
+ */
+export async function connectMetaNumberByToken(
+  context: MemberContext,
+  input: { token: string; wabaId: string; phoneNumberId: string; registrationCode?: string | null },
+): Promise<ConnectResult> {
+  if (!context.firm || !isManager(context.firm.role)) return { ok: false, code: "not_authorized" };
+  const platform = metaApp();
+  if (!platform) return { ok: false, code: "meta_not_configured" };
+  const token = input.token.trim();
+  const registrationCode = input.registrationCode ? input.registrationCode : null;
+  if (
+    !META_TOKEN.test(token) ||
+    !VENDOR_ID.test(input.wabaId) ||
+    !VENDOR_ID.test(input.phoneNumberId) ||
+    (registrationCode !== null && !REGISTRATION_CODE.test(registrationCode))
+  ) {
+    return { ok: false, code: "meta_token_invalid" };
+  }
+  const env = await backend();
+  if ("problem" in env) return { ok: false, code: env.problem };
+  const app = metaAppConfig(platform, env.settings);
+
+  const orgId = context.firm.id;
+  const started = await begin(context, orgId, input.wabaId, "WhatsApp");
+  if (!started.ok) return started;
+  const place = { orgId, connectionId: started.connectionId };
+
+  // The token reads the account and the number is the account's, or nothing is kept.
+  const numbers = await listAccountNumbers(app, token, input.wabaId);
+  if (!numbers) {
+    await undo(context, place.connectionId);
+    return { ok: false, code: "meta_token_refused" };
+  }
+  if (!numbers.includes(input.phoneNumberId)) {
+    await undo(context, place.connectionId);
+    return { ok: false, code: "meta_number_not_in_account" };
+  }
+  const info = await getNumberInfo(app, token, input.phoneNumberId);
+  if (!info) {
+    await undo(context, place.connectionId);
+    return { ok: false, code: "account_unreadable" };
+  }
+  if (info.onBusinessApp) {
+    await undo(context, place.connectionId);
+    return { ok: false, code: "meta_number_on_business_app" };
+  }
+
+  const number: MetaNumber = {
+    phoneNumberId: input.phoneNumberId,
+    wabaId: input.wabaId,
+    displayPhoneNumber: info.displayPhoneNumber,
+    verifiedName: info.verifiedName,
+  };
+  const sealed = await env.vault.seal(
+    place,
+    { access_token: token },
+    {
+      metadata: {
+        waba_id: number.wabaId,
+        phone_number_id: number.phoneNumberId,
+        display_phone_number: number.displayPhoneNumber,
+        verified_name: number.verifiedName,
+        on_business_app: false,
+        by_token: true,
+      },
+    },
+  );
+  if (sealed.kind !== "sealed") {
+    await undo(context, place.connectionId);
+    return { ok: false, code: `vault_${sealed.code}` };
+  }
+
+  const subscribed = await subscribeApp(app, token, number.wabaId);
+  if (!subscribed.ok) {
+    await undo(context, place.connectionId);
+    return { ok: false, code: "subscribe_failed" };
+  }
+
+  return finishMetaNumber(context, env, app, token, place, number, false, registrationCode, info.onCloudApi);
+}
+
 /**
  * The second half of connecting a number that lives on the Cloud API alone:
  * the signup ended, the token is sealed, and the person now gives the six
@@ -506,7 +606,7 @@ export async function finishMetaRegistration(
   // No function of the database is asked on this half: the same questions are asked here.
   const refusal = await connectionRefusal(context);
   if (refusal) return { ok: false, code: refusal };
-  const platform = metaPlatform();
+  const platform = metaApp();
   if (!platform) return { ok: false, code: "meta_not_configured" };
   if (!REGISTRATION_CODE.test(input.registrationCode)) {
     return { ok: false, code: "registration_code_needed", connectionId: input.connectionId };
@@ -602,7 +702,7 @@ export async function disconnectWhatsApp(
 
   // Read now, used after: once the connection is cut the token no longer exists.
   let leave: (() => Promise<unknown>) | null = null;
-  const platform = metaPlatform();
+  const platform = metaApp();
   if (vendorAccount && platform) {
     const env = await backend();
     if (!("problem" in env)) {
@@ -618,6 +718,20 @@ export async function disconnectWhatsApp(
     }
   }
 
+  // A number of OpenWA: its session is unlinked from the phone and ended at the platform's OpenWA.
+  const openWaSession =
+    typeof metadata.session_id === "string" && metadata.openwa === true
+      ? metadata.session_id
+      : (rows.find((number) => number.provider === "openwa")?.waba_id ?? null);
+  const openWa = openWaPlatform();
+  if (openWaSession && openWa) {
+    const sessions = openWaSessions(openWa);
+    leave = async () => {
+      await sessions.logout(openWaSession);
+      await sessions.remove(openWaSession);
+    };
+  }
+
   const { data, error } = await context.supabase.rpc("disconnect_connection", { target_connection: connectionId });
   if (error) return { ok: false, code: codeOf(error.message) };
   const answer = (data ?? {}) as { ok?: boolean; code?: string };
@@ -626,4 +740,126 @@ export async function disconnectWhatsApp(
   // The firm is disconnected here whatever the vendor answers: its token is gone.
   if (leave) await leave().catch(() => undefined);
   return { ok: true, code: "disconnected" };
+}
+
+// ---------- WhatsApp Web, by the platform's OpenWA (migration 0221) ----------
+
+/** What the screen shows while a number of OpenWA is being linked: the QR to read, or how the session stands. */
+export type OpenWaLinkState =
+  | { ok: true; code: "connected"; numberId: string }
+  | { ok: true; code: "qr"; qr: string }
+  | { ok: true; code: "waiting"; status: string }
+  | { ok: false; code: string };
+
+/**
+ * Starts linking the firm's number by WhatsApp Web: the unofficial way, which who manages the firm chooses after
+ * accepting its risk (the screen says it first). The database says whether this person may connect (the role, the
+ * second factor); a session of the platform's OpenWA is made for the firm, with ONE's signed webhook, and started;
+ * the connection keeps which session it is (no token of the firm exists: the key is the platform's). The screen
+ * then reads the session's QR (`openWaLinkState`) until the phone reads it.
+ */
+export async function connectOpenWaNumber(context: MemberContext): Promise<ConnectResult> {
+  if (!context.firm || !isManager(context.firm.role)) return { ok: false, code: "not_authorized" };
+  const platform = openWaPlatform();
+  if (!platform) return { ok: false, code: "openwa_not_configured" };
+  const env = await backend();
+  if ("problem" in env) return { ok: false, code: env.problem };
+
+  const orgId = context.firm.id;
+  const sessionName = `one-${orgId.slice(0, 8)}-${randomBytes(3).toString("hex")}`;
+  const started = await begin(context, orgId, sessionName, "WhatsApp Web");
+  if (!started.ok) return started;
+  const place = { orgId, connectionId: started.connectionId };
+
+  const sessions = openWaSessions(platform);
+  const session = await sessions.create(sessionName);
+  if (!session) {
+    await undo(context, place.connectionId);
+    return { ok: false, code: "openwa_unavailable" };
+  }
+  const leave = async () => {
+    await sessions.remove(session.id);
+  };
+  const hooked = await sessions.webhook(session.id, `${BRAND.siteUrl}/api/webhooks/openwa`, platform.webhookSecret);
+  if (!hooked) {
+    await undo(context, place.connectionId, leave);
+    return { ok: false, code: "openwa_unavailable" };
+  }
+  const sealed = await env.vault.seal(
+    place,
+    { access_token: "openwa" },
+    { metadata: { openwa: true, session_id: session.id, session_name: sessionName } },
+  );
+  if (sealed.kind !== "sealed") {
+    await undo(context, place.connectionId, leave);
+    return { ok: false, code: `vault_${sealed.code}` };
+  }
+  if (!(await sessions.start(session.id))) {
+    await undo(context, place.connectionId, leave);
+    return { ok: false, code: "openwa_unavailable" };
+  }
+  return { ok: false, code: "openwa_qr", connectionId: place.connectionId };
+}
+
+/**
+ * How the linking of a number of OpenWA stands, read again by the screen every few seconds: the QR while the phone
+ * has not read it, the session's state while it starts, and, once it is ready, the number recorded as the firm's
+ * (a real number: the test chat and the simulator end, 0221).
+ */
+export async function openWaLinkState(context: MemberContext, connectionId: string): Promise<OpenWaLinkState> {
+  if (!context.firm || !isManager(context.firm.role)) return { ok: false, code: "not_authorized" };
+  const refusal = await connectionRefusal(context);
+  if (refusal) return { ok: false, code: refusal };
+  const platform = openWaPlatform();
+  if (!platform) return { ok: false, code: "openwa_not_configured" };
+
+  const { data: connection } = await context.supabase
+    .from("connections")
+    .select("id, status, metadata")
+    .eq("id", connectionId)
+    .eq("org_id", context.firm.id)
+    .eq("provider", "whatsapp")
+    .maybeSingle();
+  const metadata = (connection?.metadata ?? {}) as Record<string, unknown>;
+  const sessionId = typeof metadata.session_id === "string" ? metadata.session_id : null;
+  if (!connection || connection.status !== "connected" || metadata.openwa !== true || !sessionId) {
+    return { ok: false, code: "connection_not_found" };
+  }
+
+  const sessions = openWaSessions(platform);
+  const session = await sessions.read(sessionId);
+  if (session === "missing") return { ok: false, code: "openwa_session_missing" };
+  if (!session) return { ok: true, code: "waiting", status: "unknown" };
+  if (session.status === "ready" && session.phone) {
+    const env = await backend();
+    if ("problem" in env) return { ok: false, code: env.problem };
+    const recorded = await recordNumber(env, {
+      orgId: context.firm.id,
+      connectionId,
+      provider: "openwa",
+      phoneNumberId: sessionId,
+      wabaId: sessionId,
+      displayPhoneNumber: session.phone,
+      verifiedName: null,
+      // The number lives on the firm's phone, which WhatsApp Web is a device of.
+      mode: "coexistence",
+    });
+    if (!recorded.ok) {
+      await undo(context, connectionId, async () => {
+        await sessions.logout(sessionId);
+        await sessions.remove(sessionId);
+      });
+      return { ok: false, code: notRecorded(recorded.code) };
+    }
+    return { ok: true, code: "connected", numberId: recorded.numberId };
+  }
+  if (session.status === "qr_ready") {
+    const qr = await sessions.qr(sessionId);
+    if (qr) return { ok: true, code: "qr", qr };
+  }
+  if (session.status === "failed" || session.status === "disconnected") {
+    // Stopped before it was linked: started again, and the next read shows its QR.
+    await sessions.start(sessionId);
+  }
+  return { ok: true, code: "waiting", status: session.status };
 }

@@ -391,12 +391,16 @@ export async function listAccountNumbers(app: MetaAppConfig, token: string, waba
   return body.data.flatMap((row) => (typeof row.id === "string" && row.id ? [row.id] : []));
 }
 
-/** The number as the vendor knows it: what it shows, its name, and whether it also lives on the phone app. */
+/**
+ * The number as the vendor knows it: what it shows, its name, whether it also lives on the phone app,
+ * and whether it is registered on the Cloud API already (`platform_type` `CLOUD_API`): a number the
+ * firm registered in its WhatsApp Manager, or the test number Meta gives an app, needs no six digits.
+ */
 export async function getNumberInfo(
   app: MetaAppConfig,
   token: string,
   phoneNumberId: string,
-): Promise<{ displayPhoneNumber: string; verifiedName: string | null; onBusinessApp: boolean } | null> {
+): Promise<{ displayPhoneNumber: string; verifiedName: string | null; onBusinessApp: boolean; onCloudApi: boolean } | null> {
   const fields = "display_phone_number,verified_name,is_on_biz_app,platform_type";
   const answer = await call(app, `${GRAPH}/${app.apiVersion}/${encodeURIComponent(phoneNumberId)}?fields=${fields}`, {
     method: "GET",
@@ -406,11 +410,13 @@ export async function getNumberInfo(
     display_phone_number?: string;
     verified_name?: string;
     is_on_biz_app?: boolean;
+    platform_type?: string;
   } | null;
   if (!answer || answer.status !== 200 || !body?.display_phone_number) return null;
   return {
     displayPhoneNumber: body.display_phone_number.replace(/\D/g, ""),
     verifiedName: body.verified_name ?? null,
     onBusinessApp: Boolean(body.is_on_biz_app),
+    onCloudApi: body.platform_type === "CLOUD_API",
   };
 }

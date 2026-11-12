@@ -1,9 +1,10 @@
 import "server-only";
 
 import { getVault } from "@/lib/connections/vault";
-import { isSimulatorOn, type WhatsAppSettings } from "@/lib/whatsapp/config";
+import { isSimulatorOn, openWaPlatform, type WhatsAppSettings } from "@/lib/whatsapp/config";
 import { TestChatProvider } from "@/lib/whatsapp/test-provider";
 import { MetaProvider } from "@flyee/whatsapp/providers/meta";
+import { OpenWaProvider } from "@flyee/whatsapp/providers/openwa";
 import { SimulatorProvider } from "@flyee/whatsapp/simulator";
 import type { AccountTemplate, WhatsAppProvider } from "@flyee/whatsapp/types";
 
@@ -47,6 +48,19 @@ export async function providerFor(
     return isSimulatorOn()
       ? { ok: true, provider: new SimulatorProvider({ templates: options.simulatedTemplates }) }
       : { ok: false, code: "simulator_off" };
+  }
+  if (target.provider === "openwa") {
+    // A number linked by WhatsApp Web (0221): the platform's OpenWA, with the platform's key, the number's session.
+    const platform = openWaPlatform();
+    if (!platform) return { ok: false, code: "openwa_not_configured" };
+    return {
+      ok: true,
+      provider: new OpenWaProvider({
+        baseUrl: platform.baseUrl,
+        apiKey: platform.apiKey,
+        sessionId: target.phoneNumberId,
+      }),
+    };
   }
   if (target.provider !== "meta") return { ok: false, code: "unknown_provider" };
 

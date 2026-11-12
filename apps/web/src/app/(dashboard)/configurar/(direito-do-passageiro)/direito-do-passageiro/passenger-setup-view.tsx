@@ -1,6 +1,6 @@
 "use client";
 
-import TestChatCard from "../../../settings/connections/components/test-chat-card";
+import ConnectCard from "../../../settings/connections/components/connect-card";
 import { PASSENGER_SETUP_STEPS, type PassengerSetupStep } from "./passenger-setup-steps";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -166,10 +166,9 @@ function PassengerSetupFlow({ state }: { state: Extract<PassengerSetupState, { k
   const [invitingAgency, setInvitingAgency] = useState(false);
   const connections = state.connections.kind === "ready" ? state.connections : null;
   const realNumber = connections?.numbers.find((item) => item.status === "active" && item.provider !== "test") ?? null;
-  // The partnership needs the channel before the agency's passenger agrees: with no test chat on, an agreement is
-  // followed as a real flight and never reaches the test chat (0071), and with no number nobody is told. Turned on
-  // here, in place.
-  const noChannel = connections !== null && !realNumber && connections.testChat?.state.on !== true;
+  // The partnership needs the firm's WhatsApp number before the agency's passenger agrees: with no number nobody is
+  // told of a problem. Connected here, in place (the test chat is offered no longer, 2026-11-11).
+  const noChannel = connections !== null && !realNumber;
   const partners = state.partners;
   const activePartners = partners?.partnerships.filter((partnership) => partnership.status === "active") ?? [];
   const day = (value: string) =>
@@ -302,19 +301,21 @@ function PassengerSetupFlow({ state }: { state: Extract<PassengerSetupState, { k
       onPrimary: () => finish(destination),
       content: (
         <Box className="flex flex-col gap-5">
-          {noChannel && !blocked && connections?.testChat ? (
-            // The channel the partnership needs, turned on here: the setup is never left for another screen.
+          {noChannel && !blocked && connections ? (
+            // The channel the partnership needs, connected here: the setup is never left for another screen.
             <Box className="flex flex-col gap-3">
               <Alert severity="warning" className="neutral bg-background-paper/60!">
                 {t("pax-setup-agency-no-channel")}
               </Alert>
-              <TestChatCard
+              <ConnectCard
                 embedded
-                state={connections.testChat.state}
-                url={connections.testChat.url}
-                sinceLabel={connections.testChat.sinceLabel}
+                firmName={connections.firm.name}
+                again={connections.numbers.some((item) => item.provider !== "test")}
+                pending={connections.pending}
+                environment={connections.environment}
                 blocked={blocked || !factorOk}
-                onChanged={refresh}
+                onConnected={refresh}
+                openWaPending={connections.openWaPending}
               />
             </Box>
           ) : null}

@@ -107,3 +107,48 @@ describe("the trip in front of the tester", () => {
     expect(testTripInFront([{ label: "voo_real", status: "watching" }])).toBeNull();
   });
 });
+
+describe("a test firm's tools (0220)", () => {
+  it("reads the view of the firm's link, its trips and legs, and nothing of a link that opens nothing", async () => {
+    const { testFirmViewOf, firmToolOf } = await import("./test-chat");
+    expect(testFirmViewOf({ found: false })).toBeNull();
+    const view = testFirmViewOf({
+      found: true,
+      firm: "Souza Advogados",
+      number: { phone: "5562900002201", provider: "openwa" },
+      delay_minutes: 240,
+      trips: [
+        {
+          id: "e2200000-0000-4000-8000-00000000000a",
+          passenger: "Passageira Teste",
+          phone_end: "0001",
+          status: "watching",
+          from_agency: true,
+          case_id: null,
+          legs: [
+            {
+              position: 1,
+              flight: "LA3456",
+              origin: "GRU",
+              destination: "REC",
+              departure: "2099-01-10T08:10:00",
+              arrival: "2099-01-10T11:25:00",
+              status: "scheduled",
+              estimated_arrival: null,
+              departed: "2099-01-10T08:12:00",
+              arrived: null,
+            },
+            { position: 2, flight: "", origin: "REC", destination: "GRU" },
+          ],
+        },
+        { id: "not-a-trip" },
+      ],
+    });
+    expect(view?.number).toEqual({ phone: "5562900002201", provider: "openwa" });
+    expect(view?.trips).toHaveLength(1);
+    expect(view?.trips[0].legs).toHaveLength(1);
+    expect(view?.trips[0].legs[0]).toMatchObject({ departed: true, arrived: false, status: "scheduled" });
+    expect(firmToolOf("cancel")?.legs).toEqual([{ position: 1, status: "cancelled" }]);
+    expect(firmToolOf("late_short")).toBeNull();
+  });
+});

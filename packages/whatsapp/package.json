@@ -10,9 +10,10 @@
     "./rules": "./src/rules.ts",
     "./webhook": "./src/webhook.ts",
     "./providers/meta": "./src/providers/meta.ts",
+    "./providers/openwa": "./src/providers/openwa.ts",
     "./simulator": "./src/simulator.ts"
   },
   "scripts": {
-    "test": "node --experimental-strip-types --test src/contract.test.ts src/webhook.test.ts src/rules.test.ts"
+    "test": "node --experimental-strip-types --test src/contract.test.ts src/webhook.test.ts src/rules.test.ts src/openwa.test.ts"
   }
 }

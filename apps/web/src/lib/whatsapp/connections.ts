@@ -13,8 +13,8 @@ import type { TestChatCard } from "@/lib/test-chat/test-chat";
 export type ConnectedNumber = {
   id: string;
   connectionId: string;
-  /** `test`: the number of the firm's test chat (0047), which its own card shows. */
-  provider: "meta" | "simulator" | "test";
+  /** `test`: the number of the firm's test chat (0047), which its own card shows. `openwa`: linked by WhatsApp Web (0221). */
+  provider: "meta" | "simulator" | "test" | "openwa";
   phoneLabel: string;
   verifiedName: string | null;
   /** `coexistence`: the number also lives on the firm's phone. `cloud`: only on the platform. */
@@ -52,6 +52,10 @@ export type ConnectEnvironment = {
   vault: boolean;
   /** The platform's app at Meta, for the signup window. Null while it is not configured. */
   signup: { appId: string; configId: string; sdkVersion: string } | null;
+  /** The platform's app at Meta receives the webhook: a number connects with the firm's own token. */
+  token: boolean;
+  /** The platform's OpenWA is configured: a number connects by WhatsApp Web, the unofficial way (0221). */
+  openwa: boolean;
 };
 
 export type ConnectionsData = {
@@ -77,6 +81,13 @@ export type ConnectionsData = {
   notices: FirmNotices;
   /** The firm's test chat (migration 0047): whether it is on, and its page's address for who may hand it out. */
   testChat: { state: TestChatCard; url: string | null; sinceLabel: string | null } | null;
+  /**
+   * The firm's test tools when the operator marked it a test firm (migration 0220): the address of its tools and of
+   * its test court, for who manages it; null for a firm that is no test firm, or when it could not be read.
+   */
+  testFirm: { toolsUrl: string; courtUrl: string } | null;
+  /** A number being linked by WhatsApp Web, whose QR the phone has not read yet (0221). */
+  openWaPending: { connectionId: string } | null;
 };
 
 /**
@@ -112,6 +123,13 @@ const CONNECT_ERROR_KEYS: Record<string, string> = {
   no_number: "connections-error-no-number",
   several_numbers: "connections-error-several-numbers",
   subscribe_failed: "connections-error-subscribe",
+  openwa_not_configured: "connections-error-openwa-off",
+  openwa_unavailable: "connections-error-openwa-unavailable",
+  openwa_session_missing: "connections-error-openwa-missing",
+  meta_token_invalid: "connections-error-meta-token-invalid",
+  meta_token_refused: "connections-error-meta-token-refused",
+  meta_number_not_in_account: "connections-error-meta-number-not-in-account",
+  meta_number_on_business_app: "connections-error-meta-number-on-business-app",
   registration_code_needed: "connections-error-registration-code",
   registration_failed: "connections-error-registration",
   connection_not_found: "connections-error-not-found",

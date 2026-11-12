@@ -1,10 +1,11 @@
 import TestChat from "./test-chat";
+import TestFirmTools from "./test-firm-tools";
 import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 
 import { Box, Paper, Typography } from "@mui/material";
 
-import { readTestChat } from "@/lib/test-chat/actions";
+import { readTestChat, readTestFirm } from "@/lib/test-chat/actions";
 
 /**
  * A firm's test chat (migration 0047): the page behind the link who manages
@@ -46,6 +47,11 @@ export default async function TestChatPage({ params }: { params: Promise<{ token
   const { token } = await params;
   const t = await getTranslations("product");
   const read = await readTestChat(token);
+  if (!read.ok && read.code === "missing") {
+    // A test firm's link (0220): its tools, with no chat, since the firm tests with its real WhatsApp number.
+    const firm = await readTestFirm(token);
+    if (firm.ok) return <TestFirmTools token={token} initial={firm.view} />;
+  }
   if (!read.ok) {
     return read.code === "unavailable" ? (
       <Notice title={t("test-chat-unavailable-title")} body={t("test-chat-unavailable-body")} />

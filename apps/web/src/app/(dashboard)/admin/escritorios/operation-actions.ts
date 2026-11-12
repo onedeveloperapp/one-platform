@@ -1,6 +1,9 @@
 "use server";
 
+import { randomBytes } from "node:crypto";
+
 import { requireSuperadmin } from "@/lib/admin/session";
+import { BRAND } from "@flyee/content";
 
 /**
  * One firm's operation, for the operator (migration 0204): its use against its tier, its cases, its WhatsApp, its
@@ -68,4 +71,54 @@ export async function loadFirmOperation(
       supportUntil: typeof raw.support_until === "string" ? raw.support_until : null,
     },
   };
+}
+
+// ---------- A test firm (migration 0220) ----------
+
+/** Whether the firm is a test firm, with its note, when and its link; null when it could not be read. */
+export type TestFirmMark = { marked: boolean; note: string | null; since: string | null; url: string | null };
+
+export async function loadTestFirm(orgId: string): Promise<TestFirmMark | null> {
+  const session = await requireSuperadmin();
+  if (!session) return null;
+  const { data, error } = await session.supabase.rpc("admin_test_firms");
+  if (error || !Array.isArray(data)) return null;
+  const row = (data as Record<string, unknown>[]).find((item) => item.org_id === orgId);
+  if (!row) return { marked: false, note: null, since: null, url: null };
+  const token = typeof row.token === "string" ? row.token : null;
+  return {
+    marked: true,
+    note: typeof row.note === "string" ? row.note : null,
+    since: typeof row.marked_at === "string" ? row.marked_at : null,
+    url: token ? `${BRAND.siteUrl}/t/${token}` : null,
+  };
+}
+
+/**
+ * Marks a firm as a test firm, or takes the mark away, with the operator's note (8 to 500 characters). Marked, the
+ * firm's cases and the trips ONE follows for it are tests, and its link opens its test tools and the test court.
+ */
+export async function setTestFirm(
+  orgId: string,
+  on: boolean,
+  note: string,
+): Promise<{ ok: true; mark: TestFirmMark | null } | { ok: false; code: string }> {
+  const session = await requireSuperadmin();
+  if (!session) return { ok: false, code: "not_authorized" };
+  const { data, error } = await session.supabase.rpc("admin_set_test_firm", {
+    target_org: orgId,
+    target_on: on,
+    target_note: String(note ?? ""),
+    target_token: on ? randomBytes(32).toString("base64url") : null,
+  });
+  if (error) {
+    const message = error.message ?? "";
+    return {
+      ok: false,
+      code: message.includes("aal2") || message.includes("second_factor") ? "second_factor" : "failed",
+    };
+  }
+  const answer = (data ?? {}) as { ok?: boolean; code?: string };
+  if (!answer.ok) return { ok: false, code: String(answer.code ?? "failed") };
+  return { ok: true, mark: await loadTestFirm(orgId) };
 }

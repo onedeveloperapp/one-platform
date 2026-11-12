@@ -11,6 +11,7 @@ STACK=/opt/atendimento/one
 IMPL="$STACK/modelos/implantacao"
 SECRETS="$STACK/segredos"
 ATENDIMENTO_HOST=atendimentoone.orkestree.com
+WA_HOST=waone.orkestree.com
 
 rand64() { openssl rand -base64 96 | tr -dc 'A-Za-z0-9' | head -c 64; }
 
@@ -36,16 +37,31 @@ grep -q '^ENABLE_PUSH_RELAY_SERVER=' "$SECRETS/chatwoot.env" ||
   printf '%s\n' "# Ninguém usa o aplicativo de celular do Chatwoot: nada vai pelo repasse de avisos deles." "ENABLE_PUSH_RELAY_SERVER=false" >> "$SECRETS/chatwoot.env"
 grep -q '^POSTGRES_DATABASE=' "$SECRETS/chatwoot.env" ||
   printf '%s\n' "POSTGRES_DATABASE=chatwoot_production" >> "$SECRETS/chatwoot.env"
-# O compose.yml do kit cita os ambientes do robô, do OpenWA e do proxy, que o ONE não sobe: ficam vazios.
-for name in robo openwa proxy; do [ -f "$SECRETS/$name.env" ] || : > "$SECRETS/$name.env"; done
+# O OpenWA dos números ligados pelo WhatsApp Web: a chave nasce aqui e nunca é impressa. Um openwa.env vazio (da
+# primeira implantação, sem o OpenWA) é trocado. O ONE pede o telefone de quem escreve com um identificador de
+# privacidade (RESOLVE_LID_TO_PHONE) e busca as mídias pela API, nunca dentro do aviso (WEBHOOK_MEDIA_INLINE_MAX_BYTES).
+if [ ! -s "$SECRETS/openwa.env" ]; then
+  sed -e "s#^BASE_URL=.*#BASE_URL=https://$WA_HOST#" \
+      -e "s#^API_MASTER_KEY=.*#API_MASTER_KEY=$(rand64)#" \
+      "$IMPL/openwa.env.example" > "$SECRETS/openwa.env"
+  echo >> "$SECRETS/openwa.env"
+  printf '%s\n' "RESOLVE_LID_TO_PHONE=true" "WEBHOOK_MEDIA_INLINE_MAX_BYTES=0" >> "$SECRETS/openwa.env"
+  echo "openwa.env criado"
+else
+  echo "openwa.env já existia"
+fi
+# O compose.yml do kit cita os ambientes do robô e do proxy, que o ONE não sobe: ficam vazios.
+for name in robo proxy; do [ -f "$SECRETS/$name.env" ] || : > "$SECRETS/$name.env"; done
 chmod 600 "$SECRETS"/*.env
 umask 022
 for name in SECRET_KEY_BASE POSTGRES_PASSWORD REDIS_PASSWORD; do
   value=$(grep "^$name=" "$SECRETS/chatwoot.env" | cut -d= -f2-)
   [ "${#value}" -ge 64 ] || { echo "ERRO: $name curto"; exit 1; }
 done
-for name in robo openwa proxy; do [ ! -s "$SECRETS/$name.env" ] || { echo "ERRO: $name.env não está vazio"; exit 1; }; done
-echo "segredos conferidos: tamanho certo; robô, OpenWA e proxy sem nada"
+value=$(grep "^API_MASTER_KEY=" "$SECRETS/openwa.env" | cut -d= -f2-)
+[ "${#value}" -ge 64 ] || { echo "ERRO: API_MASTER_KEY curta"; exit 1; }
+for name in robo proxy; do [ ! -s "$SECRETS/$name.env" ] || { echo "ERRO: $name.env não está vazio"; exit 1; }; done
+echo "segredos conferidos: tamanho certo; robô e proxy sem nada"
 
 echo "== ambiente da pilha"
 cp "$STACK/implantacao/compose.one.yml" "$IMPL/compose.one.yml"
@@ -54,15 +70,16 @@ cat > "$IMPL/.env" <<EOF
 PILHA=one
 COMPOSE_PROJECT_NAME=atendimento-one
 COMPOSE_FILE=compose.yml:compose.compartilhado.yml:compose.one.yml
+COMPOSE_PROFILES=nao-oficial
 EOF
 cd "$IMPL"
 docker compose config --quiet && echo "compose válido"
 running=$(docker compose config --services)
-if echo "$running" | grep -qE '^(robo|openwa)$'; then echo "ERRO: o robô ou o OpenWA estão na pilha"; exit 1; fi
+if echo "$running" | grep -qE '^robo$'; then echo "ERRO: o robô está na pilha"; exit 1; fi
 echo "serviços: $(echo "$running" | tr '\n' ' ')"
 
 echo "== imagens"
-docker compose pull --quiet postgres redis chatwoot-rails chatwoot-sidekiq
+docker compose pull --quiet postgres redis chatwoot-rails chatwoot-sidekiq openwa
 
 echo "== banco do Chatwoot (chatwoot_production)"
 docker compose up -d postgres redis
@@ -74,6 +91,9 @@ docker compose run --rm chatwoot-rails bundle exec rails db:chatwoot_prepare 2>&
 
 echo "== Chatwoot"
 docker compose up -d chatwoot-rails chatwoot-sidekiq
+
+echo "== OpenWA"
+docker compose up -d openwa
 
 echo "== marca do painel (chatwoot-config, a cada implantação)"
 [ -f "$STACK/gerado/marca.env" ] || { echo "ERRO: falta gerado/marca.env; rode kit.mjs theme antes"; exit 1; }

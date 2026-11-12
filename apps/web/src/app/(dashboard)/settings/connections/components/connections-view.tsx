@@ -7,6 +7,7 @@ import NumberCard from "./number-card";
 import SignatureAccountCard from "./signature-account-card";
 import TemplatesCard from "./templates-card";
 import TestChatCard from "./test-chat-card";
+import TestFirmCard from "./test-firm-card";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -37,8 +38,7 @@ export default function ConnectionsView({ state }: { state: ConnectionsState }) 
   const active = ready ? ready.numbers.filter((number) => number.status === "active") : [];
   // The test chat's number is shown by its own card; a real number is what the firm connects here.
   const realActive = active.filter((number) => number.provider !== "test");
-  // Only a number at the vendor ends the test chat: the simulator of a development machine stands beside it.
-  const vendorActive = active.some((number) => number.provider === "meta");
+
   // Nobody connects from a session without the second factor, or from a support visit: the screen says why, once.
   const blocked = ready ? ready.supportVisit || ready.secondFactor !== "ok" : false;
 
@@ -184,7 +184,8 @@ export default function ConnectionsView({ state }: { state: ConnectionsState }) 
                 />
               ))}
 
-            {ready.testChat && (!vendorActive || ready.testChat.state.on) ? (
+            {/* The test chat is offered no longer (2026-11-11): one already on stays, to be turned off. */}
+            {ready.testChat?.state.on ? (
               <TestChatCard
                 state={ready.testChat.state}
                 url={ready.testChat.url}
@@ -192,6 +193,10 @@ export default function ConnectionsView({ state }: { state: ConnectionsState }) 
                 blocked={blocked}
                 onChanged={refresh}
               />
+            ) : null}
+
+            {ready.testFirm ? (
+              <TestFirmCard toolsUrl={ready.testFirm.toolsUrl} courtUrl={ready.testFirm.courtUrl} />
             ) : null}
 
             {realActive.length === 0 || ready.pending.length > 0 ? (
@@ -202,6 +207,7 @@ export default function ConnectionsView({ state }: { state: ConnectionsState }) 
                 environment={ready.environment}
                 blocked={blocked}
                 onConnected={refresh}
+                openWaPending={ready.openWaPending}
               />
             ) : null}
 

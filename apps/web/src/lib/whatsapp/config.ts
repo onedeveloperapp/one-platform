@@ -30,23 +30,55 @@ export function isSimulatorOn(): boolean {
 const SIMULATOR_SECRET = randomBytes(32).toString("hex");
 export const simulatorSecret = (): string => SIMULATOR_SECRET;
 
-export type MetaPlatform = {
+/** The platform's app at Meta: what signs the webhook's deliveries and calls the Graph API. */
+export type MetaApp = {
   appId: string;
   appSecret: string;
-  /** The Embedded Signup configuration the signup window opens with. */
-  signupConfigId: string;
   /** What the vendor repeats when it checks that the webhook address is ours. */
   verifyToken: string;
 };
 
-/** The platform's app at Meta, or null while any of its four values is missing. */
-export function metaPlatform(): MetaPlatform | null {
+export type MetaPlatform = MetaApp & {
+  /** The Embedded Signup configuration the signup window opens with. */
+  signupConfigId: string;
+};
+
+/**
+ * The platform's app at Meta, or null while any of its three values is missing. It is all the
+ * webhook and a number connected by a token of the firm need: the signup window is apart
+ * (`metaPlatform`), since it needs the platform to be a Tech Provider at Meta, and a number
+ * connected by a token must not go deaf while it is not.
+ */
+export function metaApp(): MetaApp | null {
   const appId = (process.env.META_APP_ID ?? "").trim();
   const appSecret = (process.env.META_APP_SECRET ?? "").trim();
-  const signupConfigId = (process.env.META_SIGNUP_CONFIG_ID ?? "").trim();
   const verifyToken = (process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN ?? "").trim();
-  if (!appId || !appSecret || !signupConfigId || !verifyToken) return null;
-  return { appId, appSecret, signupConfigId, verifyToken };
+  if (!appId || !appSecret || !verifyToken) return null;
+  return { appId, appSecret, verifyToken };
+}
+
+/** The platform's OpenWA (migration 0221): where the server reaches it, its key and the secret its deliveries are signed with. */
+export type OpenWaPlatform = { baseUrl: string; apiKey: string; webhookSecret: string };
+
+/**
+ * The platform's OpenWA, the unofficial way to connect a number by WhatsApp Web, or null while any of its three
+ * values is missing (`OPENWA_URL`, `OPENWA_API_KEY`, `OPENWA_WEBHOOK_SECRET` of at least 16 characters): the
+ * screen then offers no such connection.
+ */
+export function openWaPlatform(): OpenWaPlatform | null {
+  const baseUrl = (process.env.OPENWA_URL ?? "").trim().replace(/\/+$/, "");
+  const apiKey = (process.env.OPENWA_API_KEY ?? "").trim();
+  const webhookSecret = (process.env.OPENWA_WEBHOOK_SECRET ?? "").trim();
+  if (!/^https:\/\//.test(baseUrl) || !apiKey || webhookSecret.length < 16) return null;
+  return { baseUrl, apiKey, webhookSecret };
+}
+
+/** The platform's app with its Embedded Signup configuration, or null while any of its four values is missing. */
+export function metaPlatform(): MetaPlatform | null {
+  const app = metaApp();
+  const signupConfigId = (process.env.META_SIGNUP_CONFIG_ID ?? "").trim();
+  if (!app || !signupConfigId) return null;
+  return { ...app, signupConfigId };
 }
 
 export type WhatsAppSettings = {
@@ -88,7 +120,7 @@ export async function signupWindowConfig(): Promise<{ appId: string; configId: s
 }
 
 /** The platform's app, in the shape the signup calls take. */
-export const metaAppConfig = (platform: MetaPlatform, settings: WhatsAppSettings): MetaAppConfig => ({
+export const metaAppConfig = (platform: MetaApp, settings: WhatsAppSettings): MetaAppConfig => ({
   appId: platform.appId,
   appSecret: platform.appSecret,
   apiVersion: settings.graphApiVersion,

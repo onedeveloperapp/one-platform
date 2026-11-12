@@ -9,7 +9,6 @@ import { readModuleOffer } from "@/lib/modules/offer-read";
 import { moduleOf } from "@/lib/modules/registry";
 import { readOneWork } from "@/lib/one-work/read";
 import { brasiliaMonth, monthTotals } from "@/lib/one-work/work";
-import { testChatCardOf } from "@/lib/test-chat/test-chat";
 
 type Params = { params: Promise<{ modulo: string }> };
 
@@ -51,7 +50,7 @@ async function loadArea(key: string): Promise<ModuleAreaState> {
   const definition = moduleOf(key);
   const manager = isManager(context.firm.role);
   const importer = canImportPortfolio(context.firm.firmFunction);
-  const [stock, recent, testChat, oneWork] = await Promise.all([
+  const [stock, recent, testTools, oneWork] = await Promise.all([
     // Where the module's cases are, by the rule of the top of the case (0111), as the home and the controladoria count
     // them, and the latest few in progress (`firm_cases`, the latest moved first).
     readCaseStock(context.supabase, context.firm.id, { module: key }).catch(() => null),
@@ -62,9 +61,13 @@ async function loadArea(key: string): Promise<ModuleAreaState> {
       page: 0,
       pageSize: RECENT_CASES,
     }).catch(() => null),
+    // A test firm's tools (0220), which took the test chat's place: its link, for who manages the firm.
     definition?.testChat && manager
-      ? context.supabase.rpc("test_chat_link", { target_org: context.firm.id }).then(
-          ({ data, error }) => (error ? null : testChatCardOf(data)),
+      ? context.supabase.rpc("firm_test_tools", { target_org: context.firm.id }).then(
+          ({ data, error }) => {
+            const token = !error && data && typeof data === "object" ? (data as { token?: unknown }).token : null;
+            return typeof token === "string" && /^[A-Za-z0-9_-]{32,64}$/.test(token) ? token : null;
+          },
           () => null,
         )
       : Promise.resolve(null),
@@ -81,12 +84,12 @@ async function loadArea(key: string): Promise<ModuleAreaState> {
       icon: entry.icon,
       labelKey: entry.labelKey,
     }));
-  if (testChat?.on && testChat.token) {
+  if (testTools) {
     shortcuts.push({
-      id: "chat-de-teste",
-      href: `/t/${testChat.token}`,
-      icon: "NiMessages",
-      labelKey: "module-area-test-chat",
+      id: "ferramentas-de-teste",
+      href: `/t/${testTools}`,
+      icon: "NiPlane",
+      labelKey: "module-area-test-tools",
     });
   }
 

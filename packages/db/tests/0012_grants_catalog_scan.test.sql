@@ -150,7 +150,9 @@ select is(
     'pax_file_removals',
     -- How many documents the AI read for each partnership in a day (0074).
     'pax_reading_days',
-    'proceeding_signers_seen'
+    'proceeding_signers_seen',
+    -- The firms the operator marked as test firms, with their link (0220): read through their functions.
+    'test_firms'
   ],
   'the tables only the backend touches are not readable by any session'
 );

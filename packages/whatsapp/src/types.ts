@@ -13,9 +13,10 @@
 
 /**
  * Who stands where the vendor stands for a number: the vendor itself, the simulator of a development
- * machine, or the test chat of a firm (its page by a link, honoured in production, reaching nobody).
+ * machine, the test chat of a firm (its page by a link, honoured in production, reaching nobody), or the
+ * platform's OpenWA, a number linked by WhatsApp Web (the unofficial way, a firm's choice; 2026-11-11).
  */
-export type WhatsAppProviderName = "meta" | "simulator" | "test";
+export type WhatsAppProviderName = "meta" | "simulator" | "test" | "openwa";
 
 /** How long a person's message keeps free text open. The database's setting is the one that decides. */
 export const SERVICE_WINDOW_MS = 24 * 60 * 60 * 1000;

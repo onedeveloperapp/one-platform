@@ -528,6 +528,7 @@ test("signup: the number is read as the vendor knows it, with whether it also li
     displayPhoneNumber: "5562900000001",
     verifiedName: "Teste Advogados",
     onBusinessApp: true,
+    onCloudApi: true,
   });
   assert.equal(
     known.calls[0].url,
@@ -539,7 +540,11 @@ test("signup: the number is read as the vendor knows it, with whether it also li
     displayPhoneNumber: "15550001111",
     verifiedName: null,
     onBusinessApp: false,
+    onCloudApi: false,
   });
+  // A number not registered yet is no Cloud API number: its six digits are asked.
+  const notRegistered = app([json({ display_phone_number: "15550002222", platform_type: "NOT_APPLICABLE", id: "phone-4" })]);
+  assert.equal((await getNumberInfo(notRegistered.config, "token", "phone-4"))?.onCloudApi, false);
   assert.equal(await getNumberInfo(app([json(graphError(100, "Unsupported get request"), 400)]).config, "token", "phone-3"), null);
 });
 

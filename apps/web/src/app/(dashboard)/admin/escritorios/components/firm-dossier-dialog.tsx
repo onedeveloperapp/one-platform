@@ -3,6 +3,7 @@
 import { loadFirmDossier } from "../actions";
 import FirmOperationSection from "./firm-operation";
 import type { PersonAction, PersonTarget } from "./person-actions";
+import TestFirmSection from "./test-firm-section";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
@@ -179,6 +180,8 @@ export function FirmDossierBody({
       </Section>
 
       <FirmOperationSection orgId={firm.orgId} />
+
+      <TestFirmSection orgId={firm.orgId} />
 
       <Section title="Equipe">
         {team.length === 0 ? (

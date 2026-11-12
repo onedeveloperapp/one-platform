@@ -10,6 +10,7 @@ import { sweepWhileUsed } from "@/lib/jobs/while-used";
 import { getMemberContext } from "@/lib/member/context";
 import { stagedPath } from "@/lib/test-chat/staging";
 import {
+  firmToolOf,
   flightNumberOf,
   followableDay,
   isQuickReply,
@@ -18,8 +19,12 @@ import {
   testChatCardOf,
   type TestChatView,
   testChatViewOf,
+  type TestFirmView,
+  testFirmViewOf,
   type TestMessage,
   testMessagesOf,
+  type TestTool,
+  type ToolLeg,
   toolOf,
 } from "@/lib/test-chat/test-chat";
 import { connectTestChatNumber } from "@/lib/whatsapp/connect";
@@ -410,6 +415,28 @@ export async function runTestTool(
 
   const tool = toolOf(opened.trip.label, String(toolKey ?? ""));
   if (!tool) return { ok: false, code: "invalid_tool" };
+  return applyTool(service, tripId, tool, (legs) =>
+    service.rpc("test_chat_set_legs", {
+      target_token: token,
+      target_trip: tripId,
+      target_legs: legs,
+      target_reset: false,
+    }),
+  );
+}
+
+type SetLegs = (legs: ToolLeg[]) => PromiseLike<{ data: unknown; error: unknown }>;
+
+/**
+ * A tool on a trip: its special legs found among the trip's own, the legs set as a source would say them
+ * (`setLegs`: the test chat's or the test firm's), the rule's reading, and ONE's word when it is one.
+ */
+async function applyTool(
+  service: SupabaseClient,
+  tripId: string,
+  tool: TestTool,
+  setLegs: SetLegs,
+): Promise<TestChatResult & { reason?: string }> {
   // A tool's special legs are the trip's own: its last one (an agency's trip has the legs the agency wrote), the
   // next to leave and the one in the air (0084).
   let legsOfTool = tool.legs;
@@ -431,12 +458,7 @@ export async function runTestTool(
     if (resolved.some((leg) => leg.position === null)) return { ok: true, code: "nothing" };
     legsOfTool = resolved.map((leg) => ({ ...leg, position: leg.position as number }));
   }
-  const { data, error } = await service.rpc("test_chat_set_legs", {
-    target_token: token,
-    target_trip: tripId,
-    target_legs: legsOfTool,
-    target_reset: false,
-  });
+  const { data, error } = await setLegs(legsOfTool);
   const legs = (data ?? {}) as { ok?: boolean; legs?: unknown; delay_minutes?: number };
   if (error || !legs.ok) return { ok: false, code: "failed" };
 
@@ -460,4 +482,62 @@ export async function runTestTool(
   } catch {
     return { ok: false, code: "failed" };
   }
+}
+
+// ---------- A test firm's tools, by the firm's link (migration 0220) ----------
+
+/** The test firm a link opens, with its real number and its test trips; `missing` for a link that opens nothing. */
+export async function readTestFirm(
+  token: string,
+): Promise<{ ok: true; view: TestFirmView } | { ok: false; code: "missing" | "unavailable" }> {
+  if (!TOKEN.test(String(token ?? ""))) return { ok: false, code: "missing" };
+  const service = backendOrNull();
+  if (!service) return { ok: false, code: "unavailable" };
+  // The tester waits in front of the page, which reads the trips again: what follows a tool runs meanwhile.
+  sweepWhileUsed();
+  const { data, error } = await service.rpc("test_firm_view", { target_token: token });
+  if (error) return { ok: false, code: "unavailable" };
+  const view = testFirmViewOf(data);
+  return view ? { ok: true, view } : { ok: false, code: "missing" };
+}
+
+/**
+ * A tool of a test firm's trip: the flight cancelled, six hours late at the end, the next leg leaving or the one
+ * in the air landing, as a source would say it, or the trip started over (`reset`). What ONE tells of it goes to
+ * the passenger's real WhatsApp, through the firm's real number.
+ */
+export async function runTestFirmTool(
+  token: string,
+  tripId: string,
+  toolKey: string,
+): Promise<TestChatResult & { reason?: string }> {
+  if (!TOKEN.test(String(token ?? "")) || !UUID.test(String(tripId ?? ""))) return { ok: false, code: "missing" };
+  const service = backendOrNull();
+  if (!service) return { ok: false, code: "unavailable" };
+  const { data: firm, error } = await service.rpc("test_firm_by_token", { target_token: token });
+  const found = (firm ?? {}) as { found?: boolean; org_id?: string };
+  if (error || !found.found || !found.org_id) return { ok: false, code: "missing" };
+
+  if (toolKey === "reset") {
+    const { data, error: resetError } = await service.rpc("test_firm_set_legs", {
+      target_token: token,
+      target_trip: tripId,
+      target_legs: null,
+      target_reset: true,
+    });
+    return !resetError && (data as { ok?: boolean } | null)?.ok
+      ? { ok: true, code: "reset" }
+      : { ok: false, code: "failed" };
+  }
+
+  const tool = firmToolOf(String(toolKey ?? ""));
+  if (!tool) return { ok: false, code: "invalid_tool" };
+  return applyTool(service, tripId, tool, (legs) =>
+    service.rpc("test_firm_set_legs", {
+      target_token: token,
+      target_trip: tripId,
+      target_legs: legs,
+      target_reset: false,
+    }),
+  );
 }

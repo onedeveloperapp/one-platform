@@ -1,6 +1,6 @@
 import "server-only";
 
-import { isSimulatorOn, metaPlatform, simulatorSecret } from "@/lib/whatsapp/config";
+import { isSimulatorOn, metaApp, openWaPlatform, simulatorSecret } from "@/lib/whatsapp/config";
 import {
   type AccountNumber,
   applyEvents,
@@ -12,6 +12,7 @@ import {
 import { queueMediaFetch } from "@/lib/whatsapp/media";
 import { createServiceClient } from "@flyee/auth/service";
 import { vendorFailureCode } from "@flyee/whatsapp/providers/meta";
+import { parseOpenWaDelivery, verifyOpenWaSignature } from "@flyee/whatsapp/providers/openwa";
 import type { WhatsAppProviderName } from "@flyee/whatsapp/types";
 import { parseWebhook, verifySignature } from "@flyee/whatsapp/webhook";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -281,7 +282,7 @@ export function supabaseInbox(service: SupabaseClient): WhatsAppInbox {
 
 /** Whose signature a delivery carries: the vendor's app secret, or the simulator's own. Null when neither. */
 function signedBy(rawBody: string, signature: string | null): WhatsAppProviderName | null {
-  const platform = metaPlatform();
+  const platform = metaApp();
   if (platform && verifySignature(rawBody, signature, platform.appSecret)) return "meta";
   if (isSimulatorOn() && verifySignature(rawBody, signature, simulatorSecret())) return "simulator";
   return null;
@@ -313,4 +314,56 @@ export async function handleDelivery(rawBody: string, signature: string | null):
   // The sweep fetches a pending media anyway; this only makes it sooner (and ONE's turn after it).
   if (report.mediaPending) await queueMediaFetch();
   return { ok: true, provider, report };
+}
+
+/**
+ * A delivery of the platform's OpenWA (migration 0221): taken only with the HMAC of its raw body under the
+ * platform's secret (`X-OpenWA-Signature`), read into the same events a delivery of Meta gives, and applied by the
+ * same door, under the provider `openwa`, each event routed by its session to the one firm whose number it is.
+ * OpenWA tells of every message the number sent, ONE's own included, and may do so before ONE recorded the id the
+ * send got back: while a message of ONE to that person is being sent, the delivery is answered 503 and OpenWA
+ * brings it again (it retries what was not taken), so ONE's own message is never read as the phone's.
+ */
+export async function handleOpenWaDelivery(rawBody: string, signature: string | null): Promise<DeliveryOutcome> {
+  const platform = openWaPlatform();
+  if (!platform) return { ok: false, status: 503, code: "openwa_not_configured" };
+  if (!verifyOpenWaSignature(rawBody, signature, platform.webhookSecret)) {
+    return { ok: false, status: 401, code: "invalid_signature" };
+  }
+
+  let payload: unknown;
+  try {
+    payload = JSON.parse(rawBody);
+  } catch {
+    return { ok: false, status: 400, code: "invalid_json" };
+  }
+
+  let service: SupabaseClient;
+  try {
+    service = createServiceClient();
+  } catch {
+    return { ok: false, status: 503, code: "backend_not_configured" };
+  }
+
+  const events = parseOpenWaDelivery(payload);
+  for (const event of events) {
+    if (event.type !== "echo") continue;
+    const { data: number } = await service
+      .from("wa_numbers")
+      .select("id")
+      .eq("provider", "openwa")
+      .eq("phone_number_id", event.phoneNumberId)
+      .eq("status", "active")
+      .maybeSingle();
+    if (!number) continue;
+    const { data: sending } = await service.rpc("wa_sending_to", {
+      target_number: number.id,
+      target_contact: event.to,
+    });
+    if (sending === true) return { ok: false, status: 503, code: "sending_now" };
+  }
+
+  const report = await applyEvents(supabaseInbox(service), "openwa", events);
+  if (report.mediaPending) await queueMediaFetch();
+  return { ok: true, provider: "openwa", report };
 }

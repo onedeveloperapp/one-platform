@@ -635,6 +635,12 @@ $$
   );
 $$;
 
+-- Both firms marked as test firms for the coverage below, and unmarked after it (0220): a test firm makes every case
+-- and trip written afterwards a test, which the rest of this file does not expect.
+insert into public.test_firms (org_id, token, note) values
+  ('b1000000-0000-4000-8000-00000000000a', repeat('c', 43), 'Firma A marcada para a cobertura'),
+  ('b1000000-0000-4000-8000-00000000000b', repeat('d', 43), 'Firma B marcada para a cobertura');
+
 -- ---------- The fixture covers every table that carries the firm ----------
 
 select is(
@@ -649,6 +655,7 @@ select is(
   '{}'::text[],
   'and a row of firm A'
 );
+delete from public.test_firms where org_id in ('b1000000-0000-4000-8000-00000000000a', 'b1000000-0000-4000-8000-00000000000b');
 select is(
   (
     select count(*)::int

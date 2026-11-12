@@ -391,3 +391,99 @@ export function testChatCardOf(raw: unknown): TestChatCard | null {
     endedReason: text(answer.ended_reason),
   };
 }
+
+// ---------- A test firm's tools (migration 0220) ----------
+
+/**
+ * The tools of a test firm's trip, by the firm's link (`/t/<token>`): the trips of its agency's passengers and
+ * of its own, which keep their own days, so they take the agency's tools (a cancellation, six hours late at the
+ * end of the journey, the next leg leaving and the one in the air landing).
+ */
+export const FIRM_TOOLS: readonly TestTool[] = AGENCY_TOOLS;
+
+/** The tool of a test firm's trip by its key; null for one it does not have. */
+export const firmToolOf = (key: string): TestTool | null => FIRM_TOOLS.find((tool) => tool.key === key) ?? null;
+
+export type TestFirmLeg = {
+  position: number;
+  flight: string;
+  origin: string;
+  destination: string;
+  departure: string;
+  arrival: string;
+  status: string;
+  estimatedArrival: string | null;
+  departed: boolean;
+  arrived: boolean;
+};
+
+export type TestFirmTrip = {
+  id: string;
+  passenger: string;
+  /** The end of the passenger's WhatsApp: the page shows nothing more of it. */
+  phoneEnd: string;
+  status: string;
+  fromAgency: boolean;
+  caseId: string | null;
+  legs: TestFirmLeg[];
+};
+
+export type TestFirmView = {
+  firm: string;
+  /** The firm's real number, through which its test trips are told; null while it has none. */
+  number: { phone: string; provider: string } | null;
+  delayMinutes: number;
+  trips: TestFirmTrip[];
+};
+
+/** The database's answer of `test_firm_view`, read; null when it is not one or the link opens nothing. */
+export function testFirmViewOf(raw: unknown): TestFirmView | null {
+  if (typeof raw !== "object" || raw === null) return null;
+  const answer = raw as Record<string, unknown>;
+  if (answer.found !== true || !Array.isArray(answer.trips)) return null;
+  const numberRow =
+    answer.number && typeof answer.number === "object" ? (answer.number as Record<string, unknown>) : null;
+  const trips = answer.trips.flatMap((item): TestFirmTrip[] => {
+    const row = (item ?? {}) as Record<string, unknown>;
+    const id = text(row.id);
+    if (!id || !UUID.test(id)) return [];
+    const legs = (Array.isArray(row.legs) ? row.legs : []).flatMap((leg): TestFirmLeg[] => {
+      const l = (leg ?? {}) as Record<string, unknown>;
+      if (typeof l.position !== "number" || !text(l.flight) || !text(l.origin) || !text(l.destination)) return [];
+      return [
+        {
+          position: l.position,
+          flight: String(l.flight),
+          origin: String(l.origin),
+          destination: String(l.destination),
+          departure: text(l.departure) ?? "",
+          arrival: text(l.arrival) ?? "",
+          status: text(l.status) ?? "scheduled",
+          estimatedArrival: text(l.estimated_arrival),
+          departed: text(l.departed) !== null,
+          arrived: text(l.arrived) !== null,
+        },
+      ];
+    });
+    return [
+      {
+        id,
+        passenger: text(row.passenger) ?? "",
+        phoneEnd: (text(row.phone_end) ?? "").replace(/\D/g, "").slice(-4),
+        status: text(row.status) ?? "watching",
+        fromAgency: row.from_agency === true,
+        caseId: text(row.case_id),
+        legs,
+      },
+    ];
+  });
+  return {
+    firm: text(answer.firm) ?? "",
+    number:
+      numberRow && text(numberRow.phone)
+        ? { phone: String(numberRow.phone), provider: text(numberRow.provider) ?? "meta" }
+        : null,
+    delayMinutes: typeof answer.delay_minutes === "number" ? answer.delay_minutes : 240,
+    trips,
+  };
+}

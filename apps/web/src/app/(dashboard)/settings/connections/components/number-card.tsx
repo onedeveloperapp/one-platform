@@ -75,6 +75,7 @@ export default function NumberCard({
                 tone="neutral"
               />
               {number.provider === "simulator" ? <StatusChip label={t("connections-simulated")} tone="info" /> : null}
+              {number.provider === "openwa" ? <StatusChip label={t("connections-openwa")} tone="attention" /> : null}
             </Box>
           </Box>
 

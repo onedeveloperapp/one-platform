@@ -932,7 +932,8 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
                 </>
               ) : (
                 <>
-                  {connections.testChat ? (
+                  {connections.testChat?.state.on ? (
+                    // The test chat is offered no longer (2026-11-11): one already on stays, to be turned off.
                     <TestChatCard
                       embedded
                       state={connections.testChat.state}
@@ -950,6 +951,7 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
                     environment={connections.environment}
                     blocked={blocked || locked}
                     onConnected={refresh}
+                    openWaPending={connections.openWaPending}
                   />
                 </>
               )}
