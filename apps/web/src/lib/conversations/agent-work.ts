@@ -65,6 +65,7 @@ import {
 import { takeHearingReport } from "@/lib/conversations/hearing-report-work";
 import {
   choiceOf,
+  companionsOf,
   CORRECTION_QUESTION,
   INTAKE_TASK,
   intakeDoubts,
@@ -78,6 +79,7 @@ import {
   intakeQuestion,
   intakeReadingOf,
   intakeSummary,
+  isChild,
   OPTIONS,
 } from "@/lib/conversations/intake";
 import { nextPaperAsk, NOT_HAVE_LINE, type PapersOwed, papersOwedOf, saysNotHave } from "@/lib/conversations/papers";
@@ -1021,6 +1023,9 @@ async function openFromIntake(
 ): Promise<boolean> {
   const token = randomBytes(32).toString("base64url");
   const url = `${BRAND.siteUrl}/c/${token}`;
+  const companions = companionsOf(facts.acompanhantes);
+  const children = companions.filter(isChild);
+  const adults = companions.filter((companion) => !isChild(companion));
   const answer = await rpc(service, "one_open_case_from_intake", {
     target_conversation: held.conversationId,
     target_claim: held.claim,
@@ -1033,10 +1038,13 @@ async function openFromIntake(
         passengerName: facts.nome ?? "",
         firm: context.firm,
         url,
-        companions: !!facts.acompanhantes && facts.acompanhantes !== "nenhum" && facts.acompanhantes !== "mais",
+        children: children.map((child) => child.name),
+        adults: adults.map((adult) => adult.name),
       }),
       { nome: greeting(facts.nome), link: url },
     ),
+    // Each child joins the case as a claimant the passenger answers for (0234).
+    target_children: children.map((child) => ({ name: child.name, age: child.age })),
   });
   if (answer.code === "opened" || answer.code === "opened_without_link") {
     report.opened += 1;

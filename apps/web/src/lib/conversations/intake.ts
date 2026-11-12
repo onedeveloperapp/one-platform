@@ -395,3 +395,26 @@ export function intakeInput(context: TurnContext, facts: IntakeFacts, today: str
     })),
   };
 }
+
+/** Who travelled along, as the intake keeps it ("Pedro, 8 anos; Ana"): each name, and the age when told. */
+export type Companion = { name: string; age: number | null };
+
+/** The companions told in the intake, one per part; nobody for "nenhum" or while names are still asked. */
+export function companionsOf(told: string | undefined): Companion[] {
+  if (!told || told === "nenhum" || told === "mais") return [];
+  return told
+    .split(/;|\n|\s+e\s+(?=\p{Lu})/u)
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .flatMap((part): Companion[] => {
+      const age = /(\d{1,2})\s*(?:anos?|a)\b/i.exec(part);
+      const name = part
+        .replace(/,?\s*(?:de\s+)?\d{1,2}\s*(?:anos?|a)\b.*$/i, "")
+        .replace(/[,.]+$/, "")
+        .trim();
+      return name.length >= 2 && /\p{L}/u.test(name) ? [{ name, age: age ? Number(age[1]) : null }] : [];
+    });
+}
+
+/** A companion under 18: the case takes them in as a claimant the passenger answers for. */
+export const isChild = (companion: Companion): boolean => companion.age !== null && companion.age < 18;

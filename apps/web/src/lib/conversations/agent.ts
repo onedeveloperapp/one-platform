@@ -94,20 +94,29 @@ export function caseStepsMessage(input: {
 
 /**
  * The case an intake opened at the person's "Quero seguir" (0227): no case number (it says nothing to the client),
- * the documents asked here in the chat, the identity first, and the link only as another place to do the same.
+ * the documents asked here in the chat, the identity first, and the link only as another place to do the same. A child
+ * who travelled along is in the case and their paper is asked later; an adult is asked to write themself (0234).
  */
 export function intakeOpenedMessage(input: {
   passengerName: string;
   firm: string;
   url: string;
-  companions: boolean;
+  children: string[];
+  adults: string[];
 }): string {
   const name = firstNameOf(input.passengerName) || input.passengerName;
   const firm = input.firm.trim() ? `no escritório ${input.firm.trim()}` : "no escritório";
+  const list = new Intl.ListFormat("pt-BR", { style: "long", type: "conjunction" });
+  const firsts = (names: string[]) => list.format(names.map((item) => firstNameOf(item) || item));
   return [
     `Pronto, ${name}. O seu caso está aberto ${firm}. Agora preciso de alguns documentos, um de cada vez, e você pode mandar as fotos aqui mesmo.`,
     "Primeiro, a foto do seu documento de identidade, RG ou CNH, com a frente e o verso.",
-    input.companions ? "Depois vou pedir também os documentos de quem viajou com você." : null,
+    input.children.length > 0
+      ? `Depois vou pedir também a certidão de nascimento ou o RG de ${firsts(input.children)}, que entra no seu caso com você.`
+      : null,
+    input.adults.length > 0
+      ? `Para ${firsts(input.adults)}, que também viajou: peça que escreva para este número. Cada adulto conta o próprio caso e assina a própria procuração.`
+      : null,
     `Se preferir uma tela, o seu link mostra o mesmo: ${input.url}. O link é só seu.`,
   ]
     .filter(Boolean)

@@ -221,3 +221,38 @@ describe("the follow-up of a lead who stopped answering (0207)", () => {
     ).toBeNull();
   });
 });
+
+describe("who travelled along (0234)", () => {
+  it("reads each name and age the intake kept, and tells a child from an adult", async () => {
+    const { companionsOf, isChild } = await import("@/lib/conversations/intake");
+    expect(companionsOf("Pedro, 8 anos; Ana")).toEqual([
+      { name: "Pedro", age: 8 },
+      { name: "Ana", age: null },
+    ]);
+    expect(companionsOf("Bia Teste de 12 anos e Caio Teste")).toEqual([
+      { name: "Bia Teste", age: 12 },
+      { name: "Caio Teste", age: null },
+    ]);
+    expect(companionsOf("nenhum")).toEqual([]);
+    expect(companionsOf("mais")).toEqual([]);
+    expect(companionsOf("Pedro, 8 anos; Ana").map(isChild)).toEqual([true, false]);
+    expect(isChild({ name: "Lia", age: 19 })).toBe(false);
+  });
+});
+
+describe("the case an intake opened (0234)", () => {
+  it("asks the child's paper later and the adult to write themself", async () => {
+    const { intakeOpenedMessage } = await import("@/lib/conversations/agent");
+    const message = intakeOpenedMessage({
+      passengerName: "Nídia Teste",
+      firm: "Souza Advogados",
+      url: "https://one.invalid/c/x",
+      children: ["Pedro Teste"],
+      adults: ["Ana Teste"],
+    });
+    expect(message).toContain("Pronto, Nídia. O seu caso está aberto no escritório Souza Advogados.");
+    expect(message).toContain("a certidão de nascimento ou o RG de Pedro, que entra no seu caso com você.");
+    expect(message).toContain("Para Ana, que também viajou: peça que escreva para este número.");
+    expect(message).not.toMatch(/[—–!]/);
+  });
+});
