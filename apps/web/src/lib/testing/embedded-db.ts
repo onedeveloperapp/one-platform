@@ -201,10 +201,14 @@ export function standIn(sql: Sql, options: { bucket?: Map<string, Uint8Array> } 
         };
         /** PostgREST's `column.operator.value` of an `or`, as far as the app writes it. */
         const orPart = (part: string): { clause: string; values: string[] } => {
-          const matched = /^([a-z_]+)\.(eq|neq|is)\.(.+)$/.exec(part.trim());
-          if (!matched) throw new Error(`the stand-in reads only column.eq|neq|is.value: ${part}`);
+          const matched = /^([a-z_]+)\.(eq|neq|is|ilike|like)\.(.+)$/.exec(part.trim());
+          if (!matched) throw new Error(`the stand-in reads only column.eq|neq|is|ilike|like.value: ${part}`);
           const [, column, operator, value] = matched;
           if (operator === "is") return { clause: `t0.${column} is ${value === "null" ? "null" : value}`, values: [] };
+          // PostgREST's `*` is the pattern's `%` inside an `or` (0225: an acórdão by its document type).
+          if (operator === "ilike" || operator === "like") {
+            return { clause: `t0.${column}::text ${operator} ?::text`, values: [value.replace(/\*/g, "%")] };
+          }
           return { clause: `t0.${column}::text ${operator === "eq" ? "=" : "<>"} ?::text`, values: [value] };
         };
         const builder = {

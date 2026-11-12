@@ -13,13 +13,21 @@ import NewPersonPanel from "@/components/people/new-person-panel";
 import CardTitle from "@/components/product/card-title";
 import EmptyState from "@/components/product/empty-state";
 import ListBar from "@/components/product/list-bar";
-import MetricBars from "@/components/product/metric-bars";
 import NumberCard from "@/components/product/number-card";
 import PageHeader from "@/components/product/page-header";
 import StatusChip from "@/components/product/status-chip";
+import TallyTile from "@/components/product/tally-tile";
+import { TILE_TONE } from "@/components/product/tile-tone";
 import IllustrationSupport from "@/icons/illustrations/illustration-support";
+import NiBriefcase from "@/icons/nexture/ni-briefcase";
+import NiCake from "@/icons/nexture/ni-cake";
 import NiChartBar from "@/icons/nexture/ni-chart-bar";
 import NiChevronRightSmall from "@/icons/nexture/ni-chevron-right-small";
+import NiCompass from "@/icons/nexture/ni-compass";
+import NiPin from "@/icons/nexture/ni-pin";
+import NiPlane from "@/icons/nexture/ni-plane";
+import NiScale from "@/icons/nexture/ni-scale";
+import NiSigns from "@/icons/nexture/ni-signs";
 import NiUser from "@/icons/nexture/ni-user";
 import NiUserCheck from "@/icons/nexture/ni-user-check";
 import NiUserCross from "@/icons/nexture/ni-user-cross";
@@ -45,6 +53,7 @@ import {
   type Tally,
 } from "@/lib/people/people";
 import type { MarketingTerm } from "@/lib/people/read";
+import { cn } from "@/lib/utils";
 
 export type PeopleState =
   | {
@@ -68,6 +77,15 @@ const POINT_TONE: Record<FunnelPoint, "positive" | "info" | "attention" | "neutr
   contato: "neutral",
 };
 
+/** A person's initials, for the circle that leads their row. */
+const initialsOf = (name: string) =>
+  name
+    .split(/\s+/)
+    .filter((word) => word.length > 2 || /^[A-ZÀ-Ý]/.test(word))
+    .filter((_, index, words) => index === 0 || index === words.length - 1)
+    .map((word) => word.charAt(0).toUpperCase())
+    .join("");
+
 // The cards are the funnel, in its order (the owner, 2026-11-11).
 const VIEW_LOOK: Record<
   (typeof PEOPLE_CARD_VIEWS)[number],
@@ -77,6 +95,14 @@ const VIEW_LOOK: Record<
   leads: { tone: "primary", icon: <NiUsers size="medium" /> },
   clientes: { tone: "secondary", icon: <NiUserCheck size="medium" /> },
   "nao-qualificados": { tone: "accent-3", icon: <NiUserCross size="medium" /> },
+};
+
+/** The tint of a row's circle: the colour of its card of the funnel. */
+const POINT_LOOK: Record<FunnelPoint, "primary" | "secondary" | "accent-3" | "accent-4"> = {
+  contato: "accent-4",
+  lead: "primary",
+  cliente: "secondary",
+  nao_qualificado: "accent-3",
 };
 
 /**
@@ -129,6 +155,9 @@ export default function PeopleView({ state }: { state: PeopleState }) {
   const label = (map: Record<string, string>, key: string) => (map[key] ? t(map[key]!) : key);
   const items = (tallies: Tally[], words: (key: string) => string) =>
     tallies.map((tally) => ({ key: tally.key, label: words(tally.key), value: tally.count }));
+  const moreWords = (count: number) => t("people-numbers-more", { count });
+  // Everybody in the funnel: each card's share is of them.
+  const funnelWhole = ready ? PEOPLE_CARD_VIEWS.reduce((sum, key) => sum + (ready.page.counts[key] ?? 0), 0) : 0;
 
   return (
     <Box className="flex flex-col gap-6">
@@ -175,6 +204,20 @@ export default function PeopleView({ state }: { state: PeopleState }) {
                   tone={VIEW_LOOK[key].tone}
                   label={t(PEOPLE_VIEW_KEY[key])}
                   value={String(ready.page.counts[key] ?? 0)}
+                  ratio={
+                    funnelWhole > 0
+                      ? {
+                          part: ready.page.counts[key] ?? 0,
+                          whole: funnelWhole,
+                          text: t("people-funnel-of", { count: funnelWhole }),
+                          label: t("people-funnel-share", {
+                            part: ready.page.counts[key] ?? 0,
+                            count: funnelWhole,
+                            share: Math.round(((ready.page.counts[key] ?? 0) / funnelWhole) * 100),
+                          }),
+                        }
+                      : null
+                  }
                   pressed={view === key}
                   onClick={() => router.push(view === key ? "/pessoas" : `/pessoas?ver=${key}`)}
                 />
@@ -186,41 +229,6 @@ export default function PeopleView({ state }: { state: PeopleState }) {
             <Typography variant="body2" className="text-text-secondary">
               {t("people-tests-counted")}
             </Typography>
-          ) : null}
-
-          {numbers.registered > 0 ? (
-            <Card component="section" aria-labelledby="people-numbers">
-              <CardContent className="flex flex-col gap-4">
-                <CardTitle id="people-numbers" icon={<NiChartBar size="medium" />} title={t("people-numbers-title")} />
-                <Box className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-                  <NumberGroup
-                    title={t("people-numbers-origin")}
-                    items={items(numbers.origins, (key) => label(ORIGIN_KEY, key))}
-                  />
-                  <NumberGroup
-                    title={t("people-numbers-age")}
-                    items={items(
-                      numbers.ages.filter((tally) => tally.count > 0),
-                      (key) => label(AGE_KEY, key),
-                    )}
-                  />
-                  <NumberGroup
-                    title={t("people-numbers-incident")}
-                    items={items(numbers.incidents, (key) => t(caseKindLabelKey(key) ?? "case-incident-other"))}
-                  />
-                  <NumberGroup
-                    title={t("people-numbers-outcome")}
-                    items={items(numbers.outcomes, (key) => label(OUTCOME_KEY, key))}
-                  />
-                  <NumberGroup title={t("people-numbers-city")} items={items(numbers.cities, (key) => key)} />
-                  <NumberGroup title={t("people-numbers-airline")} items={items(numbers.airlines, (key) => key)} />
-                  <NumberGroup
-                    title={t("people-numbers-profession")}
-                    items={items(numbers.professions, (key) => key)}
-                  />
-                </Box>
-              </CardContent>
-            </Card>
           ) : null}
 
           <ListBar
@@ -267,6 +275,17 @@ export default function PeopleView({ state }: { state: PeopleState }) {
                       href={`/pessoas/${row.id}`}
                       className="hover:bg-grey-25 flex items-center gap-3 px-5 py-3 no-underline"
                     >
+                      <Box
+                        aria-hidden
+                        className={cn(
+                          "flex h-10 w-10 flex-none items-center justify-center rounded-full text-sm font-semibold",
+                          row.point
+                            ? [TILE_TONE[POINT_LOOK[row.point]].bg, TILE_TONE[POINT_LOOK[row.point]].text]
+                            : "bg-grey-50 text-text-secondary",
+                        )}
+                      >
+                        {initialsOf(row.name)}
+                      </Box>
                       <Box className="flex min-w-0 flex-1 flex-col gap-0.5">
                         <Typography variant="body1" className="text-text-primary truncate font-semibold">
                           {row.name}
@@ -324,6 +343,89 @@ export default function PeopleView({ state }: { state: PeopleState }) {
             </Box>
           ) : null}
 
+          {numbers.registered > 0 ? (
+            // Who the firm serves, each way of counting them a tile with its few largest parts (the owner, 2026-11-12):
+            // seven headings each over one bar had left most of the card empty. Eight tiles, four across.
+            <Card component="section" aria-labelledby="people-numbers">
+              <CardContent className="flex flex-col gap-4">
+                <CardTitle id="people-numbers" icon={<NiChartBar size="medium" />} title={t("people-numbers-title")} />
+                <Box className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+                  <TallyTile
+                    icon={<NiUserCheck size="medium" />}
+                    tone="primary"
+                    title={t("people-numbers-standing")}
+                    total={numbers.registered}
+                    items={[
+                      { key: "active", label: t("people-view-active"), value: numbers.active },
+                      { key: "inactive", label: t("people-view-inactive"), value: numbers.inactive },
+                      { key: "no-marketing", label: t("people-view-no-marketing"), value: numbers.marketingOff },
+                    ]}
+                    empty={t("people-numbers-none")}
+                  />
+                  <TallyTile
+                    icon={<NiCompass size="medium" />}
+                    tone="accent-1"
+                    title={t("people-numbers-origin")}
+                    items={items(numbers.origins, (key) => label(ORIGIN_KEY, key))}
+                    more={moreWords}
+                    empty={t("people-numbers-none")}
+                  />
+                  <TallyTile
+                    icon={<NiCake size="medium" />}
+                    tone="accent-2"
+                    title={t("people-numbers-age")}
+                    items={items(
+                      numbers.ages.filter((tally) => tally.count > 0),
+                      (key) => label(AGE_KEY, key),
+                    )}
+                    more={moreWords}
+                    empty={t("people-numbers-none")}
+                  />
+                  <TallyTile
+                    icon={<NiSigns size="medium" />}
+                    tone="accent-4"
+                    title={t("people-numbers-incident")}
+                    items={items(numbers.incidents, (key) => t(caseKindLabelKey(key) ?? "case-incident-other"))}
+                    more={moreWords}
+                    empty={t("people-numbers-none")}
+                  />
+                  <TallyTile
+                    icon={<NiScale size="medium" />}
+                    tone="primary"
+                    title={t("people-numbers-outcome")}
+                    items={items(numbers.outcomes, (key) => label(OUTCOME_KEY, key))}
+                    more={moreWords}
+                    empty={t("people-numbers-none")}
+                  />
+                  <TallyTile
+                    icon={<NiPin size="medium" />}
+                    tone="secondary"
+                    title={t("people-numbers-city")}
+                    items={items(numbers.cities, (key) => key)}
+                    more={moreWords}
+                    empty={t("people-numbers-none")}
+                  />
+                  <TallyTile
+                    icon={<NiPlane size="medium" />}
+                    tone="secondary"
+                    title={t("people-numbers-airline")}
+                    items={items(numbers.airlines, (key) => key)}
+                    more={moreWords}
+                    empty={t("people-numbers-none")}
+                  />
+                  <TallyTile
+                    icon={<NiBriefcase size="medium" />}
+                    tone="accent-1"
+                    title={t("people-numbers-profession")}
+                    items={items(numbers.professions, (key) => key)}
+                    more={moreWords}
+                    empty={t("people-numbers-none")}
+                  />
+                </Box>
+              </CardContent>
+            </Card>
+          ) : null}
+
           <SegmentsCard segments={ready.segments} term={ready.term} factor={ready.factor} numbers={numbers} />
         </>
       ) : null}
@@ -340,24 +442,6 @@ export default function PeopleView({ state }: { state: PeopleState }) {
           }}
         />
       ) : null}
-    </Box>
-  );
-}
-
-function NumberGroup({ title, items }: { title: string; items: { key: string; label: string; value: number }[] }) {
-  const t = useTranslations("product");
-  return (
-    <Box className="flex flex-col gap-3">
-      <Typography variant="subtitle2" component="h3">
-        {title}
-      </Typography>
-      {items.length === 0 ? (
-        <Typography variant="body2" className="text-text-secondary">
-          {t("people-numbers-none")}
-        </Typography>
-      ) : (
-        <MetricBars items={items} spacing="dense" />
-      )}
     </Box>
   );
 }

@@ -109,7 +109,7 @@ export default function SegmentsCard({
             )
           }
           actions={
-            term.accepted && manages ? (
+            term.accepted && manages && active.length + archived.length > 0 ? (
               <Button size="small" variant="outlined" color="grey" onClick={() => setEditing("new")}>
                 {t("segments-new")}
               </Button>
@@ -145,6 +145,7 @@ export default function SegmentsCard({
             description={t("segments-empty-body")}
             action={{ label: t("segments-new"), onClick: () => setEditing("new") }}
             framed={false}
+            layout="row"
             titleAs="h3"
           />
         ) : (

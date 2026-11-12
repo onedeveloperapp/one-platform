@@ -49,9 +49,21 @@
       "use": "A counter as a tile: tinted icon band (h-[4.5rem]) + label + value in h5, four across. `href` makes it a link; `onClick`+`pressed` make it a real filter button with aria-pressed. Port of dashboard-analytics-stats. A filter row is THIS, never a hand-written Box."
     },
     {
+      "name": "RatioGauge",
+      "from": "@/components/product/ratio-gauge",
+      "props": "value, total, tone?, size? (56), label (what it says to assistive technology: '1 de 3 pessoas, 33%'), className?",
+      "use": "One ratio at a glance beside its x/y (the catalog's gauge, ported for the people's funnel on 2026-11-12): a ring on a grey track filled by the share, the percentage in its centre, MUI's determinate CircularProgress and no chart library. A share of nothing draws nothing; a part that exists keeps a sliver. Used through NumberCard's `ratio`. Never a ratio the data does not hold, and never several rings for parts that are not of one whole."
+    },
+    {
+      "name": "TallyTile",
+      "from": "@/components/product/tally-tile",
+      "props": "icon (size medium), tone, title, items (MetricBarItem[]), total?, shown? (3), more? (count => 'e mais 4 outros'), empty",
+      "use": "One way of counting the same people in a tile (the owner, 2026-11-12, after the template's tiles of levels): the dimension's icon on its tint in a full-height column, its name, and its few largest parts as shares of one whole (MetricBars dense), the rest said in a word. Tiles of a card sit four across in a grid and share their height; an even number of them leaves no hole. Where a card had a heading over a single bar per dimension (Pessoas' 'Quem o escritório atende')."
+    },
+    {
       "name": "NumberCard",
       "from": "@/components/product/number-card",
-      "props": "icon (size medium), tone, label, value (already written: countText), comparison? ({ delta: '+9%' | null, same: 'igual', hoped, text: 'vs 1 a 7 de outubro: 287' }), hint?, onClick+pressed | href | neither",
+      "props": "icon (size medium), tone, label, value (already written: countText), comparison? ({ delta: '+9%' | null, same: 'igual', hoped, text: 'vs 1 a 7 de outubro: 287' }), ratio? ({ part, whole, text: 'de 12 pessoas', label }: the number as a share of a whole, a RatioGauge at the card's right and its x/y in words under the number; the ring hides on a phone), hint?, onClick+pressed | href | neither",
       "use": "A list's big number with what it was in the same span before (the screen pattern after ADVBox, approved by the owner on 2026-11-07): the icon of what it counts beside a short label, the number, and under it the move and what it is compared with, the card opening the list it counts. Compare only with the same span (the same days of the month before, the end of the same day): a few days against a whole month is a false move. The move is green only when it is the one the card hopes for (more cases filed); any other move is grey, never red. The numbers and moves come from `lib/numbers/compare.ts` (compared, deltaText, isHoped, countText). Two across on a phone, the icon hidden there. The home's counts are a CountList."
     },
     {
@@ -278,11 +290,6 @@
     }
   ],
   "template": [
-    {
-      "name": "Medidor circular (gauge)",
-      "props": "CircularProgress variant=\"determinate\" + centred label + outline-grey-100 track ring",
-      "use": "One ratio that must read at a glance next to its x/y. No chart library. Not packaged yet — port it when a screen needs a single prominent ratio."
-    },
     {
       "name": "Tile horizontal com variação",
       "props": "Card flex-row p-1 + Box h-24 w-16 rounded-2xl bg-{tone}-light/10 + label body1 + value h5 + NiTriangleUp/Down change",
