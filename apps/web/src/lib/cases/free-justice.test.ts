@@ -51,12 +51,30 @@ describe("free justice in the civil court", () => {
         own_party: "a",
       }),
     ).toEqual({
-      items: [{ partyId: "a", name: "Rui Teste", minor: false, asks: false, recordedAt: null }],
+      items: [{ partyId: "a", name: "Rui Teste", minor: false, asks: false, recordedAt: null, appeal: false }],
       issued: false,
       income: true,
       ownParty: "a",
     });
     expect(clientFreeJusticeOf(null)).toBeNull();
+  });
+
+  it("says which answers are of the recurso of the small-claims court, and of which lawsuit (0218)", () => {
+    expect(
+      freeJusticeOf({
+        ok: true,
+        needs: [
+          { party_id: "a", proceeding_id: "j", appeal: true, name: "Rui Teste", answerer_id: "r", asks: null },
+          { party_id: "b", proceeding_id: "c", name: "Lia Teste", answerer_id: "l", asks: false },
+        ],
+      })?.map((need) => [need.name, need.proceedingId, need.appeal]),
+    ).toEqual([
+      ["Rui Teste", "j", true],
+      ["Lia Teste", "c", false],
+    ]);
+    expect(
+      clientFreeJusticeOf({ ok: true, items: [{ party_id: "a", name: "Rui Teste", appeal: true }] })?.items[0]?.appeal,
+    ).toBe(true);
   });
 
   it("has words for every refusal", () => {

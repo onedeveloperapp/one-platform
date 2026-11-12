@@ -47,6 +47,10 @@ describe("an intermediate piece's line", () => {
       key: "pieces-blocker-no-channel",
       lawyerFiles: true,
     });
+    // A recurso that asks free justice goes with the declaration, which ONE's own filing does not attach (0218).
+    expect(
+      pieceLine(draft("issued", { decision: "file", filingStatus: "owed" }), "free_justice_declaration"),
+    ).toMatchObject({ key: "pieces-blocker-free-justice", lawyerFiles: true });
     expect(pieceLine(draft("issued", { decision: "file", filingStatus: "unknown" }), null).lawyerFiles).toBe(true);
     expect(pieceLine(draft("issued", { decision: "file", filingStatus: "refused" }), null).tone).toBe("failed");
   });

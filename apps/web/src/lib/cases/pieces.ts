@@ -13,6 +13,8 @@ export const PIECE_BLOCKER_KEY: Record<string, string> = {
   fixed_ip: "pieces-blocker-fixed-ip",
   code_missing: "pieces-blocker-code-missing",
   signature_needed: "pieces-blocker-signature",
+  // A recurso of the small-claims court that asks free justice goes with the declaration (0218).
+  free_justice_declaration: "pieces-blocker-free-justice",
 };
 
 export type PieceLine = {

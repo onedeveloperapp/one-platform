@@ -3,7 +3,7 @@
 import { headers } from "next/headers";
 import { createHash } from "node:crypto";
 
-import { queueCaseAdvance } from "@/lib/cases/advance-work";
+import { queueAppealPapers, queueCaseAdvance } from "@/lib/cases/advance-work";
 import { isTokenShape } from "@/lib/cases/client-link";
 import { finishLinkUpload, takeBackClientUpload } from "@/lib/cases/client-uploads";
 import { readLinkUpload } from "@/lib/cases/document-prefill-work";
@@ -536,7 +536,11 @@ export async function answerFreeJustice(token: string, partyId: string, asks: bo
     }),
     nothing,
   );
-  if (result.ok) await queueCaseAdvance(null);
+  if (result.ok) {
+    await queueCaseAdvance(null);
+    // A case already with the court issues the declaration of its appeal through a line of its own (0218).
+    await queueAppealPapers(null);
+  }
   return result;
 }
 

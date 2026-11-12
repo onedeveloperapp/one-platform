@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
-import { queueCaseAdvance } from "@/lib/cases/advance-work";
+import { queueAppealPapers, queueCaseAdvance } from "@/lib/cases/advance-work";
 import { getMemberContext } from "@/lib/member/context";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -38,5 +38,7 @@ export async function recordFreeJusticeAnswer(
   if (answer.ok !== true) return { ok: false, code: typeof answer.code === "string" ? answer.code : "failed" };
   revalidatePath(`/casos/${caseId}`);
   await queueCaseAdvance(caseId);
+  // A case already with the court issues the declaration of its appeal through a line of its own (0218).
+  await queueAppealPapers(caseId);
   return { ok: true };
 }

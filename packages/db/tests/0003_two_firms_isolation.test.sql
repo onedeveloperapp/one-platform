@@ -374,6 +374,10 @@ where e.org_id in ('b1000000-0000-4000-8000-00000000000a', 'b1000000-0000-4000-8
 insert into public.lawsuit_facts (org_id, case_id, proceeding_id, kind, result, happened_on, source) values
   ('b1000000-0000-4000-8000-00000000000a', 'a3000000-0000-4000-8000-00000000000a', 'a5000000-0000-4000-8000-00000000000a', 'sentenca', 'procedente', date '2026-11-01', 'person'),
   ('b1000000-0000-4000-8000-00000000000b', 'a3000000-0000-4000-8000-00000000000b', 'a5000000-0000-4000-8000-00000000000b', 'sentenca', 'procedente', date '2026-11-01', 'person');
+-- A session of judgment of each firm's appeal (0219).
+insert into public.judgment_sessions (org_id, case_id, proceeding_id, kind, starts_on, source) values
+  ('b1000000-0000-4000-8000-00000000000a', 'a3000000-0000-4000-8000-00000000000a', 'a5000000-0000-4000-8000-00000000000a', 'virtual', date '2026-12-01', 'person'),
+  ('b1000000-0000-4000-8000-00000000000b', 'a3000000-0000-4000-8000-00000000000b', 'a5000000-0000-4000-8000-00000000000b', 'virtual', date '2026-12-01', 'person');
 -- A month closed and an invoice recorded of each firm's books (0137).
 insert into public.finance_closings (org_id, month) values
   ('b1000000-0000-4000-8000-00000000000a', date '2026-09-01'),
@@ -697,7 +701,7 @@ select is(
     'filing_receipts', 'filing_submissions', 'finance_access', 'finance_accountants', 'finance_accounts', 'finance_bill_payments', 'finance_bills', 'finance_budgets', 'finance_categories', 'finance_closings', 'finance_cost_centers', 'finance_entries', 'finance_imports', 'finance_invoices', 'finance_package_sends', 'finance_receipts', 'finance_rules', 'finance_series',
     'finance_statement_lines', 'finance_statements', 'firm_autonomy', 'firm_calendars',
     'firm_claim_defaults', 'firm_invitations', 'firm_marketing_terms', 'firm_message_texts', 'firm_modules', 'firm_notice_kinds', 'firm_one_work_cost', 'firm_one_work_minutes', 'firm_settlement_floors', 'firm_signers', 'flight_alerts', 'flight_checks', 'flight_segments', 'free_justice_answers', 'hearing_briefs', 'hearing_reports', 'hearing_staff_messages', 'hearings', 'import_batches', 'import_rows', 'invoices',
-    'issued_documents', 'judgment_paths', 'lawsuit_amounts', 'lawsuit_facts', 'lawyer_signature_uses', 'legal_sources', 'marketing_segments', 'memberships',
+    'issued_documents', 'judgment_paths', 'judgment_sessions', 'lawsuit_amounts', 'lawsuit_facts', 'lawyer_signature_uses', 'legal_sources', 'marketing_segments', 'memberships',
     'money_releases', 'money_shares', 'money_statements', 'movements', 'notice_optins', 'notice_stops', 'onboarding_state', 'partner_invitations', 'partner_links', 'passenger_welcomes', 'pax_firm_clauses',
     'people', 'person_data_requests',
     'piece_fact_checks', 'proceeding_lawyers', 'proceeding_parties', 'proceeding_tracking', 'proceedings', 'publication_actions', 'publication_readings', 'publications', 'record_versions',
@@ -873,7 +877,7 @@ select is(
     'consent_acceptances', 'deadlines', 'djen_captures', 'dossiers', 'draft_templates', 'entitlement_grants', 'files',
     'filing_package_items', 'filing_packages',
     'filing_receipts', 'filing_submissions', 'finance_access', 'firm_autonomy', 'firm_calendars', 'firm_claim_defaults', 'firm_marketing_terms', 'firm_message_texts', 'firm_modules', 'firm_notice_kinds', 'firm_settlement_floors', 'firm_signers', 'flight_alerts', 'flight_checks', 'flight_segments', 'free_justice_answers', 'hearing_briefs', 'hearing_reports', 'hearing_staff_messages', 'hearings', 'import_batches',
-    'import_rows', 'invoices', 'issued_documents', 'judgment_paths', 'lawsuit_amounts', 'lawsuit_facts', 'lawyer_signature_uses', 'legal_sources',
+    'import_rows', 'invoices', 'issued_documents', 'judgment_paths', 'judgment_sessions', 'lawsuit_amounts', 'lawsuit_facts', 'lawyer_signature_uses', 'legal_sources',
     'memberships', 'movements', 'notice_optins', 'notice_stops', 'partner_links', 'passenger_welcomes', 'pax_firm_clauses', 'people', 'piece_fact_checks', 'proceeding_lawyers', 'proceeding_parties', 'proceeding_tracking', 'proceedings',
     'publication_actions', 'publication_readings', 'publications',
     'residence_declarations', 'signature_envelopes',
@@ -917,7 +921,7 @@ select is(
     'filing_receipts', 'filing_submissions', 'finance_access', 'finance_accountants', 'finance_accounts', 'finance_bill_payments', 'finance_bills', 'finance_budgets', 'finance_categories', 'finance_closings', 'finance_cost_centers', 'finance_entries', 'finance_imports', 'finance_invoices', 'finance_package_sends', 'finance_receipts', 'finance_rules', 'finance_series',
     'finance_statement_lines', 'finance_statements', 'firm_autonomy', 'firm_calendars',
     'firm_claim_defaults', 'firm_invitations', 'firm_marketing_terms', 'firm_message_texts', 'firm_modules', 'firm_notice_kinds', 'firm_one_work_cost', 'firm_one_work_minutes', 'firm_settlement_floors', 'firm_signers', 'flight_alerts', 'flight_checks', 'flight_segments', 'free_justice_answers', 'hearing_briefs', 'hearing_reports', 'hearing_staff_messages', 'hearings', 'import_batches', 'import_rows', 'invoices',
-    'issued_documents', 'judgment_paths', 'lawsuit_amounts', 'lawsuit_facts', 'lawyer_signature_uses', 'legal_sources', 'marketing_segments', 'memberships',
+    'issued_documents', 'judgment_paths', 'judgment_sessions', 'lawsuit_amounts', 'lawsuit_facts', 'lawyer_signature_uses', 'legal_sources', 'marketing_segments', 'memberships',
     'money_releases', 'money_shares', 'money_statements', 'movements', 'notice_optins', 'notice_stops', 'onboarding_state', 'partner_invitations', 'partner_links', 'passenger_welcomes', 'pax_firm_clauses',
     'people', 'person_data_requests',
     'piece_fact_checks', 'proceeding_lawyers', 'proceeding_parties', 'proceeding_tracking', 'proceedings', 'publication_actions', 'publication_readings', 'publications', 'record_versions',

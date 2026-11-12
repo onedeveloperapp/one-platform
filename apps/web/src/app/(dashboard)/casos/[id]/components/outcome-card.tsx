@@ -2,6 +2,7 @@
 
 import type { CaseState } from "../case-types";
 import JudgmentPathBlock from "./judgment-path-block";
+import JudgmentSessionBlock from "./judgment-session-block";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 
@@ -319,6 +320,7 @@ export default function OutcomeCard({
             </Box>
             <AmountLine amount={state.amounts.find((item) => item.proceedingId === lawsuit.id) ?? null} />
             <JudgmentPathBlock state={state} proceedingId={lawsuit.id} writable={writable} onChanged={onChanged} />
+            <JudgmentSessionBlock state={state} proceedingId={lawsuit.id} writable={writable} onChanged={onChanged} />
             {all.length === 0 ? (
               <StateLine tone="info">{t("outcome-none")}</StateLine>
             ) : own.length === 0 ? null : (

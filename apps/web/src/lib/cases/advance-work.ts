@@ -388,6 +388,68 @@ function paperFileName(kind: string, person: string): string {
   return `${plain || "documento"}.pdf`;
 }
 
+/** A paper the database wrote with the person's facts, to be made a PDF and issued. */
+type PaperToIssue = {
+  org_id?: string;
+  person_id?: string;
+  kind?: string;
+  template_id?: string;
+  title?: string;
+  person?: string;
+  firm?: string;
+  body?: string;
+};
+
+/** A paper's PDF kept under the purpose `paper`, ready for the database to name. */
+type KeptPaper = {
+  fileId: string;
+  storagePath: string;
+  payload: { file_id: string; sha256: string; bytes: number; pages: number };
+};
+
+/**
+ * Makes a paper the database wrote a PDF of the firm's own (nothing of the platform printed on it) and keeps it under
+ * the purpose `paper`; null when that failed, with nothing left behind.
+ */
+async function keepPaperPdf(
+  store: ReturnType<typeof supabaseFileStore>,
+  paper: PaperToIssue & { org_id: string; kind: string; body: string },
+): Promise<KeptPaper | null> {
+  let pdf: Uint8Array;
+  try {
+    pdf = await renderTextPdf({
+      blocks: draftBlocks(paper.body),
+      title: paper.title ?? undefined,
+      author: paper.firm ?? undefined,
+      producer: paper.firm ?? undefined,
+      pageNumbers: true,
+    });
+  } catch {
+    return null;
+  }
+  const reserved = await store.reserve({
+    orgId: paper.org_id,
+    purpose: "paper",
+    name: paperFileName(paper.kind, paper.person ?? ""),
+    mime: "application/pdf",
+    bytes: pdf.byteLength,
+  });
+  if (!reserved.ok) return null;
+  try {
+    await store.put(reserved.storagePath, pdf, "application/pdf");
+    const measure = await measureFile(pdf);
+    return {
+      fileId: reserved.fileId,
+      storagePath: reserved.storagePath,
+      payload: { file_id: reserved.fileId, sha256: measure.sha256, bytes: measure.bytes, pages: measure.pages ?? 1 },
+    };
+  } catch {
+    // Nothing names the file yet: it is taken back, and the paper tried again at the next look.
+    await takeBackFile(store, reserved.fileId, reserved.storagePath);
+    return null;
+  }
+}
+
 /**
  * Issues the papers a held case owes (0054): for each, the database writes the
  * text with the person's facts (`advance_paper_to_issue`), the worker makes it
@@ -406,18 +468,7 @@ async function sendPapers(service: SupabaseClient, held: HeldAdvance): Promise<P
       target_claim: held.claim,
     });
     if (error) throw new Error("papers could not be read");
-    const paper = (data ?? {}) as {
-      ok?: boolean;
-      code?: string;
-      org_id?: string;
-      person_id?: string;
-      kind?: string;
-      template_id?: string;
-      title?: string;
-      person?: string;
-      firm?: string;
-      body?: string;
-    };
+    const paper = (data ?? {}) as PaperToIssue & { ok?: boolean; code?: string };
     if (!paper.ok) return { ...sent, lost: paper.code === "not_working" };
     if (paper.code === "none") return sent;
     if (paper.code === "incomplete" || paper.code === "unwritable") {
@@ -426,49 +477,22 @@ async function sendPapers(service: SupabaseClient, held: HeldAdvance): Promise<P
     if (paper.code !== "due" || !paper.org_id || !paper.person_id || !paper.kind || !paper.template_id || !paper.body) {
       return { ...sent, failed: true };
     }
-    let pdf: Uint8Array;
-    try {
-      pdf = await renderTextPdf({
-        blocks: draftBlocks(paper.body),
-        title: paper.title ?? undefined,
-        author: paper.firm ?? undefined,
-        producer: paper.firm ?? undefined,
-        pageNumbers: true,
-      });
-    } catch {
-      return { ...sent, failed: true };
-    }
-    const reserved = await store.reserve({
-      orgId: paper.org_id,
-      purpose: "paper",
-      name: paperFileName(paper.kind, paper.person ?? ""),
-      mime: "application/pdf",
-      bytes: pdf.byteLength,
-    });
-    if (!reserved.ok) return { ...sent, failed: true };
-    let measure: Awaited<ReturnType<typeof measureFile>>;
-    try {
-      await store.put(reserved.storagePath, pdf, "application/pdf");
-      measure = await measureFile(pdf);
-    } catch {
-      // Nothing names the file yet: it is taken back, and the paper tried again at the next look.
-      await takeBackFile(store, reserved.fileId, reserved.storagePath);
-      return { ...sent, failed: true };
-    }
+    const kept = await keepPaperPdf(store, { ...paper, org_id: paper.org_id, kind: paper.kind, body: paper.body });
+    if (!kept) return { ...sent, failed: true };
     const { data: recorded, error: refused } = await service.rpc("advance_record_paper", {
       target_case: held.caseId,
       target_claim: held.claim,
       target_person: paper.person_id,
       target_kind: paper.kind,
       target_template: paper.template_id,
-      payload: { file_id: reserved.fileId, sha256: measure.sha256, bytes: measure.bytes, pages: measure.pages ?? 1 },
+      payload: kept.payload,
     });
     // An answer lost on the way may have kept the file as the paper: it is taken back only when the database said
     // it was not, record first, and the database refuses to forget a file a document names.
     if (refused) throw new Error("paper could not be recorded");
     const result = (recorded ?? {}) as { ok?: boolean; code?: string; method?: string };
     if (!result.ok) {
-      await takeBackFile(store, reserved.fileId, reserved.storagePath);
+      await takeBackFile(store, kept.fileId, kept.storagePath);
       if (result.code === "not_working") return { ...sent, lost: true };
       if (result.code === "not_due") continue;
       return { ...sent, failed: true };
@@ -477,6 +501,92 @@ async function sendPapers(service: SupabaseClient, held: HeldAdvance): Promise<P
     if (result.method === "zapsign") sent.zapsign = true;
   }
   return sent;
+}
+
+/** What issuing the declarations of an appeal of a case came to. */
+export type AppealPapersIssued = { issued: number; waiting: string | null; failed: boolean };
+
+/**
+ * Issues the declarations of hardship a case already with the court owes for an appeal (0218): the claimants of the
+ * small-claims court who ask free justice in their recurso. The same paper as before the filing, through a line of
+ * its own (`appeal_paper_to_issue`, `record_appeal_paper`), since ONE's carrying on of a case before its filing never
+ * looks at a case with the court. The database checks again under the case's lock, so two workers never issue it
+ * twice. Throws when the database could not be asked.
+ */
+export async function issueAppealPapers(service: SupabaseClient, caseId: string): Promise<AppealPapersIssued> {
+  const done: AppealPapersIssued = { issued: 0, waiting: null, failed: false };
+  const store = supabaseFileStore(service);
+  let zapsign = false;
+  for (let turn = 0; turn < PAPERS_PER_LOOK; turn += 1) {
+    const { data, error } = await service.rpc("appeal_paper_to_issue", { target_case: caseId });
+    if (error) throw new Error("appeal papers could not be read");
+    const paper = (data ?? {}) as PaperToIssue & { ok?: boolean; code?: string };
+    if (!paper.ok || paper.code === "none") break;
+    if (paper.code === "incomplete" || paper.code === "unwritable") {
+      done.waiting = paper.code === "incomplete" ? "paper_incomplete" : "paper_unwritable";
+      break;
+    }
+    if (paper.code !== "due" || !paper.org_id || !paper.person_id || !paper.template_id || !paper.body) {
+      done.failed = true;
+      break;
+    }
+    const kept = await keepPaperPdf(store, {
+      ...paper,
+      org_id: paper.org_id,
+      kind: "declaracao_hipossuficiencia",
+      body: paper.body,
+    });
+    if (!kept) {
+      done.failed = true;
+      break;
+    }
+    const { data: recorded, error: refused } = await service.rpc("record_appeal_paper", {
+      target_case: caseId,
+      target_person: paper.person_id,
+      target_template: paper.template_id,
+      payload: kept.payload,
+    });
+    if (refused) throw new Error("appeal paper could not be recorded");
+    const result = (recorded ?? {}) as { ok?: boolean; code?: string; method?: string };
+    if (!result.ok) {
+      await takeBackFile(store, kept.fileId, kept.storagePath);
+      if (result.code === "not_due") continue;
+      done.failed = true;
+      break;
+    }
+    done.issued += 1;
+    if (result.method === "zapsign") zapsign = true;
+  }
+  // An envelope of the firm's ZapSign account is opened by the backend (0023), right after; the sweep catches what
+  // that did not.
+  if (zapsign) soon("signature-open", () => openReservedEnvelopes(createServiceClient(), 10));
+  return done;
+}
+
+/** The cases with the court that owe a declaration of an appeal (0218), a few a round: what each came to, in counts. */
+export async function appealPapersRound(service: SupabaseClient, limit: number): Promise<Record<string, number>> {
+  const { data, error } = await service.rpc("appeal_papers_owed", { target_limit: limit });
+  if (error) throw new Error("appeal papers could not be listed");
+  const outcomes: Record<string, number> = { issued: 0, waiting: 0, failed: 0 };
+  for (const row of (Array.isArray(data) ? data : []) as { case_id?: unknown }[]) {
+    if (typeof row.case_id !== "string") continue;
+    try {
+      const done = await issueAppealPapers(service, row.case_id);
+      outcomes.issued += done.issued;
+      if (done.waiting) outcomes.waiting += 1;
+      if (done.failed) outcomes.failed += 1;
+    } catch {
+      outcomes.failed += 1;
+    }
+  }
+  return outcomes;
+}
+
+/** The declarations of an appeal issued right after the answer that made them owed: of a case, or of any. */
+export async function queueAppealPapers(caseId: string | null): Promise<void> {
+  soon("appeal-papers", () =>
+    caseId ? issueAppealPapers(createServiceClient(), caseId) : appealPapersRound(createServiceClient(), 5),
+  );
 }
 
 /** The links ONE sent of a held case: the messages the outbox holds for them, and whether something went wrong. */

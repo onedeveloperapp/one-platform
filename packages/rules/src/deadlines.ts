@@ -598,3 +598,45 @@ export function internalDeadline(
   }
   return dayText(Math.max(day, first));
 }
+
+/**
+ * The court's business day before a day (`sustentacao-v1`, 0219): counted backward over the court's calendar for the
+ * lawsuit's place, passing weekends, the national holidays, the days the court was closed and the days of partial
+ * business (a limit at an hour of the morning is never put on a day whose business starts later: the earlier day is
+ * the safe one). A suspension of the terms is no closure: the court works on it. What it passed is said with its
+ * label. Null for a day it cannot read, or with no business day within a year before it. Pure.
+ */
+export function businessDayBefore(
+  on: string,
+  calendar: CourtCalendar,
+  place: DeadlinePlace,
+): { day: string; passed: { day: string; label: string }[] } | null {
+  const start = dayNumber(on);
+  if (start === null || on < DEADLINE_FIRST_DAY || on > DEADLINE_LAST_DAY) return null;
+  const where = {
+    kind: place.proceedingKind || null,
+    system: place.system || null,
+    comarca: comarcaKey(place.comarca),
+  };
+  const passed: { day: string; label: string }[] = [];
+  for (let number = start - 1; number >= start - 366; number -= 1) {
+    const day = dayText(number);
+    const weekday = weekdayOf(number);
+    if (weekday === 0 || weekday === 6) continue;
+    const holiday = nationalHoliday(day);
+    if (holiday !== null) {
+      passed.push({ day, label: holiday });
+      continue;
+    }
+    const off = calendar.days.find(
+      (entry) =>
+        entry.day === day && (entry.kind === "closed" || entry.kind === "partial") && scopeOf(entry, where) !== "no",
+    );
+    if (off) {
+      passed.push({ day, label: off.label });
+      continue;
+    }
+    return { day, passed };
+  }
+  return null;
+}

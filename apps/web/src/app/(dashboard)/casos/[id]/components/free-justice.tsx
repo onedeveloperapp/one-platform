@@ -33,18 +33,21 @@ const day = (iso: string | null) =>
  * Free justice in the civil court (migration 0125): each claimant of the lawsuit planned there, whether they ask for
  * it (answered on the link by who gives their word, or recorded by the firm with how), and where the declaration of
  * who asks stands. The piece and the filing wait for every answer; anybody of the firm records one given some other
- * way. In the small-claims court nothing is asked, so nothing shows.
+ * way. In the small-claims court nothing is asked at the start; in its recurso (0218, `appeal`) the same is asked of
+ * the claimants who appeal, and the declaration goes with the recurso.
  */
 export default function FreeJusticeAnswers({
   caseId,
   needs,
   writable,
   onChanged,
+  appeal = false,
 }: {
   caseId: string;
   needs: FreeJusticeNeed[] | null;
   writable: boolean;
   onChanged: () => void;
+  appeal?: boolean;
 }) {
   const t = useTranslations("product");
   const [recording, setRecording] = useState<string | null>(null);
@@ -65,14 +68,16 @@ export default function FreeJusticeAnswers({
       case "signing":
         return <StateLine tone="waiting">{t("free-justice-signing", when)}</StateLine>;
       case "signed":
-        return <StateLine tone="done">{t("free-justice-signed", when)}</StateLine>;
+        return (
+          <StateLine tone="done">{t(appeal ? "free-justice-signed-appeal" : "free-justice-signed", when)}</StateLine>
+        );
     }
   };
 
   return (
     <Box className="border-grey-100 flex flex-col gap-3 border-t pt-5">
       <Typography variant="subtitle2" component="h3" className="mb-0">
-        {t("free-justice-title")}
+        {t(appeal ? "free-justice-title-appeal" : "free-justice-title")}
       </Typography>
       <Box component="ul" className="m-0 flex list-none flex-col gap-3 p-0">
         {needs.map((need) => (

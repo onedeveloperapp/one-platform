@@ -369,7 +369,13 @@ export default function RulesCard({
       </Box>
 
       <CivilCourtAnswers state={state} writable={writable} onChanged={onChanged} />
-      <FreeJusticeAnswers caseId={state.case.id} needs={state.freeJustice} writable={writable} onChanged={onChanged} />
+      {/* The answers of the start of a lawsuit of the civil court; those of a recurso are on its judgment (0218). */}
+      <FreeJusticeAnswers
+        caseId={state.case.id}
+        needs={state.freeJustice ? state.freeJustice.filter((need) => !need.appeal) : null}
+        writable={writable}
+        onChanged={onChanged}
+      />
 
       <Box className="border-grey-100 flex flex-col gap-3 border-t pt-5">
         <SectionTitle

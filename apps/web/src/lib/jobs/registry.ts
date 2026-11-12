@@ -14,6 +14,7 @@ import { referralSweeps } from "@/lib/conversations/referral-work";
 import { amountSweeps } from "@/lib/courts/amount-work";
 import { courtSweeps } from "@/lib/courts/jobs";
 import { outcomeSweeps } from "@/lib/courts/outcome-work";
+import { sessionSweeps } from "@/lib/courts/session-work";
 import { deadlineSweeps } from "@/lib/deadlines/jobs";
 import { fileCopySweeps } from "@/lib/files/copy-work";
 import { fileSweeps } from "@/lib/files/jobs";
@@ -57,6 +58,7 @@ export const SWEEPS: readonly Sweep[] = [
   ...publicationActionSweeps,
   ...djenWatchSweeps,
   ...courtSweeps,
+  ...sessionSweeps,
   ...librarySweeps,
   ...signatureSweeps,
   ...aiSweeps,

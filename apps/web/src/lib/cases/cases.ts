@@ -323,6 +323,9 @@ export const EVENT_KEY: Record<string, string> = {
   hearing_reported: "case-event-hearing-reported",
   judgment_path_answered: "case-event-judgment-path-answered",
   judgment_path_decided: "case-event-judgment-path-decided",
+  judgment_session_recorded: "case-event-judgment-session-recorded",
+  judgment_session_withdrawn: "case-event-judgment-session-withdrawn",
+  oral_argument_decided: "case-event-oral-argument-decided",
   publication_action: "case-event-publication-action",
   referral_asked: "case-event-referral-asked",
 };

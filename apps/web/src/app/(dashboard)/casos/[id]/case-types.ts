@@ -26,6 +26,7 @@ import type { CaseAudio, CaseComplaint, CaseStatement } from "@/lib/cases/statem
 import type { ComplaintChannel } from "@/lib/cases/statements";
 import type { LawsuitAmount } from "@/lib/courts/amount";
 import type { CourseFacts } from "@/lib/courts/course-facts";
+import type { JudgmentSession } from "@/lib/courts/sessions";
 import type { CaseDeadlines, DeadlineAct } from "@/lib/deadlines/facts";
 import type { AutonomyDecision, AutonomyMode } from "@/lib/firm/autonomy";
 import type { FirmFunction } from "@/lib/firm/roles";
@@ -283,6 +284,8 @@ export type CaseState =
       hearingBriefs: { hearingId: string; body: string; madeAt: string; emailed: boolean }[];
       /** Each claimant's word on free justice in the civil court (0125); null when it could not be read. */
       freeJustice: FreeJusticeNeed[] | null;
+      /** The sessions of judgment of the case's appeals and the limit to register to argue (0219). */
+      sessions: JudgmentSession[];
       /** What each lawsuit came to (0130): its facts, ONE's and the firm's; null when they could not be read. */
       outcomes: LawsuitFact[] | null;
       /** ONE closed the case and no lawyer said yet they saw it (0130). */

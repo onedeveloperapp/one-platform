@@ -19,6 +19,7 @@ import {
   type AgendaMode,
   type AgendaPerson,
   entriesByDay,
+  entryCase,
   entryId,
   hearingCancelled,
   monthGrid,
@@ -51,12 +52,31 @@ const shortDay = (day: string) => `${day.slice(8, 10)}/${day.slice(5, 7)}`;
 
 const DEADLINE_KEY = { fatal: "agenda-entry-fatal", internal: "agenda-entry-internal" } as const;
 
-/** What each kind of entry looks like: the fatal day in the attention colour, a hearing in the primary, the internal quiet. */
+/**
+ * What each kind of entry looks like: the fatal day and the limit to register for oral argument in the attention
+ * colour, a hearing and a session of judgment in the primary, the internal quiet.
+ */
 const ENTRY_LOOK: Record<AgendaEntry["kind"], string> = {
   fatal: "border-l-accent-3 bg-accent-3/10",
+  oral: "border-l-accent-3 bg-accent-3/10",
   hearing: "border-l-primary bg-primary/10",
+  session: "border-l-primary bg-primary/10",
   internal: "border-l-grey-300 bg-grey-50",
 };
+
+/** What an entry is, in the screen's words. */
+function useEntryWhat(): (entry: AgendaEntry) => string {
+  const t = useTranslations("product");
+  return (entry) => {
+    if (entry.kind === "hearing") return t(KIND_KEY[entry.hearing.kind]);
+    if (entry.kind === "session") {
+      const virtual = entry.session.kind === "virtual";
+      return t(virtual ? "agenda-entry-session-virtual" : "agenda-entry-session");
+    }
+    if (entry.kind === "oral") return t("agenda-entry-oral");
+    return `${t(DEADLINE_KEY[entry.kind])}: ${entry.deadline.actName ?? entry.deadline.title}`;
+  };
+}
 
 /**
  * The agenda by day, week and month (migration 0132): the fatal and the internal deadlines and the hearings of the
@@ -216,16 +236,21 @@ function todayDay(): string {
 /** The words of one entry, short (a grid's cell) or whole (a day's list). */
 function EntryLine({ entry, whole }: { entry: AgendaEntry; whole: boolean }) {
   const t = useTranslations("product");
+  const whatOf = useEntryWhat();
   const cancelled = entry.kind === "hearing" && hearingCancelled(entry.hearing);
-  const seq = entry.kind === "hearing" ? entry.hearing.caseSeq : entry.deadline.caseSeq;
-  const caseId = entry.kind === "hearing" ? entry.hearing.caseId : entry.deadline.caseId;
-  const test = entry.kind === "hearing" ? entry.hearing.isTest : entry.deadline.isTest;
-  const what =
-    entry.kind === "hearing"
-      ? t(KIND_KEY[entry.hearing.kind])
-      : `${t(DEADLINE_KEY[entry.kind])}: ${entry.deadline.actName ?? entry.deadline.title}`;
+  const { caseSeq: seq, caseId, isTest: test, cnj } = entryCase(entry);
+  const what = whatOf(entry);
   const zone = entry.kind === "hearing" ? zoneWords(entry.hearing.timeZone) : null;
-  const when = entry.kind === "hearing" ? (zone ? `${entry.time} (${zone})` : entry.time) : null;
+  const when =
+    entry.kind === "hearing"
+      ? zone
+        ? `${entry.time} (${zone})`
+        : entry.time
+      : entry.kind === "oral" && entry.time
+        ? t("agenda-entry-until", { time: entry.time })
+        : entry.kind === "session"
+          ? entry.time
+          : null;
   const words = [when, what, seq !== null ? caseLabel(seq) : null].filter(Boolean).join(" · ");
   if (!whole) {
     return (
@@ -242,9 +267,9 @@ function EntryLine({ entry, whole }: { entry: AgendaEntry; whole: boolean }) {
         <Typography variant="body2" className={`font-semibold ${cancelled ? "line-through" : ""}`}>
           {words}
         </Typography>
-        {entry.kind !== "hearing" || entry.hearing.cnj ? (
+        {cnj ? (
           <Typography variant="caption" className="text-text-secondary">
-            {entry.kind === "hearing" ? entry.hearing.cnj : entry.deadline.cnj}
+            {cnj}
           </Typography>
         ) : null}
       </Box>

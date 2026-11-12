@@ -53,6 +53,7 @@ import { loadStatementFacts } from "@/lib/cases/statement-facts";
 import { CHRONOLOGY_TASK, TRANSCRIPTION_TASK } from "@/lib/cases/statements";
 import { lawsuitAmountsOf } from "@/lib/courts/amount";
 import { loadCourseFacts } from "@/lib/courts/course-facts";
+import { sessionsOf } from "@/lib/courts/sessions";
 import { caseDeadlines, deadlineActs } from "@/lib/deadlines/facts";
 import { type AutonomyDecision, type AutonomyMode, firmAutonomyOf } from "@/lib/firm/autonomy";
 import { isFirmFunction, isManager } from "@/lib/firm/roles";
@@ -227,6 +228,7 @@ export async function loadCase(id: string): Promise<CaseState> {
     filings,
     residence,
     freeJustice,
+    sessions,
     outcomes,
     costs,
     fees,
@@ -327,6 +329,8 @@ export async function loadCase(id: string): Promise<CaseState> {
     supabase.rpc("case_residence", { target_case: id }),
     // Each claimant's word on free justice in the civil court (0125), with the declaration of who asks.
     supabase.rpc("case_free_justice", { target_case: id }),
+    // The sessions of judgment of the case's appeals, with the limit to register for oral argument (0219).
+    supabase.rpc("case_judgment_sessions", { target_case: id }),
     // What each lawsuit came to (0130), in the order it happened.
     supabase
       .from("lawsuit_facts")
@@ -612,6 +616,7 @@ export async function loadCase(id: string): Promise<CaseState> {
           emailed: row.emailed_at !== null,
         })),
     freeJustice: freeJustice.error ? null : freeJusticeOf(freeJustice.data),
+    sessions: sessions.error ? [] : (sessionsOf(sessions.data) ?? []),
     outcomes: outcomes.error ? null : lawsuitFactsOf(outcomes.data),
     costs: costs.error ? null : caseCostsOf(costs.data),
     fees: fees.error ? null : caseFeesOf(fees.data),

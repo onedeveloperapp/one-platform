@@ -1,6 +1,7 @@
 "use client";
 
 import type { CaseState } from "../case-types";
+import FreeJusticeAnswers from "./free-justice";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 
@@ -50,6 +51,8 @@ export default function JudgmentPathBlock({
     (option) => option.option === appealOf(lawsuit.kind),
   );
   const costsKey = appeal?.costs?.preparo ? "judgment-path-costs" : "judgment-path-costs-free";
+  // Each claimant's word on free justice in the recurso of the small-claims court, asked once the firm appeals (0218).
+  const appealNeeds = (state.freeJustice ?? []).filter((need) => need.appeal && need.proceedingId === proceedingId);
   const recommendedKey = DECISION_KEY[recommended];
   const run = async (work: () => Promise<{ ok: boolean; code?: string }>): Promise<string | null> => {
     setBusy(true);
@@ -136,6 +139,7 @@ export default function JudgmentPathBlock({
       <Typography variant="caption" className="text-text-secondary">
         {t("judgment-path-may-err")}
       </Typography>
+      <FreeJusticeAnswers caseId={state.case.id} needs={appealNeeds} writable={writable} onChanged={onChanged} appeal />
     </Box>
   );
 }

@@ -5,7 +5,8 @@ import { internalDeadline, nationalHoliday } from "@flyee/rules/deadlines";
 /**
  * The agenda of a firm and of each person in it (migration 0132), as pure rules: the fatal deadlines with the internal
  * one the firm works to (`internalDeadline`, some of the court's business days before), the hearings in their own
- * zone, who answers for each, the grids of a day, a week and a month, and what the e-mail of the morning says.
+ * zone, the sessions of judgment of an appeal with the limit to register for oral argument (0219), who answers for
+ * each, the grids of a day, a week and a month, and what the e-mail of the morning says.
  *
  * What an e-mail or a calendar link says of an item is the act's name, or "Prazo", and the case's number: never a
  * typed title, which may hold the client's name.
@@ -48,10 +49,39 @@ export type AgendaHearing = {
   people: string[];
 };
 
-export type AgendaItems = { deadlines: AgendaDeadline[]; hearings: AgendaHearing[]; durationMinutes: number };
+/** A session of judgment of an appeal (0219): no hearing of the client's, and the limit to register to argue. */
+export type AgendaSession = {
+  id: string;
+  kind: "virtual" | "presencial";
+  startsOn: string;
+  /** "HH:MM" in Brasília, when the pauta says it. */
+  startsAt: string | null;
+  /** The last day to register for oral argument, once counted, and until which hour of it. */
+  limitOn: string | null;
+  limitHour: string | null;
+  /** The firm's word: it registered, or it will not argue; null while nobody said. */
+  oralChoice: "registered" | "declined" | null;
+  caseId: string | null;
+  caseSeq: number | null;
+  isTest: boolean;
+  cnj: string;
+  court: string;
+  changedAt: string | null;
+  people: string[];
+};
+
+export type AgendaItems = {
+  deadlines: AgendaDeadline[];
+  hearings: AgendaHearing[];
+  sessions: AgendaSession[];
+  durationMinutes: number;
+};
 
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 const isDay = (value: unknown): value is string => typeof value === "string" && DAY.test(value);
+/** An hour the database writes as a time ("14:00:00"), as "14:00"; null otherwise. */
+const hourOf = (value: unknown): string | null =>
+  typeof value === "string" && /^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/.test(value) ? value.slice(0, 5) : null;
 const text = (value: unknown): string | null => (typeof value === "string" && value !== "" ? value : null);
 const ids = (value: unknown): string[] =>
   Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
@@ -155,8 +185,31 @@ export function readAgendaItems(raw: unknown, internalDays: InternalDays | numbe
       },
     ];
   });
+  const sessions = list(answer.sessions).flatMap((row): AgendaSession[] => {
+    const id = text(row.id);
+    const startsOn = isDay(row.starts_on) ? row.starts_on : null;
+    if (!id || !startsOn || (row.kind !== "virtual" && row.kind !== "presencial")) return [];
+    return [
+      {
+        id,
+        kind: row.kind,
+        startsOn,
+        startsAt: hourOf(row.starts_at),
+        limitOn: isDay(row.limit_on) ? row.limit_on : null,
+        limitHour: hourOf(row.limit_hour),
+        oralChoice: row.oral_choice === "registered" || row.oral_choice === "declined" ? row.oral_choice : null,
+        caseId: text(row.case_id),
+        caseSeq: typeof row.case_seq === "number" ? row.case_seq : null,
+        isTest: row.is_test === true,
+        cnj: text(row.cnj) ?? "",
+        court: text(row.court) ?? "",
+        changedAt: text(row.changed_at),
+        people: ids(row.people),
+      },
+    ];
+  });
   const duration = typeof answer.duration_minutes === "number" ? answer.duration_minutes : 60;
-  return { deadlines, hearings, durationMinutes: Math.max(Math.round(duration), 1) };
+  return { deadlines, hearings, sessions, durationMinutes: Math.max(Math.round(duration), 1) };
 }
 
 // ---------- Days ----------
@@ -229,17 +282,24 @@ export function localOf(moment: string, timeZone: string): { day: string; time: 
 export type AgendaEntry =
   | { kind: "fatal"; day: string; deadline: AgendaDeadline }
   | { kind: "internal"; day: string; deadline: AgendaDeadline }
-  | { kind: "hearing"; day: string; time: string; hearing: AgendaHearing };
+  | { kind: "hearing"; day: string; time: string; hearing: AgendaHearing }
+  | { kind: "oral"; day: string; time: string | null; session: AgendaSession }
+  | { kind: "session"; day: string; time: string | null; session: AgendaSession };
 
-const ORDER: Record<AgendaEntry["kind"], number> = { fatal: 0, hearing: 1, internal: 2 };
+const ORDER: Record<AgendaEntry["kind"], number> = { fatal: 0, oral: 1, hearing: 2, session: 3, internal: 4 };
+
+/** The hour an entry is at, when it has one. */
+export const entryTime = (entry: AgendaEntry): string | null =>
+  entry.kind === "hearing" || entry.kind === "oral" || entry.kind === "session" ? entry.time : null;
 
 /** Whose items an agenda shows: everybody's, or one person's (who answers for it). */
 export type AgendaPerson = { kind: "all" } | { kind: "person"; id: string };
 
 /**
  * The entries of the days from `from` to `to`, of one person or everybody: each deadline on its fatal day and on its
- * internal day, each hearing on its own day in its zone (a cancelled one too, said so). The fatal ones first in a day,
- * then the hearings by their hour, then the internal ones.
+ * internal day, each hearing on its own day in its zone (a cancelled one too, said so), each session of judgment on
+ * its day and, while the firm has not said whether it argues, on the last day to register (0219). The fatal ones
+ * first in a day, then the limits to register, the hearings and the sessions by their hour, then the internal ones.
  */
 export function agendaEntries(items: AgendaItems, person: AgendaPerson, from: string, to: string): AgendaEntry[] {
   const mine = (people: readonly string[]) => person.kind === "all" || people.includes(person.id);
@@ -257,17 +317,46 @@ export function agendaEntries(items: AgendaItems, person: AgendaPerson, from: st
     const local = localOf(hearing.startsAt, hearing.timeZone);
     if (within(local.day)) entries.push({ kind: "hearing", day: local.day, time: local.time, hearing });
   }
+  for (const session of items.sessions ?? []) {
+    if (!mine(session.people)) continue;
+    if (within(session.startsOn)) {
+      entries.push({ kind: "session", day: session.startsOn, time: session.startsAt, session });
+    }
+    if (session.limitOn && session.oralChoice === null && within(session.limitOn)) {
+      entries.push({ kind: "oral", day: session.limitOn, time: session.limitHour, session });
+    }
+  }
   return entries.sort(
     (a, b) =>
       a.day.localeCompare(b.day) ||
       ORDER[a.kind] - ORDER[b.kind] ||
-      (a.kind === "hearing" && b.kind === "hearing" ? a.time.localeCompare(b.time) : 0) ||
+      (entryTime(a) ?? "").localeCompare(entryTime(b) ?? "") ||
       entryId(a).localeCompare(entryId(b)),
   );
 }
 
 export const entryId = (entry: AgendaEntry): string =>
-  entry.kind === "hearing" ? `hearing:${entry.hearing.id}` : `${entry.kind}:${entry.deadline.id}`;
+  entry.kind === "hearing"
+    ? `hearing:${entry.hearing.id}`
+    : entry.kind === "oral" || entry.kind === "session"
+      ? `${entry.kind}:${entry.session.id}`
+      : `${entry.kind}:${entry.deadline.id}`;
+
+/** The case and the lawsuit of an entry, whatever its kind. */
+export function entryCase(entry: AgendaEntry): {
+  caseId: string | null;
+  caseSeq: number | null;
+  isTest: boolean;
+  cnj: string;
+} {
+  const item =
+    entry.kind === "hearing"
+      ? entry.hearing
+      : entry.kind === "oral" || entry.kind === "session"
+        ? entry.session
+        : entry.deadline;
+  return { caseId: item.caseId, caseSeq: item.caseSeq, isTest: item.isTest, cnj: item.cnj };
+}
 
 /** The entries of each day, for a grid. */
 export function entriesByDay(entries: readonly AgendaEntry[]): Map<string, AgendaEntry[]> {
@@ -295,9 +384,13 @@ const HEARING_WORDS: Record<HearingKind, string> = {
 /** The case as an outsider reads it: its number, never a client's name. */
 export const caseWords = (caseSeq: number | null): string | null => (caseSeq !== null ? `Caso ${caseSeq}` : null);
 
-/** What an item is called outside ONE's own screens: the act's name, or "Prazo"; the hearing's kind. */
+/** What an item is called outside ONE's own screens: the act's name, or "Prazo"; the hearing's kind; the session's. */
 export function outsideName(entry: AgendaEntry): string {
   if (entry.kind === "hearing") return HEARING_WORDS[entry.hearing.kind];
+  if (entry.kind === "session") {
+    return entry.session.kind === "virtual" ? "Sessão virtual de julgamento" : "Sessão de julgamento";
+  }
+  if (entry.kind === "oral") return "Inscrição para sustentação oral";
   const act = entry.deadline.actName ?? "Prazo";
   return entry.kind === "fatal" ? `Prazo fatal: ${act}` : `Prazo interno: ${act}`;
 }
@@ -312,13 +405,13 @@ export function zoneWords(timeZone: string): string | null {
 // ---------- The e-mail of the morning ----------
 
 export type DigestLine = {
-  /** fatal, internal or hearing. */
+  /** fatal, internal, hearing, oral or session. */
   kind: AgendaEntry["kind"];
   name: string;
   caseWords: string | null;
   cnj: string;
   day: string;
-  /** The hour of a hearing, and its zone when not Brasília's. */
+  /** The hour of a hearing, a session or a limit to register, and a hearing's zone when not Brasília's. */
   time: string | null;
   zone: string | null;
   cancelled: boolean;
@@ -346,10 +439,30 @@ export function digestFor(
     ...items,
     deadlines: items.deadlines.filter((deadline) => !deadline.isTest),
     hearings: items.hearings.filter((hearing) => !hearing.isTest),
+    sessions: (items.sessions ?? []).filter((session) => !session.isTest),
   };
   const lineOf = (entry: AgendaEntry): DigestLine => {
-    const changedAt = entry.kind === "hearing" ? entry.hearing.changedAt : entry.deadline.changedAt;
+    const changedAt =
+      entry.kind === "hearing"
+        ? entry.hearing.changedAt
+        : entry.kind === "oral" || entry.kind === "session"
+          ? entry.session.changedAt
+          : entry.deadline.changedAt;
     const changed = changedAt !== null && Date.parse(changedAt) >= since;
+    if (entry.kind === "oral" || entry.kind === "session") {
+      return {
+        kind: entry.kind,
+        name: outsideName(entry),
+        caseWords: caseWords(entry.session.caseSeq),
+        cnj: entry.session.cnj,
+        day: entry.day,
+        time: entry.time,
+        zone: null,
+        cancelled: false,
+        changed,
+        caseId: entry.session.caseId,
+      };
+    }
     if (entry.kind === "hearing") {
       return {
         kind: "hearing",

@@ -252,3 +252,70 @@ describe("the internal days of each act (0167)", () => {
     expect(internalDaysFor(3, "contestacao")).toBe(3);
   });
 });
+
+describe("the sessions of judgment and the limit to register to argue (0219)", () => {
+  const items = readAgendaItems(
+    {
+      deadlines: [],
+      hearings: [],
+      sessions: [
+        {
+          id: "s1",
+          kind: "virtual",
+          starts_on: "2026-11-24",
+          starts_at: null,
+          limit_on: "2026-11-23",
+          limit_hour: "10:00:00",
+          oral_choice: null,
+          case_id: "c1",
+          case_seq: 7,
+          is_test: false,
+          cnj: "10003012720998090100",
+          court: "TJGO",
+          changed_at: "2026-11-12T10:00:00Z",
+          people: [ANA],
+        },
+        { id: "s2", kind: "outra", starts_on: "2026-11-24" },
+      ],
+      duration_minutes: 60,
+    },
+    0,
+  );
+
+  it("puts the session on its day and, while nobody said, the limit to register on its own", () => {
+    expect(items.sessions.map((session) => [session.id, session.limitHour])).toEqual([["s1", "10:00"]]);
+    const entries = agendaEntries(items, { kind: "person", id: ANA }, "2026-11-20", "2026-11-30");
+    expect(entries.map((entry) => [entry.kind, entry.day])).toEqual([
+      ["oral", "2026-11-23"],
+      ["session", "2026-11-24"],
+    ]);
+    expect(agendaEntries(items, { kind: "person", id: CAIO }, "2026-11-20", "2026-11-30")).toEqual([]);
+    const said = {
+      ...items,
+      sessions: items.sessions.map((session) => ({ ...session, oralChoice: "registered" as const })),
+    };
+    expect(agendaEntries(said, { kind: "all" }, "2026-11-20", "2026-11-30").map((entry) => entry.kind)).toEqual([
+      "session",
+    ]);
+  });
+
+  it("says them in the morning's e-mail and the calendar link by name and case, the limit's hour in words", () => {
+    const digest = digestFor(items, { userId: ANA, wholeFirm: false }, "2026-11-23", new Date("2026-11-23T10:00:00Z"));
+    expect(digest.today.map((line) => [line.kind, line.name, line.caseWords, line.time])).toEqual([
+      ["oral", "Inscrição para sustentação oral", "Caso 7", "10:00"],
+    ]);
+    expect(digest.next.map((line) => line.name)).toEqual(["Sessão virtual de julgamento"]);
+    const events = agendaEvents(
+      items,
+      { kind: "all" },
+      { from: "2026-11-20", to: "2026-11-30" },
+      "https://one.test",
+      new Date(),
+    );
+    expect(events.map((event) => [event.summary, "day" in event.when ? event.when.day : null])).toEqual([
+      ["Inscrição para sustentação oral · Caso 7", "2026-11-23"],
+      ["Sessão virtual de julgamento · Caso 7", "2026-11-24"],
+    ]);
+    expect(events[0]?.description).toContain("Até as 10:00, no sistema do tribunal.");
+  });
+});

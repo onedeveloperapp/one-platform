@@ -12,8 +12,9 @@ import { mimeOf, uploadToSignedUrl } from "@/lib/files/browser-upload";
 
 /**
  * Free justice, asked on the client's link for each claim of theirs that goes to the civil court (migration 0125):
- * their own and their children's. The client says whether they ask for it; who asks signs a declaration that ONE
- * sends below, and may send a proof of income, optional. The answer may change while the lawsuit is not filed.
+ * their own and their children's; and for their recurso of the small-claims court (0218), whatever the case's stage.
+ * The client says whether they ask for it; who asks signs a declaration that ONE sends below, and may send a proof of
+ * income, optional, while the case is open to them. The answer may change until the lawsuit or the recurso is filed.
  */
 export default function ClientFreeJustice({
   token,
@@ -34,6 +35,8 @@ export default function ClientFreeJustice({
   if (!view || view.items.length === 0) return null;
   const asking = view.items.some((item) => item.asks === true);
   const answered = view.items.every((item) => item.asks !== null);
+  // The recurso of the small-claims court is asked once the case is with the court: its answer is open all the same.
+  const appeal = view.items.some((item) => item.appeal);
 
   const answer = async (partyId: string, asks: boolean) => {
     setBusy(partyId);
@@ -98,7 +101,7 @@ export default function ClientFreeJustice({
             {t("client-free-justice-title")}
           </Typography>
           <Typography variant="body2" className="text-text-secondary">
-            {t("client-free-justice-body")}
+            {t(appeal ? "client-free-justice-body-appeal" : "client-free-justice-body")}
           </Typography>
         </Box>
         {view.items.map((item) => (
@@ -118,7 +121,7 @@ export default function ClientFreeJustice({
                 <StateLine tone="attention">{t("client-free-justice-waiting")}</StateLine>
               )}
             </Box>
-            {editable ? (
+            {editable || item.appeal ? (
               <Box className="flex flex-wrap gap-2">
                 <Button
                   variant={item.asks === true ? "contained" : "outlined"}

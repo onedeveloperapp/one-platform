@@ -1,6 +1,6 @@
 import "server-only";
 
-import { advanceOne, followSoon } from "@/lib/cases/advance-work";
+import { advanceOne, appealPapersRound, followSoon } from "@/lib/cases/advance-work";
 import { reuseRound } from "@/lib/cases/document-reuse-work";
 import { claimCaseDocuments, processClaimedDocument } from "@/lib/cases/documents-work";
 import { approveWaitingDrafts, draftNext } from "@/lib/cases/drafts-work";
@@ -31,6 +31,17 @@ function tally(outcomes: Record<string, number>, outcome: string): void {
  * read inside the work on them, never kept in a round's record.
  */
 export const caseSweeps: Sweep[] = [
+  /**
+   * The declarations of hardship of an appeal (migration 0218): a claimant of
+   * the small-claims court who asks free justice in the recurso, the case
+   * already with the court, signs the declaration ONE issues. Issued right
+   * after the answer; this takes what that did not.
+   */
+  {
+    key: "appeal-papers",
+    when: { every: 15 },
+    run: async (service) => appealPapersRound(service, 5),
+  },
   /**
    * The documents (migration 0024): what reached a case is claimed,
    * normalized and checked by the AI.

@@ -4,6 +4,7 @@ import {
   type AgendaItems,
   type AgendaPerson,
   caseWords,
+  entryCase,
   entryId,
   hearingCancelled,
   outsideName,
@@ -112,9 +113,7 @@ export function agendaEvents(
 ): IcsEvent[] {
   const stamp = now.toISOString();
   return agendaEntries(items, person, range.from, range.to).map((entry): IcsEvent => {
-    const caseId = entry.kind === "hearing" ? entry.hearing.caseId : entry.deadline.caseId;
-    const seq = entry.kind === "hearing" ? entry.hearing.caseSeq : entry.deadline.caseSeq;
-    const cnj = entry.kind === "hearing" ? entry.hearing.cnj : entry.deadline.cnj;
+    const { caseId, caseSeq: seq, cnj } = entryCase(entry);
     const url = caseId ? `${origin}/casos/${caseId}` : null;
     const summary = [outsideName(entry), caseWords(seq)].filter(Boolean).join(" · ");
     if (entry.kind === "hearing") {
@@ -138,10 +137,30 @@ export function agendaEvents(
         stamp,
       };
     }
+    // A session at a known hour is an event of that hour; the limit to register says its hour in words (0219).
+    if (entry.kind === "session" && entry.time) {
+      const start = new Date(`${entry.day}T${entry.time}:00-03:00`).toISOString();
+      const end = new Date(Date.parse(start) + items.durationMinutes * 60_000).toISOString();
+      return {
+        uid: `${entryId(entry).replace(":", "-")}@one-agenda`,
+        summary,
+        description: [cnj ? `Processo ${cnj}` : null, url ? `Abra no ONE: ${url}` : null].filter(Boolean).join("\n"),
+        url,
+        when: { start, end },
+        cancelled: false,
+        stamp,
+      };
+    }
     return {
       uid: `${entryId(entry).replace(":", "-")}@one-agenda`,
       summary,
-      description: [cnj ? `Processo ${cnj}` : null, url ? `Abra no ONE: ${url}` : null].filter(Boolean).join("\n"),
+      description: [
+        cnj ? `Processo ${cnj}` : null,
+        entry.kind === "oral" && entry.time ? `Até as ${entry.time}, no sistema do tribunal.` : null,
+        url ? `Abra no ONE: ${url}` : null,
+      ]
+        .filter(Boolean)
+        .join("\n"),
       url,
       when: { day: entry.day },
       cancelled: false,

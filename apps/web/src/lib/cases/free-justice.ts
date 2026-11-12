@@ -1,8 +1,9 @@
 /**
- * Free justice in the civil court (phase 3 of the plan of the controladoria, migration 0125): each claimant of a
- * lawsuit planned there says whether they ask for it, through who gives their word today, and who asks signs a
- * declaration of economic hardship. Pure: what the database answered of a case, where each claimant stands, and the
- * words of each.
+ * Free justice in the civil court (phase 3 of the plan of the controladoria, migration 0125) and in the recurso of the
+ * small-claims court (0218): each claimant of a lawsuit planned in the civil court, or of a lawsuit of the
+ * small-claims court while they appeal, says whether they ask for it, through who gives their word today, and who
+ * asks signs a declaration of economic hardship. Pure: what the database answered of a case, where each claimant
+ * stands, and the words of each.
  */
 
 /** Where a claimant's answer stands, read with the declaration of who answers for them. */
@@ -16,6 +17,10 @@ export type FreeJusticeStanding =
 
 export type FreeJusticeNeed = {
   partyId: string;
+  /** The lawsuit the answer is asked for. */
+  proceedingId: string | null;
+  /** Asked for the recurso of the small-claims court (0218), not for the start of a lawsuit of the civil court. */
+  appeal: boolean;
   name: string;
   minor: boolean;
   answererId: string | null;
@@ -62,6 +67,8 @@ export function freeJusticeOf(raw: unknown): FreeJusticeNeed[] | null {
     const paper = text(entry.paper);
     needs.push({
       partyId,
+      proceedingId: text(entry.proceeding_id),
+      appeal: entry.appeal === true,
       name,
       minor: entry.minor === true,
       answererId,
@@ -81,7 +88,15 @@ export function freeJusticeOf(raw: unknown): FreeJusticeNeed[] | null {
 
 /** The link's view of what its person answers for (`client_link_free_justice`). */
 export type ClientFreeJustice = {
-  items: { partyId: string; name: string; minor: boolean; asks: boolean | null; recordedAt: string | null }[];
+  items: {
+    partyId: string;
+    name: string;
+    minor: boolean;
+    asks: boolean | null;
+    recordedAt: string | null;
+    /** Asked for the recurso of the small-claims court (0218): answered whatever the case's stage. */
+    appeal: boolean;
+  }[];
   /** Whether ONE issued this person's declaration already (it then waits below, to be signed). */
   issued: boolean;
   /** Whether a proof of income of this person arrived. */
@@ -104,6 +119,7 @@ export function clientFreeJusticeOf(raw: unknown): ClientFreeJustice | null {
       minor: entry.minor === true,
       asks: typeof entry.asks === "boolean" ? entry.asks : null,
       recordedAt: text(entry.recorded_at),
+      appeal: entry.appeal === true,
     });
   }
   return { items, issued: answer.issued === true, income: answer.income === true, ownParty: text(answer.own_party) };
