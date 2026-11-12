@@ -71,21 +71,68 @@ export function accountAsksClient(state: AccountState | null): "tell" | "answer"
   return null;
 }
 
+/** How a question of the account is numbered in the chat, so the next turn knows which one an answer is of. */
+const ACCOUNT_QUESTION = /^Pergunta (\d+) de (\d+): /m;
+
+/** One question of the account, numbered: "Pergunta 2 de 4: …". */
+export const accountQuestionLine = (index: number, total: number, question: string): string =>
+  `Pergunta ${index} de ${total}: ${question.trim()}`;
+
 /**
- * ONE's message in the client's WhatsApp conversation with what their account is missing (0092): the questions of
- * the order of the facts, one a line, and how to answer. The client reads the firm, never ONE.
+ * ONE's message in the client's WhatsApp conversation with what their account is missing (0092), one question at a
+ * time (0235): the first question, with what it is for and how to answer; the next ones come one after each answer.
+ * The client reads the firm, never ONE.
  */
 export function accountQuestionsMessage(firstName: string, questions: readonly string[]): string {
   const name = firstName.trim();
   const lead = name
-    ? `${name}, para preparar a sua ação, o escritório precisa saber mais algumas coisas:`
-    : "Para preparar a sua ação, o escritório precisa saber mais algumas coisas:";
-  return [
-    lead,
-    ...questions.map((question, index) => `${index + 1}. ${question.trim()}`),
-    "Pode responder aqui mesmo, numa mensagem só. Se não lembrar de algo, é só dizer.",
-  ].join("\n");
+    ? `${name}, para preparar a sua ação, o escritório precisa saber mais algumas coisas. Vou perguntar uma de cada vez, e se não lembrar de algo, é só dizer.`
+    : "Para preparar a sua ação, o escritório precisa saber mais algumas coisas. Vou perguntar uma de cada vez, e se não lembrar de algo, é só dizer.";
+  return [lead, accountQuestionLine(1, questions.length, questions[0] ?? "")].join("\n");
 }
+
+/** The question a message of ONE asks, by its number; null when it asks none of the account. */
+export function accountQuestionOf(text: string): { index: number; total: number } | null {
+  const match = ACCOUNT_QUESTION.exec(text);
+  return match ? { index: Number(match[1]), total: Number(match[2]) } : null;
+}
+
+/**
+ * The client's answers, put together for the account (0235): each question ONE asked since its first, with the words
+ * the client wrote after it. The order of the facts reads it as it reads an answer on the link.
+ */
+export function accountAnswersText(
+  messages: readonly { author: string; text: string }[],
+  questions: readonly string[],
+): string {
+  let start = -1;
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const asked = messages[index].author === "one" ? accountQuestionOf(messages[index].text) : null;
+    if (asked?.index === 1) {
+      start = index;
+      break;
+    }
+  }
+  if (start < 0) return "";
+  const answers = new Map<number, string[]>();
+  let current = 0;
+  for (const message of messages.slice(start)) {
+    if (message.author === "one") {
+      // Words written after another message of ONE answer that one, not the account.
+      current = accountQuestionOf(message.text)?.index ?? 0;
+      continue;
+    }
+    if (message.author === "cliente" && current > 0 && message.text.trim()) {
+      answers.set(current, [...(answers.get(current) ?? []), message.text.trim()]);
+    }
+  }
+  return questions
+    .map((question, index) => `${question.trim()}\n${(answers.get(index + 1) ?? []).join(" ") || "Não respondeu."}`)
+    .join("\n\n");
+}
+
+/** What ONE says when it comes back to a question of the account that waits, after another step. */
+export const accountBackLine = "Voltando ao seu relato:";
 
 /** ONE's word once the client answered in the conversation: the account is ordered again with it. */
 export function accountThanksMessage(firstName: string): string {
@@ -104,3 +151,23 @@ export const ACCOUNT_MISSING_KEY: Partial<Record<AccountState, string>> = {
   contested: "case-missing-account-contested",
   failed: "case-missing-account-failed",
 };
+
+/**
+ * Which questions of the account the client answered in the chat since ONE first asked them (0235): the numbers of
+ * those with words after them. ONE asks next the first one not answered.
+ */
+export function accountAnswered(messages: readonly { author: string; text: string }[]): Set<number> {
+  const answered = new Set<number>();
+  let started = false;
+  let current = 0;
+  for (const message of messages) {
+    if (message.author === "one") {
+      const asked = accountQuestionOf(message.text);
+      if (asked?.index === 1 && !started) started = true;
+      current = asked?.index ?? 0;
+      continue;
+    }
+    if (started && message.author === "cliente" && current > 0 && message.text.trim()) answered.add(current);
+  }
+  return answered;
+}

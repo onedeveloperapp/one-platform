@@ -3,7 +3,14 @@ import "server-only";
 import { createHash, randomBytes } from "node:crypto";
 
 import { runFirmTask } from "@/lib/ai/executor";
-import { accountThanksMessage } from "@/lib/cases/account";
+import {
+  accountAnswered,
+  accountAnswersText,
+  accountBackLine,
+  accountQuestionLine,
+  accountQuestionOf,
+  accountThanksMessage,
+} from "@/lib/cases/account";
 import { firstNameOf } from "@/lib/cases/cases";
 import { base64, MODEL_IMAGE, processCaseDocuments, queueDocumentProcessing } from "@/lib/cases/documents-work";
 import {
@@ -633,6 +640,55 @@ async function takeFactsAnswer(
 }
 
 /**
+ * The client's answer to a question of their account, in the chat (0092, one at a time since 0235): the next question
+ * after each answer, and after the last the answers join the account, as an answer on the link does, and ONE orders it
+ * again. A question that waits after another step came between is asked again. Answers whether it took the turn.
+ */
+async function takeAccountAnswer(
+  service: SupabaseClient,
+  held: Held,
+  context: TurnContext,
+  statementId: string,
+  firstName: string,
+): Promise<boolean> {
+  const { data } = await service.from("case_statements").select("questions").eq("id", statementId).maybeSingle();
+  const listed = (data as { questions?: unknown } | null)?.questions;
+  const questions = (Array.isArray(listed) ? listed : []).filter(
+    (question): question is string => typeof question === "string" && question.trim() !== "",
+  );
+  const replied = lastClientWords(context.messages);
+  const complete = async (text: string) => {
+    const completed = await rpc(service, "one_complete_statement", {
+      target_conversation: held.conversationId,
+      target_claim: held.claim,
+      target_statement: statementId,
+      target_text: text,
+    });
+    if (!completed.ok) return false;
+    await say(service, held, accountThanksMessage(firstName)).catch(() => undefined);
+    await workStatement(statementId);
+    return true;
+  };
+  const lastOne = [...context.messages].reverse().find((message) => message.author === "one")?.text ?? "";
+  const asked = accountQuestionOf(lastOne);
+  if (!asked) {
+    // Every question in one message, as before 0235: the reply answers them all.
+    if (lastOne.includes("numa mensagem só") || questions.length === 0) return complete(replied.join("\n"));
+    // Another step came between: the first question not answered is asked again.
+    const answered = accountAnswered(context.messages);
+    const next = questions.findIndex((_question, index) => !answered.has(index + 1));
+    if (next < 0) return complete(accountAnswersText(context.messages, questions));
+    await say(service, held, `${accountBackLine}\n${accountQuestionLine(next + 1, questions.length, questions[next])}`);
+    return true;
+  }
+  if (asked.index < questions.length) {
+    await say(service, held, accountQuestionLine(asked.index + 1, questions.length, questions[asked.index]));
+    return true;
+  }
+  return complete(accountAnswersText(context.messages, questions));
+}
+
+/**
  * The client's "Não tenho" to the dispensable documents ONE asked (0230): kept as their word, as on their link, and
  * said back. Answers whether it took the turn.
  */
@@ -1233,20 +1289,14 @@ async function takeTurn(service: SupabaseClient, held: Held, report: TurnReport)
     !alertAnswer &&
     quickAnswer(replied[replied.length - 1]) !== "stop"
   ) {
-    const completed = await rpc(service, "one_complete_statement", {
-      target_conversation: held.conversationId,
-      target_claim: held.claim,
-      target_statement: statementId,
-      target_text: replied.join("\n"),
-    });
-    if (completed.ok) {
-      answeredAccount = true;
-      await say(service, held, accountThanksMessage(typeof open.first_name === "string" ? open.first_name : "")).catch(
-        () => undefined,
-      );
-      report.answered += 1;
-      await workStatement(statementId);
-    }
+    answeredAccount = await takeAccountAnswer(
+      service,
+      held,
+      context,
+      statementId,
+      typeof open.first_name === "string" ? open.first_name : "",
+    ).catch(() => false);
+    if (answeredAccount) report.answered += 1;
   }
 
   if (answeredAccount || interviewTook) {

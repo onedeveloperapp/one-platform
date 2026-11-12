@@ -6,7 +6,11 @@ import {
   ACCOUNT_TOPIC_KEY,
   ACCOUNT_TOPIC_SHORT_KEY,
   ACCOUNT_TOPICS,
+  accountAnswered,
+  accountAnswersText,
   accountAsksClient,
+  accountQuestionLine,
+  accountQuestionOf,
   accountQuestionsMessage,
   accountStateOf,
   accountThanksMessage,
@@ -44,15 +48,33 @@ describe("the client's account before the lawsuits (0090)", () => {
     );
   });
 
-  it("asks in the conversation one question a line, and thanks the client for the answers (0092)", () => {
+  it("asks in the conversation one question at a time, and thanks the client for the answers (0092, 0235)", () => {
     expect(accountQuestionsMessage("Ana", ["Quanto você pagou?", " Você teve gastos? "])).toBe(
       [
-        "Ana, para preparar a sua ação, o escritório precisa saber mais algumas coisas:",
-        "1. Quanto você pagou?",
-        "2. Você teve gastos?",
-        "Pode responder aqui mesmo, numa mensagem só. Se não lembrar de algo, é só dizer.",
+        "Ana, para preparar a sua ação, o escritório precisa saber mais algumas coisas. Vou perguntar uma de cada vez, e se não lembrar de algo, é só dizer.",
+        "Pergunta 1 de 2: Quanto você pagou?",
       ].join(String.fromCharCode(10)),
     );
+    const chat = [
+      { author: "one", text: accountQuestionsMessage("Ana", ["Quanto você pagou?", "Você teve gastos?"]) },
+      { author: "cliente", text: "Paguei 800 reais" },
+      { author: "cliente", text: "no site da companhia" },
+      { author: "one", text: accountQuestionLine(2, 2, "Você teve gastos?") },
+      { author: "cliente", text: "Um Uber de 60 reais" },
+    ];
+    expect(accountQuestionOf(chat[3].text)).toEqual({ index: 2, total: 2 });
+    expect(accountQuestionOf("Confira os seus dados")).toBeNull();
+    expect([...accountAnswered(chat)]).toEqual([1, 2]);
+    expect(accountAnswersText(chat, ["Quanto você pagou?", "Você teve gastos?"])).toBe(
+      "Quanto você pagou?\nPaguei 800 reais no site da companhia\n\nVocê teve gastos?\nUm Uber de 60 reais",
+    );
+    // Words written after another message of ONE answer that one, not the account.
+    const interrupted = [
+      chat[0],
+      { author: "one", text: "Confira os seus dados:\n1. Está tudo certo\n2. Corrigir algo" },
+      { author: "cliente", text: "1" },
+    ];
+    expect([...accountAnswered(interrupted)]).toEqual([]);
     expect(accountQuestionsMessage("", ["Quanto você pagou?"]).startsWith("Para preparar a sua ação")).toBe(true);
     expect(accountThanksMessage("Ana")).toBe(
       "Obrigado, Ana. Recebi as suas respostas e vou organizar o seu relato com elas.",

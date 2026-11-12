@@ -258,6 +258,35 @@ describe.skipIf(!DB_URL)("any passenger on the firm's WhatsApp", () => {
     expect(person).toEqual({ marital_status: "casado", profession: "Professor", read_fields: {} });
   });
 
+  it("asks what Lucas's account misses one question at a time, and joins the answers to it (0235)", async () => {
+    const { takeConversationTurns } = await import("@/lib/conversations/agent-work");
+    const { askAccountQuestions } = await import("@/lib/cases/statements-work");
+    // His account, ordered by ONE, misses two points.
+    const [statement] = await sql.unsafe(
+      `insert into public.case_statements (org_id, case_id, party_id, source, chronology, chronology_status, missing_topics, questions)
+       select c.org_id, c.id, cp.id, 'client', '22/10: o voo atrasou seis horas.', 'approved',
+              array['gastos', 'consequencias'],
+              array['Você teve algum gasto por causa do atraso?', 'O que você perdeu por causa do atraso?']
+       from public.cases c join public.case_parties cp on cp.case_id = c.id and cp.role = 'claimant'
+       where c.org_id = $1 limit 1
+       returning id`,
+      [FIRM],
+    );
+    expect(await askAccountQuestions(backend() as never, String(statement.id))).toBe(1);
+    expect((await sentTo(LUCAS)).at(-1)).toContain("Pergunta 1 de 2: Você teve algum gasto por causa do atraso?");
+
+    await writes(LUCAS, "Um Uber de 60 reais");
+    await takeConversationTurns(backend() as never);
+    expect((await sentTo(LUCAS)).at(-1)).toBe("Pergunta 2 de 2: O que você perdeu por causa do atraso?");
+    await writes(LUCAS, "Perdi uma reunião de trabalho");
+    await takeConversationTurns(backend() as never);
+    expect((await sentTo(LUCAS)).at(-1)).toContain("Recebi as suas respostas");
+    const [kept] = await sql.unsafe(`select client_added from public.case_statements where id = $1`, [statement.id]);
+    expect(String(kept.client_added)).toBe(
+      "Você teve algum gasto por causa do atraso?\nUm Uber de 60 reais\n\nO que você perdeu por causa do atraso?\nPerdi uma reunião de trabalho",
+    );
+  });
+
   it("keeps a no kindly, and opens the case when the person comes back to go on", async () => {
     const { takeConversationTurns } = await import("@/lib/conversations/agent-work");
     model.intake = () => ({
