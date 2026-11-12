@@ -31,6 +31,8 @@ describe("the platform's sweeps (2026-11-04)", () => {
         "case-drafts",
         "case-interviews",
         "case-statements",
+        "chat-data-checks",
+        "chat-questions",
         "chatwoot-mirror",
         "chatwoot-upkeep",
         "client-money",

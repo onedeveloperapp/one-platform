@@ -3,6 +3,7 @@ import "server-only";
 import { providerReadiness, runFirmTask } from "@/lib/ai/executor";
 import { queueDraftWork } from "@/lib/cases/drafts-work";
 import { factsAskedMessage, factsReminderMessage, PIECE_FACTS_TASK } from "@/lib/cases/piece-facts";
+import { FACTS_LINE } from "@/lib/conversations/questions";
 import { soon } from "@/lib/jobs/soon";
 import { deliverOutbox } from "@/lib/whatsapp/send";
 import { createServiceClient } from "@flyee/auth/service";
@@ -73,8 +74,18 @@ async function tellClients(service: SupabaseClient): Promise<number> {
   if (error) throw new Error("piece_fact_messages_owed failed");
   let told = 0;
   for (const row of (data ?? []) as { check_id: string; first_name: string | null; kind: string }[]) {
+    // The facts themselves go in the chat, to answer there (0233); the link keeps them too.
+    const { data: check } = await service
+      .from("piece_fact_checks")
+      .select("facts")
+      .eq("id", row.check_id)
+      .maybeSingle();
+    const facts = typeof check?.facts === "string" ? check.facts : null;
+    const inChat = factsAskedMessage("", facts).includes(FACTS_LINE);
     const body =
-      row.kind === "reminder" ? factsReminderMessage(row.first_name ?? "") : factsAskedMessage(row.first_name ?? "");
+      row.kind === "reminder"
+        ? factsReminderMessage(row.first_name ?? "", inChat)
+        : factsAskedMessage(row.first_name ?? "", facts);
     const written = await service.rpc("one_say_piece_facts", {
       target_check: row.check_id,
       target_kind: row.kind,

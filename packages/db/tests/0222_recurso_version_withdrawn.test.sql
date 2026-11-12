@@ -56,10 +56,12 @@ select ok(
   'a case of each firm opened under it writes its recurso with the request'
 );
 
+-- The version that took its cases changed the recurso alone (a later version may publish another task's prompt).
 select ok(
-  (select bool_and(public.case_module_manifest(c.id) -> 'documents' = (pg_temp.v(1)).manifest -> 'documents'
-                   and public.case_module_manifest(c.id) -> 'prompts' = (pg_temp.v(1)).manifest -> 'prompts')
-   from public.cases c where c.id in ('c2220000-0000-4000-8000-000000000001', 'c2220000-0000-4000-8000-000000000002')),
+  (select bool_and(public.case_module_manifest(c.id) -> 'documents' = (pg_temp.v(1)).manifest -> 'documents')
+   from public.cases c where c.id in ('c2220000-0000-4000-8000-000000000001', 'c2220000-0000-4000-8000-000000000002'))
+    and (pg_temp.v(2)).manifest -> 'prompts' = (pg_temp.v(1)).manifest -> 'prompts'
+    and (pg_temp.v(2)).manifest -> 'documents' = (pg_temp.v(1)).manifest -> 'documents',
   'and keeps the documents it asks and the versions of its AI tasks'
 );
 

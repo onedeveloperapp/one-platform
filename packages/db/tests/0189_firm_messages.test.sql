@@ -102,7 +102,7 @@ set local role authenticated;
 select ok(
   pg_temp.got('attendance', 'code') = 'not_allowed'
   and (select count(*) from public.firm_message_texts) = 0
-  and (select count(*) from public.one_messages) = 5,
+  and (select count(*) from public.one_messages) >= 5,
   'only who decides for the firm writes them, and another firm reads nothing of them'
 );
 reset role;

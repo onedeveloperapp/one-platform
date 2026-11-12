@@ -215,6 +215,49 @@ describe.skipIf(!DB_URL)("any passenger on the firm's WhatsApp", () => {
     expect(steps).not.toMatch(/número \d/);
   });
 
+  it("has Lucas check his data in the chat once his documents were accepted, and asks what no document gives", async () => {
+    const { takeConversationTurns } = await import("@/lib/conversations/agent-work");
+    const { startOwedDataChecks } = await import("@/lib/conversations/data-check-work");
+    // His identity and proof of address were accepted, and ONE read what they say (0063).
+    await sql.unsafe(
+      `with c as (select cp.case_id, cp.id as party_id, cp.person_id from public.case_parties cp
+                  join public.cases k on k.id = cp.case_id where k.org_id = $1),
+            f as (insert into public.files (org_id, purpose, storage_path, name, declared_mime, declared_bytes, status, sha256, bytes, detected_mime, expires_at, confirmed_at)
+                  select $1, 'whatsapp', 'org/' || $1 || '/whatsapp/' || x.kind, x.kind || '.jpg', 'image/jpeg', 100, 'stored', x.sha, 100, 'image/jpeg', now() + interval '1 hour', now()
+                  from (values ('identity', repeat('7', 64)), ('address_proof', repeat('8', 64))) as x (kind, sha)
+                  returning id, name)
+       insert into public.case_documents (org_id, case_id, party_id, file_id, kind, source, status, decided_at)
+       select $1, c.case_id, c.party_id, f.id, replace(f.name, '.jpg', ''), 'whatsapp', 'accepted', now() from c, f`,
+      [FIRM],
+    );
+    await sql.unsafe(
+      `update public.people set cpf = '52998224725', birth_date = '1990-03-14', nationality = 'brasileira',
+         postal_code = '74000000', street = 'Rua Exemplo', address_number = '100', district = 'Setor Teste',
+         city = 'Goiânia', uf = 'GO', read_fields = '{"cpf": {"kind": "identity"}}'::jsonb
+       where org_id = $1 and full_name = 'Lucas Teste Lima'`,
+      [FIRM],
+    );
+    expect(await startOwedDataChecks(backend() as never)).toEqual({ started: 1 });
+    const summary = (await sentTo(LUCAS)).at(-1) ?? "";
+    expect(summary).toContain("Confira os seus dados, Lucas, que li nos documentos:");
+    expect(summary).toContain("CPF: 529.982.247-25");
+
+    await writes(LUCAS, "1");
+    expect(await takeConversationTurns(backend() as never)).toMatchObject({ answered: 1, failed: 0 });
+    expect((await sentTo(LUCAS)).at(-1)).toContain("Qual é o seu estado civil?\n1. Solteiro(a)");
+    await writes(LUCAS, "casado");
+    await takeConversationTurns(backend() as never);
+    expect((await sentTo(LUCAS)).at(-1)).toBe("Qual é a sua profissão?");
+    await writes(LUCAS, "Professor");
+    await takeConversationTurns(backend() as never);
+    expect((await sentTo(LUCAS)).at(-1)).toContain("Obrigado, Lucas. Os seus dados estão completos.");
+    const [person] = await sql.unsafe(
+      `select marital_status, profession, read_fields from public.people where org_id = $1 and full_name = 'Lucas Teste Lima'`,
+      [FIRM],
+    );
+    expect(person).toEqual({ marital_status: "casado", profession: "Professor", read_fields: {} });
+  });
+
   it("keeps a no kindly, and opens the case when the person comes back to go on", async () => {
     const { takeConversationTurns } = await import("@/lib/conversations/agent-work");
     model.intake = () => ({

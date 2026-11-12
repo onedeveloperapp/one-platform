@@ -1,3 +1,4 @@
+import { FACTS_LINE } from "@/lib/conversations/questions";
 /**
  * The client checks the facts of the initial (migration 0182, item 3.6 of the case journey plan): ONE writes the
  * facts of a ready piece in plain words, the client confirms them or says what is wrong, a correction goes back to
@@ -93,20 +94,33 @@ export function clientPieceFactsOf(raw: unknown): ClientPieceFacts[] {
   });
 }
 
-/** ONE's word in the conversation when the facts are ready for the client to check. */
-export function factsAskedMessage(firstName: string): string {
+/** The longest facts ONE writes in the chat; longer ones are read on the link. */
+const FACTS_IN_CHAT = 3000;
+
+/**
+ * ONE's word in the conversation when the facts are ready for the client to check: the facts themselves, to answer
+ * right there (0233), or, when there are none to show or they are too long for a message, where to read them.
+ */
+export function factsAskedMessage(firstName: string, facts: string | null = null): string {
   const name = firstName.trim();
+  const lead = `${name ? `${name}, a` : "A"} sua ação está pronta para o escritório levar ao tribunal.`;
+  const told = facts?.trim();
+  if (told && told.length <= FACTS_IN_CHAT) {
+    return `${lead} Antes, confira se os fatos estão certos, do jeito que aconteceu:\n\n${told}\n\nEstá certo?\n${FACTS_LINE}`;
+  }
   return [
-    `${name ? `${name}, a` : "A"} sua ação está pronta para o escritório levar ao tribunal.`,
+    lead,
     "Antes, confira no seu link, em Os fatos da sua ação, se está tudo certo do jeito que aconteceu.",
     "Se estiver, toque em Confirmo. Se algo estiver errado, diga o que é: o escritório corrige a ação e te mostra de novo.",
   ].join(" ");
 }
 
-/** ONE's reminder when the client did not answer. */
-export function factsReminderMessage(firstName: string): string {
+/** ONE's reminder when the client did not answer: in the chat when the facts were written there. */
+export function factsReminderMessage(firstName: string, inChat = false): string {
   const name = firstName.trim();
-  return `${name ? `${name}, a` : "A"} sua ação só vai ao tribunal depois que você conferir os fatos no seu link, em Os fatos da sua ação. Leva poucos minutos.`;
+  return inChat
+    ? `${name ? `${name}, a` : "A"} sua ação só vai ao tribunal depois que você conferir os fatos que mandei acima. Está certo?\n${FACTS_LINE}`
+    : `${name ? `${name}, a` : "A"} sua ação só vai ao tribunal depois que você conferir os fatos no seu link, em Os fatos da sua ação. Leva poucos minutos.`;
 }
 
 /** The refusals of a word on the facts, in the screen's words. */

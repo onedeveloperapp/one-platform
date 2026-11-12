@@ -1,6 +1,8 @@
 import "server-only";
 
 import { takeConversationTurns } from "@/lib/conversations/agent-work";
+import { chatQuestionSweeps } from "@/lib/conversations/chat-questions-work";
+import { dataCheckSweeps } from "@/lib/conversations/data-check-work";
 import { signatureLinkSweeps } from "@/lib/conversations/signature-links-work";
 import type { Sweep } from "@/lib/jobs/schedule";
 
@@ -19,4 +21,8 @@ export const conversationSweeps: Sweep[] = [
   },
   // The links to sign, in the chat (0231).
   ...signatureLinkSweeps,
+  // The check of data a firm's acceptance left owed (0232).
+  ...dataCheckSweeps,
+  // What the client is asked before the action goes to court (0233).
+  ...chatQuestionSweeps,
 ];

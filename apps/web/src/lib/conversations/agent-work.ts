@@ -41,6 +41,27 @@ import {
   type TurnFile,
   turnFilesOf,
 } from "@/lib/conversations/agent";
+import {
+  CEP_NOT_FOUND,
+  CEP_QUESTION,
+  cepOf,
+  choose,
+  DATA_OPTIONS,
+  dataDone,
+  dataSummary,
+  FIELD_OPTIONS,
+  FIELD_QUESTION,
+  MARITAL_OPTIONS,
+  missingAsk,
+  NATIONALITY_OPTIONS,
+  NUMBER_QUESTION,
+  numberOf,
+  OTHER_NATIONALITY_QUESTION,
+  type PersonData,
+  personDataOf,
+  readValue,
+  valueQuestion,
+} from "@/lib/conversations/data-check";
 import { takeHearingReport } from "@/lib/conversations/hearing-report-work";
 import {
   choiceOf,
@@ -60,6 +81,17 @@ import {
   OPTIONS,
 } from "@/lib/conversations/intake";
 import { nextPaperAsk, NOT_HAVE_LINE, type PapersOwed, papersOwedOf, saysNotHave } from "@/lib/conversations/papers";
+import {
+  FACTS_CONFIRMED,
+  FACTS_CORRECTED,
+  FACTS_CORRECTION,
+  FACTS_LINE,
+  FACTS_TOO_SHORT,
+  factsChoice,
+  freeJusticeExplained,
+  questionAnswered,
+  questionChoice,
+} from "@/lib/conversations/questions";
 import { supabaseFileStore } from "@/lib/files/store";
 import { fillMessage } from "@/lib/firm/messages";
 import { firmMessageText } from "@/lib/firm/messages-read";
@@ -69,6 +101,7 @@ import { createServiceClient } from "@flyee/auth/service";
 import { BRAND } from "@flyee/content";
 import { normalizeImage } from "@flyee/documents/normalize";
 import type { FileStore } from "@flyee/documents/types";
+import { viaCep } from "@flyee/fields";
 import { qualify } from "@flyee/rules/qualification";
 import { checkMessage } from "@flyee/whatsapp/rules";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -291,7 +324,310 @@ const dispensablesAsked = (context: TurnContext): boolean =>
 /** What ONE asks next of the documents (0230): the next one owed, the dispensable ones, or that the signature comes. */
 async function nextPaper(service: SupabaseClient, held: Held, context: TurnContext): Promise<string | null> {
   const papers = await papersOwed(service, held);
-  return papers ? nextPaperAsk(papers, { dispensablesAsked: dispensablesAsked(context) }) : null;
+  if (!papers) return null;
+  // Nothing essential owed: the client checks what ONE read, before anything else (0232).
+  if (!papers.owed.some((owed) => !owed.rejected)) {
+    const check = await startDataCheck(service, held).catch(() => null);
+    if (check) return check;
+  }
+  return nextPaperAsk(papers, { dispensablesAsked: dispensablesAsked(context) });
+}
+
+/** The passenger's data of the case this conversation gathers (0232); null with no case. */
+async function personData(service: SupabaseClient, held: Held): Promise<PersonData | null> {
+  const answer = await rpc(service, "conversation_person", {
+    target_conversation: held.conversationId,
+    target_claim: held.claim,
+  });
+  return answer.code === "person" ? personDataOf(answer) : null;
+}
+
+/** Where the conversation stands after the case opened (0232); `checked` adds a case whose data was checked. */
+async function keepStep(
+  service: SupabaseClient,
+  held: Held,
+  step: Record<string, string>,
+  checked: string | null = null,
+): Promise<boolean> {
+  const kept = await rpc(service, "record_chat_step", {
+    target_conversation: held.conversationId,
+    target_claim: held.claim,
+    target_step: step,
+    target_checked: checked,
+  });
+  return kept.ok === true;
+}
+
+/** The client's own data written in the chat, through the link's checks; `confirm` makes what ONE read theirs. */
+async function writePerson(
+  service: SupabaseClient,
+  held: Held,
+  fields: Record<string, string>,
+  confirm = false,
+): Promise<boolean> {
+  const written = await rpc(service, "one_person_fields", {
+    target_conversation: held.conversationId,
+    target_claim: held.claim,
+    target_fields: fields,
+    target_confirm: confirm,
+  });
+  return written.ok === true;
+}
+
+/**
+ * The check of data starts (0232) once nothing essential is owed, the identity and the proof of address were accepted,
+ * and it was not done for this case: the summary of what ONE read, and the step it waits on. Null when not now.
+ */
+async function startDataCheck(service: SupabaseClient, held: Held): Promise<string | null> {
+  const data = await personData(service, held);
+  if (!data || data.minor || !data.documentsIn || data.checked || data.step) return null;
+  if (!(await keepStep(service, held, { step: "dados" }))) return null;
+  return dataSummary(data);
+}
+
+/** The next question of the data still missing, or the end of the check with what comes after it. */
+async function nextDataStep(
+  service: SupabaseClient,
+  held: Held,
+  context: TurnContext,
+  data: PersonData,
+): Promise<string> {
+  const missing = missingAsk(data);
+  if (missing) {
+    await keepStep(service, held, { step: missing.step });
+    return missing.question;
+  }
+  await keepStep(service, held, {}, data.caseId);
+  const after = await nextPaper(service, held, context).catch(() => null);
+  return [dataDone(data.fullName), after].filter(Boolean).join("\n");
+}
+
+/**
+ * The client's answer while the check of data waits for one (0232): the confirmation, the field to correct and its
+ * value (an address by its CEP and number), and what the papers need and no document gives. Answers whether it took
+ * the turn.
+ */
+async function takeDataCheck(
+  service: SupabaseClient,
+  held: Held,
+  context: TurnContext,
+  reply: string,
+): Promise<boolean> {
+  if (!reply.trim()) return false;
+  const data = await personData(service, held);
+  if (!data?.step) return false;
+  const tell = async (body: string) => {
+    await say(service, held, body);
+    return true;
+  };
+  const again = async () => {
+    const fresh = await personData(service, held);
+    if (!fresh) return false;
+    await keepStep(service, held, { step: "dados" });
+    return tell(dataSummary(fresh));
+  };
+  const proceed = async (fields: Record<string, string>) => {
+    if (!(await writePerson(service, held, fields))) {
+      return tell("Não consegui guardar esse dado. Uma pessoa do escritório confere com você.");
+    }
+    const fresh = await personData(service, held);
+    return fresh ? tell(await nextDataStep(service, held, context, fresh)) : false;
+  };
+
+  switch (data.step) {
+    case "dados": {
+      if (choose(DATA_OPTIONS, reply) === "certo") {
+        await writePerson(service, held, {}, true);
+        const fresh = (await personData(service, held)) ?? data;
+        return tell(await nextDataStep(service, held, context, fresh));
+      }
+      await keepStep(service, held, { step: "campo" });
+      return tell(FIELD_QUESTION);
+    }
+    case "campo": {
+      const field = choose(FIELD_OPTIONS, reply);
+      if (field === "address") {
+        await keepStep(service, held, { step: "cep" });
+        return tell(CEP_QUESTION);
+      }
+      if (field === "full_name" || field === "cpf" || field === "birth_date") {
+        await keepStep(service, held, { step: "valor", field });
+        return tell(valueQuestion(field));
+      }
+      return tell(FIELD_QUESTION);
+    }
+    case "valor": {
+      if (!data.field) return again();
+      const value = readValue(data.field, reply);
+      if (!value.ok) return tell(value.why);
+      if (!(await writePerson(service, held, { [data.field]: value.value }))) {
+        return tell("Esse dado não confere com o que o escritório já tem. Uma pessoa do escritório confere com você.");
+      }
+      return again();
+    }
+    case "cep": {
+      const cep = cepOf(reply);
+      const found = cep ? await viaCep.lookup(cep).catch(() => null) : null;
+      if (!cep || !found) return tell(CEP_NOT_FOUND);
+      const written = await writePerson(service, held, {
+        postal_code: found.postalCode,
+        street: found.street,
+        district: found.district,
+        city: found.city,
+        uf: found.state,
+      });
+      if (!written) return tell(CEP_NOT_FOUND);
+      await keepStep(service, held, { step: "numero" });
+      return tell(NUMBER_QUESTION);
+    }
+    case "numero": {
+      const read = numberOf(reply);
+      if (!read) return tell(NUMBER_QUESTION);
+      await writePerson(service, held, {
+        address_number: read.number,
+        ...(read.complement ? { complement: read.complement } : {}),
+      });
+      return again();
+    }
+    case "nacionalidade": {
+      const chosen = choose(NATIONALITY_OPTIONS, reply);
+      if (chosen === "brasileira") return proceed({ nationality: "brasileira" });
+      if (chosen === "outra") {
+        await keepStep(service, held, { step: "nacionalidade_outra" });
+        return tell(OTHER_NATIONALITY_QUESTION);
+      }
+      return tell(missingAsk({ ...data, nationality: null })?.question ?? OTHER_NATIONALITY_QUESTION);
+    }
+    case "nacionalidade_outra": {
+      const said = reply.trim().replace(/\s+/g, " ").slice(0, 60);
+      return said.length >= 3 ? proceed({ nationality: said.toLowerCase() }) : tell(OTHER_NATIONALITY_QUESTION);
+    }
+    case "estado_civil": {
+      const chosen = choose(MARITAL_OPTIONS, reply);
+      return chosen
+        ? proceed({ marital_status: chosen })
+        : tell(missingAsk({ ...data, maritalStatus: null })!.question);
+    }
+    case "profissao": {
+      const said = reply.trim().replace(/\s+/g, " ").slice(0, 120);
+      return said.length >= 2 ? proceed({ profession: said }) : tell("Qual é a sua profissão?");
+    }
+  }
+}
+
+/**
+ * The client's answer to a word ONE asked in the chat (0233): free justice or the civil court, kept as on the link.
+ * Answers whether it took the turn.
+ */
+async function takeChatQuestion(
+  service: SupabaseClient,
+  held: Held,
+  context: TurnContext,
+  reply: string,
+  report: TurnReport,
+): Promise<boolean> {
+  if (!reply.trim()) return false;
+  const { data: row } = await service
+    .from("wa_conversations")
+    .select("chat_step")
+    .eq("id", held.conversationId)
+    .maybeSingle();
+  const step = ((row as { chat_step?: Record<string, unknown> } | null)?.chat_step ?? {}).step;
+  if (step !== "free_justice" && step !== "civil_court") return false;
+  const choice = questionChoice(step, reply);
+  if (step === "free_justice" && choice === "explicar") {
+    await say(service, held, freeJusticeExplained());
+    return true;
+  }
+  if (step === "civil_court" && choice === "duvidas") {
+    await say(service, held, await wordsOf(service, context.orgId, "called_person", calledMessage)).catch(
+      () => undefined,
+    );
+    await callPerson(
+      service,
+      held,
+      "O cliente tem dúvidas antes de aceitar a ação na vara cível: uma pessoa do escritório responde.",
+    );
+    report.called += 1;
+    return true;
+  }
+  if (choice !== "sim" && choice !== "nao") {
+    await say(
+      service,
+      held,
+      step === "free_justice"
+        ? freeJusticeExplained()
+        : "Responda 1 para aceitar ou 2 para não aceitar. Se tiver dúvidas, responda 3.",
+    );
+    return true;
+  }
+  const kept = await rpc(service, "one_answer_chat_question", {
+    target_conversation: held.conversationId,
+    target_claim: held.claim,
+    target_value: choice === "sim",
+    target_message: null,
+  });
+  if (kept.ok === true) {
+    await say(service, held, questionAnswered(step, choice === "sim"));
+  } else {
+    await say(service, held, await wordsOf(service, context.orgId, "called_person", calledMessage)).catch(
+      () => undefined,
+    );
+    await callPerson(
+      service,
+      held,
+      "O cliente respondeu no chat, mas a resposta não pôde ser guardada: uma pessoa do escritório confere.",
+    );
+    report.called += 1;
+  }
+  return true;
+}
+
+/**
+ * The client's word on the facts of their action, in the chat (0182, 0233): confirmed, or what is wrong, kept as on
+ * the link. Answers whether it took the turn.
+ */
+async function takeFactsAnswer(
+  service: SupabaseClient,
+  held: Held,
+  context: TurnContext,
+  reply: string,
+): Promise<boolean> {
+  if (!reply.trim()) return false;
+  const lastOne = [...context.messages].reverse().find((message) => message.author === "one")?.text ?? "";
+  const answer = (confirmed: boolean, note: string | null) =>
+    rpc(service, "one_answer_piece_facts", {
+      target_conversation: held.conversationId,
+      target_claim: held.claim,
+      target_confirmed: confirmed,
+      target_note: note,
+    });
+  if (lastOne.endsWith(FACTS_LINE)) {
+    const choice = factsChoice(reply);
+    if (choice === "certo") {
+      const kept = await answer(true, null);
+      if (kept.ok !== true) return false;
+      await say(service, held, FACTS_CONFIRMED);
+      return true;
+    }
+    if (choice === "errado") {
+      await say(service, held, FACTS_CORRECTION);
+      return true;
+    }
+    return false;
+  }
+  if (lastOne === FACTS_CORRECTION || lastOne === FACTS_TOO_SHORT) {
+    const note = reply.trim().replace(/\s+/g, " ");
+    if (note.length < 10) {
+      await say(service, held, FACTS_TOO_SHORT);
+      return true;
+    }
+    const kept = await answer(false, note.slice(0, 2000));
+    if (kept.ok !== true) return false;
+    await say(service, held, FACTS_CORRECTED);
+    return true;
+  }
+  return false;
 }
 
 /**
@@ -789,6 +1125,38 @@ async function takeTurn(service: SupabaseClient, held: Held, report: TurnReport)
 
   // What the passenger sent as files joins the case before anything is answered.
   const joinedFiles = await joinFiles(service, held, context);
+
+  // The client's word ONE asked in the chat: free justice, the civil court, the facts of the action (0233).
+  {
+    const reply = lastClientWords(context.messages).join(" ");
+    const took =
+      !joinedFiles &&
+      ((await takeChatQuestion(service, held, context, reply, report).catch(() => false)) ||
+        (await takeFactsAnswer(service, held, context, reply).catch(() => false)));
+    if (took) {
+      report.answered += 1;
+      await rpc(service, "record_conversation_turn", {
+        target_conversation: held.conversationId,
+        target_claim: held.claim,
+        target_through: context.through,
+      });
+      return;
+    }
+  }
+
+  // The client's answer while the check of their data waits for one (0232).
+  if (
+    !joinedFiles &&
+    (await takeDataCheck(service, held, context, lastClientWords(context.messages).join(" ")).catch(() => false))
+  ) {
+    report.answered += 1;
+    await rpc(service, "record_conversation_turn", {
+      target_conversation: held.conversationId,
+      target_claim: held.claim,
+      target_through: context.through,
+    });
+    return;
+  }
 
   // The client's "Não tenho" to the dispensable documents ONE asked (0230).
   if (
