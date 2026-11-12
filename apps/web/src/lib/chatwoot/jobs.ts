@@ -59,8 +59,15 @@ export async function workDeletions(service: SupabaseClient, until: number): Pro
         // The firm's account went too: taking it out takes everything in it.
         if (account) {
           const panel = await serviceAccount(provider, account);
-          if (item.kind === "contact") await panel.deleteContact(item.target_id);
-          else await panel.deleteConversation(item.target_id);
+          if (item.kind === "contact") {
+            // A contact a conversation of the firm found again since it was queued stays (0229).
+            const { data: inUse, error } = await service.rpc("chatwoot_contact_in_use", {
+              target_account: item.account_id,
+              target_contact: item.target_id,
+            });
+            if (error) throw new Error(`chatwoot_contact_in_use failed: ${error.message}`);
+            if (inUse !== true) await panel.deleteContact(item.target_id);
+          } else await panel.deleteConversation(item.target_id);
         }
       }
     } catch (failure) {

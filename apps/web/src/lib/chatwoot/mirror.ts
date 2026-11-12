@@ -86,7 +86,16 @@ export async function mirrorConversations(
       if (input.until && Date.now() > input.until) throw new Error("out of time");
       if (!accounts.has(item.org_id)) accounts.set(item.org_id, await readyAccount(service, item.org_id));
       const account = accounts.get(item.org_id);
-      if (account) report.written += await mirrorOne(service, provider, account, item.conversation_id);
+      if (account) {
+        try {
+          report.written += await mirrorOne(service, provider, account, item.conversation_id);
+        } catch (error) {
+          if (!isChatwootNotFound(error)) throw error;
+          // The panel no longer has the conversation or its contact (0229): forgotten, and written there again now.
+          await kept(service.rpc("chatwoot_forget_conversation", { target_conversation: item.conversation_id }));
+          report.written += await mirrorOne(service, provider, account, item.conversation_id);
+        }
+      }
       done = true;
     } catch {
       done = false;
@@ -181,18 +190,14 @@ async function mirrorOne(
       PUSHED.has(message.status) &&
       message.status !== message.chatwoot_status
     ) {
-      try {
-        await panel.setMessageStatus(
-          panelId,
-          // A bigint: a number from PostgREST, and text from a driver that keeps its digits.
-          Number(message.chatwoot_message_id),
-          message.status as "read",
-          statusError(message),
-        );
-      } catch (error) {
-        // A message the panel no longer has (somebody deleted it there) has no status to keep.
-        if (!isChatwootNotFound(error)) throw error;
-      }
+      // A 404 here is a conversation the panel lost: the round forgets it and writes it again (0229).
+      await panel.setMessageStatus(
+        panelId,
+        // A bigint: a number from PostgREST, and text from a driver that keeps its digits.
+        Number(message.chatwoot_message_id),
+        message.status as "read",
+        statusError(message),
+      );
       await kept(service.rpc("chatwoot_keep_message", { target_message: message.id, target_status: message.status }));
     }
   }

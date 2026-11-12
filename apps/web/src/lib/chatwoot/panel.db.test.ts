@@ -322,6 +322,29 @@ describe.skipIf(!DB_URL)("the firm's panel of attendance", () => {
     expect((await conversation()).agent).toBe("one");
   });
 
+  it("writes the conversation again when the panel lost it, its messages with it", async () => {
+    const panel = await fake();
+    const account = await accountOf(FIRM);
+    const before = await conversation();
+    // Somebody took the contact out in the panel: its conversations went with it.
+    const token = (await panel.platform.user(Number(account.service_user_id))).accessToken!;
+    await panel.account(Number(account.account_id), token).deleteContact(Number(before.chatwoot_contact_id));
+    // What waited in the outbox goes, as the outbox would send it: its status reaches a panel that lost the conversation.
+    await sql.unsafe(`update public.wa_messages set status = 'sent' where conversation_id = $1 and status = 'queued'`, [
+      CONVERSATION,
+    ]);
+    const { mirrorConversations } = await import("@/lib/chatwoot/mirror");
+    const report = await mirrorConversations(backend(), { limit: 10 });
+    expect(report.failed).toBe(0);
+    const after = await conversation();
+    expect(after.chatwoot_conversation_id).not.toBe(before.chatwoot_conversation_id);
+    const shown = panel.conversation(Number(account.account_id), Number(after.chatwoot_conversation_id))!;
+    expect(shown).toBeTruthy();
+    expect(panel.messagesOf(Number(account.account_id), shown.id).map((item) => item.content)).toContain(
+      "Meu voo foi cancelado",
+    );
+  });
+
   it("takes out of the panel a conversation taken out of ONE", async () => {
     const panel = await fake();
     const contactId = Number((await conversation()).chatwoot_contact_id);

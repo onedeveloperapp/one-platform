@@ -238,7 +238,8 @@ select ok(
 insert into res values ('deletions1', (select to_jsonb(count(*)) from public.chatwoot_claim_deletions(10)));
 insert into res values ('deletions2', (select to_jsonb(count(*)) from public.chatwoot_claim_deletions(10)));
 select ok(
-  (select payload::int = 3 from res where name = 'deletions1')
+  -- The person, the conversation and its contact (0229 queues the conversation too), and the account.
+  (select payload::int = 4 from res where name = 'deletions1')
   and (select payload::int = 0 from res where name = 'deletions2'),
   'what is to be taken out of the panel is claimed once'
 );
