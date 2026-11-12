@@ -23,7 +23,15 @@ export const SERVICE_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 /** A message the firm sends. */
 export type OutboundMessage =
-  | { kind: "text"; text: string }
+  | {
+      kind: "text";
+      text: string;
+      /**
+       * Shown as buttons or a list where the vendor has them (the official API), the text's numbered choices
+       * (`choicesOf`); another provider sends the text as it is, its numbered lines answered by number or words.
+       */
+      choices?: { body: string; options: string[] };
+    }
   | {
       kind: "template";
       /** The name the template was approved under. */

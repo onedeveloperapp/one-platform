@@ -112,13 +112,13 @@ const PROBLEM_OPTIONS: readonly IntakeOption[] = [
   { value: "missed_connection", label: "Perdi a conexão", words: ["conexao", "perdi a conexao"] },
   { value: "overbooking", label: "Não consegui embarcar", words: ["nao consegui embarcar", "overbooking", "lotado"] },
   { value: "baggage_lost", label: "A bagagem foi extraviada", words: ["extraviada", "extravio", "perderam a mala"] },
-  { value: "baggage_damaged", label: "A bagagem chegou danificada", words: ["danificada", "quebrada", "rasgada"] },
+  { value: "baggage_damaged", label: "Bagagem danificada", words: ["danificada", "quebrada", "rasgada"] },
   { value: "baggage_delayed", label: "A bagagem chegou depois", words: ["chegou depois", "bagagem atrasou"] },
 ];
 
 const NOTICE_OPTIONS: readonly IntakeOption[] = [
   { value: "at_airport", label: "No aeroporto", words: ["aeroporto", "no aeroporto", "na hora"] },
-  { value: "late", label: "Menos de 72 horas antes do voo", words: ["menos de 72", "menos de 72h"] },
+  { value: "late", label: "Menos de 72 horas antes", words: ["menos de 72", "menos de 72h"] },
   { value: "early", label: "Com mais antecedência", words: ["mais antecedencia", "antecedencia", "mais de 72"] },
 ];
 

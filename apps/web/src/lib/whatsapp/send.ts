@@ -5,7 +5,7 @@ import { FIRM_FILES_BUCKET } from "@/lib/files/store";
 import { readWhatsAppSettings, simulatorSecret, type WhatsAppSettings } from "@/lib/whatsapp/config";
 import { handleDelivery } from "@/lib/whatsapp/inbox";
 import { providerFor } from "@/lib/whatsapp/provider";
-import { failureCodeOf } from "@flyee/whatsapp/rules";
+import { choicesOf, failureCodeOf } from "@flyee/whatsapp/rules";
 import { signedDelivery, statusDelivery } from "@flyee/whatsapp/simulator";
 import type { OutboundMessage, SendResult, WhatsAppProvider } from "@flyee/whatsapp/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -48,7 +48,12 @@ export type Delivery = { messageId: string; ok: boolean; code: string };
 export type OutboxReport = { claimed: number; sent: number; failed: number; deliveries: Delivery[] };
 
 async function messageOf(service: SupabaseClient, row: Claimed): Promise<OutboundMessage | { problem: string }> {
-  if (row.kind === "text") return row.body ? { kind: "text", text: row.body } : { problem: "empty" };
+  if (row.kind === "text") {
+    if (!row.body) return { problem: "empty" };
+    // Its numbered choices go as buttons or a list where the vendor has them; the text stays as it is (0227).
+    const choices = choicesOf(row.body);
+    return choices ? { kind: "text", text: row.body, choices } : { kind: "text", text: row.body };
+  }
   if (row.kind === "template") {
     if (!row.template_name) return { problem: "template_not_found" };
     const params = Array.isArray(row.template_params) ? row.template_params.map((value) => String(value)) : [];

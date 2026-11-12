@@ -4,6 +4,8 @@ import test from "node:test";
 
 import {
   checkTemplate,
+  choicesOf,
+  fitsButtons,
   isWindowOpen,
   paramCountOf,
   placeholdersOf,
@@ -107,4 +109,22 @@ test("a message is checked for what the bar's rules on advertising weigh, by its
   assert.deepEqual(checkMessage("A consulta é grátis e sem custo."), ["speaks_of_price"]);
   assert.deepEqual(checkMessage("Só hoje: últimas vagas para entrar com a ação."), ["presses"]);
   assert.deepEqual(checkMessage("Recebemos os seus documentos. O escritório vai analisar o seu caso."), []);
+});
+
+test("the choices a text offers at its end are read for buttons or a list, and anything else stays text", () => {
+  assert.deepEqual(choicesOf("Quer seguir?\n1. Quero seguir\n2. Tenho dúvidas\n3. Agora não"), {
+    body: "Quer seguir?",
+    options: ["Quero seguir", "Tenho dúvidas", "Agora não"],
+  });
+  assert.equal(fitsButtons(["Quero seguir", "Tenho dúvidas", "Agora não"]), true);
+  assert.equal(fitsButtons(["No aeroporto", "Menos de 72 horas antes", "Com mais antecedência"]), false);
+  assert.equal(choicesOf("Sem opções aqui."), null);
+  assert.equal(choicesOf("Só uma?\n1. Sim"), null);
+  assert.equal(choicesOf("Fora de ordem\n1. Sim\n3. Não"), null);
+  assert.equal(
+    choicesOf("Assine:\n1. Procuração: https://exemplo.invalid/a\n2. Contrato: https://exemplo.invalid/b"),
+    null,
+  );
+  assert.equal(choicesOf(`${"x".repeat(1100)}\n1. Sim\n2. Não`), null);
+  assert.equal(choicesOf("Qual?\n1. Uma opção com mais de vinte e quatro letras\n2. Outra"), null);
 });

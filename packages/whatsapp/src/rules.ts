@@ -141,3 +141,42 @@ export function checkTemplate(draft: TemplateDraft): TemplateFinding[] {
 
   return findings;
 }
+
+/** The most options a message offers as a list, and the longest title of a list's row or of a button (Meta's limits). */
+const MOST_OPTIONS = 10;
+const ROW_TITLE = 24;
+const BUTTON_TITLE = 20;
+const MOST_BUTTONS = 3;
+/** The longest body of an interactive message (Meta's limit). */
+const INTERACTIVE_BODY = 1024;
+
+/**
+ * The choices a text offers at its end, numbered from 1 ("1. Quero seguir"), for a provider that shows them as buttons
+ * or a list: the text before them and each option's words. Null when the text offers none, or offers them in a way
+ * the vendor cannot show (too many, a title too long, an address in one, a body too long): the text then goes as it
+ * is, its numbered lines answered by number or by words.
+ */
+export function choicesOf(text: string): { body: string; options: string[] } | null {
+  const lines = text.replace(/\s+$/, "").split("\n");
+  const options: string[] = [];
+  let index = lines.length - 1;
+  for (; index >= 0; index -= 1) {
+    const match = /^(\d{1,2})\. (.+)$/.exec(lines[index]);
+    if (!match) break;
+    options.unshift(match[2].trim());
+  }
+  if (options.length < 2 || options.length > MOST_OPTIONS) return null;
+  const numbered = lines.slice(index + 1).every((line, position) => line.startsWith(`${position + 1}. `));
+  if (!numbered) return null;
+  if (options.some((option) => option.length > ROW_TITLE || /https?:\/\//i.test(option))) return null;
+  const body = lines
+    .slice(0, index + 1)
+    .join("\n")
+    .trim();
+  if (!body || body.length > INTERACTIVE_BODY) return null;
+  return { body, options };
+}
+
+/** Whether a set of choices fits the vendor's buttons (else it goes as a list). */
+export const fitsButtons = (options: readonly string[]): boolean =>
+  options.length <= MOST_BUTTONS && options.every((option) => option.length <= BUTTON_TITLE);

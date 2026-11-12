@@ -73,9 +73,19 @@ const TEMPLATES_PAGE_1 = {
       ],
     },
     // A template with no body text (an authentication one keeps its text at the vendor).
-    { name: "codigo_de_acesso", language: "pt_BR", status: "APPROVED", category: "AUTHENTICATION", id: "1003", components: [{ type: "BODY" }] },
+    {
+      name: "codigo_de_acesso",
+      language: "pt_BR",
+      status: "APPROVED",
+      category: "AUTHENTICATION",
+      id: "1003",
+      components: [{ type: "BODY" }],
+    },
   ],
-  paging: { cursors: { before: "MAZDZD", after: "MjQZD" }, next: "https://graph.facebook.com/v25.0/waba-1/message_templates?after=MjQZD" },
+  paging: {
+    cursors: { before: "MAZDZD", after: "MjQZD" },
+    next: "https://graph.facebook.com/v25.0/waba-1/message_templates?after=MjQZD",
+  },
 };
 
 const TEMPLATES_PAGE_2 = {
@@ -216,9 +226,14 @@ test("simulator: a template submitted is approved at once and listed from then o
   // Another instance has no memory of it: it lists what the platform recorded of the account.
   assert.ok(!(await new SimulatorProvider().listTemplates()).some((template) => template.name === SUBMISSION.name));
   assert.ok(
-    (await new SimulatorProvider({ templates: [mine] }).listTemplates()).some((template) => template.name === SUBMISSION.name),
+    (await new SimulatorProvider({ templates: [mine] }).listTemplates()).some(
+      (template) => template.name === SUBMISSION.name,
+    ),
   );
-  assert.deepEqual(await simulator.createTemplate({ ...SUBMISSION, name: "Nome Errado" }), { ok: false, code: "rejected" });
+  assert.deepEqual(await simulator.createTemplate({ ...SUBMISSION, name: "Nome Errado" }), {
+    ok: false,
+    code: "rejected",
+  });
 });
 
 test("meta: a template goes to the account's address as a utility message with positional values and an example of each", async () => {
@@ -258,7 +273,11 @@ test("meta: a template the account refused, or that nobody can say was taken, is
 test("simulator: what was sent stays in its outbox, and a media of a simulated person is nothing to fetch", async () => {
   const provider = new SimulatorProvider();
   const first = await provider.send("5562999990001", TEXT);
-  const second = await provider.send("5562999990001", { kind: "template", name: "retomar_conversa", bodyParams: ["Maria", "Teste"] });
+  const second = await provider.send("5562999990001", {
+    kind: "template",
+    name: "retomar_conversa",
+    bodyParams: ["Maria", "Teste"],
+  });
   assert.equal(first.ok && second.ok, true);
   assert.deepEqual(
     provider.outbox.map((entry) => [entry.to, entry.message.kind]),
@@ -297,7 +316,11 @@ test("meta: a text goes to the number's own address, with the firm's token and t
 
 test("meta: a template carries its name, its language and the values of the body in order", async () => {
   const { provider, calls } = meta([json(SENT), json(SENT)]);
-  await provider.send("5562999990001", { kind: "template", name: "retomar_conversa", bodyParams: ["Maria", "Teste Advogados"] });
+  await provider.send("5562999990001", {
+    kind: "template",
+    name: "retomar_conversa",
+    bodyParams: ["Maria", "Teste Advogados"],
+  });
   assert.deepEqual((calls[0].body as { template: unknown }).template, {
     name: "retomar_conversa",
     language: { code: "pt_BR" },
@@ -314,7 +337,10 @@ test("meta: a template carries its name, its language and the values of the body
 
   // A template with no value sends no components at all.
   await provider.send("5562999990001", { kind: "template", name: "boas_vindas", language: "en_US" });
-  assert.deepEqual((calls[1].body as { template: unknown }).template, { name: "boas_vindas", language: { code: "en_US" } });
+  assert.deepEqual((calls[1].body as { template: unknown }).template, {
+    name: "boas_vindas",
+    language: { code: "en_US" },
+  });
 });
 
 test("meta: a document goes as an address the vendor fetches, with its name and caption", async () => {
@@ -329,12 +355,20 @@ test("meta: a document goes as an address the vendor fetches, with its name and 
     { type: (calls[0].body as { type: string }).type, document: (calls[0].body as { document: unknown }).document },
     {
       type: "document",
-      document: { link: "https://files.example/assinada/peticao.pdf", caption: "Segue a petição.", filename: "peticao.pdf" },
+      document: {
+        link: "https://files.example/assinada/peticao.pdf",
+        caption: "Segue a petição.",
+        filename: "peticao.pdf",
+      },
     },
   );
 
   // An image has no file name to show.
-  await provider.send("5562999990001", { kind: "image", url: "https://files.example/assinada/foto.jpg", filename: "foto.jpg" });
+  await provider.send("5562999990001", {
+    kind: "image",
+    url: "https://files.example/assinada/foto.jpg",
+    filename: "foto.jpg",
+  });
   assert.deepEqual((calls[1].body as { image: unknown }).image, { link: "https://files.example/assinada/foto.jpg" });
 });
 
@@ -353,7 +387,11 @@ test("meta: each refusal of the vendor becomes a word the caller branches on, an
   ];
   for (const [code, status, message, expected] of cases) {
     const { provider } = meta([json(graphError(code, message), status)]);
-    assert.deepEqual(await provider.send("5562999990001", TEXT), { ok: false, error: expected, detail: `meta_${code}` });
+    assert.deepEqual(await provider.send("5562999990001", TEXT), {
+      ok: false,
+      error: expected,
+      detail: `meta_${code}`,
+    });
   }
   // A server error that names nothing does not say whether the message was taken.
   assert.deepEqual(sendErrorOf(undefined, 502), { error: "unconfirmed", detail: "http_502" });
@@ -376,18 +414,34 @@ test("meta: a network that fails or answers nonsense is an answer too, never an 
   // The line went quiet: the vendor may have taken the message before it did. That is never
   // reported as a message that did not go out, or somebody sends it again and it arrives twice.
   const offline = meta([new Error("ECONNRESET")]);
-  assert.deepEqual(await offline.provider.send("5562999990001", TEXT), { ok: false, error: "unconfirmed", detail: "no_answer" });
+  assert.deepEqual(await offline.provider.send("5562999990001", TEXT), {
+    ok: false,
+    error: "unconfirmed",
+    detail: "no_answer",
+  });
 
   const html = meta([new Response("<html>Bad Gateway</html>", { status: 502 })]);
-  assert.deepEqual(await html.provider.send("5562999990001", TEXT), { ok: false, error: "unconfirmed", detail: "http_502" });
+  assert.deepEqual(await html.provider.send("5562999990001", TEXT), {
+    ok: false,
+    error: "unconfirmed",
+    detail: "http_502",
+  });
 
   // When the vendor itself says it cannot take the message now, the message did not go out.
   const busy = meta([json(graphError(131016, "Service unavailable"), 503)]);
-  assert.deepEqual(await busy.provider.send("5562999990001", TEXT), { ok: false, error: "unavailable", detail: "meta_131016" });
+  assert.deepEqual(await busy.provider.send("5562999990001", TEXT), {
+    ok: false,
+    error: "unavailable",
+    detail: "meta_131016",
+  });
 
   // A 200 that names no message is not a message sent.
   const empty = meta([json({ messaging_product: "whatsapp", messages: [] })]);
-  assert.deepEqual(await empty.provider.send("5562999990001", TEXT), { ok: false, error: "rejected", detail: "no_message_id" });
+  assert.deepEqual(await empty.provider.send("5562999990001", TEXT), {
+    ok: false,
+    error: "rejected",
+    detail: "no_message_id",
+  });
 });
 
 test("meta: a media is fetched in two steps, the address first and the bytes after, both with the firm's token", async () => {
@@ -408,7 +462,6 @@ test("meta: a media is fetched in two steps, the address first and the bytes aft
   assert.equal(calls[0].url, "https://graph.facebook.com/v25.0/media-9?phone_number_id=phone-1");
   assert.equal(calls[1].url, "https://lookaside.fbsbx.com/whatsapp_business/attachments/?mid=1&ext=1");
   assert.equal(calls[1].headers.Authorization, "Bearer token-do-escritorio");
-
 });
 
 test("meta: a media is given up only when the vendor says it is gone; anything else is tried again", async () => {
@@ -420,15 +473,30 @@ test("meta: a media is given up only when the vendor says it is gone; anything e
 
   // Everything else may pass next time, and the file may well still be there: the caller waits and asks again.
   assert.deepEqual(await fetchOf([new Error("ETIMEDOUT")]), { kind: "later", detail: "no_answer" });
-  assert.deepEqual(await fetchOf([json(graphError(190, "Access token has expired"), 401)]), { kind: "later", detail: "meta_190" });
-  assert.deepEqual(await fetchOf([json(graphError(130429, "Rate limit hit"), 429)]), { kind: "later", detail: "meta_130429" });
-  assert.deepEqual(await fetchOf([new Response("<html>Bad Gateway</html>", { status: 502 })]), { kind: "later", detail: "http_502" });
+  assert.deepEqual(await fetchOf([json(graphError(190, "Access token has expired"), 401)]), {
+    kind: "later",
+    detail: "meta_190",
+  });
+  assert.deepEqual(await fetchOf([json(graphError(130429, "Rate limit hit"), 429)]), {
+    kind: "later",
+    detail: "meta_130429",
+  });
+  assert.deepEqual(await fetchOf([new Response("<html>Bad Gateway</html>", { status: 502 })]), {
+    kind: "later",
+    detail: "http_502",
+  });
   assert.deepEqual(await fetchOf([json({ id: "media-9" })]), { kind: "later", detail: "no_address" });
 
   // The address is good for five minutes: when it stops working, a new one is asked for on the next try.
   const located = () => json({ url: "https://lookaside.fbsbx.com/x", mime_type: "image/jpeg" });
-  assert.deepEqual(await fetchOf([located(), new Response("", { status: 404 })]), { kind: "later", detail: "download_http_404" });
-  assert.deepEqual(await fetchOf([located(), new Error("ECONNRESET")]), { kind: "later", detail: "download_no_answer" });
+  assert.deepEqual(await fetchOf([located(), new Response("", { status: 404 })]), {
+    kind: "later",
+    detail: "download_http_404",
+  });
+  assert.deepEqual(await fetchOf([located(), new Error("ECONNRESET")]), {
+    kind: "later",
+    detail: "download_no_answer",
+  });
 });
 
 test("meta: the templates are read page by page, and one ONE cannot show is left out", async () => {
@@ -441,7 +509,14 @@ test("meta: the templates are read page by page, and one ONE cannot show is left
   );
   assert.equal(calls[1].url, TEMPLATES_PAGE_1.paging.next);
   assert.deepEqual(
-    templates.map((template) => [template.name, template.category, template.status, template.paramCount, template.headerText, template.footerText]),
+    templates.map((template) => [
+      template.name,
+      template.category,
+      template.status,
+      template.paramCount,
+      template.headerText,
+      template.footerText,
+    ]),
     [
       ["retomar_conversa", "utility", "approved", 2, "Seu atendimento", "Responda SAIR para não receber mais."],
       // The header is an image: there is no header text.
@@ -460,7 +535,10 @@ test("meta: the templates are read page by page, and one ONE cannot show is left
 
 const app = (answers: Parameters<typeof scripted>[0]) => {
   const network = scripted(answers);
-  return { config: { appId: "app-1", appSecret: "segredo-do-app", apiVersion: "v25.0", fetch: network.fetch }, calls: network.calls };
+  return {
+    config: { appId: "app-1", appSecret: "segredo-do-app", apiVersion: "v25.0", fetch: network.fetch },
+    calls: network.calls,
+  };
 };
 
 test("signup: the code of the signup window is exchanged for the firm's token, once and at once", async () => {
@@ -479,7 +557,10 @@ test("signup: the code of the signup window is exchanged for the firm's token, o
 
   // The reference shows the answer as the token alone: that form is read too.
   const bare = app([new Response("EAAGtokenDoEscritorio0123456789", { status: 200 })]);
-  assert.deepEqual(await exchangeSignupCode(bare.config, "codigo"), { ok: true, accessToken: "EAAGtokenDoEscritorio0123456789" });
+  assert.deepEqual(await exchangeSignupCode(bare.config, "codigo"), {
+    ok: true,
+    accessToken: "EAAGtokenDoEscritorio0123456789",
+  });
 
   // A code that expired, an answer with no token, a network that failed.
   const expired = app([json(graphError(100, "This authorization code has expired."), 400)]);
@@ -499,30 +580,61 @@ test("signup: the app subscribes to the account, registers a cloud number and as
   ]);
   assert.deepEqual(await subscribeApp(steps.config, "token-do-escritorio", "waba-1"), { ok: true });
   assert.deepEqual(await registerNumber(steps.config, "token-do-escritorio", "phone-1", "123456"), { ok: true });
-  assert.deepEqual(await requestCoexistenceSync(steps.config, "token-do-escritorio", "phone-1", "smb_app_state_sync"), { ok: true });
-  assert.deepEqual(await requestCoexistenceSync(steps.config, "token-do-escritorio", "phone-1", "history"), { ok: true });
+  assert.deepEqual(await requestCoexistenceSync(steps.config, "token-do-escritorio", "phone-1", "smb_app_state_sync"), {
+    ok: true,
+  });
+  assert.deepEqual(await requestCoexistenceSync(steps.config, "token-do-escritorio", "phone-1", "history"), {
+    ok: true,
+  });
 
   assert.deepEqual(
     steps.calls.map((call) => [call.method, call.url, call.body]),
     [
       ["POST", "https://graph.facebook.com/v25.0/waba-1/subscribed_apps", null],
       ["POST", "https://graph.facebook.com/v25.0/phone-1/register", { messaging_product: "whatsapp", pin: "123456" }],
-      ["POST", "https://graph.facebook.com/v25.0/phone-1/smb_app_data", { messaging_product: "whatsapp", sync_type: "smb_app_state_sync" }],
-      ["POST", "https://graph.facebook.com/v25.0/phone-1/smb_app_data", { messaging_product: "whatsapp", sync_type: "history" }],
+      [
+        "POST",
+        "https://graph.facebook.com/v25.0/phone-1/smb_app_data",
+        { messaging_product: "whatsapp", sync_type: "smb_app_state_sync" },
+      ],
+      [
+        "POST",
+        "https://graph.facebook.com/v25.0/phone-1/smb_app_data",
+        { messaging_product: "whatsapp", sync_type: "history" },
+      ],
     ],
   );
   // Every step after the exchange speaks with the firm's token, never with the app's secret.
-  assert.equal(steps.calls.every((call) => call.headers.Authorization === "Bearer token-do-escritorio"), true);
+  assert.equal(
+    steps.calls.every((call) => call.headers.Authorization === "Bearer token-do-escritorio"),
+    true,
+  );
 
-  const refused = app([json(graphError(200, "Permissions error"), 403), json({ success: false }), new Error("ECONNRESET")]);
+  const refused = app([
+    json(graphError(200, "Permissions error"), 403),
+    json({ success: false }),
+    new Error("ECONNRESET"),
+  ]);
   assert.deepEqual(await subscribeApp(refused.config, "token", "waba-1"), { ok: false, code: "meta_200" });
-  assert.deepEqual(await registerNumber(refused.config, "token", "phone-1", "123456"), { ok: false, code: "not_confirmed" });
-  assert.deepEqual(await requestCoexistenceSync(refused.config, "token", "phone-1", "history"), { ok: false, code: "no_answer" });
+  assert.deepEqual(await registerNumber(refused.config, "token", "phone-1", "123456"), {
+    ok: false,
+    code: "not_confirmed",
+  });
+  assert.deepEqual(await requestCoexistenceSync(refused.config, "token", "phone-1", "history"), {
+    ok: false,
+    code: "no_answer",
+  });
 });
 
 test("signup: the number is read as the vendor knows it, with whether it also lives on the phone app", async () => {
   const known = app([
-    json({ display_phone_number: "+55 62 90000-0001", verified_name: "Teste Advogados", is_on_biz_app: true, platform_type: "CLOUD_API", id: "phone-1" }),
+    json({
+      display_phone_number: "+55 62 90000-0001",
+      verified_name: "Teste Advogados",
+      is_on_biz_app: true,
+      platform_type: "CLOUD_API",
+      id: "phone-1",
+    }),
   ]);
   assert.deepEqual(await getNumberInfo(known.config, "token-do-escritorio", "phone-1"), {
     displayPhoneNumber: "5562900000001",
@@ -543,23 +655,67 @@ test("signup: the number is read as the vendor knows it, with whether it also li
     onCloudApi: false,
   });
   // A number not registered yet is no Cloud API number: its six digits are asked.
-  const notRegistered = app([json({ display_phone_number: "15550002222", platform_type: "NOT_APPLICABLE", id: "phone-4" })]);
+  const notRegistered = app([
+    json({ display_phone_number: "15550002222", platform_type: "NOT_APPLICABLE", id: "phone-4" }),
+  ]);
   assert.equal((await getNumberInfo(notRegistered.config, "token", "phone-4"))?.onCloudApi, false);
-  assert.equal(await getNumberInfo(app([json(graphError(100, "Unsupported get request"), 400)]).config, "token", "phone-3"), null);
+  assert.equal(
+    await getNumberInfo(app([json(graphError(100, "Unsupported get request"), 400)]).config, "token", "phone-3"),
+    null,
+  );
 });
 
 test("signup: an account that named no number has its numbers listed, and leaving takes the app off its webhooks", async () => {
-  const listed = app([json({ data: [{ id: "phone-1" }, { id: "phone-2" }, {}], paging: { cursors: { before: "a", after: "b" } } })]);
+  const listed = app([
+    json({ data: [{ id: "phone-1" }, { id: "phone-2" }, {}], paging: { cursors: { before: "a", after: "b" } } }),
+  ]);
   assert.deepEqual(await listAccountNumbers(listed.config, "token-do-escritorio", "waba-1"), ["phone-1", "phone-2"]);
   assert.equal(listed.calls[0].url, "https://graph.facebook.com/v25.0/waba-1/phone_numbers?fields=id&limit=50");
   assert.equal(listed.calls[0].headers.Authorization, "Bearer token-do-escritorio");
   // An account that could not be read is not an account with no number.
-  assert.equal(await listAccountNumbers(app([json(graphError(190, "Access token has expired"), 401)]).config, "token", "waba-1"), null);
+  assert.equal(
+    await listAccountNumbers(app([json(graphError(190, "Access token has expired"), 401)]).config, "token", "waba-1"),
+    null,
+  );
   assert.equal(await listAccountNumbers(app([new Error("ECONNRESET")]).config, "token", "waba-1"), null);
 
   const left = app([json({ success: true }), json(graphError(190, "Access token has expired"), 401)]);
   assert.deepEqual(await unsubscribeApp(left.config, "token-do-escritorio", "waba-1"), { ok: true });
-  assert.deepEqual([left.calls[0].method, left.calls[0].url], ["DELETE", "https://graph.facebook.com/v25.0/waba-1/subscribed_apps"]);
+  assert.deepEqual(
+    [left.calls[0].method, left.calls[0].url],
+    ["DELETE", "https://graph.facebook.com/v25.0/waba-1/subscribed_apps"],
+  );
   // The token was already taken back at the vendor: the firm is as disconnected as it asked to be.
   assert.deepEqual(await unsubscribeApp(left.config, "token-do-escritorio", "waba-1"), { ok: false, code: "meta_190" });
+});
+
+test("meta: a text's numbered choices go as buttons, or as a list when they do not fit buttons", async () => {
+  const { provider, calls } = meta([json(SENT), json(SENT)]);
+  await provider.send("5562999990001", {
+    kind: "text",
+    text: "Quer seguir?\n1. Quero seguir\n2. Agora não",
+    choices: { body: "Quer seguir?", options: ["Quero seguir", "Agora não"] },
+  });
+  assert.deepEqual(calls[0].body, {
+    messaging_product: "whatsapp",
+    recipient_type: "individual",
+    to: "5562999990001",
+    type: "interactive",
+    interactive: {
+      type: "button",
+      body: { text: "Quer seguir?" },
+      action: {
+        buttons: [
+          { type: "reply", reply: { id: "opcao-1", title: "Quero seguir" } },
+          { type: "reply", reply: { id: "opcao-2", title: "Agora não" } },
+        ],
+      },
+    },
+  });
+  const options = ["No aeroporto", "Menos de 72 horas antes", "Com mais antecedência"];
+  await provider.send("5562999990001", { kind: "text", text: "Quando?", choices: { body: "Quando?", options } });
+  const list = (calls[1].body as { interactive: { type: string; action: { sections: { rows: unknown[] }[] } } })
+    .interactive;
+  assert.equal(list.type, "list");
+  assert.equal(list.action.sections[0].rows.length, 3);
 });

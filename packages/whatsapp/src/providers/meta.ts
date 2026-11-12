@@ -1,4 +1,4 @@
-import { failureCodeOf, paramCountOf } from "@flyee/whatsapp/rules";
+import { failureCodeOf, fitsButtons, paramCountOf } from "@flyee/whatsapp/rules";
 import type {
   AccountTemplate,
   MediaResult,
@@ -79,8 +79,7 @@ async function call(
   }
 }
 
-const errorOf = (body: unknown): GraphError | undefined =>
-  (body as { error?: GraphError } | null)?.error ?? undefined;
+const errorOf = (body: unknown): GraphError | undefined => (body as { error?: GraphError } | null)?.error ?? undefined;
 
 /** Why a call that is not a send failed, as a code: the vendor's own, or the HTTP status when it gave none. */
 function failureCode(answer: { status: number; body: unknown }, whenAccepted: string): string {
@@ -90,6 +89,33 @@ function failureCode(answer: { status: number; body: unknown }, whenAccepted: st
 }
 
 function payloadOf(message: OutboundMessage): Record<string, unknown> {
+  if (message.kind === "text" && message.choices) {
+    // The person taps a choice; its title comes back as the reply's words (`button_reply`, `list_reply`).
+    const { body, options } = message.choices;
+    if (fitsButtons(options)) {
+      return {
+        type: "interactive",
+        interactive: {
+          type: "button",
+          body: { text: body },
+          action: {
+            buttons: options.map((title, index) => ({ type: "reply", reply: { id: `opcao-${index + 1}`, title } })),
+          },
+        },
+      };
+    }
+    return {
+      type: "interactive",
+      interactive: {
+        type: "list",
+        body: { text: body },
+        action: {
+          button: "Escolher",
+          sections: [{ title: "Opções", rows: options.map((title, index) => ({ id: `opcao-${index + 1}`, title })) }],
+        },
+      },
+    };
+  }
   if (message.kind === "text") return { type: "text", text: { body: message.text } };
   if (message.kind === "template") {
     const parameters = (message.bodyParams ?? []).map((value) => ({ type: "text", text: value }));
@@ -246,17 +272,21 @@ export class MetaProvider implements WhatsAppProvider {
       },
       ...(submission.footer ? [{ type: "FOOTER", text: submission.footer }] : []),
     ];
-    const answer = await call(this.config, `${GRAPH}/${this.config.apiVersion}/${this.config.wabaId}/message_templates`, {
-      method: "POST",
-      headers: this.headers(),
-      body: JSON.stringify({
-        name: submission.name,
-        language: submission.language,
-        category: "UTILITY",
-        parameter_format: "POSITIONAL",
-        components,
-      }),
-    });
+    const answer = await call(
+      this.config,
+      `${GRAPH}/${this.config.apiVersion}/${this.config.wabaId}/message_templates`,
+      {
+        method: "POST",
+        headers: this.headers(),
+        body: JSON.stringify({
+          name: submission.name,
+          language: submission.language,
+          category: "UTILITY",
+          parameter_format: "POSITIONAL",
+          components,
+        }),
+      },
+    );
     // No answer: the vendor may have taken it before the line went quiet.
     if (!answer) return { ok: false, code: "unconfirmed" };
     const body = (answer.body ?? null) as { id?: unknown; status?: unknown; category?: unknown } | null;
@@ -360,7 +390,12 @@ export const unsubscribeApp = (app: MetaAppConfig, token: string, wabaId: string
   step(app, token, `${encodeURIComponent(wabaId)}/subscribed_apps`, undefined, "DELETE");
 
 /** Registers a number that lives only on the Cloud API. A number that also lives on the phone app is already registered. */
-export const registerNumber = (app: MetaAppConfig, token: string, phoneNumberId: string, pin: string): Promise<SignupStep> =>
+export const registerNumber = (
+  app: MetaAppConfig,
+  token: string,
+  phoneNumberId: string,
+  pin: string,
+): Promise<SignupStep> =>
   step(app, token, `${encodeURIComponent(phoneNumberId)}/register`, { messaging_product: "whatsapp", pin });
 
 /**
@@ -374,7 +409,10 @@ export const requestCoexistenceSync = (
   phoneNumberId: string,
   sync: "smb_app_state_sync" | "history",
 ): Promise<SignupStep> =>
-  step(app, token, `${encodeURIComponent(phoneNumberId)}/smb_app_data`, { messaging_product: "whatsapp", sync_type: sync });
+  step(app, token, `${encodeURIComponent(phoneNumberId)}/smb_app_data`, {
+    messaging_product: "whatsapp",
+    sync_type: sync,
+  });
 
 /**
  * The ids of the numbers of an account, for a signup that named the account
@@ -382,10 +420,14 @@ export const requestCoexistenceSync = (
  * Null when the account could not be read.
  */
 export async function listAccountNumbers(app: MetaAppConfig, token: string, wabaId: string): Promise<string[] | null> {
-  const answer = await call(app, `${GRAPH}/${app.apiVersion}/${encodeURIComponent(wabaId)}/phone_numbers?fields=id&limit=50`, {
-    method: "GET",
-    headers: { Authorization: `Bearer ${token}` },
-  });
+  const answer = await call(
+    app,
+    `${GRAPH}/${app.apiVersion}/${encodeURIComponent(wabaId)}/phone_numbers?fields=id&limit=50`,
+    {
+      method: "GET",
+      headers: { Authorization: `Bearer ${token}` },
+    },
+  );
   const body = (answer?.body ?? null) as { data?: { id?: string }[] } | null;
   if (!answer || answer.status !== 200 || !Array.isArray(body?.data)) return null;
   return body.data.flatMap((row) => (typeof row.id === "string" && row.id ? [row.id] : []));
@@ -400,7 +442,12 @@ export async function getNumberInfo(
   app: MetaAppConfig,
   token: string,
   phoneNumberId: string,
-): Promise<{ displayPhoneNumber: string; verifiedName: string | null; onBusinessApp: boolean; onCloudApi: boolean } | null> {
+): Promise<{
+  displayPhoneNumber: string;
+  verifiedName: string | null;
+  onBusinessApp: boolean;
+  onCloudApi: boolean;
+} | null> {
   const fields = "display_phone_number,verified_name,is_on_biz_app,platform_type";
   const answer = await call(app, `${GRAPH}/${app.apiVersion}/${encodeURIComponent(phoneNumberId)}?fields=${fields}`, {
     method: "GET",

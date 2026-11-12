@@ -108,10 +108,14 @@ describe("who writes to the firm with no alert", () => {
       after: { nome: "Lia", problema: "cancellation" },
     });
     expect(asked).toBe(
-      "Sinto muito pelo cancelamento. Quando a companhia avisou do cancelamento?\n1. No aeroporto\n2. Menos de 72 horas antes do voo\n3. Com mais antecedência",
+      "Sinto muito pelo cancelamento. Quando a companhia avisou do cancelamento?\n1. No aeroporto\n2. Menos de 72 horas antes\n3. Com mais antecedência",
     );
     for (const ask of ["nome", "problema", "voo", "data", "atraso", "aviso", "acompanhantes", "nomes"] as const) {
       plainCopy(questionText(ask, { problema: "change" }));
+    }
+    // Every option fits a row of the vendor's list, so the official API shows them as buttons or a list.
+    for (const options of Object.values(OPTIONS)) {
+      for (const option of options) expect(option.label.length).toBeLessThanOrEqual(24);
     }
   });
 
