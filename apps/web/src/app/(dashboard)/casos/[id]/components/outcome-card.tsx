@@ -232,13 +232,7 @@ export default function OutcomeCard({
       description={t("outcome-description")}
       ask={waiting || closedUnseen ? { tone: "firm", label: t("outcome-chip-waits") } : null}
       defaultOpen={state.case.status === "filed" || state.case.status === "closed" || waiting}
-      action={
-        writable && lawsuits.length > 0 ? (
-          <Button size="small" variant="outlined" color="grey" onClick={() => setAdding(true)}>
-            {t("outcome-add")}
-          </Button>
-        ) : undefined
-      }
+      add={writable && lawsuits.length > 0 ? { label: t("outcome-add"), onClick: () => setAdding(true) } : null}
       bodyClassName="gap-4"
     >
       {problem ? (

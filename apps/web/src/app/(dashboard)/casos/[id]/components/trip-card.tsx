@@ -11,9 +11,11 @@ import SegmentFields from "@/components/cases/segment-fields";
 import CollapsibleCard from "@/components/product/collapsible-card";
 import DialogHeader from "@/components/product/dialog-header";
 import EmptyState from "@/components/product/empty-state";
+import QuickActions from "@/components/product/quick-actions";
 import StateLine from "@/components/product/state-line";
 import StatusChip, { type StatusTone } from "@/components/product/status-chip";
 import IllustrationLaunch from "@/icons/illustrations/illustration-launch";
+import NiCrossSquare from "@/icons/nexture/ni-cross-square";
 import { removeFlightSegment, saveFlightSegment } from "@/lib/cases/actions";
 import { caseErrorKey, formatLocalTime } from "@/lib/cases/cases";
 import { segmentFields, type SegmentValues, segmentValues } from "@/lib/cases/forms";
@@ -103,7 +105,11 @@ export default function TripCard({
     : null;
   const unmarked = beforeCourt(state.case.status) && state.segments.length > 0 && affected === null;
   // ONE marks the leg itself once ANAC's record answered for every leg (0228): until then it is ONE's to do.
-  const checking = state.segments.some((segment) => state.flights.bySegment[segment.id]?.vra?.status === "waiting");
+  const checking = state.segments.some((segment) =>
+    ["waiting", "not_published"].includes(state.flights.bySegment[segment.id]?.vra?.status ?? ""),
+  );
+  // ONE asking the record now is ONE at work; a month of the record not out yet is a wait of weeks, said as one.
+  const asking = state.segments.some((segment) => state.flights.bySegment[segment.id]?.vra?.status === "waiting");
   const [marking, setMarking] = useState<string | null>(null);
   const mark = async (segment: CaseSegment, affectedNow: boolean) => {
     setMarking(segment.id);
@@ -147,18 +153,18 @@ export default function TripCard({
       }
       ask={
         unmarked
-          ? checking
-            ? { tone: "working", label: t("card-state-trip-working") }
-            : { tone: "firm", label: t("card-state-trip-mark") }
+          ? asking
+            ? { tone: "working", label: t("case-card-working-checking") }
+            : checking
+              ? { tone: "client", label: t("card-state-trip-working") }
+              : { tone: "firm", label: t("card-state-trip-mark") }
           : null
       }
       description={t("case-trip-body")}
-      action={
-        writable && state.segments.length > 0 ? (
-          <Button variant="outlined" color="grey" size="small" onClick={() => setFromTicket(true)}>
-            {t("case-trip-add-legs")}
-          </Button>
-        ) : null
+      add={
+        writable && state.segments.length > 0
+          ? { label: t("case-trip-add-legs"), onClick: () => setFromTicket(true) }
+          : null
       }
       defaultOpen={opensOnArrival(state.case.status, "trip", unmarked, state.segments.length === 0)}
     >
@@ -240,11 +246,30 @@ export default function TripCard({
                   </Typography>
                 )}
               </Box>
-              <Box className="flex flex-wrap gap-1">
+              <Box className="flex flex-wrap items-center gap-2">
                 {segment.affected && <StatusChip tone="attention" label={t("client-trip-affected")} />}
                 {delay !== null && delay > 0 && (
                   <StatusChip tone="info" label={t("case-trip-delay", { delay: hoursAndMinutes(delay) })} />
                 )}
+                {writable ? (
+                  <>
+                    <Button variant="outlined" color="grey" size="small" onClick={() => setEditing(segment)}>
+                      {t("case-trip-edit")}
+                    </Button>
+                    <QuickActions
+                      label={t("case-trip-more", { flight: segment.flight_number ?? String(segment.position) })}
+                      actions={[
+                        {
+                          key: "remove",
+                          label: t("client-trip-remove"),
+                          icon: <NiCrossSquare size="medium" />,
+                          disabled: busy !== null,
+                          onClick: () => void remove(segment),
+                        },
+                      ]}
+                    />
+                  </>
+                ) : null}
               </Box>
             </Box>
             {times.map((line) => (
@@ -286,22 +311,6 @@ export default function TripCard({
               writable={writable}
               onChanged={onChanged}
             />
-            {writable && (
-              <Box className="flex flex-wrap gap-2 pt-1">
-                <Button variant="outlined" color="grey" size="small" onClick={() => setEditing(segment)}>
-                  {t("client-edit")}
-                </Button>
-                <Button
-                  variant="text"
-                  color="grey"
-                  size="small"
-                  disabled={busy !== null}
-                  onClick={() => void remove(segment)}
-                >
-                  {t("client-trip-remove")}
-                </Button>
-              </Box>
-            )}
           </Box>
         );
       })}

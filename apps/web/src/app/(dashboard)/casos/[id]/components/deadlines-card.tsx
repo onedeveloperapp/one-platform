@@ -1,7 +1,6 @@
 "use client";
 
 import type { CaseProceeding, CaseState } from "../case-types";
-import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 
@@ -94,11 +93,7 @@ export default function DeadlinesCard({
               ? { tone: "firm", label: t("case-deadlines-summary-review", { count: toReview }) }
               : null
       }
-      action={
-        <Button variant="outlined" color="grey" size="small" href="/prazos" LinkComponent={Link}>
-          {t("case-deadlines-all")}
-        </Button>
-      }
+      more={{ label: t("case-deadlines-all"), href: "/prazos" }}
       defaultOpen={opensOnArrival(state.case.status, "deadlines", overdue + toConfirm + toReview > 0)}
       bodyClassName="gap-3"
     >

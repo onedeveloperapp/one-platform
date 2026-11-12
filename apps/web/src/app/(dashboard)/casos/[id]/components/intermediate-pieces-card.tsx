@@ -140,6 +140,11 @@ export default function IntermediatePiecesCard({
             : null
       }
       description={t("pieces-body")}
+      add={
+        writable && !state.supportVisit && pieces.length > 0 && filed.length > 0
+          ? { label: t("pieces-ask"), onClick: () => setAsking(true), disabled: busy }
+          : null
+      }
       defaultOpen={opensOnArrival(state.case.status, "pieces", asks || failed, pieces.length === 0)}
     >
       {problem ? (
@@ -246,15 +251,6 @@ export default function IntermediatePiecesCard({
               ) : null}
             </Box>
           ))}
-          {writable && !state.supportVisit ? (
-            <Box className="flex flex-wrap gap-2">
-              {filed.length > 0 ? (
-                <Button variant="text" size="small" disabled={busy} onClick={() => setAsking(true)}>
-                  {t("pieces-ask")}
-                </Button>
-              ) : null}
-            </Box>
-          ) : null}
           <Typography variant="caption" className="text-text-secondary">
             {t("pieces-may-err")}
           </Typography>

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 
@@ -10,10 +11,12 @@ import StatusChip from "@/components/product/status-chip";
 import { TILE_TONE, type TileTone } from "@/components/product/tile-tone";
 import NiCheck from "@/icons/nexture/ni-check";
 import NiChevronDownSmall from "@/icons/nexture/ni-chevron-down-small";
+import NiChevronRightSmall from "@/icons/nexture/ni-chevron-right-small";
 import NiClock from "@/icons/nexture/ni-clock";
 import NiCrossSquare from "@/icons/nexture/ni-cross-square";
 import NiExclamationSquare from "@/icons/nexture/ni-exclamation-square";
 import NiLoader from "@/icons/nexture/ni-loader";
+import NiPlus from "@/icons/nexture/ni-plus";
 import { cn } from "@/lib/utils";
 
 /** An order given to every card of a screen at once: open them all, or close them all. */
@@ -204,6 +207,8 @@ export default function CollapsibleCard({
   description,
   detail,
   action,
+  add,
+  more,
   defaultOpen = false,
   bodyClassName,
   children,
@@ -235,8 +240,18 @@ export default function CollapsibleCard({
   description?: string;
   /** What must be read before acting here (a consequence, what each choice does): shown open, above the content. */
   detail?: ReactNode;
-  /** The card's own action (add, settings, the whole list elsewhere): shown open, above the content. */
+  /**
+   * What the record the card is acts on as a whole (editing it): shown open, at the top right of the body. Adding to
+   * the card's list is `add`, and the whole list elsewhere is `more`, never here.
+   */
   action?: ReactNode;
+  /**
+   * One more item of the card's list (the owner, 2026-11-12: "Incluir pessoa" is the pattern): a text button with a
+   * plus at the card's foot, after its items, on the left.
+   */
+  add?: { label: string; onClick: () => void; disabled?: boolean } | null;
+  /** The whole list, or its setting, elsewhere: a link with a chevron at the card's foot, on the right. */
+  more?: { label: string; href: string } | null;
   /** Open on arrival. Read once: what the person does afterwards is theirs. */
   defaultOpen?: boolean;
   bodyClassName?: string;
@@ -445,6 +460,36 @@ export default function CollapsibleCard({
               </Box>
             ) : null}
             {children}
+            {add || more ? (
+              <Box className="flex flex-wrap items-center justify-between gap-2">
+                {add ? (
+                  <Button
+                    variant="text"
+                    color="grey"
+                    size="small"
+                    startIcon={<NiPlus size="small" />}
+                    disabled={add.disabled}
+                    onClick={add.onClick}
+                  >
+                    {add.label}
+                  </Button>
+                ) : (
+                  <span />
+                )}
+                {more ? (
+                  <Button
+                    variant="text"
+                    color="grey"
+                    size="small"
+                    href={more.href}
+                    LinkComponent={Link}
+                    endIcon={<NiChevronRightSmall size="small" />}
+                  >
+                    {more.label}
+                  </Button>
+                ) : null}
+              </Box>
+            ) : null}
           </Box>
         </Collapse>
       </CardContent>

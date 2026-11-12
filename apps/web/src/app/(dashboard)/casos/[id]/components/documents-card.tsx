@@ -131,6 +131,8 @@ export default function DocumentsCard({
   const [opening, setOpening] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [kind, setKind] = useState<DocumentKind>("evidence");
+  // The form of a file the firm includes, opened by the card's foot.
+  const [adding, setAdding] = useState(false);
   const [party, setParty] = useState<string>("");
   // A document ONE is still checking that the person chose to decide without waiting for it.
   const [early, setEarly] = useState<string | null>(null);
@@ -406,6 +408,7 @@ export default function DocumentsCard({
             : null
       }
       description={t("case-documents-body")}
+      add={writable && !adding ? { label: t("case-documents-add"), onClick: () => setAdding(true) } : null}
       defaultOpen={opensOnArrival(state.case.status, "documents", ordered.ask.length > 0, state.documents.length === 0)}
     >
       {problem && (
@@ -524,7 +527,23 @@ export default function DocumentsCard({
         </Box>
       ) : null}
 
-      {writable && (
+      {/* Always there: "Enviar pelo cliente" opens it with the kind and the person it set. */}
+      {writable ? (
+        <input
+          ref={input}
+          type="file"
+          hidden
+          accept="application/pdf,image/jpeg,image/png,image/webp,image/heic,image/heif"
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            event.target.value = "";
+            if (file) void send(file);
+          }}
+        />
+      ) : null}
+      {writable && adding && (
+        // A file the firm includes by itself, opened by the card's "Incluir arquivo" (the owner, 2026-11-12: one way
+        // of adding on every card); a form always open at the foot had been the card's largest part.
         <Box className="border-grey-100 flex flex-col gap-3 rounded-2xl border p-4">
           <Typography variant="body1" className="font-semibold">
             {t("case-documents-add")}
@@ -562,18 +581,7 @@ export default function DocumentsCard({
               ))}
             </TextField>
           </Box>
-          <input
-            ref={input}
-            type="file"
-            hidden
-            accept="application/pdf,image/jpeg,image/png,image/webp,image/heic,image/heif"
-            onChange={(event) => {
-              const file = event.target.files?.[0];
-              event.target.value = "";
-              if (file) void send(file);
-            }}
-          />
-          <Box>
+          <Box className="flex flex-wrap gap-2">
             <Button
               variant="outlined"
               color="grey"
@@ -584,6 +592,9 @@ export default function DocumentsCard({
               onClick={() => input.current?.click()}
             >
               {action.pending("upload") ? t("client-documents-sending") : t("client-documents-choose")}
+            </Button>
+            <Button variant="text" color="grey" size="small" disabled={action.busy} onClick={() => setAdding(false)}>
+              {t("cases-cancel")}
             </Button>
           </Box>
         </Box>

@@ -1,7 +1,6 @@
 "use client";
 
 import type { CaseProceeding, CaseState } from "../case-types";
-import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 
@@ -76,11 +75,7 @@ export default function HearingsCard({
           : t("case-hearings-summary-none")
       }
       ask={silent > 0 ? { tone: "firm", label: t("case-hearings-summary-silent", { count: silent }) } : null}
-      action={
-        <Button variant="outlined" color="grey" size="small" href="/agenda" LinkComponent={Link}>
-          {t("case-hearings-all")}
-        </Button>
-      }
+      more={{ label: t("case-hearings-all"), href: "/agenda" }}
       defaultOpen={opensOnArrival(state.case.status, "hearings", silent > 0 || soon)}
       bodyClassName="gap-3"
     >

@@ -30,9 +30,11 @@ import ConfirmActionDialog from "@/components/product/confirm-action-dialog";
 import DialogHeader from "@/components/product/dialog-header";
 import EmptyState from "@/components/product/empty-state";
 import FactGrid, { type Fact } from "@/components/product/fact-grid";
+import QuickActions from "@/components/product/quick-actions";
 import StateLine from "@/components/product/state-line";
 import StatusChip, { type StatusTone } from "@/components/product/status-chip";
 import IllustrationLaunch from "@/icons/illustrations/illustration-launch";
+import NiCrossSquare from "@/icons/nexture/ni-cross-square";
 import { removeProceeding, saveProceeding } from "@/lib/cases/actions";
 import { caseErrorKey } from "@/lib/cases/cases";
 import { caseDomicile, lawyerNeedsSupplementary, ruleParties } from "@/lib/cases/rules";
@@ -154,12 +156,10 @@ export default function ProceedingsCard({
       }
       ask={unseen > 0 ? { tone: "firm", label: t("case-proceedings-summary-moved", { count: unseen }) } : null}
       description={t("case-proceedings-body")}
-      action={
-        writable && state.proceedings.length > 0 ? (
-          <Button variant="outlined" color="grey" size="small" onClick={() => setEditing("new")}>
-            {t("case-proceedings-add")}
-          </Button>
-        ) : null
+      add={
+        writable && state.proceedings.length > 0
+          ? { label: t("case-proceedings-add"), onClick: () => setEditing("new") }
+          : null
       }
       defaultOpen={opensOnArrival(state.case.status, "proceedings", unseen > 0, state.proceedings.length === 0)}
     >
@@ -236,7 +236,30 @@ export default function ProceedingsCard({
                   {t(KIND_KEY[proceeding.kind])}
                 </Typography>
               </Box>
-              <StatusChip tone={STATUS_TONE[proceeding.status]} label={t(STATUS_KEY[proceeding.status])} />
+              <Box className="flex flex-wrap items-center gap-2">
+                <StatusChip tone={STATUS_TONE[proceeding.status]} label={t(STATUS_KEY[proceeding.status])} />
+                {writable ? (
+                  <>
+                    <Button variant="outlined" color="grey" size="small" onClick={() => setEditing(proceeding)}>
+                      {t("case-proceeding-edit")}
+                    </Button>
+                    {proceeding.status === "planned" ? (
+                      <QuickActions
+                        label={t("case-proceeding-more", { kind: t(KIND_KEY[proceeding.kind]) })}
+                        actions={[
+                          {
+                            key: "remove",
+                            label: t("client-trip-remove"),
+                            icon: <NiCrossSquare size="medium" />,
+                            disabled: action.busy,
+                            onClick: () => setRemoving(proceeding),
+                          },
+                        ]}
+                      />
+                    ) : null}
+                  </>
+                ) : null}
+              </Box>
             </Box>
             {proceeding.status === "planned" && proceeding.comarca ? (
               proceeding.comarcaChecked ? (
@@ -317,24 +340,6 @@ export default function ProceedingsCard({
             />
             {/* How its unit and judge usually decide, from the market's public decisions (0190): only to prepare. */}
             {proceeding.court ? <MarketProfile proceedingId={proceeding.id} /> : null}
-            {writable && (
-              <Box className="flex flex-wrap gap-2 pt-1">
-                <Button variant="outlined" color="grey" size="small" onClick={() => setEditing(proceeding)}>
-                  {t("client-edit")}
-                </Button>
-                {proceeding.status === "planned" && (
-                  <Button
-                    variant="text"
-                    color="grey"
-                    size="small"
-                    disabled={action.busy}
-                    onClick={() => setRemoving(proceeding)}
-                  >
-                    {t("client-trip-remove")}
-                  </Button>
-                )}
-              </Box>
-            )}
           </Box>
         );
       })}

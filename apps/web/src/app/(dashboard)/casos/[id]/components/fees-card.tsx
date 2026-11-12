@@ -116,13 +116,7 @@ export default function FeesCard({
         costs.length > 0 ? t("fees-summary-costs", { count: costs.length, value: formatCents(totals.paid) }) : undefined
       }
       defaultOpen={false}
-      action={
-        writable ? (
-          <Button size="small" variant="outlined" color="grey" onClick={() => setAdding(true)}>
-            {t("fees-cost-add")}
-          </Button>
-        ) : undefined
-      }
+      add={writable ? { label: t("fees-cost-add"), onClick: () => setAdding(true) } : null}
       bodyClassName="gap-4"
     >
       {problem ? (

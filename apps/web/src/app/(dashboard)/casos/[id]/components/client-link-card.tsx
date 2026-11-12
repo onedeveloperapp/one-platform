@@ -21,8 +21,10 @@ import {
 
 import CollapsibleCard from "@/components/product/collapsible-card";
 import ConfirmActionDialog from "@/components/product/confirm-action-dialog";
+import QuickActions from "@/components/product/quick-actions";
 import StateLine from "@/components/product/state-line";
 import StatusChip from "@/components/product/status-chip";
+import NiCrossSquare from "@/icons/nexture/ni-cross-square";
 import { createClientLink, type LinkDelivery, revokeClientLink } from "@/lib/cases/actions";
 import { caseErrorKey, CLIENT_STAGES, LINK_OWED_KEY } from "@/lib/cases/cases";
 import { opensOnArrival } from "@/lib/cases/sections";
@@ -93,6 +95,8 @@ export default function ClientLinkCard({
   const open = state.links.filter((link) => !link.revokedAt && Date.parse(link.expiresAt) > now);
   const nameOf = (id: string) => adults.find((person) => person.person_id === id)?.full_name ?? "";
   const ended = state.case.status === "closed" || state.case.status === "declined";
+  // With a link open, a new one is another of the card's list: asked at its foot, its form opened then.
+  const [renewing, setRenewing] = useState(false);
 
   const create = async () => {
     setBusy(true);
@@ -106,6 +110,7 @@ export default function ClientLinkCard({
       return;
     }
     setMade({ url: result.url, whatsapp: result.whatsapp });
+    setRenewing(false);
     onChanged();
   };
 
@@ -160,6 +165,11 @@ export default function ClientLinkCard({
               : null
       }
       description={t("case-link-body")}
+      add={
+        writable && !ended && adults.length > 0 && open.length > 0 && !renewing
+          ? { label: t("case-link-new"), onClick: () => setRenewing(true) }
+          : null
+      }
       defaultOpen={opensOnArrival(state.case.status, "link", unsent)}
       bodyClassName="gap-3"
     >
@@ -169,16 +179,32 @@ export default function ClientLinkCard({
             <Typography variant="body1" className="font-semibold break-words">
               {nameOf(link.personId)}
             </Typography>
-            <StatusChip
-              tone={link.finishedAt ? "positive" : link.visits > 0 ? "info" : "neutral"}
-              label={
-                link.finishedAt
-                  ? t("case-link-finished")
-                  : link.visits > 0
-                    ? t("case-link-opened")
-                    : t("case-link-not-opened")
-              }
-            />
+            <Box className="flex items-center gap-2">
+              <StatusChip
+                tone={link.finishedAt ? "positive" : link.visits > 0 ? "info" : "neutral"}
+                label={
+                  link.finishedAt
+                    ? t("case-link-finished")
+                    : link.visits > 0
+                      ? t("case-link-opened")
+                      : t("case-link-not-opened")
+                }
+              />
+              {writable ? (
+                <QuickActions
+                  label={t("case-link-more", { name: nameOf(link.personId) })}
+                  actions={[
+                    {
+                      key: "revoke",
+                      label: t("case-link-revoke"),
+                      icon: <NiCrossSquare size="medium" />,
+                      disabled: busy,
+                      onClick: () => setRevoking(link.id),
+                    },
+                  ]}
+                />
+              ) : null}
+            </Box>
           </Box>
           <Typography variant="body2" className="text-text-secondary">
             {[
@@ -195,13 +221,6 @@ export default function ClientLinkCard({
               .filter(Boolean)
               .join(" · ")}
           </Typography>
-          {writable && (
-            <Box className="pt-1">
-              <Button variant="text" color="grey" size="small" disabled={busy} onClick={() => setRevoking(link.id)}>
-                {t("case-link-revoke")}
-              </Button>
-            </Box>
-          )}
         </Box>
       ))}
 
@@ -278,7 +297,7 @@ export default function ClientLinkCard({
         </Alert>
       )}
 
-      {writable && !ended && (
+      {writable && !ended && (open.length === 0 || renewing || adults.length === 0) && (
         <Box className="flex flex-col gap-3">
           {adults.length === 0 ? (
             <Typography variant="body2" className="text-text-secondary">
@@ -334,6 +353,13 @@ export default function ClientLinkCard({
                   {t("case-link-replaces")}
                 </Typography>
               )}
+              {renewing ? (
+                <Box>
+                  <Button variant="text" color="grey" size="small" disabled={busy} onClick={() => setRenewing(false)}>
+                    {t("cases-cancel")}
+                  </Button>
+                </Box>
+              ) : null}
             </>
           )}
           {!CLIENT_STAGES.includes(state.case.status) && (

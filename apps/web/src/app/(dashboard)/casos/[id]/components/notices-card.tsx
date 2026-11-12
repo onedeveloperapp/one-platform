@@ -1,7 +1,6 @@
 "use client";
 
 import type { CaseState } from "../case-types";
-import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 
@@ -130,13 +129,7 @@ export default function NoticesCard({
               : t("case-notices-summary-reached")
       }
       ask={troubled.length > 0 ? { tone: "firm", label: t("case-rows-ask-chip", { count: troubled.length }) } : null}
-      action={
-        state.managesFirm ? (
-          <Button variant="outlined" color="grey" size="small" href="/settings/mensagens#avisos" LinkComponent={Link}>
-            {t("case-notices-settings")}
-          </Button>
-        ) : null
-      }
+      more={state.managesFirm ? { label: t("case-notices-settings"), href: "/settings/mensagens#avisos" } : null}
       defaultOpen={opensOnArrival(state.case.status, "notices", false)}
       bodyClassName="gap-3"
     >

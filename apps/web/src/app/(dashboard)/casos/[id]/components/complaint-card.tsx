@@ -22,9 +22,11 @@ import ConfirmActionDialog from "@/components/product/confirm-action-dialog";
 import DialogHeader from "@/components/product/dialog-header";
 import EmptyState from "@/components/product/empty-state";
 import { CurrencyField } from "@/components/product/fields";
+import QuickActions from "@/components/product/quick-actions";
 import StateLine from "@/components/product/state-line";
 import StatusChip, { type StatusTone } from "@/components/product/status-chip";
 import IllustrationSupport from "@/icons/illustrations/illustration-support";
+import NiCrossSquare from "@/icons/nexture/ni-cross-square";
 import { caseErrorKey } from "@/lib/cases/cases";
 import { opensOnArrival } from "@/lib/cases/sections";
 import { removeAdminComplaint, saveAdminComplaint } from "@/lib/cases/statement-actions";
@@ -119,12 +121,10 @@ export default function ComplaintCard({
               : null
       }
       description={t("case-complaints-body")}
-      action={
-        writable && state.complaints.length > 0 ? (
-          <Button variant="outlined" color="grey" size="small" onClick={() => setEditing("new")}>
-            {t("case-complaints-add")}
-          </Button>
-        ) : null
+      add={
+        writable && state.complaints.length > 0
+          ? { label: t("case-complaints-add"), onClick: () => setEditing("new") }
+          : null
       }
       defaultOpen={opensOnArrival(state.case.status, "complaints", anyOverdue || prior?.state === "owed")}
     >
@@ -187,10 +187,37 @@ export default function ComplaintCard({
                         .join(" · ")}
                     </Typography>
                   </Box>
-                  <StatusChip
-                    tone={overdue ? "attention" : OUTCOME_TONE[complaint.outcome]}
-                    label={overdue ? t("case-complaint-overdue") : t(OUTCOME_KEY[complaint.outcome])}
-                  />
+                  <Box className="flex flex-wrap items-center gap-2">
+                    <StatusChip
+                      tone={overdue ? "attention" : OUTCOME_TONE[complaint.outcome]}
+                      label={overdue ? t("case-complaint-overdue") : t(OUTCOME_KEY[complaint.outcome])}
+                    />
+                    {writable ? (
+                      <>
+                        <Button
+                          variant="outlined"
+                          color="grey"
+                          size="small"
+                          disabled={busy !== null}
+                          onClick={() => setEditing(complaint)}
+                        >
+                          {t("case-complaint-edit")}
+                        </Button>
+                        <QuickActions
+                          label={t("case-complaint-more", { channel: t(CHANNEL_KEY[complaint.channel]) })}
+                          actions={[
+                            {
+                              key: "remove",
+                              label: t("case-complaint-remove"),
+                              icon: <NiCrossSquare size="medium" />,
+                              disabled: busy !== null,
+                              onClick: () => setRemoving(complaint),
+                            },
+                          ]}
+                        />
+                      </>
+                    ) : null}
+                  </Box>
                 </Box>
                 {overdue ? (
                   // What the firm owes here, beside the one button that does it (the top of the case said it alone).
@@ -218,28 +245,6 @@ export default function ComplaintCard({
                     {complaint.notes}
                   </Typography>
                 ) : null}
-                {writable && (
-                  <Box className="flex flex-wrap gap-2 pt-1">
-                    <Button
-                      variant="outlined"
-                      color="grey"
-                      size="small"
-                      disabled={busy !== null}
-                      onClick={() => setEditing(complaint)}
-                    >
-                      {t("case-complaint-edit")}
-                    </Button>
-                    <Button
-                      variant="text"
-                      color="grey"
-                      size="small"
-                      disabled={busy !== null}
-                      onClick={() => setRemoving(complaint)}
-                    >
-                      {t("case-complaint-remove")}
-                    </Button>
-                  </Box>
-                )}
               </Box>
             );
           })}

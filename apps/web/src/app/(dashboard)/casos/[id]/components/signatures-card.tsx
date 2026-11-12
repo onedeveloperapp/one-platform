@@ -355,12 +355,10 @@ export default function SignaturesCard({
       }
       ask={needs ? { tone: "firm", label: statusOf(needs) } : null}
       description={t("case-signatures-body")}
-      action={
-        writable && state.envelopes.length > 0 ? (
-          <Button variant="outlined" color="grey" size="small" onClick={() => setRequesting(true)}>
-            {t("case-signatures-request")}
-          </Button>
-        ) : null
+      add={
+        writable && state.envelopes.length > 0
+          ? { label: t("case-signatures-request"), onClick: () => setRequesting(true) }
+          : null
       }
       defaultOpen={opensOnArrival(state.case.status, "signatures", needs !== null, state.envelopes.length === 0)}
     >

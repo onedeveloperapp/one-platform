@@ -37,7 +37,6 @@ import NiCrossSquare from "@/icons/nexture/ni-cross-square";
 import NiDocumentFull from "@/icons/nexture/ni-document-full";
 import NiHome from "@/icons/nexture/ni-home";
 import NiKeyboard from "@/icons/nexture/ni-keyboard";
-import NiPlus from "@/icons/nexture/ni-plus";
 import {
   checkCpf,
   confirmPersonReadFields,
@@ -262,6 +261,7 @@ export default function PeopleCard({
             : null
       }
       description={t("case-people-body")}
+      add={writable ? { label: t("case-people-add"), onClick: () => setEditing("new") } : null}
       defaultOpen={opensOnArrival(state.case.status, "people", incomplete > 0)}
     >
       {notice?.kind === "error" && (
@@ -492,20 +492,6 @@ export default function PeopleCard({
           onClose={() => setChecking(null)}
         />
       )}
-
-      {writable ? (
-        <Box>
-          <Button
-            variant="text"
-            color="grey"
-            size="small"
-            startIcon={<NiPlus size="small" />}
-            onClick={() => setEditing("new")}
-          >
-            {t("case-people-add")}
-          </Button>
-        </Box>
-      ) : null}
 
       {editing && (
         <PersonDialog
