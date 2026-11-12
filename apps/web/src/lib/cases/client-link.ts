@@ -109,6 +109,11 @@ export type ClientSignature = {
   sign_url: string | null;
   signed_at: string | null;
   enotariado_url: string | null;
+  /**
+   * Who signs the same document beside this person (migration 0224): each minor of 16 or 17 they assist, with their
+   * own address at ZapSign and whether they signed.
+   */
+  assisted?: { name: string; sign_url: string | null; signed_at: string | null }[];
 };
 
 /** A text for clients in force, and whether this client accepted it (`client_link_terms`). */

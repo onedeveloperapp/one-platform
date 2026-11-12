@@ -530,7 +530,7 @@ function FactPanel({
             </MenuItem>
           ))}
         </TextField>
-        {kind === "sentenca" ? (
+        {kind === "sentenca" || kind === "acordao" ? (
           <TextField
             select
             label={t("outcome-field-result")}

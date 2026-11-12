@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 import { Box, Card, CardContent, Grid, Skeleton, useMediaQuery } from "@mui/material";
 
 /** The shapes a page of the logged area has, each drawn as it will be while it loads. */
-export type PageShape = "list" | "record" | "home" | "cards" | "split" | "setup";
+export type PageShape = "list" | "record" | "home" | "board" | "cards" | "split" | "setup";
 
 type Bone = { width?: number | string; height: number; round?: boolean };
 
@@ -30,7 +30,9 @@ function B({ width = "100%", height, round = false, still }: Bone & { still: boo
  *
  * `list`: the cards of numbers (`numbers` of them), the list's bar and its rows (`rows`, in one card or one card
  * each, `cards`); `record`: a record of many cards (a case), its top first and the cards in two columns; `home`: the
- * greeting with the modules, and what waits; `split`: a list beside what is open of it (a conversation); `setup`:
+ * greeting with the modules, then what holds a case beside what to follow; `board`: the cards of numbers (`numbers`
+ * of them), a board of columns by step under the parts of the way, then a card beside a wider one (the controladoria);
+ * `split`: a list beside what is open of it (a conversation); `setup`:
  * the rail of steps beside the step; `cards`: a few cards one under the other, for any other page. The motion is a
  * slow pulse, and still for whoever asks the system for less motion. Said once to assistive technology as loading.
  */
@@ -192,19 +194,90 @@ export default function PageSkeleton({
                 </Box>
               </CardContent>
             </Card>
-            <Grid container spacing={2.5}>
-              {Array.from({ length: 4 }, (_, index) => (
-                <Grid key={index} size={{ xs: 12, sm: 6, lg: 3 }}>
-                  <Card>
-                    <CardContent className="flex flex-col gap-3">
-                      {head(100)}
-                      {b({ width: "85%", height: 12 })}
-                      {b({ width: "60%", height: 12 })}
-                    </CardContent>
-                  </Card>
-                </Grid>
+            {/* What holds a case in the wide column; what to follow and what ONE did this month in the side one. */}
+            <Box className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+              <Card>
+                <CardContent className="flex flex-col gap-4">
+                  {head(220)}
+                  <Box className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,20rem),1fr))] gap-3">
+                    {[0, 1].map((index) => (
+                      <Box key={index}>{b({ height: 92 })}</Box>
+                    ))}
+                  </Box>
+                </CardContent>
+              </Card>
+              <Box className="flex flex-col gap-6">
+                <Card>
+                  <CardContent className="flex flex-col gap-4">
+                    {head(150)}
+                    {[0, 1, 2].map((index) => (
+                      <Box key={index}>{b({ height: 56 })}</Box>
+                    ))}
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="flex flex-col gap-3">
+                    {b({ width: "90%", height: 14 })}
+                    {b({ width: "60%", height: 14 })}
+                  </CardContent>
+                </Card>
+              </Box>
+            </Box>
+          </>
+        ) : null}
+
+        {shape === "board" ? (
+          <>
+            {numbers > 0 ? (
+              <Grid container spacing={2.5}>
+                {Array.from({ length: numbers }, (_, index) => (
+                  <Grid key={index} size={{ xs: 6, lg: 3 }}>
+                    <Card className="flex flex-col gap-2 px-4! py-3! sm:px-5! sm:py-4!">
+                      <Box className="flex flex-row items-center gap-2.5">
+                        <Box className="hidden sm:block">{b({ width: 32, height: 32 })}</Box>
+                        {b({ width: "60%", height: 16 })}
+                      </Box>
+                      {b({ width: 56, height: 30 })}
+                      {b({ width: "70%", height: 14 })}
+                    </Card>
+                  </Grid>
+                ))}
+              </Grid>
+            ) : null}
+            {/* The board: its title, the parts of the way, and its columns, each with its icon, name, number, button
+                and first cases; as many as the page shows, the rest to the side. */}
+            <Box className="flex flex-col gap-3">
+              {b({ width: 160, height: 24 })}
+              <Box className="flex flex-row gap-3 overflow-hidden">
+                {Array.from({ length: 8 }, (_, index) => (
+                  <Box key={index} className="flex w-60 flex-none flex-col gap-3 lg:w-52">
+                    {b({ height: 32 })}
+                    <Card className="flex flex-col items-center gap-2.5 px-4! py-5!">
+                      {b({ width: 44, height: 44 })}
+                      {b({ width: "60%", height: 16 })}
+                      {b({ width: 64, height: 26 })}
+                      {b({ height: 40 })}
+                      {b({ height: 32 })}
+                      {b({ height: 76 })}
+                      {b({ height: 76 })}
+                    </Card>
+                  </Box>
+                ))}
+              </Box>
+            </Box>
+            {/* Who has the cases beside the court's numbers. */}
+            <Box className="grid grid-cols-1 gap-5 lg:grid-cols-3">
+              {[1, 2].map((span) => (
+                <Card key={span} className={span === 2 ? "lg:col-span-2" : undefined}>
+                  <CardContent className="flex flex-col gap-3">
+                    {head(150)}
+                    {[0, 1, 2, 3].map((index) => (
+                      <Box key={index}>{b({ height: 56 })}</Box>
+                    ))}
+                  </CardContent>
+                </Card>
               ))}
-            </Grid>
+            </Box>
           </>
         ) : null}
 

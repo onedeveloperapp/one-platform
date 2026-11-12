@@ -4,7 +4,7 @@ import { describe, it } from "node:test";
 import { pathOpen, pathsAfter } from "@flyee/rules/paths";
 import { depositShortfall, enforcementFine, monthsBetween, updateAmount } from "@flyee/rules/update";
 
-describe("caminhos-v1: what may follow a decision", () => {
+describe("caminhos-v2: what may follow a decision", () => {
   it("a judgment of the small-claims court takes embargos or the recurso inominado, with its preparo and fees", () => {
     const paths = pathsAfter({ kind: "juizado", stage: "sentenca", condemnation: true });
     assert.deepEqual(
@@ -12,7 +12,11 @@ describe("caminhos-v1: what may follow a decision", () => {
       ["aceitar", "embargos_declaracao", "recurso_inominado"],
     );
     const appeal = paths.find((path) => path.option === "recurso_inominado");
-    assert.deepEqual(appeal?.costs, { preparo: true, fees: { min: 10, max: 20, base: "condenacao" }, suspended: false });
+    assert.deepEqual(appeal?.costs, {
+      preparo: true,
+      fees: { min: 10, max: 20, base: "condenacao" },
+      suspended: false,
+    });
   });
 
   it("free justice takes off the preparo and suspends what losing costs", () => {
@@ -22,11 +26,15 @@ describe("caminhos-v1: what may follow a decision", () => {
     assert.deepEqual(appeal?.costs, { preparo: false, fees: { min: 10, max: 20, base: "causa" }, suspended: true });
   });
 
-  it("never the recurso especial from the small-claims court; the uniformization only where the court has it", () => {
+  it("never the recurso especial from the small-claims court; its acórdão takes the reclamação to the court of the state", () => {
     assert.equal(pathOpen({ kind: "juizado", stage: "acordao" }, "recurso_especial"), false);
     assert.equal(pathOpen({ kind: "juizado", stage: "acordao" }, "recurso_extraordinario"), true);
-    assert.equal(pathOpen({ kind: "juizado", stage: "acordao" }, "pedido_uniformizacao"), false);
-    assert.equal(pathOpen({ kind: "juizado", stage: "acordao", uniformization: true }, "pedido_uniformizacao"), true);
+    assert.deepEqual(
+      pathsAfter({ kind: "juizado", stage: "acordao" }).map((path) => path.option),
+      ["aceitar", "embargos_declaracao", "recurso_extraordinario", "reclamacao"],
+    );
+    assert.equal(pathOpen({ kind: "comum", stage: "acordao" }, "reclamacao"), false);
+    assert.equal(pathOpen({ kind: "juizado", stage: "sentenca" }, "reclamacao"), false);
   });
 
   it("the civil court's judgment takes the apelação, and its acórdão the special and the extraordinary appeals", () => {

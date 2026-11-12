@@ -746,6 +746,14 @@ function ConfirmDialog({
           <Typography variant="body2">
             {envelope.method === "govbr" ? t("case-signature-confirm-govbr") : t("case-signature-confirm-enotariado")}
           </Typography>
+          {/* A paper an assisted minor signs beside the adult carries both gov.br signatures (0224). */}
+          {envelope.method === "govbr" && envelope.signers.length > 1 ? (
+            <Typography variant="body2">
+              {t("case-signature-confirm-each", {
+                names: envelope.signers.map((signer) => signer.name).join(", "),
+              })}
+            </Typography>
+          ) : null}
           {candidates.length === 0 ? (
             <Alert severity="info" className="neutral bg-background-paper/60!">
               {t("case-signature-confirm-none")}

@@ -25,10 +25,13 @@ export default function GoalsCard({
   goals,
   modules,
   scope,
+  className,
 }: {
   goals: ClosingGoals | null;
   modules: ModuleCard[];
   scope: ModuleCard | null;
+  /** Where the card sits in the page's grid. */
+  className?: string;
 }) {
   const t = useTranslations("product");
   const { periodOf, scopeOf } = goalWords(t, modules, scope);
@@ -37,7 +40,7 @@ export default function GoalsCard({
   const more = Math.max(0, inForce.length - SHOWN);
 
   return (
-    <Card component="section" aria-labelledby="controladoria-goals">
+    <Card component="section" aria-labelledby="controladoria-goals" className={className}>
       <CardContent className="flex flex-col gap-4">
         <CardTitle
           id="controladoria-goals"

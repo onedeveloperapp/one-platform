@@ -88,6 +88,14 @@ type Searched = {
  * link of the home opens the view it counts. No "Novo": a conversation starts
  * with the person or with ONE.
  */
+/** Why the panel did not open, said where the person tried (`?painel=`). */
+const PANEL_ERRORS: Record<string, string> = {
+  email_is_admin: "inbox-panel-error-email",
+  support_session: "inbox-panel-error-support",
+  busy: "inbox-panel-error-busy",
+  not_configured: "inbox-panel-error-off",
+};
+
 export default function InboxView({ state }: { state: InboxState }) {
   const t = useTranslations("product");
   const router = useRouter();
@@ -116,7 +124,27 @@ export default function InboxView({ state }: { state: InboxState }) {
         title={t("inbox-title")}
         crumbs={scopeCrumbs(t("inbox-home"), t("inbox-title"), ready?.scope.current ?? null)}
         description={ready ? t("inbox-description", { firm: ready.firm.name }) : undefined}
+        action={
+          ready?.panel.available ? (
+            // The firm's panel of attendance (0223), entered signed in, in a tab of its own.
+            <Button
+              variant="outlined"
+              color="grey"
+              href="/atendimento/painel"
+              target="_blank"
+              rel="noopener"
+              startIcon={<NiSendUpRight size="small" />}
+            >
+              {t("inbox-panel-open")}
+            </Button>
+          ) : undefined
+        }
       />
+      {ready?.panel.error ? (
+        <Alert severity="warning" className="neutral bg-background-paper/60!">
+          {t(PANEL_ERRORS[ready.panel.error] ?? "inbox-panel-error")}
+        </Alert>
+      ) : null}
       {ready ? (
         <ModuleScope path="/atendimento" modules={ready.scope.modules} current={ready.scope.current?.key ?? null} />
       ) : null}

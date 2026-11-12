@@ -1,18 +1,38 @@
 import { type PathOption, pathsAfter } from "@flyee/rules/paths";
 
 /**
- * The judgment: its options, the appeal and its costs (migration 0185, item 4.5 of the case journey plan). Pure: what
- * the database answers, read into what the screens show, and ONE's recommendation by comparing what was asked with
- * what was granted. A recommendation decides nothing: the lawyer decides with it.
+ * The judgment: its options, the appeal and its costs (migration 0185, item 4.5 of the case journey plan), and the
+ * acórdão with what may follow it (0225, `caminhos-v2`). Pure: what the database answers, read into what the screens
+ * show, and ONE's recommendation by comparing what was asked with what was granted. A recommendation decides nothing:
+ * the lawyer decides with it.
  */
 
-export type JudgmentDecision = "aceitar" | "embargos_declaracao" | "recurso_inominado" | "apelacao";
-const DECISIONS: readonly JudgmentDecision[] = ["aceitar", "embargos_declaracao", "recurso_inominado", "apelacao"];
+export type JudgmentDecision =
+  | "aceitar"
+  | "embargos_declaracao"
+  | "recurso_inominado"
+  | "apelacao"
+  | "recurso_extraordinario"
+  | "recurso_especial"
+  | "reclamacao";
+const DECISIONS: readonly JudgmentDecision[] = [
+  "aceitar",
+  "embargos_declaracao",
+  "recurso_inominado",
+  "apelacao",
+  "recurso_extraordinario",
+  "recurso_especial",
+  "reclamacao",
+];
+
+/** What a path follows: a judgment, or the acórdão of its appeal. */
+export type JudgmentStage = "sentenca" | "acordao";
 
 export type JudgmentPath = {
   id: string;
   proceedingId: string;
   factId: string;
+  stage: JudgmentStage;
   clientAgrees: boolean | null;
   clientVia: string | null;
   decision: JudgmentDecision | null;
@@ -32,6 +52,7 @@ export function judgmentPathsOf(raw: unknown): JudgmentPath[] {
         id: row.id,
         proceedingId: row.proceeding_id,
         factId: row.fact_id,
+        stage: row.stage === "acordao" ? "acordao" : "sentenca",
         clientAgrees: typeof row.client_agrees === "boolean" ? row.client_agrees : null,
         clientVia: typeof row.client_via === "string" ? row.client_via : null,
         decision,
@@ -63,18 +84,36 @@ export function recommendPath(input: {
   return input.grantedCents < input.requestedCents / 2 ? appealOf(input.kind) : "aceitar";
 }
 
-/** What the options after a judgment are, with their costs, by `caminhos-v1`. */
+/** What the options after a judgment are, with their costs, by `caminhos-v2`. */
 export function optionsAfter(kind: "juizado" | "comum", freeJustice: boolean, condemnation: boolean) {
   return pathsAfter({ kind, stage: "sentenca", freeJustice, condemnation }).filter((path) =>
     (DECISIONS as readonly PathOption[]).includes(path.option),
   );
 }
 
+/** The decisions open after an acórdão (`caminhos-v2`): the special appeals, and the reclamação in the small-claims court. */
+export function decisionsAfterAcordao(kind: "juizado" | "comum"): JudgmentDecision[] {
+  return pathsAfter({ kind, stage: "acordao" })
+    .map((path) => path.option)
+    .filter((option): option is JudgmentDecision => (DECISIONS as readonly string[]).includes(option));
+}
+
+/**
+ * ONE's recommendation after an acórdão: accept one in the client's favour or in part; none for one against the
+ * client or one the rule could not tell, since the extraordinary paths ask a lawyer's reading (a constitutional
+ * question, a divergence from the STJ) that this rule does not make.
+ */
+export const recommendAfterAcordao = (result: string | null): JudgmentDecision | null =>
+  result === "procedente" || result === "parcial" ? "aceitar" : null;
+
 export const DECISION_KEY: Record<JudgmentDecision, string> = {
   aceitar: "judgment-path-accept",
   embargos_declaracao: "judgment-path-embargos",
   recurso_inominado: "judgment-path-recurso-inominado",
   apelacao: "judgment-path-apelacao",
+  recurso_extraordinario: "judgment-path-recurso-extraordinario",
+  recurso_especial: "judgment-path-recurso-especial",
+  reclamacao: "judgment-path-reclamacao",
 };
 
 /** What the client's link shows of a judgment. */

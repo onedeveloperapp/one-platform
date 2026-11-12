@@ -9,9 +9,10 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { type ReactNode, useState, useTransition } from "react";
 
-import { Alert, Box, Button, Card, CardContent, Grid, List, ListItem, ListItemButton, Typography } from "@mui/material";
+import { Alert, Box, Button, Card, CardContent, Grid, Typography } from "@mui/material";
 
 import CardTitle from "@/components/product/card-title";
+import CountList, { CountRows } from "@/components/product/count-list";
 import EmptyState from "@/components/product/empty-state";
 import InfoHint from "@/components/product/info-hint";
 import MetricBars from "@/components/product/metric-bars";
@@ -23,17 +24,20 @@ import StatusChip from "@/components/product/status-chip";
 import type { TileTone } from "@/components/product/tile-tone";
 import IllustrationDocumentation from "@/icons/illustrations/illustration-documentation";
 import IllustrationLaunch from "@/icons/illustrations/illustration-launch";
+import NiAi from "@/icons/nexture/ni-ai";
 import NiArchive from "@/icons/nexture/ni-archive";
 import NiArrowInDown from "@/icons/nexture/ni-arrow-in-down";
+import NiBuilding from "@/icons/nexture/ni-building";
 import NiChartBar from "@/icons/nexture/ni-chart-bar";
-import NiChevronRightSmall from "@/icons/nexture/ni-chevron-right-small";
 import NiFlag from "@/icons/nexture/ni-flag";
 import NiFolder from "@/icons/nexture/ni-folder";
 import NiFolderPlus from "@/icons/nexture/ni-folder-plus";
 import NiPause from "@/icons/nexture/ni-pause";
 import NiRefresh from "@/icons/nexture/ni-refresh";
 import NiScale from "@/icons/nexture/ni-scale";
+import NiSettings from "@/icons/nexture/ni-settings";
 import NiTimeline from "@/icons/nexture/ni-timeline";
+import NiUser from "@/icons/nexture/ni-user";
 import NiUsers from "@/icons/nexture/ni-users";
 import { type CaseFilter, type CourtView, stepView } from "@/lib/cases/list";
 import { type CaseCardKey, oversightCards, spanText } from "@/lib/cases/numbers";
@@ -73,19 +77,19 @@ const COURT_CARD: Record<CourtView, { label: string; hint: string; tone: TileTon
   "mov-hoje": {
     label: "cases-filter-moved-today",
     hint: "cases-filter-moved-today-hint",
-    tone: "accent-1",
+    tone: "primary",
     icon: <NiTimeline size="medium" />,
   },
   "mov-7": {
     label: "cases-filter-moved-7",
     hint: "cases-filter-moved-7-hint",
-    tone: "accent-1",
+    tone: "primary",
     icon: <NiTimeline size="medium" />,
   },
   "mov-30": {
     label: "cases-filter-moved-30",
     hint: "cases-filter-moved-30-hint",
-    tone: "accent-1",
+    tone: "primary",
     icon: <NiTimeline size="medium" />,
   },
   "nunca-capturados": {
@@ -120,16 +124,44 @@ const TESTS_LINE = {
   included: { line: "controladoria-tests-included", action: "controladoria-tests-exclude" },
 };
 
-/** Who has the cases, by the name of the view each opens. */
-const HOLDER_VIEW_LABEL: Record<Holder, string> = {
-  firm: "cases-filter-with-firm",
-  client: "cases-filter-with-client",
-  one: "cases-filter-with-one",
-  court: "cases-filter-in-court",
-  platform: "cases-filter-with-platform",
+/**
+ * Who has the cases, by the name of the view each opens, with its icon and its colour: the client in the colour of the
+ * board's hiring, the court in the court's.
+ */
+const HOLDER_LOOK: Record<Holder, { label: string; hint: string; tone: TileTone; icon: ReactNode }> = {
+  firm: {
+    label: "cases-filter-with-firm",
+    hint: "cases-filter-with-firm-hint",
+    tone: "accent-4",
+    icon: <NiBuilding size="medium" />,
+  },
+  client: {
+    label: "cases-filter-with-client",
+    hint: "cases-filter-with-client-hint",
+    tone: "accent-1",
+    icon: <NiUser size="medium" />,
+  },
+  one: {
+    label: "cases-filter-with-one",
+    hint: "cases-filter-with-one-hint",
+    tone: "secondary",
+    icon: <NiAi size="medium" />,
+  },
+  court: {
+    label: "cases-filter-in-court",
+    hint: "cases-filter-in-court-hint",
+    tone: "primary",
+    icon: <NiScale size="medium" />,
+  },
+  platform: {
+    label: "cases-filter-with-platform",
+    hint: "cases-filter-with-platform-hint",
+    tone: "accent-2",
+    icon: <NiSettings size="medium" />,
+  },
 };
 
-/** What moved, then what is quiet, three a row, then what was never read. */
+/** What moved, then what is quiet, then what was never read: the court's card shows the first three on its left. */
 const COURT_ORDER: readonly CourtView[] = [
   "mov-hoje",
   "mov-7",
@@ -302,26 +334,11 @@ export default function ControladoriaView({ state }: { state: ControladoriaState
           {/* Where the cases are, right under the numbers (the owner, 2026-11-09): each column opens its list. With no
               case going, one drawing says so instead of a row of empty columns. */}
           <Box component="section" aria-labelledby="controladoria-board" className="flex flex-col gap-3">
-            <SectionTitle
-              id="controladoria-board"
-              title={t("controladoria-board-title")}
-              description={t("controladoria-board-body")}
-            />
-            {ready.board && ready.board.every((column) => column.cases === 0) ? (
-              <Card>
-                <CardContent>
-                  <EmptyState
-                    layout="row"
-                    framed={false}
-                    titleAs="h3"
-                    illustration={<IllustrationLaunch />}
-                    title={t("controladoria-board-none-title")}
-                    description={t("controladoria-board-none-body")}
-                  />
-                </CardContent>
-              </Card>
-            ) : ready.board ? (
+            {ready.board && ready.board.some((column) => column.cases > 0) ? (
               <CaseBoard
+                headingId="controladoria-board"
+                title={t("controladoria-board-title")}
+                description={t("controladoria-board-body")}
                 columns={ready.board}
                 stock={ready.stock}
                 module={module}
@@ -329,93 +346,82 @@ export default function ControladoriaView({ state }: { state: ControladoriaState
                 listOf={(step) => listOf(stepView(step))}
               />
             ) : (
-              <Alert severity="warning" className="neutral bg-background-paper/60!">
-                {t("controladoria-board-unread")}
-              </Alert>
+              <>
+                <SectionTitle
+                  id="controladoria-board"
+                  title={t("controladoria-board-title")}
+                  description={t("controladoria-board-body")}
+                />
+                {ready.board ? (
+                  <Card>
+                    <CardContent>
+                      <EmptyState
+                        layout="row"
+                        framed={false}
+                        titleAs="h3"
+                        illustration={<IllustrationLaunch />}
+                        title={t("controladoria-board-none-title")}
+                        description={t("controladoria-board-none-body")}
+                      />
+                    </CardContent>
+                  </Card>
+                ) : (
+                  <Alert severity="warning" className="neutral bg-background-paper/60!">
+                    {t("controladoria-board-unread")}
+                  </Alert>
+                )}
+              </>
             )}
           </Box>
 
-          {/* The details: who has the cases and each module's beside the court's numbers. */}
-          <Grid container spacing={2.5}>
-            <Grid size={{ xs: 12, lg: 4 }} className="flex flex-col gap-5">
-              {ready.stock ? (
-                <Card component="section" aria-labelledby="controladoria-holders">
-                  <CardContent className="flex flex-col gap-3">
-                    <CardTitle
-                      id="controladoria-holders"
-                      icon={<NiUsers size="medium" />}
-                      tone="accent-3"
-                      title={t("controladoria-holders-title")}
-                      description={t("controladoria-holders-body")}
-                    />
-                    <List disablePadding className="-mx-2">
-                      {[
-                        ...HOLDERS.filter(
-                          (holder) => holder !== "platform" || (ready.stock?.holders.platform ?? 0) > 0,
-                        ).map((holder) => ({
-                          key: holder,
-                          label: t(HOLDER_VIEW_LABEL[holder]),
-                          value: ready.stock?.holders[holder] ?? 0,
-                          view: HOLDER_VIEW[holder],
-                        })),
-                        {
-                          key: "stagnant",
-                          label: t("cases-filter-stagnant"),
-                          value: ready.stock?.stagnant ?? 0,
-                          view: "estagnados" as CaseFilter,
-                        },
-                      ].map((item) => (
-                        <ListItem key={item.key} disablePadding>
-                          <ListItemButton
-                            href={listOf(item.view)}
-                            LinkComponent={Link}
-                            className="flex items-center gap-3 rounded-xl px-2 py-1.5"
-                          >
-                            <Typography variant="body2" component="span" className="min-w-0 flex-1 truncate">
-                              {item.label}
-                            </Typography>
-                            <Typography variant="body2" component="span" className="font-semibold tabular-nums">
-                              {countText(item.value)}
-                            </Typography>
-                            {/* Each line opens the list of its cases: the arrow says it, no sentence does. */}
-                            <NiChevronRightSmall size="small" className="text-text-secondary flex-none" />
-                          </ListItemButton>
-                        </ListItem>
-                      ))}
-                    </List>
-                  </CardContent>
-                </Card>
-              ) : (
+          {/* The details, in rows whose cards share their height (the owner, 2026-11-12, who found the cards out of
+              line): who has the cases beside the court's numbers, then the goals, beside each module's stock where the
+              firm has more than one. */}
+          <Box className="grid grid-cols-1 gap-5 lg:grid-cols-3">
+            {ready.stock ? (
+              <CountList
+                id="controladoria-holders"
+                icon={<NiUsers size="medium" />}
+                tone="accent-2"
+                title={t("controladoria-holders-title")}
+                description={t("controladoria-holders-body")}
+                items={[
+                  ...HOLDERS.filter((holder) => holder !== "platform" || (ready.stock?.holders.platform ?? 0) > 0).map(
+                    (holder) => ({
+                      key: holder,
+                      href: listOf(HOLDER_VIEW[holder]),
+                      icon: HOLDER_LOOK[holder].icon,
+                      tone: HOLDER_LOOK[holder].tone,
+                      label: t(HOLDER_LOOK[holder].label),
+                      hint: t(HOLDER_LOOK[holder].hint),
+                      value: countText(ready.stock?.holders[holder] ?? 0),
+                    }),
+                  ),
+                  {
+                    key: "stagnant",
+                    href: listOf("estagnados"),
+                    icon: <NiPause size="medium" />,
+                    tone: "accent-3",
+                    label: t("cases-filter-stagnant"),
+                    hint: t("cases-filter-stagnant-hint"),
+                    value: countText(ready.stock?.stagnant ?? 0),
+                  },
+                ]}
+              />
+            ) : (
+              <Box>
                 <Alert severity="warning" className="neutral bg-background-paper/60!">
                   {t("controladoria-stock-unread")}
                 </Alert>
-              )}
-              {ready.byModule ? (
-                <Card component="section" aria-labelledby="controladoria-modules">
-                  <CardContent className="flex flex-col gap-4">
-                    <CardTitle
-                      id="controladoria-modules"
-                      icon={<NiFolder size="medium" />}
-                      tone="secondary"
-                      title={t("controladoria-modules-title")}
-                    />
-                    <MetricBars
-                      spacing="dense"
-                      items={ready.byModule.map((item) => ({
-                        key: item.module.key,
-                        label: item.module.name,
-                        value: item.going,
-                      }))}
-                    />
-                  </CardContent>
-                </Card>
-              ) : null}
-            </Grid>
-            <Grid size={{ xs: 12, lg: 8 }} className="flex">
-              <Box component="section" aria-labelledby="controladoria-court" className="flex w-full flex-col gap-3">
+              </Box>
+            )}
+            <Card component="section" aria-labelledby="controladoria-court" className="@container lg:col-span-2">
+              <CardContent className="flex h-full flex-col gap-4">
                 {/* Where the environment reads no court, a chip says so, with what it means behind its "i". */}
-                <SectionTitle
+                <CardTitle
                   id="controladoria-court"
+                  icon={<NiScale size="medium" />}
+                  tone="primary"
                   title={t("controladoria-court-title")}
                   description={ready.courtRead ? t("controladoria-court-body") : undefined}
                   chip={
@@ -432,39 +438,62 @@ export default function ControladoriaView({ state }: { state: ControladoriaState
                   }
                 />
                 {counts && counts.filed > 0 ? (
-                  <Grid container spacing={2.5}>
-                    {COURT_ORDER.map((view) => (
-                      <Grid key={view} size={{ xs: 6, sm: 4 }}>
-                        <NumberCard
-                          icon={COURT_CARD[view].icon}
-                          tone={COURT_CARD[view].tone}
-                          label={t(COURT_CARD[view].label)}
-                          hint={t(COURT_CARD[view].hint)}
-                          value={countText(counts[view])}
-                          href={listOf(view)}
-                        />
-                      </Grid>
-                    ))}
-                  </Grid>
+                  // What moved on the left, what is quiet and what was never read on the right, row by row.
+                  <CountRows
+                    split={3}
+                    items={COURT_ORDER.map((view) => ({
+                      key: view,
+                      href: listOf(view),
+                      icon: COURT_CARD[view].icon,
+                      tone: COURT_CARD[view].tone,
+                      label: t(COURT_CARD[view].label),
+                      hint: t(COURT_CARD[view].hint),
+                      value: countText(counts[view]),
+                    }))}
+                  />
                 ) : (
-                  // Nothing in court yet: a drawing fills the space beside the cards of the left, never a blank.
-                  <Card className="flex-1">
-                    <CardContent className="flex h-full items-center justify-center">
-                      <EmptyState
-                        framed={false}
-                        titleAs="h3"
-                        illustration={<IllustrationDocumentation />}
-                        title={t("controladoria-court-none")}
-                        description={t("controladoria-court-none-body")}
-                      />
-                    </CardContent>
-                  </Card>
+                  // Nothing in court yet: a drawing says so, never a blank.
+                  <Box className="flex flex-1 items-center">
+                    <EmptyState
+                      layout="row"
+                      framed={false}
+                      titleAs="h3"
+                      illustration={<IllustrationDocumentation />}
+                      title={t("controladoria-court-none")}
+                      description={t("controladoria-court-none-body")}
+                    />
+                  </Box>
                 )}
-              </Box>
-            </Grid>
-          </Grid>
+              </CardContent>
+            </Card>
 
-          <GoalsCard goals={ready.goals} modules={ready.modules} scope={ready.module} />
+            <GoalsCard
+              goals={ready.goals}
+              modules={ready.modules}
+              scope={ready.module}
+              className={ready.byModule ? "lg:col-span-2" : "lg:col-span-3"}
+            />
+            {ready.byModule ? (
+              <Card component="section" aria-labelledby="controladoria-modules">
+                <CardContent className="flex flex-col gap-4">
+                  <CardTitle
+                    id="controladoria-modules"
+                    icon={<NiFolder size="medium" />}
+                    tone="secondary"
+                    title={t("controladoria-modules-title")}
+                  />
+                  <MetricBars
+                    spacing="dense"
+                    items={ready.byModule.map((item) => ({
+                      key: item.module.key,
+                      label: item.module.name,
+                      value: item.going,
+                    }))}
+                  />
+                </CardContent>
+              </Card>
+            ) : null}
+          </Box>
 
           {ready.takesPortfolio ? (
             <PortfolioPanel

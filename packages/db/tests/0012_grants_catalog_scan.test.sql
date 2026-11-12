@@ -130,6 +130,10 @@ select is(
   ),
   array[
     'billing_webhook_events',
+    -- The firms' panel of attendance (0223): its accounts, its people and what is to be taken out of it.
+    'chatwoot_accounts',
+    'chatwoot_deletions',
+    'chatwoot_staff',
     'connection_secrets',
     -- Each court's channel to file by machine, the operator's data (0101): read through the backend's functions.
     'court_filing_channels',

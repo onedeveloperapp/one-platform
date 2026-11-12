@@ -61,6 +61,9 @@ describe("what each lawsuit came to (0130)", () => {
       acks: [
         { fact_id: "a", case_id: "c1", seq: 7, kind: "transito" },
         { fact_id: "b", case_id: "c2", seq: 8, kind: "sentenca", result: "improcedente" },
+        // An acórdão against the client, and one the rule could not tell for whom (0225).
+        { fact_id: "d", case_id: "c6", seq: 12, kind: "acordao", result: "improcedente" },
+        { fact_id: "e", case_id: "c7", seq: 13, kind: "acordao", result: null },
       ],
       unconfirmed: [{ fact_id: "u", case_id: "c3", seq: 9, kind: "arquivamento" }],
       releases: [{ fact_id: "r", case_id: "c1", seq: 7, cents: 1000000 }],
@@ -71,6 +74,8 @@ describe("what each lawsuit came to (0130)", () => {
     expect(items.map((item) => [item.label.key, item.href])).toEqual([
       ["pending-outcome-final", "/casos/c1#resultado"],
       ["pending-outcome-against", "/casos/c2#resultado"],
+      ["pending-outcome-acordao-against", "/casos/c6#resultado"],
+      ["pending-outcome-acordao", "/casos/c7#resultado"],
       ["pending-outcome-release", "/casos/c1#resultado"],
       ["pending-outcome-unconfirmed", "/casos/c3#resultado"],
       ["pending-outcome-ready", "/casos/c4#resultado"],

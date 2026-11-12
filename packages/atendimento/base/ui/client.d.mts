@@ -24,6 +24,8 @@ export interface SettingsResponse {
   /** Os grupos que esta pessoa pode editar nesta camada. */
   editable: string[];
   tools: Array<{ name: string; description: string }>;
+  /** audio false: o robô não tem quem transcreva, e a tela esconde "Ouvir áudios"; null: não se sabe. */
+  media?: { audio: boolean | null };
 }
 
 export interface Suggestion {

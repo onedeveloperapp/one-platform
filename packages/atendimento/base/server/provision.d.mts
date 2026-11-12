@@ -49,7 +49,9 @@ export interface SupportState {
 type FetchImpl = typeof fetch;
 
 export const NEVER_OFF: string[];
-export const DEFAULT_UI_SETTINGS: Record<string, boolean>;
+export const DEFAULT_UI_SETTINGS: Record<string, unknown>;
+/** Gravadas só quando a pessoa entra na equipe: a lista de conversas abre em todas, não só nas abertas. */
+export const INITIAL_UI_SETTINGS: Record<string, unknown>;
 export const ADAPTER_SUBSCRIPTIONS: string[];
 export const KIT_LABELS: Array<{ title: string; description: string; color: string }>;
 export const RELAY_NAME: string;
@@ -88,7 +90,10 @@ export function ensureStaffUser(input: {
   platformToken: string;
   state: SupportState;
   person: { key: string; email: string; name: string };
-  uiSettings?: Record<string, boolean> | null;
+  /** Mescladas ao perfil a cada chamada. */
+  uiSettings?: Record<string, unknown> | null;
+  /** Mescladas só na primeira vez da pessoa na equipe, para não desfazer a escolha dela. */
+  initialUiSettings?: Record<string, unknown> | null;
   fetchImpl?: FetchImpl;
 }): Promise<{ state: SupportState; userId: number }>;
 
@@ -179,6 +184,8 @@ export function conversationHistory(input: {
 }): Promise<Array<{ role: "cliente" | "robo" | "equipe"; text: string; at: string }>>;
 
 export function ensureAdapter(input: { openwa: unknown }): Promise<void>;
+/** Liga o adaptador depois da instância e exige que fique saudável; lança adapter_config, adapter_enable ou adapter_unhealthy. */
+export function startAdapter(input: { openwa: unknown; config: Record<string, unknown> }): Promise<{ started: boolean }>;
 
 export const TEAM_GROUP_PREFIX: string;
 export interface TeamGroupInput {

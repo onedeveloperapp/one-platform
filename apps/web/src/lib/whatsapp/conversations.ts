@@ -178,6 +178,11 @@ export type InboxData = {
   supportVisit: boolean;
   /** The simulated number of the firm, when the simulator is on: the screen can start a conversation on it. */
   simulatorNumberId: string | null;
+  /**
+   * The firm's panel of attendance (0223): whether this person can enter it from here, and why the last try to
+   * enter did not, when it came back here (`?painel=`).
+   */
+  panel: { available: boolean; error: string | null };
   /** The modules of the firm, and the one the inbox is under (0078): its conversations, by its cases' clients. */
   scope: PageScope;
 };

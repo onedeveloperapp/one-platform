@@ -29,6 +29,7 @@
     "@flyee/backup": "*",
     "@flyee/billing": "*",
     "@flyee/calendar": "*",
+    "@flyee/chatwoot": "*",
     "@flyee/connectors": "*",
     "@flyee/courts": "*",
     "@flyee/db": "*",

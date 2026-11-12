@@ -5,13 +5,13 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useCallback } from "react";
 
-import { Alert, Box, Button, Grid, Typography } from "@mui/material";
+import { Alert, Box, Button } from "@mui/material";
 
 import CasesProgressCard, { type CasesProgress } from "@/components/cases/cases-progress-card";
 import AttentionList, { type AttentionGroup } from "@/components/product/attention-list";
+import CountList from "@/components/product/count-list";
 import EmptyState from "@/components/product/empty-state";
 import HomeHero, { type HeroOrnament } from "@/components/product/home-hero";
-import { StatTile } from "@/components/product/home-tiles";
 import ModulesQuickAccess from "@/components/product/modules-quick-access";
 import OnboardingChecklistCard from "@/components/product/onboarding-checklist-card";
 import OneWorkLine from "@/components/product/one-work-line";
@@ -25,6 +25,7 @@ import NiDocumentCross from "@/icons/nexture/ni-document-cross";
 import NiDocumentFull from "@/icons/nexture/ni-document-full";
 import NiEmail from "@/icons/nexture/ni-email";
 import NiExclamationSquare from "@/icons/nexture/ni-exclamation-square";
+import NiEyeOpen from "@/icons/nexture/ni-eye-open";
 import NiFlag from "@/icons/nexture/ni-flag";
 import NiFolderCheck from "@/icons/nexture/ni-folder-check";
 import NiInbox from "@/icons/nexture/ni-inbox";
@@ -48,7 +49,8 @@ import { homeTiles, type PendingGroup, sayPending, withDecisions } from "@/lib/f
 import { type FirmToday, somethingForMe, type TodayNeed, todayNeeds } from "@/lib/firm/today";
 import type { ModuleOffer } from "@/lib/modules/offer";
 import type { ActivationFacts } from "@/lib/onboarding";
-import type { OneWorkTotals } from "@/lib/one-work/work";
+import { type OneWorkTotals, saysOneWork } from "@/lib/one-work/work";
+import { cn } from "@/lib/utils";
 import type { FlowKey, OnboardingStateRow, OnboardingStep } from "@flyee/onboarding";
 
 /**
@@ -112,169 +114,169 @@ const NEED: Record<TodayNeed["key"], { label: string; hint: string; tone: TileTo
     label: "today-need-overdue",
     hint: "today-need-overdue-hint",
     tone: "accent-3",
-    icon: <NiClock size="large" />,
+    icon: <NiClock size="medium" />,
   },
   due: {
     label: "today-need-due",
     hint: "today-need-due-hint",
     tone: "accent-3",
-    icon: <NiCalendarClock size="large" />,
+    icon: <NiCalendarClock size="medium" />,
   },
   confirm: {
     label: "today-need-confirm",
     hint: "today-need-confirm-hint",
     tone: "primary",
-    icon: <NiListCheck size="large" />,
+    icon: <NiListCheck size="medium" />,
   },
   hearings: {
     label: "today-need-hearings",
     hint: "today-need-hearings-hint",
     tone: "primary",
-    icon: <NiCalendar size="large" />,
+    icon: <NiCalendar size="medium" />,
   },
   unwarned: {
     label: "today-need-unwarned",
     hint: "today-need-unwarned-hint",
     tone: "accent-4",
-    icon: <NiMessageCross size="large" />,
+    icon: <NiMessageCross size="medium" />,
   },
   unresolved: {
     label: "today-need-unresolved",
     hint: "today-need-unresolved-hint",
     tone: "accent-4",
-    icon: <NiCalendar size="large" />,
+    icon: <NiCalendar size="medium" />,
   },
   calendar: {
     label: "today-need-calendar",
     hint: "today-need-calendar-hint",
     tone: "accent-4",
-    icon: <NiCalendar size="large" />,
+    icon: <NiCalendar size="medium" />,
   },
   untimed: {
     label: "today-need-untimed",
     hint: "today-need-untimed-hint",
     tone: "accent-3",
-    icon: <NiDocumentFull size="large" />,
+    icon: <NiDocumentFull size="medium" />,
   },
   unwritten: {
     label: "today-need-unwritten",
     hint: "today-need-unwritten-hint",
     tone: "accent-3",
-    icon: <NiCalendar size="large" />,
+    icon: <NiCalendar size="medium" />,
   },
   recheck: {
     label: "today-need-recheck",
     hint: "today-need-recheck-hint",
     tone: "accent-4",
-    icon: <NiExclamationSquare size="large" />,
+    icon: <NiExclamationSquare size="medium" />,
   },
   closing: {
     label: "today-need-closing",
     hint: "today-need-closing-hint",
     tone: "accent-3",
-    icon: <NiClock size="large" />,
+    icon: <NiClock size="medium" />,
   },
   waiting: {
     label: "today-need-waiting",
     hint: "today-need-waiting-hint",
     tone: "primary",
-    icon: <NiMessages size="large" />,
+    icon: <NiMessages size="medium" />,
   },
   approvals: {
     label: "today-need-approvals",
     hint: "today-need-approvals-hint",
     tone: "secondary",
-    icon: <NiListCheck size="large" />,
+    icon: <NiListCheck size="medium" />,
   },
   clients: {
     label: "today-need-clients",
     hint: "today-need-clients-hint",
     tone: "primary",
-    icon: <NiFolderCheck size="large" />,
+    icon: <NiFolderCheck size="medium" />,
   },
   civil: {
     label: "today-need-civil",
     hint: "today-need-civil-hint",
     tone: "accent-4",
-    icon: <NiScale size="large" />,
+    icon: <NiScale size="medium" />,
   },
   documents: {
     label: "today-need-documents",
     hint: "today-need-documents-hint",
     tone: "secondary",
-    icon: <NiPaperclip size="large" />,
+    icon: <NiPaperclip size="medium" />,
   },
   cancelled: {
     label: "today-need-cancelled",
     hint: "today-need-cancelled-hint",
     tone: "accent-3",
-    icon: <NiDocumentCross size="large" />,
+    icon: <NiDocumentCross size="medium" />,
   },
   publications: {
     label: "today-need-publications",
     hint: "today-need-publications-hint",
     tone: "accent-3",
-    icon: <NiInbox size="large" />,
+    icon: <NiInbox size="medium" />,
   },
   checks: {
     label: "today-need-checks",
     hint: "today-need-checks-hint",
     tone: "accent-4",
-    icon: <NiShieldCheck size="large" />,
+    icon: <NiShieldCheck size="medium" />,
   },
   reading: {
     label: "today-need-reading",
     hint: "today-need-reading-hint",
     tone: "accent-4",
-    icon: <NiUserCross size="large" />,
+    icon: <NiUserCross size="medium" />,
   },
   skipped: {
     label: "today-need-skipped",
     hint: "today-need-skipped-hint",
     tone: "accent-3",
-    icon: <NiDocumentCross size="large" />,
+    icon: <NiDocumentCross size="medium" />,
   },
   moved: {
     label: "today-need-moved",
     hint: "today-need-moved-hint",
     tone: "secondary",
-    icon: <NiTimeline size="large" />,
+    icon: <NiTimeline size="medium" />,
   },
   drafts: {
     label: "today-need-drafts",
     hint: "today-need-drafts-hint",
     tone: "primary",
-    icon: <NiDocumentFull size="large" />,
+    icon: <NiDocumentFull size="medium" />,
   },
   filings: {
     label: "today-need-filings",
     hint: "today-need-filings-hint",
     tone: "accent-3",
-    icon: <NiScale size="large" />,
+    icon: <NiScale size="medium" />,
   },
   contested: {
     label: "today-need-contested",
     hint: "today-need-contested-hint",
     tone: "accent-3",
-    icon: <NiMicrophone size="large" />,
+    icon: <NiMicrophone size="medium" />,
   },
   complaints: {
     label: "today-need-complaints",
     hint: "today-need-complaints-hint",
     tone: "accent-4",
-    icon: <NiFlag size="large" />,
+    icon: <NiFlag size="medium" />,
   },
   failed: {
     label: "today-need-failed",
     hint: "today-need-failed-hint",
     tone: "accent-3",
-    icon: <NiMessageCross size="large" />,
+    icon: <NiMessageCross size="medium" />,
   },
   queue: {
     label: "today-need-queue",
     hint: "today-need-queue-hint",
     tone: "accent-4",
-    icon: <NiListCheck size="large" />,
+    icon: <NiListCheck size="medium" />,
   },
 };
 
@@ -334,6 +336,11 @@ const HERO_ORNAMENTS: HeroOrnament[] = [
  * of counts, each one a way into where the work is done, and for a firm still
  * being set up, what is missing. A day with nothing waiting says so, and says
  * where to go next.
+ *
+ * Under the greeting, what holds a case takes the wide column and what to
+ * follow and what ONE did this month the side one; whichever has nothing to
+ * say leaves the other the whole width (the owner, 2026-11-12: a line, a list
+ * of one and a tile of one, each across the page, left most of it empty).
  */
 export default function HomeView({ state }: { state: HomeState }) {
   const t = useTranslations("product");
@@ -388,6 +395,12 @@ export default function HomeView({ state }: { state: HomeState }) {
   // Nothing waits only when the list was read and holds nothing, and no need is this person's: never beside the list
   // of what holds a case, nor beside the error that says it could not be read.
   const nothingWaits = Boolean(ready?.attention) && attentionTotal === 0 && !somethingForMe(needs);
+  // The two columns under the greeting: the wide one says what holds a case (or that nothing waits), the side one what
+  // to follow and what ONE did this month. Each is drawn only with something in it, and alone it takes the whole width.
+  const attentionShown = Boolean(ready?.attention) && attentionTotal > 0;
+  const oneWorkShown = Boolean(ready?.oneWork && saysOneWork(ready.oneWork));
+  const main = attentionShown || nothingWaits;
+  const side = tiles.length > 0 || oneWorkShown;
   // The setup's list already asks the registration at the bar while its step is open: the reminder waits for it.
   const setupAsksRegistration = Boolean(
     ready?.setup &&
@@ -422,9 +435,6 @@ export default function HomeView({ state }: { state: HomeState }) {
           {ready.modules ? <ModulesQuickAccess offer={ready.modules} inHero /> : null}
         </HomeHero>
       ) : null}
-
-      {/* What ONE did for the firm this month, the argument of the renewal: the same total its page shows. */}
-      {ready?.oneWork ? <OneWorkLine totals={ready.oneWork} href="/trabalho-do-one" /> : null}
 
       {state.kind === "unavailable" ? (
         <Alert severity="info" className="neutral bg-background-paper/60!">
@@ -485,14 +495,6 @@ export default function HomeView({ state }: { state: HomeState }) {
             >
               {t("today-attention-error")}
             </Alert>
-          ) : attentionTotal > 0 ? (
-            <AttentionList
-              id="today-attention"
-              title={t("today-attention-title")}
-              description={t("today-attention-body")}
-              total={t("today-attention-count", { count: attentionTotal })}
-              groups={attention}
-            />
           ) : null}
 
           {ready.ownRegistrationMissing && !setupAsksRegistration ? (
@@ -520,59 +522,89 @@ export default function HomeView({ state }: { state: HomeState }) {
             />
           ) : null}
 
-          {tiles.length > 0 ? (
-            <Box component="section" aria-labelledby="today-needs" className="flex flex-col gap-4">
-              <Typography id="today-needs" variant="h5" component="h2" className="mb-0">
-                {ready.attention ? t("today-follow-title") : t("today-needs-title")}
-              </Typography>
-              <Grid container spacing={2.5}>
-                {tiles.map((need) => (
-                  <Grid key={need.key} size={{ xs: 12, sm: 6, lg: 3 }}>
-                    <StatTile
-                      href={need.href}
-                      icon={NEED[need.key].icon}
-                      tone={NEED[need.key].tone}
-                      label={t(NEED[need.key].label)}
-                      hint={t(NEED[need.key].hint)}
-                      value={need.count}
-                    />
-                  </Grid>
-                ))}
-              </Grid>
-            </Box>
-          ) : null}
-
-          {nothingWaits ? (
-            <Box component="section" aria-label={t("today-needs-title")}>
-              {ready.today.whatsapp === "none" && ready.manager ? (
-                <EmptyState
-                  icon={<NiMessages size="large" />}
-                  title={t("today-empty-title")}
-                  description={t("today-empty-body-connect")}
-                  action={{ label: t("today-empty-action-connect"), href: "/settings/connections" }}
-                />
-              ) : ready.waitsFirstCase && ready.today.whatsapp !== "none" ? (
-                // The firm gave ONE what it needs: the first case is ONE's to receive and carry, never the firm's step.
-                <EmptyState
-                  icon={<NiRobot size="large" />}
-                  title={t("today-one-waits-title")}
-                  description={t("today-one-waits-body")}
-                  action={{ label: t("today-one-waits-action"), href: "/settings/autonomia" }}
-                />
-              ) : (
-                <EmptyState
-                  icon={<NiListCheck size="large" />}
-                  title={t("today-empty-title")}
-                  description={
-                    ready.today.whatsapp === "none" ? t("today-empty-body-no-whatsapp") : t("today-empty-body")
-                  }
-                  action={
-                    ready.today.whatsapp === "none"
-                      ? { label: t("today-empty-action-team"), href: "/settings/team" }
-                      : { label: t("today-empty-action-inbox"), href: "/atendimento" }
-                  }
-                />
+          {main || side ? (
+            <Box
+              className={cn(
+                "grid grid-cols-1 items-start gap-6",
+                main && side && "lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]",
               )}
+            >
+              {main ? (
+                <Box className="flex min-w-0 flex-col gap-6">
+                  {attentionShown ? (
+                    <AttentionList
+                      id="today-attention"
+                      title={t("today-attention-title")}
+                      description={t("today-attention-body")}
+                      total={t("today-attention-count", { count: attentionTotal })}
+                      groups={attention}
+                    />
+                  ) : null}
+
+                  {nothingWaits ? (
+                    <Box component="section" aria-label={t("today-needs-title")}>
+                      {ready.today.whatsapp === "none" && ready.manager ? (
+                        <EmptyState
+                          icon={<NiMessages size="large" />}
+                          title={t("today-empty-title")}
+                          description={t("today-empty-body-connect")}
+                          action={{ label: t("today-empty-action-connect"), href: "/settings/connections" }}
+                        />
+                      ) : ready.waitsFirstCase && ready.today.whatsapp !== "none" ? (
+                        // The firm gave ONE what it needs: the first case is ONE's to receive and carry, never the
+                        // firm's step.
+                        <EmptyState
+                          icon={<NiRobot size="large" />}
+                          title={t("today-one-waits-title")}
+                          description={t("today-one-waits-body")}
+                          action={{ label: t("today-one-waits-action"), href: "/settings/autonomia" }}
+                        />
+                      ) : (
+                        <EmptyState
+                          icon={<NiListCheck size="large" />}
+                          title={t("today-empty-title")}
+                          description={
+                            ready.today.whatsapp === "none" ? t("today-empty-body-no-whatsapp") : t("today-empty-body")
+                          }
+                          action={
+                            ready.today.whatsapp === "none"
+                              ? { label: t("today-empty-action-team"), href: "/settings/team" }
+                              : { label: t("today-empty-action-inbox"), href: "/atendimento" }
+                          }
+                        />
+                      )}
+                    </Box>
+                  ) : null}
+                </Box>
+              ) : null}
+
+              {side ? (
+                <Box className="flex min-w-0 flex-col gap-6">
+                  {tiles.length > 0 ? (
+                    <CountList
+                      id="today-needs"
+                      icon={<NiEyeOpen size="medium" />}
+                      title={ready.attention ? t("today-follow-title") : t("today-needs-title")}
+                      description={t("today-follow-hint")}
+                      items={tiles.map((need) => ({
+                        key: need.key,
+                        href: need.href,
+                        icon: NEED[need.key].icon,
+                        tone: NEED[need.key].tone,
+                        label: t(NEED[need.key].label),
+                        hint: t(NEED[need.key].hint),
+                        value: need.count,
+                      }))}
+                    />
+                  ) : null}
+
+                  {/* What ONE did for the firm this month, the argument of the renewal: the same total its page
+                      shows. */}
+                  {ready.oneWork && oneWorkShown ? (
+                    <OneWorkLine totals={ready.oneWork} href="/trabalho-do-one" />
+                  ) : null}
+                </Box>
+              ) : null}
             </Box>
           ) : null}
 

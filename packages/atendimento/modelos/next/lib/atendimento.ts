@@ -25,8 +25,20 @@ import {
   type PlatformSettings,
   type Scope,
 } from "../atendimento/base/shared/settings.mjs";
-import { createToolRunner, handleBotRequest, type BotRequest, type GapEventPayload, type ProjectTool } from "../atendimento/base/server/bot-contract.mjs";
-import { checkWhatsappHealth, currentInbox, healthAlerts, type WhatsappAlert } from "../atendimento/base/server/health.mjs";
+import {
+  createToolRunner,
+  handleBotRequest,
+  mediaSupport,
+  type BotRequest,
+  type GapEventPayload,
+  type ProjectTool,
+} from "../atendimento/base/server/bot-contract.mjs";
+import {
+  checkWhatsappHealth,
+  currentInbox,
+  healthAlerts,
+  type WhatsappAlert,
+} from "../atendimento/base/server/health.mjs";
 import {
   archiveTeamGroup,
   connectCloudApi,
@@ -174,10 +186,15 @@ export const tools: ProjectTool[] = [
   {
     name: "consultar_pedido",
     description: "Situação de um pedido da própria pessoa: recebido, em preparo, enviado ou entregue.",
-    input_schema: { type: "object", properties: { numero: { type: "string", description: "Número do pedido" } }, required: ["numero"] },
+    input_schema: {
+      type: "object",
+      properties: { numero: { type: "string", description: "Número do pedido" } },
+      required: ["numero"],
+    },
     async run({ contact, input }) {
       const phones = brPhoneVariants(contactPhone(contact));
-      if (!phones.length) return { ok: false, code: "sem_telefone", message: "Não deu para confirmar quem é a pessoa." };
+      if (!phones.length)
+        return { ok: false, code: "sem_telefone", message: "Não deu para confirmar quem é a pessoa." };
       // ADAPTE: busque o pedido input.numero cujo cliente tem um dos telefones em phones.
       void input;
       return { ok: false, code: "nao_implementado" };
@@ -187,7 +204,11 @@ export const tools: ProjectTool[] = [
 
 const declaredTools = tools.map((tool) => tool.name);
 
-/** O provedor de IA padrão do projeto; o superadmin pode trocar na camada da plataforma (ai). */
+/**
+ * O provedor de IA padrão do projeto; o superadmin pode trocar na camada da plataforma (ai). Um projeto
+ * que não põe chave de IA no robô usa provider "project" e transcription "project", e implementa as rotas
+ * generate e transcribe em botHandler (references/contratos.md, "Rotas que o projeto expõe ao robô").
+ */
 export const defaultAi = { provider: "anthropic", model: "claude-opus-5-5", effort: "low" } as const;
 
 async function platformSettings(): Promise<PlatformSettings> {
@@ -253,7 +274,10 @@ export async function enterPanel(request: Request): Promise<EnterResult> {
     person: { key: person.key, email: person.email, name: person.name },
   });
   await store.saveState(tenantId, next);
-  return { ok: true, url: await ssoUrl({ chatwootUrl: env.chatwootUrl(), platformToken: env.platformToken(), userId }) };
+  return {
+    ok: true,
+    url: await ssoUrl({ chatwootUrl: env.chatwootUrl(), platformToken: env.platformToken(), userId }),
+  };
 }
 
 /**
@@ -263,7 +287,12 @@ export async function enterPanel(request: Request): Promise<EnterResult> {
 export async function removeFromPanel(tenantId: string, personKey: string): Promise<boolean> {
   const state = await store.loadState(tenantId);
   if (!state?.staff?.[personKey]) return false;
-  const { state: next, removed } = await removeStaffUser({ chatwootUrl: env.chatwootUrl(), platformToken: env.platformToken(), state, personKey });
+  const { state: next, removed } = await removeStaffUser({
+    chatwootUrl: env.chatwootUrl(),
+    platformToken: env.platformToken(),
+    state,
+    personKey,
+  });
   await store.saveState(tenantId, next);
   return removed !== null;
 }
@@ -305,7 +334,8 @@ export async function checkWhatsapp(tenantId: string) {
   const { alerts, health } = healthAlerts({ previous: state.health, report });
   // Avisa antes de gravar: se o canal falhar, o aviso volta na próxima conferência.
   if (alerts.length) await store.alertWhatsapp(tenantId, alerts);
-  if (JSON.stringify(health) !== JSON.stringify(state.health ?? {})) await store.saveState(tenantId, { ...state, health });
+  if (JSON.stringify(health) !== JSON.stringify(state.health ?? {}))
+    await store.saveState(tenantId, { ...state, health });
   return { skipped: null, report, alerts };
 }
 
@@ -324,7 +354,8 @@ async function groupsFor(tenantId: string) {
  */
 export async function syncWhatsappGroups(tenantId: string) {
   const state = await store.loadState(tenantId);
-  if (!state?.account_id || !(state.inboxes ?? []).some((inbox) => inbox.route === "nao_oficial")) return { skipped: "no_unofficial" as const };
+  if (!state?.account_id || !(state.inboxes ?? []).some((inbox) => inbox.route === "nao_oficial"))
+    return { skipped: "no_unofficial" as const };
   const groups = await groupsFor(tenantId);
   const result = await syncOpenWAGroups({
     chatwootUrl: env.chatwootUrl(),
@@ -361,9 +392,13 @@ export async function teamGroups(request: Request) {
 }
 
 /** Cria ou muda um grupo da equipe. Sem chave, cria um grupo novo. */
-export async function saveTeamGroupFor(request: Request, body: { chave?: string; nome?: string; membros?: string[]; etiquetas?: string[] }) {
+export async function saveTeamGroupFor(
+  request: Request,
+  body: { chave?: string; nome?: string; membros?: string[]; etiquetas?: string[] },
+) {
   const person = await store.currentPerson(request);
-  if (!canManageGroups(person)) return { status: 403, body: { code: "forbidden", message: "Você não pode mudar os grupos da equipe." } };
+  if (!canManageGroups(person))
+    return { status: 403, body: { code: "forbidden", message: "Você não pode mudar os grupos da equipe." } };
   const tenantId = tenantOf(person!);
   const people = new Map((await store.teamPeople(tenantId)).map((item) => [item.key, item]));
   // Só entra num grupo quem pode atender neste cliente (canEnterPanel, pela lista do projeto).
@@ -372,11 +407,22 @@ export async function saveTeamGroupFor(request: Request, body: { chave?: string;
   for (const key of members) {
     if (state.staff?.[key]) continue;
     const item = people.get(key)!;
-    state = (await ensureStaffUser({ chatwootUrl: env.chatwootUrl(), platformToken: env.platformToken(), state, person: { key, email: item.email, name: item.name } })).state;
+    state = (
+      await ensureStaffUser({
+        chatwootUrl: env.chatwootUrl(),
+        platformToken: env.platformToken(),
+        state,
+        person: { key, email: item.email, name: item.name },
+      })
+    ).state;
   }
   await store.saveState(tenantId, state);
   const chave = body.chave?.trim() || `g-${crypto.randomUUID().slice(0, 8)}`;
-  const result = await saveTeamGroup({ chatwootUrl: env.chatwootUrl(), state, group: { key: chave, name: body.nome ?? "", members, labels: body.etiquetas ?? [] } });
+  const result = await saveTeamGroup({
+    chatwootUrl: env.chatwootUrl(),
+    state,
+    group: { key: chave, name: body.nome ?? "", members, labels: body.etiquetas ?? [] },
+  });
   await store.saveState(tenantId, result.state);
   return { status: 200, body: { ok: true, chave, fora: result.missing } };
 }
@@ -384,10 +430,12 @@ export async function saveTeamGroupFor(request: Request, body: { chave?: string;
 /** Arquiva um grupo: todos saem dele e o histórico fica guardado. */
 export async function archiveTeamGroupFor(request: Request, chave: string) {
   const person = await store.currentPerson(request);
-  if (!canManageGroups(person)) return { status: 403, body: { code: "forbidden", message: "Você não pode mudar os grupos da equipe." } };
+  if (!canManageGroups(person))
+    return { status: 403, body: { code: "forbidden", message: "Você não pode mudar os grupos da equipe." } };
   const tenantId = tenantOf(person!);
   const state = await store.loadState(tenantId);
-  if (!state?.team_groups?.[chave]) return { status: 404, body: { code: "not_found", message: "Este grupo não existe." } };
+  if (!state?.team_groups?.[chave])
+    return { status: 404, body: { code: "not_found", message: "Este grupo não existe." } };
   const result = await archiveTeamGroup({ chatwootUrl: env.chatwootUrl(), state, key: chave });
   await store.saveState(tenantId, result.state);
   return { status: 200, body: { ok: true } };
@@ -419,28 +467,40 @@ export async function readSettings(request: Request, scope: Scope) {
   const person = await store.currentPerson(request);
   if (!canEdit(person, scope)) return null;
   const platform = await platformSettings();
-  const settings = scope === "plataforma" ? platform : (await store.loadSettings(person!.tenantId)) ?? defaultSettings(await store.tenantName(person!.tenantId));
+  const settings =
+    scope === "plataforma"
+      ? platform
+      : ((await store.loadSettings(person!.tenantId)) ?? defaultSettings(await store.tenantName(person!.tenantId)));
   const offered = Array.isArray(platform.tools_available) ? platform.tools_available : declaredTools;
   const visibleTools = scope === "plataforma" ? tools : tools.filter((tool) => offered.includes(tool.name));
+  const editable = editableGroups(scope, MODEL, platform);
+  // A tela esconde "Ouvir áudios" quando o robô não tem quem transcreva (o /health dele e ai.transcription).
+  const media = editable.includes("midia")
+    ? await mediaSupport({ ai: { ...defaultAi, ...(platform.ai ?? {}) }, botUrl: env.botPublicUrl() })
+    : { audio: null };
   return {
     model: MODEL,
     scope,
     settings,
-    editable: editableGroups(scope, MODEL, platform),
+    editable,
     tools: visibleTools.map(({ name, description }) => ({ name, description })),
+    media,
   };
 }
 
 export async function writeSettings(request: Request, scope: Scope, incoming: unknown) {
   const person = await store.currentPerson(request);
-  if (!canEdit(person, scope)) return { status: 403, body: { code: "forbidden", message: "Você não pode mudar esta parte do robô." } };
+  if (!canEdit(person, scope))
+    return { status: 403, body: { code: "forbidden", message: "Você não pode mudar esta parte do robô." } };
   if (scope === "plataforma") {
     const problems = validateSettings(incoming, { declaredTools, scope });
-    if (problems.length) return { status: 422, body: { code: "invalid", message: "Confira os campos marcados.", problems } };
+    if (problems.length)
+      return { status: 422, body: { code: "invalid", message: "Confira os campos marcados.", problems } };
     const before = await platformSettings();
     await store.savePlatformSettings(incoming as PlatformSettings);
     // No por-cliente, a mudança chega ao número de cada cliente pela rotina (syncWhatsappGroups).
-    const changed = JSON.stringify(before.groups ?? null) !== JSON.stringify((incoming as PlatformSettings).groups ?? null);
+    const changed =
+      JSON.stringify(before.groups ?? null) !== JSON.stringify((incoming as PlatformSettings).groups ?? null);
     const aviso = changed && MODEL === "plataforma" ? await applyGroups(PLATFORM_TENANT) : null;
     return { status: 200, body: { ok: true, ...(aviso ? { aviso } : {}) } };
   }
@@ -448,9 +508,13 @@ export async function writeSettings(request: Request, scope: Scope, incoming: un
   const current = await store.loadSettings(person!.tenantId);
   const next = applyClientEdits(current, incoming as Partial<BotSettings>, clientPermissions(MODEL, platform));
   const problems = validateSettings(next, { declaredTools, scope });
-  if (problems.length) return { status: 422, body: { code: "invalid", message: "Confira os campos marcados.", problems } };
+  if (problems.length)
+    return { status: 422, body: { code: "invalid", message: "Confira os campos marcados.", problems } };
   await store.saveSettings(person!.tenantId, next);
-  const aviso = JSON.stringify(current?.groups ?? null) !== JSON.stringify(next.groups ?? null) ? await applyGroups(person!.tenantId) : null;
+  const aviso =
+    JSON.stringify(current?.groups ?? null) !== JSON.stringify(next.groups ?? null)
+      ? await applyGroups(person!.tenantId)
+      : null;
   return { status: 200, body: { ok: true, ...(aviso ? { aviso } : {}) } };
 }
 
@@ -458,24 +522,44 @@ export async function writeSettings(request: Request, scope: Scope, incoming: un
 export async function listSuggestionsFor(request: Request, scope: Scope) {
   const person = await store.currentPerson(request);
   if (!canEdit(person, scope)) return null;
-  const items = await store.listSuggestions(scope === "plataforma" ? { owner: "plataforma" } : { owner: "cliente", tenantId: person!.tenantId });
-  return { suggestions: items.map(({ id, q, a, why, at, tenantId }) => ({ id, q, a, why, at, tenant: scope === "plataforma" ? tenantId : null })) };
+  const items = await store.listSuggestions(
+    scope === "plataforma" ? { owner: "plataforma" } : { owner: "cliente", tenantId: person!.tenantId },
+  );
+  return {
+    suggestions: items.map(({ id, q, a, why, at, tenantId }) => ({
+      id,
+      q,
+      a,
+      why,
+      at,
+      tenant: scope === "plataforma" ? tenantId : null,
+    })),
+  };
 }
 
 /** Aprovar põe a pergunta e a resposta (com as edições da pessoa) no conhecimento da camada dona. */
-export async function decideSuggestion(request: Request, id: string, body: { decisao?: string; q?: string; a?: string }) {
+export async function decideSuggestion(
+  request: Request,
+  id: string,
+  body: { decisao?: string; q?: string; a?: string },
+) {
   const person = await store.currentPerson(request);
-  const pending = (await store.listSuggestions({ owner: "plataforma" })).concat(person ? await store.listSuggestions({ owner: "cliente", tenantId: person.tenantId }) : []);
+  const pending = (await store.listSuggestions({ owner: "plataforma" })).concat(
+    person ? await store.listSuggestions({ owner: "cliente", tenantId: person.tenantId }) : [],
+  );
   const item = pending.find((suggestion) => suggestion.id === id);
-  if (!item || !canEdit(person, item.owner)) return { status: 404, body: { code: "not_found", message: "Esta sugestão não existe mais." } };
+  if (!item || !canEdit(person, item.owner))
+    return { status: 404, body: { code: "not_found", message: "Esta sugestão não existe mais." } };
   if (body.decisao === "aprovar") {
     const entry = { q: String(body.q ?? item.q).trim(), a: String(body.a ?? item.a).trim() };
-    if (!entry.q || !entry.a) return { status: 422, body: { code: "invalid", message: "A pergunta e a resposta precisam de texto." } };
+    if (!entry.q || !entry.a)
+      return { status: 422, body: { code: "invalid", message: "A pergunta e a resposta precisam de texto." } };
     if (item.owner === "plataforma") {
       const platform = await platformSettings();
       await store.savePlatformSettings({ ...platform, knowledge: [...(platform.knowledge ?? []), entry] });
     } else {
-      const current = (await store.loadSettings(item.tenantId)) ?? defaultSettings(await store.tenantName(item.tenantId));
+      const current =
+        (await store.loadSettings(item.tenantId)) ?? defaultSettings(await store.tenantName(item.tenantId));
       await store.saveSettings(item.tenantId, { ...current, knowledge: [...(current.knowledge ?? []), entry] });
     }
   }
@@ -500,31 +584,56 @@ export async function whatsapp(request: Request) {
   if (!inbox) return { connected: false, route: null, status: null, qrCode: null, level: null, findings: [] };
   if (inbox.route === "oficial") {
     const current = (await checkWhatsappHealth({ chatwootUrl: env.chatwootUrl(), state })).inboxes[0];
-    return { connected: current.level !== "fora", route: "oficial", status: null, qrCode: null, level: current.level, findings: current.findings };
+    return {
+      connected: current.level !== "fora",
+      route: "oficial",
+      status: null,
+      qrCode: null,
+      level: current.level,
+      findings: current.findings,
+    };
   }
-  const status = await whatsappStatus({ openwaUrl: env.openwaUrl(), openwaApiKey: env.openwaApiKey(), sessionId: inbox.session_id! });
+  const status = await whatsappStatus({
+    openwaUrl: env.openwaUrl(),
+    openwaApiKey: env.openwaApiKey(),
+    sessionId: inbox.session_id!,
+  });
   return { connected: status.status === "ready", route: "nao_oficial", ...status };
 }
 
 /** Ler o QR de novo: retoma a sessão que a caixa já tem, sem criar outra caixa. */
 export async function reconnectWhatsapp(request: Request) {
   const person = await store.currentPerson(request);
-  if (!canConnect(person)) return { status: 403, body: { code: "forbidden", message: "Você não pode conectar o número." } };
+  if (!canConnect(person))
+    return { status: 403, body: { code: "forbidden", message: "Você não pode conectar o número." } };
   const inbox = currentInbox(await store.loadState(tenantOf(person!)));
-  if (inbox?.route !== "nao_oficial" || !inbox.session_id) return { status: 409, body: { code: "no_session", message: "Não há conexão pelo WhatsApp Web para retomar." } };
-  const result = await reconnectOpenWA({ openwaUrl: env.openwaUrl(), openwaApiKey: env.openwaApiKey(), sessionId: inbox.session_id });
+  if (inbox?.route !== "nao_oficial" || !inbox.session_id)
+    return { status: 409, body: { code: "no_session", message: "Não há conexão pelo WhatsApp Web para retomar." } };
+  const result = await reconnectOpenWA({
+    openwaUrl: env.openwaUrl(),
+    openwaApiKey: env.openwaApiKey(),
+    sessionId: inbox.session_id,
+  });
   return { status: 200, body: { ok: true, status: result.status } };
 }
 
 export async function connectWhatsapp(request: Request, body: Record<string, string>) {
   const person = await store.currentPerson(request);
-  if (!canConnect(person)) return { status: 403, body: { code: "forbidden", message: "Você não pode conectar o número." } };
+  if (!canConnect(person))
+    return { status: 403, body: { code: "forbidden", message: "Você não pode conectar o número." } };
   const tenantId = tenantOf(person!);
   const state = await ensureAccount(tenantId);
   if (body.route === "oficial") {
-    const cloud = { phoneNumber: body.phoneNumber, phoneNumberId: body.phoneNumberId, businessAccountId: body.businessAccountId, apiKey: body.apiKey };
+    const cloud = {
+      phoneNumber: body.phoneNumber,
+      phoneNumberId: body.phoneNumberId,
+      businessAccountId: body.businessAccountId,
+      apiKey: body.apiKey,
+    };
     // O mesmo número de novo é a troca do token: o Chatwoot aceita cada número uma vez só.
-    const existing = (state.inboxes ?? []).find((inbox) => inbox.route === "oficial" && samePhone(inbox.phone ?? "", cloud.phoneNumber));
+    const existing = (state.inboxes ?? []).find(
+      (inbox) => inbox.route === "oficial" && samePhone(inbox.phone ?? "", cloud.phoneNumber),
+    );
     const result = existing
       ? await updateCloudApi({ chatwootUrl: env.chatwootUrl(), state, inboxId: existing.id, cloud })
       : await connectCloudApi({ chatwootUrl: env.chatwootUrl(), state, cloud });
@@ -560,7 +669,11 @@ async function configFor(accountId: number) {
   ]);
   if (!state?.bot_token) return null;
   const tenantName = MODEL === "por-cliente" ? await store.tenantName(tenantId) : "";
-  return { tenantId, platform, config: botConfig({ model: MODEL, platform, client, state, tools, ai: defaultAi, tenantName }) };
+  return {
+    tenantId,
+    platform,
+    config: botConfig({ model: MODEL, platform, client, state, tools, ai: defaultAi, tenantName }),
+  };
 }
 
 const runTool = createToolRunner(tools, {
@@ -593,7 +706,13 @@ export async function botHandler(request: BotRequest) {
       if (!found) return;
       const owner = knowledgeOwner(MODEL, found.platform);
       await store.addSuggestions(
-        payload.suggestions.map((suggestion) => ({ tenantId: found.tenantId, owner, conversationId: payload.conversation_id, ...suggestion, at: payload.at })),
+        payload.suggestions.map((suggestion) => ({
+          tenantId: found.tenantId,
+          owner,
+          conversationId: payload.conversation_id,
+          ...suggestion,
+          at: payload.at,
+        })),
       );
     },
   });

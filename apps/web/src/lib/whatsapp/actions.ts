@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { recordAudit } from "@/lib/audit";
+import { queueChatwootMirror } from "@/lib/chatwoot/mirror";
 import { discardUpload, downloadUrl, finishUpload, startUpload } from "@/lib/files/uploads";
 import { isManager } from "@/lib/firm/roles";
 import { getMemberContext } from "@/lib/member/context";
@@ -257,6 +258,8 @@ export async function setConversationAgent(conversationId: string, agent: "one" 
   const answer = (data ?? {}) as { ok?: boolean; code?: string };
   if (!answer.ok) return { ok: false, code: codeOf(answer.code) };
   refresh();
+  // The firm's panel shows who answers now (0223).
+  queueChatwootMirror(conversationId);
   if (agent === "one") {
     // Given back with something the passenger wrote and nobody answered: ONE takes its turn now.
     const { queueConversationTurn } = await import("@/lib/conversations/agent-work");

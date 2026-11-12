@@ -1,5 +1,6 @@
 import "server-only";
 
+import { queueChatwootMirror } from "@/lib/chatwoot/mirror";
 import { FIRM_FILES_BUCKET } from "@/lib/files/store";
 import { readWhatsAppSettings, simulatorSecret, type WhatsAppSettings } from "@/lib/whatsapp/config";
 import { handleDelivery } from "@/lib/whatsapp/inbox";
@@ -261,5 +262,7 @@ export async function deliverOutbox(
     if (delivery.ok) report.sent += 1;
     else report.failed += 1;
   }
+  // What went (or did not) shows in the firm's panel at once (0223).
+  if (report.claimed > 0) queueChatwootMirror();
   return report;
 }

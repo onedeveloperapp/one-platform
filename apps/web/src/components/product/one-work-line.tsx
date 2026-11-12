@@ -7,7 +7,7 @@ import { Box, Button, Card, Typography } from "@mui/material";
 
 import { TILE_TONE } from "@/components/product/tile-tone";
 import NiRobot from "@/icons/nexture/ni-robot";
-import { durationOf, type OneWorkTotals } from "@/lib/one-work/work";
+import { durationOf, type OneWorkTotals, saysOneWork } from "@/lib/one-work/work";
 import { cn } from "@/lib/utils";
 
 /**
@@ -27,7 +27,7 @@ export default function OneWorkLine({
   scope?: "firm" | "module";
 }) {
   const t = useTranslations("product");
-  if (totals.tasks === 0 && totals.test === 0) return null;
+  if (!saysOneWork(totals)) return null;
   const duration = durationOf(totals.minutes);
   const about =
     duration.unit === "hours"
@@ -37,30 +37,33 @@ export default function OneWorkLine({
   const lineKey = scope === "module" ? "one-work-line-module" : "one-work-line";
 
   return (
-    <Card component="section" aria-label={t("one-work-title")}>
-      <Box className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
-        <Box className="flex min-w-0 items-center gap-3">
-          <Box
-            aria-hidden
-            className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-xl", style.bg, style.text)}
-          >
-            <NiRobot size="medium" />
-          </Box>
-          <Typography variant="body1" className="min-w-0">
+    // The card reads its own width (a container query): one line across a whole page, the sentence over its link in
+    // a side column (the home's, 2026-11-12).
+    <Card component="section" aria-label={t("one-work-title")} className="@container">
+      <Box className="flex flex-row items-start gap-3 p-4 @2xl:items-center">
+        <Box
+          aria-hidden
+          className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-xl", style.bg, style.text)}
+        >
+          <NiRobot size="medium" />
+        </Box>
+        {/* Narrow, the link sits under the sentence, at its start; wide, at the card's right. */}
+        <Box className="flex min-w-0 flex-1 flex-col gap-1 @2xl:flex-row @2xl:items-center @2xl:justify-between @2xl:gap-3">
+          <Typography variant="body1" className="min-w-0 @max-2xl:pt-2">
             {totals.tasks > 0
               ? t(lineKey, { count: totals.tasks, about })
               : t("one-work-line-tests", { count: totals.test })}
           </Typography>
+          <Button
+            variant="text"
+            size="small"
+            href={href}
+            LinkComponent={Link}
+            className="-ml-2 shrink-0 self-start @2xl:ml-0 @2xl:self-center"
+          >
+            {t("one-work-line-action")}
+          </Button>
         </Box>
-        <Button
-          variant="text"
-          size="small"
-          href={href}
-          LinkComponent={Link}
-          className="shrink-0 self-start sm:self-center"
-        >
-          {t("one-work-line-action")}
-        </Button>
       </Box>
     </Card>
   );

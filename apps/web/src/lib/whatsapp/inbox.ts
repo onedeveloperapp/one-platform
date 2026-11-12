@@ -1,5 +1,6 @@
 import "server-only";
 
+import { queueChatwootMirror } from "@/lib/chatwoot/mirror";
 import { isSimulatorOn, metaApp, openWaPlatform, simulatorSecret } from "@/lib/whatsapp/config";
 import {
   type AccountNumber,
@@ -313,6 +314,8 @@ export async function handleDelivery(rawBody: string, signature: string | null):
   const report = await applyEvents(supabaseInbox(service), provider, parseWebhook(payload));
   // The sweep fetches a pending media anyway; this only makes it sooner (and ONE's turn after it).
   if (report.mediaPending) await queueMediaFetch();
+  // The firm's panel shows what came at once (0223); the clock's sweep takes what this does not finish.
+  queueChatwootMirror();
   return { ok: true, provider, report };
 }
 
@@ -365,5 +368,6 @@ export async function handleOpenWaDelivery(rawBody: string, signature: string | 
 
   const report = await applyEvents(supabaseInbox(service), "openwa", events);
   if (report.mediaPending) await queueMediaFetch();
+  queueChatwootMirror();
   return { ok: true, provider: "openwa", report };
 }

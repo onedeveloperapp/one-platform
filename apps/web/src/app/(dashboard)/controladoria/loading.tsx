@@ -1,6 +1,6 @@
 import PageSkeleton from "@/components/product/page-skeleton";
 
-/** The numbers of the stock, then the list they open. */
+/** The numbers of the month, the board by step under them, then who has the cases beside the court. */
 export default function Loading() {
-  return <PageSkeleton shape="list" numbers={4} rows={6} />;
+  return <PageSkeleton shape="board" numbers={4} />;
 }

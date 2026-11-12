@@ -204,8 +204,15 @@ export default function JudgmentSessionBlock({
       }
       case "counting":
         return <StateLine tone="waiting">{t("session-oral-counting")}</StateLine>;
-      case "uncounted":
-        return <StateLine tone="attention">{t("session-oral-uncounted")}</StateLine>;
+      case "uncounted": {
+        // A limit counted from the pauta's publication, of a session a person recorded (0226): ONE has no day to count from.
+        const noPublication = session.limitError === "no_publication";
+        return (
+          <StateLine tone="attention">
+            {t(noPublication ? "session-oral-no-publication" : "session-oral-uncounted")}
+          </StateLine>
+        );
+      }
       case "passed":
         return (
           <StateLine tone="info">

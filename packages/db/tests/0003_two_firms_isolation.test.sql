@@ -644,6 +644,13 @@ $$;
 insert into public.test_firms (org_id, token, note) values
   ('b1000000-0000-4000-8000-00000000000a', repeat('c', 43), 'Firma A marcada para a cobertura'),
   ('b1000000-0000-4000-8000-00000000000b', repeat('d', 43), 'Firma B marcada para a cobertura');
+-- Each firm's account in the panel of attendance and a person of it there (0223): backend-only, still the firm's.
+insert into public.chatwoot_accounts (org_id) values
+  ('b1000000-0000-4000-8000-00000000000a'),
+  ('b1000000-0000-4000-8000-00000000000b');
+insert into public.chatwoot_staff (org_id, user_id, chatwoot_user_id) values
+  ('b1000000-0000-4000-8000-00000000000a', 'a1000000-0000-4000-8000-000000000001', 101),
+  ('b1000000-0000-4000-8000-00000000000b', 'a1000000-0000-4000-8000-000000000004', 102);
 
 -- ---------- The fixture covers every table that carries the firm ----------
 
@@ -660,6 +667,8 @@ select is(
   'and a row of firm A'
 );
 delete from public.test_firms where org_id in ('b1000000-0000-4000-8000-00000000000a', 'b1000000-0000-4000-8000-00000000000b');
+delete from public.chatwoot_staff where org_id in ('b1000000-0000-4000-8000-00000000000a', 'b1000000-0000-4000-8000-00000000000b');
+delete from public.chatwoot_accounts where org_id in ('b1000000-0000-4000-8000-00000000000a', 'b1000000-0000-4000-8000-00000000000b');
 select is(
   (
     select count(*)::int

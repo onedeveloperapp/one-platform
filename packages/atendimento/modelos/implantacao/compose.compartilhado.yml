@@ -7,7 +7,7 @@
 # de cada pilha, pela rede borda-<pilha>, que nenhuma outra pilha usa.
 #
 # Os tetos de memória e CPU são regra de bolso para duas pilhas numa VPS de 16 GB, não medição: somados,
-# ficam em 13 GB, e o resto é do sistema e do proxy. Ajuste no .env de cada pilha. O que mais pesa é o
+# ficam em 14 GB, e o resto é do sistema e do proxy. Ajuste no .env de cada pilha. O que mais pesa é o
 # OpenWA: de 300 a 500 MB por número conectado com o motor whatsapp-web.js.
 
 name: atendimento-${PILHA:?Defina PILHA no .env da pilha, por exemplo sistema-a}
@@ -35,8 +35,9 @@ services:
     cpus: ${CPU_REDIS:-0.5}
 
   robo:
-    mem_limit: ${LIMITE_ROBO:-256m}
-    cpus: ${CPU_ROBO:-0.5}
+    # O ffmpeg do robô trabalha aqui (imagem, áudio e vídeo), até duas mídias de cada vez.
+    mem_limit: ${LIMITE_ROBO:-768m}
+    cpus: ${CPU_ROBO:-1.0}
     networks:
       default: {}
       borda:

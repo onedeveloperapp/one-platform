@@ -2,8 +2,19 @@ export type Mode = "auto" | "sugestao" | "desligado";
 export type Model = "por-cliente" | "plataforma";
 export type Scope = "plataforma" | "cliente";
 export type Day = "seg" | "ter" | "qua" | "qui" | "sex" | "sab" | "dom";
-export type PermissionGroup = "apresentacao" | "instrucoes" | "conhecimento" | "horario" | "mensagens" | "transferencia" | "consultas" | "modo" | "grupos";
+export type PermissionGroup = "apresentacao" | "instrucoes" | "conhecimento" | "horario" | "mensagens" | "transferencia" | "consultas" | "modo" | "grupos" | "midia";
 export type GroupMode = "fora" | "equipe" | "chamado";
+
+/** O que o robô lê do que a pessoa manda (D28). */
+export interface MediaSettings {
+  images: boolean;
+  audio: boolean;
+  video: boolean;
+  /** PDF, planilha (XLSX, ODS), CSV e documento de texto (DOCX, ODT, TXT). Ausente numa configuração antiga: ligado. */
+  documents?: boolean;
+  /** A transcrição do áudio e da fala do vídeo também como nota interna para a equipe. */
+  transcription_note: boolean;
+}
 
 /** Grupos do WhatsApp (só na rota não oficial). */
 export interface GroupSettings {
@@ -35,6 +46,11 @@ export interface AiSettings {
   fallbacks: boolean;
   max_tokens: number;
   cache_ttl: "5m" | "1h";
+  /**
+   * "project": o projeto transcreve áudio e a fala do vídeo pela rota transcribe do contrato do robô, e o
+   * contêiner do robô fica sem chave de IA. Sem o campo, transcreve a chave do Gemini ou da OpenAI do robô.
+   */
+  transcription?: "project" | null;
 }
 
 /** A camada do cliente (ou a base da camada da plataforma). */
@@ -50,6 +66,8 @@ export interface BotSettings {
   tools_enabled: string[];
   /** Ausente nas camadas gravadas antes dos grupos: vale "fora". */
   groups?: GroupSettings;
+  /** Imagem, áudio e vídeo que a pessoa manda; ausente, tudo ligado. */
+  media?: MediaSettings;
   suggest_on_open: boolean;
   share_contact_name: boolean;
 }

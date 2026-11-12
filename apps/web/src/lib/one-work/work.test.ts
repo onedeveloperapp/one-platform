@@ -15,6 +15,7 @@ import {
   oneWorkOf,
   oneWorkSheet,
   type Say,
+  saysOneWork,
 } from "@/lib/one-work/work";
 
 const answer = {
@@ -83,6 +84,12 @@ describe("the totals of a month", () => {
     });
     expect(monthTotals(work, "2026-09").tasks).toBe(1);
     expect(monthTotals(work, "2026-08").tasks).toBe(0);
+  });
+
+  it("has something to say with a task that counts or one of a test case, and nothing with neither", () => {
+    expect(saysOneWork(monthTotals(work, "2026-10"))).toBe(true);
+    expect(saysOneWork({ ...monthTotals(work, "2026-08"), test: 1 })).toBe(true);
+    expect(saysOneWork(monthTotals(work, "2026-08"))).toBe(false);
   });
 
   it("lists every kind of each family the catalog has, zero where ONE did none", () => {

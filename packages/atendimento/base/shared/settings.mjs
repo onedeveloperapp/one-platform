@@ -16,7 +16,7 @@ export const DAYS = ["seg", "ter", "qua", "qui", "sex", "sab", "dom"];
 export const GROUP_MODES = ["fora", "equipe", "chamado"];
 
 /** Grupos de campos que a plataforma pode liberar para o cliente editar. */
-export const PERMISSION_GROUPS = ["apresentacao", "instrucoes", "conhecimento", "horario", "mensagens", "transferencia", "consultas", "modo", "grupos"];
+export const PERMISSION_GROUPS = ["apresentacao", "instrucoes", "conhecimento", "horario", "mensagens", "transferencia", "consultas", "modo", "grupos", "midia"];
 
 export const LIMITS = {
   persona: 2000,
@@ -48,6 +48,8 @@ export function defaultSettings(brand = "") {
     handoff: { keywords: null, max_bot_turns: 8, team_id: null },
     tools_enabled: [],
     groups: { mode: "fora", call_words: [], team_id: null },
+    // Imagem, áudio e vídeo que a pessoa manda (D28); a transcrição também vira nota interna para a equipe.
+    media: { images: true, audio: true, video: true, documents: true, transcription_note: true },
     suggest_on_open: true,
     share_contact_name: true,
   };
@@ -57,7 +59,7 @@ export function defaultSettings(brand = "") {
 export function defaultPlatformSettings(brand = "") {
   return {
     ...defaultSettings(brand),
-    client_permissions: { apresentacao: true, instrucoes: true, conhecimento: true, horario: true, mensagens: true, transferencia: true, consultas: true, modo: false, grupos: false },
+    client_permissions: { apresentacao: true, instrucoes: true, conhecimento: true, horario: true, mensagens: true, transferencia: true, consultas: true, modo: false, grupos: false, midia: false },
     tools_available: null,
     learning: { enabled: true },
     report: { enabled: true },
@@ -100,6 +102,7 @@ const GROUP_FIELDS = {
   consultas: ["tools_enabled"],
   modo: ["mode"],
   grupos: ["groups"],
+  midia: ["media"],
 };
 
 /** Grava do que o cliente mandou só os grupos liberados; o resto fica como estava. */
@@ -178,6 +181,15 @@ export function validateSettings(settings, { declaredTools = [], scope = "client
     if (groups.team_id !== null && groups.team_id !== undefined && !(Number.isInteger(groups.team_id) && groups.team_id > 0)) add("groups.team_id", "O time do Chatwoot é um número.");
   }
 
+  const media = settings.media;
+  if (media !== undefined && media !== null) {
+    for (const field of ["images", "audio", "video", "transcription_note"]) {
+      if (typeof media[field] !== "boolean") add(`media.${field}`, "Escolha sim ou não para imagem, áudio, vídeo e a nota com a transcrição.");
+    }
+    // Arquivos chegaram depois (D29): uma configuração salva antes não tem o campo e vale como ligado.
+    if (media.documents !== undefined && typeof media.documents !== "boolean") add("media.documents", "Escolha sim ou não para PDF, planilha e documento.");
+  }
+
   for (const name of settings.tools_enabled ?? []) {
     if (!declaredTools.includes(name)) add("tools_enabled", `A consulta ${name} não existe neste sistema.`);
   }
@@ -207,6 +219,13 @@ export function groupSettings({ model = "por-cliente", platform, client }) {
     call_words: words,
     team_id: Number.isInteger(chosen.team_id) && chosen.team_id > 0 ? chosen.team_id : null,
   };
+}
+
+/** Imagem, áudio e vídeo: a camada do cliente quando a plataforma liberou e ele escolheu; senão a da plataforma. */
+function mediaSettings({ platform, client }) {
+  const chosen = client?.media && typeof client.media === "object" ? client.media : platform?.media ?? {};
+  const on = (field) => chosen[field] !== false;
+  return { images: on("images"), audio: on("audio"), video: on("video"), documents: on("documents"), transcription_note: on("transcription_note") };
 }
 
 const filled = (value) => (Array.isArray(value) ? value.length > 0 : value !== null && value !== undefined && String(value).trim() !== "");
@@ -253,6 +272,7 @@ export function botConfig({ model = "por-cliente", platform, client, state, tool
       labels: ["robo-passou"],
     },
     groups: groupSettings({ model, platform, client }),
+    media: mediaSettings({ model, platform: base, client: layer && permissions.midia ? layer : null }),
     tools: tools.filter((tool) => enabled.has(tool.name)).map(({ name, description, input_schema }) => ({ name, description, input_schema })),
     suggest_on_open: (permissions.transferencia && layer ? layer.suggest_on_open : base.suggest_on_open) !== false,
     history_from_project: true,

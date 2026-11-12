@@ -22,6 +22,7 @@
   },
   "include": [
     "calendar/src",
+    "chatwoot/src",
     "psc/src",
     "courts/src",
     "flights/src",

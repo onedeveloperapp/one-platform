@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 
 import { Box, Card, CardContent, Typography } from "@mui/material";
 
+import InfoHint from "@/components/product/info-hint";
 import StatusChip from "@/components/product/status-chip";
 import NiExclamationSquare from "@/icons/nexture/ni-exclamation-square";
 import { cn } from "@/lib/utils";
@@ -39,7 +40,8 @@ const ICON: Record<AttentionTone, string> = {
  * What holds a firm's cases until somebody of the firm acts, at the top of
  * the screen where a person starts the day: one card, its colour the most
  * urgent of what it holds, and in it, by group, one card per thing (the
- * template's grid of projects, the owner's model of 2026-11-05): the icon of
+ * template's grid of projects, the owner's model of 2026-11-05; as many
+ * columns as the card holds, 2026-11-12): the icon of
  * its kind on the group's tint, what it is, its kind named in a pastel badge
  * (never colour alone), of which case and since when in two lines at most,
  * and how many when it stands for more than one, the whole card one click
@@ -71,23 +73,24 @@ export default function AttentionList({
   return (
     <Card component="section" aria-labelledby={id}>
       <CardContent className="flex flex-col gap-4">
-        <Box className="flex flex-row items-start gap-3">
-          <Box className={cn("flex h-12 w-12 flex-none items-center justify-center rounded-2xl", ICON[tone])}>
-            <NiExclamationSquare size="large" />
+        {/* The head of every card of a screen (CardTitle's shape), in the tint of the most urgent group: what the
+            list is for behind the "i" (the owner, 2026-11-09), how many it holds in the chip. */}
+        <Box className="flex flex-row flex-wrap items-center gap-x-3 gap-y-2">
+          <Box
+            aria-hidden
+            className={cn("flex h-10 w-10 flex-none items-center justify-center rounded-xl", ICON[tone])}
+          >
+            <NiExclamationSquare size="medium" />
           </Box>
-          <Box className="flex min-w-0 flex-1 flex-col gap-1">
-            <Box className="flex flex-row flex-wrap items-center gap-2">
-              <Typography id={id} variant="h5" component="h2" className="mb-0">
-                {title}
-              </Typography>
-              <StatusChip tone={tone} label={total} />
-            </Box>
+          <Box className="flex min-w-40 flex-1 items-center gap-1.5">
+            <Typography id={id} variant="h5" component="h2" className="mb-0 min-w-0 break-words">
+              {title}
+            </Typography>
             {description ? (
-              <Typography variant="body2" className="text-text-secondary">
-                {description}
-              </Typography>
+              <InfoHint label={description} placement="bottom-start" className="flex-none self-center" />
             ) : null}
           </Box>
+          <StatusChip tone={tone} label={total} className="ml-auto flex-none" />
         </Box>
 
         {groups
@@ -97,7 +100,12 @@ export default function AttentionList({
               <Typography id={`${id}-${group.key}`} variant="subtitle2" component="h3" className="mb-2">
                 {group.title}
               </Typography>
-              <Box component="ul" className="m-0 grid list-none grid-cols-1 gap-3 p-0 md:grid-cols-2">
+              {/* As many columns as the card's width holds, and a group of one thing takes the whole width: a fixed
+                  two columns left half of the card empty beside a single thing (the owner, 2026-11-12). */}
+              <Box
+                component="ul"
+                className="m-0 grid list-none grid-cols-[repeat(auto-fit,minmax(min(100%,20rem),1fr))] gap-3 p-0"
+              >
                 {group.items.map((item) => (
                   <Box component="li" key={item.id} className="flex">
                     <Box

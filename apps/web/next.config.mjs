@@ -45,6 +45,7 @@ const nextConfig = {
     "@flyee/connectors",
     "@flyee/documents",
     "@flyee/whatsapp",
+    "@flyee/chatwoot",
     "@flyee/rules",
     "@flyee/identity",
     "@flyee/courts",

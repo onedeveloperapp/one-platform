@@ -97,7 +97,7 @@ services:
       - "2785"
 
   caddy:
-    image: caddy:2
+    image: caddy:2.11.9
     profiles: ["proxy"]
     restart: unless-stopped
     env_file: ../../segredos/proxy.env

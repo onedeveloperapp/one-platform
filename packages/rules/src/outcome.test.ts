@@ -2,11 +2,14 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import {
+  acordaoForClient,
   againstClient,
   certifiesFinal,
+  isAcordao,
   endsLawsuit,
   movementFact,
   readClaims,
+  readAcordao,
   readJudgment,
   readRelease,
 } from "./outcome.ts";
@@ -156,5 +159,42 @@ describe("what a lawsuit came to, read by rule", () => {
     ]) {
       assert.equal(certifiesFinal(notYet), false, notYet);
     }
+  });
+});
+
+describe("the acórdão of an appeal (acordao-v1)", () => {
+  it("tells an acórdão by its type or by the words a panel judges with, never a judgment that only names one", () => {
+    assert.equal(isAcordao("Acórdão", ""), true);
+    assert.equal(
+      isAcordao(null, "ACÓRDÃO. Vistos, relatados e discutidos estes autos, ACORDAM os juízes da 1ª Turma Recursal"),
+      true,
+    );
+    assert.equal(isAcordao("Sentença", "Julgo procedente o pedido, conforme o acórdão citado."), false);
+  });
+
+  it("reads what it decided of the appeal: granted, in part, denied or not heard", () => {
+    assert.equal(
+      readAcordao("ACORDAM os integrantes, por unanimidade, em conhecer do recurso e NEGAR-LHE PROVIMENTO.")?.result,
+      "desprovido",
+    );
+    assert.equal(readAcordao("Recurso conhecido e provido. Acordam em dar provimento ao recurso.")?.result, "provido");
+    assert.equal(
+      readAcordao("Acordam em dar parcial provimento ao recurso para reduzir a indenização.")?.result,
+      "parcial",
+    );
+    assert.equal(readAcordao("Acordam em não conhecer do recurso, por deserto.")?.result, "nao_conhecido");
+    // Two appeals, two results: a person reads it.
+    assert.equal(readAcordao("Dar provimento ao recurso do autor e negar provimento ao recurso da ré."), null);
+    assert.equal(readAcordao("Embargos de declaração rejeitados."), null);
+  });
+
+  it("is in the client's favour or against by who appealed, and unknown when that is not known", () => {
+    assert.equal(acordaoForClient("provido", "autor"), "procedente");
+    assert.equal(acordaoForClient("desprovido", "autor"), "improcedente");
+    assert.equal(acordaoForClient("desprovido", "re"), "procedente");
+    assert.equal(acordaoForClient("nao_conhecido", "re"), "procedente");
+    assert.equal(acordaoForClient("provido", "re"), "improcedente");
+    assert.equal(acordaoForClient("parcial", "re"), "parcial");
+    assert.equal(acordaoForClient("provido", null), null);
   });
 });

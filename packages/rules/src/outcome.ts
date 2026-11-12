@@ -9,7 +9,15 @@
 
 export const OUTCOME_RULE = "resultado-v1";
 
-export type FactKind = "sentenca" | "acordo" | "transito" | "recurso" | "deposito" | "alvara" | "arquivamento";
+export type FactKind =
+  | "sentenca"
+  | "acordao"
+  | "acordo"
+  | "transito"
+  | "recurso"
+  | "deposito"
+  | "alvara"
+  | "arquivamento";
 export type JudgmentResult = "procedente" | "parcial" | "improcedente";
 export type ReleaseKind = "alvara" | "transferencia" | "rpv" | "precatorio";
 
@@ -323,3 +331,65 @@ export const endsLawsuit = (facts: readonly { kind: FactKind }[]): boolean =>
 
 /** Whether a result is against the client: the claim denied. */
 export const againstClient = (result: JudgmentResult | "acordo" | null): boolean => result === "improcedente";
+
+/**
+ * The acórdão of an appeal (`acordao-v1`, migration 0225): whether a court's document is one, by its type or by the
+ * words a panel judges with ("acórdão", "acordam os juízes", "vistos, relatados e discutidos"), never a judgment that
+ * only names one; and what it decided of the appeal it judged: granted, in part, denied, or not heard. Only what the
+ * words say clearly: an acórdão that grants one appeal and denies another says nothing a rule can tell, and is read by
+ * a person. Pure.
+ */
+export const ACORDAO_RULE = "acordao-v1";
+
+export type AcordaoResult = "provido" | "parcial" | "desprovido" | "nao_conhecido";
+
+export function isAcordao(documentType: string | null | undefined, text: string): boolean {
+  if (/ac[oó]rd[aã]o/i.test(String(documentType ?? ""))) return true;
+  const words = plain(text);
+  return (
+    /^\W*acordao\b/.test(words) ||
+    /\bacordam (os|as) (juizes|juizas|desembargador|membros|integrantes)/.test(words) ||
+    /vistos,? relatados e discutidos/.test(words)
+  );
+}
+
+export function readAcordao(text: string): { result: AcordaoResult; words: string } | null {
+  const words = plain(text);
+  if (!words) return null;
+  const found: { result: AcordaoResult; at: number }[] = [];
+  const look = (result: AcordaoResult, pattern: RegExp) => {
+    const match = pattern.exec(words);
+    if (match) found.push({ result, at: match.index });
+  };
+  look(
+    "parcial",
+    /\b(dar|deram|da|dou|dando|dado)(-lhe| lhe)? parcial provimento|provimento parcial|parcialmente provido/,
+  );
+  look(
+    "desprovido",
+    /\b(negar|negaram|nega|nego|negando|negado)(-lhe| lhe)? provimento|\b(desprovido|improvido|nao provido)\b/,
+  );
+  look("nao_conhecido", /\bnao conhec\w*|\bnao (foi|ser) conhecido/);
+  const granted = /\b(dar|deram|da|dou|dando|dado)(-lhe| lhe)? provimento|\brecurso (conhecido e )?provido\b/.exec(
+    words,
+  );
+  if (granted && !found.some((item) => item.result === "parcial")) found.push({ result: "provido", at: granted.index });
+  // One decision only: an acórdão that names two results (one appeal granted, another denied) is a person's to read.
+  const results = [...new Set(found.map((item) => item.result))];
+  if (results.length !== 1) return null;
+  const at = found[0]!.at;
+  return { result: results[0]!, words: words.slice(Math.max(0, at - 160), at + 240).trim() };
+}
+
+/**
+ * What an acórdão is to the client, by who appealed: the client's appeal granted, or the airline's denied or not
+ * heard, is in the client's favour; granted in part, in part; the other way round, against. Null when who appealed is
+ * not known (or both did): a person says it.
+ */
+export function acordaoForClient(result: AcordaoResult, appellant: "autor" | "re" | null): JudgmentResult | null {
+  if (appellant === null) return null;
+  if (result === "parcial") return "parcial";
+  const appealWon = result === "provido";
+  if (appellant === "autor") return appealWon ? "procedente" : "improcedente";
+  return appealWon ? "improcedente" : "procedente";
+}

@@ -7,7 +7,9 @@ import { createServiceClient } from "@flyee/auth/service";
 import {
   certifiesFinal,
   type ClaimReading,
+  isAcordao,
   movementFact,
+  readAcordao,
   readClaims,
   readJudgment,
   readRelease,
@@ -51,8 +53,22 @@ const claimsOut = (claims: readonly ClaimReading[]) =>
     per_claimant: claim.perClaimant,
   }));
 
-/** What the rule reads of a publication: the judgment's result and value, a settlement, or a release's value. */
-function publicationReading(category: string, body: string): Record<string, unknown> | null {
+/**
+ * What the rule reads of a publication: an acórdão and what it decided of the appeal (0225, `acordao-v1`; one the rule
+ * cannot read is recorded all the same, for a person to say), the judgment's result and value, a settlement, or a
+ * release's value.
+ */
+function publicationReading(
+  category: string,
+  body: string,
+  documentType: string | null,
+): Record<string, unknown> | null {
+  if (category === "decisao" && isAcordao(documentType, body)) {
+    const acordao = readAcordao(body);
+    return acordao
+      ? { kind: "acordao", appeal_result: acordao.result, words: acordao.words }
+      : { kind: "acordao", words: body.slice(0, 600) };
+  }
   if (category === "pagamento") {
     const release = readRelease(body);
     return release
@@ -101,17 +117,24 @@ export async function outcomesRound(service: SupabaseClient, until: number): Pro
     while (Date.now() < until) {
       let query = service
         .from("publications")
-        .select("id, category, body")
+        .select("id, category, body, document_type")
         .is("outcome_read_at", null)
         .eq("category", kind);
-      if (kind === "decisao") query = query.eq("judgment", true);
+      // The judgment, and an acórdão whether or not the triage said it is the judgment (0225).
+      if (kind === "decisao")
+        query = query.or("judgment.eq.true,document_type.ilike.*córd*,document_type.ilike.*cord*");
       const { data, error } = await query.order("captured_at", { ascending: true }).limit(BATCH);
       if (error) throw new Error(`publications to read failed: ${error.code ?? "unknown"}`);
-      const rows = (data ?? []) as { id: string; category: string; body: string | null }[];
+      const rows = (data ?? []) as {
+        id: string;
+        category: string;
+        body: string | null;
+        document_type: string | null;
+      }[];
       for (const row of rows) {
         const { data: answer, error: recordError } = await service.rpc("record_publication_outcome", {
           target_publication: row.id,
-          target_reading: publicationReading(row.category, row.body ?? ""),
+          target_reading: publicationReading(row.category, row.body ?? "", row.document_type),
         });
         if (recordError) throw new Error(`record_publication_outcome failed: ${recordError.code ?? "unknown"}`);
         counts.publications += 1;

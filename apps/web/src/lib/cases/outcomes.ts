@@ -8,7 +8,16 @@ import type { PendingItem } from "@/lib/firm/pending";
 import { formatCents } from "@flyee/rules/finance";
 import { CLAIM_KINDS, type ClaimKind } from "@flyee/rules/outcome";
 
-export const FACT_KINDS = ["sentenca", "acordo", "transito", "recurso", "deposito", "alvara", "arquivamento"] as const;
+export const FACT_KINDS = [
+  "sentenca",
+  "acordao",
+  "acordo",
+  "transito",
+  "recurso",
+  "deposito",
+  "alvara",
+  "arquivamento",
+] as const;
 export type FactKind = (typeof FACT_KINDS)[number];
 export type FactResult = "procedente" | "parcial" | "improcedente";
 
@@ -122,6 +131,7 @@ export function lawsuitFactsOf(raw: unknown): LawsuitFact[] {
 /** The words of each kind of fact, and of a judgment's result. */
 export const FACT_KEY: Record<FactKind, string> = {
   sentenca: "outcome-fact-sentenca",
+  acordao: "outcome-fact-acordao",
   acordo: "outcome-fact-acordo",
   transito: "outcome-fact-transito",
   recurso: "outcome-fact-recurso",
@@ -143,7 +153,7 @@ export function lawsuitOutcome(facts: readonly LawsuitFact[]): LawsuitOutcome {
   if (live.some((fact) => fact.kind === "arquivamento")) return "archived";
   if (live.some((fact) => fact.kind === "transito")) return "final";
   if (live.some((fact) => fact.kind === "acordo")) return "settled";
-  if (live.some((fact) => fact.kind === "sentenca")) return "judged";
+  if (live.some((fact) => fact.kind === "sentenca" || fact.kind === "acordao")) return "judged";
   return "open";
 }
 
@@ -212,6 +222,8 @@ export function outcomeAttentionOf(raw: unknown): OutcomeAttention | null {
 const caseHref = (caseId: string) => `/casos/${caseId}#resultado`;
 const ACK_KEY = {
   against: "pending-outcome-against",
+  acordaoAgainst: "pending-outcome-acordao-against",
+  acordao: "pending-outcome-acordao",
   archived: "pending-outcome-archived",
   final: "pending-outcome-final",
 } as const;
@@ -220,13 +232,24 @@ const ACK_KEY = {
 export function outcomeAttentionItems(attention: OutcomeAttention): PendingItem[] {
   const items: PendingItem[] = [];
   for (const ack of attention.acks.slice(0, 10)) {
-    const against = ack.kind === "sentenca" && ack.result === "improcedente";
+    const against = (ack.kind === "sentenca" || ack.kind === "acordao") && ack.result === "improcedente";
+    // An acórdão against the client, or one the rule could not tell for whom (0225), is said as the acórdão.
+    const key =
+      ack.kind === "acordao"
+        ? against
+          ? "acordaoAgainst"
+          : "acordao"
+        : against
+          ? "against"
+          : ack.kind === "arquivamento"
+            ? "archived"
+            : "final";
     items.push({
       id: `outcome:ack:${ack.factId}`,
       href: caseHref(ack.caseId),
       tag: { key: "pending-tag-outcome" },
       label: {
-        key: ACK_KEY[against ? "against" : ack.kind === "arquivamento" ? "archived" : "final"],
+        key: ACK_KEY[key],
         values: { seq: ack.seq ?? 0 },
       },
       detail: against ? { key: "pending-outcome-against-detail" } : { key: "pending-outcome-ack-detail" },

@@ -52,7 +52,7 @@
       "name": "NumberCard",
       "from": "@/components/product/number-card",
       "props": "icon (size medium), tone, label, value (already written: countText), comparison? ({ delta: '+9%' | null, same: 'igual', hoped, text: 'vs 1 a 7 de outubro: 287' }), hint?, onClick+pressed | href | neither",
-      "use": "A list's big number with what it was in the same span before (the screen pattern after ADVBox, approved by the owner on 2026-11-07): the icon of what it counts beside a short label, the number, and under it the move and what it is compared with, the card opening the list it counts. Compare only with the same span (the same days of the month before, the end of the same day): a few days against a whole month is a false move. The move is green only when it is the one the card hopes for (more cases filed); any other move is grey, never red. The numbers and moves come from `lib/numbers/compare.ts` (compared, deltaText, isHoped, countText). Two across on a phone, the icon hidden there. The home's tiles stay StatTile."
+      "use": "A list's big number with what it was in the same span before (the screen pattern after ADVBox, approved by the owner on 2026-11-07): the icon of what it counts beside a short label, the number, and under it the move and what it is compared with, the card opening the list it counts. Compare only with the same span (the same days of the month before, the end of the same day): a few days against a whole month is a false move. The move is green only when it is the one the card hopes for (more cases filed); any other move is grey, never red. The numbers and moves come from `lib/numbers/compare.ts` (compared, deltaText, isHoped, countText). Two across on a phone, the icon hidden there. The home's counts are a CountList."
     },
     {
       "name": "QuickActionTile",
@@ -117,8 +117,8 @@
     {
       "name": "PageSkeleton",
       "from": "@/components/product/page-skeleton",
-      "props": "shape? (list | record | home | cards | split | setup), numbers?, rows?, cards?",
-      "use": "The page that is loading, drawn in the shape it will have (the screen pattern after ADVBox, approved by the owner on 2026-11-07): its title block, then its form in grey blocks inside the very cards and spacing the page uses, so nothing jumps when the content arrives. `list`: the cards of numbers (`numbers`), the bar and the rows (`rows`; `cards` when each row is a card of its own); `record`: a record's top and its cards in two columns; `home`; `split`: a list beside what is open of it; `setup`: the rail of steps beside the step; `cards`: a few cards, for any other page. Said once to assistive technology as loading, a slow pulse that is still for whoever asks for less motion. Each route's `loading.tsx` renders it in its page's shape, and the group's own catches the rest; never a spinner in the middle of the screen."
+      "props": "shape? (list | record | home | board | cards | split | setup), numbers?, rows?, cards?",
+      "use": "The page that is loading, drawn in the shape it will have (the screen pattern after ADVBox, approved by the owner on 2026-11-07): its title block, then its form in grey blocks inside the very cards and spacing the page uses, so nothing jumps when the content arrives. `list`: the cards of numbers (`numbers`), the bar and the rows (`rows`; `cards` when each row is a card of its own); `record`: a record's top and its cards in two columns; `home`; `board`: the cards of numbers, a board of columns under the parts of the way, then a card beside a wider one (the controladoria); `split`: a list beside what is open of it; `setup`: the rail of steps beside the step; `cards`: a few cards, for any other page. Said once to assistive technology as loading, a slow pulse that is still for whoever asks for less motion. Each route's `loading.tsx` renders it in its page's shape, and the group's own catches the rest; never a spinner in the middle of the screen."
     },
     {
       "name": "AtWorkNotice",
@@ -166,7 +166,13 @@
       "name": "AttentionList",
       "from": "@/components/product/attention-list",
       "props": "id, title, description?, total, groups[{key,title,tone: danger | attention,items[{id,href,tag,title,detail?,count?,countLabel?,icon?}]}]",
-      "use": "What holds a firm's cases until somebody acts, where a person starts the day: one card coloured by its most urgent group (danger = past its time, attention = waiting on the firm), and in it, by group, a two-column grid of outlined cards (the template's projects grid): the icon of the thing's kind on the group's tint, what it is, its kind as a StatusChip tag on the right, of which case in two lines at most, a pill with how many when more than one; the whole card one click from where it is done. The hue rides on the icon's tint and the badges, never on the words. Not for counters (StatTile) nor for a list of records to manage (DataTable)."
+      "use": "What holds a firm's cases until somebody acts, where a person starts the day: one card coloured by its most urgent group (danger = past its time, attention = waiting on the firm), its head in CardTitle's shape with what it is for behind the \"i\", and in it, by group, a grid of outlined cards with as many columns as the card holds, one thing alone taking the whole width (the template's projects grid; a fixed two columns left half the card empty, 2026-11-12): the icon of the thing's kind on the group's tint, what it is, its kind as a StatusChip tag on the right, of which case in two lines at most, a pill with how many when more than one; the whole card one click from where it is done. The hue rides on the icon's tint and the badges, never on the words. Not for counters (StatTile) nor for a list of records to manage (DataTable)."
+    },
+    {
+      "name": "CountList",
+      "from": "@/components/product/count-list",
+      "props": "id, icon, tone?, title, description? (behind the i), items[{key, href, icon (size medium), tone, label, hint?, value}]; CountRows: items, split? (named export)",
+      "use": "A few counts in one card, each a way into where its work is done (the home's \"Para acompanhar\", the owner, 2026-11-12): CardTitle on top, then one outlined line per count with the icon of what it counts on its tint, what it counts, the number and a chevron, the whole line the link. One column in a side column, two or three as the card widens (a container query: the card reads its own width). `CountRows` is its lines alone, for a card with a head of its own (the controladoria's \"Tribunal\", with its chip): `split` keeps two families apart on a wide card, the first `split` lines on the left and the rest on the right, row by row, so a line that wraps never pushes its neighbour out of line. For a single counter or a filter, StatTile; for what holds a case, AttentionList."
     },
     {
       "name": "ActivityCards",

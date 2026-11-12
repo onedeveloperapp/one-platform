@@ -1,0 +1,17 @@
+{
+  "name": "@flyee/chatwoot",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "The firms' panel of attendance behind an interface: a Chatwoot of the platform's own, one account per firm, an inbox of the API kind that ONE writes every message of the firm's WhatsApp into, and the webhook that brings back what a person of the firm wrote there. The HTTP provider and a fake, under one contract.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./types": "./src/types.ts",
+    "./fake": "./src/fake.ts",
+    "./webhook": "./src/webhook.ts",
+    "./providers/http": "./src/providers/http.ts"
+  },
+  "scripts": {
+    "test": "node --experimental-strip-types --test src/contract.test.ts"
+  }
+}

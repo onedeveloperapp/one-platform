@@ -6,7 +6,7 @@ import { randomBytes } from "node:crypto";
 
 import { chatwootAccount, chatwootPlatform, chatwootProfile } from "./chatwoot.mjs";
 import { classifySession, openwaFailure, worstLevel } from "./health.mjs";
-import { ADAPTER_ID, adapterIngressUrl, openwaClient } from "./openwa.mjs";
+import { ADAPTER_ID, adapterEnabled, adapterIngressUrl, openwaClient } from "./openwa.mjs";
 
 /** Funções que o atendimento usa e que nunca se desligam numa conta. */
 export const NEVER_OFF = ["api_and_webhooks", "agent_bots", "inbox_management", "agent_management", "labels"];
@@ -21,6 +21,15 @@ export const DEFAULT_UI_SETTINGS = {
   is_macro_open: false,
   is_contact_notes_open: false,
   is_shared_files_open: false,
+};
+
+/**
+ * Gravadas só quando a pessoa entra na equipe, para não desfazer o que ela escolher depois. A lista de
+ * conversas do Chatwoot abre em "abertas" sem esta escolha (ChatList.vue), e com o robô respondendo sozinho
+ * as conversas ficam pendentes: o painel parecia vazio (achado da Atrupe, 2026-11-11).
+ */
+export const INITIAL_UI_SETTINGS = {
+  conversations_filter_by: { status: "all", order_by: "last_activity_at_desc" },
 };
 
 export const ADAPTER_SUBSCRIPTIONS = ["message_created", "conversation_updated", "conversation_status_changed"];
@@ -183,14 +192,24 @@ export async function provisionAccount({ chatwootUrl, platformToken, state = {},
 /**
  * Uma pessoa da equipe do cliente: atendente (nunca administradora), membro de todas as caixas da conta,
  * com as preferências do painel lateral. person: { key, email, name }, key é o id da pessoa no projeto.
+ * initialUiSettings vale só na primeira vez da pessoa na equipe; uiSettings, a cada chamada.
  */
-export async function ensureStaffUser({ chatwootUrl, platformToken, state, person, uiSettings = DEFAULT_UI_SETTINGS, fetchImpl = fetch }) {
+export async function ensureStaffUser({ chatwootUrl, platformToken, state, person, uiSettings = DEFAULT_UI_SETTINGS, initialUiSettings = INITIAL_UI_SETTINGS, fetchImpl = fetch }) {
   const platform = chatwootPlatform({ url: chatwootUrl, token: platformToken, fetchImpl });
   const next = { staff: {}, ...state, staff: { ...(state.staff ?? {}) } };
   let userId = next.staff[person.key];
-  if (!userId) {
+  const joining = !userId;
+  let full = null;
+  if (joining) {
+    // O Chatwoot acha a pessoa existente pelo e-mail. Se for de quem administra outra conta, como o super
+    // administrador criado na instalação, ela viraria atendente aqui e o login único cairia na outra conta.
     const user = await platform.createUser({ name: person.name, email: person.email, password: strongPassword() });
     userId = user.id;
+    full = await platform.user(userId);
+    const adminElsewhere = (full?.accounts ?? []).some((item) => Number(item.id) !== Number(next.account_id) && item.role === "administrator");
+    if (adminElsewhere) {
+      throw new ProvisionError("staff_email_is_admin", "Este e-mail é de quem administra outra conta do Chatwoot, como o super administrador.", "Dê ao super administrador um e-mail que ninguém da equipe usa, ou use outro e-mail para esta pessoa.");
+    }
     next.staff[person.key] = userId;
   } else {
     await platform.updateUser(userId, { name: person.name, email: person.email });
@@ -204,9 +223,10 @@ export async function ensureStaffUser({ chatwootUrl, platformToken, state, perso
   const account = chatwootAccount({ url: chatwootUrl, token: next.service_token, accountId: next.account_id, fetchImpl });
   for (const inbox of next.inboxes ?? []) await account.addInboxMembers(inbox.id, [userId]);
 
-  if (uiSettings) {
-    const full = await platform.user(userId);
-    if (full?.access_token) await chatwootProfile({ url: chatwootUrl, userToken: full.access_token, fetchImpl }).mergeUiSettings(uiSettings);
+  const settings = { ...(uiSettings ?? {}), ...(joining && initialUiSettings ? initialUiSettings : {}) };
+  if (Object.keys(settings).length) {
+    full = full ?? (await platform.user(userId));
+    if (full?.access_token) await chatwootProfile({ url: chatwootUrl, userToken: full.access_token, fetchImpl }).mergeUiSettings(settings);
   }
   return { state: next, userId };
 }
@@ -320,14 +340,35 @@ export async function updateCloudApi({ chatwootUrl, state, inboxId, cloud, fetch
 }
 
 /** Instala e liga o adaptador do Chatwoot no OpenWA, pelo catálogo (que traz o hash do pacote). */
+/** Instala o adaptador pelo catálogo, se faltar. O catálogo entrega a versão mais nova, não a de versoes.json. */
 export async function ensureAdapter({ openwa }) {
   const installed = (await openwa.plugins()).find((plugin) => plugin.id === ADAPTER_ID);
-  if (!installed) {
-    const entry = (await openwa.catalog()).find((plugin) => plugin.id === ADAPTER_ID);
-    if (!entry?.download) throw new ProvisionError("adapter_missing", "O catálogo do OpenWA não trouxe o adaptador do Chatwoot.", "Instale o chatwoot-adapter pelo painel do OpenWA, em Plugins.");
-    await openwa.installFromUrl(entry.download);
+  if (installed) return;
+  const entry = (await openwa.catalog()).find((plugin) => plugin.id === ADAPTER_ID);
+  if (!entry?.download) throw new ProvisionError("adapter_missing", "O catálogo do OpenWA não trouxe o adaptador do Chatwoot.", "Instale o chatwoot-adapter pelo painel do OpenWA, em Plugins.");
+  await openwa.installFromUrl(entry.download);
+}
+
+/**
+ * Liga o adaptador depois de a instância existir, e só aceita quando ele está saudável. O chatwoot-adapter
+ * 0.9.17 confere a configuração base ao ligar, e a da instância não basta: ligado antes, ele fica em erro
+ * ("missing/invalid config") e nenhuma mensagem passa, com o número conectado (achado da Atrupe, 2026-11-11).
+ * A configuração base recebe a desta conexão só quando o adaptador ainda não está saudável; cada instância
+ * continua com a sua. O OpenWA devolve o apiToken mascarado em toda leitura: ele vem do estado, nunca de lá.
+ */
+export async function startAdapter({ openwa, config }) {
+  const plugin = (await openwa.plugins()).find((item) => item.id === ADAPTER_ID);
+  const before = await openwa.pluginHealth(ADAPTER_ID).catch(() => null);
+  if (adapterEnabled(plugin) && before?.healthy === true) return { started: false };
+  const updated = await openwa.setPluginConfig(ADAPTER_ID, config);
+  if (updated?.success === false) throw new ProvisionError("adapter_config", `O OpenWA recusou a configuração do adaptador: ${updated.message ?? "sem motivo"}.`, "Confira os logs do OpenWA e o endereço público do Chatwoot.");
+  const enabled = await openwa.enablePlugin(ADAPTER_ID);
+  if (enabled?.success === false) throw new ProvisionError("adapter_enable", `O OpenWA não ligou o adaptador: ${enabled.message ?? "sem motivo"}.`, "Confira os logs do OpenWA (chatwoot-adapter).");
+  const health = await openwa.pluginHealth(ADAPTER_ID);
+  if (health?.healthy !== true) {
+    throw new ProvisionError("adapter_unhealthy", `O adaptador do Chatwoot ligou, mas não está saudável: ${health?.message ?? "sem resposta"}.`, "Confira os logs do OpenWA (chatwoot-adapter) e se o Chatwoot responde pelo endereço público.");
   }
-  if (!installed?.enabled) await openwa.enablePlugin(ADAPTER_ID);
+  return { started: true };
 }
 
 /**
@@ -367,24 +408,26 @@ export async function connectOpenWA({ chatwootUrl, platformToken, state, input, 
   await ensureAdapter({ openwa });
   const session = await openwa.createSession(input.sessionName);
   await openwa.startSession(session.id);
+  const adapterConfig = {
+    baseUrl: input.chatwootPublicUrl,
+    apiToken: next.relay_token,
+    accountId: next.account_id,
+    inboxId: inbox.id,
+    // Grupos só entram quando a configuração do robô pede (D23); syncOpenWAGroups muda depois.
+    relayGroups: input.relayGroups === true,
+    relayMedia: true,
+    relayOwnMessages: true,
+    backfillLimit: 0,
+  };
   const instance = await openwa.createInstance(ADAPTER_ID, {
     instanceId: input.sessionName,
     sessionScope: session.id,
     secret: webhook.secret,
-    config: {
-      baseUrl: input.chatwootPublicUrl,
-      apiToken: next.relay_token,
-      accountId: next.account_id,
-      inboxId: inbox.id,
-      // Grupos só entram quando a configuração do robô pede (D23); syncOpenWAGroups muda depois.
-      relayGroups: input.relayGroups === true,
-      relayMedia: true,
-      relayOwnMessages: true,
-      backfillLimit: 0,
-    },
+    config: adapterConfig,
   });
   const given = (instance?.ingressUrls ?? []).find((item) => item.route === "chatwoot")?.url;
   if (given && /^https?:\/\//.test(given) && given !== ingress) await account.updateWebhook(webhook.id, { url: given });
+  await startAdapter({ openwa, config: adapterConfig });
 
   await account.setAgentBot(inbox.id, next.bot_id);
   next = {

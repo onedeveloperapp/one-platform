@@ -13,6 +13,7 @@ import {
   validateSettings,
   type Day,
   type GroupSettings,
+  type MediaSettings,
   type PermissionGroup,
   type PlatformSettings,
   type Scope,
@@ -22,7 +23,15 @@ import { Alert, Button, Card, Choice, Loading, Stack, Text, TextArea, TextField,
 
 const api = supportApi();
 
-const DAY_LABELS: Record<Day, string> = { seg: "Segunda", ter: "Terça", qua: "Quarta", qui: "Quinta", sex: "Sexta", sab: "Sábado", dom: "Domingo" };
+const DAY_LABELS: Record<Day, string> = {
+  seg: "Segunda",
+  ter: "Terça",
+  qua: "Quarta",
+  qui: "Quinta",
+  sex: "Sexta",
+  sab: "Sábado",
+  dom: "Domingo",
+};
 const GROUP_LABELS: Record<PermissionGroup, string> = {
   apresentacao: "Nome e apresentação do robô",
   instrucoes: "Instruções da empresa",
@@ -33,8 +42,16 @@ const GROUP_LABELS: Record<PermissionGroup, string> = {
   consultas: "Quais consultas ao sistema ligar",
   modo: "Como o robô trabalha",
   grupos: "Grupos do WhatsApp",
+  midia: "Imagens, áudios, vídeos e arquivos",
 };
 const SEM_GRUPOS: GroupSettings = { mode: "fora", call_words: [], team_id: null };
+const MIDIA_PADRAO: MediaSettings = {
+  images: true,
+  audio: true,
+  video: true,
+  documents: true,
+  transcription_note: true,
+};
 
 export function RoboAtendimento({ escopo = "cliente" }: { escopo?: Scope }) {
   const [data, setData] = useState<SettingsResponse | null>(null);
@@ -64,7 +81,10 @@ export function RoboAtendimento({ escopo = "cliente" }: { escopo?: Scope }) {
 
   async function salvar() {
     if (!settings) return;
-    const encontrados = validateSettings(settings, { declaredTools: data!.tools.map((tool) => tool.name), scope: escopo });
+    const encontrados = validateSettings(settings, {
+      declaredTools: data!.tools.map((tool) => tool.name),
+      scope: escopo,
+    });
     setProblemas(Object.fromEntries(encontrados.map((problem) => [problem.field, problem.message])));
     if (encontrados.length) {
       setAviso({ tone: "danger", text: "Confira os campos marcados." });
@@ -73,7 +93,11 @@ export function RoboAtendimento({ escopo = "cliente" }: { escopo?: Scope }) {
     setSalvando(true);
     try {
       const result = await api.saveSettings(settings, escopo);
-      setAviso(result.aviso ? { tone: "info", text: result.aviso } : { tone: "success", text: "Robô atualizado. Vale a partir da próxima mensagem, em até um minuto." });
+      setAviso(
+        result.aviso
+          ? { tone: "info", text: result.aviso }
+          : { tone: "success", text: "Robô atualizado. Vale a partir da próxima mensagem, em até um minuto." },
+      );
     } catch (error) {
       setAviso({ tone: "danger", text: (error as Error).message });
     } finally {
@@ -91,6 +115,9 @@ export function RoboAtendimento({ escopo = "cliente" }: { escopo?: Scope }) {
     update({ hours: { ...hours, days: { ...hours.days, [day]: ranges } } });
   };
   const grupos = settings.groups ?? SEM_GRUPOS;
+  const midia = settings.media ?? MIDIA_PADRAO;
+  // Sem quem transcreva, "Ouvir áudios" some: ligar não mudaria nada. Quando não se sabe (null), mostra tudo.
+  const semAudio = data.media?.audio === false;
   const toggleList = (list: string[] | null | undefined, name: string, on: boolean) => {
     const current = list ?? [];
     return on ? [...new Set([...current, name])] : current.filter((item) => item !== name);
@@ -100,7 +127,9 @@ export function RoboAtendimento({ escopo = "cliente" }: { escopo?: Scope }) {
     <Stack>
       {aviso ? <Alert tone={aviso.tone}>{aviso.text}</Alert> : null}
       {isPlatform && data.model === "por-cliente" ? (
-        <Alert tone="info">Estas regras e este conhecimento valem para todos os clientes e ficam acima do que cada um escreve.</Alert>
+        <Alert tone="info">
+          Estas regras e este conhecimento valem para todos os clientes e ficam acima do que cada um escreve.
+        </Alert>
       ) : null}
 
       {can("modo") ? (
@@ -110,9 +139,23 @@ export function RoboAtendimento({ escopo = "cliente" }: { escopo?: Scope }) {
             value={settings.mode}
             onChange={(mode) => update({ mode })}
             options={[
-              { value: "auto", label: "Responde sozinho", hint: "Responde o que sabe e passa para a equipe quando precisa." },
-              { value: "sugestao", label: "Sugere a resposta", hint: "Escreve uma nota interna com a resposta; alguém da equipe revisa e envia." },
-              { value: "desligado", label: "Desligado", hint: isPlatform ? "Desliga o robô de todos os atendimentos." : "Toda conversa vai direto para a equipe." },
+              {
+                value: "auto",
+                label: "Responde sozinho",
+                hint: "Responde o que sabe e passa para a equipe quando precisa.",
+              },
+              {
+                value: "sugestao",
+                label: "Sugere a resposta",
+                hint: "Escreve uma nota interna com a resposta; alguém da equipe revisa e envia.",
+              },
+              {
+                value: "desligado",
+                label: "Desligado",
+                hint: isPlatform
+                  ? "Desliga o robô de todos os atendimentos."
+                  : "Toda conversa vai direto para a equipe.",
+              },
             ]}
           />
         </Card>
@@ -121,7 +164,11 @@ export function RoboAtendimento({ escopo = "cliente" }: { escopo?: Scope }) {
       {can("apresentacao") ? (
         <Card title="Quem é o robô">
           <Stack>
-            <TextField label="Nome da empresa que o robô representa" value={settings.brand} onChange={(brand) => update({ brand })} />
+            <TextField
+              label="Nome da empresa que o robô representa"
+              value={settings.brand}
+              onChange={(brand) => update({ brand })}
+            />
             <TextArea
               label="Apresentação e jeito de falar"
               hint={`Por exemplo: "Você é a Ana, da equipe. Fala de um jeito simples e gentil." Até ${LIMITS.persona} caracteres.`}
@@ -136,7 +183,11 @@ export function RoboAtendimento({ escopo = "cliente" }: { escopo?: Scope }) {
       {can("instrucoes") ? (
         <Card title={isPlatform && data.model === "por-cliente" ? "Regras da plataforma" : "Instruções"}>
           <TextArea
-            label={isPlatform && data.model === "por-cliente" ? "Regras que todo robô segue" : "O que o robô deve fazer e não fazer"}
+            label={
+              isPlatform && data.model === "por-cliente"
+                ? "Regras que todo robô segue"
+                : "O que o robô deve fazer e não fazer"
+            }
             hint="Prazos, políticas, o que nunca responder e o que sempre passa para a equipe."
             rows={8}
             value={settings.instructions}
@@ -155,21 +206,39 @@ export function RoboAtendimento({ escopo = "cliente" }: { escopo?: Scope }) {
                   label={`Pergunta ${index + 1}`}
                   value={item.q}
                   error={problemas[`knowledge.${index}.q`] ?? problemas[`knowledge.${index}`]}
-                  onChange={(q) => update({ knowledge: settings.knowledge.map((entry, position) => (position === index ? { ...entry, q } : entry)) })}
+                  onChange={(q) =>
+                    update({
+                      knowledge: settings.knowledge.map((entry, position) =>
+                        position === index ? { ...entry, q } : entry,
+                      ),
+                    })
+                  }
                 />
                 <TextArea
                   label="Resposta"
                   value={item.a}
                   error={problemas[`knowledge.${index}.a`]}
-                  onChange={(a) => update({ knowledge: settings.knowledge.map((entry, position) => (position === index ? { ...entry, a } : entry)) })}
+                  onChange={(a) =>
+                    update({
+                      knowledge: settings.knowledge.map((entry, position) =>
+                        position === index ? { ...entry, a } : entry,
+                      ),
+                    })
+                  }
                 />
-                <Button variant="secondary" onClick={() => update({ knowledge: settings.knowledge.filter((_, position) => position !== index) })}>
+                <Button
+                  variant="secondary"
+                  onClick={() => update({ knowledge: settings.knowledge.filter((_, position) => position !== index) })}
+                >
                   Remover
                 </Button>
               </Stack>
             ))}
             {problemas.knowledge ? <Text tone="danger">{problemas.knowledge}</Text> : null}
-            <Button variant="secondary" onClick={() => update({ knowledge: [...settings.knowledge, { q: "", a: "" }] })}>
+            <Button
+              variant="secondary"
+              onClick={() => update({ knowledge: [...settings.knowledge, { q: "", a: "" }] })}
+            >
               Adicionar pergunta
             </Button>
           </Stack>
@@ -179,7 +248,10 @@ export function RoboAtendimento({ escopo = "cliente" }: { escopo?: Scope }) {
       {can("horario") ? (
         <Card title="Horário da equipe">
           <Stack>
-            <Text tone="muted">Fora do horário, o robô avisa que a equipe responde quando voltar. Escreva as faixas assim: 08:00 a 12:00, 13:00 a 18:00.</Text>
+            <Text tone="muted">
+              Fora do horário, o robô avisa que a equipe responde quando voltar. Escreva as faixas assim: 08:00 a 12:00,
+              13:00 a 18:00.
+            </Text>
             {DAYS.map((day) => (
               <TextField
                 key={day}
@@ -204,14 +276,26 @@ export function RoboAtendimento({ escopo = "cliente" }: { escopo?: Scope }) {
                   hint="Separadas por vírgula. Vazio usa as do sistema: atendente, humano, falar com uma pessoa."
                   value={(settings.handoff.keywords ?? []).join(", ")}
                   onChange={(text) =>
-                    update({ handoff: { ...settings.handoff, keywords: text.trim() ? text.split(",").map((word) => word.trim()).filter(Boolean) : null } })
+                    update({
+                      handoff: {
+                        ...settings.handoff,
+                        keywords: text.trim()
+                          ? text
+                              .split(",")
+                              .map((word) => word.trim())
+                              .filter(Boolean)
+                          : null,
+                      },
+                    })
                   }
                 />
                 <TextField
                   label="Respostas do robô antes de chamar a equipe"
                   value={String(settings.handoff.max_bot_turns)}
                   error={problemas["handoff.max_bot_turns"]}
-                  onChange={(text) => update({ handoff: { ...settings.handoff, max_bot_turns: Number.parseInt(text, 10) || 0 } })}
+                  onChange={(text) =>
+                    update({ handoff: { ...settings.handoff, max_bot_turns: Number.parseInt(text, 10) || 0 } })
+                  }
                 />
               </>
             ) : null}
@@ -238,13 +322,17 @@ export function RoboAtendimento({ escopo = "cliente" }: { escopo?: Scope }) {
       {can("consultas") && data.tools.length ? (
         <Card title="O que o robô pode consultar no sistema">
           <Stack gap={8}>
-            <Text tone="muted">O robô só vê os dados da própria pessoa da conversa, e só nas consultas ligadas aqui.</Text>
+            <Text tone="muted">
+              O robô só vê os dados da própria pessoa da conversa, e só nas consultas ligadas aqui.
+            </Text>
             {data.tools.map((tool) => (
               <Toggle
                 key={tool.name}
                 label={tool.description}
                 checked={settings.tools_enabled.includes(tool.name)}
-                onChange={(checked) => update({ tools_enabled: toggleList(settings.tools_enabled, tool.name, checked) })}
+                onChange={(checked) =>
+                  update({ tools_enabled: toggleList(settings.tools_enabled, tool.name, checked) })
+                }
               />
             ))}
             {isPlatform && data.model === "por-cliente" ? (
@@ -255,7 +343,9 @@ export function RoboAtendimento({ escopo = "cliente" }: { escopo?: Scope }) {
                     key={`oferta-${tool.name}`}
                     label={tool.description}
                     checked={(settings.tools_available ?? []).includes(tool.name)}
-                    onChange={(checked) => update({ tools_available: toggleList(settings.tools_available, tool.name, checked) })}
+                    onChange={(checked) =>
+                      update({ tools_available: toggleList(settings.tools_available, tool.name, checked) })
+                    }
                   />
                 ))}
               </>
@@ -264,17 +354,77 @@ export function RoboAtendimento({ escopo = "cliente" }: { escopo?: Scope }) {
         </Card>
       ) : null}
 
+      {can("midia") ? (
+        <Card title="Imagens, áudios, vídeos e arquivos">
+          <Stack gap={8}>
+            <Text tone="muted">O robô lê o que a pessoa manda e só passa para a equipe quando não consegue.</Text>
+            {semAudio ? (
+              <Text tone="muted">
+                Áudios vão para a equipe, porque este atendimento ainda não transcreve o que é falado. Nos vídeos, o
+                robô vê os quadros.
+              </Text>
+            ) : null}
+            <Toggle
+              label="Ler imagens e prints"
+              checked={midia.images}
+              onChange={(images) => update({ media: { ...midia, images } })}
+            />
+            {semAudio ? null : (
+              <Toggle
+                label="Ouvir áudios"
+                checked={midia.audio}
+                onChange={(audio) => update({ media: { ...midia, audio } })}
+              />
+            )}
+            <Toggle
+              label="Ver vídeos"
+              hint={
+                semAudio
+                  ? "O robô vê uma grade de quadros do vídeo, também em vídeo longo."
+                  : "O robô vê uma grade de quadros do vídeo e ouve a fala, também em vídeo longo."
+              }
+              checked={midia.video}
+              onChange={(video) => update({ media: { ...midia, video } })}
+            />
+            <Toggle
+              label="Ler PDFs, planilhas e documentos"
+              hint="Comprovante, boleto, nota, planilha, CSV e documento de texto. Arquivo grande é lido só no começo."
+              checked={midia.documents !== false}
+              onChange={(documents) => update({ media: { ...midia, documents } })}
+            />
+            {semAudio ? null : (
+              <Toggle
+                label="Deixar a transcrição para a equipe"
+                hint="Uma nota interna com o que foi falado, para quem atende ler sem ouvir."
+                checked={midia.transcription_note}
+                onChange={(transcription_note) => update({ media: { ...midia, transcription_note } })}
+              />
+            )}
+          </Stack>
+        </Card>
+      ) : null}
+
       {can("grupos") ? (
         <Card title="Grupos do WhatsApp">
           <Stack>
-            <Text tone="muted">Valem para o número conectado pelo WhatsApp Web. Pela API oficial, os grupos não chegam ao atendimento.</Text>
+            <Text tone="muted">
+              Valem para o número conectado pelo WhatsApp Web. Pela API oficial, os grupos não chegam ao atendimento.
+            </Text>
             <Choice
               label="O que fazer com os grupos de que o número participa"
               value={grupos.mode}
               onChange={(mode) => update({ groups: { ...grupos, mode } })}
               options={[
-                { value: "fora", label: "Deixar fora do atendimento", hint: "Só as conversas com uma pessoa entram no painel." },
-                { value: "equipe", label: "A equipe atende e o robô fica calado", hint: "Cada grupo vira uma conversa no painel, com o nome do grupo. O robô nunca escreve nele." },
+                {
+                  value: "fora",
+                  label: "Deixar fora do atendimento",
+                  hint: "Só as conversas com uma pessoa entram no painel.",
+                },
+                {
+                  value: "equipe",
+                  label: "A equipe atende e o robô fica calado",
+                  hint: "Cada grupo vira uma conversa no painel, com o nome do grupo. O robô nunca escreve nele.",
+                },
                 {
                   value: "chamado",
                   label: "O robô responde quando chamado",
@@ -288,10 +438,24 @@ export function RoboAtendimento({ escopo = "cliente" }: { escopo?: Scope }) {
                 hint="Separadas por vírgula, como o nome do robô. Chame pelo nome escrito: a menção com @ ao número não conta."
                 value={grupos.call_words.join(", ")}
                 error={problemas["groups.call_words"]}
-                onChange={(text) => update({ groups: { ...grupos, call_words: text.split(",").map((word) => word.trim()).filter(Boolean) } })}
+                onChange={(text) =>
+                  update({
+                    groups: {
+                      ...grupos,
+                      call_words: text
+                        .split(",")
+                        .map((word) => word.trim())
+                        .filter(Boolean),
+                    },
+                  })
+                }
               />
             ) : null}
-            {grupos.mode !== "fora" ? <Text tone="muted">As mensagens chegam a partir de agora; o que foi escrito antes no grupo não entra.</Text> : null}
+            {grupos.mode !== "fora" ? (
+              <Text tone="muted">
+                As mensagens chegam a partir de agora; o que foi escrito antes no grupo não entra.
+              </Text>
+            ) : null}
           </Stack>
         </Card>
       ) : null}
@@ -304,7 +468,9 @@ export function RoboAtendimento({ escopo = "cliente" }: { escopo?: Scope }) {
                 key={group}
                 label={GROUP_LABELS[group]}
                 checked={settings.client_permissions?.[group] === true}
-                onChange={(checked) => update({ client_permissions: { ...settings.client_permissions, [group]: checked } })}
+                onChange={(checked) =>
+                  update({ client_permissions: { ...settings.client_permissions, [group]: checked } })
+                }
               />
             ))}
           </Stack>

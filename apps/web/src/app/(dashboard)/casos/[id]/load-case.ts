@@ -369,7 +369,7 @@ export async function loadCase(id: string): Promise<CaseState> {
     // What may follow each judgment (0185).
     supabase
       .from("judgment_paths")
-      .select("id, proceeding_id, fact_id, client_agrees, client_via, decision, decision_reason, decided_at")
+      .select("id, proceeding_id, fact_id, stage, client_agrees, client_via, decision, decision_reason, decided_at")
       .eq("case_id", id),
     // What each publication of the case asks, as ONE read it (0186).
     supabase

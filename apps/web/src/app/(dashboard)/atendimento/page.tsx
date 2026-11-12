@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 
 import { mayDecide, momentLabel } from "@/lib/ai/approvals";
 import { phonesOfWaId } from "@/lib/cases/cases";
+import { chatwootProvider } from "@/lib/chatwoot/provider";
 import { type WaitingReply, waitingReplyOf } from "@/lib/conversations/reply";
 import { isFirmFunction } from "@/lib/firm/roles";
 import { getMemberContext } from "@/lib/member/context";
@@ -78,7 +79,12 @@ const STATUSES: readonly MessageStatus[] = ["received", "queued", "sending", "se
  */
 async function loadInbox(
   selectedId: string | null,
-  params: { modulo: string | undefined; ver: string | undefined; ordem: string | undefined },
+  params: {
+    modulo: string | undefined;
+    ver: string | undefined;
+    ordem: string | undefined;
+    painel?: string | undefined;
+  },
 ): Promise<InboxState> {
   const context = await getMemberContext();
   if (!context) return { kind: "unavailable" };
@@ -269,6 +275,10 @@ async function loadInbox(
     supportVisit: cookieStore.has(IMPERSONATION_MARKER_COOKIE),
     simulatorNumberId: simulatorOn ? (active.find((row) => row.provider === "simulator")?.id ?? null) : null,
     scope,
+    panel: {
+      available: chatwootProvider() !== null && !cookieStore.has(IMPERSONATION_MARKER_COOKIE),
+      error: params.painel && /^[a-z0-9_]{1,40}$/.test(params.painel) ? params.painel : null,
+    },
   };
 }
 
@@ -280,9 +290,10 @@ export default async function InboxPage({
     modulo?: string | string[];
     ver?: string | string[];
     ordem?: string | string[];
+    painel?: string | string[];
   }>;
 }) {
-  const { c, modulo, ver, ordem } = await searchParams;
+  const { c, modulo, ver, ordem, painel } = await searchParams;
   const one = (value: string | string[] | undefined) => (typeof value === "string" ? value : undefined);
   return (
     <InboxView
@@ -290,6 +301,7 @@ export default async function InboxPage({
         modulo: one(modulo),
         ver: one(ver),
         ordem: one(ordem),
+        painel: one(painel),
       })}
     />
   );

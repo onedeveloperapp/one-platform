@@ -28,6 +28,12 @@ type ToCount = {
   until_kind: string | null;
   until_hour: string | null;
   basis: string | null;
+  until_hours: number | null;
+  until_anchor: string | null;
+  until_days: number | null;
+  until_counting: string | null;
+  /** The day the DJEN made the pauta available, for a limit counted from its publication (0226). */
+  published_on: string | null;
 };
 
 const hourOf = (value: string | null): string | null => (value ? value.slice(0, 5) : null);
@@ -67,9 +73,19 @@ export async function countSessionLimits(service: SupabaseClient, limit = 20): P
       const outcome = oralArgumentLimit({
         startsOn,
         startsAt: hourOf(row.starts_at),
-        rule: { until: row.until_kind as OralLimit, hour: hourOf(row.until_hour), basis: row.basis },
+        rule: {
+          until: row.until_kind as OralLimit,
+          hour: hourOf(row.until_hour),
+          basis: row.basis,
+          hours: row.until_hours,
+          anchor: row.until_anchor === "day" ? "day" : row.until_anchor === "session" ? "session" : null,
+          days: row.until_days,
+          counting:
+            row.until_counting === "calendar" ? "calendar" : row.until_counting === "business" ? "business" : null,
+        },
         calendar,
         place: { proceedingKind: row.proceeding_kind, system: row.system, comarca: row.comarca },
+        publishedOn: row.published_on ? String(row.published_on).slice(0, 10) : null,
       });
       payload = outcome.ok
         ? {

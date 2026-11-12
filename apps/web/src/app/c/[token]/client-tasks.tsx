@@ -6,8 +6,9 @@ import { useRef, useState } from "react";
 import { Alert, Box, Button, Card, CardContent, Typography } from "@mui/material";
 
 import ProductMarkdown from "@/components/product/product-markdown";
+import StateLine from "@/components/product/state-line";
 import StatusChip from "@/components/product/status-chip";
-import { caseErrorKey, DOCUMENT_KIND_KEY, isDocumentKind } from "@/lib/cases/cases";
+import { caseErrorKey, DOCUMENT_KIND_KEY, firstNameOf, isDocumentKind } from "@/lib/cases/cases";
 import type { ClientSignature, ClientTerm } from "@/lib/cases/client-link";
 import {
   acceptClientTerms,
@@ -233,6 +234,37 @@ export function ClientSignatures({
                   </Box>
                 )}
 
+              {/* A minor of 16 or 17 this person assists signs the same document beside them (0224). */}
+              {signature.status === "pending" && signature.method === "zapsign"
+                ? (signature.assisted ?? []).map((part) =>
+                    part.signed_at ? (
+                      <StateLine key={part.name} tone="done">
+                        {t("client-signature-assisted-signed", { name: part.name })}
+                      </StateLine>
+                    ) : (
+                      <StateLine
+                        key={part.name}
+                        tone="attention"
+                        action={
+                          editable && part.sign_url ? (
+                            <Button
+                              variant="outlined"
+                              size="small"
+                              href={part.sign_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                            >
+                              {t("client-signature-assisted-sign", { name: firstNameOf(part.name) })}
+                            </Button>
+                          ) : undefined
+                        }
+                      >
+                        {t("client-signature-assisted-waiting", { name: part.name })}
+                      </StateLine>
+                    ),
+                  )
+                : null}
+
               {editable && signature.status === "pending" && signature.method === "govbr" && (
                 <Box component="ol" className="m-0 flex list-decimal flex-col gap-3 pl-5">
                   <Typography component="li" variant="body1">
@@ -260,6 +292,13 @@ export function ClientSignatures({
                       {t("client-signature-govbr-open")}
                     </Button>
                   </Typography>
+                  {(signature.assisted ?? []).length > 0 ? (
+                    <Typography component="li" variant="body1">
+                      {t("client-signature-govbr-assisted", {
+                        names: (signature.assisted ?? []).map((part) => part.name).join(" e "),
+                      })}
+                    </Typography>
+                  ) : null}
                   <Typography component="li" variant="body1">
                     {t("client-signature-govbr-send")}{" "}
                     <Button

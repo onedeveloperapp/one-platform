@@ -1,5 +1,6 @@
 import "server-only";
 
+import { queueChatwootMirror } from "@/lib/chatwoot/mirror";
 import { supabaseFileStore } from "@/lib/files/store";
 import { soon } from "@/lib/jobs/soon";
 import { forgetStaged, readStaged } from "@/lib/test-chat/staging";
@@ -199,6 +200,8 @@ export async function fetchPendingMedia(service: SupabaseClient, limit = 10): Pr
     report.conversations = [
       ...new Set(((messages ?? []) as { conversation_id: string | null }[]).flatMap((m) => m.conversation_id ?? [])),
     ];
+    // The file goes to the firm's panel with its message (0223).
+    queueChatwootMirror();
   }
   return report;
 }

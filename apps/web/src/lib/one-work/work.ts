@@ -188,6 +188,9 @@ export function monthTotals(work: OneWork, month: string): OneWorkTotals {
   return totals;
 }
 
+/** Whether a month has anything of ONE's to say: a task that counts, or one of a test case. */
+export const saysOneWork = (totals: OneWorkTotals): boolean => totals.tasks > 0 || totals.test > 0;
+
 /** A kind's line of a month, zero when ONE did none of it. */
 export type KindLine = { kind: OneWorkKind } & Pick<OneWorkRow, "alone" | "assisted" | "test" | "minutes">;
 

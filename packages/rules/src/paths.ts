@@ -4,8 +4,12 @@
  * panels, and whether the client has free justice are given.
  *
  * - In the small-claims court a judgment is appealed by the recurso inominado to the turma recursal (Lei 9.099/1995,
- *   art. 41); its acórdão only by the recurso extraordinário (CF, art. 102, III) or, where the court has a panel for
- *   it, a request to settle diverging decisions; never by the recurso especial (Súmula 203 do STJ).
+ *   art. 41); its acórdão by the recurso extraordinário (CF, art. 102, III; Súmula 640 do STF), never by the recurso
+ *   especial (Súmula 203 do STJ); and, when it goes against the jurisprudence of the STJ consolidated in a súmula, a
+ *   repetitive appeal or an incident of assumption of competence or of repetitive demands, by the reclamação to the
+ *   court of justice of its state (Resolução STJ nº 3/2016, art. 1º; in the TJGO, its Seções Cíveis: Regimento
+ *   Interno, art. 16, V), until the acórdão becomes final (CPC, art. 988, § 5º, I), which has no term of its own
+ *   (`caminhos-v2`: `reclamacao` in place of `caminhos-v1`'s request to settle diverging panels).
  * - In the civil court a judgment is appealed by the apelação (CPC, art. 1.009); its acórdão by the recurso especial
  *   (CF, art. 105, III) and the recurso extraordinário.
  * - Every decision takes the embargos de declaração, for an omission, a contradiction, an obscurity or a material
@@ -16,7 +20,7 @@
  *   costs (CPC, art. 98, §§ 1º and 3º).
  */
 
-export const PATHS_RULE = "caminhos-v1";
+export const PATHS_RULE = "caminhos-v2";
 
 export type LawsuitKind = "juizado" | "comum";
 export type DecisionStage = "sentenca" | "acordao";
@@ -27,7 +31,7 @@ export type PathOption =
   | "apelacao"
   | "recurso_extraordinario"
   | "recurso_especial"
-  | "pedido_uniformizacao";
+  | "reclamacao";
 
 export type PathCosts = {
   /** The appeal asks a preparo the court's table sets (none with free justice). */
@@ -41,8 +45,6 @@ export type PathCosts = {
 export type PathsInput = {
   kind: LawsuitKind;
   stage: DecisionStage;
-  /** The court has a panel to settle diverging decisions of its turmas recursais. */
-  uniformization?: boolean;
   /** The client has free justice in this lawsuit. */
   freeJustice?: boolean;
   /** The decision condemned the defendant to pay something (the base of the fees of a lost appeal). */
@@ -76,15 +78,16 @@ export function pathsAfter(input: PathsInput): Path[] {
         },
       ];
     }
-    const options: Path[] = [
+    return [
       accept,
       EMBARGOS,
-      { option: "recurso_extraordinario", grounds: ["CF, art. 102, III", "Súmula 203 do STJ"], costs: null },
+      { option: "recurso_extraordinario", grounds: ["CF, art. 102, III", "Súmula 640 do STF"], costs: null },
+      {
+        option: "reclamacao",
+        grounds: ["Resolução STJ nº 3/2016, art. 1º", "CPC, arts. 988 a 993", "CPC, art. 988, § 5º, I"],
+        costs: null,
+      },
     ];
-    if (input.uniformization) {
-      options.push({ option: "pedido_uniformizacao", grounds: ["regimento do tribunal"], costs: null });
-    }
-    return options;
   }
   if (input.stage === "sentenca") {
     return [

@@ -121,4 +121,65 @@ describe("the registration for oral argument (sustentacao-v1)", () => {
       { ok: false, code: "invalid_rule" },
     );
   });
+
+  it("counts hours before the session, or before its day, from its first minute when its hour is not known", () => {
+    const cnj = {
+      until: "hours_before" as const,
+      hour: null,
+      hours: 48,
+      anchor: "session" as const,
+      basis: "Res. CNJ 591/2024",
+    };
+    const timed = oralArgumentLimit({
+      startsOn: "2026-11-24",
+      startsAt: "14:00",
+      rule: cnj,
+      calendar: NONE,
+      place: PLACE,
+    });
+    assert.deepEqual(timed.ok && [timed.limit.on, timed.limit.hour], ["2026-11-22", "14:00"]);
+    const untimed = oralArgumentLimit({
+      startsOn: "2026-11-24",
+      startsAt: null,
+      rule: cnj,
+      calendar: NONE,
+      place: PLACE,
+    });
+    assert.deepEqual(untimed.ok && [untimed.limit.on, untimed.limit.hour], ["2026-11-22", "00:00"]);
+    const day = oralArgumentLimit({
+      startsOn: "2026-11-24",
+      startsAt: "14:00",
+      rule: { ...cnj, anchor: "day" as const },
+      calendar: NONE,
+      place: PLACE,
+    });
+    assert.deepEqual(day.ok && [day.limit.on, day.limit.hour], ["2026-11-22", "00:00"]);
+  });
+
+  it("counts days from the publication of the pauta as a term is, and says when there is none", () => {
+    const tjmg = {
+      until: "days_after_publication" as const,
+      hour: null,
+      days: 5,
+      counting: "business" as const,
+      basis: "Código de Normas dos Juizados do TJMG, art. 176, § 1º",
+    };
+    // Made available on Tuesday 2026-11-10: published on the 11th, counted from the 12th, five business days.
+    const out = oralArgumentLimit({
+      startsOn: "2026-11-30",
+      startsAt: null,
+      rule: tjmg,
+      calendar: NONE,
+      place: PLACE,
+      publishedOn: "2026-11-10",
+    });
+    assert.deepEqual(out.ok && [out.limit.on, out.limit.hour], ["2026-11-18", null]);
+    assert.deepEqual(
+      oralArgumentLimit({ startsOn: "2026-11-30", startsAt: null, rule: tjmg, calendar: NONE, place: PLACE }),
+      {
+        ok: false,
+        code: "no_publication",
+      },
+    );
+  });
 });
