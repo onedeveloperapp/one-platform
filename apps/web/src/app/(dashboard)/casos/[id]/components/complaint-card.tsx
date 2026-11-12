@@ -109,14 +109,14 @@ export default function ComplaintCard({
               .map((complaint) => `${t(CHANNEL_KEY[complaint.channel])}: ${t(OUTCOME_KEY[complaint.outcome])}`)
               .join(" · ")
       }
-      chip={
-        anyOverdue ? (
-          <StatusChip tone="attention" label={t("case-complaint-overdue")} />
-        ) : prior?.state === "owed" ? (
-          <StatusChip tone="info" label={t("case-prior-complaint-chip-owed")} />
-        ) : prior?.state === "waiting" ? (
-          <StatusChip tone="info" label={t("case-prior-complaint-chip-waiting")} />
-        ) : null
+      ask={
+        anyOverdue
+          ? { tone: "firm", label: t("case-complaint-overdue") }
+          : prior?.state === "owed"
+            ? { tone: "client", label: t("case-prior-complaint-chip-owed") }
+            : prior?.state === "waiting"
+              ? { tone: "client", label: t("case-prior-complaint-chip-waiting") }
+              : null
       }
       description={t("case-complaints-body")}
       action={
@@ -192,6 +192,27 @@ export default function ComplaintCard({
                     label={overdue ? t("case-complaint-overdue") : t(OUTCOME_KEY[complaint.outcome])}
                   />
                 </Box>
+                {overdue ? (
+                  // What the firm owes here, beside the one button that does it (the top of the case said it alone).
+                  <StateLine
+                    tone="attention"
+                    action={
+                      writable ? (
+                        <Button
+                          variant="outlined"
+                          color="grey"
+                          size="small"
+                          disabled={busy !== null}
+                          onClick={() => setEditing(complaint)}
+                        >
+                          {t("case-complaint-overdue-record")}
+                        </Button>
+                      ) : undefined
+                    }
+                  >
+                    {t("case-complaint-overdue-line", { day: formatDayBr(complaint.answerDueOn ?? "") ?? "" })}
+                  </StateLine>
+                ) : null}
                 {complaint.notes ? (
                   <Typography variant="body1" className="text-text-primary whitespace-pre-wrap">
                     {complaint.notes}

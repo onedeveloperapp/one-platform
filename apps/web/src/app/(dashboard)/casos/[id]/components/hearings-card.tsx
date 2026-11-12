@@ -11,7 +11,6 @@ import HearingCard from "@/components/hearings/hearing-card";
 import HearingPanel from "@/components/hearings/hearing-panel";
 import CollapsibleCard from "@/components/product/collapsible-card";
 import EmptyState from "@/components/product/empty-state";
-import StatusChip from "@/components/product/status-chip";
 import IllustrationPlatforms from "@/icons/illustrations/illustration-platforms";
 import { opensOnArrival } from "@/lib/cases/sections";
 import { momentIn } from "@/lib/hearings/hearings";
@@ -76,9 +75,7 @@ export default function HearingsCard({
           ? t("case-hearings-summary-next", { day: comingAt.day, time: comingAt.time })
           : t("case-hearings-summary-none")
       }
-      chip={
-        silent > 0 ? <StatusChip tone="attention" label={t("case-hearings-summary-silent", { count: silent })} /> : null
-      }
+      ask={silent > 0 ? { tone: "firm", label: t("case-hearings-summary-silent", { count: silent }) } : null}
       action={
         <Button variant="outlined" color="grey" size="small" href="/agenda" LinkComponent={Link}>
           {t("case-hearings-all")}

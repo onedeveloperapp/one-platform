@@ -39,7 +39,8 @@ export default function PublicationActionBox({ view }: { view: PublicationAction
         </Typography>
       ) : null}
       {view.pending.map((item, index) => (
-        <StateLine key={index} tone="attention">
+        // What the client owes is the client's wait, never the firm's task.
+        <StateLine key={index} tone={item.from === "cliente" ? "waiting" : "attention"}>
           {t(PENDING_KEY[item.from], { text: item.text })}
         </StateLine>
       ))}

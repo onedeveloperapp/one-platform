@@ -5,6 +5,7 @@ import { useState } from "react";
 
 import { Alert, Box, Button, Typography } from "@mui/material";
 
+import FactGrid, { type Fact } from "@/components/product/fact-grid";
 import StatusChip from "@/components/product/status-chip";
 import { acknowledgeMovements, requestProceedingRead } from "@/lib/courts/actions";
 import { courseErrorKey } from "@/lib/courts/course";
@@ -88,9 +89,13 @@ export default function CourtCourse({
     if (view.status === "secret") return t("course-secret");
     return view.readLabel ? t("course-read", { from, when: view.readLabel }) : null;
   })();
-  const about = [view.unit, view.courtStatus, view.phase, view.judge ? t("course-judge", { name: view.judge }) : null]
-    .filter(Boolean)
-    .join(" · ");
+  // What the court says of the lawsuit, each under its name.
+  const about: Fact[] = [
+    { key: "unit", label: t("course-fact-unit"), value: view.unit },
+    { key: "status", label: t("course-fact-status"), value: view.courtStatus },
+    { key: "phase", label: t("course-fact-phase"), value: view.phase },
+    { key: "judge", label: t("course-fact-judge"), value: view.judge },
+  ];
   const shown = all ? view.movements : view.movements.slice(0, FIRST_SHOWN);
   const mayRead = writable && reader && !view.asked && !test;
 
@@ -115,7 +120,7 @@ export default function CourtCourse({
           {state}
         </Typography>
       ) : null}
-      {about ? <Typography variant="body2">{about}</Typography> : null}
+      <FactGrid facts={about} />
 
       {view.pending.length > 0 ? (
         <Box className="flex flex-col gap-1">

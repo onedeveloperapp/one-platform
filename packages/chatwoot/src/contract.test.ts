@@ -149,6 +149,25 @@ function chatwootStandIn(state: FakeChatwootProvider, platformToken: string) {
         await account.deleteConversation(Number(inner[1]));
         return { status: 200 };
       }
+      if (rest === "agent_bots" && method === "GET") {
+        return {
+          status: 200,
+          body: state.bots
+            .filter((bot) => bot.accountId === Number(match![1]))
+            .map((bot) => ({ id: bot.id, name: bot.name, account_id: bot.accountId, outgoing_url: null })),
+        };
+      }
+      if (rest === "agent_bots" && method === "POST") {
+        const { id } = await account.agentBot(String(input.name));
+        return {
+          status: 200,
+          body: { id, name: input.name, account_id: Number(match![1]), outgoing_url: input.outgoing_url },
+        };
+      }
+      if ((inner = /^conversations\/(\d+)\/assignments$/.exec(rest)) && method === "POST") {
+        await account.assignToBot(Number(inner[1]), Number(input.assignee_id));
+        return { status: 200, body: { id: input.assignee_id, name: "ONE" } };
+      }
       if ((inner = /^conversations\/(\d+)\/toggle_status$/.exec(rest)) && method === "POST") {
         await account.setConversationStatus(Number(inner[1]), input.status as "open");
         return {
@@ -411,6 +430,28 @@ for (const run of runs()) {
       assert.equal(kept[1]!.status, "failed");
       assert.equal(kept[1]!.externalError, "A janela de 24 horas fechou.");
       assert.equal(fake.conversation(accountId, conversation.id)!.status, "open");
+    });
+
+    it("makes the account's robot once and gives it a conversation, which waits as pending", async () => {
+      const { provider, fake } = run.make();
+      const { account, inbox, accountId } = await firm(provider);
+      const bot = await account.agentBot("ONE");
+      assert.deepEqual(await account.agentBot("ONE"), bot);
+      const contact = await account.createContact({
+        inboxId: inbox.id,
+        name: "Cliente",
+        phone: "+5562999990000",
+        identifier: "5562999990000",
+      });
+      const conversation = await account.createConversation({
+        inboxId: inbox.id,
+        contactId: contact.id,
+        status: "open",
+      });
+      await account.assignToBot(conversation.id, bot.id);
+      assert.equal(fake.conversation(accountId, conversation.id)!.status, "pending");
+      assert.equal(fake.conversation(accountId, conversation.id)!.botId, bot.id);
+      assert.equal(fake.bots.filter((item) => item.accountId === accountId).length, 1);
     });
 
     it("takes out a conversation and a contact, and says plainly what is not there", async () => {

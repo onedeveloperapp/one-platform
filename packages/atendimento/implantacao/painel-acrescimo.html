@@ -1,0 +1,28 @@
+<!--
+  O que o ONE acrescenta ao painel, depois do tema do kit (pilha-one.sh junta os dois em gerado/painel-one.html,
+  que o chatwoot-config grava em DASHBOARD_SCRIPTS).
+
+  A lista de conversas abre em "Todos". As conversas do ONE são do robô e quase nunca têm alguém atribuído, e o
+  Chatwoot 4.19.1 abre sempre em "Minhas" (ChatList.vue, activeAssigneeTab começa em ME, sem preferência que o
+  troque). Cada vez que a lista aparece, o script clica uma vez na terceira aba (Minhas, Não atribuídas, Todos); a
+  escolha que a pessoa fizer depois fica até a lista sair da tela. Nada é removido nem escondido: só um clique,
+  como a pessoa faria. Se uma versão nova mudar a lista, o script não acha as três abas e não faz nada.
+-->
+<script>
+  (function () {
+    var seen = new WeakSet();
+    function chooseAll() {
+      var lists = document.querySelectorAll(".conversations-list-wrap");
+      for (var i = 0; i < lists.length; i++) {
+        var list = lists[i];
+        if (seen.has(list)) continue;
+        var tabs = list.querySelectorAll("ul.list-none > li > a");
+        if (tabs.length !== 3) continue;
+        seen.add(list);
+        tabs[2].click();
+      }
+    }
+    new MutationObserver(chooseAll).observe(document.documentElement, { childList: true, subtree: true });
+    chooseAll();
+  })();
+</script>

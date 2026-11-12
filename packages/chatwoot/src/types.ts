@@ -87,6 +87,13 @@ export interface ChatwootAccount {
   }): Promise<{ id: number }>;
   deleteConversation(conversationId: number): Promise<void>;
   setConversationStatus(conversationId: number, status: ChatwootConversationStatus): Promise<void>;
+  /**
+   * The account's robot of this name, made once (with no address: Chatwoot sends it nothing). A conversation
+   * assigned to it is pending and shows the panel's "Assumir atendimento", which hands it to the person and opens it.
+   */
+  agentBot(name: string): Promise<{ id: number }>;
+  /** The conversation assigned to the robot: pending, with nobody of the team on it. */
+  assignToBot(conversationId: number, botId: number): Promise<void>;
   createMessage(conversationId: number, message: NewChatwootMessage): Promise<{ id: number }>;
   /** Only in an inbox of the API kind: what became of a message, and why it failed. */
   setMessageStatus(

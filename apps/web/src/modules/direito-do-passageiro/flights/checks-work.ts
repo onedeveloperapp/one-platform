@@ -1,8 +1,16 @@
 import "server-only";
 
 import { soon } from "@/lib/jobs/soon";
+import { loadFlightChecks } from "@/modules/direito-do-passageiro/flights/facts";
 import { createServiceClient } from "@flyee/auth/service";
-import { FLIGHT_CHECK_VERSION, type LegToCheck, matchLeg, monthsToSearch, withUnscheduled } from "@flyee/flights/check";
+import {
+  FLIGHT_CHECK_VERSION,
+  type LegToCheck,
+  matchLeg,
+  monthsToSearch,
+  problemLeg,
+  withUnscheduled,
+} from "@flyee/flights/check";
 import { AnacVraSource, VRA_URL_PATTERN } from "@flyee/flights/providers/anac-vra";
 import type { FlightRecordSource, VraMonth } from "@flyee/flights/types";
 import type { VraRecord } from "@flyee/flights/vra";
@@ -38,7 +46,7 @@ type ClaimedCheck = {
 /** The most months one run downloads: each is a large file. */
 const MONTHS_PER_RUN = 2;
 
-type Settings = { url: string; missingAfterMonths: number };
+type Settings = { url: string; missingAfterMonths: number; problemDelayMinutes: number };
 
 async function settingsOf(service: SupabaseClient): Promise<Settings> {
   const { data } = await service.from("platform_settings").select("value").eq("key", "flights").maybeSingle();
@@ -48,7 +56,13 @@ async function settingsOf(service: SupabaseClient): Promise<Settings> {
       ? value.vra_url
       : VRA_URL_PATTERN;
   const after = Number(value.vra_missing_after_months);
-  return { url, missingAfterMonths: Number.isInteger(after) && after > 0 ? after : 3 };
+  const late = Number(value.problem_delay_minutes);
+  return {
+    url,
+    missingAfterMonths: Number.isInteger(after) && after > 0 ? after : 3,
+    // How late a leg's arrival is, by the record, for ONE to take it as the leg of the problem.
+    problemDelayMinutes: Number.isInteger(late) && late > 0 ? late : 30,
+  };
 }
 
 /** A flight of the record by what tells it apart in a month. */
@@ -113,7 +127,70 @@ export async function checkFlights(
     const outcome = await settle(service, check, monthsOf.get(check.check_id) ?? [], read, settings, current);
     counts[outcome] += 1;
   }
+  // With what the record said, ONE marks the leg of each case's problem where its rule can tell (0228).
+  for (const caseId of new Set(claimed.map((check) => check.leg_case))) {
+    await markProblemLeg(service, caseId, settings.problemDelayMinutes);
+  }
   return counts;
+}
+
+/** A leg of a trip as ONE's rule of the problem's leg reads it. */
+type TripLeg = {
+  id: string;
+  position: number;
+  flight_number: string | null;
+  origin_iata: string | null;
+  destination_iata: string | null;
+  affected: boolean;
+};
+
+/**
+ * The leg where a case's problem happened, marked by ONE (the owner, 2026-11-12: ONE does what needs no person):
+ * the pure rule `problemLeg` over what ANAC's record said of each leg, applied while the case is before the lawsuit
+ * and no leg is marked; the database marks it only then too, and never over a person's mark. A leg the rule cannot
+ * tell is the card's question to a person. A failure here leaves the leg unmarked and the check recorded.
+ */
+export async function markProblemLeg(service: SupabaseClient, caseId: string, delayMinutes: number): Promise<boolean> {
+  const { data: theCase } = await service.from("cases").select("org_id, status").eq("id", caseId).maybeSingle();
+  if (!theCase || ["filed", "closed", "declined"].includes(String(theCase.status))) return false;
+  const { data: rows, error } = await service
+    .from("flight_segments")
+    .select("id, position, flight_number, origin_iata, destination_iata, affected")
+    .eq("case_id", caseId);
+  const segments = ((rows ?? []) as TripLeg[]).slice().sort((a, b) => a.position - b.position);
+  if (error || segments.length === 0 || segments.some((segment) => segment.affected)) return false;
+  let checks: Awaited<ReturnType<typeof loadFlightChecks>>;
+  try {
+    // The rule reads what the record says of each flight, never the case's own times: they are left out.
+    checks = await loadFlightChecks(
+      service,
+      String(theCase.org_id),
+      caseId,
+      segments.map((segment) => ({ ...segment, scheduled_departure_local: null, actual_arrival_local: null })),
+      null,
+    );
+  } catch {
+    return false;
+  }
+  const leg = problemLeg(
+    segments.map((segment) => {
+      const view = checks.bySegment[segment.id]?.vra ?? null;
+      return {
+        id: segment.id,
+        checked: view?.status === "found",
+        cancelled: view?.cancelled ?? false,
+        diverted: view?.diverted ?? false,
+        arrivalDelayMinutes: view?.comparison?.arrivalDelayMinutes ?? null,
+      };
+    }),
+    delayMinutes,
+  );
+  if (!leg) return false;
+  const { data: marked, error: markError } = await service.rpc("one_mark_problem_leg", {
+    target_case: caseId,
+    target_segment: leg,
+  });
+  return !markError && (marked as { marked?: boolean } | null)?.marked === true;
 }
 
 async function settle(

@@ -254,7 +254,7 @@ export async function loadCase(id: string): Promise<CaseState> {
     supabase
       .from("flight_segments")
       .select(
-        "id, position, flight_number, origin_iata, destination_iata, scheduled_departure_local, scheduled_arrival_local, actual_departure_local, actual_arrival_local, booking_reference, affected, source",
+        "id, position, flight_number, origin_iata, destination_iata, scheduled_departure_local, scheduled_arrival_local, actual_departure_local, actual_arrival_local, booking_reference, affected, affected_by, source",
       )
       .eq("case_id", id)
       .eq("org_id", firm)
@@ -295,7 +295,7 @@ export async function loadCase(id: string): Promise<CaseState> {
     supabase.rpc("firm_team", { target_org: firm }),
     supabase.from("airlines").select("iata, name").eq("active", true).order("name"),
     supabase.from("courts").select("acronym, name, uf").order("uf"),
-    supabase.from("court_systems").select("court, proceeding_kind, system, confirmed, notes, file_types"),
+    supabase.from("court_systems").select("court, proceeding_kind, system, confirmed, notes, file_types, source, host"),
     // The cases' setting, and the documents by problem of the version of the module the case was opened under (0212),
     // which the case reads in its place. A version that could not be read leaves the setting's.
     Promise.all([
@@ -874,6 +874,8 @@ export async function loadCase(id: string): Promise<CaseState> {
         confirmed: boolean;
         notes: string | null;
         file_types: Record<string, unknown> | null;
+        source: string;
+        host: string | null;
       }[]
     ).map((row) => ({
       court: row.court,
@@ -881,6 +883,8 @@ export async function loadCase(id: string): Promise<CaseState> {
       system: row.system,
       confirmed: row.confirmed,
       notes: row.notes,
+      source: row.source,
+      host: row.host,
       fileTypes: Object.fromEntries(
         Object.entries(row.file_types ?? {}).flatMap(([kind, name]) =>
           typeof name === "string" ? [[kind, name]] : [],

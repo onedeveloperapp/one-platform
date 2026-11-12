@@ -1,0 +1,1 @@
+export default {"dialect":"postgresql","out":"C:/Users/tribo/AppData/Local/Temp/one-drizzle-8A9Neo","schemaFilter":["public"],"dbCredentials":{"url":"postgres://postgres:postgres@127.0.0.1:54361/one_test"}};

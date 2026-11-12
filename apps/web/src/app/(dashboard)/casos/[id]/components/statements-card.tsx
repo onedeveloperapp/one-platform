@@ -9,7 +9,7 @@ import { useRef, useState } from "react";
 
 import { Alert, Box, Button, MenuItem, TextField, Typography } from "@mui/material";
 
-import CollapsibleCard from "@/components/product/collapsible-card";
+import CollapsibleCard, { type CardAsk } from "@/components/product/collapsible-card";
 import EmptyState from "@/components/product/empty-state";
 import SecondFactorPrompt from "@/components/product/second-factor-prompt";
 import SectionTitle from "@/components/product/section-title";
@@ -537,16 +537,18 @@ export default function StatementsCard({
     (statement, index) => statement.stalled || stages[index] === "not_transcribed" || stages[index] === "not_proposed",
   );
   const unused = writable ? state.audios.length : 0;
-  const waitChip =
-    state.interview?.status === "open" ? (
-      <StatusChip tone="info" label={t("interview-chip-open")} />
-    ) : contested ? (
-      <StatusChip tone="attention" label={t(STAGE_KEY.contested)} />
-    ) : unused > 0 ? (
-      <StatusChip tone="attention" label={t("case-statements-summary-audios", { count: unused })} />
-    ) : stopped ? (
-      <StatusChip tone="attention" label={t("case-statements-summary-stalled")} />
-    ) : null;
+  // Whose turn the account is (`WAIT_PLACE`): the client's while the interview is open, ONE's while it orders the
+  // facts again after the client said they were wrong, the firm's for audios to use and work that stopped.
+  const waitChip: CardAsk | null =
+    unused > 0
+      ? { tone: "firm", label: t("case-statements-summary-audios", { count: unused }) }
+      : stopped
+        ? { tone: "firm", label: t("case-statements-summary-stalled") }
+        : contested
+          ? { tone: "working", label: t("case-statements-contested-working") }
+          : state.interview?.status === "open"
+            ? { tone: "client", label: t("interview-chip-open") }
+            : null;
 
   return (
     <CollapsibleCard
@@ -559,7 +561,7 @@ export default function StatementsCard({
             ? [t("case-statements-summary", { count: 1 }), t(STAGE_KEY[stages[0]])].join(" · ")
             : t("case-statements-summary", { count: state.statements.length })
       }
-      chip={waitChip}
+      ask={waitChip}
       description={t("case-statements-body")}
       defaultOpen={opensOnArrival(
         state.case.status,

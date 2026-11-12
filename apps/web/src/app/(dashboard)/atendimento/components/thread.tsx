@@ -19,6 +19,7 @@ import NiBriefcase from "@/icons/nexture/ni-briefcase";
 import NiFolderPlus from "@/icons/nexture/ni-folder-plus";
 import NiMessageCheck from "@/icons/nexture/ni-message-check";
 import NiMessageCross from "@/icons/nexture/ni-message-cross";
+import NiSendUpRight from "@/icons/nexture/ni-send-up-right";
 import NiUser from "@/icons/nexture/ni-user";
 import { caseLabel } from "@/lib/cases/cases";
 import { notSentKey, type ReplyBlock, replyBlock, type WaitingReply } from "@/lib/conversations/reply";
@@ -63,6 +64,7 @@ export default function Thread({
   module = null,
   backHref,
   onChanged,
+  panel = false,
 }: {
   conversation: ConversationSummary;
   messages: ThreadMessage[];
@@ -83,6 +85,8 @@ export default function Thread({
   /** The way back to the list on a phone: the inbox under the view and the order it was opened from. */
   backHref?: string;
   onChanged: () => void;
+  /** The firm's panel of attendance is on (0223): the conversation is read and answered there. */
+  panel?: boolean;
 }) {
   const t = useTranslations("product");
   const router = useRouter();
@@ -243,7 +247,7 @@ export default function Thread({
             />
             {conversation.optedOut ? <StatusChip label={t("inbox-opted-out")} tone="attention" /> : null}
             {conversation.test ? <StatusChip label={t("inbox-test-chip")} tone="info" /> : null}
-            {!supportVisit ? (
+            {!supportVisit && !panel ? (
               conversation.agent === "one" ? (
                 <Button
                   variant="outlined"
@@ -291,126 +295,144 @@ export default function Thread({
           ) : null}
         </Box>
 
-        <Box
-          ref={log}
-          className="border-grey-100 max-h-[55vh] min-h-48 overflow-y-auto border-y py-4"
-          tabIndex={0}
-          role="log"
-          aria-label={t("inbox-thread-label", { name: conversation.name })}
-        >
-          {olderHidden ? (
-            <Typography variant="body2" className="text-text-secondary mb-4 text-center">
-              {t("inbox-older-hidden")}
+        {panel ? (
+          // The firm's panel holds the conversation (0223): it is read and answered there.
+          <Box className="border-grey-100 flex flex-col items-start gap-2 border-y py-4">
+            <Typography variant="body2" className="text-text-secondary">
+              {t("inbox-panel-conversation")}
             </Typography>
-          ) : null}
-          <Box component="ul" className="m-0 flex list-none flex-col gap-3 p-0">
-            {timeline.map((item) => {
-              if (item.type === "event") {
-                const words = eventWords(item.event);
-                return (
-                  <Box
-                    component="li"
-                    key={`event-${item.event.id}`}
-                    className="flex flex-col items-center gap-0.5 px-4 text-center"
-                  >
-                    <Typography variant="body2" className="text-text-secondary">
-                      {t(words.key, words.paperKey ? { ...words.values, paper: t(words.paperKey) } : words.values)}
-                      {item.event.caseId &&
-                      ["case_opened", "document_joined", "statement_joined"].includes(item.event.kind) ? (
-                        <>
-                          {" · "}
-                          <Link href={`/casos/${item.event.caseId}`} className="text-primary">
-                            {t("inbox-event-open-case")}
-                          </Link>
-                        </>
-                      ) : null}
-                    </Typography>
-                    <Typography variant="caption" className="text-text-secondary">
-                      {item.event.momentLabel}
-                    </Typography>
-                  </Box>
-                );
-              }
-              const message = item.message;
-              const fromFirm = message.direction === "out";
-              const failed = message.status === "failed";
-              // Not sent, or nobody can tell: the two are never shown under the same word.
-              const unconfirmed = failed && message.errorCode === "unconfirmed";
-              return (
-                <MessageBubble
-                  key={message.id}
-                  side={message.direction}
-                  sideLabel={fromFirm ? t("inbox-said-firm") : t("inbox-said-person", { name: conversation.name })}
-                  note={
-                    message.origin === "app"
-                      ? t("inbox-note-app")
-                      : message.origin === "history"
-                        ? t("inbox-note-history")
-                        : message.templateName
-                          ? t("inbox-template-label", { name: message.templateName })
-                          : undefined
-                  }
-                  meta={
-                    <>
-                      <span>{message.momentLabel}</span>
-                      {!fromFirm ? <span>{t("inbox-by-client")}</span> : null}
-                      {fromFirm && message.aiRun ? (
-                        <span>
-                          {message.authorName
-                            ? t("inbox-by-one-approved", { name: message.authorName })
-                            : t("inbox-by-one-ai")}
-                        </span>
-                      ) : fromFirm && message.byOne ? (
-                        <span>{t("inbox-by-one")}</span>
-                      ) : fromFirm && message.authorName ? (
-                        <span>{t("inbox-by", { name: message.authorName })}</span>
-                      ) : null}
-                      {fromFirm ? (
-                        <StatusChip
-                          label={unconfirmed ? t("inbox-status-unconfirmed") : t(statusKey(message.status))}
-                          tone={unconfirmed ? "attention" : failed ? "danger" : "neutral"}
-                        />
-                      ) : null}
-                    </>
-                  }
-                >
-                  {message.body ? message.body : <em>{t(kindKey(message.kind))}</em>}
-                  {message.media.state === "stored" && message.media.fileId ? (
-                    <Box className="mt-2">
-                      <Button
-                        size="small"
-                        variant="outlined"
-                        color="grey"
-                        onClick={() => void open(message.media.fileId as string)}
-                      >
-                        {message.media.filename
-                          ? t("inbox-media-open-named", { name: message.media.filename })
-                          : t("inbox-media-open")}
-                      </Button>
-                    </Box>
-                  ) : null}
-                  {message.media.state === "pending" ? (
-                    <Typography variant="body2" className="text-text-secondary mt-1">
-                      {t("inbox-media-pending")}
-                    </Typography>
-                  ) : null}
-                  {message.media.state === "failed" ? (
-                    <Typography variant="body2" className="text-text-secondary mt-1">
-                      {t("inbox-media-failed")}
-                    </Typography>
-                  ) : null}
-                  {failed ? (
-                    <Typography variant="body2" className="text-text-primary mt-1">
-                      {failureHasNoWords(message.errorCode)
-                        ? t("inbox-failure-other", { code: message.errorCode ?? "" })
-                        : t(failureKey(message.errorCode))}
-                    </Typography>
-                  ) : null}
-                </MessageBubble>
-              );
-            })}
+            <Button
+              variant="contained"
+              href="/atendimento/painel"
+              target="_blank"
+              rel="noopener"
+              startIcon={<NiSendUpRight size="small" />}
+            >
+              {t("inbox-panel-open-conversation")}
+            </Button>
           </Box>
-        </Box>
+        ) : (
+          <Box
+            ref={log}
+            className="border-grey-100 max-h-[55vh] min-h-48 overflow-y-auto border-y py-4"
+            tabIndex={0}
+            role="log"
+            aria-label={t("inbox-thread-label", { name: conversation.name })}
+          >
+            {olderHidden ? (
+              <Typography variant="body2" className="text-text-secondary mb-4 text-center">
+                {t("inbox-older-hidden")}
+              </Typography>
+            ) : null}
+            <Box component="ul" className="m-0 flex list-none flex-col gap-3 p-0">
+              {timeline.map((item) => {
+                if (item.type === "event") {
+                  const words = eventWords(item.event);
+                  return (
+                    <Box
+                      component="li"
+                      key={`event-${item.event.id}`}
+                      className="flex flex-col items-center gap-0.5 px-4 text-center"
+                    >
+                      <Typography variant="body2" className="text-text-secondary">
+                        {t(words.key, words.paperKey ? { ...words.values, paper: t(words.paperKey) } : words.values)}
+                        {item.event.caseId &&
+                        ["case_opened", "document_joined", "statement_joined"].includes(item.event.kind) ? (
+                          <>
+                            {" · "}
+                            <Link href={`/casos/${item.event.caseId}`} className="text-primary">
+                              {t("inbox-event-open-case")}
+                            </Link>
+                          </>
+                        ) : null}
+                      </Typography>
+                      <Typography variant="caption" className="text-text-secondary">
+                        {item.event.momentLabel}
+                      </Typography>
+                    </Box>
+                  );
+                }
+                const message = item.message;
+                const fromFirm = message.direction === "out";
+                const failed = message.status === "failed";
+                // Not sent, or nobody can tell: the two are never shown under the same word.
+                const unconfirmed = failed && message.errorCode === "unconfirmed";
+                return (
+                  <MessageBubble
+                    key={message.id}
+                    side={message.direction}
+                    sideLabel={fromFirm ? t("inbox-said-firm") : t("inbox-said-person", { name: conversation.name })}
+                    note={
+                      message.origin === "app"
+                        ? t("inbox-note-app")
+                        : message.origin === "history"
+                          ? t("inbox-note-history")
+                          : message.templateName
+                            ? t("inbox-template-label", { name: message.templateName })
+                            : undefined
+                    }
+                    meta={
+                      <>
+                        <span>{message.momentLabel}</span>
+                        {!fromFirm ? <span>{t("inbox-by-client")}</span> : null}
+                        {fromFirm && message.aiRun ? (
+                          <span>
+                            {message.authorName
+                              ? t("inbox-by-one-approved", { name: message.authorName })
+                              : t("inbox-by-one-ai")}
+                          </span>
+                        ) : fromFirm && message.byOne ? (
+                          <span>{t("inbox-by-one")}</span>
+                        ) : fromFirm && message.authorName ? (
+                          <span>{t("inbox-by", { name: message.authorName })}</span>
+                        ) : null}
+                        {fromFirm ? (
+                          <StatusChip
+                            label={unconfirmed ? t("inbox-status-unconfirmed") : t(statusKey(message.status))}
+                            tone={unconfirmed ? "attention" : failed ? "danger" : "neutral"}
+                          />
+                        ) : null}
+                      </>
+                    }
+                  >
+                    {message.body ? message.body : <em>{t(kindKey(message.kind))}</em>}
+                    {message.media.state === "stored" && message.media.fileId ? (
+                      <Box className="mt-2">
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          color="grey"
+                          onClick={() => void open(message.media.fileId as string)}
+                        >
+                          {message.media.filename
+                            ? t("inbox-media-open-named", { name: message.media.filename })
+                            : t("inbox-media-open")}
+                        </Button>
+                      </Box>
+                    ) : null}
+                    {message.media.state === "pending" ? (
+                      <Typography variant="body2" className="text-text-secondary mt-1">
+                        {t("inbox-media-pending")}
+                      </Typography>
+                    ) : null}
+                    {message.media.state === "failed" ? (
+                      <Typography variant="body2" className="text-text-secondary mt-1">
+                        {t("inbox-media-failed")}
+                      </Typography>
+                    ) : null}
+                    {failed ? (
+                      <Typography variant="body2" className="text-text-primary mt-1">
+                        {failureHasNoWords(message.errorCode)
+                          ? t("inbox-failure-other", { code: message.errorCode ?? "" })
+                          : t(failureKey(message.errorCode))}
+                      </Typography>
+                    ) : null}
+                  </MessageBubble>
+                );
+              })}
+            </Box>
+          </Box>
+        )}
 
         {mediaError ? (
           <Alert severity="error" className="neutral bg-background-paper/60!" onClose={() => setMediaError(false)}>
@@ -451,7 +473,7 @@ export default function Thread({
           />
         ) : null}
 
-        {conversation.agent === "one" && (mode === "text" || mode === "template") ? (
+        {!panel && conversation.agent === "one" && (mode === "text" || mode === "template") ? (
           <Typography variant="body2" className="text-text-secondary">
             {t("inbox-one-answers-hint")}
           </Typography>
@@ -464,6 +486,7 @@ export default function Thread({
           firmName={firmName}
           manager={manager}
           onSent={onChanged}
+          fileOnly={panel}
         />
       </CardContent>
 

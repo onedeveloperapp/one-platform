@@ -58,6 +58,7 @@ export default function Composer({
   firmName,
   manager,
   onSent,
+  fileOnly = false,
 }: {
   mode: ComposerMode;
   conversation: ConversationSummary;
@@ -65,6 +66,8 @@ export default function Composer({
   firmName: string;
   manager: boolean;
   onSent: () => void;
+  /** The conversation is answered in the firm's panel (0223): what goes from here is a file, never a text alone. */
+  fileOnly?: boolean;
 }) {
   const t = useTranslations("product");
   const [text, setText] = useState("");
@@ -352,6 +355,43 @@ export default function Composer({
     );
   }
 
+  const filePicker = (
+    <input
+      ref={picker}
+      type="file"
+      hidden
+      accept="application/pdf,image/jpeg,image/png"
+      onChange={(event) => {
+        const file = event.target.files?.[0];
+        event.target.value = "";
+        if (file) void attach(file);
+      }}
+    />
+  );
+
+  if (fileOnly && !attached) {
+    return (
+      <Box className="flex flex-col gap-3">
+        {feedback}
+        <Typography variant="body2" className="text-text-secondary">
+          {t("inbox-file-only-hint")}
+        </Typography>
+        {filePicker}
+        <Box>
+          <Button
+            variant="outlined"
+            color="grey"
+            startIcon={<NiPaperclip size="medium" />}
+            onClick={() => picker.current?.click()}
+            disabled={busy || uploading}
+          >
+            {uploading ? t("inbox-file-uploading") : t("inbox-file-attach")}
+          </Button>
+        </Box>
+      </Box>
+    );
+  }
+
   return (
     <Box className="flex flex-col gap-3">
       {feedback}
@@ -403,17 +443,7 @@ export default function Composer({
                 : t("inbox-composer-help")}
         </FormHelperText>
       </FormControl>
-      <input
-        ref={picker}
-        type="file"
-        hidden
-        accept="application/pdf,image/jpeg,image/png"
-        onChange={(event) => {
-          const file = event.target.files?.[0];
-          event.target.value = "";
-          if (file) void attach(file);
-        }}
-      />
+      {filePicker}
       <Box className="flex flex-row flex-wrap gap-2">
         <Button variant="contained" startIcon={<NiSendRight size="medium" />} onClick={sendText} disabled={!canSend}>
           {busy ? t("inbox-sending") : attached ? t("inbox-file-send") : t("inbox-send")}

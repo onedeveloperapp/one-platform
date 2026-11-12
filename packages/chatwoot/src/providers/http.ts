@@ -207,6 +207,21 @@ export class HttpChatwootProvider implements ChatwootProvider {
       deleteConversation: async (conversationId) => {
         await send("DELETE", `conversations/${Number(conversationId)}`);
       },
+      agentBot: async (name) => {
+        const bots = await send<unknown>("GET", "agent_bots");
+        const found = (Array.isArray(bots) ? bots : [])
+          .map((item) => item as Record<string, unknown>)
+          .find((item) => item.name === name && item.account_id !== null);
+        if (found) return { id: idOf(found) };
+        // No outgoing address: the robot is only who the conversation is with, and Chatwoot posts it nothing.
+        return { id: idOf(await send("POST", "agent_bots", { name, description: name, outgoing_url: "" })) };
+      },
+      assignToBot: async (conversationId, botId) => {
+        await send("POST", `conversations/${Number(conversationId)}/assignments`, {
+          assignee_type: "AgentBot",
+          assignee_id: botId,
+        });
+      },
       setConversationStatus: async (conversationId, status: ChatwootConversationStatus) => {
         await send("POST", `conversations/${Number(conversationId)}/toggle_status`, { status });
       },

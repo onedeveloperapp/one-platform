@@ -207,7 +207,7 @@ export default function RulesCard({
       ]
         .filter(Boolean)
         .join(" · ")}
-      chip={civilDeclined ? <StatusChip tone="attention" label={t("case-rules-summary-civil-declined")} /> : null}
+      ask={civilDeclined ? { tone: "firm", label: t("case-rules-summary-civil-declined") } : null}
       description={t("case-rules-body")}
       defaultOpen={opensOnArrival(state.case.status, "rules", civilDeclined || toCreate)}
       bodyClassName="gap-5"
@@ -259,14 +259,28 @@ export default function RulesCard({
                     </Typography>
                   ))}
                 </Box>
-                <Typography variant="body2" className="text-text-secondary">
-                  {forumOf(proceeding.partyIds)
-                    ? t("case-plan-forum", {
-                        city: forumOf(proceeding.partyIds)?.city ?? "",
-                        uf: forumOf(proceeding.partyIds)?.uf ?? "",
-                      })
-                    : t("case-plan-no-domicile")}
-                </Typography>
+                {forumOf(proceeding.partyIds) ? (
+                  <Typography variant="body2" className="text-text-secondary">
+                    {t("case-plan-forum", {
+                      city: forumOf(proceeding.partyIds)?.city ?? "",
+                      uf: forumOf(proceeding.partyIds)?.uf ?? "",
+                    })}
+                  </Typography>
+                ) : (
+                  // The domicile decides the forum and lives in the people's card (`WAIT_PLACE.domicile_unknown`).
+                  <StateLine
+                    tone="attention"
+                    action={
+                      writable ? (
+                        <Button variant="outlined" color="grey" size="small" href="#case-people">
+                          {t("case-plan-no-domicile-fix")}
+                        </Button>
+                      ) : undefined
+                    }
+                  >
+                    {t("case-plan-no-domicile")}
+                  </StateLine>
+                )}
               </Box>
             ))}
             {plan && <FamilyPlanBox state={state} family={plan.family} writable={writable} onChanged={onChanged} />}

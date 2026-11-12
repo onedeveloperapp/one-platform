@@ -273,7 +273,9 @@ export default function CaseBoard({
                 data-board-column
                 role="group"
                 aria-labelledby={id}
-                className="grid snap-start grid-rows-subgrid gap-y-2 px-4! py-5!"
+                // One column, never wider than the card: an `auto` column grew to a long client's name (which does
+                // not wrap) and the card clipped its numbers, its button and its cases.
+                className="grid snap-start grid-cols-[minmax(0,1fr)] grid-rows-subgrid gap-y-2 px-4! py-5!"
                 style={{ gridColumn: index + 1, gridRow: "2 / span 8" }}
               >
                 <Box className={cn(ROW.icon, "flex justify-center")}>
@@ -373,11 +375,11 @@ export default function CaseBoard({
                       {column.items.map((item) => {
                         const reason = reasonKey(item.holder, item.why);
                         return (
-                          <Box component="li" key={item.id} className="flex">
+                          <Box component="li" key={item.id} className="flex min-w-0">
                             <ButtonBase
                               component={Link}
                               href={`/casos/${item.id}`}
-                              className="border-grey-100 hover:border-grey-200 hover:bg-grey-25 focus-visible:bg-grey-25 flex w-full flex-col items-stretch gap-0.5 rounded-xl border px-3 py-2.5 text-left transition-colors"
+                              className="border-grey-100 hover:border-grey-200 hover:bg-grey-25 focus-visible:bg-grey-25 flex w-full min-w-0 flex-col items-stretch gap-0.5 rounded-xl border px-3 py-2.5 text-left transition-colors"
                             >
                               <Box className="flex items-center justify-between gap-2">
                                 <Typography
@@ -394,7 +396,7 @@ export default function CaseBoard({
                               <Typography
                                 variant="body2"
                                 component="span"
-                                className="text-text-primary truncate font-semibold"
+                                className="text-text-primary line-clamp-2 font-semibold break-words"
                               >
                                 {item.client || t("cases-no-client")}
                               </Typography>

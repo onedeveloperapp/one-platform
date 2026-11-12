@@ -2,6 +2,8 @@
 
 import type { CaseParty, CasePerson, CaseState } from "../case-types";
 import { sentence, useCaseAction } from "./case-action";
+import { useClientAsked } from "./client-asked";
+import PersonReadCheck, { ADDRESS_FIELDS, addressLine, readFacts, sourceOf } from "./person-read-check";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 
@@ -25,12 +27,17 @@ import PersonFields from "@/components/cases/person-fields";
 import CollapsibleCard from "@/components/product/collapsible-card";
 import ConfirmActionDialog from "@/components/product/confirm-action-dialog";
 import DialogHeader from "@/components/product/dialog-header";
+import FactGrid, { type Fact } from "@/components/product/fact-grid";
+import QuickActions from "@/components/product/quick-actions";
 import StateLine from "@/components/product/state-line";
 import StatusChip, { type StatusTone } from "@/components/product/status-chip";
 import { TILE_TONE } from "@/components/product/tile-tone";
+import NiClock from "@/icons/nexture/ni-clock";
+import NiCrossSquare from "@/icons/nexture/ni-cross-square";
 import NiDocumentFull from "@/icons/nexture/ni-document-full";
 import NiHome from "@/icons/nexture/ni-home";
 import NiKeyboard from "@/icons/nexture/ni-keyboard";
+import NiPlus from "@/icons/nexture/ni-plus";
 import {
   checkCpf,
   confirmPersonReadFields,
@@ -38,7 +45,14 @@ import {
   removeCaseParty,
   saveCasePerson,
 } from "@/lib/cases/actions";
-import { caseErrorKey, missingFields, PERSON_FIELD_KEY } from "@/lib/cases/cases";
+import {
+  caseErrorKey,
+  MARITAL_KEY,
+  MARITAL_STATUSES,
+  type MaritalStatus,
+  missingFields,
+  PERSON_FIELD_KEY,
+} from "@/lib/cases/cases";
 import { documentReadingOf, prefillErrorKey } from "@/lib/cases/document-prefill";
 import {
   ADULT_FORM,
@@ -50,12 +64,15 @@ import {
   personValues,
 } from "@/lib/cases/forms";
 import { dropUnsaved, sendForReading } from "@/lib/cases/prefill-browser";
-import { READ_ITEM_KEY, readItems } from "@/lib/cases/read-fields";
+import { readItems } from "@/lib/cases/read-fields";
 import { opensOnArrival } from "@/lib/cases/sections";
 import { formatCpf, formatPhoneBr } from "@flyee/fields";
 import { ageOn, formatDayBr, isMinorOn } from "@flyee/rules/person";
 
 type Ready = Extract<CaseState, { kind: "ready" }>;
+
+const isMarital = (value: string): value is MaritalStatus => (MARITAL_STATUSES as readonly string[]).includes(value);
+const capitalize = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
 type Problem = { code: string; field?: string | null } | null;
 
 /** One person, with every role they take in the case. */
@@ -134,6 +151,12 @@ export default function PeopleCard({
         : ADULT_FORM.filter((field) => field !== "complement" && field !== "email" && field !== "phone"),
     );
   const incomplete = members.filter((member) => leftOf(member.person).length > 0).length;
+  // What ONE read waits for a look of the firm.
+  const toCheck = members.some((member) => readItems(member.person.readFields).length > 0);
+
+  // What is missing of a person is the client's to give on their link, said with who answers and since when.
+  const asked = useClientAsked(state);
+  const [checking, setChecking] = useState<Member | null>(null);
 
   const roleLine = (member: Member) =>
     member.parties
@@ -215,7 +238,7 @@ export default function PeopleCard({
     <CollapsibleCard
       id="case-people"
       title={t("case-people-title")}
-      summary={
+      summary={[
         members.length === 0
           ? t("case-people-summary-none")
           : members.length <= 3
@@ -226,21 +249,19 @@ export default function PeopleCard({
                   .map((member) => member.person.full_name)
                   .join(", "),
                 count: members.length - 2,
-              })
-      }
-      chip={
-        incomplete > 0 ? (
-          <StatusChip tone="attention" label={t("case-people-summary-incomplete", { count: incomplete })} />
-        ) : null
+              }),
+        incomplete > 0 ? t("case-people-summary-owed", { count: incomplete }) : null,
+      ]
+        .filter(Boolean)
+        .join(" · ")}
+      ask={
+        writable && toCheck
+          ? { tone: "firm", label: t("card-state-people-firm") }
+          : incomplete > 0
+            ? { tone: "client", label: t("card-state-client") }
+            : null
       }
       description={t("case-people-body")}
-      action={
-        writable ? (
-          <Button variant="outlined" color="grey" size="small" onClick={() => setEditing("new")}>
-            {t("case-people-add")}
-          </Button>
-        ) : null
-      }
       defaultOpen={opensOnArrival(state.case.status, "people", incomplete > 0)}
     >
       {notice?.kind === "error" && (
@@ -273,20 +294,92 @@ export default function PeopleCard({
         const left = leftOf(person);
         const chip = registryChip(person);
         const age = ageOn(person.birth_date, state.today);
-        const facts = [
-          person.cpf ? formatCpf(person.cpf) : null,
-          person.birth_date
-            ? `${formatDayBr(person.birth_date)}${age !== null ? ` (${t("case-age", { age })})` : ""}`
-            : null,
-          person.phone ? formatPhoneBr(person.phone.replace(/^55(?=\d{10,11}$)/, "")) : null,
-          person.email,
-          [person.city, person.uf].filter(Boolean).join("/") || null,
-        ].filter(Boolean);
+        const marks = person.readFields;
+        const owedChip = <StatusChip tone="info" icon={<NiClock size="small" />} label={t("case-person-owed-chip")} />;
+        const owes = (field: PersonField) => (left.includes(field) ? owedChip : undefined);
+        const address = addressLine(person);
+        const facts: Fact[] = [
+          {
+            key: "cpf",
+            label: t(PERSON_FIELD_KEY.cpf),
+            value: person.cpf ? formatCpf(person.cpf) : null,
+            read: Boolean(marks.cpf),
+            owed: owes("cpf"),
+          },
+          {
+            key: "birth_date",
+            label: t(PERSON_FIELD_KEY.birth_date),
+            value: person.birth_date
+              ? `${formatDayBr(person.birth_date)}${age !== null ? ` · ${t("case-age", { age })}` : ""}`
+              : null,
+            read: Boolean(marks.birth_date),
+            owed: owes("birth_date"),
+          },
+          ...(isMinor
+            ? []
+            : [
+                {
+                  key: "nationality",
+                  label: t(PERSON_FIELD_KEY.nationality),
+                  value: person.nationality,
+                  read: Boolean(marks.nationality),
+                  owed: owes("nationality"),
+                },
+                {
+                  key: "marital_status",
+                  label: t(PERSON_FIELD_KEY.marital_status),
+                  value:
+                    person.marital_status && isMarital(person.marital_status)
+                      ? t(MARITAL_KEY[person.marital_status])
+                      : person.marital_status,
+                  owed: owes("marital_status"),
+                },
+                {
+                  key: "profession",
+                  label: t(PERSON_FIELD_KEY.profession),
+                  value: person.profession,
+                  owed: owes("profession"),
+                },
+                {
+                  key: "phone",
+                  label: t(PERSON_FIELD_KEY.phone),
+                  value: person.phone ? formatPhoneBr(person.phone.replace(/^55(?=\d{10,11}$)/, "")) : null,
+                },
+                { key: "email", label: t(PERSON_FIELD_KEY.email), value: person.email },
+                {
+                  key: "address",
+                  label: t("case-person-fact-address"),
+                  value: address,
+                  read: ADDRESS_FIELDS.some((field) => marks[field]),
+                  owed:
+                    left.some((field) => (ADDRESS_FIELDS as readonly string[]).includes(field)) && !address
+                      ? owedChip
+                      : undefined,
+                  wide: true,
+                },
+              ]),
+        ];
+        const read = readFacts(person, marks, (field) => t(PERSON_FIELD_KEY[field]));
+        const readSources = [...new Set(read.map((fact) => fact.kind))].map((kind) => t(sourceOf(kind).from));
         const mayCheck = state.cpfLookup && !isMinor && Boolean(person.cpf) && Boolean(person.birth_date);
+        const missingWords = list.format(left.map((field) => t(PERSON_FIELD_KEY[field as PersonField]).toLowerCase()));
+        const owedText = left.length > 0 ? asked(person.person_id, capitalize(missingWords)) : null;
+        const more = [
+          ...(writable && members.length > 1
+            ? [
+                {
+                  key: "remove",
+                  label: t("case-person-remove"),
+                  icon: <NiCrossSquare size="medium" />,
+                  onClick: () => setRemoving(member),
+                },
+              ]
+            : []),
+        ];
         return (
-          <Box key={person.person_id} className="border-grey-100 flex flex-col gap-2 rounded-2xl border p-4">
-            <Box className="flex flex-wrap items-start justify-between gap-2">
-              <Box className="flex min-w-0 flex-col">
+          <Box key={person.person_id} className="border-grey-100 flex flex-col gap-4 rounded-2xl border p-4">
+            <Box className="flex flex-wrap items-center gap-x-3 gap-y-2">
+              <Box className="flex min-w-0 flex-1 basis-56 flex-col">
                 <Typography variant="body1" className="font-semibold break-words">
                   {person.full_name}
                 </Typography>
@@ -294,98 +387,125 @@ export default function PeopleCard({
                   {roleLine(member)}
                 </Typography>
               </Box>
-              {/* The registry's word, where this environment can ask it: with no lookup here, nothing waits on it. */}
-              {!isMinor && (state.cpfLookup || person.registry) && (
+              {/* The registry's word, where this environment can ask it; never asked yet, the way to ask it. */}
+              {!isMinor && person.registry ? (
                 <StatusChip tone={chip.tone} label={t(chip.key, chip.values ?? {})} />
-              )}
+              ) : null}
+              {writable && mayCheck && !person.registry ? (
+                <Button
+                  variant="text"
+                  color="grey"
+                  size="small"
+                  disabled={action.busy}
+                  loading={action.pending(`cpf-${person.person_id}`)}
+                  loadingPosition="start"
+                  onClick={() => void check(member)}
+                >
+                  {action.pending(`cpf-${person.person_id}`) ? sentence(words.check.doing) : t("case-cpf-check")}
+                </Button>
+              ) : null}
+              {writable ? (
+                <Button variant="outlined" color="grey" size="small" onClick={() => setEditing(member)}>
+                  {t("case-person-edit")}
+                </Button>
+              ) : null}
+              {more.length > 0 ? (
+                <QuickActions label={t("case-person-more", { name: person.full_name })} actions={more} />
+              ) : null}
             </Box>
-            {facts.length > 0 && (
-              <Typography variant="body2" className="break-words">
-                {facts.join(" · ")}
-              </Typography>
-            )}
+
+            <FactGrid facts={facts} />
+
             {person.registry?.name && person.registry.nameMatches === false && (
               <Typography variant="body2" className="text-text-secondary">
                 {t("case-cpf-registry-name", { name: person.registry.name })}
               </Typography>
             )}
-            {left.length > 0 && (
-              <Typography variant="body2" className="text-text-secondary">
-                {t("case-person-missing", {
-                  fields: left.map((field) => t(PERSON_FIELD_KEY[field as PersonField])).join(", "),
-                })}
-              </Typography>
-            )}
             {person.updatedVia === "client" && (
-              <Typography variant="body2" className="text-text-secondary">
+              <Typography variant="caption" className="text-text-secondary">
                 {t("case-person-by-client")}
               </Typography>
             )}
-            {readItems(person.readFields).length > 0 && (
-              // What ONE read waits for a person's look: confirmed here in one click, or by saving the person (0094).
-              <StateLine
-                tone="attention"
-                action={
-                  writable ? (
-                    <Button
-                      variant="outlined"
-                      color="grey"
-                      size="small"
-                      disabled={action.busy}
-                      loading={action.pending(`read-${person.person_id}`)}
-                      loadingPosition="start"
-                      onClick={() => void confirmRead(member)}
-                    >
-                      {action.pending(`read-${person.person_id}`)
-                        ? sentence(words.read.doing)
-                        : t("case-person-read-confirm")}
-                    </Button>
-                  ) : undefined
-                }
-              >
-                {t("case-person-read", {
-                  items: list.format(readItems(person.readFields).map((item) => t(READ_ITEM_KEY[item]))),
-                })}
-              </StateLine>
-            )}
-            {writable && (
-              <Box className="flex flex-wrap gap-2 pt-1">
-                <Button variant="outlined" color="grey" size="small" onClick={() => setEditing(member)}>
-                  {t("case-person-edit")}
-                </Button>
-                {mayCheck && (
-                  <Button
-                    variant="text"
-                    size="small"
-                    disabled={action.busy}
-                    loading={action.pending(`cpf-${person.person_id}`)}
-                    loadingPosition="start"
-                    onClick={() => void check(member)}
+
+            {read.length > 0 || owedText ? (
+              <Box className="border-grey-100 flex flex-col gap-3 border-t pt-4">
+                {read.length > 0 ? (
+                  // What ONE read waits for a person's look, with the documents in front of them (0094).
+                  <StateLine
+                    tone="attention"
+                    action={
+                      writable ? (
+                        <Button
+                          variant="outlined"
+                          color="grey"
+                          size="small"
+                          disabled={action.busy}
+                          onClick={() => setChecking(member)}
+                        >
+                          {t("case-person-read-open")}
+                        </Button>
+                      ) : undefined
+                    }
                   >
-                    {action.pending(`cpf-${person.person_id}`) ? sentence(words.check.doing) : t("case-cpf-check")}
-                  </Button>
-                )}
-                {members.length > 1 && (
-                  <Button
-                    variant="text"
-                    color="grey"
-                    size="small"
-                    disabled={action.busy}
-                    onClick={() => setRemoving(member)}
+                    {t("case-person-read-check", { count: read.length, sources: list.format(readSources) })}
+                  </StateLine>
+                ) : null}
+                {owedText ? (
+                  // What is missing is the client's to give on their link (`WAIT_PLACE.case_incomplete`): said with
+                  // who answers and since when, the firm's own way in as the exception it is.
+                  <StateLine
+                    tone="waiting"
+                    action={
+                      writable ? (
+                        <Button variant="text" color="grey" size="small" onClick={() => setEditing(member)}>
+                          {t("case-person-fill-for-client")}
+                        </Button>
+                      ) : undefined
+                    }
                   >
-                    {t("case-person-remove")}
-                  </Button>
-                )}
+                    {owedText}
+                  </StateLine>
+                ) : null}
               </Box>
-            )}
+            ) : null}
           </Box>
         );
       })}
-      {!state.cpfLookup && (
-        <Typography variant="body2" className="text-text-secondary">
-          {t("case-cpf-not-configured")}
-        </Typography>
+
+      {checking && (
+        <PersonReadCheck
+          key={checking.person.person_id}
+          person={checking.person}
+          marks={checking.person.readFields}
+          documents={state.documents}
+          busy={action.pending(`read-${checking.person.person_id}`)}
+          onConfirm={() =>
+            void confirmRead(checking).then((ok) => {
+              if (ok) setChecking(null);
+            })
+          }
+          onCorrect={() => {
+            const member = checking;
+            setChecking(null);
+            setEditing(member);
+          }}
+          onClose={() => setChecking(null)}
+        />
       )}
+
+      {writable ? (
+        <Box>
+          <Button
+            variant="text"
+            color="grey"
+            size="small"
+            startIcon={<NiPlus size="small" />}
+            onClick={() => setEditing("new")}
+          >
+            {t("case-people-add")}
+          </Button>
+        </Box>
+      ) : null}
 
       {editing && (
         <PersonDialog

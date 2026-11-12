@@ -5,12 +5,13 @@ import TicketDialog from "./ticket-dialog";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 
-import { Alert, Box, Button, Dialog, DialogActions, DialogContent, Typography } from "@mui/material";
+import { Alert, Box, Button, ButtonBase, Dialog, DialogActions, DialogContent, Typography } from "@mui/material";
 
 import SegmentFields from "@/components/cases/segment-fields";
 import CollapsibleCard from "@/components/product/collapsible-card";
 import DialogHeader from "@/components/product/dialog-header";
 import EmptyState from "@/components/product/empty-state";
+import StateLine from "@/components/product/state-line";
 import StatusChip, { type StatusTone } from "@/components/product/status-chip";
 import IllustrationLaunch from "@/icons/illustrations/illustration-launch";
 import { removeFlightSegment, saveFlightSegment } from "@/lib/cases/actions";
@@ -101,6 +102,32 @@ export default function TripCard({
     ? arrivalDelayMinutes(affected.scheduled_arrival_local, affected.actual_arrival_local)
     : null;
   const unmarked = beforeCourt(state.case.status) && state.segments.length > 0 && affected === null;
+  // ONE marks the leg itself once ANAC's record answered for every leg (0228): until then it is ONE's to do.
+  const checking = state.segments.some((segment) => state.flights.bySegment[segment.id]?.vra?.status === "waiting");
+  const [marking, setMarking] = useState<string | null>(null);
+  const mark = async (segment: CaseSegment, affectedNow: boolean) => {
+    setMarking(segment.id);
+    setProblem(null);
+    const result = await saveFlightSegment(state.case.id, segment.id, { affected: affectedNow });
+    setMarking(null);
+    if (!result.ok) setProblem(result.code);
+    else onChanged();
+  };
+  // What the record said of a leg, in a few words, for the person who says which leg it was.
+  const legWords = (segment: CaseSegment): string => {
+    const view = state.flights.bySegment[segment.id]?.vra ?? null;
+    if (view?.status === "found") {
+      if (view.cancelled) return t("case-trip-leg-cancelled");
+      if (view.diverted) return t("case-trip-leg-diverted");
+      const late = view.comparison?.arrivalDelayMinutes ?? null;
+      if (late !== null)
+        return late > 0 ? t("case-trip-leg-late", { delay: hoursAndMinutes(late) }) : t("case-trip-leg-ontime");
+    }
+    const own = arrivalDelayMinutes(segment.scheduled_arrival_local, segment.actual_arrival_local);
+    return own !== null && own > 0
+      ? t("case-trip-leg-late-own", { delay: hoursAndMinutes(own) })
+      : t("case-trip-leg-unknown");
+  };
 
   return (
     <CollapsibleCard
@@ -118,7 +145,13 @@ export default function TripCard({
               .filter(Boolean)
               .join(" · ")
       }
-      chip={unmarked ? <StatusChip tone="attention" label={t("case-trip-summary-unmarked")} /> : null}
+      ask={
+        unmarked
+          ? checking
+            ? { tone: "working", label: t("card-state-trip-working") }
+            : { tone: "firm", label: t("card-state-trip-mark") }
+          : null
+      }
       description={t("case-trip-body")}
       action={
         writable && state.segments.length > 0 ? (
@@ -147,6 +180,37 @@ export default function TripCard({
           secondaryAction={writable ? { label: t("prefill-manual"), onClick: () => setEditing("new") } : undefined}
         />
       )}
+
+      {unmarked && writable ? (
+        // The question of the leg, with its answers beside it: one click on the leg (the owner, 2026-11-12).
+        <Box className="flex flex-col gap-3">
+          <StateLine tone={checking ? "waiting" : "attention"} emphasis>
+            <strong>{t("case-trip-ask-title")}</strong> {checking ? t("case-trip-ask-waiting") : t("case-trip-ask-why")}
+          </StateLine>
+          <Box className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            {state.segments.map((segment) => (
+              <ButtonBase
+                key={segment.id}
+                disabled={marking !== null}
+                onClick={() => void mark(segment, true)}
+                className="border-grey-200 hover:border-grey-300 hover:bg-grey-25 focus-visible:bg-grey-25 flex flex-col items-start gap-0.5 rounded-xl border px-4 py-3 text-left transition-colors"
+              >
+                <Typography variant="body2" component="span" className="font-semibold">
+                  {[segment.flight_number, [segment.origin_iata, segment.destination_iata].filter(Boolean).join(" → ")]
+                    .filter(Boolean)
+                    .join(" · ") || t("client-trip-leg", { position: segment.position })}
+                </Typography>
+                <Typography variant="caption" component="span" className="text-text-secondary">
+                  {legWords(segment)}
+                </Typography>
+                <Typography variant="body2" component="span" className="text-text-primary pt-1 font-semibold underline">
+                  {marking === segment.id ? t("case-trip-ask-marking") : t("case-trip-ask-pick")}
+                </Typography>
+              </ButtonBase>
+            ))}
+          </Box>
+        </Box>
+      ) : null}
 
       {state.segments.map((segment) => {
         const delay = arrivalDelayMinutes(segment.scheduled_arrival_local, segment.actual_arrival_local);
@@ -188,6 +252,27 @@ export default function TripCard({
                 {line}
               </Typography>
             ))}
+            {segment.affected && segment.affected_by === "one" && beforeCourt(state.case.status) ? (
+              // What ONE marked, said as ONE's and as something that may be wrong, with the way to undo it.
+              <StateLine
+                tone="done"
+                action={
+                  writable ? (
+                    <Button
+                      variant="text"
+                      color="grey"
+                      size="small"
+                      disabled={marking !== null}
+                      onClick={() => void mark(segment, false)}
+                    >
+                      {t("case-trip-marked-not-this")}
+                    </Button>
+                  ) : undefined
+                }
+              >
+                {t("case-trip-marked-by-one")}
+              </StateLine>
+            ) : null}
             {segment.source === "client" && (
               <Typography variant="body2" className="text-text-secondary">
                 {t("case-trip-by-client")}

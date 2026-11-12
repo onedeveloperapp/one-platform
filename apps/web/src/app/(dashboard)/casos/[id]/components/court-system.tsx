@@ -142,9 +142,28 @@ export default function CourtSystem({
           : t("case-proceeding-system-firm")}
       </Typography>
       {proceeding.systemByOne && (
-        <Typography variant="body2" className="text-text-secondary">
-          {t("case-proceeding-system-may-err")}
-        </Typography>
+        // What ONE's choice stands on, in front of who approves it: the table's source and the system itself.
+        <StateLine
+          tone="info"
+          action={
+            row?.host ? (
+              <Button
+                variant="outlined"
+                color="grey"
+                size="small"
+                href={`https://${row.host}`}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                {t("case-proceeding-system-open")}
+              </Button>
+            ) : undefined
+          }
+        >
+          {row?.source
+            ? t("case-proceeding-system-source", { source: row.source })
+            : t("case-proceeding-system-may-err")}
+        </StateLine>
       )}
       {signal && !approval && signal.seenSystem !== proceeding.system && (
         <StateLine tone="attention">

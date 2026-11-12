@@ -424,4 +424,57 @@ describe.skipIf(!DB_URL)("the legs of a case, checked against ANAC's official re
     expect(again.found).toBe(1);
     expect(await statusOf(legs.unknown)).toMatchObject({ status: "found", matched_by: "operator" });
   });
+
+  it("marks the leg of the problem by itself: the one the record gives as late, and none while it cannot tell", async () => {
+    const { checkFlights } = await import("@/modules/direito-do-passageiro/flights/checks-work");
+    // The case above still has legs the record could not answer: ONE marks none of them.
+    const marked = (await sql.unsafe(
+      `select count(*)::int as count from public.flight_segments where case_id = $1 and affected`,
+      [caseId],
+    )) as { count: number }[];
+    expect(marked[0].count).toBe(0);
+
+    // A trip of two legs: the record gives the first as four hours late and the second as on time.
+    const opened = await asAna().rpc("create_case", {
+      target_org: FIRM,
+      target_incident: "delay",
+      target_airline: "LA",
+      target_flight_date: "2026-08-05",
+      target_client: { full_name: "Joana Teste" },
+    });
+    const trip = String((opened.data as Row).case_id);
+    const leg = async (fields: Row) =>
+      String(
+        (
+          (await asAna().rpc("save_flight_segment", { target_case: trip, target_segment: null, target_fields: fields }))
+            .data as Row
+        ).segment_id,
+      );
+    const late = await leg({
+      flight_number: "LA3418",
+      origin_iata: "GYN",
+      destination_iata: "CGH",
+      scheduled_departure_local: "2026-08-05T08:00",
+      scheduled_arrival_local: "2026-08-05T09:40",
+    });
+    const onTime = await leg({
+      flight_number: "AD7800",
+      origin_iata: "GRU",
+      destination_iata: "BSB",
+      scheduled_departure_local: "2026-08-05T06:00",
+    });
+    await checkFlights(backend() as never, { fetch: anac().run, now: NOW });
+
+    const legsOf = (await sql.unsafe(
+      `select id, affected, affected_by from public.flight_segments where case_id = $1`,
+      [trip],
+    )) as { id: string; affected: boolean; affected_by: string | null }[];
+    expect(legsOf.find((row) => row.id === late)).toMatchObject({ affected: true, affected_by: "one" });
+    expect(legsOf.find((row) => row.id === onTime)).toMatchObject({ affected: false, affected_by: null });
+    const told = (await sql.unsafe(
+      `select actor_type, data ->> 'flight' as flight from public.case_events where case_id = $1 and kind = 'leg_marked_by_one'`,
+      [trip],
+    )) as { actor_type: string; flight: string }[];
+    expect(told).toEqual([{ actor_type: "system", flight: "LA3418" }]);
+  });
 });

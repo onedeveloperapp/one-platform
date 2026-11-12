@@ -28,8 +28,8 @@ import CollapsibleCard from "@/components/product/collapsible-card";
 import DialogHeader from "@/components/product/dialog-header";
 import EmptyState from "@/components/product/empty-state";
 import ItemRows, { type ItemRow } from "@/components/product/item-rows";
-import type { StateTone } from "@/components/product/state-line";
-import StatusChip, { type StatusTone } from "@/components/product/status-chip";
+import StateLine, { type StateTone } from "@/components/product/state-line";
+import type { StatusTone } from "@/components/product/status-chip";
 import IllustrationDocumentation from "@/icons/illustrations/illustration-documentation";
 import NiPen from "@/icons/nexture/ni-pen";
 import { openCaseFile } from "@/lib/cases/actions";
@@ -215,9 +215,23 @@ export default function SignaturesCard({
         ))}
 
         {envelope.lastError && (envelope.status === "failed" || envelope.status === "uncertain") && (
-          <Typography variant="body2" className="text-text-secondary">
+          <StateLine
+            tone="attention"
+            action={
+              <Button
+                variant="outlined"
+                color="grey"
+                size="small"
+                href="https://app.zapsign.com.br"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                {t("case-signature-open-zapsign")}
+              </Button>
+            }
+          >
             {t("case-signature-failed-help")}
-          </Typography>
+          </StateLine>
         )}
         {envelope.status === "pending" && envelope.lastError && (
           <Typography variant="body2" className="text-text-secondary">
@@ -339,7 +353,7 @@ export default function SignaturesCard({
               .map((envelope) => `${kindOf(envelope)}: ${statusOf(envelope)}`)
               .join(" · ")
       }
-      chip={needs ? <StatusChip tone="attention" label={statusOf(needs)} /> : null}
+      ask={needs ? { tone: "firm", label: statusOf(needs) } : null}
       description={t("case-signatures-body")}
       action={
         writable && state.envelopes.length > 0 ? (
@@ -714,6 +728,17 @@ function ConfirmDialog({
   const [documentId, setDocumentId] = useState(candidates[0]?.id ?? "");
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
+  const [opening, setOpening] = useState(false);
+  const openChosen = async () => {
+    const chosen = candidates.find((document) => document.id === documentId);
+    if (!chosen) return;
+    setOpening(true);
+    setProblem(null);
+    const link = await openCaseFile(chosen.fileId);
+    setOpening(false);
+    if (link.ok) window.open(link.url, "_blank", "noopener,noreferrer");
+    else setProblem(link.code);
+  };
 
   const submit = async () => {
     setBusy(true);
@@ -776,6 +801,33 @@ function ConfirmDialog({
               ))}
             </TextField>
           )}
+          {/* What the person checks, in front of them (the owner, 2026-11-12): the file and the place that validates it. */}
+          <Box className="flex flex-wrap gap-2">
+            {documentId ? (
+              <Button
+                variant="outlined"
+                color="grey"
+                size="small"
+                disabled={busy || opening}
+                loading={opening}
+                onClick={() => void openChosen()}
+              >
+                {t("case-signature-confirm-open-file")}
+              </Button>
+            ) : null}
+            {envelope.method === "govbr" ? (
+              <Button
+                variant="outlined"
+                color="grey"
+                size="small"
+                href="https://validar.iti.gov.br"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                {t("case-signature-confirm-open-iti")}
+              </Button>
+            ) : null}
+          </Box>
           {problem && (
             <Alert severity="error" className="neutral bg-background-paper/60!">
               {t(caseErrorKey(problem))}

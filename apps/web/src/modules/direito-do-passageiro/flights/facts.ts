@@ -59,6 +59,9 @@ export type SourceView = {
     actualArrival: WallTime;
   } | null;
   comparison: LegComparison | null;
+  /** The source gives the flight as cancelled, or as having landed elsewhere (ONE's rule of the problem's leg). */
+  cancelled: boolean;
+  diverted: boolean;
   /** The record: the legs of the same flight no schedule foresaw (a stop nobody planned, a return). */
   unscheduled: UnscheduledView[];
   /** The record, for a cancelled flight: when its aircraft still reached the destination by those legs. */
@@ -297,6 +300,8 @@ export async function loadFlightChecks(
             }
           : null,
         comparison: facts ? compareLeg(informed, facts, toleranceMinutes) : null,
+        cancelled: facts?.cancelled ?? false,
+        diverted: facts?.diverted ?? false,
         unscheduled,
         reachedDestination: facts ? at(facts.reachedDestination ?? null, destinationOffset, null) : null,
         stops,

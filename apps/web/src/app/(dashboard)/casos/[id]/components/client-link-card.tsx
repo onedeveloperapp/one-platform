@@ -21,6 +21,7 @@ import {
 
 import CollapsibleCard from "@/components/product/collapsible-card";
 import ConfirmActionDialog from "@/components/product/confirm-action-dialog";
+import StateLine from "@/components/product/state-line";
 import StatusChip from "@/components/product/status-chip";
 import { createClientLink, type LinkDelivery, revokeClientLink } from "@/lib/cases/actions";
 import { caseErrorKey, CLIENT_STAGES, LINK_OWED_KEY } from "@/lib/cases/cases";
@@ -38,6 +39,10 @@ const DELIVERY_KEY: Record<LinkDelivery, string> = {
   opted_out: "case-link-whatsapp-opted-out",
   no_conversation: "case-link-whatsapp-no-conversation",
 };
+
+/** The reasons a link waits for the firm, and the ones it waits for the client to write first. */
+const FIRM_REASONS: ReadonlySet<string> = new Set(["late", "by_person", "no_phone", "no_number", "opted_out"]);
+const CLIENT_REASONS: ReadonlySet<string> = new Set(["no_conversation", "window_closed"]);
 
 const moment = (iso: string) =>
   new Intl.DateTimeFormat("pt-BR", {
@@ -130,6 +135,11 @@ export default function ClientLinkCard({
   const linkState = (link: (typeof open)[number]) =>
     link.finishedAt ? t("case-link-finished") : link.visits > 0 ? t("case-link-opened") : t("case-link-not-opened");
   const unsent = state.linksOwed.some((owed) => owed.reason !== "sending");
+  // Whose turn a link not sent is (the top of the case, `now.ts`): the client's to write first, ONE's while it sends,
+  // the firm's for the rest. The head says the heaviest of them.
+  const firmOwes = state.linksOwed.some((owed) => FIRM_REASONS.has(owed.reason));
+  const clientOwes = state.linksOwed.some((owed) => CLIENT_REASONS.has(owed.reason));
+  const sending = state.linksOwed.some((owed) => owed.reason === "sending");
 
   return (
     <CollapsibleCard
@@ -140,7 +150,15 @@ export default function ClientLinkCard({
           ? open.map((link) => `${nameOf(link.personId)}: ${linkState(link)}`).join(" · ")
           : t("case-link-summary-none")
       }
-      chip={unsent ? <StatusChip tone="attention" label={t("case-link-summary-owed")} /> : null}
+      ask={
+        firmOwes
+          ? { tone: "firm", label: t("case-link-summary-owed") }
+          : sending
+            ? { tone: "working", label: t("card-state-link-working") }
+            : clientOwes
+              ? { tone: "client", label: t("case-link-summary-client") }
+              : null
+      }
       description={t("case-link-body")}
       defaultOpen={opensOnArrival(state.case.status, "link", unsent)}
       bodyClassName="gap-3"
@@ -188,11 +206,21 @@ export default function ClientLinkCard({
       ))}
 
       {state.linksOwed.length > 0 && (
-        <Box className="flex flex-col gap-1">
+        <Box className="flex flex-col gap-2">
           {state.linksOwed.map((owed) => (
-            <Typography key={owed.personId} variant="body2" className="text-text-secondary">
+            <StateLine
+              key={owed.personId}
+              tone={FIRM_REASONS.has(owed.reason) ? "attention" : "waiting"}
+              action={
+                writable && owed.reason === "no_phone" ? (
+                  <Button variant="outlined" color="grey" size="small" href="#case-people">
+                    {t("case-link-owed-add-phone")}
+                  </Button>
+                ) : undefined
+              }
+            >
               {t(LINK_OWED_KEY[owed.reason], { name: nameOf(owed.personId) })}
-            </Typography>
+            </StateLine>
           ))}
         </Box>
       )}

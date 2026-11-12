@@ -74,6 +74,8 @@ export type CaseSegment = {
   actual_arrival_local: string | null;
   booking_reference: string | null;
   affected: boolean;
+  /** Who marked the leg of the problem: a person, or ONE by its rule (0228). */
+  affected_by: "person" | "one" | null;
   source: "firm" | "client";
 };
 
@@ -193,6 +195,9 @@ export type CourtSystem = {
   system: string;
   confirmed: boolean;
   notes: string | null;
+  /** Where the platform's table took the system from (a DJEN sample, an act of the court), and its address. */
+  source: string;
+  host: string | null;
   /** The type the lawyer picks in the system for each kind of file, where it is known (0036). */
   fileTypes: Record<string, string>;
 };

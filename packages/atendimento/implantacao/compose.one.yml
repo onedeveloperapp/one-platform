@@ -7,3 +7,8 @@
 services:
   robo:
     profiles: ["fora-do-one"]
+
+  # O tema do kit e o acréscimo do ONE (painel-acrescimo.html), juntos por pilha-one.sh em gerado/painel-one.html.
+  chatwoot-config:
+    environment:
+      KIT_DASHBOARD_SCRIPTS_FILE: /kit/gerado/painel-one.html

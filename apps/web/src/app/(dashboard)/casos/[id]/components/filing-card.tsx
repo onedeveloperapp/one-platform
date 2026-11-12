@@ -14,6 +14,7 @@ import DocumentSlot, { type SlotState } from "@/components/cases/document-slot";
 import CollapsibleCard from "@/components/product/collapsible-card";
 import ConfirmActionDialog from "@/components/product/confirm-action-dialog";
 import EmptyState from "@/components/product/empty-state";
+import FactGrid, { type Fact } from "@/components/product/fact-grid";
 import InfoHint from "@/components/product/info-hint";
 import StateLine from "@/components/product/state-line";
 import StatusChip, { type StatusTone } from "@/components/product/status-chip";
@@ -138,14 +139,14 @@ export default function FilingCard({
               )
               .join(" · ")
       }
-      chip={
-        notBuilt ? (
-          <StatusChip tone="danger" label={t("filing-status-failed")} />
-        ) : readyToFile ? (
-          <StatusChip tone="attention" label={t("filing-status-ready")} />
-        ) : authorizeAhead ? (
-          <StatusChip tone="attention" label={t("filing-chip-authorize")} />
-        ) : null
+      ask={
+        notBuilt
+          ? { tone: "failed", label: t("filing-status-failed") }
+          : readyToFile
+            ? { tone: "firm", label: t("filing-status-ready") }
+            : authorizeAhead
+              ? { tone: "firm", label: t("filing-chip-authorize") }
+              : null
       }
       description={t("filing-body")}
       defaultOpen={opensOnArrival(
@@ -447,14 +448,17 @@ function Lawsuit({
       },
     );
 
-  const where = [
-    t(KIND_KEY[proceeding.kind]),
-    proceeding.court,
-    proceeding.comarca,
-    proceeding.system ? t(SYSTEM_KEY[proceeding.system] ?? "case-system-outro") : null,
-  ]
-    .filter(Boolean)
-    .join(" · ");
+  // The lawsuit the package is of: its kind as the title, and where it goes under the names of each thing.
+  const where = t(KIND_KEY[proceeding.kind]);
+  const whereFacts: Fact[] = [
+    { key: "court", label: t("case-proceeding-fact-court"), value: proceeding.court },
+    { key: "comarca", label: t("case-proceeding-fact-comarca"), value: proceeding.comarca },
+    {
+      key: "system",
+      label: t("case-proceeding-fact-system"),
+      value: proceeding.system ? t(SYSTEM_KEY[proceeding.system] ?? "case-system-outro") : null,
+    },
+  ];
   const status: PackageStatus | null = proceeding.status === "filed" && !filing ? null : (filing?.status ?? null);
   // A package can be asked for a lawsuit not filed yet that names its court and system, with a petition to lead it.
   const canBuild =
@@ -520,6 +524,7 @@ function Lawsuit({
         </Typography>
         {status ? <StatusChip tone={STATUS_TONE[status]} label={t(PACKAGE_STATUS_KEY[status])} /> : null}
       </Box>
+      <FactGrid facts={whereFacts} />
 
       {problem && problemFor !== "sign" && (
         <Alert
@@ -683,9 +688,7 @@ function Lawsuit({
             </Typography>
           ) : null}
           {(filing.limitBytes || filing.petitionLimitBytes) && !filing.limitConfirmed ? (
-            <Alert severity="info" className="neutral bg-background-paper/60!">
-              {t("filing-limit-unconfirmed")}
-            </Alert>
+            <StateLine tone="info">{t("filing-limit-unconfirmed")}</StateLine>
           ) : null}
           {signature?.takesSigned ? (
             <SignatureBlock

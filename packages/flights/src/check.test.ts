@@ -8,6 +8,7 @@ import {
   type LegToCheck,
   matchLeg,
   monthsToSearch,
+  problemLeg,
   wallAt,
   withUnscheduled,
 } from "./check.ts";
@@ -58,7 +59,9 @@ const UNSCHEDULED = [
 ];
 
 const COLUMNS = readVraHeader(HEADER);
-const RECORDS = LINES.map((line) => parseVraLine(COLUMNS, line)).filter((record): record is VraRecord => record !== null);
+const RECORDS = LINES.map((line) => parseVraLine(COLUMNS, line)).filter(
+  (record): record is VraRecord => record !== null,
+);
 
 describe("the official record of a month", () => {
   it("reads a flight by the names of its columns: its airline, number, airports and Brasília times", () => {
@@ -154,7 +157,10 @@ describe("the official record of a month", () => {
     );
     // The flight of the 6th is another flight: its leg is not the 5th's.
     const latam = withUnscheduled(RECORDS[0], lines);
-    assert.deepEqual(latam.unscheduled?.map((leg) => leg.kind), ["return"]);
+    assert.deepEqual(
+      latam.unscheduled?.map((leg) => leg.kind),
+      ["return"],
+    );
     // None for a flight with none, and none from a file with no day of the flight.
     assert.equal(withUnscheduled(RECORDS[1], lines).unscheduled, undefined);
     assert.equal(withUnscheduled({ ...RECORDS[3], reference: null }, lines).unscheduled, undefined);
@@ -166,9 +172,15 @@ describe("the official record of a month", () => {
     // June 2021: no codeshares, the day of the flight as "2021-06-01". Invented flights.
     const of2021 = readVraHeader(HEADER.replace(";Codeshare", ""));
     assert.equal(of2021.codeshare, null);
-    const flight = parseVraLine(of2021, "AAL;AMERICAN AIRLINES, INC.;0904;0;I;B772;288;SBGL;GALEÃO;01/06/2021 23:00;;KMIA;MIAMI;02/06/2021 07:50;;CANCELADO;;2021-06-01;;");
+    const flight = parseVraLine(
+      of2021,
+      "AAL;AMERICAN AIRLINES, INC.;0904;0;I;B772;288;SBGL;GALEÃO;01/06/2021 23:00;;KMIA;MIAMI;02/06/2021 07:50;;CANCELADO;;2021-06-01;;",
+    );
     assert.equal(flight?.reference, "2021-06-01");
-    const extra = parseVraUnscheduled(of2021, "AAL;AMERICAN AIRLINES, INC.;0905;2;X;B772;272;KMIA;MIAMI;;01/06/2021 23:52;SBGL;GALEÃO;;02/06/2021 08:03;REALIZADO;;2021-06-01;;");
+    const extra = parseVraUnscheduled(
+      of2021,
+      "AAL;AMERICAN AIRLINES, INC.;0905;2;X;B772;272;KMIA;MIAMI;;01/06/2021 23:52;SBGL;GALEÃO;;02/06/2021 08:03;REALIZADO;;2021-06-01;;",
+    );
     assert.deepEqual([extra?.kind, extra?.reference], ["extra", "2021-06-01"]);
     // December 2018: the reason the airline gave, kept as written.
     const of2018 = parseVraLine(
@@ -183,7 +195,10 @@ describe("the official record of a month", () => {
     const month = new VraMonthReader(wanted);
     for (const line of [HEADER, ...LINES, ...UNSCHEDULED]) month.take(line);
     const read = month.finish();
-    assert.deepEqual(read.records.map((record) => `${record.airline}${record.number}`), ["TAM3418"]);
+    assert.deepEqual(
+      read.records.map((record) => `${record.airline}${record.number}`),
+      ["TAM3418"],
+    );
     // Every leg no schedule foresaw is kept (a codeshare's operator flies another number), but the one nobody paid for.
     assert.equal(read.unscheduled.length, 4);
     const odd = new VraMonthReader(wanted);
@@ -212,12 +227,18 @@ describe("a time of a zone, as the instant it was", () => {
   });
 
   it("is read at an airport with its offset, in the zone a source names, or else in Brasília time", () => {
-    assert.deepEqual(wallAt("2026-08-05T17:05:00Z", { offsetMinutes: -240 }), { wall: "2026-08-05T13:05", basis: "airport" });
+    assert.deepEqual(wallAt("2026-08-05T17:05:00Z", { offsetMinutes: -240 }), {
+      wall: "2026-08-05T13:05",
+      basis: "airport",
+    });
     assert.deepEqual(wallAt("2026-08-06T12:48:00Z", { offsetMinutes: null, timeZone: "America/New_York" }), {
       wall: "2026-08-06T08:48",
       basis: "airport",
     });
-    assert.deepEqual(wallAt("2026-08-06T12:48:00Z", { offsetMinutes: null }), { wall: "2026-08-06T09:48", basis: "brasilia" });
+    assert.deepEqual(wallAt("2026-08-06T12:48:00Z", { offsetMinutes: null }), {
+      wall: "2026-08-06T09:48",
+      basis: "brasilia",
+    });
     assert.equal(wallAt(null, { offsetMinutes: -180 }), null);
   });
 });
@@ -248,12 +269,24 @@ describe("which flight of the record is the leg's", () => {
 
   it("tells apart the legs one number flies on a day by their origin", () => {
     const fromBrasilia = matchLeg(
-      leg({ designators: ["GLO"], number: "1000", originIcao: "SBBR", destinationIcao: "SBEG", scheduledDepartureLocal: "2026-08-05T08:30" }),
+      leg({
+        designators: ["GLO"],
+        number: "1000",
+        originIcao: "SBBR",
+        destinationIcao: "SBEG",
+        scheduledDepartureLocal: "2026-08-05T08:30",
+      }),
       RECORDS,
     );
     assert.equal(fromBrasilia?.record.destination, "SBEG");
     const fromGuarulhos = matchLeg(
-      leg({ designators: ["GLO"], number: "1000", originIcao: "SBGR", destinationIcao: null, scheduledDepartureLocal: "2026-08-05T06:00" }),
+      leg({
+        designators: ["GLO"],
+        number: "1000",
+        originIcao: "SBGR",
+        destinationIcao: null,
+        scheduledDepartureLocal: "2026-08-05T06:00",
+      }),
       RECORDS,
     );
     assert.equal(fromGuarulhos?.record.destination, "SBBR");
@@ -261,7 +294,13 @@ describe("which flight of the record is the leg's", () => {
 
   it("finds a flight sold under another airline's number by its codeshare", () => {
     const sold = matchLeg(
-      leg({ designators: ["AZU"], number: "7800", originIcao: "SBGR", destinationIcao: "SBBR", scheduledDepartureLocal: "2026-08-05T06:00" }),
+      leg({
+        designators: ["AZU"],
+        number: "7800",
+        originIcao: "SBGR",
+        destinationIcao: "SBBR",
+        scheduledDepartureLocal: "2026-08-05T06:00",
+      }),
       RECORDS,
     );
     assert.equal(sold?.matchedBy, "codeshare");
@@ -270,13 +309,41 @@ describe("which flight of the record is the leg's", () => {
 
   it("reads a leg from an airport abroad by the wall times, and an unknown airline only on the same route", () => {
     const fromMiami = matchLeg(
-      leg({ designators: ["AAL"], number: "905", originIcao: "KMIA", destinationIcao: "SBGL", scheduledDepartureLocal: "2026-08-05T22:55", originOffsetMinutes: null }),
+      leg({
+        designators: ["AAL"],
+        number: "905",
+        originIcao: "KMIA",
+        destinationIcao: "SBGL",
+        scheduledDepartureLocal: "2026-08-05T22:55",
+        originOffsetMinutes: null,
+      }),
       RECORDS,
     );
     assert.equal(fromMiami?.record.destination, "SBGL");
-    const unknown = matchLeg(leg({ designators: [], number: "4567", originIcao: "SBKP", destinationIcao: "SBRF", scheduledDepartureLocal: "2026-08-05T21:00" }), RECORDS);
+    const unknown = matchLeg(
+      leg({
+        designators: [],
+        number: "4567",
+        originIcao: "SBKP",
+        destinationIcao: "SBRF",
+        scheduledDepartureLocal: "2026-08-05T21:00",
+      }),
+      RECORDS,
+    );
     assert.equal(unknown?.matchedBy, "route");
-    assert.equal(matchLeg(leg({ designators: [], number: "4567", originIcao: "SBKP", destinationIcao: null, scheduledDepartureLocal: "2026-08-05T21:00" }), RECORDS), null);
+    assert.equal(
+      matchLeg(
+        leg({
+          designators: [],
+          number: "4567",
+          originIcao: "SBKP",
+          destinationIcao: null,
+          scheduledDepartureLocal: "2026-08-05T21:00",
+        }),
+        RECORDS,
+      ),
+      null,
+    );
   });
 });
 
@@ -299,14 +366,21 @@ describe("what the case says, next to what the record says", () => {
       agreement: "agrees",
       reachedDestinationDelayMinutes: null,
     });
-    assert.equal(compareLeg(informed({ actualArrivalLocal: "2026-08-05T14:15" }), factsOfRecord(RECORDS[0]), 15).agreement, "agrees");
+    assert.equal(
+      compareLeg(informed({ actualArrivalLocal: "2026-08-05T14:15" }), factsOfRecord(RECORDS[0]), 15).agreement,
+      "agrees",
+    );
   });
 
   it("differs when the arrival the case tells is not the record's, or the ticket's schedule is not", () => {
     const later = compareLeg(informed({ actualArrivalLocal: "2026-08-05T15:00" }), factsOfRecord(RECORDS[0]), 15);
     assert.equal(later.agreement, "differs");
     assert.equal(later.actualArrivalDifference, 55);
-    const moved = compareLeg(informed({ scheduledDepartureLocal: "2026-08-05T07:00", actualArrivalLocal: null }), factsOfRecord(RECORDS[0]), 15);
+    const moved = compareLeg(
+      informed({ scheduledDepartureLocal: "2026-08-05T07:00", actualArrivalLocal: null }),
+      factsOfRecord(RECORDS[0]),
+      15,
+    );
     assert.equal(moved.agreement, "differs");
     assert.equal(moved.scheduledDepartureDifference, -60);
   });
@@ -316,7 +390,11 @@ describe("what the case says, next to what the record says", () => {
     assert.equal(cancelled.agreement, "cancelled");
     assert.equal(cancelled.arrivalDelayMinutes, null);
     assert.equal(cancelled.reachedDestinationDelayMinutes, null);
-    const abroad = compareLeg(informed({ originOffsetMinutes: null, destinationOffsetMinutes: null }), factsOfRecord(RECORDS[4]), 15);
+    const abroad = compareLeg(
+      informed({ originOffsetMinutes: null, destinationOffsetMinutes: null }),
+      factsOfRecord(RECORDS[4]),
+      15,
+    );
     assert.equal(abroad.agreement, "nothing_to_compare");
     assert.equal(abroad.arrivalDelayMinutes, 88);
   });
@@ -382,7 +460,10 @@ describe("a flight with a stop under one number", () => {
   it("arrives where the ticket gets off: the stop's arrival is never the leg's", () => {
     const through = matchLeg(gol({}), THROUGH);
     assert.equal(through?.record.origin, "SBGL");
-    assert.deepEqual(through?.record.continuation?.map((leg) => leg.destination), ["SBMQ"]);
+    assert.deepEqual(
+      through?.record.continuation?.map((leg) => leg.destination),
+      ["SBMQ"],
+    );
     const facts = factsOfRecord(through?.record as VraRecord);
     assert.equal(facts.scheduledDeparture, "2026-08-11T11:30:00.000Z");
     assert.equal(facts.actualArrival, "2026-08-11T16:38:00.000Z");
@@ -393,7 +474,9 @@ describe("a flight with a stop under one number", () => {
   });
 
   it("is cancelled when a leg of it was, keeping the departure that happened", () => {
-    const facts = factsOfRecord(matchLeg(gol({ scheduledDepartureLocal: "2026-08-12T08:30" }), THROUGH)?.record as VraRecord);
+    const facts = factsOfRecord(
+      matchLeg(gol({ scheduledDepartureLocal: "2026-08-12T08:30" }), THROUGH)?.record as VraRecord,
+    );
     assert.equal(facts.cancelled, true);
     assert.equal(facts.actualDeparture, "2026-08-12T12:10:00.000Z");
     assert.equal(facts.actualArrival, null);
@@ -406,7 +489,12 @@ describe("a flight with a stop under one number", () => {
     assert.equal(facts.scheduledArrival, null);
     assert.equal(facts.actualArrival, null);
     const compared = compareLeg(
-      { scheduledDepartureLocal: "2026-08-11T08:30", actualArrivalLocal: "2026-08-11T13:00", originOffsetMinutes: -180, destinationOffsetMinutes: -180 },
+      {
+        scheduledDepartureLocal: "2026-08-11T08:30",
+        actualArrivalLocal: "2026-08-11T13:00",
+        originOffsetMinutes: -180,
+        destinationOffsetMinutes: -180,
+      },
       facts,
       15,
     );
@@ -435,5 +523,40 @@ describe("the months a leg is looked for in", () => {
     assert.deepEqual(monthsToSearch("2027-01-01T00:10"), ["2027-01", "2026-12"]);
     assert.deepEqual(monthsToSearch("2028-02-29T10:00"), ["2028-02", "2028-03"]);
     assert.deepEqual(monthsToSearch("ontem"), []);
+  });
+});
+
+describe("problemLeg", () => {
+  const leg = (
+    id: string,
+    over: Partial<{ checked: boolean; cancelled: boolean; diverted: boolean; arrivalDelayMinutes: number | null }> = {},
+  ) => ({
+    id,
+    checked: true,
+    cancelled: false,
+    diverted: false,
+    arrivalDelayMinutes: 0,
+    ...over,
+  });
+
+  it("takes the only leg of a trip, checked or not", () => {
+    assert.equal(problemLeg([leg("a", { checked: false })], 30), "a");
+  });
+
+  it("takes the one leg the record gives as late, cancelled or diverted", () => {
+    assert.equal(problemLeg([leg("a", { arrivalDelayMinutes: 5 }), leg("b", { arrivalDelayMinutes: 250 })], 30), "b");
+    assert.equal(problemLeg([leg("a", { cancelled: true, arrivalDelayMinutes: null }), leg("b")], 30), "a");
+    assert.equal(problemLeg([leg("a"), leg("b", { diverted: true, arrivalDelayMinutes: null })], 30), "b");
+    assert.equal(problemLeg([leg("a", { arrivalDelayMinutes: 30 }), leg("b")], 30), "a");
+  });
+
+  it("leaves it to a person when no leg, or more than one, had a problem", () => {
+    assert.equal(problemLeg([leg("a"), leg("b", { arrivalDelayMinutes: 29 })], 30), null);
+    assert.equal(problemLeg([leg("a", { arrivalDelayMinutes: 40 }), leg("b", { arrivalDelayMinutes: 90 })], 30), null);
+    assert.equal(problemLeg([], 30), null);
+  });
+
+  it("waits while a leg is still checked", () => {
+    assert.equal(problemLeg([leg("a", { arrivalDelayMinutes: 300 }), leg("b", { checked: false })], 30), null);
   });
 });

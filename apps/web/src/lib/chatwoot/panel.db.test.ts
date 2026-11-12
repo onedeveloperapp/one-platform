@@ -2,6 +2,7 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { connect, DB_URL, type Row, type Sql, standIn } from "@/lib/testing/embedded-db";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 /**
  * The firm's panel of attendance (migration 0223), with the app's own code against a real database and the
@@ -21,7 +22,8 @@ vi.mock("@flyee/jobs", () => ({ sendEvent: async () => ({ sent: false, hint: "no
 
 let sql: Sql;
 let clientAs: ReturnType<typeof standIn>;
-const backend = () => clientAs("service_role", { role: "service_role" });
+// The stand-in, as the code under test types the backend's client.
+const backend = () => clientAs("service_role", { role: "service_role" }) as unknown as SupabaseClient;
 vi.mock("@flyee/auth/service", () => ({ createServiceClient: () => backend() }));
 
 const ANA = "ae223000-0000-4000-8000-000000000001";
@@ -138,6 +140,8 @@ describe.skipIf(!DB_URL)("the firm's panel of attendance", () => {
     const row = await conversation();
     const shown = panel.conversation(Number(account.account_id), Number(row.chatwoot_conversation_id))!;
     expect(shown.status).toBe("pending");
+    // With the robot ONE: the panel offers "Assumir atendimento".
+    expect(panel.bots.find((bot) => bot.id === shown.botId)?.name).toBe("ONE");
     expect(panel.contacts.get(shown.contactId)).toMatchObject({
       identifier: CLIENT,
       phone: `+${CLIENT}`,

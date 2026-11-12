@@ -1,6 +1,6 @@
 import "server-only";
 
-import { type ReadyAccount, readyAccount, serviceAccount, userToken } from "@/lib/chatwoot/accounts";
+import { type ReadyAccount, readyAccount, SERVICE_NAME, serviceAccount, userToken } from "@/lib/chatwoot/accounts";
 import { calledNote, contentOf, failureOf, FILE_IN_ONE } from "@/lib/chatwoot/notes";
 import { chatwootProvider } from "@/lib/chatwoot/provider";
 import { supabaseFileStore } from "@/lib/files/store";
@@ -140,6 +140,7 @@ async function mirrorOne(
         status: conversation.agent === "one" ? "pending" : "open",
       })
     ).id;
+    if (conversation.agent === "one") await panel.assignToBot(panelId, await botOf(panel, account));
     await kept(
       service.rpc("chatwoot_keep_conversation", {
         target_conversation: conversation.id,
@@ -204,7 +205,9 @@ async function mirrorOne(
 
   // Who answers.
   if (conversation.agent !== conversation.chatwoot_agent) {
-    await panel.setConversationStatus(panelId, conversation.agent === "one" ? "pending" : "open");
+    // ONE answers: the conversation is with the robot ONE, pending, and the panel offers "Assumir atendimento".
+    if (conversation.agent === "one") await panel.assignToBot(panelId, await botOf(panel, account));
+    else await panel.setConversationStatus(panelId, "open");
     await kept(
       service.rpc("chatwoot_keep_conversation", {
         target_conversation: conversation.id,
@@ -318,6 +321,16 @@ async function fileOf(
 
 const statusError = (message: MessageRow): string | null =>
   message.status === "failed" ? failureOf(message.error_code) : null;
+
+/** The robot ONE of the firm's account, made once and remembered by this server. */
+const bots = new Map<number, number>();
+async function botOf(panel: ChatwootAccount, account: ReadyAccount): Promise<number> {
+  const known = bots.get(account.accountId);
+  if (known) return known;
+  const { id } = await panel.agentBot(SERVICE_NAME);
+  bots.set(account.accountId, id);
+  return id;
+}
 
 /** What the panel now has is kept in ONE, or the round fails and the conversation is brought up again later. */
 async function kept(call: PromiseLike<{ error: { message: string } | null }>): Promise<void> {

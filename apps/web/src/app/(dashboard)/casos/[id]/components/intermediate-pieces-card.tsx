@@ -13,7 +13,6 @@ import EmptyState from "@/components/product/empty-state";
 import QuickActions from "@/components/product/quick-actions";
 import SidePanel from "@/components/product/side-panel";
 import StateLine from "@/components/product/state-line";
-import StatusChip from "@/components/product/status-chip";
 import IllustrationDocumentation from "@/icons/illustrations/illustration-documentation";
 import NiDocument from "@/icons/nexture/ni-document-full";
 import { openCaseFile, startCaseUpload } from "@/lib/cases/actions";
@@ -128,19 +127,17 @@ export default function IntermediatePiecesCard({
     else setProblem(link.code);
   };
 
-  const waitsDefense = pieces.some((draft) => draft.piece?.waitsFor === "defense" && draft.status === "generating");
-
   return (
     <CollapsibleCard
       id="case-pieces"
       title={t("pieces-title")}
       summary={pieces.length === 0 ? t("pieces-summary-none") : t("pieces-summary", { count: pieces.length })}
-      chip={
-        failed ? (
-          <StatusChip tone="danger" label={t("pieces-chip-failed")} />
-        ) : asks ? (
-          <StatusChip tone="attention" label={t("pieces-chip-asks")} />
-        ) : null
+      ask={
+        failed
+          ? { tone: "failed", label: t("pieces-chip-failed") }
+          : asks
+            ? { tone: "firm", label: t("pieces-chip-asks") }
+            : null
       }
       description={t("pieces-body")}
       defaultOpen={opensOnArrival(state.case.status, "pieces", asks || failed, pieces.length === 0)}
@@ -172,45 +169,62 @@ export default function IntermediatePiecesCard({
               <StateLine
                 tone={line.tone}
                 action={
-                  <QuickActions
-                    label={t("pieces-actions")}
-                    actions={[
-                      ...(draft.status === "proposed" && writable
-                        ? [{ key: "review", label: t("pieces-review"), onClick: () => setEditing(draft.id) }]
-                        : []),
-                      ...(lawyer && writable && draft.piece?.decision === null && draft.status !== "cancelled"
-                        ? [
-                            {
-                              key: "file",
-                              label: t("pieces-decide-file"),
-                              disabled: busy,
-                              onClick: () => setDeciding({ draft, decision: "file" }),
-                            },
-                            {
-                              key: "hold",
-                              label: t("pieces-decide-hold"),
-                              disabled: busy,
-                              onClick: () => setDeciding({ draft, decision: "hold" }),
-                            },
-                          ]
-                        : []),
-                      ...(draft.status === "issued" && draft.documentId
-                        ? [{ key: "pdf", label: t("pieces-open-pdf"), onClick: () => void openPieceDocument(draft) }]
-                        : []),
-                      ...(draft.piece?.receiptFileId
-                        ? [
-                            {
-                              key: "receipt",
-                              label: t("pieces-open-receipt"),
-                              onClick: () => void openFile(draft.piece?.receiptFileId ?? ""),
-                            },
-                          ]
-                        : []),
-                      ...(writable && line.lawyerFiles
-                        ? [{ key: "filed", label: t("pieces-record-filed"), onClick: () => setRecording(draft) }]
-                        : []),
-                    ]}
-                  />
+                  <Box className="flex items-center gap-2">
+                    {/* What the line asks for, beside it: the defense the reply waits for (it was at the card's foot). */}
+                    {writable &&
+                    !state.supportVisit &&
+                    draft.piece?.waitsFor === "defense" &&
+                    draft.status === "generating" ? (
+                      <Button
+                        variant="outlined"
+                        color="grey"
+                        size="small"
+                        disabled={busy}
+                        onClick={() => fileInput.current?.click()}
+                      >
+                        {t("pieces-send-defense")}
+                      </Button>
+                    ) : null}
+                    <QuickActions
+                      label={t("pieces-actions")}
+                      actions={[
+                        ...(draft.status === "proposed" && writable
+                          ? [{ key: "review", label: t("pieces-review"), onClick: () => setEditing(draft.id) }]
+                          : []),
+                        ...(lawyer && writable && draft.piece?.decision === null && draft.status !== "cancelled"
+                          ? [
+                              {
+                                key: "file",
+                                label: t("pieces-decide-file"),
+                                disabled: busy,
+                                onClick: () => setDeciding({ draft, decision: "file" }),
+                              },
+                              {
+                                key: "hold",
+                                label: t("pieces-decide-hold"),
+                                disabled: busy,
+                                onClick: () => setDeciding({ draft, decision: "hold" }),
+                              },
+                            ]
+                          : []),
+                        ...(draft.status === "issued" && draft.documentId
+                          ? [{ key: "pdf", label: t("pieces-open-pdf"), onClick: () => void openPieceDocument(draft) }]
+                          : []),
+                        ...(draft.piece?.receiptFileId
+                          ? [
+                              {
+                                key: "receipt",
+                                label: t("pieces-open-receipt"),
+                                onClick: () => void openFile(draft.piece?.receiptFileId ?? ""),
+                              },
+                            ]
+                          : []),
+                        ...(writable && line.lawyerFiles
+                          ? [{ key: "filed", label: t("pieces-record-filed"), onClick: () => setRecording(draft) }]
+                          : []),
+                      ]}
+                    />
+                  </Box>
                 }
               >
                 {t(line.key, line.values)}
@@ -234,11 +248,6 @@ export default function IntermediatePiecesCard({
           ))}
           {writable && !state.supportVisit ? (
             <Box className="flex flex-wrap gap-2">
-              {waitsDefense ? (
-                <Button variant="contained" size="small" disabled={busy} onClick={() => fileInput.current?.click()}>
-                  {t("pieces-send-defense")}
-                </Button>
-              ) : null}
               {filed.length > 0 ? (
                 <Button variant="text" size="small" disabled={busy} onClick={() => setAsking(true)}>
                   {t("pieces-ask")}

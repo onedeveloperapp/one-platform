@@ -11,6 +11,7 @@ import CollapsibleCard from "@/components/product/collapsible-card";
 import DialogHeader from "@/components/product/dialog-header";
 import ItemRows, { type ItemRow } from "@/components/product/item-rows";
 import type { StateTone } from "@/components/product/state-line";
+import StateLine from "@/components/product/state-line";
 import StatusChip from "@/components/product/status-chip";
 import NiClock from "@/icons/nexture/ni-clock";
 import NiMessages from "@/icons/nexture/ni-messages";
@@ -88,9 +89,20 @@ export default function NoticesCard({
       opener: unconfirmed || failed ? t("case-rows-notice-open") : undefined,
       openLabel: t("case-rows-notice-open-label", { kind: kindLabel(item.kind) }),
       content: () => (
-        <Typography variant="body2" className="text-text-secondary break-words whitespace-pre-line">
-          {item.body}
-        </Typography>
+        <Box className="flex flex-col gap-2">
+          {unconfirmed || failed ? (
+            // What a person does about it, before the message itself (the owner, 2026-11-12: "Ver" showed only the
+            // text, and nothing said what to do).
+            <StateLine tone="attention">
+              {unconfirmed
+                ? t("notice-unconfirmed-help")
+                : t("notice-failed-help", { reason: t(noticeErrorKey(item.error)) })}
+            </StateLine>
+          ) : null}
+          <Typography variant="body2" className="text-text-secondary break-words whitespace-pre-line">
+            {item.body}
+          </Typography>
+        </Box>
       ),
     };
   };
@@ -117,11 +129,7 @@ export default function NoticesCard({
               ? t("case-notices-summary-unreached", { count: unreached })
               : t("case-notices-summary-reached")
       }
-      chip={
-        troubled.length > 0 ? (
-          <StatusChip tone="attention" label={t("case-rows-ask-chip", { count: troubled.length })} />
-        ) : null
-      }
+      ask={troubled.length > 0 ? { tone: "firm", label: t("case-rows-ask-chip", { count: troubled.length }) } : null}
       action={
         state.managesFirm ? (
           <Button variant="outlined" color="grey" size="small" href="/settings/mensagens#avisos" LinkComponent={Link}>

@@ -1,5 +1,11 @@
 import type { FlightStatus } from "@flyee/flights/types";
-import { type UnscheduledLeg, VRA_TIME_ZONE, type VraRecord, type VraUnscheduledLine, zonedInstant } from "@flyee/flights/vra";
+import {
+  type UnscheduledLeg,
+  VRA_TIME_ZONE,
+  type VraRecord,
+  type VraUnscheduledLine,
+  zonedInstant,
+} from "@flyee/flights/vra";
 
 /**
  * How a leg of a case is checked against what a source says of its flight:
@@ -164,7 +170,9 @@ export function withUnscheduled(record: VraRecord, lines: readonly VraUnschedule
   if (!record.reference) return record;
   const when = (leg: UnscheduledLeg) => leg.actualDeparture ?? leg.actualArrival ?? "";
   const legs = lines
-    .filter((line) => line.airline === record.airline && line.number === record.number && line.reference === record.reference)
+    .filter(
+      (line) => line.airline === record.airline && line.number === record.number && line.reference === record.reference,
+    )
     .sort((a, b) => when(a).localeCompare(when(b)))
     .slice(0, MOST_UNSCHEDULED)
     .map(({ origin, destination, actualDeparture, actualArrival, kind }) => ({
@@ -208,7 +216,11 @@ export function factsOfRecord(record: VraRecord): FlightFacts {
     cancelled && !elsewhere
       ? (record.unscheduled ?? []).filter((leg) => leg.destination === final.destination && leg.actualArrival)
       : [];
-  const reached = arrivals.map((leg) => leg.actualArrival as string).sort().at(-1) ?? null;
+  const reached =
+    arrivals
+      .map((leg) => leg.actualArrival as string)
+      .sort()
+      .at(-1) ?? null;
   return {
     scheduledDeparture: brasilia(record.scheduledDeparture),
     actualDeparture: brasilia(record.actualDeparture),
@@ -275,7 +287,8 @@ const localInstant = (wall: string | null, offset: number | null): number | null
 
 export function compareLeg(informed: InformedLeg, facts: FlightFacts, toleranceMinutes: number): LegComparison {
   const departureDelayMinutes = between(facts.scheduledDeparture, facts.actualDeparture);
-  const arrivalDelayMinutes = facts.cancelled || facts.diverted ? null : between(facts.scheduledArrival, facts.actualArrival);
+  const arrivalDelayMinutes =
+    facts.cancelled || facts.diverted ? null : between(facts.scheduledArrival, facts.actualArrival);
   const informedDeparture = localInstant(informed.scheduledDepartureLocal, informed.originOffsetMinutes);
   const informedArrival = localInstant(informed.actualArrivalLocal, informed.destinationOffsetMinutes);
   const scheduledDepartureDifference =
@@ -298,7 +311,9 @@ export function compareLeg(informed: InformedLeg, facts: FlightFacts, toleranceM
         : differences.some((difference) => Math.abs(difference) > toleranceMinutes)
           ? "differs"
           : "agrees";
-  const reachedDestinationDelayMinutes = facts.cancelled ? between(facts.scheduledArrival, facts.reachedDestination ?? null) : null;
+  const reachedDestinationDelayMinutes = facts.cancelled
+    ? between(facts.scheduledArrival, facts.reachedDestination ?? null)
+    : null;
   return {
     departureDelayMinutes,
     arrivalDelayMinutes,
@@ -359,4 +374,32 @@ export function monthsToSearch(scheduledDepartureLocal: string): string[] {
   const last = new Date(Date.UTC(year, month, 0)).getUTCDate();
   if (day === last) months.push(month === 12 ? label(year + 1, 1) : label(year, month + 1));
   return months;
+}
+
+/** A leg of a trip as the rule of the problem's leg reads it: what the official record said of its flight. */
+export type LegTrouble = {
+  id: string;
+  /** The record answered for the leg's flight (found it, or said it is not there); false while it is still asked. */
+  checked: boolean;
+  cancelled: boolean;
+  diverted: boolean;
+  /** Actual minus scheduled arrival, in minutes, by the record; null when it has no arrival to compare. */
+  arrivalDelayMinutes: number | null;
+};
+
+/**
+ * The leg of a trip where the problem happened, which ONE marks by itself before the lawsuit (the owner,
+ * 2026-11-12: ONE does what needs no person): a trip of one leg is that leg; a trip of several is the one leg the
+ * record gives as cancelled, diverted or arriving `delayMinutes` or more late, once every leg was checked. None or
+ * more than one such leg (a missed connection behind a late first leg, a trip the record does not explain), or a
+ * leg still waiting for its check, is a person's to say: null.
+ */
+export function problemLeg(legs: readonly LegTrouble[], delayMinutes: number): string | null {
+  if (legs.length === 1) return legs[0].id;
+  if (legs.length === 0 || legs.some((leg) => !leg.checked)) return null;
+  const troubled = legs.filter(
+    (leg) =>
+      leg.cancelled || leg.diverted || (leg.arrivalDelayMinutes !== null && leg.arrivalDelayMinutes >= delayMinutes),
+  );
+  return troubled.length === 1 ? troubled[0].id : null;
 }

@@ -128,8 +128,7 @@ export default function InboxView({ state }: { state: InboxState }) {
           ready?.panel.available ? (
             // The firm's panel of attendance (0223), entered signed in, in a tab of its own.
             <Button
-              variant="outlined"
-              color="grey"
+              variant="contained"
               href="/atendimento/painel"
               target="_blank"
               rel="noopener"
@@ -432,6 +431,7 @@ function InboxList({ ready, manager, onChanged }: { ready: Ready; manager: boole
               manager={manager}
               module={module}
               backHref={inboxHref({ view: ready.view, sort: ready.sort, module })}
+              panel={ready.panel.available}
               onChanged={onChanged}
             />
           ) : (

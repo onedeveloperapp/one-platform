@@ -230,7 +230,7 @@ export default function OutcomeCard({
       anchor="resultado"
       title={t("outcome-title")}
       description={t("outcome-description")}
-      chip={waiting || closedUnseen ? <StatusChip tone="attention" label={t("outcome-chip-waits")} /> : undefined}
+      ask={waiting || closedUnseen ? { tone: "firm", label: t("outcome-chip-waits") } : null}
       defaultOpen={state.case.status === "filed" || state.case.status === "closed" || waiting}
       action={
         writable && lawsuits.length > 0 ? (

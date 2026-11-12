@@ -1,7 +1,9 @@
 "use client";
 
-import type { CaseDocument, CaseState } from "../case-types";
+import type { CaseDocument, CasePerson, CaseState } from "../case-types";
 import { sentence, useCaseAction } from "./case-action";
+import { useClientAsked } from "./client-asked";
+import { addressLine } from "./person-read-check";
 import ResidenceLine from "./residence-line";
 import { useTranslations } from "next-intl";
 import { useRef, useState } from "react";
@@ -25,13 +27,19 @@ import EmptyState from "@/components/product/empty-state";
 import ItemRows, { type ItemRow } from "@/components/product/item-rows";
 import SectionTitle from "@/components/product/section-title";
 import StateLine from "@/components/product/state-line";
-import StatusChip from "@/components/product/status-chip";
 import IllustrationDocumentation from "@/icons/illustrations/illustration-documentation";
 import NiDocumentCross from "@/icons/nexture/ni-document-cross";
 import NiDocumentFull from "@/icons/nexture/ni-document-full";
-import { decideCaseDocument, finishCaseUpload, openCaseFile, startCaseUpload } from "@/lib/cases/actions";
+import {
+  decideCaseDocument,
+  finishCaseUpload,
+  openCaseFile,
+  saveCasePerson,
+  startCaseUpload,
+} from "@/lib/cases/actions";
 import {
   caseErrorKey,
+  caseMissing,
   DOCUMENT_KIND_KEY,
   DOCUMENT_KINDS,
   type DocumentKind,
@@ -45,6 +53,8 @@ import { documentLine, orderDocuments } from "@/lib/cases/document-rows";
 import { SECTION_ANCHOR } from "@/lib/cases/now";
 import { opensOnArrival } from "@/lib/cases/sections";
 import { mimeOf, uploadToSignedUrl } from "@/lib/files/browser-upload";
+import { formatCpf } from "@flyee/fields";
+import { formatDayBr } from "@flyee/rules/person";
 
 type Ready = Extract<CaseState, { kind: "ready" }>;
 
@@ -130,7 +140,6 @@ export default function DocumentsCard({
     state.residence?.find((view) => view.documentId === document.id) ?? null;
   const personOf = (partyId: string | null) =>
     state.parties.find((candidate) => candidate.partyId === partyId)?.person.full_name ?? null;
-  const list = new Intl.ListFormat("pt-BR", { style: "long", type: "conjunction" });
   // What a document of a person says otherwise than their record (migration 0063), never of a refused one.
   const differsOf = (document: CaseDocument) => {
     const person = state.parties.find((candidate) => candidate.partyId === document.partyId)?.person;
@@ -237,18 +246,27 @@ export default function DocumentsCard({
         </Typography>
       ) : null}
       {differsOf(document).length > 0 && (
-        // A fact of the record the document says otherwise: ONE changed nothing, and who decides looks at it.
-        <Typography variant="body2" className="text-text-primary">
-          {t("case-document-read-differs", {
-            fields: list.format(differsOf(document).map((field) => t(READ_DIFFER_KEY[field]))),
-          })}
-        </Typography>
+        // A fact of the record the document says otherwise: ONE changed nothing, and who decides sees both values.
+        <DiffersBlock
+          caseId={state.case.id}
+          document={document}
+          person={state.parties.find((candidate) => candidate.partyId === document.partyId)?.person ?? null}
+          fields={differsOf(document)}
+          writable={writable}
+          onChanged={onChanged}
+        />
       )}
       {residenceOf(document) ? (
         // A bill in somebody else's name the firm accepted owes the client's declaration of residence (0123).
         <ResidenceLine
           caseId={state.case.id}
           view={residenceOf(document)!}
+          recordAddress={(() => {
+            const person = state.parties.find(
+              (candidate) => candidate.person.person_id === residenceOf(document)!.personId,
+            )?.person;
+            return person ? addressLine(person) : null;
+          })()}
           writable={writable}
           mayWaive={state.lawyer}
           onChanged={onChanged}
@@ -348,6 +366,20 @@ export default function DocumentsCard({
     };
   };
 
+  // What the case lacks of documents, by the one rule the top of the case reads (`caseMissing`).
+  const owedDocuments = caseMissing({
+    parties: state.parties,
+    documents: state.documents.map((document) => ({
+      kind: document.kind,
+      party_id: document.partyId,
+      status: document.status,
+    })),
+    segments: state.segments.length,
+    required: state.required,
+    today: state.today,
+  }).flatMap((item) => (item.type === "document" ? [item] : []));
+  const asked = useClientAsked(state);
+
   const accepted = state.documents.filter((document) => document.status === "accepted").length;
   const refused = state.documents.filter((document) => document.status === "rejected").length;
 
@@ -366,10 +398,12 @@ export default function DocumentsCard({
               .filter(Boolean)
               .join(" · ")
       }
-      chip={
-        ordered.ask.length > 0 ? (
-          <StatusChip tone="attention" label={t("case-rows-ask-chip", { count: ordered.ask.length })} />
-        ) : null
+      ask={
+        ordered.ask.length > 0
+          ? { tone: "firm", label: t("case-rows-ask-chip", { count: ordered.ask.length }) }
+          : owedDocuments.length > 0
+            ? { tone: "client", label: t("card-state-client") }
+            : null
       }
       description={t("case-documents-body")}
       defaultOpen={opensOnArrival(state.case.status, "documents", ordered.ask.length > 0, state.documents.length === 0)}
@@ -390,6 +424,51 @@ export default function DocumentsCard({
           description={t("case-documents-empty-body")}
         />
       )}
+
+      {owedDocuments.length > 0 ? (
+        // The documents the case lacks are the client's to send on their link (`WAIT_PLACE.case_incomplete`): each
+        // said with who sends it and since when, the firm's own sending as the exception it is.
+        <Box className="flex flex-col gap-2">
+          <SectionTitle
+            id="case-documents-owed"
+            as="h3"
+            variant="subtitle2"
+            title={t("case-documents-owed-title", { count: owedDocuments.length })}
+          />
+          {owedDocuments.map((item) => {
+            const kindWords = isDocumentKind(item.kind) ? t(DOCUMENT_KIND_KEY[item.kind]) : item.kind;
+            const what = item.name ? t("case-documents-owed-of", { kind: kindWords, name: item.name }) : kindWords;
+            return (
+              <StateLine
+                key={`${item.kind}-${item.personId ?? "case"}`}
+                tone="waiting"
+                action={
+                  writable ? (
+                    <Button
+                      variant="text"
+                      color="grey"
+                      size="small"
+                      disabled={action.busy}
+                      onClick={() => {
+                        if (isDocumentKind(item.kind)) setKind(item.kind);
+                        setParty(
+                          state.parties.find((candidate) => candidate.person.person_id === item.personId)?.partyId ??
+                            "",
+                        );
+                        input.current?.click();
+                      }}
+                    >
+                      {t("case-documents-owed-send")}
+                    </Button>
+                  ) : undefined
+                }
+              >
+                {asked(item.personId, what)}
+              </StateLine>
+            );
+          })}
+        </Box>
+      ) : null}
 
       {state.documents.length > 0 ? (
         <ItemRows
@@ -522,6 +601,111 @@ export default function DocumentsCard({
         />
       )}
     </CollapsibleCard>
+  );
+}
+
+/**
+ * The facts of the record a document says otherwise (0063), each with both values (the owner, 2026-11-12: a line
+ * that named the field and not the values asked the person to decide what they could not see): the record's and
+ * the document's, and the document's taken into the record in one click. Keeping the record changes nothing.
+ */
+function DiffersBlock({
+  caseId,
+  document,
+  person,
+  fields,
+  writable,
+  onChanged,
+}: {
+  caseId: string;
+  document: CaseDocument;
+  person: CasePerson | null;
+  fields: ReadDiffer[];
+  writable: boolean;
+  onChanged: () => void;
+}) {
+  const t = useTranslations("product");
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+  const data = document.check?.answer.data ?? null;
+  if (!person || !data) return null;
+  const shown = (field: ReadDiffer, value: string | null): string => {
+    if (!value) return "";
+    if (field === "cpf") return formatCpf(value.replace(/\D/g, ""));
+    if (field === "birth_date") return formatDayBr(value.slice(0, 10)) ?? value;
+    const digits = value.replace(/\D/g, "");
+    return digits.length === 8 ? `${digits.slice(0, 5)}-${digits.slice(5)}` : value;
+  };
+  const read: Record<ReadDiffer, string> = {
+    cpf: data.cpf,
+    birth_date: data.birthDate ?? "",
+    postal_code: data.postalCode,
+  };
+  const record: Record<ReadDiffer, string | null> = {
+    cpf: person.cpf,
+    birth_date: person.birth_date,
+    postal_code: person.postal_code,
+  };
+  const take = async () => {
+    setBusy(true);
+    setProblem(null);
+    const result = await saveCasePerson({
+      caseId,
+      personId: person.person_id,
+      fields: Object.fromEntries(
+        fields.map((field) => [field, field === "birth_date" ? read[field] : read[field].replace(/\D/g, "")]),
+      ),
+    });
+    setBusy(false);
+    if (!result.ok) setProblem(result.code);
+    else onChanged();
+  };
+  return (
+    <Box className="border-accent-3/30 bg-accent-3-light/10 flex flex-col gap-3 rounded-2xl border p-4">
+      <Typography variant="body2" className="text-text-primary font-semibold">
+        {t("case-document-differs-title")}
+      </Typography>
+      {fields.map((field) => (
+        <Box
+          key={field}
+          className="grid grid-cols-1 gap-2 sm:grid-cols-[8rem_minmax(0,1fr)_minmax(0,1fr)] sm:items-baseline"
+        >
+          <Typography variant="body2" className="font-semibold">
+            {t(READ_DIFFER_KEY[field])}
+          </Typography>
+          <Typography variant="body2">
+            <span className="text-text-secondary">{t("case-document-differs-record")} </span>
+            {shown(field, record[field])}
+          </Typography>
+          <Typography variant="body2">
+            <span className="text-text-secondary">{t("case-document-differs-read")} </span>
+            {shown(field, read[field])}
+          </Typography>
+        </Box>
+      ))}
+      {problem ? (
+        <Typography variant="body2" role="alert" className="text-text-primary">
+          {t(caseErrorKey(problem))}
+        </Typography>
+      ) : null}
+      {writable ? (
+        <Box className="flex flex-wrap items-center gap-3">
+          <Button
+            variant="outlined"
+            color="grey"
+            size="small"
+            disabled={busy}
+            loading={busy}
+            onClick={() => void take()}
+          >
+            {t("case-document-differs-take")}
+          </Button>
+          <Typography variant="caption" className="text-text-secondary">
+            {t("case-document-differs-keep")}
+          </Typography>
+        </Box>
+      ) : null}
+    </Box>
   );
 }
 

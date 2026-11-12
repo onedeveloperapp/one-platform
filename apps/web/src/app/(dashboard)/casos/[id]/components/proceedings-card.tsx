@@ -29,6 +29,7 @@ import CollapsibleCard from "@/components/product/collapsible-card";
 import ConfirmActionDialog from "@/components/product/confirm-action-dialog";
 import DialogHeader from "@/components/product/dialog-header";
 import EmptyState from "@/components/product/empty-state";
+import FactGrid, { type Fact } from "@/components/product/fact-grid";
 import StateLine from "@/components/product/state-line";
 import StatusChip, { type StatusTone } from "@/components/product/status-chip";
 import IllustrationLaunch from "@/icons/illustrations/illustration-launch";
@@ -151,11 +152,7 @@ export default function ProceedingsCard({
       summary={
         state.proceedings.length === 0 ? t("case-proceedings-empty-title") : state.proceedings.map(lineOf).join(" · ")
       }
-      chip={
-        unseen > 0 ? (
-          <StatusChip tone="attention" label={t("case-proceedings-summary-moved", { count: unseen })} />
-        ) : null
-      }
+      ask={unseen > 0 ? { tone: "firm", label: t("case-proceedings-summary-moved", { count: unseen }) } : null}
       description={t("case-proceedings-body")}
       action={
         writable && state.proceedings.length > 0 ? (
@@ -185,15 +182,52 @@ export default function ProceedingsCard({
       )}
 
       {state.proceedings.map((proceeding) => {
-        const where = [
-          courtName(proceeding.court),
-          proceeding.comarca,
-          proceeding.unit,
-          // A planned lawsuit's system is said with the firm's word on it, below (`CourtSystem`).
-          proceeding.status === "planned" ? null : systemLabel(t, proceeding.system),
-        ]
-          .filter(Boolean)
-          .join(" · ");
+        // Each fact of the lawsuit under its name (the owner, 2026-11-12): a run joined by "·" left the reader to
+        // guess which was the comarca and which the unit. A planned lawsuit's system is said below, with the firm's
+        // word on it (`CourtSystem`).
+        const facts: Fact[] = [
+          {
+            key: "cnj",
+            label: t("case-proceeding-fact-cnj"),
+            value: proceeding.cnj ? (formatCnj(proceeding.cnj) ?? proceeding.cnj) : null,
+          },
+          {
+            key: "filed",
+            label: t("case-proceeding-fact-filed"),
+            value: proceeding.filedAt ? formatDayBr(proceeding.filedAt) : null,
+          },
+          { key: "court", label: t("case-proceeding-fact-court"), value: courtName(proceeding.court) },
+          { key: "comarca", label: t("case-proceeding-fact-comarca"), value: proceeding.comarca },
+          { key: "unit", label: t("case-proceeding-fact-unit"), value: proceeding.unit },
+          {
+            key: "system",
+            label: t("case-proceeding-fact-system"),
+            value: proceeding.status === "planned" ? null : systemLabel(t, proceeding.system),
+          },
+          {
+            key: "forum",
+            label: t("case-proceeding-fact-forum"),
+            value: proceeding.forumBasis
+              ? `${
+                  proceeding.forumBasis in BASIS_KEY
+                    ? t(BASIS_KEY[proceeding.forumBasis as (typeof BASES)[number]])
+                    : proceeding.forumBasis
+                }${proceeding.forumReason ? `: ${proceeding.forumReason}` : ""}`
+              : null,
+            wide: true,
+          },
+          {
+            key: "claimants",
+            label: t("case-proceeding-fact-claimants"),
+            value: proceeding.parties.map(nameOfParty).filter(Boolean).join(", "),
+            wide: true,
+          },
+          {
+            key: "lawyers",
+            label: t("case-proceeding-fact-lawyers"),
+            value: proceeding.lawyers.map(nameOfLawyer).filter(Boolean).join(", "),
+          },
+        ];
         return (
           <Box key={proceeding.id} className="border-grey-100 flex flex-col gap-2 rounded-2xl border p-4">
             <Box className="flex flex-wrap items-start justify-between gap-2">
@@ -201,11 +235,6 @@ export default function ProceedingsCard({
                 <Typography variant="body1" className="font-semibold">
                   {t(KIND_KEY[proceeding.kind])}
                 </Typography>
-                {where && (
-                  <Typography variant="body2" className="text-text-secondary">
-                    {where}
-                  </Typography>
-                )}
               </Box>
               <StatusChip tone={STATUS_TONE[proceeding.status]} label={t(STATUS_KEY[proceeding.status])} />
             </Box>
@@ -218,11 +247,21 @@ export default function ProceedingsCard({
                 ) : null
               ) : (
                 // The platform's table does not know this city in this court (0145): a person checks it before filing.
-                <StateLine tone="attention">
+                <StateLine
+                  tone="attention"
+                  action={
+                    writable ? (
+                      <Button variant="outlined" color="grey" size="small" onClick={() => setEditing(proceeding)}>
+                        {t("case-proceeding-correct")}
+                      </Button>
+                    ) : undefined
+                  }
+                >
                   {t("case-proceeding-comarca-unchecked", { comarca: proceeding.comarca })}
                 </StateLine>
               )
             ) : null}
+            <FactGrid facts={facts} />
             {proceeding.status === "planned" && proceeding.unitByOne && proceeding.unit ? (
               // ONE named the unit from the platform's table of the comarca's units (0179); the piece addresses it.
               <Typography variant="body2" className="text-text-secondary">
@@ -242,43 +281,6 @@ export default function ProceedingsCard({
                   .join(" ")}
               </Typography>
             ) : null}
-            {proceeding.cnj && (
-              <Typography variant="body2" className="font-mono">
-                {[
-                  formatCnj(proceeding.cnj) ?? proceeding.cnj,
-                  proceeding.filedAt
-                    ? t("case-proceeding-filed-on", { date: formatDayBr(proceeding.filedAt) ?? "" })
-                    : null,
-                ]
-                  .filter(Boolean)
-                  .join(" · ")}
-              </Typography>
-            )}
-            {proceeding.forumBasis && (
-              <Typography variant="body2">
-                {t("case-proceeding-forum", {
-                  basis:
-                    proceeding.forumBasis in BASIS_KEY
-                      ? t(BASIS_KEY[proceeding.forumBasis as (typeof BASES)[number]])
-                      : proceeding.forumBasis,
-                })}
-                {proceeding.forumReason ? `: ${proceeding.forumReason}` : ""}
-              </Typography>
-            )}
-            {proceeding.parties.length > 0 && (
-              <Typography variant="body2" className="text-text-secondary">
-                {t("case-proceeding-claimants", {
-                  names: proceeding.parties.map(nameOfParty).filter(Boolean).join(", "),
-                })}
-              </Typography>
-            )}
-            {proceeding.lawyers.length > 0 && (
-              <Typography variant="body2" className="text-text-secondary">
-                {t("case-proceeding-lawyers", {
-                  names: proceeding.lawyers.map(nameOfLawyer).filter(Boolean).join(", "),
-                })}
-              </Typography>
-            )}
             {proceeding.status === "planned" && unnamedOf(proceeding).length > 0 && (
               // The firm's own power of attorney names its lawyers as the firm wrote them (0093): one who signs this
               // lawsuit and is not among them holds no power of the client's.
@@ -290,9 +292,19 @@ export default function ProceedingsCard({
               </StateLine>
             )}
             {proceeding.createdByOne && proceeding.status === "planned" && (
-              <Typography variant="body2" className="text-text-secondary">
+              // ONE's work, said as ONE's, with the way to correct it beside it.
+              <StateLine
+                tone="info"
+                action={
+                  writable ? (
+                    <Button variant="text" color="grey" size="small" onClick={() => setEditing(proceeding)}>
+                      {t("case-proceeding-correct")}
+                    </Button>
+                  ) : undefined
+                }
+              >
                 {t("case-proceeding-created-by-one")}
-              </Typography>
+              </StateLine>
             )}
             <CourtSystem state={state} proceeding={proceeding} writable={writable} onChanged={onChanged} />
             <CourtCourse

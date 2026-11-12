@@ -209,14 +209,14 @@ export default function DraftsCard({
                 )
                 .join(" · ")
       }
-      chip={
-        notWritten ? (
-          <StatusChip tone="danger" label={t("draft-status-failed")} />
-        ) : toRevise ? (
-          <StatusChip tone="attention" label={t("draft-status-proposed")} />
-        ) : oneAtWork ? (
-          <StatusChip tone="info" label={t("drafts-one-at-work")} />
-        ) : null
+      ask={
+        notWritten
+          ? { tone: "failed", label: t("draft-status-failed") }
+          : toRevise
+            ? { tone: "firm", label: t("draft-status-proposed") }
+            : oneAtWork
+              ? { tone: "working", label: t("drafts-one-at-work") }
+              : null
       }
       description={t("drafts-body")}
       defaultOpen={opensOnArrival(state.case.status, "drafts", toRevise || notWritten, lawsuits.length === 0)}

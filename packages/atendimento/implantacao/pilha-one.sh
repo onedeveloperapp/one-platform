@@ -97,5 +97,7 @@ docker compose up -d openwa
 
 echo "== marca do painel (chatwoot-config, a cada implantação)"
 [ -f "$STACK/gerado/marca.env" ] || { echo "ERRO: falta gerado/marca.env; rode kit.mjs theme antes"; exit 1; }
+# O tema do kit e, depois dele, o que o ONE acrescenta ao painel (a lista abre em "Todos"): o chatwoot-config grava os dois.
+cat "$STACK/gerado/painel.html" "$STACK/implantacao/painel-acrescimo.html" > "$STACK/gerado/painel-one.html"
 docker compose --profile config run --rm chatwoot-config 2>&1 | grep -E '^(gravado|igual|sem arquivo|configuração)' || true
 docker compose ps --format 'table {{.Service}}\t{{.State}}\t{{.Status}}'

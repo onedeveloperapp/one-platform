@@ -32,7 +32,15 @@ type FakeInbox = {
   members: Set<number>;
 };
 type FakeContact = { id: number; accountId: number; name: string; phone: string; identifier: string };
-type FakeConversation = { id: number; accountId: number; inboxId: number; contactId: number; status: string };
+type FakeConversation = {
+  id: number;
+  accountId: number;
+  inboxId: number;
+  contactId: number;
+  status: string;
+  /** The robot the conversation is with, when it is. */
+  botId?: number | null;
+};
 export type FakeMessage = {
   id: number;
   accountId: number;
@@ -63,6 +71,7 @@ export class FakeChatwootProvider implements ChatwootProvider {
   readonly contacts = new Map<number, FakeContact>();
   readonly conversations = new Map<string, FakeConversation>();
   readonly messages: FakeMessage[] = [];
+  readonly bots: { id: number; accountId: number; name: string }[] = [];
   /** The links handed out, by person: a test follows one as the browser would. */
   readonly links: { userId: number; url: string }[] = [];
   private next = 1;
@@ -208,6 +217,23 @@ export class FakeChatwootProvider implements ChatwootProvider {
       setConversationStatus: async (conversationId, status: ChatwootConversationStatus) => {
         caller();
         conversation(conversationId).status = status;
+      },
+      agentBot: async (name) => {
+        admin();
+        const found = this.bots.find((bot) => bot.accountId === accountId && bot.name === name);
+        if (found) return { id: found.id };
+        const id = this.id();
+        this.bots.push({ id, accountId, name });
+        return { id };
+      },
+      assignToBot: async (conversationId, botId) => {
+        caller();
+        if (!this.bots.some((bot) => bot.id === botId && bot.accountId === accountId)) {
+          throw new ChatwootRequestError(404, "resource_could_not_be_found");
+        }
+        const found = conversation(conversationId);
+        found.botId = botId;
+        found.status = "pending";
       },
       createMessage: async (conversationId, message: NewChatwootMessage) => {
         const user = caller();

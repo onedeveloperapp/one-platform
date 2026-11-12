@@ -75,6 +75,12 @@ const STATE_TILE: Record<Exclude<CardTone, "idle">, { tile: string; badge: strin
   failed: { tile: "bg-error/10 text-error", badge: "bg-error text-text-contrast", icon: <NiCrossSquare size={12} /> },
 };
 
+/** Which of two states weighs more on a card's head: a failure, then the firm's turn, ONE at work, the client's turn. */
+const RANK: Record<CardTone, number> = { failed: 5, firm: 4, working: 3, client: 2, done: 1, idle: 0 };
+
+/** What a card says of itself by its own facts: whose turn it is there, in its own words. */
+export type CardAsk = { tone: Exclude<CardTone, "done" | "idle">; label: string };
+
 /** The words of the marks, in the screen's language. */
 export type CardMarkWords = { firm: string; failed: string; client: string };
 
@@ -194,6 +200,7 @@ export default function CollapsibleCard({
   summary,
   summaryClosedOnly = false,
   chip,
+  ask,
   description,
   detail,
   action,
@@ -214,6 +221,13 @@ export default function CollapsibleCard({
   summaryClosedOnly?: boolean;
   /** What waits for a person here, as a StatusChip. A definition of the title is `description`, behind its "i". */
   chip?: ReactNode;
+  /**
+   * Whose turn it is here by the card's own facts, in its own words (the owner, 2026-11-12: one signal on a head).
+   * It and the state the screen gives (`CardMark.state`) make ONE badge and the colour of the icon: the one that
+   * weighs more (a failure, the firm's turn, ONE at work, the client's turn), the card's own words on a tie. A card
+   * of a screen that gives states says where it stands this way, never with a `chip` beside the state.
+   */
+  ask?: CardAsk | null;
   /**
    * What the card is for, behind the "i" beside the title (the owner, 2026-11-09): never a paragraph read on every
    * visit. At most 200 characters (a test keeps it).
@@ -279,9 +293,11 @@ export default function CollapsibleCard({
 
   // Where the card stands: its own chip says what asks for somebody there in its own words; the state's badge says
   // the rest (done, ONE at work, waiting for the client, nothing yet), and ONE at work beside a card's own chip too.
-  const state = mark?.state ?? null;
+  // The card's own word and the screen's state make one: the heavier, the card's own words on a tie.
+  const given = mark?.state ?? null;
+  const state = ask && (!given || RANK[ask.tone] >= RANK[given.tone]) ? ask : given;
   const stateChip =
-    state && (!chip || state.tone === "working") ? (
+    state && (ask || !chip || state.tone === "working") ? (
       <StatusChip label={state.label} tone={STATE_CHIP[state.tone].tone} icon={STATE_CHIP[state.tone].icon} />
     ) : null;
   const stateLook = state && state.tone !== "idle" ? STATE_TILE[state.tone] : null;
@@ -369,7 +385,7 @@ export default function CollapsibleCard({
               ) : null}
               {chip || stateChip || markChip || (!state && mark?.working) ? (
                 <Box className="relative z-[1] flex flex-wrap items-center gap-2">
-                  {chip}
+                  {ask ? null : chip}
                   {stateChip}
                   {markChip ? <StatusChip label={markChip.label} tone={markChip.tone} /> : null}
                   {!state && mark?.working ? (

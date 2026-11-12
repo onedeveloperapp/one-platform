@@ -11,7 +11,6 @@ import DeadlineCard from "@/components/deadlines/deadline-card";
 import DeadlinePanel from "@/components/deadlines/deadline-panel";
 import CollapsibleCard from "@/components/product/collapsible-card";
 import EmptyState from "@/components/product/empty-state";
-import StatusChip from "@/components/product/status-chip";
 import IllustrationConfigure from "@/icons/illustrations/illustration-configure";
 import { opensOnArrival } from "@/lib/cases/sections";
 import { formatCnj } from "@flyee/rules/cnj";
@@ -86,14 +85,14 @@ export default function DeadlinesCard({
               .filter(Boolean)
               .join(" · ")
       }
-      chip={
-        overdue > 0 ? (
-          <StatusChip tone="danger" label={t("case-deadlines-summary-overdue", { count: overdue })} />
-        ) : toConfirm > 0 ? (
-          <StatusChip tone="attention" label={t("case-deadlines-summary-confirm", { count: toConfirm })} />
-        ) : toReview > 0 ? (
-          <StatusChip tone="attention" label={t("case-deadlines-summary-review", { count: toReview })} />
-        ) : null
+      ask={
+        overdue > 0
+          ? { tone: "failed", label: t("case-deadlines-summary-overdue", { count: overdue }) }
+          : toConfirm > 0
+            ? { tone: "firm", label: t("case-deadlines-summary-confirm", { count: toConfirm }) }
+            : toReview > 0
+              ? { tone: "firm", label: t("case-deadlines-summary-review", { count: toReview }) }
+              : null
       }
       action={
         <Button variant="outlined" color="grey" size="small" href="/prazos" LinkComponent={Link}>

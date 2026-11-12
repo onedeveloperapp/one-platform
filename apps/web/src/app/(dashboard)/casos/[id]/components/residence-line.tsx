@@ -41,12 +41,15 @@ import { recordResidenceRelation, waiveResidenceDeclaration } from "@/lib/cases/
 export default function ResidenceLine({
   caseId,
   view,
+  recordAddress = null,
   writable,
   mayWaive,
   onChanged,
 }: {
   caseId: string;
   view: ResidenceView;
+  /** The address the person's record has, said beside the bill's city when the two differ. */
+  recordAddress?: string | null;
   writable: boolean;
   /** A partner or a lawyer of the firm: who may go on without the declaration. */
   mayWaive: boolean;
@@ -85,8 +88,23 @@ export default function ResidenceLine({
         return <StateLine tone="waiting">{t("residence-asking", { holder: view.holder })}</StateLine>;
       case "conflict":
         return (
-          <StateLine tone="attention">
-            {t("residence-conflict", { who, city: view.billCity ?? t("residence-city-unknown") })}
+          // Both places in front of the person, and the way to where the address is corrected (`WAIT_PLACE`:
+          // the people's card): the record's address decides the forum.
+          <StateLine
+            tone="attention"
+            action={
+              writable ? (
+                <Button variant="outlined" color="grey" size="small" href="#case-people">
+                  {t("residence-conflict-fix")}
+                </Button>
+              ) : undefined
+            }
+          >
+            {t("residence-conflict-both", {
+              who,
+              city: view.billCity ?? t("residence-city-unknown"),
+              record: recordAddress ?? t("residence-record-none"),
+            })}
           </StateLine>
         );
       case "issuing":

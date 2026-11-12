@@ -23,6 +23,7 @@ import {
 import DialogHeader from "@/components/product/dialog-header";
 import InfoHint from "@/components/product/info-hint";
 import SectionTitle from "@/components/product/section-title";
+import StateLine from "@/components/product/state-line";
 import StatusChip from "@/components/product/status-chip";
 import { caseErrorKey } from "@/lib/cases/cases";
 import { type CivilCourtNeed, COURT_NOTE_STANCE_KEY, type CourtNote, noteForState } from "@/lib/cases/family";
@@ -371,9 +372,18 @@ export function CivilCourtAnswers({
                 </Typography>
               )}
               {need.planned && !need.answererId && (
-                <Typography variant="body2" className="text-text-secondary">
+                <StateLine
+                  tone="attention"
+                  action={
+                    writable ? (
+                      <Button variant="outlined" color="grey" size="small" href="#case-people">
+                        {t("case-civil-no-guardian-fix")}
+                      </Button>
+                    ) : undefined
+                  }
+                >
                   {t("case-civil-no-guardian", { name: partyName(need.partyId) })}
-                </Typography>
+                </StateLine>
               )}
             </Box>
             {writable && need.planned && need.answererId && (
