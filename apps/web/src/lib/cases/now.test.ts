@@ -137,6 +137,26 @@ describe("caseNow", () => {
       owner: "firm",
       text: { key: "case-now-draft-review" },
     });
+    // What the text leaves to complete is said, once each, for the lawyer to do (the owner, 2026-11-13).
+    const gaps = caseNow(
+      base({
+        status: "drafting",
+        proceedings: [planned],
+        drafts: [
+          {
+            ...draft,
+            body: "Ré: [COMPLETAR: razão social da companhia], CNPJ [COMPLETAR: CNPJ da companhia]. [COMPLETAR: CNPJ da companhia]",
+          },
+        ] as unknown as CaseNowInput["drafts"],
+      }),
+    );
+    expect(gaps.blocking.find((one) => one.id === "draft:dr")).toMatchObject({
+      owner: "firm",
+      text: {
+        key: "case-now-draft-complete",
+        values: { gaps: "razão social da companhia, CNPJ da companhia" },
+      },
+    });
     // Once the client answered, ONE writes it again: its work, nothing asked of a lawyer (0100).
     const rewriting = caseNow(
       base({

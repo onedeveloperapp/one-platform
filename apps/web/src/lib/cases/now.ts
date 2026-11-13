@@ -103,7 +103,20 @@ type Draft = {
   requestedAt?: string | null;
   /** What ONE is doing with a text it carries (0099, 0100): asking the client what it lacks, or writing it again. */
   oneRedo?: "asking" | "rewriting" | null;
+  /** The text of its latest version: what it leaves to complete ("[COMPLETAR: CNPJ da companhia]") is said. */
+  body?: string | null;
+  /** What its filled text leaves to complete, as the database read it (0245); else read from `body`. */
+  gaps?: string[];
 };
+
+/** What a piece leaves to complete: as the database read its filled text, else from its own text. */
+const gapsOf = (draft: Draft): string[] => (draft.gaps && draft.gaps.length > 0 ? draft.gaps : draftGaps(draft.body));
+
+/** What a piece's text leaves to complete, in its own words, once each. */
+export function draftGaps(body: string | null | undefined): string[] {
+  const gaps = [...(body ?? "").matchAll(/\[COMPLETAR:\s*([^\]]+)\]/g)].map((match) => match[1].trim());
+  return [...new Set(gaps.filter(Boolean))];
+}
 type Filing = {
   id: string;
   proceedingId: string;
@@ -793,7 +806,11 @@ export function caseNow(input: CaseNowInput): CaseNow {
                     owner: "firm",
                     actor: "lawyer",
                     tone: "attention",
-                    text: { key: "case-now-draft-review", values: { kind } },
+                    // What the lawyer does, said: what the text leaves to complete, when it does (the owner, 2026-11-13).
+                    text:
+                      gapsOf(draft).length > 0
+                        ? { key: "case-now-draft-complete", values: { kind, gaps: gapsOf(draft).join(", ") } }
+                        : { key: "case-now-draft-review", values: { kind } },
                     section: "drafts",
                   },
             ),

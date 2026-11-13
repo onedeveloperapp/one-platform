@@ -40,6 +40,8 @@ export type IntakeFacts = {
   chegada_real?: string;
   /** For a cancellation or a change: "nao" when the passenger did not travel after it, "sim" when they did (0239). */
   viajou?: string;
+  /** How late they arrived, as the question's options have it (the owner, 2026-11-13, 0242): `menos_4` or `mais_4`. */
+  atraso_faixa?: string;
   aviso?: string;
   /** How the person is called: the first name is enough, the full name comes from the identity document. */
   nome?: string;
@@ -63,6 +65,7 @@ const KEYS = [
   "chegada_prevista",
   "chegada_real",
   "viajou",
+  "atraso_faixa",
   "aviso",
   "nome",
   "indicado_por",
@@ -127,10 +130,13 @@ function momentOf(value: string | undefined, day: string | undefined): { minutes
   return { minutes: Date.UTC(y, m - 1, d, hour, minute) / 60000, dated: Boolean(full) };
 }
 
+/** The band of the arrival's question as minutes the rule reads: "more than four hours" is the rule's own 4 hours. */
+const BAND_MINUTES: Record<string, number> = { menos_4: 0, mais_4: 240 };
+
 /**
  * How late the passenger arrived at the final destination, in minutes (0239): the two times they told when both are
- * read (an arrival past midnight with no day told falls on the next one), else the hours of delay they told; null when
- * neither is known. Arithmetic only: the rule of qualification decides what it means.
+ * read (an arrival past midnight with no day told falls on the next one), else the band they chose (0242), else the
+ * hours of delay they told; null when none is known. Arithmetic only: the rule of qualification decides what it means.
  */
 export function arrivalDelayMinutes(facts: IntakeFacts): number | null {
   const scheduled = momentOf(facts.chegada_prevista, facts.data);
@@ -140,6 +146,7 @@ export function arrivalDelayMinutes(facts: IntakeFacts): number | null {
     if (late < 0 && !arrived.dated) late += 24 * 60;
     return Math.round(late);
   }
+  if (facts.atraso_faixa && facts.atraso_faixa in BAND_MINUTES) return BAND_MINUTES[facts.atraso_faixa];
   const hours = facts.atraso_horas ? Number(facts.atraso_horas.replace(",", ".")) : NaN;
   return Number.isFinite(hours) ? Math.round(hours * 60) : null;
 }
@@ -159,11 +166,8 @@ export function intakeMissing(facts: IntakeFacts): IntakeAsk[] {
   if (!facts.data) missing.push("data");
   if (facts.problema && TOLD.includes(facts.problema) && !facts.aviso) missing.push("aviso");
   const arrival = facts.problema && (LATE.includes(facts.problema) || TOLD.includes(facts.problema));
-  if (arrival && !didNotTravel(facts) && arrivalDelayMinutes(facts) === null) {
-    const scheduled = Boolean(momentOf(facts.chegada_prevista, facts.data));
-    const arrived = Boolean(momentOf(facts.chegada_real, facts.data));
-    missing.push(scheduled ? "chegada_real" : arrived ? "chegada_prevista" : "chegada");
-  }
+  // One question with its options (0242): how late they arrived, or that they did not travel.
+  if (arrival && !didNotTravel(facts) && arrivalDelayMinutes(facts) === null) missing.push("chegada");
   return missing;
 }
 
@@ -200,14 +204,43 @@ const NOTICE_OPTIONS: readonly IntakeOption[] = [
   { value: "early", label: "Com mais antecedência", words: ["mais antecedencia", "antecedencia", "mais de 72"] },
 ];
 
-/** The one choice of the arrival's question, after a cancellation or a change: the passenger did not travel (0239). */
+/**
+ * The options of the arrival's question (the owner, 2026-11-13, 0242): how late they arrived at the final destination,
+ * and, after a cancellation or a change, that they did not travel. A reply in words (the times, the hours) is the
+ * task's to read.
+ */
+const ARRIVAL_BANDS: readonly IntakeOption[] = [
+  {
+    value: "menos_4",
+    label: "Menos de quatro horas",
+    words: ["menos de quatro horas", "menos de 4 horas", "menos de 4h", "menos de quatro", "menos"],
+  },
+  {
+    value: "mais_4",
+    label: "Mais de quatro horas",
+    words: ["mais de quatro horas", "mais de 4 horas", "mais de 4h", "mais de quatro", "mais"],
+  },
+];
 const ARRIVAL_OPTIONS: readonly IntakeOption[] = [
+  ...ARRIVAL_BANDS,
   {
     value: "nao",
     label: "Não cheguei a viajar",
     words: ["nao cheguei a viajar", "nao viajei", "nao fui", "desisti", "desisti da viagem", "pedi reembolso"],
   },
 ];
+
+/** The arrival's options for a problem: "Não cheguei a viajar" only after a cancellation or a change. */
+export const arrivalOptions = (problem: string | undefined): readonly IntakeOption[] =>
+  problem && TOLD.includes(problem) ? ARRIVAL_OPTIONS : ARRIVAL_BANDS;
+
+/** The arrival's question, in the words of each problem (0242). */
+const ARRIVAL_QUESTION: Record<string, string> = {
+  cancellation: "O cancelamento gerou quanto tempo de atraso até você chegar ao destino final?",
+  change: "A mudança do voo gerou quanto tempo de atraso até você chegar ao destino final?",
+  delay: "O atraso foi de quanto tempo até você chegar ao destino final?",
+  missed_connection: "A conexão perdida gerou quanto tempo de atraso até você chegar ao destino final?",
+};
 
 const COMPANION_OPTIONS: readonly IntakeOption[] = [
   { value: "nenhum", label: "Só eu", words: ["so eu", "sozinho", "sozinha", "ninguem", "nao", "viajei sozinho"] },
@@ -315,7 +348,8 @@ export function intakeLead(before: IntakeFacts, after: IntakeFacts): string | nu
 /** The question of what is missing, with its options. */
 export function questionText(ask: IntakeAsk, facts: IntakeFacts = {}): string {
   // After a cancellation or a change the passenger may not have travelled at all: the notice decides then (0239).
-  const notTravelled = facts.problema && TOLD.includes(facts.problema) ? `\n${optionsText(OPTIONS.chegada)}` : "";
+  const notTravelled =
+    facts.problema && TOLD.includes(facts.problema) ? `\n${optionsText(OPTIONS.chegada.slice(2))}` : "";
   switch (ask) {
     case "nome":
       return "Como posso te chamar?";
@@ -324,7 +358,7 @@ export function questionText(ask: IntakeAsk, facts: IntakeFacts = {}): string {
     case "data":
       return "Em que dia era o voo?";
     case "chegada":
-      return `A que horas você deveria chegar ao destino final, e a que horas chegou? Se chegou em outro dia, diga o dia também.${notTravelled}`;
+      return `${ARRIVAL_QUESTION[facts.problema ?? ""] ?? ARRIVAL_QUESTION.delay}\n${optionsText(arrivalOptions(facts.problema))}`;
     case "chegada_prevista":
       return "E a que horas você deveria chegar ao destino final?";
     case "chegada_real":
@@ -382,6 +416,13 @@ function lateWords(minutes: number): string {
 /** The arrival at the final destination, in the summary's words; null when not known. */
 function arrivalWords(facts: IntakeFacts): string | null {
   if (didNotTravel(facts)) return "e você não chegou a viajar";
+  // The band chosen, in its own words, when no time was told (0242).
+  if (!(momentOf(facts.chegada_prevista, facts.data) && momentOf(facts.chegada_real, facts.data))) {
+    if (facts.atraso_faixa === "mais_4")
+      return "e você chegou ao destino final mais de quatro horas depois do previsto";
+    if (facts.atraso_faixa === "menos_4")
+      return "e você chegou ao destino final menos de quatro horas depois do previsto";
+  }
   const late = arrivalDelayMinutes(facts);
   return late === null ? null : `e você chegou ao destino final ${lateWords(late)}`;
 }

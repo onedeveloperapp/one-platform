@@ -72,6 +72,7 @@ import {
 } from "@/lib/conversations/data-check";
 import { takeHearingReport } from "@/lib/conversations/hearing-report-work";
 import {
+  arrivalOptions,
   choiceOf,
   companionsOf,
   CORRECTION_QUESTION,
@@ -1199,14 +1200,16 @@ async function takeIntake(
   const options =
     asked === "problema" || asked === "aviso" || asked === "acompanhantes"
       ? OPTIONS[asked]
-      : arrivalAsked && (known.problema === "cancellation" || known.problema === "change")
-        ? OPTIONS.chegada
+      : arrivalAsked
+        ? arrivalOptions(known.problema)
         : null;
   const choice = options && asked ? choiceOf(options, reply) : null;
   let facts: IntakeFacts | null;
   if (choice && asked) {
-    // "Não cheguei a viajar": the notice alone decides a cancellation or a change then (0239).
-    facts = await keep(arrivalAsked ? { viajou: choice } : { [asked]: choice });
+    // The arrival's band (0242), or "Não cheguei a viajar": the notice alone decides a cancellation or a change then.
+    facts = await keep(
+      arrivalAsked ? (choice === "nao" ? { viajou: "nao" } : { atraso_faixa: choice }) : { [asked]: choice },
+    );
   } else {
     const run = await runFirmTask({
       orgId: context.orgId,

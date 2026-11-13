@@ -70,12 +70,9 @@ describe("who writes to the firm with no alert", () => {
     expect(intakeMissing({})).toEqual(["problema", "data"]);
     expect(intakeMissing({ problema: "delay", data: "2099-10-22" })).toEqual(["chegada"]);
     expect(intakeMissing({ problema: "cancellation", data: "2099-10-22" })).toEqual(["aviso", "chegada"]);
-    expect(intakeMissing({ problema: "delay", data: "2099-10-22", chegada_prevista: "14:00" })).toEqual([
-      "chegada_real",
-    ]);
-    expect(intakeMissing({ problema: "delay", data: "2099-10-22", chegada_real: "20:00" })).toEqual([
-      "chegada_prevista",
-    ]);
+    // One question with its options, whatever of the times was told (0242).
+    expect(intakeMissing({ problema: "delay", data: "2099-10-22", chegada_prevista: "14:00" })).toEqual(["chegada"]);
+    expect(intakeMissing({ problema: "delay", data: "2099-10-22", atraso_faixa: "mais_4" })).toEqual([]);
     // Who did not travel after a cancellation is decided by the notice alone.
     expect(intakeMissing({ problema: "cancellation", data: "2099-10-22", aviso: "late", viajou: "nao" })).toEqual([]);
     expect(intakeMissing({ problema: "overbooking", data: "2099-10-22" })).toEqual([]);
@@ -112,7 +109,7 @@ describe("who writes to the firm with no alert", () => {
         after: { problema: "cancellation", data: "2099-10-22", aviso: "late" },
       }),
     ).toBe(
-      "A que horas você deveria chegar ao destino final, e a que horas chegou? Se chegou em outro dia, diga o dia também.\n1. Não cheguei a viajar",
+      "O cancelamento gerou quanto tempo de atraso até você chegar ao destino final?\n1. Menos de quatro horas\n2. Mais de quatro horas\n3. Não cheguei a viajar",
     );
     expect(questionText("chegada", { problema: "delay" })).not.toContain("Não cheguei a viajar");
     expect(intakeOpening("")).toContain("assistente virtual do escritório.");
@@ -169,9 +166,21 @@ describe("who writes to the firm with no alert", () => {
     expect(choiceOf(OPTIONS.oferta, "agora não")).toBe("agora_nao");
     expect(choiceOf(OPTIONS.oferta, "quanto vou pagar?")).toBeNull();
     expect(choiceOf(OPTIONS.duvidas, "2")).toBe("pessoa");
-    expect(choiceOf(OPTIONS.chegada, "1")).toBe("nao");
+    expect(choiceOf(OPTIONS.chegada, "1")).toBe("menos_4");
+    expect(choiceOf(OPTIONS.chegada, "Mais de quatro horas")).toBe("mais_4");
+    expect(choiceOf(OPTIONS.chegada, "3")).toBe("nao");
     expect(choiceOf(OPTIONS.chegada, "não viajei")).toBe("nao");
     expect(choiceOf(OPTIONS.chegada, "cheguei as 22h")).toBeNull();
+    // The band chosen is the rule's: more than four hours is its 4 hours, less is short of them.
+    expect(arrivalDelayMinutes({ data: "2099-10-22", atraso_faixa: "mais_4" })).toBe(240);
+    expect(
+      qualify(
+        intakeQualificationInput(
+          { problema: "cancellation", data: "2099-10-22", aviso: "late", atraso_faixa: "menos_4" },
+          "2099-10-23",
+        ),
+      ).outcome,
+    ).toBe("not_qualified");
   });
 
   it("sums up what decides the right, with the year, for the person to confirm", () => {
@@ -253,7 +262,7 @@ describe("the follow-up of a lead who stopped answering (0207)", () => {
     expect(first).toBe("Oi, ainda posso te ajudar com o que aconteceu no seu voo. Em que dia era o voo?");
     const second = leadFollowupText({ problema: "cancellation", data: "2099-10-22", aviso: "late" }, 1);
     expect(second).toContain("responda SAIR");
-    expect(second).toContain("A que horas você deveria chegar ao destino final");
+    expect(second).toContain("O cancelamento gerou quanto tempo de atraso até você chegar ao destino final?");
     // After the "Quero seguir", what is missing of the person.
     expect(leadFollowupText({ problema: "overbooking", data: "2099-10-22", etapa: "seguir" }, 0)).toContain(
       "Como posso te chamar?",

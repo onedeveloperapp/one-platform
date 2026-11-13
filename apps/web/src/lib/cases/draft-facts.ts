@@ -82,6 +82,8 @@ export type CaseDraft = {
    * the client's answers; null when it waits for a lawyer as before.
    */
   oneRedo: "asking" | "rewriting" | null;
+  /** What its filled text leaves to complete, in its own words (0245): the case's top says it. */
+  gaps: string[];
   /** When it last changed: the day a draft given up was given up. */
   updatedLabel: string;
   /** The kind of piece: `inicial`, or an intermediate piece of a lawsuit the court has (0189). */
@@ -254,7 +256,7 @@ export async function loadCasePieces(
   const runIds = [...new Set(rows.flatMap((row) => (row.run_id ? [row.run_id] : [])))];
   const alikeCases = [...new Set(rows.flatMap((row) => alikeOf(row.alike).map((item) => item.case)))];
 
-  const [bodies, sources, waiting, cases, written, oneRedo] = await Promise.all([
+  const [bodies, sources, waiting, cases, written, oneRedo, gapsRead] = await Promise.all([
     Promise.all(
       open.map((row) =>
         supabase
@@ -292,7 +294,17 @@ export async function loadCasePieces(
     // What ONE is doing with the texts it carries: asking the client what they lack, or writing them again (0100).
     // A read that fails says nothing of it, and the pieces read as before.
     open.length > 0 ? supabase.rpc("case_drafts_one_redo", { target_case: caseId }) : { data: {}, error: null },
+    // What each piece being written leaves to complete, as its filled text says it (0245); a read that fails says none.
+    open.length > 0 ? supabase.rpc("case_drafts_gaps", { target_case: caseId }) : { data: {}, error: null },
   ]);
+  const gapsOf = new Map<string, string[]>(
+    !gapsRead.error && gapsRead.data && typeof gapsRead.data === "object"
+      ? Object.entries(gapsRead.data as Record<string, unknown>).map(([id, gaps]) => [
+          id,
+          Array.isArray(gaps) ? gaps.filter((gap): gap is string => typeof gap === "string") : [],
+        ])
+      : [],
+  );
   const redoOf = new Map<string, "asking" | "rewriting">(
     !oneRedo.error && oneRedo.data && typeof oneRedo.data === "object"
       ? Object.entries(oneRedo.data as Record<string, unknown>).flatMap(([id, state]) =>
@@ -454,6 +466,7 @@ export async function loadCasePieces(
           requestedBy: row.requested_by ? names.get(row.requested_by) || null : null,
           requestedAuto: row.requested_auto === true,
           oneRedo: row.status === "proposed" ? (redoOf.get(row.id) ?? null) : null,
+          gaps: row.status === "proposed" ? (gapsOf.get(row.id) ?? []) : [],
           updatedLabel: momentLabel(row.updated_at, timeZone),
           pieceKind: row.piece_kind ?? "inicial",
           piece:

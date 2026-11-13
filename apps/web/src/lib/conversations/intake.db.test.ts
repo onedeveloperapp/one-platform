@@ -172,7 +172,7 @@ describe.skipIf(!DB_URL)("any passenger on the firm's WhatsApp", () => {
     await writes(LUCAS, "Foi ontem");
     expect(await takeConversationTurns(backend() as never)).toMatchObject({ answered: 1, failed: 0 });
     expect((await sentTo(LUCAS)).at(-1)).toBe(
-      "A que horas você deveria chegar ao destino final, e a que horas chegou? Se chegou em outro dia, diga o dia também.",
+      "O atraso foi de quanto tempo até você chegar ao destino final?\n1. Menos de quatro horas\n2. Mais de quatro horas",
     );
 
     model.intake = () => ({

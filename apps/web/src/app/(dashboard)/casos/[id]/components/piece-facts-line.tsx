@@ -69,7 +69,13 @@ export default function PieceFactsLine({
     },
   };
   const open = check.status === "asked" || check.status === "failed" || check.status === "corrected";
-  const confirmedKey = check.via === "link" ? "piece-facts-confirmed-link" : "piece-facts-confirmed-firm";
+  // The client's own word in the chat is theirs, never a record of the firm's (0233).
+  const confirmedKey =
+    check.via === "link"
+      ? "piece-facts-confirmed-link"
+      : check.via === "chat"
+        ? "piece-facts-confirmed-chat"
+        : "piece-facts-confirmed-firm";
   const correctedKey =
     check.draftStatus === "proposed" ? "piece-facts-corrected-rewrite" : "piece-facts-corrected-reopen";
   const line =
