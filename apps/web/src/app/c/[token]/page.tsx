@@ -1,13 +1,9 @@
 import ClientFolder from "./client-folder";
+import { Frame, openOrNotice } from "./client-frame";
 import type { Metadata } from "next";
-import { headers } from "next/headers";
-import { getTranslations } from "next-intl/server";
 
-import { Box, Paper, Typography } from "@mui/material";
-
-import { openClientLink, readClientTasks } from "@/lib/cases/client-link";
+import { readClientTasks } from "@/lib/cases/client-link";
 import { sweepWhileUsed } from "@/lib/jobs/while-used";
-import { isPreviewRobot } from "@/lib/links/preview-robot";
 
 /**
  * A client's folder: the page behind the link a firm sends a passenger
@@ -35,65 +31,20 @@ export const metadata: Metadata = {
 // What the client sees is read on every request: never a page cached for another token.
 export const dynamic = "force-dynamic";
 
-function Frame({ children }: { children: React.ReactNode }) {
-  return (
-    <Box className="flex min-h-screen w-full justify-center px-4 py-8 sm:py-14">
-      <Box className="flex w-full max-w-3xl flex-col gap-6">{children}</Box>
-    </Box>
-  );
-}
-
-function Notice({ title, body }: { title: string; body: string }) {
-  return (
-    <Frame>
-      <Paper elevation={0} className="bg-background-paper rounded-4xl px-6 py-10 sm:px-12">
-        <Typography variant="h1" component="h1" className="mb-3">
-          {title}
-        </Typography>
-        <Typography variant="body1" className="text-text-primary">
-          {body}
-        </Typography>
-      </Paper>
-    </Frame>
-  );
-}
-
 /** The day in Brazil's official time: who is a minor is decided by it. */
 const todayInBrazil = () => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date());
 
 export default async function ClientLinkPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
-  const t = await getTranslations("product");
-  if (isPreviewRobot((await headers()).get("user-agent") ?? "")) {
-    return <Notice title={t("client-preview-title")} body={t("client-preview-body")} />;
-  }
-  const view = await openClientLink(token);
-
-  if (view.state === "unavailable") {
-    return <Notice title={t("client-unavailable-title")} body={t("client-unavailable-body")} />;
-  }
-  if (view.state === "missing") {
-    return <Notice title={t("client-missing-link-title")} body={t("client-missing-link-body")} />;
-  }
-  if (view.state === "revoked" || view.state === "expired") {
-    return (
-      <Notice
-        title={t("client-ended-title")}
-        body={
-          view.state === "revoked"
-            ? t("client-revoked-body", { firm: view.firm })
-            : t("client-expired-body", { firm: view.firm })
-        }
-      />
-    );
-  }
+  const opened = await openOrNotice(token);
+  if ("notice" in opened) return opened.notice;
 
   // The client is here, and the page reads itself again while something they sent waits: the sweeps that serve
   // what people wait on run now and then, after the answer (a check that failed is tried again).
   sweepWhileUsed();
   return (
     <Frame>
-      <ClientFolder token={token} view={view} tasks={await readClientTasks(token)} today={todayInBrazil()} />
+      <ClientFolder token={token} view={opened.view} tasks={await readClientTasks(token)} today={todayInBrazil()} />
     </Frame>
   );
 }

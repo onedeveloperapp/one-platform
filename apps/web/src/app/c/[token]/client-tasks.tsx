@@ -104,11 +104,14 @@ export function ClientSignatures({
   token,
   signatures,
   editable,
+  titled = true,
   onSaved,
 }: {
   token: string;
   signatures: ClientSignature[];
   editable: boolean;
+  /** Its own title, which the page of the papers alone (`/c/[token]/assinar`) already says. */
+  titled?: boolean;
   onSaved: () => void;
 }) {
   const t = useTranslations("product");
@@ -168,16 +171,23 @@ export function ClientSignatures({
     isDocumentKind(signature.kind) ? t(DOCUMENT_KIND_KEY[signature.kind]) : signature.name;
 
   return (
-    <Card component="section" aria-labelledby="client-signatures">
+    <Card
+      component="section"
+      id="assinar"
+      aria-labelledby={titled ? "client-signatures" : undefined}
+      aria-label={titled ? undefined : t("client-signatures-title")}
+    >
       <CardContent className="flex flex-col gap-4">
-        <Box className="flex flex-col gap-1">
-          <Typography id="client-signatures" variant="h5" component="h2" className="mb-0">
-            {t("client-signatures-title")}
-          </Typography>
-          <Typography variant="body2" className="text-text-secondary">
-            {t("client-signatures-body")}
-          </Typography>
-        </Box>
+        {titled && (
+          <Box className="flex flex-col gap-1">
+            <Typography id="client-signatures" variant="h5" component="h2" className="mb-0">
+              {t("client-signatures-title")}
+            </Typography>
+            <Typography variant="body2" className="text-text-secondary">
+              {t("client-signatures-body")}
+            </Typography>
+          </Box>
+        )}
 
         <input
           ref={input}

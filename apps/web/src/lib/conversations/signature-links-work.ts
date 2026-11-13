@@ -25,7 +25,8 @@ export async function tellSignatureLinks(service: SupabaseClient, limit = 20): P
     const token = papers.some((paper) => paper.method === "govbr") ? randomBytes(32).toString("base64url") : null;
     const tell = async (withLink: boolean) => {
       const link = withLink && token ? token : null;
-      const body = signatureLinksMessage(row.full_name, papers, link ? `${BRAND.siteUrl}/c/${link}` : null);
+      // The page of the papers alone, never the whole folder: the client lands on what to sign.
+      const body = signatureLinksMessage(row.full_name, papers, link ? `${BRAND.siteUrl}/c/${link}/assinar` : null);
       if (!body) return null;
       return service.rpc("one_tell_signature_links", {
         target_conversation: row.conversation_id,

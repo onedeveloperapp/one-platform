@@ -193,6 +193,9 @@ export default function ClientFolder({
   // The client's account of what happened is asked here too, while it is theirs to give (0090).
   const accountAsk = accountAsksClient(tasks.account);
 
+  // A paper waiting for the client's signature is what the folder asks first: it goes right under the head (0237).
+  const signing = tasks.signatures.some((signature) => signature.status === "pending" && !signature.signed_at);
+
   const kindKey = caseKindLabelKey(view.case.incident);
   const facts = [
     caseLabel(view.case.seq),
@@ -221,6 +224,10 @@ export default function ClientFolder({
           )}
         </CardContent>
       </Card>
+
+      {signing && (
+        <ClientSignatures token={token} signatures={tasks.signatures} editable onSaved={() => router.refresh()} />
+      )}
 
       {editable && (
         <Card component="section" aria-labelledby="client-missing">
@@ -306,7 +313,9 @@ export default function ClientFolder({
       <ClientMoney token={token} editable={editable} />
       <ClientReceipts token={token} />
       <ClientMarketing token={token} editable={editable} />
-      <ClientSignatures token={token} signatures={tasks.signatures} editable onSaved={() => router.refresh()} />
+      {!signing && (
+        <ClientSignatures token={token} signatures={tasks.signatures} editable onSaved={() => router.refresh()} />
+      )}
       {editable && (
         <Finish
           token={token}
