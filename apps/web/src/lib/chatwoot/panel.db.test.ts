@@ -200,10 +200,21 @@ describe.skipIf(!DB_URL)("the firm's panel of attendance", () => {
         ANA,
       ]),
     ).toEqual([{ chatwoot_user_id: ana.id }]);
-    // Entering again makes nobody new.
+    // The link enters the firm's account, on its list when no conversation was asked for.
+    const link = new URL(opened.ok ? opened.url : "https://invalid");
+    expect(link.searchParams.get("sso_account_id")).toBe(String(account.account_id));
+    expect(link.searchParams.get("sso_conversation_id")).toBeNull();
+    // Entering again makes nobody new, and opens the conversation asked for from ONE's list.
     const people = panel.users.size;
-    expect((await openPanel(context)).ok).toBe(true);
+    const onOne = await openPanel(context, { conversation: CONVERSATION });
+    expect(onOne.ok).toBe(true);
+    expect(new URL(onOne.ok ? onOne.url : "https://invalid").searchParams.get("sso_conversation_id")).toBe(
+      String((await conversation()).chatwoot_conversation_id),
+    );
     expect(panel.users.size).toBe(people);
+    // A conversation the person cannot read, or one the panel does not have, opens the list.
+    const unknown = await openPanel(context, { conversation: "ce223000-0000-4000-8000-0000000000ff" });
+    expect(new URL(unknown.ok ? unknown.url : "https://invalid").searchParams.get("sso_conversation_id")).toBeNull();
   });
 
   it("sends what the person wrote as theirs, once, and hands them the conversation", async () => {

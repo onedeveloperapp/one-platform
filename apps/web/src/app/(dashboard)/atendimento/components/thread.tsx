@@ -303,7 +303,7 @@ export default function Thread({
             </Typography>
             <Button
               variant="contained"
-              href="/atendimento/painel"
+              href={`/atendimento/painel?c=${conversation.id}`}
               target="_blank"
               rel="noopener"
               startIcon={<NiSendUpRight size="small" />}

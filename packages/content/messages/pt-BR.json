@@ -1753,7 +1753,7 @@
     "inbox-panel-error-busy": "O painel de atendimento do escritório está sendo preparado. Tente de novo em alguns segundos.",
     "inbox-panel-error-off": "O painel de atendimento ainda não está ligado neste ambiente.",
     "inbox-panel-conversation": "A conversa é lida e respondida no painel de atendimento. Daqui sai só o que o painel ainda não envia: um modelo depois das 24 horas e um arquivo.",
-    "inbox-panel-open-conversation": "Abrir no painel",
+    "inbox-panel-open-conversation": "Abrir esta conversa no painel",
     "inbox-file-only-hint": "O texto vai pelo painel. Daqui sai um arquivo do escritório, uma foto ou um PDF, com uma legenda se quiser.",
     "inbox-event-lead-followup": "O ONE retomou a conversa, que estava sem resposta",
     "inbox-event-came-from-ad": "A pessoa chegou pelo anúncio \"{headline}\"",

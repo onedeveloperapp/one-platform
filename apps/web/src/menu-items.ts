@@ -115,10 +115,9 @@ export const leftMenuItems: MenuItem[] = [
     label: "menu-atendimento",
     description: "menu-atendimento-description",
     color: "text-primary",
-    // The firm's panel of attendance (0223), signed in, in a tab of its own: the conversations are read and answered
-    // there. /atendimento keeps the numbers and what only ONE sends (a template after the 24 hours, a file).
-    href: "/atendimento/painel",
-    isExternalLink: true,
+    // The list of the firm's conversations, every one of them (ONE's included) for everybody of the firm (the user,
+    // 2026-11-13): the panel of attendance (0223) opens from there, whole or on one conversation.
+    href: "/atendimento",
   },
   {
     id: "protocolo",

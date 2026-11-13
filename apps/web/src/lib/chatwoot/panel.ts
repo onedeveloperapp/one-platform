@@ -13,12 +13,20 @@ import { ChatwootRequestError, ChatwootUnavailableError } from "@flyee/chatwoot/
  * when it is not there yet, the person is made in the panel as an agent of it (an existing person of their e-mail
  * is taken, unless they administer another account, as the instance's super administrator does), joins its
  * inbox, sees every conversation the first time, and gets the link that enters signed in (five minutes, once).
+ * The link enters the firm's account, on the conversation asked for when it is one of the firm's the panel already
+ * has (`sso_account_id` and `sso_conversation_id`, which Chatwoot 4.19.1 reads in `getLoginRedirectURL`); without
+ * one, on the panel's list, where every conversation of the firm is, ONE's included.
  * The firm's settings stay in ONE: nobody of the firm administers the panel. A support visit enters nobody's panel.
  */
 
 export type PanelOutcome = { ok: true; url: string } | { ok: false; code: string };
 
-export async function openPanel(context: MemberContext): Promise<PanelOutcome> {
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export async function openPanel(
+  context: MemberContext,
+  target: { conversation?: string | null } = {},
+): Promise<PanelOutcome> {
   const provider = chatwootProvider();
   if (!provider) return { ok: false, code: "not_configured" };
 
@@ -75,8 +83,11 @@ export async function openPanel(context: MemberContext): Promise<PanelOutcome> {
     await (await serviceAccount(provider, account)).addInboxMembers(account.inboxId, [userId]);
     if (joining) await provider.profile(await userToken(provider, userId)).mergeUiSettings(FIRST_UI_SETTINGS);
 
-    const url = await provider.platform.ssoLink(userId);
-    return { ok: true, url };
+    const url = new URL(await provider.platform.ssoLink(userId));
+    url.searchParams.set("sso_account_id", String(account.accountId));
+    const conversation = await panelConversationOf(context, orgId, target.conversation);
+    if (conversation) url.searchParams.set("sso_conversation_id", String(conversation));
+    return { ok: true, url: url.toString() };
   } catch (failure) {
     return {
       ok: false,
@@ -88,4 +99,25 @@ export async function openPanel(context: MemberContext): Promise<PanelOutcome> {
             : "failed",
     };
   }
+}
+
+/**
+ * The panel's number of a conversation of the firm, read in the person's own session: one of another firm, or one
+ * the panel has not been given yet, has none, and the panel opens on its list.
+ */
+async function panelConversationOf(
+  context: MemberContext,
+  orgId: string,
+  conversation: string | null | undefined,
+): Promise<number | null> {
+  if (!conversation || !UUID.test(conversation)) return null;
+  const { data, error } = await context.supabase
+    .from("wa_conversations")
+    .select("chatwoot_conversation_id")
+    .eq("id", conversation)
+    .eq("org_id", orgId)
+    .maybeSingle();
+  if (error) return null;
+  const id = Number((data as { chatwoot_conversation_id?: number | string | null } | null)?.chatwoot_conversation_id);
+  return Number.isInteger(id) && id > 0 ? id : null;
 }
