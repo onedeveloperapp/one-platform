@@ -10,7 +10,7 @@ import type { ClientLinkView, ClientTasks } from "@/lib/cases/client-link";
  * come from here, from what the page already reads, so the count never says less than the page asks.
  *
  * The steps are what the client does now, in the order of the case: sign (once there is a paper), send the
- * documents, complete the data, tell what happened, answer what the firm asks, and say they finished. What the
+ * documents, complete the data, tell what happened and answer what the firm asks (ONE marks when they finished, 0240). What the
  * client answered or the firm has is done, one line each. The path of the case has five points: the papers, the
  * signature, the action, the court and the result.
  */
@@ -18,7 +18,7 @@ import type { ClientLinkView, ClientTasks } from "@/lib/cases/client-link";
 export const CLIENT_PATH = ["papers", "signature", "action", "court", "result"] as const;
 export type ClientPathStage = (typeof CLIENT_PATH)[number];
 
-export const CLIENT_STEPS = ["sign", "documents", "data", "account", "answers", "finish"] as const;
+export const CLIENT_STEPS = ["sign", "documents", "data", "account", "answers"] as const;
 export type ClientStepKey = (typeof CLIENT_STEPS)[number];
 
 /** What a client answers, in the order "Suas respostas" lists it. */
@@ -166,7 +166,7 @@ export function clientStanding(view: OpenView, tasks: ClientTasks, today: string
       answers: answersOwed,
     });
   }
-  if (editable && !finishedAt) steps.push({ key: "finish", count: 1 });
+  // The client never says they finished (the owner, 2026-11-13): ONE marks it at its look of the case (0240).
 
   const done: ClientDoneKey[] = [];
   const owes = (key: ClientStepKey) => steps.some((step) => step.key === key);

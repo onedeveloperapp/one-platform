@@ -123,7 +123,6 @@ describe("where a client's case stands on their link", () => {
       ["data", 1],
       ["account", 1],
       ["answers", 1],
-      ["finish", 1],
     ]);
     expect(standing.steps.find((step) => step.key === "data")?.trip).toBe(true);
     expect(standing.steps.find((step) => step.key === "answers")?.answers).toEqual(["terms"]);
@@ -158,7 +157,8 @@ describe("where a client's case stands on their link", () => {
       }),
       "2026-11-13",
     );
-    expect(standing.steps.map((step) => step.key)).toEqual(["finish"]);
+    // Nothing is a step once given, and finishing is ONE's to mark (0240).
+    expect(standing.steps.map((step) => step.key)).toEqual([]);
     expect(standing.done).toEqual(["sign", "pieceFacts", "documents", "data", "trip", "terms"]);
   });
 

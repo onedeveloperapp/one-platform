@@ -37,6 +37,11 @@ insert into public.memberships (org_id, user_id, role, firm_function) values
   ('b7000000-0000-4000-8000-00000000000a', 'a7000000-0000-4000-8000-000000000003', 'member', 'controladoria'),
   ('b7000000-0000-4000-8000-00000000000b', 'a7000000-0000-4000-8000-000000000004', 'owner', 'advogado');
 
+-- These firms keep the court system with a person, as every firm did before 0240 (ONE's by default since).
+insert into public.firm_autonomy (org_id, decision, mode) values
+  ('b7000000-0000-4000-8000-00000000000a', 'court_system', 'approval'),
+  ('b7000000-0000-4000-8000-00000000000b', 'court_system', 'approval');
+
 create temporary table res (name text primary key, payload jsonb);
 grant select, insert on res to anon, authenticated, service_role;
 

@@ -264,6 +264,8 @@ describe.skipIf(!DB_URL)("a filing package, built by the worker against the data
       values ('${ANA}', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'ana@filing.invalid', '', now(), '{}', '{"display_name":"Ana Souza"}', now(), now());
       insert into public.organizations (id, name, slug, created_by) values ('${FIRM}', 'Souza Advogados', 'souza-filing', '${ANA}');
       insert into public.memberships (org_id, user_id, role, firm_function) values ('${FIRM}', '${ANA}', 'owner', 'socio');
+      -- The firm keeps the court system with a person, as every firm did before 0240 (ONE's by default since).
+      insert into public.firm_autonomy (org_id, decision, mode) values ('${FIRM}', 'court_system', 'approval');
     `);
     // The limit of the court's system is data: a small one here, a little under a third of the scan,
     // so a scan of a few pages has to be cut and every page of it still fits a part.

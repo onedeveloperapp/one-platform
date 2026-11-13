@@ -23,7 +23,12 @@
 -- ---------- The court system, ONE's ----------
 
 insert into public.autonomy_decisions (key, task, position, modes) values
-  ('court_system', null, 95, array['auto', 'approval'])
+  ('court_system', null, 65, array['auto', 'approval'])
+on conflict (key) do nothing;
+
+-- ONE's work of it, counted as the rest of its work (0121).
+insert into public.one_work_kinds (key, family, position, minutes, decision) values
+  ('sistema_tribunal', 'acoes', 315, 2, 'court_system')
 on conflict (key) do nothing;
 
 /**

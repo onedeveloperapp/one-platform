@@ -244,6 +244,9 @@ describe.skipIf(!DB_URL)("ONE carrying a case on, from its lawsuits to its filin
         ('${ANA}', 'GO', '19191', 'principal'), ('${RUI}', 'GO', '19194', 'principal');
       -- In the other firm a person creates the lawsuits.
       insert into public.firm_autonomy (org_id, decision, mode) values ('${OTHER_FIRM}', 'create_lawsuits', 'approval');
+      -- Both keep the court system with a person, as every firm did before 0240 (ONE's by default since).
+      insert into public.firm_autonomy (org_id, decision, mode) values
+        ('${FIRM}', 'court_system', 'approval'), ('${OTHER_FIRM}', 'court_system', 'approval');
     `);
     // What the operator recorded of the airline and of the court's system: put back at the end.
     const company = (await sql.unsafe(`select legal_name, cnpj from public.airlines where iata = 'G3'`))[0];

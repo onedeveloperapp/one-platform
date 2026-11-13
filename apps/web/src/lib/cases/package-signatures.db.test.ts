@@ -203,6 +203,8 @@ describe.skipIf(!DB_URL)("a filing package signed by ONE with a lawyer's certifi
       insert into public.memberships (org_id, user_id, role, firm_function) values
         ('${FIRM}', '${ANA}', 'owner', 'socio'),
         ('${FIRM}', '${BRUNO}', 'member', 'advogado');
+      -- The firm keeps the court system with a person, as every firm did before 0240 (ONE's by default since).
+      insert into public.firm_autonomy (org_id, decision, mode) values ('${FIRM}', 'court_system', 'approval');
     `);
     const opened = await call(asAna(), "create_case", {
       target_org: FIRM,

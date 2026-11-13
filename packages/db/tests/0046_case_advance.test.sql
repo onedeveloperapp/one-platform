@@ -35,6 +35,12 @@ insert into public.memberships (org_id, user_id, role, firm_function) values
   ('b4600000-0000-4000-8000-00000000000a', 'a4600000-0000-4000-8000-000000000002', 'member', 'advogado'),
   ('b4600000-0000-4000-8000-00000000000a', 'a4600000-0000-4000-8000-000000000003', 'member', 'atendimento'),
   ('b4600000-0000-4000-8000-00000000000b', 'a4600000-0000-4000-8000-000000000004', 'owner', 'socio');
+
+-- These firms keep the court system with a person, as every firm did before 0240 (ONE's by default since).
+insert into public.firm_autonomy (org_id, decision, mode) values
+  ('b4600000-0000-4000-8000-00000000000a', 'court_system', 'approval'),
+  ('b4600000-0000-4000-8000-00000000000b', 'court_system', 'approval');
+
 -- Ana is at the bar in Goiás, Bia in São Paulo, Caio in Goiás.
 insert into public.oab_registrations (user_id, uf, number, kind) values
   ('a4600000-0000-4000-8000-000000000001', 'GO', '46001', 'principal'),

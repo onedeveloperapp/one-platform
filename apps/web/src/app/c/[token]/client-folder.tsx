@@ -31,13 +31,11 @@ import type { Fact } from "@/components/product/fact-grid";
 import QuickActions, { type QuickAction } from "@/components/product/quick-actions";
 import StateLine, { type StateTone } from "@/components/product/state-line";
 import StatusChip from "@/components/product/status-chip";
-import NiCheck from "@/icons/nexture/ni-check";
 import NiDocumentFull from "@/icons/nexture/ni-document-full";
 import NiDocumentPlus from "@/icons/nexture/ni-document-plus";
 import NiPaperclip from "@/icons/nexture/ni-paperclip";
 import NiPlane from "@/icons/nexture/ni-plane";
 import NiUploadCloud from "@/icons/nexture/ni-upload-cloud";
-import { accountAsksClient } from "@/lib/cases/account";
 import {
   caseErrorKey,
   caseLabel,
@@ -68,7 +66,6 @@ import {
   assignClientUpload,
   clientNotHave,
   discardClientUpload,
-  finishClientLink,
   finishClientUpload,
   readClientChildDocument,
   removeClientSegment,
@@ -185,8 +182,6 @@ export default function ClientFolder({
   // Where the case stands and what the page asks, from one rule (the owner, 2026-11-13): the head's count, the steps
   // in the order of the case, and what is done, so the count never says less than the page asks.
   const standing = clientStanding(view, tasks, today);
-  // The client's account of what happened is asked here too, while it is theirs to give (0090).
-  const accountAsk = accountAsksClient(tasks.account);
   const refresh = () => router.refresh();
   const hearing = tasks.course.some((lawsuit) => lawsuit.next_hearing !== null);
   const judgmentsOwed = standing.steps.some((step) => step.answers?.includes("judgments"));
@@ -247,16 +242,6 @@ export default function ClientFolder({
     pieceFacts: <ClientPieceFacts token={token} items={tasks.pieceFacts} onSaved={refresh} />,
     judgments: <ClientJudgment token={token} items={tasks.judgments} onSaved={refresh} />,
   };
-  const finish = (
-    <Finish
-      token={token}
-      finishedAt={view.link.finished_at}
-      expiresAt={view.link.expires_at}
-      // What the action is prepared from and the client still owes (0090): told before and after they finish.
-      owed={OWED_OF_ASK[accountAsk ?? "none"]}
-      onSaved={refresh}
-    />
-  );
 
   /** A step's title, what it is for behind its "i", and its sections (each under a sub-heading when several). */
   const stepOf = (step: ClientStep): { title: string; hint?: string; titles: boolean; body: ReactNode } => {
@@ -291,8 +276,6 @@ export default function ClientFolder({
           titles: true,
           body: (step.answers ?? []).map((key) => <Fragment key={key}>{answer[key]}</Fragment>),
         };
-      default:
-        return { title: t("client-step-finish"), titles: false, body: finish };
     }
   };
 
@@ -408,7 +391,7 @@ export default function ClientFolder({
           key,
           title: t("client-done-finished"),
           summary: day(view.link.finished_at),
-          detail: finish,
+          detail: null,
         };
     }
   };
@@ -1615,84 +1598,3 @@ function DocumentWords({
 }
 
 // ---------- Finishing ----------
-
-/** What the account asks of the client (0090), as what the finish card says is still owed. */
-const OWED_OF_ASK: Record<"tell" | "answer" | "none", "account" | "questions" | null> = {
-  tell: "account",
-  answer: "questions",
-  none: null,
-};
-
-/** What the client still owes of their account, said before they finish and after (`product` namespace). */
-const FINISH_OWED_KEY: Record<"account" | "questions", string> = {
-  account: "client-finish-owed-account",
-  questions: "client-finish-owed-questions",
-};
-const FINISHED_OWED_KEY: Record<"account" | "questions", string> = {
-  account: "client-finished-owed-account",
-  questions: "client-finished-owed-questions",
-};
-
-function Finish({
-  token,
-  finishedAt,
-  expiresAt,
-  owed,
-  onSaved,
-}: {
-  token: string;
-  finishedAt: string | null;
-  expiresAt: string;
-  /** What the action is prepared from and the client has not given yet: their account, or its missing answers. */
-  owed: "account" | "questions" | null;
-  onSaved: () => void;
-}) {
-  const t = useTranslations("product");
-  const [busy, setBusy] = useState(false);
-  const [problem, setProblem] = useState<Problem>(null);
-  const day = (iso: string) =>
-    new Intl.DateTimeFormat("pt-BR", { day: "numeric", month: "long", timeZone: "America/Sao_Paulo" }).format(
-      new Date(iso),
-    );
-
-  const finish = async () => {
-    setBusy(true);
-    setProblem(null);
-    const result = await finishClientLink(token);
-    setBusy(false);
-    if (!result.ok) {
-      setProblem({ code: result.code });
-      return;
-    }
-    onSaved();
-  };
-
-  return (
-    <ClientSection id="client-finish" title={t("client-finish-title")} gap={3}>
-      {finishedAt && owed ? (
-        // Finished, while the action still waits on them: never "the firm prepares your action".
-        <StateLine tone="attention">{t(FINISHED_OWED_KEY[owed], { date: day(finishedAt) })}</StateLine>
-      ) : finishedAt ? (
-        <Alert severity="success" icon={<NiCheck />} className="neutral bg-background-paper/60!">
-          {t("client-finished", { date: day(finishedAt) })}
-        </Alert>
-      ) : (
-        <>
-          <Typography variant="body1">{t("client-finish-body")}</Typography>
-          {owed && <StateLine tone="attention">{t(FINISH_OWED_KEY[owed])}</StateLine>}
-        </>
-      )}
-      <ProblemAlert problem={problem} />
-      {!finishedAt && (
-        <Box>
-          <Button variant="contained" onClick={() => void finish()} disabled={busy}>
-            {busy ? t("client-working") : t("client-finish-submit")}
-          </Button>
-        </Box>
-      )}
-      <Typography variant="body2" className="text-text-secondary">
-        {t("client-expires", { date: day(expiresAt) })}
-      </Typography>
-    </ClientSection>
-  );
-}
