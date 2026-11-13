@@ -5,6 +5,7 @@ import { supabaseFileStore } from "@/lib/files/store";
 import { soon } from "@/lib/jobs/soon";
 import { forgetStaged, readStaged } from "@/lib/test-chat/staging";
 import { readWhatsAppSettings } from "@/lib/whatsapp/config";
+import { mediaType } from "@/lib/whatsapp/media-type";
 import { providerFor } from "@/lib/whatsapp/provider";
 import { createServiceClient } from "@flyee/auth/service";
 import { measureFile } from "@flyee/documents/measure";
@@ -70,9 +71,6 @@ const EXTENSION: Record<string, string> = {
   "video/mp4": "mp4",
   "video/3gpp": "3gp",
 };
-
-/** `audio/ogg; codecs=opus` is `audio/ogg`: the list of the purpose names types, not their parameters. */
-const baseMime = (mime: string): string => mime.split(";")[0].trim().toLowerCase();
 
 /** The name the file shows with: the one it came with, or one made from what it is. */
 function nameOf(row: Claimed, mime: string): string {
@@ -163,7 +161,9 @@ export async function fetchPendingMedia(service: SupabaseClient, limit = 10): Pr
         continue;
       }
 
-      const mime = baseMime(media.mime || row.media_mime || "");
+      // What the bytes are decides, then a vendor's type that names a format, then the message's own (media-type.ts).
+      const measure = await measureFile(media.bytes);
+      const mime = mediaType(measure.detectedMime, media.mime, row.media_mime);
       const reserved = await store.reserve({
         orgId: row.org_id,
         purpose: PURPOSE,
@@ -178,7 +178,7 @@ export async function fetchPendingMedia(service: SupabaseClient, limit = 10): Pr
       }
 
       await store.put(reserved.storagePath, media.bytes, mime);
-      const confirmed = await store.confirm(reserved.fileId, await measureFile(media.bytes));
+      const confirmed = await store.confirm(reserved.fileId, measure);
       if (!confirmed.ok) {
         // What was rejected does not stay in the bucket.
         await store.remove([reserved.storagePath]).catch(() => undefined);

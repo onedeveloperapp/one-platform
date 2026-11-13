@@ -389,9 +389,12 @@ export function fileLine(outcome: FileOutcome): string {
   }
 }
 
-/** ONE's message of the files of a turn: a line each, in the order they came; null for none. */
+/**
+ * ONE's message of the files of a turn: a line each, in the order they came, a line said once however many
+ * files it stands for (the same PDF sent twice failed twice and was told twice, 2026-11-13); null for none.
+ */
 export function filesMessage(outcomes: readonly FileOutcome[]): string | null {
-  return outcomes.length > 0 ? outcomes.map(fileLine).join("\n") : null;
+  return outcomes.length > 0 ? [...new Set(outcomes.map(fileLine))].join("\n") : null;
 }
 
 /** Whether a person of the date is a minor on a day (both `YYYY-MM-DD`). */

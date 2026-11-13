@@ -188,6 +188,10 @@ describe("ONE in a conversation", () => {
       "Recebi o documento de identidade e já juntei ao seu caso. Vou usar o nome como está nele: Nidya Farias de Castro.",
     );
     expect(filesMessage([])).toBeNull();
+    // Two files that failed alike are told once.
+    expect(filesMessage([{ kind: "failed" }, { kind: "failed" }])).toBe(
+      "Não consegui receber um arquivo. Envie de novo, por aqui ou pelo link do seu caso.",
+    );
   });
 
   it("answers no caption of a file as a question", () => {
