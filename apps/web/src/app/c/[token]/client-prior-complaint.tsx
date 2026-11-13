@@ -1,5 +1,6 @@
 "use client";
 
+import { ClientSection } from "./client-section";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 
@@ -7,8 +8,6 @@ import {
   Alert,
   Box,
   Button,
-  Card,
-  CardContent,
   FormControl,
   FormControlLabel,
   FormLabel,
@@ -81,144 +80,137 @@ export default function ClientPriorComplaint({
   };
 
   return (
-    <Card component="section" aria-labelledby="prior-complaint-title">
-      <CardContent className="flex flex-col gap-4">
-        <Box className="flex flex-col gap-1">
-          <Typography id="prior-complaint-title" variant="h6" component="h2" className="mb-0">
-            {t("client-prior-complaint-title")}
-          </Typography>
-          <Typography variant="body2" className="text-text-secondary">
-            {t("client-prior-complaint-body", { airline })}
-          </Typography>
+    <ClientSection
+      id="prior-complaint-title"
+      title={t("client-prior-complaint-title")}
+      hint={t("client-prior-complaint-body", { airline })}
+    >
+      {problem ? (
+        <Alert severity="error" className="neutral bg-background-paper/60!" role="alert">
+          {t(priorComplaintErrorKey(problem))}
+        </Alert>
+      ) : null}
+
+      {view.state === "owed" ? (
+        <Box
+          component="form"
+          className="flex flex-col gap-4"
+          onSubmit={(event) => {
+            event.preventDefault();
+            sendProtocol();
+          }}
+        >
+          <Box component="ol" className="m-0 flex list-decimal flex-col gap-2 pl-5">
+            <Typography component="li" variant="body2">
+              {t.rich("client-prior-complaint-step-1", {
+                site: (chunks) => (
+                  <Link href={CONSUMIDOR_GOV_URL} target="_blank" rel="noreferrer noopener">
+                    {chunks}
+                  </Link>
+                ),
+              })}
+            </Typography>
+            <Typography component="li" variant="body2">
+              {t("client-prior-complaint-step-2", { airline })}
+            </Typography>
+            <Typography component="li" variant="body2">
+              {t("client-prior-complaint-step-3")}
+            </Typography>
+            <Typography component="li" variant="body2">
+              {t("client-prior-complaint-step-4")}
+            </Typography>
+          </Box>
+          <TextField
+            label={t("client-prior-complaint-protocol")}
+            value={protocol}
+            onChange={(event) => setProtocol(event.target.value)}
+            helperText={t("client-prior-complaint-protocol-help")}
+            slotProps={{ htmlInput: { maxLength: 80 } }}
+          />
+          <TextField
+            type="date"
+            label={t("client-prior-complaint-filed-on")}
+            value={filedOn}
+            onChange={(event) => setFiledOn(event.target.value)}
+            slotProps={{ inputLabel: { shrink: true }, htmlInput: { max: todayInBrazil() } }}
+          />
+          <Box>
+            <Button type="submit" variant="contained" disabled={busy}>
+              {busy ? t("client-prior-complaint-sending") : t("client-prior-complaint-send")}
+            </Button>
+          </Box>
         </Box>
+      ) : null}
 
-        {problem ? (
-          <Alert severity="error" className="neutral bg-background-paper/60!" role="alert">
-            {t(priorComplaintErrorKey(problem))}
-          </Alert>
-        ) : null}
-
-        {view.state === "owed" ? (
+      {view.state === "waiting" && complaint ? (
+        <Box className="flex flex-col gap-4">
+          <StateLine tone="waiting">
+            {t("client-prior-complaint-waiting", {
+              protocol: complaint.protocol ?? "",
+              due: brDay(complaint.dueOn),
+            })}
+          </StateLine>
           <Box
             component="form"
             className="flex flex-col gap-4"
             onSubmit={(event) => {
               event.preventDefault();
-              sendProtocol();
+              sendAnswer();
             }}
           >
-            <Box component="ol" className="m-0 flex list-decimal flex-col gap-2 pl-5">
-              <Typography component="li" variant="body2">
-                {t.rich("client-prior-complaint-step-1", {
-                  site: (chunks) => (
-                    <Link href={CONSUMIDOR_GOV_URL} target="_blank" rel="noreferrer noopener">
-                      {chunks}
-                    </Link>
-                  ),
-                })}
-              </Typography>
-              <Typography component="li" variant="body2">
-                {t("client-prior-complaint-step-2", { airline })}
-              </Typography>
-              <Typography component="li" variant="body2">
-                {t("client-prior-complaint-step-3")}
-              </Typography>
-              <Typography component="li" variant="body2">
-                {t("client-prior-complaint-step-4")}
-              </Typography>
-            </Box>
-            <TextField
-              label={t("client-prior-complaint-protocol")}
-              value={protocol}
-              onChange={(event) => setProtocol(event.target.value)}
-              helperText={t("client-prior-complaint-protocol-help")}
-              slotProps={{ htmlInput: { maxLength: 80 } }}
-            />
-            <TextField
-              type="date"
-              label={t("client-prior-complaint-filed-on")}
-              value={filedOn}
-              onChange={(event) => setFiledOn(event.target.value)}
-              slotProps={{ inputLabel: { shrink: true }, htmlInput: { max: todayInBrazil() } }}
-            />
+            <FormControl component="fieldset">
+              <FormLabel component="legend" id="prior-complaint-answer" className="mb-1">
+                {t("client-prior-complaint-answer-question", { airline })}
+              </FormLabel>
+              <RadioGroup
+                aria-labelledby="prior-complaint-answer"
+                name="prior-complaint-answer"
+                value={outcome}
+                onChange={(event) => setOutcome(event.target.value as "answered" | "settled")}
+              >
+                <FormControlLabel
+                  value="settled"
+                  control={<Radio />}
+                  label={t("client-prior-complaint-answer-settled")}
+                />
+                <FormControlLabel
+                  value="answered"
+                  control={<Radio />}
+                  label={t("client-prior-complaint-answer-answered")}
+                />
+              </RadioGroup>
+            </FormControl>
+            {outcome === "settled" ? (
+              <CurrencyField
+                fullWidth
+                className="sm:max-w-xs"
+                id="prior-complaint-paid"
+                name="prior-complaint-paid"
+                label={t("client-prior-complaint-paid")}
+                helperText={t("client-prior-complaint-paid-help")}
+                currencySymbol="R$"
+                value={paid}
+                onChange={(event) => setPaid(event.target.value)}
+              />
+            ) : null}
             <Box>
-              <Button type="submit" variant="contained" disabled={busy}>
-                {busy ? t("client-prior-complaint-sending") : t("client-prior-complaint-send")}
+              <Button type="submit" variant="outlined" color="grey" disabled={busy || !outcome}>
+                {busy ? t("client-prior-complaint-sending") : t("client-prior-complaint-answer-send")}
               </Button>
             </Box>
           </Box>
-        ) : null}
+        </Box>
+      ) : null}
 
-        {view.state === "waiting" && complaint ? (
-          <Box className="flex flex-col gap-4">
-            <StateLine tone="waiting">
-              {t("client-prior-complaint-waiting", {
-                protocol: complaint.protocol ?? "",
-                due: brDay(complaint.dueOn),
-              })}
-            </StateLine>
-            <Box
-              component="form"
-              className="flex flex-col gap-4"
-              onSubmit={(event) => {
-                event.preventDefault();
-                sendAnswer();
-              }}
-            >
-              <FormControl component="fieldset">
-                <FormLabel component="legend" id="prior-complaint-answer" className="mb-1">
-                  {t("client-prior-complaint-answer-question", { airline })}
-                </FormLabel>
-                <RadioGroup
-                  aria-labelledby="prior-complaint-answer"
-                  name="prior-complaint-answer"
-                  value={outcome}
-                  onChange={(event) => setOutcome(event.target.value as "answered" | "settled")}
-                >
-                  <FormControlLabel
-                    value="settled"
-                    control={<Radio />}
-                    label={t("client-prior-complaint-answer-settled")}
-                  />
-                  <FormControlLabel
-                    value="answered"
-                    control={<Radio />}
-                    label={t("client-prior-complaint-answer-answered")}
-                  />
-                </RadioGroup>
-              </FormControl>
-              {outcome === "settled" ? (
-                <CurrencyField
-                  fullWidth
-                  className="sm:max-w-xs"
-                  id="prior-complaint-paid"
-                  name="prior-complaint-paid"
-                  label={t("client-prior-complaint-paid")}
-                  helperText={t("client-prior-complaint-paid-help")}
-                  currencySymbol="R$"
-                  value={paid}
-                  onChange={(event) => setPaid(event.target.value)}
-                />
-              ) : null}
-              <Box>
-                <Button type="submit" variant="outlined" color="grey" disabled={busy || !outcome}>
-                  {busy ? t("client-prior-complaint-sending") : t("client-prior-complaint-answer-send")}
-                </Button>
-              </Box>
-            </Box>
-          </Box>
-        ) : null}
-
-        {view.state === "done" && complaint ? (
-          <StateLine tone="done">
-            {complaint.outcome === "settled"
-              ? t("client-prior-complaint-done-settled")
-              : complaint.outcome === "no_answer" || view.overdue
-                ? t("client-prior-complaint-done-unanswered")
-                : t("client-prior-complaint-done-answered")}
-          </StateLine>
-        ) : null}
-      </CardContent>
-    </Card>
+      {view.state === "done" && complaint ? (
+        <StateLine tone="done">
+          {complaint.outcome === "settled"
+            ? t("client-prior-complaint-done-settled")
+            : complaint.outcome === "no_answer" || view.overdue
+              ? t("client-prior-complaint-done-unanswered")
+              : t("client-prior-complaint-done-answered")}
+        </StateLine>
+      ) : null}
+    </ClientSection>
   );
 }

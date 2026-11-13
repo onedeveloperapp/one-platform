@@ -7,14 +7,17 @@ import { useEffect, useState } from "react";
 import { Alert, Box, Button, Dialog, DialogActions, DialogContent, TextField, Typography } from "@mui/material";
 
 import DialogHeader from "@/components/product/dialog-header";
+import type { Fact } from "@/components/product/fact-grid";
 import StateLine from "@/components/product/state-line";
 import StatusChip from "@/components/product/status-chip";
+import NiExternal from "@/icons/nexture/ni-external";
 import { decideCourtSystem } from "@/lib/cases/actions";
 import { caseErrorKey } from "@/lib/cases/cases";
 import type { CourtSystemSignal } from "@/lib/publications/djen-watch";
 import { readSystemSignal } from "@/lib/publications/djen-watch-actions";
 
 type Ready = Extract<CaseState, { kind: "ready" }>;
+type T = ReturnType<typeof useTranslations<"product">>;
 
 const SYSTEM_KEY: Record<string, string> = {
   projudi: "case-system-projudi",
@@ -32,15 +35,70 @@ const day = (iso: string) =>
     timeZone: "America/Sao_Paulo",
   }).format(new Date(iso));
 
+const systemName = (t: T, system: string | null) =>
+  system ? (SYSTEM_KEY[system] ? t(SYSTEM_KEY[system]) : system) : null;
+
+const nameIn = (state: Ready, userId: string | null) =>
+  (userId ? state.team.find((member) => member.userId === userId)?.name : null) || null;
+
+/** Whether this person may approve the system of this lawsuit, and whether it waits for that. */
+export function systemWaits(state: Ready, proceeding: CaseProceeding, writable: boolean) {
+  const waits = proceeding.status === "planned" && proceeding.system !== null && !proceeding.systemApproval;
+  return { waits, mayDecide: writable && state.decidesCourtSystem && proceeding.system !== null };
+}
+
 /**
- * The court system of a planned lawsuit (migration 0066): ONE names it from the platform's table of each court's
- * systems, says it may have erred and what to check, and the firm approves it or not. The approval is the firm's
- * decision, said with who and when; not approving says why, for the platform to check the court's acts, and the
- * lawsuit's package waits meanwhile. The firm never picks a system.
- *
- * Closest catalog shape: the bordered box of a lawsuit's facts, with a pastel `StatusChip` naming the state, as
- * `CourtCourse` shows the course under the same lawsuit; nothing existing carried a fact ONE proposes beside the
- * firm's approval of it.
+ * The system of a lawsuit as one of its facts (the owner, 2026-11-13, who found the lawsuit's card disordered: the
+ * system sat in a box of its own inside the lawsuit, with two lines of ONE's reasons): its name, the firm's word on
+ * it under the name once given, and how ONE chose it behind the "i". A planned lawsuit whose court the platform has
+ * not mapped yet says so in its place.
+ */
+export function courtSystemFact(t: T, state: Ready, proceeding: CaseProceeding): Fact {
+  const label = systemName(t, proceeding.system);
+  const base = { key: "system", label: t("case-proceeding-fact-system") };
+  if (proceeding.status !== "planned") return { ...base, value: label };
+  if (!label) {
+    return {
+      ...base,
+      owed: <StatusChip tone="neutral" label={t("case-proceeding-system-platform")} />,
+      hint: t("case-proceeding-system-none"),
+    };
+  }
+  const row = state.courtSystems.find((item) => item.court === proceeding.court && item.kind === proceeding.kind);
+  const approval = proceeding.systemApproval;
+  const how = proceeding.systemByOne
+    ? [
+        t(row?.confirmed ? "case-proceeding-system-one-confirmed" : "case-proceeding-system-one"),
+        row?.source ? t("case-proceeding-system-source", { source: row.source }) : t("case-proceeding-system-may-err"),
+      ].join(" ")
+    : t("case-proceeding-system-firm");
+  return {
+    ...base,
+    value: (
+      <Box component="span" className="flex flex-col">
+        <span>{label}</span>
+        {approval ? (
+          <Typography variant="caption" component="span" className="text-text-secondary">
+            {nameIn(state, approval.by)
+              ? t("case-proceeding-system-approved-short", {
+                  name: nameIn(state, approval.by) ?? "",
+                  date: day(approval.at),
+                })
+              : t("case-proceeding-system-approved-firm", { date: day(approval.at) })}
+          </Typography>
+        ) : null}
+      </Box>
+    ),
+    hint: how,
+  };
+}
+
+/**
+ * What the system of a planned lawsuit (migration 0066) still asks of the firm, and nothing else: ONE names it from
+ * the platform's table of each court's systems, and the firm approves it or not. Waiting, it is one line on the
+ * attention tint with the system to open and the two answers beside it; not approved, why and that the package
+ * waits; approved, nothing here (the fact says who and when). A sign in the DJEN that the court changed system is
+ * its own line above. The firm never picks a system.
  */
 export default function CourtSystem({
   state,
@@ -74,17 +132,12 @@ export default function CourtSystem({
     };
   }, [asksSignal, proceeding.court, proceeding.kind]);
 
-  if (proceeding.status !== "planned") return null;
+  const label = systemName(t, proceeding.system);
+  if (proceeding.status !== "planned" || !label || proceeding.systemApproval) return null;
 
   const row = state.courtSystems.find((item) => item.court === proceeding.court && item.kind === proceeding.kind);
-  const label = proceeding.system
-    ? SYSTEM_KEY[proceeding.system]
-      ? t(SYSTEM_KEY[proceeding.system])
-      : proceeding.system
-    : null;
-  const nameOf = (userId: string | null) =>
-    (userId ? state.team.find((member) => member.userId === userId)?.name : null) || null;
-  const mayDecide = writable && state.decidesCourtSystem && proceeding.system !== null;
+  const { mayDecide } = systemWaits(state, proceeding, writable);
+  const refusal = proceeding.systemRefusal;
 
   const decide = async (approve: boolean) => {
     setBusy(true);
@@ -105,67 +158,24 @@ export default function CourtSystem({
     onChanged();
   };
 
-  if (!label) {
-    return (
-      <Box className="border-grey-100 flex flex-col gap-1 rounded-xl border px-3 py-2">
-        <Typography variant="body2" className="font-semibold">
-          {t("case-proceeding-system")}
-        </Typography>
-        <Typography variant="body2" className="text-text-secondary">
-          {t("case-proceeding-system-none")}
-        </Typography>
-      </Box>
-    );
-  }
-
-  const approval = proceeding.systemApproval;
-  const refusal = proceeding.systemRefusal;
-  const chip = refusal
-    ? { tone: "attention" as const, label: t("case-proceeding-system-chip-refused") }
-    : approval
-      ? { tone: "positive" as const, label: t("case-proceeding-system-chip-approved") }
-      : { tone: "attention" as const, label: t("case-proceeding-system-chip-waiting") };
+  const open = row?.host ? (
+    <Button
+      variant="text"
+      color="grey"
+      size="small"
+      className="-ml-1 self-start px-1"
+      href={`https://${row.host}`}
+      target="_blank"
+      rel="noopener noreferrer"
+      endIcon={<NiExternal size="small" />}
+    >
+      {t("case-proceeding-system-open-named", { system: label })}
+    </Button>
+  ) : null;
 
   return (
-    <Box className="border-grey-100 flex flex-col gap-2 rounded-xl border px-3 py-2">
-      <Box className="flex flex-wrap items-center justify-between gap-2">
-        <Typography variant="body2" className="font-semibold">
-          {t("case-proceeding-system")}: {label}
-        </Typography>
-        <StatusChip tone={chip.tone} label={chip.label} />
-      </Box>
-      <Typography variant="body2">
-        {proceeding.systemByOne
-          ? row?.confirmed
-            ? t("case-proceeding-system-one-confirmed")
-            : t("case-proceeding-system-one")
-          : t("case-proceeding-system-firm")}
-      </Typography>
-      {proceeding.systemByOne && (
-        // What ONE's choice stands on, in front of who approves it: the table's source and the system itself.
-        <StateLine
-          tone="info"
-          action={
-            row?.host ? (
-              <Button
-                variant="outlined"
-                color="grey"
-                size="small"
-                href={`https://${row.host}`}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                {t("case-proceeding-system-open")}
-              </Button>
-            ) : undefined
-          }
-        >
-          {row?.source
-            ? t("case-proceeding-system-source", { source: row.source })
-            : t("case-proceeding-system-may-err")}
-        </StateLine>
-      )}
-      {signal && !approval && signal.seenSystem !== proceeding.system && (
+    <>
+      {signal && signal.seenSystem !== proceeding.system ? (
         <StateLine tone="attention">
           {t("case-proceeding-system-signal", {
             system: SYSTEM_KEY[signal.seenSystem] ? t(SYSTEM_KEY[signal.seenSystem]) : signal.seenSystem,
@@ -173,52 +183,54 @@ export default function CourtSystem({
             total: signal.total,
           })}
         </StateLine>
-      )}
-      {approval && (
-        <Typography variant="body2" className="text-text-secondary">
-          {nameOf(approval.by)
-            ? t("case-proceeding-system-approved", { name: nameOf(approval.by) ?? "", date: day(approval.at) })
-            : t("case-proceeding-system-approved-firm", { date: day(approval.at) })}
-        </Typography>
-      )}
-      {refusal && (
-        <>
-          <Typography variant="body2">
-            {nameOf(refusal.by)
-              ? t("case-proceeding-system-refused", {
-                  name: nameOf(refusal.by) ?? "",
-                  date: day(refusal.at),
-                  reason: refusal.reason,
-                })
-              : t("case-proceeding-system-refused-firm", { date: day(refusal.at), reason: refusal.reason })}
-          </Typography>
-          <Typography variant="body2" className="text-text-secondary">
-            {t("case-proceeding-system-refused-wait")}
-          </Typography>
-        </>
-      )}
-      {!approval && !refusal && (
-        <Typography variant="body2" className="text-text-secondary">
-          {mayDecide ? t("case-proceeding-system-waits") : t("case-proceeding-system-who")}
-        </Typography>
-      )}
-      {problem && !refusing && (
+      ) : null}
+
+      <StateLine
+        tone={mayDecide ? "attention" : "waiting"}
+        emphasis={mayDecide}
+        action={
+          mayDecide ? (
+            <Box className="flex flex-wrap items-center gap-2">
+              {!refusal ? (
+                <Button variant="text" color="grey" size="small" disabled={busy} onClick={() => setRefusing(true)}>
+                  {t("case-proceeding-system-refuse")}
+                </Button>
+              ) : null}
+              <Button variant="contained" size="small" disabled={busy} onClick={() => void decide(true)}>
+                {busy && !refusing ? t("cases-working") : t("case-proceeding-system-approve")}
+              </Button>
+            </Box>
+          ) : undefined
+        }
+      >
+        <Box component="span" className="flex flex-col gap-0.5">
+          <span>
+            {refusal
+              ? nameIn(state, refusal.by)
+                ? t("case-proceeding-system-refused", {
+                    name: nameIn(state, refusal.by) ?? "",
+                    date: day(refusal.at),
+                    reason: refusal.reason,
+                  })
+                : t("case-proceeding-system-refused-firm", { date: day(refusal.at), reason: refusal.reason })
+              : mayDecide
+                ? t("case-proceeding-system-ask", { system: label })
+                : t("case-proceeding-system-who")}
+          </span>
+          {refusal ? (
+            <Typography variant="body2" component="span" className="text-text-secondary">
+              {t("case-proceeding-system-refused-wait")}
+            </Typography>
+          ) : null}
+          {open}
+        </Box>
+      </StateLine>
+
+      {problem && !refusing ? (
         <Alert severity="error" className="neutral bg-background-paper/60!" onClose={() => setProblem(null)}>
           {t(caseErrorKey(problem))}
         </Alert>
-      )}
-      {mayDecide && !approval && (
-        <Box className="flex flex-wrap gap-2">
-          <Button variant="contained" size="small" disabled={busy} onClick={() => void decide(true)}>
-            {busy && !refusing ? t("cases-working") : t("case-proceeding-system-approve")}
-          </Button>
-          {!refusal && (
-            <Button variant="text" color="grey" size="small" disabled={busy} onClick={() => setRefusing(true)}>
-              {t("case-proceeding-system-refuse")}
-            </Button>
-          )}
-        </Box>
-      )}
+      ) : null}
 
       <Dialog
         open={refusing}
@@ -268,6 +280,6 @@ export default function CourtSystem({
           </Button>
         </DialogActions>
       </Dialog>
-    </Box>
+    </>
   );
 }

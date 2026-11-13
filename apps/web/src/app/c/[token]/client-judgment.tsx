@@ -1,9 +1,10 @@
 "use client";
 
+import { ClientSection } from "./client-section";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 
-import { Alert, Box, Button, Card, CardContent, Typography } from "@mui/material";
+import { Alert, Box, Button, Typography } from "@mui/material";
 
 import StateLine from "@/components/product/state-line";
 import { answerClientJudgment } from "@/lib/cases/client-link-actions";
@@ -47,47 +48,42 @@ export default function ClientJudgment({
   };
 
   return (
-    <Card component="section" aria-labelledby="client-judgment-title">
-      <CardContent className="flex flex-col gap-4">
-        <Typography id="client-judgment-title" variant="h6" component="h2" className="mb-0">
-          {t("client-judgment-title")}
-        </Typography>
-        {problem ? (
-          <Alert severity="error" className="neutral bg-background-paper/60!" role="alert">
-            {t("client-judgment-error")}
-          </Alert>
-        ) : null}
-        {shown.map((item) => {
-          const resultKey =
-            item.result === "procedente"
-              ? "client-judgment-won"
-              : item.result === "parcial"
-                ? "client-judgment-partly"
-                : "client-judgment-lost";
-          const costsKey = item.freeJustice ? "client-judgment-costs-free" : "client-judgment-costs";
-          const answerKey = item.agrees ? "client-judgment-agreed" : "client-judgment-refused";
-          return (
-            <Box key={item.id} className="flex flex-col gap-3">
-              <Typography variant="body1">{t(resultKey, { value: item.cents ? brl(item.cents) : "" })}</Typography>
-              <Typography variant="body2" className="text-text-secondary">
-                {t(costsKey)}
-              </Typography>
-              {item.agrees !== null ? (
-                <StateLine tone="done">{t(answerKey)}</StateLine>
-              ) : (
-                <Box className="flex flex-wrap gap-2">
-                  <Button variant="contained" disabled={busy} onClick={() => void send(item.id, true)}>
-                    {t("client-judgment-agree")}
-                  </Button>
-                  <Button variant="outlined" color="grey" disabled={busy} onClick={() => void send(item.id, false)}>
-                    {t("client-judgment-refuse")}
-                  </Button>
-                </Box>
-              )}
-            </Box>
-          );
-        })}
-      </CardContent>
-    </Card>
+    <ClientSection id="client-judgment-title" title={t("client-judgment-title")}>
+      {problem ? (
+        <Alert severity="error" className="neutral bg-background-paper/60!" role="alert">
+          {t("client-judgment-error")}
+        </Alert>
+      ) : null}
+      {shown.map((item) => {
+        const resultKey =
+          item.result === "procedente"
+            ? "client-judgment-won"
+            : item.result === "parcial"
+              ? "client-judgment-partly"
+              : "client-judgment-lost";
+        const costsKey = item.freeJustice ? "client-judgment-costs-free" : "client-judgment-costs";
+        const answerKey = item.agrees ? "client-judgment-agreed" : "client-judgment-refused";
+        return (
+          <Box key={item.id} className="flex flex-col gap-3">
+            <Typography variant="body1">{t(resultKey, { value: item.cents ? brl(item.cents) : "" })}</Typography>
+            <Typography variant="body2" className="text-text-secondary">
+              {t(costsKey)}
+            </Typography>
+            {item.agrees !== null ? (
+              <StateLine tone="done">{t(answerKey)}</StateLine>
+            ) : (
+              <Box className="flex flex-wrap gap-2">
+                <Button variant="contained" disabled={busy} onClick={() => void send(item.id, true)}>
+                  {t("client-judgment-agree")}
+                </Button>
+                <Button variant="outlined" color="grey" disabled={busy} onClick={() => void send(item.id, false)}>
+                  {t("client-judgment-refuse")}
+                </Button>
+              </Box>
+            )}
+          </Box>
+        );
+      })}
+    </ClientSection>
   );
 }

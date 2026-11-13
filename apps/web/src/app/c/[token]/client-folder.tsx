@@ -1,8 +1,10 @@
 "use client";
 
 import ClientCivilCourt from "./client-civil-court";
-import ClientCourse from "./client-course";
+import { ClientHearing, ClientProcess } from "./client-course";
+import ClientDone, { type DoneRow } from "./client-done";
 import ClientFreeJustice from "./client-free-justice";
+import ClientHead from "./client-head";
 import ClientInterview from "./client-interview";
 import ClientJudgment from "./client-judgment";
 import ClientMarketing from "./client-marketing";
@@ -10,22 +12,22 @@ import ClientMoney from "./client-money";
 import ClientNotices from "./client-notices";
 import ClientPieceFacts from "./client-piece-facts";
 import ClientPriorComplaint from "./client-prior-complaint";
-import ClientPublicationNews from "./client-publication-news";
 import ClientReceipts from "./client-receipts";
 import ClientResidence from "./client-residence";
+import { CardHead, ClientSection, SectionFrame, StepCard } from "./client-section";
 import ClientStatements from "./client-statements";
 import { ClientSignatures, ClientTerms } from "./client-tasks";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { useEffect, useRef, useState } from "react";
+import { Fragment, type ReactNode, useEffect, useRef, useState } from "react";
 
 import { Alert, Box, Button, Card, CardContent, MenuItem, TextField, Typography } from "@mui/material";
 
 import DocumentSlot, { type SlotState } from "@/components/cases/document-slot";
 import PersonFields from "@/components/cases/person-fields";
 import SegmentFields from "@/components/cases/segment-fields";
-import CardTitle from "@/components/product/card-title";
 import EmptyState from "@/components/product/empty-state";
+import type { Fact } from "@/components/product/fact-grid";
 import QuickActions, { type QuickAction } from "@/components/product/quick-actions";
 import StateLine, { type StateTone } from "@/components/product/state-line";
 import StatusChip from "@/components/product/status-chip";
@@ -47,8 +49,9 @@ import {
   documentNeeds,
   documentsFor,
   FILE_REFUSAL_KEY,
+  firstNameOf,
   formatLocalTime,
-  missingItems,
+  isDocumentKind,
   PERSON_FIELD_KEY,
 } from "@/lib/cases/cases";
 import {
@@ -59,7 +62,7 @@ import {
   type NeedStanding,
   needStanding,
 } from "@/lib/cases/client-documents";
-import type { ClientLinkView, ClientPerson, ClientTasks } from "@/lib/cases/client-link";
+import type { ClientLinkView, ClientPerson, ClientSignature, ClientTasks } from "@/lib/cases/client-link";
 import {
   addClientDependent,
   assignClientUpload,
@@ -73,6 +76,7 @@ import {
   saveClientSegment,
   startClientUpload,
 } from "@/lib/cases/client-link-actions";
+import { type ClientAnswerKey, type ClientDoneKey, clientStanding, type ClientStep } from "@/lib/cases/client-standing";
 import { documentReadingOf } from "@/lib/cases/document-prefill";
 import { CLIENT_PHOTO_PROBLEM_KEY, isPhotoProblem, PHOTO_POOR, type PhotoProblem } from "@/lib/cases/document-quality";
 import {
@@ -178,153 +182,292 @@ export default function ClientFolder({
 
   const holder = view.people.find((person) => person.is_holder) ?? view.people[0];
   const claimants = view.people.filter((person) => person.roles.includes("claimant"));
-  const missing = holder
-    ? missingItems({
-        holder,
-        holderPartyIds: holder.party_ids,
-        claimants,
-        documents: view.documents,
-        segments: view.segments.length,
-        required: view.required_documents,
-        today,
-      })
-    : [];
-
+  // Where the case stands and what the page asks, from one rule (the owner, 2026-11-13): the head's count, the steps
+  // in the order of the case, and what is done, so the count never says less than the page asks.
+  const standing = clientStanding(view, tasks, today);
   // The client's account of what happened is asked here too, while it is theirs to give (0090).
   const accountAsk = accountAsksClient(tasks.account);
-
-  // A paper waiting for the client's signature is what the folder asks first: it goes right under the head (0237).
-  const signing = tasks.signatures.some((signature) => signature.status === "pending" && !signature.signed_at);
+  const refresh = () => router.refresh();
+  const hearing = tasks.course.some((lawsuit) => lawsuit.next_hearing !== null);
+  const judgmentsOwed = standing.steps.some((step) => step.answers?.includes("judgments"));
 
   const kindKey = caseKindLabelKey(view.case.incident);
-  const facts = [
-    caseLabel(view.case.seq),
-    kindKey ? t(kindKey) : null,
-    view.case.airline?.name ?? null,
-    view.case.flight_date ? formatDayBr(view.case.flight_date) : null,
-  ].filter(Boolean);
+  const facts: Fact[] = [
+    { key: "case", label: t("client-fact-case"), value: caseLabel(view.case.seq) },
+    { key: "problem", label: t("client-fact-problem"), value: kindKey ? t(kindKey) : null },
+    { key: "airline", label: t("client-fact-airline"), value: view.case.airline?.name ?? null },
+    {
+      key: "flight",
+      label: t("client-fact-flight"),
+      value: view.case.flight_date ? formatDayBr(view.case.flight_date) : null,
+    },
+  ];
 
-  return (
+  // Each section once, placed by the rule: in a step while the client owes it, in "Já feito" once done.
+  const people = (
+    <People
+      token={token}
+      people={view.people}
+      documents={view.documents}
+      today={today}
+      editable={editable}
+      onSaved={refresh}
+    />
+  );
+  const trip = <Trip token={token} view={view} editable={editable} onSaved={refresh} />;
+  const documents = (
+    // The documents first: ONE reads the data of each person and the trip in them (migration 0063).
+    <Documents token={token} view={view} holder={holder} claimants={claimants} editable={editable} onSaved={refresh} />
+  );
+  const signatures = <ClientSignatures token={token} signatures={tasks.signatures} editable onSaved={refresh} />;
+  const account = (
     <>
-      <Card component="header">
-        <CardContent className="flex flex-col gap-3">
-          <Typography variant="h1" component="h1" className="mb-0 break-words">
-            {t("client-title", { firm: view.firm })}
-          </Typography>
-          <Typography variant="body2" className="text-text-secondary">
-            {facts.join(" · ")}
-          </Typography>
-          <Typography variant="body1" className="text-text-primary">
-            {editable ? t("client-intro") : tasks.course.length > 0 ? t("client-locked-court") : t("client-locked")}
-          </Typography>
-          {editable && tasks.agency && (
-            <Alert severity="info" className="neutral bg-background-paper/60!">
-              {t("client-agency-confirm", { agency: tasks.agency })}
-            </Alert>
-          )}
-        </CardContent>
-      </Card>
-
-      {signing && (
-        <ClientSignatures token={token} signatures={tasks.signatures} editable onSaved={() => router.refresh()} />
-      )}
-
-      {editable && (
-        <Card component="section" aria-labelledby="client-missing">
-          <CardContent className="flex flex-col gap-3">
-            <Typography id="client-missing" variant="h5" component="h2" className="mb-0">
-              {t("client-missing-title")}
-            </Typography>
-            {missing.length === 0 && !accountAsk ? (
-              <Alert severity="success" className="neutral bg-background-paper/60!">
-                {t("client-missing-none")}
-              </Alert>
-            ) : (
-              <Box component="ul" className="m-0 flex list-disc flex-col gap-1 pl-5">
-                {missing.map((item, index) => (
-                  <Typography key={index} component="li" variant="body1">
-                    {item.type === "fields"
-                      ? t("client-missing-fields", { name: item.name })
-                      : item.type === "flight"
-                        ? t("client-missing-flight")
-                        : item.name
-                          ? t("client-missing-document", { document: t(DOCUMENT_KIND_KEY[item.kind]), name: item.name })
-                          : t(DOCUMENT_KIND_KEY[item.kind])}
-                  </Typography>
-                ))}
-                {accountAsk && (
-                  <Typography component="li" variant="body1">
-                    {accountAsk === "tell" ? t("client-missing-account") : t("client-missing-account-answer")}
-                  </Typography>
-                )}
-              </Box>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
-      <ClientCourse lawsuits={tasks.course} />
-      <ClientTerms token={token} terms={tasks.terms} onSaved={() => router.refresh()} />
-      <ClientCivilCourt token={token} items={tasks.civilCourt} onSaved={() => router.refresh()} />
-      <ClientFreeJustice token={token} view={tasks.freeJustice} editable={editable} onSaved={() => router.refresh()} />
-      {/* The documents first: ONE reads the data of each person and the trip in them (migration 0063). */}
-      <Documents
-        token={token}
-        view={view}
-        holder={holder}
-        claimants={claimants}
-        editable={editable}
-        onSaved={() => router.refresh()}
-      />
-      {/* A bill in somebody else's name the firm accepted asks who the holder is (0123), right under the documents. */}
-      <ClientResidence token={token} items={tasks.residence} editable={editable} onSaved={() => router.refresh()} />
-      <ClientPriorComplaint token={token} view={tasks.priorComplaint} onSaved={() => router.refresh()} />
-      <ClientPieceFacts token={token} items={tasks.pieceFacts} onSaved={() => router.refresh()} />
-      <ClientJudgment token={token} items={tasks.judgments} onSaved={() => router.refresh()} />
-      <ClientPublicationNews items={tasks.publicationNews} />
-      <People
-        token={token}
-        people={view.people}
-        documents={view.documents}
-        today={today}
-        editable={editable}
-        onSaved={() => router.refresh()}
-      />
-      <Trip token={token} view={view} editable={editable} onSaved={() => router.refresh()} />
-      {tasks.interview && (
+      {tasks.interview ? (
         // The interview is the case's account (0095): one question per screen, the same as on WhatsApp.
-        <ClientInterview
-          token={token}
-          interview={tasks.interview}
-          editable={editable}
-          onSaved={() => router.refresh()}
-        />
-      )}
-      {(!tasks.interview || tasks.statements.length > 0) && (
+        <ClientInterview token={token} interview={tasks.interview} editable={editable} onSaved={refresh} />
+      ) : null}
+      {!tasks.interview || tasks.statements.length > 0 ? (
         <ClientStatements
           token={token}
           statements={tasks.statements}
           account={tasks.account}
           editable={editable}
-          onSaved={() => router.refresh()}
+          onSaved={refresh}
         />
-      )}
-      <ClientNotices token={token} notices={tasks.notices} editable={editable} onSaved={() => router.refresh()} />
-      <ClientMoney token={token} editable={editable} />
+      ) : null}
+    </>
+  );
+  const answer: Record<ClientAnswerKey, ReactNode> = {
+    terms: <ClientTerms token={token} terms={tasks.terms} onSaved={refresh} />,
+    civilCourt: <ClientCivilCourt token={token} items={tasks.civilCourt} onSaved={refresh} />,
+    freeJustice: <ClientFreeJustice token={token} view={tasks.freeJustice} editable={editable} onSaved={refresh} />,
+    // A bill in somebody else's name the firm accepted asks who the holder is (0123).
+    residence: <ClientResidence token={token} items={tasks.residence} editable={editable} onSaved={refresh} />,
+    priorComplaint: <ClientPriorComplaint token={token} view={tasks.priorComplaint} onSaved={refresh} />,
+    pieceFacts: <ClientPieceFacts token={token} items={tasks.pieceFacts} onSaved={refresh} />,
+    judgments: <ClientJudgment token={token} items={tasks.judgments} onSaved={refresh} />,
+  };
+  const finish = (
+    <Finish
+      token={token}
+      finishedAt={view.link.finished_at}
+      expiresAt={view.link.expires_at}
+      // What the action is prepared from and the client still owes (0090): told before and after they finish.
+      owed={OWED_OF_ASK[accountAsk ?? "none"]}
+      onSaved={refresh}
+    />
+  );
+
+  /** A step's title, what it is for behind its "i", and its sections (each under a sub-heading when several). */
+  const stepOf = (step: ClientStep): { title: string; hint?: string; titles: boolean; body: ReactNode } => {
+    switch (step.key) {
+      case "sign":
+        return { title: t("client-step-sign"), hint: t("client-signatures-body"), titles: false, body: signatures };
+      case "documents":
+        return { title: t("client-step-documents"), hint: t("client-documents-body"), titles: false, body: documents };
+      case "data":
+        return {
+          title: t("client-step-data"),
+          hint: t("client-people-body"),
+          titles: Boolean(step.trip),
+          body: (
+            <>
+              {people}
+              {step.trip ? trip : null}
+            </>
+          ),
+        };
+      case "account":
+        return {
+          title: t("client-step-account"),
+          hint: t(tasks.interview ? "client-interview-body" : "client-statements-body"),
+          titles: Boolean(tasks.interview) && tasks.statements.length > 0,
+          body: account,
+        };
+      case "answers":
+        return {
+          title: t("client-step-answers"),
+          hint: t("client-step-answers-hint"),
+          titles: true,
+          body: (step.answers ?? []).map((key) => <Fragment key={key}>{answer[key]}</Fragment>),
+        };
+      default:
+        return { title: t("client-step-finish"), titles: false, body: finish };
+    }
+  };
+
+  const day = (iso: string | null | undefined) => (iso ? (formatDayBr(iso.slice(0, 10)) ?? "") : "");
+  const signatureName = (signature: ClientSignature) =>
+    isDocumentKind(signature.kind) ? t(DOCUMENT_KIND_KEY[signature.kind]) : signature.name;
+  const corrected = tasks.pieceFacts.some((item) => item.status === "corrected");
+  const orderConfirmed = tasks.statements.some((item) => item.chronology_status === "confirmed");
+  const complaintWaits = tasks.priorComplaint?.state === "waiting";
+  /** What is done, one line each: the thing, where it stands in a few words, and the section as it is. */
+  const doneOf = (key: ClientDoneKey): DoneRow => {
+    switch (key) {
+      case "sign": {
+        const signed = tasks.signatures.filter((item) => item.signed_at || item.status !== "pending");
+        const one = signed.length === 1 ? signed[0]! : null;
+        return {
+          key,
+          title: one ? signatureName(one) : t("client-done-signatures"),
+          summary:
+            one && one.signed_at
+              ? t("client-done-signed-on", { date: day(one.signed_at) })
+              : t("client-done-signed-count", { count: signed.length }),
+          detail: signatures,
+        };
+      }
+      case "pieceFacts":
+        return {
+          key,
+          title: t("client-piece-facts-title"),
+          summary: corrected ? t("client-done-corrected") : t("client-done-confirmed"),
+          detail: answer.pieceFacts,
+        };
+      case "documents": {
+        const accepted = view.documents.filter((item) => item.status === "accepted").length;
+        const checking = view.documents.filter((item) => item.status === "received").length;
+        return {
+          key,
+          title: t("client-documents-title"),
+          summary: [
+            accepted > 0 ? t("client-done-documents-accepted", { count: accepted }) : null,
+            checking > 0 ? t("client-done-documents-checking", { count: checking }) : null,
+          ]
+            .filter(Boolean)
+            .join(" · "),
+          detail: documents,
+        };
+      }
+      case "data":
+        return {
+          key,
+          title: t("client-people-title"),
+          summary: view.people.map((person) => firstNameOf(person.full_name)).join(", "),
+          detail: people,
+        };
+      case "trip": {
+        const affected = view.segments.find((segment) => segment.affected && segment.flight_number);
+        return {
+          key,
+          title: t("client-trip-title"),
+          summary: [
+            affected ? t("client-done-trip-affected", { flight: affected.flight_number ?? "" }) : null,
+            t("client-done-trip-legs", { count: view.segments.length }),
+          ]
+            .filter(Boolean)
+            .join(" · "),
+          detail: trip,
+        };
+      }
+      case "account":
+        return {
+          key,
+          title: t("client-step-account"),
+          summary: orderConfirmed ? t("client-done-account-confirmed") : t("client-done-account-told"),
+          detail: account,
+        };
+      case "terms": {
+        const accepted = tasks.terms.filter((term) => term.accepted_at);
+        const one = accepted.length === 1 ? accepted[0]! : null;
+        return {
+          key,
+          title: one ? one.title : t("client-terms-title"),
+          summary: one
+            ? t("client-done-accepted-on", { date: day(one.accepted_at) })
+            : t("client-done-accepted-count", { count: accepted.length }),
+          detail: answer.terms,
+        };
+      }
+      case "civilCourt":
+        return { key, title: t("client-civil-title"), summary: t("client-done-answered"), detail: answer.civilCourt };
+      case "freeJustice":
+        return {
+          key,
+          title: t("client-free-justice-title"),
+          summary: t("client-done-answered"),
+          detail: answer.freeJustice,
+        };
+      case "residence":
+        return {
+          key,
+          title: t("client-residence-title"),
+          summary: t("client-done-answered"),
+          detail: answer.residence,
+        };
+      case "priorComplaint":
+        return {
+          key,
+          title: t("client-prior-complaint-title"),
+          summary: complaintWaits ? t("client-done-complaint-waiting") : t("client-done-complaint-done"),
+          detail: answer.priorComplaint,
+        };
+      default:
+        return {
+          key,
+          title: t("client-done-finished"),
+          summary: day(view.link.finished_at),
+          detail: finish,
+        };
+    }
+  };
+
+  // The notices of the lawsuit and the firm's news in one card, at the end.
+  const noticesShown = Boolean(tasks.notices && (tasks.notices.active || tasks.notices.stopped));
+
+  return (
+    <>
+      <ClientHead
+        firm={view.firm}
+        facts={facts}
+        standing={standing}
+        notice={editable && tasks.agency ? t("client-agency-confirm", { agency: tasks.agency }) : undefined}
+      />
+
+      {standing.steps.map((step, index) => {
+        const shape = stepOf(step);
+        return (
+          <StepCard
+            key={step.key}
+            id={`client-step-${step.key}`}
+            number={index + 1}
+            title={shape.title}
+            hint={shape.hint}
+            titles={shape.titles}
+            chip={
+              <StatusChip
+                tone="attention"
+                label={step.count > 1 ? t("client-step-chip-many", { count: step.count }) : t("client-step-chip-you")}
+              />
+            }
+          >
+            {shape.body}
+          </StepCard>
+        );
+      })}
+
+      <ClientHearing lawsuits={tasks.course} news={tasks.publicationNews} />
+      <ClientProcess lawsuits={tasks.course} news={tasks.publicationNews} asksAbove={hearing}>
+        {judgmentsOwed ? null : answer.judgments}
+        <ClientMoney token={token} editable={editable} />
+      </ClientProcess>
       <ClientReceipts token={token} />
-      <ClientMarketing token={token} editable={editable} />
-      {!signing && (
-        <ClientSignatures token={token} signatures={tasks.signatures} editable onSaved={() => router.refresh()} />
-      )}
-      {editable && (
-        <Finish
-          token={token}
-          finishedAt={view.link.finished_at}
-          expiresAt={view.link.expires_at}
-          // What the action is prepared from and the client still owes (0090): told before and after they finish.
-          owed={OWED_OF_ASK[accountAsk ?? "none"]}
-          onSaved={() => router.refresh()}
-        />
+
+      <ClientDone rows={standing.done.map(doneOf)} />
+
+      {noticesShown ? (
+        <Card component="section" aria-labelledby="client-messages">
+          <CardContent className="flex flex-col gap-4">
+            <CardHead id="client-messages" title={t("client-messages-title")} />
+            <SectionFrame titles>
+              <ClientNotices token={token} notices={tasks.notices} editable={editable} onSaved={refresh} />
+              <ClientMarketing token={token} editable={editable} />
+            </SectionFrame>
+          </CardContent>
+        </Card>
+      ) : (
+        <ClientMarketing token={token} editable={editable} />
       )}
 
       <Typography variant="body2" className="text-text-secondary px-2 text-center">
@@ -538,200 +681,189 @@ function People({
   );
 
   return (
-    <Card component="section" aria-labelledby="client-people">
-      <CardContent className="flex flex-col gap-4">
-        <Box className="flex flex-col gap-1">
-          <Typography id="client-people" variant="h5" component="h2" className="mb-0">
-            {t("client-people-title")}
-          </Typography>
-          <Typography variant="body2" className="text-text-secondary">
-            {t("client-people-body")}
-          </Typography>
-        </Box>
-
-        {people.map((person) => {
-          const minor = isMinorOn(person.birth_date, today) === true;
-          const left = formOf(person)
-            .filter((field) => field !== "complement" && field !== "email" && field !== "phone")
-            .filter((field) => !String(person[field] ?? "").trim());
-          const read = readItems(readFieldsOf(person.read_fields));
-          const reading = left.length > 0 && beingRead(person.party_ids ?? [person.party_id], documents);
-          return (
-            <Box key={person.person_id} className="border-grey-100 flex flex-col gap-3 rounded-2xl border p-4">
-              <Box className="flex flex-wrap items-center justify-between gap-2">
-                <Box className="flex min-w-0 flex-col">
-                  <Typography variant="body1" className="font-semibold break-words">
-                    {person.full_name}
-                  </Typography>
-                  <Typography variant="body2" className="text-text-secondary">
-                    {person.is_holder
-                      ? t("client-person-you")
-                      : minor
-                        ? t("client-person-minor")
-                        : t("client-person-other")}
-                  </Typography>
-                </Box>
-                <StatusChip
-                  tone={left.length === 0 ? "positive" : "attention"}
-                  label={
-                    left.length === 0 ? t("client-person-complete") : t("client-person-missing", { count: left.length })
-                  }
-                />
-              </Box>
-              {left.length > 0 && open !== person.person_id && (
+    <ClientSection id="client-people" title={t("client-people-title")} hint={t("client-people-body")}>
+      {people.map((person) => {
+        const minor = isMinorOn(person.birth_date, today) === true;
+        const left = formOf(person)
+          .filter((field) => field !== "complement" && field !== "email" && field !== "phone")
+          .filter((field) => !String(person[field] ?? "").trim());
+        const read = readItems(readFieldsOf(person.read_fields));
+        const reading = left.length > 0 && beingRead(person.party_ids ?? [person.party_id], documents);
+        return (
+          <Box key={person.person_id} className="border-grey-100 flex flex-col gap-3 rounded-2xl border p-4">
+            <Box className="flex flex-wrap items-center justify-between gap-2">
+              <Box className="flex min-w-0 flex-col">
+                <Typography variant="body1" className="font-semibold break-words">
+                  {person.full_name}
+                </Typography>
                 <Typography variant="body2" className="text-text-secondary">
-                  {left.map((field) => t(PERSON_FIELD_KEY[field])).join(" · ")}
+                  {person.is_holder
+                    ? t("client-person-you")
+                    : minor
+                      ? t("client-person-minor")
+                      : t("client-person-other")}
                 </Typography>
-              )}
-              {read.length > 0 && open !== person.person_id && (
-                <Typography variant="body2" className="text-text-primary">
-                  {t("client-person-read", { items: list.format(read.map((item) => t(READ_ITEM_KEY[item]))) })}
-                </Typography>
-              )}
-              {reading && (
-                <Typography variant="body2" className="text-text-secondary" role="status">
-                  {t("client-person-reading")}
-                </Typography>
-              )}
-              {open === person.person_id
-                ? form(person)
-                : editable && (
-                    <Box>
-                      <Button variant="outlined" color="grey" size="small" onClick={() => edit(person)}>
-                        {t("client-edit")}
-                      </Button>
-                    </Box>
-                  )}
+              </Box>
+              <StatusChip
+                tone={left.length === 0 ? "positive" : "attention"}
+                label={
+                  left.length === 0 ? t("client-person-complete") : t("client-person-missing", { count: left.length })
+                }
+              />
             </Box>
-          );
-        })}
+            {left.length > 0 && open !== person.person_id && (
+              <Typography variant="body2" className="text-text-secondary">
+                {left.map((field) => t(PERSON_FIELD_KEY[field])).join(" · ")}
+              </Typography>
+            )}
+            {read.length > 0 && open !== person.person_id && (
+              <Typography variant="body2" className="text-text-primary">
+                {t("client-person-read", { items: list.format(read.map((item) => t(READ_ITEM_KEY[item]))) })}
+              </Typography>
+            )}
+            {reading && (
+              <Typography variant="body2" className="text-text-secondary" role="status">
+                {t("client-person-reading")}
+              </Typography>
+            )}
+            {open === person.person_id
+              ? form(person)
+              : editable && (
+                  <Box>
+                    <Button variant="outlined" color="grey" size="small" onClick={() => edit(person)}>
+                      {t("client-edit")}
+                    </Button>
+                  </Box>
+                )}
+          </Box>
+        );
+      })}
 
-        {childPoor && (
-          <Alert severity="warning" className="neutral bg-background-paper/60!" role="status">
-            <Typography variant="body2" component="p" className="mb-1 font-semibold">
-              {t("client-photo-poor-title")}
+      {childPoor && (
+        <Alert severity="warning" className="neutral bg-background-paper/60!" role="status">
+          <Typography variant="body2" component="p" className="mb-1 font-semibold">
+            {t("client-photo-poor-title")}
+          </Typography>
+          {childPoor.problems.length > 0 && (
+            <Box component="ul" className="m-0 flex list-disc flex-col gap-1 pl-5">
+              {childPoor.problems.map((item) => (
+                <Typography key={item} component="li" variant="body2">
+                  {t(CLIENT_PHOTO_PROBLEM_KEY[item])}
+                </Typography>
+              ))}
+            </Box>
+          )}
+          <Typography variant="body2" component="p" className="mt-2">
+            {t("client-photo-poor-choice")}
+          </Typography>
+          <Box className="flex flex-wrap gap-2 pt-2">
+            <Button
+              variant="contained"
+              size="small"
+              disabled={busy}
+              onClick={() => {
+                void discardClientUpload(token, childPoor.documentId).catch(() => undefined);
+                setChildPoor(null);
+                setChildNote(t("client-child-retake-where"));
+                onSaved();
+              }}
+            >
+              {t("client-photo-retake")}
+            </Button>
+            <Button
+              variant="outlined"
+              color="grey"
+              size="small"
+              disabled={busy}
+              onClick={async () => {
+                setBusy(true);
+                await sendToChild(childPoor.documentId, "", true);
+                setBusy(false);
+                onSaved();
+              }}
+            >
+              {t("client-photo-insist")}
+            </Button>
+          </Box>
+        </Alert>
+      )}
+      {childNote && (
+        <Alert severity="info" className="neutral bg-background-paper/60!" onClose={() => setChildNote(null)}>
+          {childNote}
+        </Alert>
+      )}
+      {editable &&
+        (open === "new" ? (
+          <Box className="border-grey-100 flex flex-col gap-3 rounded-2xl border p-4">
+            <Typography variant="body1" className="font-semibold">
+              {t("client-add-child")}
             </Typography>
-            {childPoor.problems.length > 0 && (
-              <Box component="ul" className="m-0 flex list-disc flex-col gap-1 pl-5">
-                {childPoor.problems.map((item) => (
-                  <Typography key={item} component="li" variant="body2">
-                    {t(CLIENT_PHOTO_PROBLEM_KEY[item])}
+            <Typography variant="body2" className="text-text-secondary">
+              {t("client-add-child-body")}
+            </Typography>
+            <Box component="ul" className="m-0 flex list-none flex-col gap-3 p-0">
+              <DocumentSlot
+                id="client-child-doc"
+                icon={<NiDocumentFull size="medium" />}
+                title={t("client-child-docs-title")}
+                hint={t("client-child-docs-hint")}
+                state={childDoc?.state ?? { kind: "empty" }}
+                fileName={childDoc?.name}
+                primary
+                disabled={busy}
+                labels={{
+                  send: t("prefill-send"),
+                  again: t("prefill-again"),
+                  sending: t("prefill-sending"),
+                  reading: t("client-prefill-reading"),
+                  read: t("prefill-read"),
+                  failed: t("prefill-failed"),
+                }}
+                onFile={(file) => void sendChildDocument(file)}
+              />
+            </Box>
+            {childDoc && (childDoc.state.kind === "read" || childDoc.state.kind === "failed") ? (
+              <>
+                {childDoc.state.kind === "read" && childRead.size > 0 && (
+                  <Typography variant="body2" className="text-text-secondary">
+                    {t("client-child-confirm")}
                   </Typography>
-                ))}
+                )}
+                {form(null)}
+              </>
+            ) : childManual ? (
+              form(null)
+            ) : (
+              <Box className="flex flex-wrap gap-2">
+                <Button
+                  variant="text"
+                  color="grey"
+                  size="small"
+                  disabled={busy || childDoc?.state.kind === "reading"}
+                  onClick={() => setChildManual(true)}
+                >
+                  {t("client-child-manual")}
+                </Button>
+                <Button
+                  variant="text"
+                  color="grey"
+                  size="small"
+                  disabled={childDoc?.state.kind === "reading"}
+                  onClick={cancelChild}
+                >
+                  {t("client-cancel")}
+                </Button>
               </Box>
             )}
-            <Typography variant="body2" component="p" className="mt-2">
-              {t("client-photo-poor-choice")}
-            </Typography>
-            <Box className="flex flex-wrap gap-2 pt-2">
-              <Button
-                variant="contained"
-                size="small"
-                disabled={busy}
-                onClick={() => {
-                  void discardClientUpload(token, childPoor.documentId).catch(() => undefined);
-                  setChildPoor(null);
-                  setChildNote(t("client-child-retake-where"));
-                  onSaved();
-                }}
-              >
-                {t("client-photo-retake")}
-              </Button>
-              <Button
-                variant="outlined"
-                color="grey"
-                size="small"
-                disabled={busy}
-                onClick={async () => {
-                  setBusy(true);
-                  await sendToChild(childPoor.documentId, "", true);
-                  setBusy(false);
-                  onSaved();
-                }}
-              >
-                {t("client-photo-insist")}
-              </Button>
-            </Box>
-          </Alert>
-        )}
-        {childNote && (
-          <Alert severity="info" className="neutral bg-background-paper/60!" onClose={() => setChildNote(null)}>
-            {childNote}
-          </Alert>
-        )}
-        {editable &&
-          (open === "new" ? (
-            <Box className="border-grey-100 flex flex-col gap-3 rounded-2xl border p-4">
-              <Typography variant="body1" className="font-semibold">
-                {t("client-add-child")}
-              </Typography>
-              <Typography variant="body2" className="text-text-secondary">
-                {t("client-add-child-body")}
-              </Typography>
-              <Box component="ul" className="m-0 flex list-none flex-col gap-3 p-0">
-                <DocumentSlot
-                  id="client-child-doc"
-                  icon={<NiDocumentFull size="medium" />}
-                  title={t("client-child-docs-title")}
-                  hint={t("client-child-docs-hint")}
-                  state={childDoc?.state ?? { kind: "empty" }}
-                  fileName={childDoc?.name}
-                  primary
-                  disabled={busy}
-                  labels={{
-                    send: t("prefill-send"),
-                    again: t("prefill-again"),
-                    sending: t("prefill-sending"),
-                    reading: t("prefill-reading"),
-                    read: t("prefill-read"),
-                    failed: t("prefill-failed"),
-                  }}
-                  onFile={(file) => void sendChildDocument(file)}
-                />
-              </Box>
-              {childDoc && (childDoc.state.kind === "read" || childDoc.state.kind === "failed") ? (
-                <>
-                  {childDoc.state.kind === "read" && childRead.size > 0 && (
-                    <Typography variant="body2" className="text-text-secondary">
-                      {t("client-child-confirm")}
-                    </Typography>
-                  )}
-                  {form(null)}
-                </>
-              ) : childManual ? (
-                form(null)
-              ) : (
-                <Box className="flex flex-wrap gap-2">
-                  <Button
-                    variant="text"
-                    color="grey"
-                    size="small"
-                    disabled={busy || childDoc?.state.kind === "reading"}
-                    onClick={() => setChildManual(true)}
-                  >
-                    {t("client-child-manual")}
-                  </Button>
-                  <Button
-                    variant="text"
-                    color="grey"
-                    size="small"
-                    disabled={childDoc?.state.kind === "reading"}
-                    onClick={cancelChild}
-                  >
-                    {t("client-cancel")}
-                  </Button>
-                </Box>
-              )}
-            </Box>
-          ) : (
-            <Box>
-              <Button variant="text" onClick={() => edit(null)}>
-                {t("client-add-child")}
-              </Button>
-            </Box>
-          ))}
-      </CardContent>
-    </Card>
+          </Box>
+        ) : (
+          <Box>
+            <Button variant="text" onClick={() => edit(null)}>
+              {t("client-add-child")}
+            </Button>
+          </Box>
+        ))}
+    </ClientSection>
   );
 }
 
@@ -820,95 +952,82 @@ function Trip({
   );
 
   return (
-    <Card component="section" aria-labelledby="client-trip">
-      <CardContent className="flex flex-col gap-4">
-        <Box className="flex flex-col gap-1">
-          <Typography id="client-trip" variant="h5" component="h2" className="mb-0">
-            {t("client-trip-title")}
-          </Typography>
-          <Typography variant="body2" className="text-text-secondary">
-            {t("client-trip-body")}
-          </Typography>
-        </Box>
+    <ClientSection id="client-trip" title={t("client-trip-title")} hint={t("client-trip-body")}>
+      {view.segments.length === 0 && open !== "new" && (
+        // The flights come from the trip's document, which ONE reads (0085): sent in the documents above, its legs
+        // enter here once it is checked. Typing a leg is the contingency.
+        <EmptyState
+          icon={<NiPlane />}
+          title={t("client-trip-empty-title")}
+          description={ticketOnItsWay ? t("client-trip-reading") : t("client-trip-empty-docs")}
+          action={
+            editable && !ticketOnItsWay
+              ? {
+                  label: t("client-trip-send-ticket"),
+                  onClick: () =>
+                    document.getElementById("client-documents")?.scrollIntoView({ behavior: "smooth", block: "start" }),
+                }
+              : undefined
+          }
+          secondaryAction={editable ? { label: t("client-trip-manual"), onClick: () => edit(null) } : undefined}
+        />
+      )}
 
-        {view.segments.length === 0 && open !== "new" && (
-          // The flights come from the trip's document, which ONE reads (0085): sent in the documents above, its legs
-          // enter here once it is checked. Typing a leg is the contingency.
-          <EmptyState
-            icon={<NiPlane />}
-            title={t("client-trip-empty-title")}
-            description={ticketOnItsWay ? t("client-trip-reading") : t("client-trip-empty-docs")}
-            action={
-              editable && !ticketOnItsWay
-                ? {
-                    label: t("client-trip-send-ticket"),
-                    onClick: () =>
-                      document
-                        .getElementById("client-documents")
-                        ?.scrollIntoView({ behavior: "smooth", block: "start" }),
-                  }
-                : undefined
-            }
-            secondaryAction={editable ? { label: t("client-trip-manual"), onClick: () => edit(null) } : undefined}
-          />
-        )}
-
-        {view.segments.map((segment) => (
-          <Box key={segment.id} className="border-grey-100 flex flex-col gap-3 rounded-2xl border p-4">
-            <Box className="flex flex-wrap items-center justify-between gap-2">
-              <Box className="flex min-w-0 flex-col">
-                <Typography variant="body1" className="font-semibold">
-                  {[segment.flight_number, [segment.origin_iata, segment.destination_iata].filter(Boolean).join(" → ")]
-                    .filter(Boolean)
-                    .join(" · ") || t("client-trip-leg", { position: segment.position })}
+      {view.segments.map((segment) => (
+        <Box key={segment.id} className="border-grey-100 flex flex-col gap-3 rounded-2xl border p-4">
+          <Box className="flex flex-wrap items-center justify-between gap-2">
+            <Box className="flex min-w-0 flex-col">
+              <Typography variant="body1" className="font-semibold">
+                {[segment.flight_number, [segment.origin_iata, segment.destination_iata].filter(Boolean).join(" → ")]
+                  .filter(Boolean)
+                  .join(" · ") || t("client-trip-leg", { position: segment.position })}
+              </Typography>
+              {segment.scheduled_departure_local && (
+                <Typography variant="body2" className="text-text-secondary">
+                  {t("client-trip-departure", { time: formatLocalTime(segment.scheduled_departure_local) })}
                 </Typography>
-                {segment.scheduled_departure_local && (
-                  <Typography variant="body2" className="text-text-secondary">
-                    {t("client-trip-departure", { time: formatLocalTime(segment.scheduled_departure_local) })}
-                  </Typography>
-                )}
-              </Box>
-              {segment.affected && <StatusChip tone="attention" label={t("client-trip-affected")} />}
+              )}
             </Box>
-            {open === segment.id
-              ? form(segment.id)
-              : editable && (
-                  <Box className="flex flex-wrap gap-2">
-                    <Button variant="outlined" color="grey" size="small" onClick={() => edit(segment)}>
-                      {t("client-edit")}
-                    </Button>
-                    {segment.source === "client" && (
-                      <Button
-                        variant="text"
-                        color="grey"
-                        size="small"
-                        disabled={busy}
-                        onClick={() => void remove(segment.id)}
-                      >
-                        {t("client-trip-remove")}
-                      </Button>
-                    )}
-                  </Box>
-                )}
+            {segment.affected && <StatusChip tone="attention" label={t("client-trip-affected")} />}
           </Box>
+          {open === segment.id
+            ? form(segment.id)
+            : editable && (
+                <Box className="flex flex-wrap gap-2">
+                  <Button variant="outlined" color="grey" size="small" onClick={() => edit(segment)}>
+                    {t("client-edit")}
+                  </Button>
+                  {segment.source === "client" && (
+                    <Button
+                      variant="text"
+                      color="grey"
+                      size="small"
+                      disabled={busy}
+                      onClick={() => void remove(segment.id)}
+                    >
+                      {t("client-trip-remove")}
+                    </Button>
+                  )}
+                </Box>
+              )}
+        </Box>
+      ))}
+
+      {problem && open === null && <ProblemAlert problem={problem} />}
+
+      {editable &&
+        (open === "new" ? (
+          <Box className="border-grey-100 flex flex-col gap-3 rounded-2xl border p-4">{form(null)}</Box>
+        ) : (
+          view.segments.length > 0 && (
+            <Box>
+              <Button variant="text" onClick={() => edit(null)}>
+                {t("client-trip-add")}
+              </Button>
+            </Box>
+          )
         ))}
-
-        {problem && open === null && <ProblemAlert problem={problem} />}
-
-        {editable &&
-          (open === "new" ? (
-            <Box className="border-grey-100 flex flex-col gap-3 rounded-2xl border p-4">{form(null)}</Box>
-          ) : (
-            view.segments.length > 0 && (
-              <Box>
-                <Button variant="text" onClick={() => edit(null)}>
-                  {t("client-trip-add")}
-                </Button>
-              </Box>
-            )
-          ))}
-      </CardContent>
-    </Card>
+    </ClientSection>
   );
 }
 
@@ -1183,285 +1302,283 @@ function Documents({
     ) : null;
 
   return (
-    <Card ref={card} component="section" aria-labelledby="client-documents">
-      <CardContent className="flex flex-col gap-4">
-        <CardTitle
-          id="client-documents"
-          icon={<NiDocumentFull size="medium" />}
-          tone="secondary"
-          title={t("client-documents-title")}
-          chip={chip}
-          detail={standing.state === "owed" || standing.state === "none" ? t("client-documents-body") : undefined}
-        />
-        {/* Nothing left for the client to send: the card says so first, and what was sent stays listed under it. */}
-        {standing.state === "checking" && (
-          <StateLine tone="waiting" emphasis>
-            {t("client-documents-checking")}
-          </StateLine>
-        )}
-        {standing.state === "complete" && (
-          <StateLine tone="done" emphasis>
-            {t("client-documents-complete")}
-          </StateLine>
-        )}
+    <ClientSection
+      cardRef={card}
+      id="client-documents"
+      icon={<NiDocumentFull size="medium" />}
+      tone="secondary"
+      title={t("client-documents-title")}
+      chip={chip}
+      hint={t("client-documents-body")}
+    >
+      {/* Nothing left for the client to send: the card says so first, and what was sent stays listed under it. */}
+      {standing.state === "checking" && (
+        <StateLine tone="waiting" emphasis>
+          {t("client-documents-checking")}
+        </StateLine>
+      )}
+      {standing.state === "complete" && (
+        <StateLine tone="done" emphasis>
+          {t("client-documents-complete")}
+        </StateLine>
+      )}
 
-        <input
-          ref={input}
-          type="file"
-          hidden
-          accept="application/pdf,image/jpeg,image/png,image/webp,image/heic,image/heif"
-          onChange={(event) => {
-            const file = event.target.files?.[0];
-            event.target.value = "";
-            if (file) void send(file);
-          }}
-        />
+      <input
+        ref={input}
+        type="file"
+        hidden
+        accept="application/pdf,image/jpeg,image/png,image/webp,image/heic,image/heif"
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          event.target.value = "";
+          if (file) void send(file);
+        }}
+      />
 
-        {/* One line per document: what it is and whose, how it stands on the right, and a button only where a
+      {/* One line per document: what it is and whose, how it stands on the right, and a button only where a
             file is still owed. */}
-        {needs.length + extras.length + dispensables.length > 0 && (
-          <Box component="ul" className="divide-grey-100 m-0 flex list-none flex-col divide-y p-0">
-            {needs.map((need) => {
-              const sent = documentsFor(need, view.documents);
-              const state = needStanding(sent);
-              const sending = busy?.key === need.key && !busy.insist;
-              const refused = state === "rejected" ? latestRefusal(sent) : null;
-              return (
-                <Box
-                  component="li"
-                  key={need.key}
-                  ref={(line: HTMLElement | null) => {
-                    lines.current[need.key] = line;
-                  }}
-                  tabIndex={-1}
-                  className="flex flex-col gap-2 py-3 first:pt-0 last:pb-0"
+      {needs.length + extras.length + dispensables.length > 0 && (
+        <Box component="ul" className="divide-grey-100 m-0 flex list-none flex-col divide-y p-0">
+          {needs.map((need) => {
+            const sent = documentsFor(need, view.documents);
+            const state = needStanding(sent);
+            const sending = busy?.key === need.key && !busy.insist;
+            const refused = state === "rejected" ? latestRefusal(sent) : null;
+            return (
+              <Box
+                component="li"
+                key={need.key}
+                ref={(line: HTMLElement | null) => {
+                  lines.current[need.key] = line;
+                }}
+                tabIndex={-1}
+                className="flex flex-col gap-2 py-3 first:pt-0 last:pb-0"
+              >
+                <StateLine
+                  tone={sending ? "waiting" : NEED_LOOK[state].tone}
+                  icon={sending ? <NiUploadCloud size="medium" /> : undefined}
+                  status={sending ? t("client-documents-sending") : t(NEED_LOOK[state].key)}
+                  action={
+                    editable && isOwed(state) && !poor[need.key] ? (
+                      <Button
+                        variant="contained"
+                        size="small"
+                        disabled={busy !== null}
+                        onClick={() => pick(need.key, need.kind, partyOf(need))}
+                      >
+                        {state === "rejected" ? t("client-documents-send-more") : t("client-documents-send")}
+                      </Button>
+                    ) : undefined
+                  }
                 >
-                  <StateLine
-                    tone={sending ? "waiting" : NEED_LOOK[state].tone}
-                    icon={sending ? <NiUploadCloud size="medium" /> : undefined}
-                    status={sending ? t("client-documents-sending") : t(NEED_LOOK[state].key)}
-                    action={
-                      editable && isOwed(state) && !poor[need.key] ? (
+                  <DocumentWords
+                    kind={t(DOCUMENT_KIND_KEY[need.kind])}
+                    name={need.name}
+                    detail={refused?.rejected_reason ? refusal(refused.rejected_reason) : null}
+                  />
+                </StateLine>
+                {poorNotice(need.key)}
+                {problemOf(need.key)}
+              </Box>
+            );
+          })}
+          {dispensables.map((item) => {
+            const key = `dispensable-${item.kind}`;
+            const sending = busy?.key === key && !busy.insist;
+            return (
+              <Box
+                component="li"
+                key={key}
+                ref={(line: HTMLElement | null) => {
+                  lines.current[key] = line;
+                }}
+                tabIndex={-1}
+                className="flex flex-col gap-2 py-3 first:pt-0 last:pb-0"
+              >
+                <StateLine
+                  tone={sending ? "waiting" : item.state === "not_have" ? "info" : "attention"}
+                  icon={sending ? <NiUploadCloud size="medium" /> : undefined}
+                  status={
+                    sending
+                      ? t("client-documents-sending")
+                      : item.state === "not_have"
+                        ? t("client-documents-not-had")
+                        : t("client-documents-optional")
+                  }
+                  action={
+                    editable && item.state === "asked" && !poor[key] ? (
+                      <Box className="flex flex-wrap gap-2">
                         <Button
                           variant="contained"
                           size="small"
                           disabled={busy !== null}
-                          onClick={() => pick(need.key, need.kind, partyOf(need))}
+                          onClick={() => pick(key, item.kind as DocumentKind, holder?.party_id ?? null)}
                         >
-                          {state === "rejected" ? t("client-documents-send-more") : t("client-documents-send")}
+                          {t("client-documents-send")}
                         </Button>
-                      ) : undefined
-                    }
-                  >
-                    <DocumentWords
-                      kind={t(DOCUMENT_KIND_KEY[need.kind])}
-                      name={need.name}
-                      detail={refused?.rejected_reason ? refusal(refused.rejected_reason) : null}
-                    />
-                  </StateLine>
-                  {poorNotice(need.key)}
-                  {problemOf(need.key)}
-                </Box>
-              );
-            })}
-            {dispensables.map((item) => {
-              const key = `dispensable-${item.kind}`;
-              const sending = busy?.key === key && !busy.insist;
-              return (
-                <Box
-                  component="li"
-                  key={key}
-                  ref={(line: HTMLElement | null) => {
-                    lines.current[key] = line;
-                  }}
-                  tabIndex={-1}
-                  className="flex flex-col gap-2 py-3 first:pt-0 last:pb-0"
+                        <Button
+                          variant="text"
+                          color="grey"
+                          size="small"
+                          disabled={busy !== null}
+                          onClick={() => void notHave(item.kind)}
+                        >
+                          {t("client-documents-not-have")}
+                        </Button>
+                      </Box>
+                    ) : undefined
+                  }
                 >
-                  <StateLine
-                    tone={sending ? "waiting" : item.state === "not_have" ? "info" : "attention"}
-                    icon={sending ? <NiUploadCloud size="medium" /> : undefined}
-                    status={
-                      sending
-                        ? t("client-documents-sending")
-                        : item.state === "not_have"
-                          ? t("client-documents-not-had")
-                          : t("client-documents-optional")
+                  <DocumentWords
+                    kind={item.label.charAt(0).toUpperCase() + item.label.slice(1)}
+                    name={null}
+                    // What ONE keeps of a proof of the moment (0209): the hour it arrives, said where it is asked.
+                    detail={
+                      item.state === "asked" && (item.kind === "evidence" || item.kind === "receipt")
+                        ? t("client-documents-moment")
+                        : null
                     }
-                    action={
-                      editable && item.state === "asked" && !poor[key] ? (
-                        <Box className="flex flex-wrap gap-2">
-                          <Button
-                            variant="contained"
-                            size="small"
-                            disabled={busy !== null}
-                            onClick={() => pick(key, item.kind as DocumentKind, holder?.party_id ?? null)}
-                          >
-                            {t("client-documents-send")}
-                          </Button>
-                          <Button
-                            variant="text"
-                            color="grey"
-                            size="small"
-                            disabled={busy !== null}
-                            onClick={() => void notHave(item.kind)}
-                          >
-                            {t("client-documents-not-have")}
-                          </Button>
-                        </Box>
-                      ) : undefined
-                    }
-                  >
-                    <DocumentWords
-                      kind={item.label.charAt(0).toUpperCase() + item.label.slice(1)}
-                      name={null}
-                      // What ONE keeps of a proof of the moment (0209): the hour it arrives, said where it is asked.
-                      detail={
-                        item.state === "asked" && (item.kind === "evidence" || item.kind === "receipt")
-                          ? t("client-documents-moment")
-                          : null
-                      }
-                    />
-                  </StateLine>
-                  {poorNotice(key)}
-                  {problemOf(key)}
-                </Box>
-              );
-            })}
-            {extras.map((document) => {
-              const state = needStanding([document]);
-              const reason = document.status === "rejected" && document.rejected_reason;
-              return (
-                <Box component="li" key={document.id} className="py-3 first:pt-0 last:pb-0">
-                  <StateLine tone={NEED_LOOK[state].tone} status={t(NEED_LOOK[state].key)}>
-                    {/* Several of a kind are told apart by the file each came in. */}
-                    <DocumentWords
-                      kind={kindOf(document.kind)}
-                      name={nameOf(document.party_id)}
-                      detail={reason ? refusal(reason) : document.name}
-                      oneLine={!reason}
-                    />
-                  </StateLine>
-                </Box>
-              );
-            })}
-          </Box>
-        )}
+                  />
+                </StateLine>
+                {poorNotice(key)}
+                {problemOf(key)}
+              </Box>
+            );
+          })}
+          {extras.map((document) => {
+            const state = needStanding([document]);
+            const reason = document.status === "rejected" && document.rejected_reason;
+            return (
+              <Box component="li" key={document.id} className="py-3 first:pt-0 last:pb-0">
+                <StateLine tone={NEED_LOOK[state].tone} status={t(NEED_LOOK[state].key)}>
+                  {/* Several of a kind are told apart by the file each came in. */}
+                  <DocumentWords
+                    kind={kindOf(document.kind)}
+                    name={nameOf(document.party_id)}
+                    detail={reason ? refusal(reason) : document.name}
+                    oneLine={!reason}
+                  />
+                </StateLine>
+              </Box>
+            );
+          })}
+        </Box>
+      )}
 
-        {showOther ? (
-          <Box
-            ref={(line: HTMLElement | null) => {
-              lines.current[OTHER] = line;
-            }}
-            tabIndex={-1}
-            className="border-grey-100 flex flex-col gap-3 rounded-2xl border p-4"
-          >
-            <Typography variant="body2" component="h3" className="font-semibold">
-              {t("client-documents-other")}
-            </Typography>
-            {editable && (
-              <Box className="flex flex-col gap-3 sm:flex-row">
+      {showOther ? (
+        <Box
+          ref={(line: HTMLElement | null) => {
+            lines.current[OTHER] = line;
+          }}
+          tabIndex={-1}
+          className="border-grey-100 flex flex-col gap-3 rounded-2xl border p-4"
+        >
+          <Typography variant="body2" component="h3" className="font-semibold">
+            {t("client-documents-other")}
+          </Typography>
+          {editable && (
+            <Box className="flex flex-col gap-3 sm:flex-row">
+              <TextField
+                select
+                size="small"
+                fullWidth
+                id="client-other-kind"
+                label={t("client-documents-kind")}
+                value={otherKind}
+                // A photo that waits here was sent as a kind and for a person: they stay what the choice is about.
+                disabled={Boolean(poor[OTHER])}
+                onChange={(event) => setOtherKind(event.target.value as DocumentKind)}
+              >
+                {CLIENT_DOCUMENT_KINDS.map((kind) => (
+                  <MenuItem key={kind} value={kind}>
+                    {t(DOCUMENT_KIND_KEY[kind])}
+                  </MenuItem>
+                ))}
+              </TextField>
+              {people.length > 1 && (
                 <TextField
                   select
                   size="small"
                   fullWidth
-                  id="client-other-kind"
-                  label={t("client-documents-kind")}
-                  value={otherKind}
-                  // A photo that waits here was sent as a kind and for a person: they stay what the choice is about.
+                  id="client-other-person"
+                  label={t("client-documents-person")}
+                  value={otherParty}
                   disabled={Boolean(poor[OTHER])}
-                  onChange={(event) => setOtherKind(event.target.value as DocumentKind)}
+                  onChange={(event) => setOtherParty(event.target.value)}
                 >
-                  {CLIENT_DOCUMENT_KINDS.map((kind) => (
-                    <MenuItem key={kind} value={kind}>
-                      {t(DOCUMENT_KIND_KEY[kind])}
+                  {people.map((person) => (
+                    <MenuItem key={person.person_id} value={person.party_id ?? ""}>
+                      {person.full_name}
                     </MenuItem>
                   ))}
                 </TextField>
-                {people.length > 1 && (
-                  <TextField
-                    select
-                    size="small"
-                    fullWidth
-                    id="client-other-person"
-                    label={t("client-documents-person")}
-                    value={otherParty}
-                    disabled={Boolean(poor[OTHER])}
-                    onChange={(event) => setOtherParty(event.target.value)}
-                  >
-                    {people.map((person) => (
-                      <MenuItem key={person.person_id} value={person.party_id ?? ""}>
-                        {person.full_name}
-                      </MenuItem>
-                    ))}
-                  </TextField>
-                )}
-              </Box>
-            )}
-            {poorNotice(OTHER)}
-            {problemOf(OTHER)}
-            {editable && !poor[OTHER] && (
-              <Box className="flex flex-wrap items-center gap-2">
-                <Button
-                  variant="contained"
-                  size="small"
-                  startIcon={<NiUploadCloud size="small" />}
-                  disabled={busy !== null}
-                  onClick={() => pick(OTHER, otherKind, otherParty || holder?.party_id || null)}
-                >
-                  {busy?.key === OTHER ? t("client-documents-sending") : t("client-documents-choose")}
-                </Button>
-                <Button variant="text" color="grey" size="small" disabled={busy !== null} onClick={closeOther}>
-                  {t("client-cancel")}
-                </Button>
-                {left && <Box className="sm:ml-auto">{left}</Box>}
-              </Box>
-            )}
-          </Box>
-        ) : editable ? (
-          <Box
-            ref={(line: HTMLElement | null) => {
-              lines.current[OTHER] = line;
-            }}
-            tabIndex={-1}
-            className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1"
-          >
-            <Box className="-ml-2">
-              {again.length > 0 ? (
-                <QuickActions
-                  label={t("client-documents-other")}
-                  text={t("client-documents-other")}
-                  icon={<NiDocumentPlus size="small" />}
-                  align="left"
-                  actions={[
-                    ...again,
-                    {
-                      key: OTHER,
-                      label: t("client-documents-other-kind"),
-                      icon: <NiPaperclip size="medium" />,
-                      disabled: busy !== null,
-                      onClick: openOther,
-                    },
-                  ]}
-                />
-              ) : (
-                <Button
-                  variant="text"
-                  color="grey"
-                  size="small"
-                  className="hover:bg-grey-25"
-                  startIcon={<NiDocumentPlus size="small" />}
-                  disabled={busy !== null}
-                  onClick={openOther}
-                >
-                  {t("client-documents-other")}
-                </Button>
               )}
             </Box>
-            {left}
+          )}
+          {poorNotice(OTHER)}
+          {problemOf(OTHER)}
+          {editable && !poor[OTHER] && (
+            <Box className="flex flex-wrap items-center gap-2">
+              <Button
+                variant="contained"
+                size="small"
+                startIcon={<NiUploadCloud size="small" />}
+                disabled={busy !== null}
+                onClick={() => pick(OTHER, otherKind, otherParty || holder?.party_id || null)}
+              >
+                {busy?.key === OTHER ? t("client-documents-sending") : t("client-documents-choose")}
+              </Button>
+              <Button variant="text" color="grey" size="small" disabled={busy !== null} onClick={closeOther}>
+                {t("client-cancel")}
+              </Button>
+              {left && <Box className="sm:ml-auto">{left}</Box>}
+            </Box>
+          )}
+        </Box>
+      ) : editable ? (
+        <Box
+          ref={(line: HTMLElement | null) => {
+            lines.current[OTHER] = line;
+          }}
+          tabIndex={-1}
+          className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1"
+        >
+          <Box className="-ml-2">
+            {again.length > 0 ? (
+              <QuickActions
+                label={t("client-documents-other")}
+                text={t("client-documents-other")}
+                icon={<NiDocumentPlus size="small" />}
+                align="left"
+                actions={[
+                  ...again,
+                  {
+                    key: OTHER,
+                    label: t("client-documents-other-kind"),
+                    icon: <NiPaperclip size="medium" />,
+                    disabled: busy !== null,
+                    onClick: openOther,
+                  },
+                ]}
+              />
+            ) : (
+              <Button
+                variant="text"
+                color="grey"
+                size="small"
+                className="hover:bg-grey-25"
+                startIcon={<NiDocumentPlus size="small" />}
+                disabled={busy !== null}
+                onClick={openOther}
+              >
+                {t("client-documents-other")}
+              </Button>
+            )}
           </Box>
-        ) : null}
-      </CardContent>
-    </Card>
+          {left}
+        </Box>
+      ) : null}
+    </ClientSection>
   );
 }
 
@@ -1551,36 +1668,31 @@ function Finish({
   };
 
   return (
-    <Card component="section" aria-labelledby="client-finish">
-      <CardContent className="flex flex-col gap-3">
-        <Typography id="client-finish" variant="h5" component="h2" className="mb-0">
-          {t("client-finish-title")}
-        </Typography>
-        {finishedAt && owed ? (
-          // Finished, while the action still waits on them: never "the firm prepares your action".
-          <StateLine tone="attention">{t(FINISHED_OWED_KEY[owed], { date: day(finishedAt) })}</StateLine>
-        ) : finishedAt ? (
-          <Alert severity="success" icon={<NiCheck />} className="neutral bg-background-paper/60!">
-            {t("client-finished", { date: day(finishedAt) })}
-          </Alert>
-        ) : (
-          <>
-            <Typography variant="body1">{t("client-finish-body")}</Typography>
-            {owed && <StateLine tone="attention">{t(FINISH_OWED_KEY[owed])}</StateLine>}
-          </>
-        )}
-        <ProblemAlert problem={problem} />
-        {!finishedAt && (
-          <Box>
-            <Button variant="contained" onClick={() => void finish()} disabled={busy}>
-              {busy ? t("client-working") : t("client-finish-submit")}
-            </Button>
-          </Box>
-        )}
-        <Typography variant="body2" className="text-text-secondary">
-          {t("client-expires", { date: day(expiresAt) })}
-        </Typography>
-      </CardContent>
-    </Card>
+    <ClientSection id="client-finish" title={t("client-finish-title")} gap={3}>
+      {finishedAt && owed ? (
+        // Finished, while the action still waits on them: never "the firm prepares your action".
+        <StateLine tone="attention">{t(FINISHED_OWED_KEY[owed], { date: day(finishedAt) })}</StateLine>
+      ) : finishedAt ? (
+        <Alert severity="success" icon={<NiCheck />} className="neutral bg-background-paper/60!">
+          {t("client-finished", { date: day(finishedAt) })}
+        </Alert>
+      ) : (
+        <>
+          <Typography variant="body1">{t("client-finish-body")}</Typography>
+          {owed && <StateLine tone="attention">{t(FINISH_OWED_KEY[owed])}</StateLine>}
+        </>
+      )}
+      <ProblemAlert problem={problem} />
+      {!finishedAt && (
+        <Box>
+          <Button variant="contained" onClick={() => void finish()} disabled={busy}>
+            {busy ? t("client-working") : t("client-finish-submit")}
+          </Button>
+        </Box>
+      )}
+      <Typography variant="body2" className="text-text-secondary">
+        {t("client-expires", { date: day(expiresAt) })}
+      </Typography>
+    </ClientSection>
   );
 }

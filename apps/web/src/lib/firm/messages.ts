@@ -86,8 +86,11 @@ export function suggestMessage(message: Pick<OneMessage, "required" | "optional"
 
 /** The text as it goes, its values written in: a value not given stays for whoever fills it later (the case's number). */
 export function fillMessage(text: string, values: Record<string, string | null | undefined>): string {
-  return text.replace(/\{([a-z]+)\}/g, (whole, value: string) => {
+  // A value given blank takes the comma or the space before it along ("Pronto, {nome}." with no name is "Pronto."):
+  // ONE asks no name before the person says "Quero seguir" (0239).
+  return text.replace(/(,\s*|\s)?\{([a-z]+)\}/g, (whole, lead: string | undefined, value: string) => {
     const given = values[value];
-    return typeof given === "string" ? given : whole;
+    if (typeof given !== "string") return whole;
+    return given.trim() ? `${lead ?? ""}${given}` : "";
   });
 }

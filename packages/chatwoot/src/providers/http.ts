@@ -1,13 +1,13 @@
 import {
   type ChatwootAccount,
   type ChatwootAttachment,
-  type ChatwootConversationStatus,
   type ChatwootInbox,
   type ChatwootMessageStatus,
   type ChatwootPlatform,
   type ChatwootProfile,
   type ChatwootProvider,
   ChatwootRequestError,
+  type ChatwootStatusToSet,
   ChatwootUnavailableError,
   type ChatwootUser,
   type NewChatwootMessage,
@@ -179,6 +179,15 @@ export class HttpChatwootProvider implements ChatwootProvider {
         if (userIds.length === 0) return;
         await send("POST", "inbox_members", { inbox_id: inboxId, user_ids: userIds });
       },
+      createTeamInbox: async ({ name }) => ({
+        id: idOf(await send("POST", "inboxes", { name, enable_auto_assignment: false, channel: { type: "api" } })),
+      }),
+      renameInbox: async (inboxId, name) => {
+        await send("PATCH", `inboxes/${Number(inboxId)}`, { name });
+      },
+      setInboxMembers: async (inboxId, userIds) => {
+        await send("PATCH", "inbox_members", { inbox_id: inboxId, user_ids: userIds });
+      },
       findContact: async (identifier) => {
         const answer = await send<{ payload?: unknown }>(
           "GET",
@@ -193,10 +202,13 @@ export class HttpChatwootProvider implements ChatwootProvider {
         const answer = await send<{ payload?: { contact?: unknown } }>("POST", "contacts", {
           inbox_id: inboxId,
           name,
-          phone_number: phone,
+          ...(phone ? { phone_number: phone } : {}),
           identifier,
         });
         return { id: idOf(answer?.payload?.contact) };
+      },
+      renameContact: async (contactId, name) => {
+        await send("PUT", `contacts/${Number(contactId)}`, { name });
       },
       deleteContact: async (contactId) => {
         await send("DELETE", `contacts/${Number(contactId)}`);
@@ -222,8 +234,21 @@ export class HttpChatwootProvider implements ChatwootProvider {
           assignee_id: botId,
         });
       },
-      setConversationStatus: async (conversationId, status: ChatwootConversationStatus) => {
+      setConversationStatus: async (conversationId, status: ChatwootStatusToSet) => {
         await send("POST", `conversations/${Number(conversationId)}/toggle_status`, { status });
+      },
+      conversationStatus: async (conversationId) => {
+        const answer = await send<{ status?: unknown }>("GET", `conversations/${Number(conversationId)}`);
+        if (typeof answer?.status !== "string") throw new ChatwootRequestError(200, "no_status_in_answer");
+        return answer.status;
+      },
+      setParticipants: async (conversationId, userIds) => {
+        if (userIds.length === 0) throw new ChatwootRequestError(422, "no_participants");
+        await send("PATCH", `conversations/${Number(conversationId)}/participants`, { user_ids: userIds });
+      },
+      removeParticipants: async (conversationId, userIds) => {
+        if (userIds.length === 0) return;
+        await send("DELETE", `conversations/${Number(conversationId)}/participants`, { user_ids: userIds });
       },
       createMessage: async (conversationId, message: NewChatwootMessage) => {
         const path = `conversations/${Number(conversationId)}/messages`;

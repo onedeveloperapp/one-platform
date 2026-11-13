@@ -137,7 +137,7 @@ describe.skipIf(!DB_URL)("any passenger on the firm's WhatsApp", () => {
     await sql.end({ timeout: 5 });
   });
 
-  it("asks what is missing one question at a time, sums it up, and opens the case only at the person's yes", async () => {
+  it("asks first what decides the right, sums it up, and asks the person only after their yes (0239)", async () => {
     const { takeConversationTurns } = await import("@/lib/conversations/agent-work");
     const { intakeOpening } = await import("@/lib/conversations/intake");
     const empty = {
@@ -147,6 +147,10 @@ describe.skipIf(!DB_URL)("any passenger on the firm's WhatsApp", () => {
       origem: "",
       destino: "",
       atraso_horas: "",
+      // The arrival at the final destination, and whether the passenger travelled after a cancellation (0239).
+      chegada_prevista: "",
+      chegada_real: "",
+      viajou: "",
       aviso: "",
       nome: "",
       // Who referred the person (0183) and who travelled along (0227), empty when not told.
@@ -161,7 +165,15 @@ describe.skipIf(!DB_URL)("any passenger on the firm's WhatsApp", () => {
     const first = await sentTo(LUCAS);
     expect(first).toHaveLength(1);
     expect(first[0].startsWith(intakeOpening("Souza Advogados"))).toBe(true);
-    expect(first[0]).toContain("Sinto muito pelo atraso. Como posso te chamar?");
+    // The day of the flight first: the airline and the flight's number are never asked (0239).
+    expect(first[0]).toContain("Sinto muito pelo atraso. Em que dia era o voo?");
+
+    model.intake = () => ({ assunto: "problema_voo", problema: "delay", ...empty, data: day(-1) });
+    await writes(LUCAS, "Foi ontem");
+    expect(await takeConversationTurns(backend() as never)).toMatchObject({ answered: 1, failed: 0 });
+    expect((await sentTo(LUCAS)).at(-1)).toBe(
+      "A que horas você deveria chegar ao destino final, e a que horas chegou? Se chegou em outro dia, diga o dia também.",
+    );
 
     model.intake = () => ({
       assunto: "problema_voo",
@@ -170,20 +182,16 @@ describe.skipIf(!DB_URL)("any passenger on the firm's WhatsApp", () => {
       companhia: "LA",
       voo: "LA 3456",
       data: day(-1),
-      origem: "GRU",
-      destino: "REC",
-      atraso_horas: "6",
-      nome: "Lucas Teste Lima",
-      acompanhantes: "nenhum",
+      chegada_prevista: "14:00",
+      chegada_real: "20:00",
     });
-    await writes(
-      LUCAS,
-      "Sou o Lucas Teste Lima. Era o LA 3456 de Guarulhos para Recife, cheguei seis horas depois, sozinho",
-    );
+    await writes(LUCAS, "Era o LA 3456, devia chegar às 14h e cheguei às 20h");
     expect(await takeConversationTurns(backend() as never)).toMatchObject({ answered: 1, opened: 0, failed: 0 });
     const summary = (await sentTo(LUCAS)).at(-1) ?? "";
-    expect(summary).toContain("Confere, Lucas.");
-    expect(summary).toContain("Só você viajou. Está certo?\n1. Está certo\n2. Corrigir");
+    expect(summary).toContain("Confere o que eu entendi.");
+    expect(summary).toContain("atrasou e você chegou ao destino final 6 horas depois do previsto.");
+    expect(summary).toContain("Está certo?\n1. Está certo\n2. Corrigir");
+    expect(summary).not.toMatch(/Lucas|viajou/);
     expect(await countCases()).toBe(0);
 
     await writes(LUCAS, "1");
@@ -191,7 +199,27 @@ describe.skipIf(!DB_URL)("any passenger on the firm's WhatsApp", () => {
     expect((await sentTo(LUCAS)).at(-1)).toContain("Quer que o escritório siga com o seu caso?\n1. Quero seguir");
     expect(await countCases()).toBe(0);
 
+    // Only after the yes: how to call him, then who travelled along, and the case opens.
     await writes(LUCAS, "Quero seguir");
+    expect(await takeConversationTurns(backend() as never)).toMatchObject({ opened: 0, failed: 0 });
+    expect((await sentTo(LUCAS)).at(-1)).toBe("Combinado. Como posso te chamar?");
+    model.intake = () => ({
+      assunto: "problema_voo",
+      problema: "delay",
+      ...empty,
+      companhia: "LA",
+      voo: "LA 3456",
+      data: day(-1),
+      chegada_prevista: "14:00",
+      chegada_real: "20:00",
+      nome: "Lucas Teste Lima",
+    });
+    await writes(LUCAS, "Lucas Teste Lima");
+    expect(await takeConversationTurns(backend() as never)).toMatchObject({ opened: 0, failed: 0 });
+    expect((await sentTo(LUCAS)).at(-1)).toContain(
+      "Obrigado, Lucas. Mais alguém viajou com você nessa reserva?\n1. Só eu",
+    );
+    await writes(LUCAS, "1");
     expect(await takeConversationTurns(backend() as never)).toMatchObject({ opened: 1, failed: 0 });
     const [opened] = await sql.unsafe(
       `select c.incident, c.airline_iata, c.flight_date::text as day, c.origin, p.full_name, p.phone,
@@ -299,12 +327,18 @@ describe.skipIf(!DB_URL)("any passenger on the firm's WhatsApp", () => {
       origem: "VCP",
       destino: "BSB",
       atraso_horas: "",
+      chegada_prevista: "10:00",
+      chegada_real: "18:00",
+      viajou: "sim",
       aviso: "late",
       nome: "Dora",
       indicado_por: "",
       acompanhantes: "nenhum",
     });
-    await writes(DORA, "Oi, sou a Dora. O AD 4040 de Viracopos para Brasília foi cancelado 10 horas antes, viajei só");
+    await writes(
+      DORA,
+      "Oi, sou a Dora. O AD 4040 de Viracopos para Brasília foi cancelado 10 horas antes. Devia chegar às 10h e cheguei às 18h, viajei só",
+    );
     await takeConversationTurns(backend() as never);
     await writes(DORA, "Está certo");
     await takeConversationTurns(backend() as never);
@@ -320,7 +354,7 @@ describe.skipIf(!DB_URL)("any passenger on the firm's WhatsApp", () => {
     expect(await takeConversationTurns(backend() as never)).toMatchObject({ opened: 1, failed: 0 });
   });
 
-  it("tells a delay too short kindly, and keeps the person as not qualified", async () => {
+  it("tells a delay too short kindly at once, and keeps the person as not qualified (0239)", async () => {
     const { takeConversationTurns } = await import("@/lib/conversations/agent-work");
     model.intake = () => ({
       assunto: "problema_voo",
@@ -331,6 +365,9 @@ describe.skipIf(!DB_URL)("any passenger on the firm's WhatsApp", () => {
       origem: "BSB",
       destino: "GIG",
       atraso_horas: "2",
+      chegada_prevista: "",
+      chegada_real: "",
+      viajou: "",
       aviso: "",
       nome: "Rita Teste",
       indicado_por: "",
@@ -338,15 +375,16 @@ describe.skipIf(!DB_URL)("any passenger on the firm's WhatsApp", () => {
     });
     await writes(RITA, "Meu voo G3 1450 de Brasília para o Rio atrasou duas horas anteontem. Rita Teste, viajei só");
     expect(await takeConversationTurns(backend() as never)).toMatchObject({ claimed: 1, opened: 0, failed: 0 });
-    await writes(RITA, "sim");
-    expect(await takeConversationTurns(backend() as never)).toMatchObject({ claimed: 1, opened: 0, failed: 0 });
+    // The answer that rules the right out ends the intake there, with no summary and no other question.
+    expect(await sentTo(RITA)).toEqual([
+      "Obrigado por responder, Rita. Pelo que vimos deste voo, o escritório não vai abrir um caso agora. Se quiser falar com uma pessoa do escritório, é só escrever aqui.",
+    ]);
     const [kept] = await sql.unsafe(
       `select f.point from public.people p join public.people_funnel($1) f on f.person_id = p.id
        where p.org_id = $1 and p.full_name = 'Rita Teste'`,
       [FIRM],
     );
     expect(kept).toEqual({ point: "nao_qualificado" });
-    expect(await sentTo(RITA)).toHaveLength(2);
     const [cases] = await sql.unsafe(`select count(*)::int as n from public.cases where org_id = $1`, [FIRM]);
     expect(cases.n).toBe(2);
   });
@@ -362,6 +400,9 @@ describe.skipIf(!DB_URL)("any passenger on the firm's WhatsApp", () => {
       origem: "",
       destino: "",
       atraso_horas: "",
+      chegada_prevista: "",
+      chegada_real: "",
+      viajou: "",
       aviso: "",
       nome: "",
       indicado_por: "",

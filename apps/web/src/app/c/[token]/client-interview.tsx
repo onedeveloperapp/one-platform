@@ -1,11 +1,11 @@
 "use client";
 
+import { ClientSection } from "./client-section";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 
-import { Alert, Box, Button, Card, CardContent, TextField, Typography } from "@mui/material";
+import { Alert, Box, Button, TextField, Typography } from "@mui/material";
 
-import CardTitle from "@/components/product/card-title";
 import StateLine from "@/components/product/state-line";
 import StatusChip from "@/components/product/status-chip";
 import NiTextQuote from "@/icons/nexture/ni-text-quote";
@@ -65,109 +65,106 @@ export default function ClientInterview({
 
   const shape = question ? QUESTION_SHAPE[question] : "text";
   return (
-    <Card component="section" aria-labelledby="client-interview">
-      <CardContent className="flex flex-col gap-4">
-        <CardTitle
-          id="client-interview"
-          icon={<NiTextQuote size="medium" />}
-          tone="secondary"
-          title={t("client-interview-title")}
-          detail={question ? t("client-interview-body") : undefined}
-          chip={
-            question ? (
-              <StatusChip tone="attention" label={t("client-interview-progress", { position, total })} />
-            ) : (
-              <StatusChip tone="positive" label={t("client-interview-chip-done")} />
-            )
-          }
-        />
-        {!question ? (
-          <StateLine tone="done" emphasis>
-            {t("client-interview-done")}
-          </StateLine>
-        ) : !editable ? (
-          <StateLine tone="info">{t("client-interview-locked")}</StateLine>
+    <ClientSection
+      id="client-interview"
+      icon={<NiTextQuote size="medium" />}
+      tone="secondary"
+      title={t("client-interview-title")}
+      hint={question ? t("client-interview-body") : undefined}
+      chip={
+        question ? (
+          <StatusChip tone="attention" label={t("client-interview-progress", { position, total })} />
         ) : (
-          <Box className="flex flex-col gap-3">
-            <Typography variant="h6" component="p" className="mb-0">
-              {questionText(question, interview.facts)}
-            </Typography>
-            {shape === "yes_no" && (
-              <Box className="flex flex-row flex-wrap gap-2">
-                <Button variant="contained" disabled={busy} onClick={() => void send({ yesNo: "sim" })}>
-                  {t("client-interview-yes")}
-                </Button>
-                <Button variant="contained" disabled={busy} onClick={() => void send({ yesNo: "nao" })}>
-                  {t("client-interview-no")}
-                </Button>
-              </Box>
-            )}
-            {shape === "moment" && (
-              <Box className="flex flex-row flex-wrap gap-3">
-                <TextField
-                  type="date"
-                  size="small"
-                  id="client-interview-day"
-                  label={t("client-interview-day")}
-                  value={day}
-                  disabled={busy}
-                  onChange={(event) => setDay(event.target.value)}
-                  slotProps={{ inputLabel: { shrink: true } }}
-                />
-                <TextField
-                  type="time"
-                  size="small"
-                  id="client-interview-hour"
-                  label={t("client-interview-hour")}
-                  value={hour}
-                  disabled={busy}
-                  onChange={(event) => setHour(event.target.value)}
-                  slotProps={{ inputLabel: { shrink: true } }}
-                />
-              </Box>
-            )}
-            {shape !== "yes_no" && (
-              <TextField
-                fullWidth
-                multiline
-                minRows={shape === "text" ? 3 : 1}
-                maxRows={10}
-                size="small"
-                id="client-interview-text"
-                label={shape === "text" ? t("client-interview-text") : t("client-interview-text-more")}
-                value={typed}
-                disabled={busy}
-                slotProps={{ htmlInput: { maxLength: 2000 } }}
-                onChange={(event) => setTyped(event.target.value)}
-              />
-            )}
-            {problem && (
-              <Alert severity="error" className="neutral bg-background-paper/60!" onClose={() => setProblem(null)}>
-                {t(statementErrorKey(problem))}
-              </Alert>
-            )}
+          <StatusChip tone="positive" label={t("client-interview-chip-done")} />
+        )
+      }
+    >
+      {!question ? (
+        <StateLine tone="done" emphasis>
+          {t("client-interview-done")}
+        </StateLine>
+      ) : !editable ? (
+        <StateLine tone="info">{t("client-interview-locked")}</StateLine>
+      ) : (
+        <Box className="flex flex-col gap-3">
+          <Typography variant="h6" component="p" className="mb-0">
+            {questionText(question, interview.facts)}
+          </Typography>
+          {shape === "yes_no" && (
             <Box className="flex flex-row flex-wrap gap-2">
-              {shape !== "yes_no" && (
-                <Button
-                  variant="contained"
-                  disabled={busy || (shape === "moment" ? !day : typed.trim().length < 2)}
-                  onClick={() =>
-                    void send({
-                      text: typed.trim() || null,
-                      moment: shape === "moment" && day ? (hour ? `${day}T${hour}` : day) : null,
-                    })
-                  }
-                >
-                  {busy ? t("client-working") : t("client-interview-send")}
-                </Button>
-              )}
-              <Button variant="text" color="grey" disabled={busy} onClick={() => void send({ unknown: true })}>
-                {t("client-interview-unknown")}
+              <Button variant="contained" disabled={busy} onClick={() => void send({ yesNo: "sim" })}>
+                {t("client-interview-yes")}
+              </Button>
+              <Button variant="contained" disabled={busy} onClick={() => void send({ yesNo: "nao" })}>
+                {t("client-interview-no")}
               </Button>
             </Box>
+          )}
+          {shape === "moment" && (
+            <Box className="flex flex-row flex-wrap gap-3">
+              <TextField
+                type="date"
+                size="small"
+                id="client-interview-day"
+                label={t("client-interview-day")}
+                value={day}
+                disabled={busy}
+                onChange={(event) => setDay(event.target.value)}
+                slotProps={{ inputLabel: { shrink: true } }}
+              />
+              <TextField
+                type="time"
+                size="small"
+                id="client-interview-hour"
+                label={t("client-interview-hour")}
+                value={hour}
+                disabled={busy}
+                onChange={(event) => setHour(event.target.value)}
+                slotProps={{ inputLabel: { shrink: true } }}
+              />
+            </Box>
+          )}
+          {shape !== "yes_no" && (
+            <TextField
+              fullWidth
+              multiline
+              minRows={shape === "text" ? 3 : 1}
+              maxRows={10}
+              size="small"
+              id="client-interview-text"
+              label={shape === "text" ? t("client-interview-text") : t("client-interview-text-more")}
+              value={typed}
+              disabled={busy}
+              slotProps={{ htmlInput: { maxLength: 2000 } }}
+              onChange={(event) => setTyped(event.target.value)}
+            />
+          )}
+          {problem && (
+            <Alert severity="error" className="neutral bg-background-paper/60!" onClose={() => setProblem(null)}>
+              {t(statementErrorKey(problem))}
+            </Alert>
+          )}
+          <Box className="flex flex-row flex-wrap gap-2">
+            {shape !== "yes_no" && (
+              <Button
+                variant="contained"
+                disabled={busy || (shape === "moment" ? !day : typed.trim().length < 2)}
+                onClick={() =>
+                  void send({
+                    text: typed.trim() || null,
+                    moment: shape === "moment" && day ? (hour ? `${day}T${hour}` : day) : null,
+                  })
+                }
+              >
+                {busy ? t("client-working") : t("client-interview-send")}
+              </Button>
+            )}
+            <Button variant="text" color="grey" disabled={busy} onClick={() => void send({ unknown: true })}>
+              {t("client-interview-unknown")}
+            </Button>
           </Box>
-        )}
-      </CardContent>
-    </Card>
+        </Box>
+      )}
+    </ClientSection>
   );
 }

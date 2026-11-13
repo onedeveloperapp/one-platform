@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 
 import { Box, Tooltip, Typography } from "@mui/material";
 
+import InfoHint from "@/components/product/info-hint";
 import NiSparkle from "@/icons/nexture/ni-sparkle";
 import { cn } from "@/lib/utils";
 
@@ -20,6 +21,8 @@ export type Fact = {
   owed?: ReactNode;
   /** A long value (an address) takes two columns where there are three. */
   wide?: boolean;
+  /** How the value came to be (what ONE read or decided it from, that it may err), behind the "i" beside the name. */
+  hint?: string;
 };
 
 /**
@@ -32,7 +35,16 @@ export type Fact = {
  * compares counts; neither names several values of different kinds. A run of values joined by "·" made the reader
  * guess which was the CPF and which the phone, and hid what had no room on the line.
  */
-export default function FactGrid({ facts, className }: { facts: Fact[]; className?: string }) {
+export default function FactGrid({
+  facts,
+  className,
+  pairs = false,
+}: {
+  facts: Fact[];
+  className?: string;
+  /** Short facts two by two even on a phone (a case's head), four across where there is room; a wide fact a row. */
+  pairs?: boolean;
+}) {
   const t = useTranslations("product");
   const shown = facts.filter(
     (fact) => (fact.value !== undefined && fact.value !== null && fact.value !== "") || fact.owed,
@@ -40,12 +52,24 @@ export default function FactGrid({ facts, className }: { facts: Fact[]; classNam
   if (shown.length === 0) return null;
   return (
     <Box className={cn("@container", className)}>
-      <Box component="dl" className="m-0 grid grid-cols-1 gap-x-6 gap-y-3 @md:grid-cols-2 @3xl:grid-cols-3">
+      <Box
+        component="dl"
+        className={cn(
+          "m-0 grid gap-x-6 gap-y-3",
+          pairs ? "grid-cols-2 @3xl:grid-cols-4" : "grid-cols-1 @md:grid-cols-2 @3xl:grid-cols-3",
+        )}
+      >
         {shown.map((fact) => (
-          <Box key={fact.key} className={cn("flex min-w-0 flex-col gap-0.5", fact.wide && "@3xl:col-span-2")}>
-            <Typography variant="caption" component="dt" className="text-text-secondary leading-4">
-              {fact.label}
-            </Typography>
+          <Box
+            key={fact.key}
+            className={cn("flex min-w-0 flex-col gap-0.5", fact.wide && (pairs ? "col-span-2" : "@3xl:col-span-2"))}
+          >
+            <Box component="dt" className="flex min-w-0 items-center gap-0.5">
+              <Typography variant="caption" component="span" className="text-text-secondary leading-4">
+                {fact.label}
+              </Typography>
+              {fact.hint ? <InfoHint label={fact.hint} placement="bottom-start" className="-my-1 self-center" /> : null}
+            </Box>
             <Typography variant="body2" component="dd" className="m-0 flex min-w-0 items-start gap-1.5 break-words">
               {fact.owed && !fact.value ? (
                 fact.owed

@@ -3,7 +3,7 @@
 import type { CaseProceeding, CaseState } from "../case-types";
 import { useCaseAction } from "./case-action";
 import CourtCourse from "./court-course";
-import CourtSystem from "./court-system";
+import CourtSystem, { courtSystemFact, systemWaits } from "./court-system";
 import MarketProfile from "./market-profile";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
@@ -30,6 +30,7 @@ import ConfirmActionDialog from "@/components/product/confirm-action-dialog";
 import DialogHeader from "@/components/product/dialog-header";
 import EmptyState from "@/components/product/empty-state";
 import FactGrid, { type Fact } from "@/components/product/fact-grid";
+import InfoHint from "@/components/product/info-hint";
 import QuickActions from "@/components/product/quick-actions";
 import StateLine from "@/components/product/state-line";
 import StatusChip, { type StatusTone } from "@/components/product/status-chip";
@@ -182,29 +183,58 @@ export default function ProceedingsCard({
       )}
 
       {state.proceedings.map((proceeding) => {
-        // Each fact of the lawsuit under its name (the owner, 2026-11-12): a run joined by "·" left the reader to
-        // guess which was the comarca and which the unit. A planned lawsuit's system is said below, with the firm's
-        // word on it (`CourtSystem`).
-        const facts: Fact[] = [
-          {
+        const planned = proceeding.status === "planned";
+        const unnamed = planned ? unnamedOf(proceeding) : [];
+        const comarcaUnchecked = planned && Boolean(proceeding.comarca) && !proceeding.comarcaChecked;
+        const { waits, mayDecide } = systemWaits(state, proceeding, writable);
+        // The head says one state: a planned lawsuit is on the attention tint only while the firm owes it something.
+        const owes = planned && ((waits && mayDecide) || comarcaUnchecked || unnamed.length > 0);
+        // Each fact under its name, and how ONE came to it behind the "i" beside the name (the owner, 2026-11-13, who
+        // found the lawsuit's card disordered: ONE's reasons were four paragraphs between the facts and the system a box
+        // inside the box). The order fills the grid's rows: a wide fact closes a row of three.
+        const unitHint =
+          planned && proceeding.unitByOne && proceeding.unit
+            ? [
+                t(
+                  proceeding.unitTable?.wholeComarca === false
+                    ? "case-proceeding-unit-by-one"
+                    : "case-proceeding-unit-by-one-comarca",
+                  { unit: proceeding.unit },
+                ),
+                proceeding.unitTable && !proceeding.unitTable.confirmed ? t("case-proceeding-unit-unconfirmed") : null,
+                proceeding.unitTable?.priorComplaint ? t("case-proceeding-unit-prior-complaint") : null,
+              ]
+                .filter(Boolean)
+                .join(" ")
+            : undefined;
+        const comarcaHint =
+          planned &&
+          proceeding.comarca &&
+          proceeding.comarcaChecked &&
+          proceeding.forumCity &&
+          plainName(proceeding.forumCity) !== plainName(proceeding.comarca)
+            ? t("case-proceeding-comarca-of", { city: proceeding.forumCity, comarca: proceeding.comarca })
+            : undefined;
+        const fact: Record<string, Fact> = {
+          cnj: {
             key: "cnj",
             label: t("case-proceeding-fact-cnj"),
             value: proceeding.cnj ? (formatCnj(proceeding.cnj) ?? proceeding.cnj) : null,
           },
-          {
+          filed: {
             key: "filed",
             label: t("case-proceeding-fact-filed"),
             value: proceeding.filedAt ? formatDayBr(proceeding.filedAt) : null,
           },
-          { key: "court", label: t("case-proceeding-fact-court"), value: courtName(proceeding.court) },
-          { key: "comarca", label: t("case-proceeding-fact-comarca"), value: proceeding.comarca },
-          { key: "unit", label: t("case-proceeding-fact-unit"), value: proceeding.unit },
-          {
-            key: "system",
-            label: t("case-proceeding-fact-system"),
-            value: proceeding.status === "planned" ? null : systemLabel(t, proceeding.system),
+          court: { key: "court", label: t("case-proceeding-fact-court"), value: courtName(proceeding.court) },
+          comarca: {
+            key: "comarca",
+            label: t("case-proceeding-fact-comarca"),
+            value: proceeding.comarca,
+            hint: comarcaHint,
           },
-          {
+          system: courtSystemFact(t, state, proceeding),
+          forum: {
             key: "forum",
             label: t("case-proceeding-fact-forum"),
             value: proceeding.forumBasis
@@ -214,36 +244,57 @@ export default function ProceedingsCard({
                     : proceeding.forumBasis
                 }${proceeding.forumReason ? `: ${proceeding.forumReason}` : ""}`
               : null,
-            wide: true,
           },
-          {
+          unit: {
+            key: "unit",
+            label: t("case-proceeding-fact-unit"),
+            value: proceeding.unit,
+            wide: true,
+            hint: unitHint,
+          },
+          claimants: {
             key: "claimants",
             label: t("case-proceeding-fact-claimants"),
             value: proceeding.parties.map(nameOfParty).filter(Boolean).join(", "),
             wide: true,
           },
-          {
+          lawyers: {
             key: "lawyers",
             label: t("case-proceeding-fact-lawyers"),
             value: proceeding.lawyers.map(nameOfLawyer).filter(Boolean).join(", "),
           },
-        ];
+        };
+        const order = planned
+          ? ["court", "comarca", "system", "forum", "unit", "claimants", "lawyers"]
+          : ["cnj", "filed", "court", "comarca", "system", "forum", "unit", "lawyers", "claimants"];
+        const facts = order.map((key) => fact[key]!);
         return (
-          <Box key={proceeding.id} className="border-grey-100 flex flex-col gap-2 rounded-2xl border p-4">
-            <Box className="flex flex-wrap items-start justify-between gap-2">
-              <Box className="flex min-w-0 flex-col">
-                <Typography variant="body1" className="font-semibold">
+          <Box key={proceeding.id} className="border-grey-100 flex flex-col gap-4 rounded-2xl border p-4">
+            <Box className="flex flex-wrap items-center justify-between gap-2">
+              <Box className="flex min-w-0 items-center gap-1">
+                <Typography variant="body1" component="h3" className="mb-0 font-semibold">
                   {t(KIND_KEY[proceeding.kind])}
                 </Typography>
+                {proceeding.createdByOne && planned ? (
+                  // ONE's work, said as ONE's: what it decided by and that it may err; "Editar processo" corrects it.
+                  <InfoHint
+                    label={t("case-proceeding-created-by-one")}
+                    placement="bottom-start"
+                    className="self-center"
+                  />
+                ) : null}
               </Box>
               <Box className="flex flex-wrap items-center gap-2">
-                <StatusChip tone={STATUS_TONE[proceeding.status]} label={t(STATUS_KEY[proceeding.status])} />
+                <StatusChip
+                  tone={planned ? (owes ? "attention" : "info") : STATUS_TONE[proceeding.status]}
+                  label={t(STATUS_KEY[proceeding.status])}
+                />
                 {writable ? (
                   <>
                     <Button variant="outlined" color="grey" size="small" onClick={() => setEditing(proceeding)}>
                       {t("case-proceeding-edit")}
                     </Button>
-                    {proceeding.status === "planned" ? (
+                    {planned ? (
                       <QuickActions
                         label={t("case-proceeding-more", { kind: t(KIND_KEY[proceeding.kind]) })}
                         actions={[
@@ -261,75 +312,38 @@ export default function ProceedingsCard({
                 ) : null}
               </Box>
             </Box>
-            {proceeding.status === "planned" && proceeding.comarca ? (
-              proceeding.comarcaChecked ? (
-                proceeding.forumCity && plainName(proceeding.forumCity) !== plainName(proceeding.comarca) ? (
-                  <Typography variant="body2" className="text-text-secondary">
-                    {t("case-proceeding-comarca-of", { city: proceeding.forumCity, comarca: proceeding.comarca })}
-                  </Typography>
-                ) : null
-              ) : (
-                // The platform's table does not know this city in this court (0145): a person checks it before filing.
-                <StateLine
-                  tone="attention"
-                  action={
-                    writable ? (
-                      <Button variant="outlined" color="grey" size="small" onClick={() => setEditing(proceeding)}>
-                        {t("case-proceeding-correct")}
-                      </Button>
-                    ) : undefined
-                  }
-                >
-                  {t("case-proceeding-comarca-unchecked", { comarca: proceeding.comarca })}
-                </StateLine>
-              )
-            ) : null}
+
             <FactGrid facts={facts} />
-            {proceeding.status === "planned" && proceeding.unitByOne && proceeding.unit ? (
-              // ONE named the unit from the platform's table of the comarca's units (0179); the piece addresses it.
-              <Typography variant="body2" className="text-text-secondary">
-                {[
-                  t(
-                    proceeding.unitTable?.wholeComarca === false
-                      ? "case-proceeding-unit-by-one"
-                      : "case-proceeding-unit-by-one-comarca",
-                    { unit: proceeding.unit },
-                  ),
-                  proceeding.unitTable && !proceeding.unitTable.confirmed
-                    ? t("case-proceeding-unit-unconfirmed")
-                    : null,
-                  proceeding.unitTable?.priorComplaint ? t("case-proceeding-unit-prior-complaint") : null,
-                ]
-                  .filter(Boolean)
-                  .join(" ")}
-              </Typography>
+
+            {comarcaUnchecked || unnamed.length > 0 || (waits && proceeding.system) ? (
+              // What the firm still owes this lawsuit, each its own line with its one answer beside it.
+              <Box className="flex flex-col gap-2">
+                {comarcaUnchecked ? (
+                  // The platform's table does not know this city in this court (0145): a person checks it before filing.
+                  <StateLine
+                    tone="attention"
+                    action={
+                      writable ? (
+                        <Button variant="outlined" color="grey" size="small" onClick={() => setEditing(proceeding)}>
+                          {t("case-proceeding-correct")}
+                        </Button>
+                      ) : undefined
+                    }
+                  >
+                    {t("case-proceeding-comarca-unchecked", { comarca: proceeding.comarca ?? "" })}
+                  </StateLine>
+                ) : null}
+                {unnamed.length > 0 ? (
+                  // The firm's own power of attorney names its lawyers as the firm wrote them (0093): one who signs this
+                  // lawsuit and is not among them holds no power of the client's.
+                  <StateLine tone="attention">
+                    {t("case-proceeding-power-unnamed", { names: unnamed.join(", "), count: unnamed.length })}
+                  </StateLine>
+                ) : null}
+                <CourtSystem state={state} proceeding={proceeding} writable={writable} onChanged={onChanged} />
+              </Box>
             ) : null}
-            {proceeding.status === "planned" && unnamedOf(proceeding).length > 0 && (
-              // The firm's own power of attorney names its lawyers as the firm wrote them (0093): one who signs this
-              // lawsuit and is not among them holds no power of the client's.
-              <StateLine tone="attention">
-                {t("case-proceeding-power-unnamed", {
-                  names: unnamedOf(proceeding).join(", "),
-                  count: unnamedOf(proceeding).length,
-                })}
-              </StateLine>
-            )}
-            {proceeding.createdByOne && proceeding.status === "planned" && (
-              // ONE's work, said as ONE's, with the way to correct it beside it.
-              <StateLine
-                tone="info"
-                action={
-                  writable ? (
-                    <Button variant="text" color="grey" size="small" onClick={() => setEditing(proceeding)}>
-                      {t("case-proceeding-correct")}
-                    </Button>
-                  ) : undefined
-                }
-              >
-                {t("case-proceeding-created-by-one")}
-              </StateLine>
-            )}
-            <CourtSystem state={state} proceeding={proceeding} writable={writable} onChanged={onChanged} />
+
             <CourtCourse
               caseId={state.case.id}
               proceedingId={proceeding.id}

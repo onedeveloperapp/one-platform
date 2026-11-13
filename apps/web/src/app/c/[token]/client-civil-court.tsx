@@ -1,9 +1,10 @@
 "use client";
 
+import { ClientSection } from "./client-section";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 
-import { Alert, Box, Button, Card, CardContent, Typography } from "@mui/material";
+import { Alert, Box, Button, Typography } from "@mui/material";
 
 import StatusChip from "@/components/product/status-chip";
 import { caseErrorKey } from "@/lib/cases/cases";
@@ -64,115 +65,105 @@ export default function ClientCivilCourt({
   };
 
   return (
-    <Card component="section" aria-labelledby="client-civil-court">
-      <CardContent className="flex flex-col gap-4">
-        <Box className="flex flex-col gap-1">
-          <Typography id="client-civil-court" variant="h5" component="h2" className="mb-0">
-            {t("client-civil-title")}
-          </Typography>
-          <Typography variant="body2" className="text-text-secondary">
-            {t("client-civil-body")}
-          </Typography>
-        </Box>
-        {items.map((item) => (
-          <Box key={item.party_id} className="border-grey-100 flex flex-col gap-3 rounded-2xl border p-4">
-            <Box className="flex flex-wrap items-center justify-between gap-2">
-              <Typography variant="body1" className="font-semibold">
-                {item.minor ? t("client-civil-minor", { name: item.name }) : t("client-civil-own")}
-              </Typography>
-              {item.accepted === true ? (
-                <StatusChip
-                  tone="positive"
-                  label={
-                    item.source === "firm"
-                      ? t("client-civil-firm", { date: day(item.recorded_at) })
-                      : t("client-civil-accepted", { date: day(item.recorded_at) })
-                  }
-                />
-              ) : item.accepted === false ? (
-                <StatusChip tone="attention" label={t("client-civil-declined", { date: day(item.recorded_at) })} />
-              ) : null}
-            </Box>
-            {item.wording ? (
-              <Typography variant="body1" className="text-text-primary">
-                {item.wording}
-              </Typography>
-            ) : (
-              <Typography variant="body2" className="text-text-secondary">
-                {t("client-civil-unavailable")}
-              </Typography>
-            )}
-            {item.accepted === false && (
-              <Typography variant="body2" className="text-text-secondary">
-                {t("client-civil-declined-hint")}
-              </Typography>
-            )}
-            {item.wording && confirming === item.party_id ? (
-              <Box className="flex flex-col gap-2">
-                <Typography variant="body2">{t("client-civil-confirm-no")}</Typography>
-                <Box className="flex flex-wrap gap-2">
-                  <Button
-                    variant="contained"
-                    size="small"
-                    disabled={busy !== null}
-                    onClick={() => void answer(item, false)}
-                  >
-                    {busy === item.party_id ? t("client-working") : t("client-civil-confirm-no-action")}
-                  </Button>
-                  <Button
-                    variant="text"
-                    color="grey"
-                    size="small"
-                    disabled={busy !== null}
-                    onClick={() => setConfirming(null)}
-                  >
-                    {t("client-civil-keep")}
-                  </Button>
-                </Box>
-              </Box>
-            ) : item.wording ? (
-              <Box className="flex flex-wrap gap-2">
-                {item.accepted !== true && (
-                  <Button
-                    variant="contained"
-                    size="small"
-                    disabled={busy !== null}
-                    onClick={() => void answer(item, true)}
-                  >
-                    {busy === item.party_id ? t("client-working") : t("client-civil-accept")}
-                  </Button>
-                )}
-                {item.accepted === true ? (
-                  <Button
-                    variant="text"
-                    color="grey"
-                    size="small"
-                    disabled={busy !== null}
-                    onClick={() => setConfirming(item.party_id)}
-                  >
-                    {t("client-civil-change")}
-                  </Button>
-                ) : item.accepted === null ? (
-                  <Button
-                    variant="outlined"
-                    color="grey"
-                    size="small"
-                    disabled={busy !== null}
-                    onClick={() => void answer(item, false)}
-                  >
-                    {t("client-civil-decline")}
-                  </Button>
-                ) : null}
-              </Box>
+    <ClientSection id="client-civil-court" title={t("client-civil-title")} lead={t("client-civil-body")}>
+      {items.map((item) => (
+        <Box key={item.party_id} className="border-grey-100 flex flex-col gap-3 rounded-2xl border p-4">
+          <Box className="flex flex-wrap items-center justify-between gap-2">
+            <Typography variant="body1" className="font-semibold">
+              {item.minor ? t("client-civil-minor", { name: item.name }) : t("client-civil-own")}
+            </Typography>
+            {item.accepted === true ? (
+              <StatusChip
+                tone="positive"
+                label={
+                  item.source === "firm"
+                    ? t("client-civil-firm", { date: day(item.recorded_at) })
+                    : t("client-civil-accepted", { date: day(item.recorded_at) })
+                }
+              />
+            ) : item.accepted === false ? (
+              <StatusChip tone="attention" label={t("client-civil-declined", { date: day(item.recorded_at) })} />
             ) : null}
           </Box>
-        ))}
-        {problem ? (
-          <Alert severity="error" className="neutral bg-background-paper/60!">
-            {t(caseErrorKey(problem))}
-          </Alert>
-        ) : null}
-      </CardContent>
-    </Card>
+          {item.wording ? (
+            <Typography variant="body1" className="text-text-primary">
+              {item.wording}
+            </Typography>
+          ) : (
+            <Typography variant="body2" className="text-text-secondary">
+              {t("client-civil-unavailable")}
+            </Typography>
+          )}
+          {item.accepted === false && (
+            <Typography variant="body2" className="text-text-secondary">
+              {t("client-civil-declined-hint")}
+            </Typography>
+          )}
+          {item.wording && confirming === item.party_id ? (
+            <Box className="flex flex-col gap-2">
+              <Typography variant="body2">{t("client-civil-confirm-no")}</Typography>
+              <Box className="flex flex-wrap gap-2">
+                <Button
+                  variant="contained"
+                  size="small"
+                  disabled={busy !== null}
+                  onClick={() => void answer(item, false)}
+                >
+                  {busy === item.party_id ? t("client-working") : t("client-civil-confirm-no-action")}
+                </Button>
+                <Button
+                  variant="text"
+                  color="grey"
+                  size="small"
+                  disabled={busy !== null}
+                  onClick={() => setConfirming(null)}
+                >
+                  {t("client-civil-keep")}
+                </Button>
+              </Box>
+            </Box>
+          ) : item.wording ? (
+            <Box className="flex flex-wrap gap-2">
+              {item.accepted !== true && (
+                <Button
+                  variant="contained"
+                  size="small"
+                  disabled={busy !== null}
+                  onClick={() => void answer(item, true)}
+                >
+                  {busy === item.party_id ? t("client-working") : t("client-civil-accept")}
+                </Button>
+              )}
+              {item.accepted === true ? (
+                <Button
+                  variant="text"
+                  color="grey"
+                  size="small"
+                  disabled={busy !== null}
+                  onClick={() => setConfirming(item.party_id)}
+                >
+                  {t("client-civil-change")}
+                </Button>
+              ) : item.accepted === null ? (
+                <Button
+                  variant="outlined"
+                  color="grey"
+                  size="small"
+                  disabled={busy !== null}
+                  onClick={() => void answer(item, false)}
+                >
+                  {t("client-civil-decline")}
+                </Button>
+              ) : null}
+            </Box>
+          ) : null}
+        </Box>
+      ))}
+      {problem ? (
+        <Alert severity="error" className="neutral bg-background-paper/60!">
+          {t(caseErrorKey(problem))}
+        </Alert>
+      ) : null}
+    </ClientSection>
   );
 }

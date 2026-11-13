@@ -1,11 +1,11 @@
 "use client";
 
+import { ClientSection } from "./client-section";
 import { useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
 
-import { Alert, Box, Button, Card, CardContent } from "@mui/material";
+import { Alert, Box, Button } from "@mui/material";
 
-import CardTitle from "@/components/product/card-title";
 import StateLine from "@/components/product/state-line";
 import NiEmail from "@/icons/nexture/ni-email";
 import { readClientMarketing, setClientMarketing } from "@/lib/cases/client-link-actions";
@@ -49,24 +49,21 @@ export default function ClientMarketing({ token, editable }: { token: string; ed
   };
 
   return (
-    <Card component="section" aria-labelledby="client-marketing">
-      <CardContent className="flex flex-col gap-3">
-        <CardTitle id="client-marketing" icon={<NiEmail size="medium" />} title={t("client-marketing-title")} />
-        {failed ? (
-          <Alert severity="error" className="neutral bg-background-paper/60!">
-            {t("client-marketing-failed")}
-          </Alert>
-        ) : null}
-        <StateLine tone={off ? "done" : "info"}>{t(off ? "client-marketing-off" : "client-marketing-on")}</StateLine>
-        <StateLine tone="info">{t("client-marketing-notices")}</StateLine>
-        {editable ? (
-          <Box>
-            <Button variant="outlined" color="grey" disabled={busy} onClick={() => void change()}>
-              {t(off ? "client-marketing-resume" : "client-marketing-stop")}
-            </Button>
-          </Box>
-        ) : null}
-      </CardContent>
-    </Card>
+    <ClientSection id="client-marketing" icon={<NiEmail size="medium" />} title={t("client-marketing-title")} gap={3}>
+      {failed ? (
+        <Alert severity="error" className="neutral bg-background-paper/60!">
+          {t("client-marketing-failed")}
+        </Alert>
+      ) : null}
+      <StateLine tone={off ? "done" : "info"}>{t(off ? "client-marketing-off" : "client-marketing-on")}</StateLine>
+      <StateLine tone="info">{t("client-marketing-notices")}</StateLine>
+      {editable ? (
+        <Box>
+          <Button variant="outlined" color="grey" disabled={busy} onClick={() => void change()}>
+            {t(off ? "client-marketing-resume" : "client-marketing-stop")}
+          </Button>
+        </Box>
+      ) : null}
+    </ClientSection>
   );
 }

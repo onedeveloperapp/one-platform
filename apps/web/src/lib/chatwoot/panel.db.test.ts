@@ -32,6 +32,9 @@ const FIRM = "be223000-0000-4000-8000-00000000000a";
 const OTHER_FIRM = "be223000-0000-4000-8000-00000000000b";
 const CONVERSATION = "ce223000-0000-4000-8000-00000000000a";
 const CLIENT = "5562999992233";
+/** A colleague of Ana's who has not entered the panel yet, and a room of the team they are both in (0238). */
+const BEA = "ae223000-0000-4000-8000-000000000003";
+const ROOM = "ee223000-0000-4000-8000-00000000000a";
 
 process.env.CHATWOOT_FAKE = "1";
 delete process.env.VERCEL_ENV;
@@ -76,7 +79,7 @@ describe.skipIf(!DB_URL)("the firm's panel of attendance", () => {
     clientAs = standIn(sql);
     await sql.unsafe(`
       delete from public.organizations where id in ('${FIRM}', '${OTHER_FIRM}');
-      delete from auth.users where id in ('${ANA}', '${CAIO}');
+      delete from auth.users where id in ('${ANA}', '${CAIO}', '${BEA}');
       insert into auth.users (id, instance_id, aud, role, email, encrypted_password, email_confirmed_at, raw_app_meta_data, raw_user_meta_data, created_at, updated_at)
       values
         ('${ANA}', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'ana@painel-app.invalid', '', now(), '{}', '{"display_name":"Ana Souza"}', now(), now()),
@@ -110,7 +113,7 @@ describe.skipIf(!DB_URL)("the firm's panel of attendance", () => {
     // The firms' accounts queued to be taken out of the panel: the panel of this test is gone with it.
     for (const { account_id } of accounts)
       await sql.unsafe(`delete from public.chatwoot_deletions where account_id = $1`, [account_id]);
-    await sql.unsafe(`delete from auth.users where id in ('${ANA}', '${CAIO}')`);
+    await sql.unsafe(`delete from auth.users where id in ('${ANA}', '${CAIO}', '${BEA}')`);
     await sql.end({ timeout: 5 });
   });
 
@@ -368,5 +371,67 @@ describe.skipIf(!DB_URL)("the firm's panel of attendance", () => {
     const worked = await workDeletions(backend(), Date.now() + 30_000);
     expect(worked.failed).toBe(0);
     expect(panel.contacts.has(contactId)).toBe(false);
+  });
+
+  it("makes a room of the team in the panel, opens it for a person of it and empties it once archived", async () => {
+    const { syncRooms } = await import("@/lib/chatwoot/rooms");
+    const { openPanel } = await import("@/lib/chatwoot/panel");
+    await sql.unsafe(`
+      insert into auth.users (id, instance_id, aud, role, email, encrypted_password, email_confirmed_at, raw_app_meta_data, raw_user_meta_data, created_at, updated_at)
+      values ('${BEA}', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'bea@painel-app.invalid', '', now(), '{}', '{"display_name":"Bea Lima"}', now(), now());
+      insert into public.memberships (org_id, user_id, role, firm_function) values ('${FIRM}', '${BEA}', 'member', 'atendimento');
+      insert into public.chatwoot_rooms (id, org_id, name) values ('${ROOM}', '${FIRM}', 'Comercial');
+      insert into public.chatwoot_room_members (room_id, org_id, user_id) values ('${ROOM}', '${FIRM}', '${ANA}'), ('${ROOM}', '${FIRM}', '${BEA}');
+    `);
+    expect(await syncRooms(backend(), { roomId: ROOM })).toMatchObject({ claimed: 1, done: 1, failed: 0 });
+    const panel = await fake();
+    const account = await accountOf(FIRM);
+    const ana = panel.userByEmail("ana@painel-app.invalid")!;
+    const room = (await sql.unsafe(`select * from public.chatwoot_rooms where id = $1`, [ROOM]))[0]!;
+    const inbox = panel.inboxes.get(Number(room.chatwoot_inbox_id))!;
+    expect(inbox).toMatchObject({ name: "Sala: Comercial", team: true, webhookUrl: "" });
+    // Bea has not entered the panel: only Ana is in the room there.
+    expect([...inbox.members]).toEqual([ana.id]);
+    const shown = panel.conversation(Number(account.account_id), Number(room.chatwoot_conversation_id))!;
+    expect([...shown.participants]).toEqual([ana.id]);
+    expect(shown.status).toBe("open");
+    expect(panel.contacts.get(shown.contactId)!.phone).toBeNull();
+    // The firm's inbox of WhatsApp is not the room's, and keeps its people.
+    expect(Number(room.chatwoot_inbox_id)).not.toBe(Number(account.inbox_id));
+    expect(panel.inboxes.get(Number(account.inbox_id))!.members.has(ana.id)).toBe(true);
+
+    // Bea enters the panel for the first time, from the room: she joins it, and the link opens it.
+    const bea = {
+      supabase: clientAs("authenticated", { sub: BEA, role: "authenticated", email: "bea@painel-app.invalid" }),
+      email: "bea@painel-app.invalid",
+      profile: { displayName: "Bea Lima", timezone: null },
+    } as unknown as Parameters<typeof openPanel>[0];
+    const opened = await openPanel(bea, { room: ROOM });
+    expect(opened.ok).toBe(true);
+    expect(new URL(opened.ok ? opened.url : "https://invalid").searchParams.get("sso_conversation_id")).toBe(
+      String(room.chatwoot_conversation_id),
+    );
+    const beaUser = panel.userByEmail("bea@painel-app.invalid")!;
+    expect([...panel.inboxes.get(inbox.id)!.members].sort()).toEqual([ana.id, beaUser.id].sort());
+    expect([...shown.participants].sort()).toEqual([ana.id, beaUser.id].sort());
+    // A room somebody resolved in the panel opens again for a person of it.
+    shown.status = "resolved";
+    await openPanel(bea, { room: ROOM });
+    expect(shown.status).toBe("open");
+    // A room the person is not in opens the panel's list.
+    const other = await openPanel(bea, { room: "ee223000-0000-4000-8000-0000000000ff" });
+    expect(new URL(other.ok ? other.url : "https://invalid").searchParams.get("sso_conversation_id")).toBeNull();
+
+    // Archived: everybody leaves it in the panel, its history stays, and it opens for nobody.
+    await sql.unsafe(
+      `update public.chatwoot_rooms set archived_at = now(), archive_reason = 'Equipe desfeita', chatwoot_dirty_at = clock_timestamp() where id = $1`,
+      [ROOM],
+    );
+    expect(await syncRooms(backend(), { roomId: ROOM })).toMatchObject({ done: 1 });
+    expect(panel.inboxes.get(inbox.id)!.members.size).toBe(0);
+    expect(shown.participants.size).toBe(0);
+    expect(shown.status).toBe("resolved");
+    const closed = await openPanel(bea, { room: ROOM });
+    expect(new URL(closed.ok ? closed.url : "https://invalid").searchParams.get("sso_conversation_id")).toBeNull();
   });
 });

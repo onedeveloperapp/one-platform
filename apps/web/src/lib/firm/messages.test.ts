@@ -31,6 +31,11 @@ describe("the firm's own words in ONE's messages", () => {
     expect(fillMessage("Oi, {nome}. Caso {caso}: {link}", { nome: "Maria", link: "https://x.invalid/c/a" })).toBe(
       "Oi, Maria. Caso {caso}: https://x.invalid/c/a",
     );
+    // A name not known yet (0239: none before the "Quero seguir") takes its comma or space along.
+    expect(fillMessage("Obrigado por responder, {nome}. Pelo que vimos", { nome: "" })).toBe(
+      "Obrigado por responder. Pelo que vimos",
+    );
+    expect(fillMessage("Tudo bem {nome}, até logo.", { nome: " " })).toBe("Tudo bem, até logo.");
   });
 
   it("says when a text speaks of a price, for the firm to weigh", () => {

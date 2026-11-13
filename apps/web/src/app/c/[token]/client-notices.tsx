@@ -1,22 +1,11 @@
 "use client";
 
+import { ClientSection } from "./client-section";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 
-import {
-  Alert,
-  Box,
-  Button,
-  Card,
-  CardContent,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  Typography,
-} from "@mui/material";
+import { Alert, Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, Typography } from "@mui/material";
 
-import CardTitle from "@/components/product/card-title";
 import OutcomeDialog, { type OutcomeLine } from "@/components/product/outcome-dialog";
 import StateLine from "@/components/product/state-line";
 import StatusChip from "@/components/product/status-chip";
@@ -113,60 +102,58 @@ export default function ClientNotices({
   );
 
   return (
-    <Card component="section" aria-labelledby="client-notices">
-      <CardContent className="flex flex-col gap-3">
-        <CardTitle
-          id="client-notices"
-          icon={<NiBell size="medium" />}
-          tone="primary"
-          title={t("client-notices-title")}
-          chip={chip}
-        />
-        {!notices.phone ? (
-          <StateLine tone="attention">
-            {editable ? t("client-notices-no-phone-editable") : t("client-notices-no-phone")}
+    <ClientSection
+      id="client-notices"
+      icon={<NiBell size="medium" />}
+      tone="primary"
+      title={t("client-notices-title")}
+      chip={chip}
+      gap={3}
+    >
+      {!notices.phone ? (
+        <StateLine tone="attention">
+          {editable ? t("client-notices-no-phone-editable") : t("client-notices-no-phone")}
+        </StateLine>
+      ) : notices.opted_out ? (
+        <StateLine tone="info">{t("client-notices-opted-out")}</StateLine>
+      ) : notices.stopped ? (
+        <StateLine
+          tone="attention"
+          emphasis
+          icon={<NiBellInactive size="medium" />}
+          action={
+            <Button variant="contained" disabled={busy} onClick={() => void answer(true)}>
+              {t("client-notices-resume")}
+            </Button>
+          }
+        >
+          <strong>
+            {notices.stopped_at
+              ? t("client-notices-stopped", { day: momentIn(notices.stopped_at, "America/Sao_Paulo").day })
+              : t("client-notices-stopped-undated")}
+          </strong>{" "}
+          {t("client-notices-stopped-risk")}
+        </StateLine>
+      ) : (
+        <>
+          <StateLine tone="done" emphasis icon={<NiPhone size="medium" />}>
+            {t("client-notices-going", { phone: phone ?? "", firm })}
           </StateLine>
-        ) : notices.opted_out ? (
-          <StateLine tone="info">{t("client-notices-opted-out")}</StateLine>
-        ) : notices.stopped ? (
-          <StateLine
-            tone="attention"
-            emphasis
-            icon={<NiBellInactive size="medium" />}
-            action={
-              <Button variant="contained" disabled={busy} onClick={() => void answer(true)}>
-                {t("client-notices-resume")}
-              </Button>
-            }
-          >
-            <strong>
-              {notices.stopped_at
-                ? t("client-notices-stopped", { day: momentIn(notices.stopped_at, "America/Sao_Paulo").day })
-                : t("client-notices-stopped-undated")}
-            </strong>{" "}
-            {t("client-notices-stopped-risk")}
-          </StateLine>
-        ) : (
-          <>
-            <StateLine tone="done" emphasis icon={<NiPhone size="medium" />}>
-              {t("client-notices-going", { phone: phone ?? "", firm })}
-            </StateLine>
-            <Typography variant="body2" className="text-text-secondary">
-              {t("client-notices-what")}
-            </Typography>
-            <Box>
-              <Button variant="text" color="grey" disabled={busy} onClick={() => setLeaving(true)}>
-                {t("client-notices-stop")}
-              </Button>
-            </Box>
-          </>
-        )}
-        {problem ? (
-          <Alert severity="error" className="neutral bg-background-paper/60!">
-            {t(clientNoticeErrorKey(problem))}
-          </Alert>
-        ) : null}
-      </CardContent>
+          <Typography variant="body2" className="text-text-secondary">
+            {t("client-notices-what")}
+          </Typography>
+          <Box>
+            <Button variant="text" color="grey" disabled={busy} onClick={() => setLeaving(true)}>
+              {t("client-notices-stop")}
+            </Button>
+          </Box>
+        </>
+      )}
+      {problem ? (
+        <Alert severity="error" className="neutral bg-background-paper/60!">
+          {t(clientNoticeErrorKey(problem))}
+        </Alert>
+      ) : null}
 
       {leaving ? (
         <Dialog open onClose={busy ? undefined : () => setLeaving(false)} aria-labelledby="client-notices-leave-title">
@@ -199,6 +186,6 @@ export default function ClientNotices({
           onClose={() => setOutcome(null)}
         />
       ) : null}
-    </Card>
+    </ClientSection>
   );
 }

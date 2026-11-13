@@ -399,6 +399,9 @@ type PaperToIssue = {
   person?: string;
   firm?: string;
   body?: string;
+  /** Of a paper not issued: the client's data it misses, and whether its model has a field ONE does not know. */
+  missing?: string[];
+  unknown_mark?: boolean;
 };
 
 /** A paper's PDF kept under the purpose `paper`, ready for the database to name. */
@@ -473,7 +476,17 @@ async function sendPapers(service: SupabaseClient, held: HeldAdvance): Promise<P
     if (!paper.ok) return { ...sent, lost: paper.code === "not_working" };
     if (paper.code === "none") return sent;
     if (paper.code === "incomplete" || paper.code === "unwritable") {
-      return { ...sent, waiting: paper.code === "incomplete" ? "paper_incomplete" : "paper_unwritable" };
+      // A field of the firm's model ONE does not know is the model's to put right, never the client's data (0240).
+      const modelOnly =
+        paper.code === "incomplete" && paper.unknown_mark === true && (paper.missing ?? []).length === 0;
+      return {
+        ...sent,
+        waiting: modelOnly
+          ? "paper_model_marks"
+          : paper.code === "incomplete"
+            ? "paper_incomplete"
+            : "paper_unwritable",
+      };
     }
     if (paper.code !== "due" || !paper.org_id || !paper.person_id || !paper.kind || !paper.template_id || !paper.body) {
       return { ...sent, failed: true };
@@ -731,6 +744,19 @@ export async function advanceClaimedCase(
     if ((held.lawsuitsDue || held.packageDue) && !facts) {
       await deliverMessages(asked.messages, follow);
       return "lost";
+    }
+    // The client never says they finished (0240): ONE marks their link finished once the case has what it needs,
+    // having asked what was missing in the chat.
+    if (facts && missingOf(facts, day).length === 0) {
+      const { data: done, error: doneError } = await service.rpc("one_finish_client_links", {
+        target_case: held.caseId,
+        target_claim: held.claim,
+      });
+      if (doneError) throw new Error("links could not be finished");
+      if ((done as { code?: string } | null)?.code === "not_working") {
+        await deliverMessages(asked.messages, follow);
+        return "lost";
+      }
     }
     if (held.lawsuitsDue && facts) {
       const lawsuits = await createLawsuits(service, held, facts, day);

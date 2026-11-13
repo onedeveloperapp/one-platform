@@ -9,17 +9,23 @@ import {
 
 /**
  * Who writes to the firm's WhatsApp with no alert of ONE's and no case (migration 0176, item 2.1 of the case journey
- * plan), as the chat's script of 2026-11-12 has it (migration 0227): ONE says who it is, asks what is missing one
- * question at a time (the name first, then the trip, then who travelled along), each choice in numbered options, sums
- * up what it understood for the person to confirm, and offers to go on with the firm's own words on its fees. The case
- * opens only at their "Quero seguir". The task `atendimento.entrada` reads what they told; these rules say what is
- * still missing, what a reply chose and what ONE writes. Pure.
+ * plan), as the chat's script of 2026-11-12 has it (migration 0227) with the owner's changes of 2026-11-13 (0239): ONE
+ * says who it is and asks first what decides the right, one question at a time, each choice in numbered options (what
+ * happened, the day of the flight, when the airline told of a cancellation or a change, when the passenger should have
+ * arrived and did), stopping at the first answer that rules it out; it sums up for the person to confirm, and offers to
+ * go on with the firm's own words on its fees. Only after their "Quero seguir" does it ask how to call them and who
+ * travelled along, and the case opens. The airline and the flight's number come from the documents, never asked. The
+ * task `atendimento.entrada` reads what they told; these rules say what is still missing, what a reply chose and what
+ * ONE writes. Pure.
  */
 
 export const INTAKE_TASK = "atendimento.entrada";
 
-/** Where an intake stands once nothing is missing: the summary sent, a correction asked, the offer, the doubts, a no. */
-export type IntakeStep = "resumo" | "corrigir" | "oferta" | "duvidas" | "recusou";
+/**
+ * Where an intake stands once nothing of the right is missing: the summary sent, a correction asked, the offer, the
+ * doubts, a no, or the person's "Quero seguir" while their name and who travelled along are asked (0239).
+ */
+export type IntakeStep = "resumo" | "corrigir" | "oferta" | "duvidas" | "recusou" | "seguir";
 
 export type IntakeFacts = {
   problema?: string;
@@ -29,6 +35,11 @@ export type IntakeFacts = {
   origem?: string;
   destino?: string;
   atraso_horas?: string;
+  /** When the passenger should have arrived at the final destination, and did (`AAAA-MM-DDTHH:MM` or `HH:MM`, 0239). */
+  chegada_prevista?: string;
+  chegada_real?: string;
+  /** For a cancellation or a change: "nao" when the passenger did not travel after it, "sim" when they did (0239). */
+  viajou?: string;
   aviso?: string;
   /** How the person is called: the first name is enough, the full name comes from the identity document. */
   nome?: string;
@@ -49,13 +60,16 @@ const KEYS = [
   "origem",
   "destino",
   "atraso_horas",
+  "chegada_prevista",
+  "chegada_real",
+  "viajou",
   "aviso",
   "nome",
   "indicado_por",
   "acompanhantes",
 ] as const;
 
-const STEPS: readonly IntakeStep[] = ["resumo", "corrigir", "oferta", "duvidas", "recusou"];
+const STEPS: readonly IntakeStep[] = ["resumo", "corrigir", "oferta", "duvidas", "recusou", "seguir"];
 
 /** What the task read: whether it is a problem with a flight, and the facts it found. Null for an answer that is not. */
 export function intakeReadingOf(raw: unknown): { flight: boolean; facts: Record<string, string> } | null {
@@ -83,24 +97,88 @@ export function intakeFactsOf(raw: unknown): IntakeFacts {
   return facts;
 }
 
-export type IntakeAsk = "nome" | "problema" | "voo" | "data" | "atraso" | "aviso" | "acompanhantes" | "nomes";
+export type IntakeAsk =
+  | "problema"
+  | "data"
+  | "aviso"
+  | "chegada"
+  | "chegada_prevista"
+  | "chegada_real"
+  | "nome"
+  | "acompanhantes"
+  | "nomes";
 
 const LATE: readonly string[] = ["delay", "missed_connection"];
 const TOLD: readonly string[] = ["cancellation", "change"];
 
-/** What the intake still lacks to decide, in the order it is asked. */
+const DATE_TIME = /^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})$/;
+const TIME = /^(\d{1,2}):(\d{2})$/;
+
+/** A moment as the task writes it, in minutes since the epoch; a time alone falls on the flight's day. Null when not one. */
+function momentOf(value: string | undefined, day: string | undefined): { minutes: number; dated: boolean } | null {
+  const text = (value ?? "").trim();
+  const full = DATE_TIME.exec(text);
+  const time = full ? null : TIME.exec(text);
+  const date = full ? full[1] : day && /^\d{4}-\d{2}-\d{2}$/.test(day) ? day : null;
+  const hour = Number(full ? full[2] : time?.[1]);
+  const minute = Number(full ? full[3] : time?.[2]);
+  if (!date || (!full && !time) || hour > 23 || minute > 59) return null;
+  const [y, m, d] = date.split("-").map(Number);
+  return { minutes: Date.UTC(y, m - 1, d, hour, minute) / 60000, dated: Boolean(full) };
+}
+
+/**
+ * How late the passenger arrived at the final destination, in minutes (0239): the two times they told when both are
+ * read (an arrival past midnight with no day told falls on the next one), else the hours of delay they told; null when
+ * neither is known. Arithmetic only: the rule of qualification decides what it means.
+ */
+export function arrivalDelayMinutes(facts: IntakeFacts): number | null {
+  const scheduled = momentOf(facts.chegada_prevista, facts.data);
+  const arrived = momentOf(facts.chegada_real, facts.data);
+  if (scheduled && arrived) {
+    let late = arrived.minutes - scheduled.minutes;
+    if (late < 0 && !arrived.dated) late += 24 * 60;
+    return Math.round(late);
+  }
+  const hours = facts.atraso_horas ? Number(facts.atraso_horas.replace(",", ".")) : NaN;
+  return Number.isFinite(hours) ? Math.round(hours * 60) : null;
+}
+
+/** Whether the passenger did not travel after a cancellation or a change: the notice alone decides then (0239). */
+const didNotTravel = (facts: IntakeFacts): boolean =>
+  Boolean(facts.problema && TOLD.includes(facts.problema)) && facts.viajou === "nao";
+
+/**
+ * What the intake still lacks to decide the right, in the order it is asked (0239): what happened, the day of the
+ * flight (5 years decide it), when the airline told of a cancellation or a change, and the arrival at the final
+ * destination (4 hours decide it). The airline and the flight's number come from the documents.
+ */
 export function intakeMissing(facts: IntakeFacts): IntakeAsk[] {
   const missing: IntakeAsk[] = [];
-  if (!facts.nome) missing.push("nome");
   if (!facts.problema) missing.push("problema");
-  if (!facts.voo && !(facts.origem && facts.destino)) missing.push("voo");
   if (!facts.data) missing.push("data");
-  if (facts.problema && LATE.includes(facts.problema) && !facts.atraso_horas) missing.push("atraso");
   if (facts.problema && TOLD.includes(facts.problema) && !facts.aviso) missing.push("aviso");
+  const arrival = facts.problema && (LATE.includes(facts.problema) || TOLD.includes(facts.problema));
+  if (arrival && !didNotTravel(facts) && arrivalDelayMinutes(facts) === null) {
+    const scheduled = Boolean(momentOf(facts.chegada_prevista, facts.data));
+    const arrived = Boolean(momentOf(facts.chegada_real, facts.data));
+    missing.push(scheduled ? "chegada_real" : arrived ? "chegada_prevista" : "chegada");
+  }
+  return missing;
+}
+
+/** What is asked once the person said "Quero seguir" (0239): how to call them, then who travelled along. */
+export function intakePersonalMissing(facts: IntakeFacts): IntakeAsk[] {
+  const missing: IntakeAsk[] = [];
+  if (!facts.nome) missing.push("nome");
   if (!facts.acompanhantes) missing.push("acompanhantes");
   else if (facts.acompanhantes === "mais") missing.push("nomes");
   return missing;
 }
+
+/** The next question of an intake: of the right before the "Quero seguir", of the person after it. */
+export const intakeNextAsk = (facts: IntakeFacts): IntakeAsk | null =>
+  (facts.etapa === "seguir" ? intakePersonalMissing(facts) : facts.etapa ? [] : intakeMissing(facts))[0] ?? null;
 
 // ---------- The options of a question, and what a reply chose ----------
 
@@ -122,6 +200,15 @@ const NOTICE_OPTIONS: readonly IntakeOption[] = [
   { value: "early", label: "Com mais antecedência", words: ["mais antecedencia", "antecedencia", "mais de 72"] },
 ];
 
+/** The one choice of the arrival's question, after a cancellation or a change: the passenger did not travel (0239). */
+const ARRIVAL_OPTIONS: readonly IntakeOption[] = [
+  {
+    value: "nao",
+    label: "Não cheguei a viajar",
+    words: ["nao cheguei a viajar", "nao viajei", "nao fui", "desisti", "desisti da viagem", "pedi reembolso"],
+  },
+];
+
 const COMPANION_OPTIONS: readonly IntakeOption[] = [
   { value: "nenhum", label: "Só eu", words: ["so eu", "sozinho", "sozinha", "ninguem", "nao", "viajei sozinho"] },
   { value: "mais", label: "Sim, mais pessoas", words: ["sim", "mais pessoas", "sim mais pessoas"] },
@@ -131,6 +218,7 @@ const COMPANION_OPTIONS: readonly IntakeOption[] = [
 export const OPTIONS = {
   problema: PROBLEM_OPTIONS,
   aviso: NOTICE_OPTIONS,
+  chegada: ARRIVAL_OPTIONS,
   acompanhantes: COMPANION_OPTIONS,
   resumo: [
     { value: "certo", label: "Está certo", words: ["sim", "certo", "isso", "correto", "esta certo", "ok", "confere"] },
@@ -226,17 +314,21 @@ export function intakeLead(before: IntakeFacts, after: IntakeFacts): string | nu
 
 /** The question of what is missing, with its options. */
 export function questionText(ask: IntakeAsk, facts: IntakeFacts = {}): string {
+  // After a cancellation or a change the passenger may not have travelled at all: the notice decides then (0239).
+  const notTravelled = facts.problema && TOLD.includes(facts.problema) ? `\n${optionsText(OPTIONS.chegada)}` : "";
   switch (ask) {
     case "nome":
       return "Como posso te chamar?";
     case "problema":
       return `O que aconteceu com o voo?\n${optionsText(OPTIONS.problema)}`;
-    case "voo":
-      return "Qual era a companhia aérea e o número do voo? Se não souber o número, diga de qual cidade para qual cidade era.";
     case "data":
       return "Em que dia era o voo?";
-    case "atraso":
-      return "Com quantas horas de atraso, mais ou menos, você chegou ao destino final?";
+    case "chegada":
+      return `A que horas você deveria chegar ao destino final, e a que horas chegou? Se chegou em outro dia, diga o dia também.${notTravelled}`;
+    case "chegada_prevista":
+      return "E a que horas você deveria chegar ao destino final?";
+    case "chegada_real":
+      return `E a que horas você chegou ao destino final? Se foi em outro dia, diga o dia também.${notTravelled}`;
     case "aviso":
       return `Quando a companhia avisou ${facts.problema === "change" ? "da mudança" : "do cancelamento"}?\n${optionsText(OPTIONS.aviso)}`;
     case "acompanhantes":
@@ -276,19 +368,38 @@ const NOTICE_WORDS: Record<string, string> = {
   early: "com aviso 72 horas ou mais antes",
 };
 
+/** How late the passenger arrived, in the summary's words ("6 horas", "4 horas e 30 minutos"). */
+function lateWords(minutes: number): string {
+  if (minutes <= 0) return "no horário previsto ou antes";
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  const h = hours === 1 ? "1 hora" : `${hours} horas`;
+  const m = rest === 1 ? "1 minuto" : `${rest} minutos`;
+  const said = hours === 0 ? m : rest === 0 ? h : `${h} e ${m}`;
+  return `${said} depois do previsto`;
+}
+
+/** The arrival at the final destination, in the summary's words; null when not known. */
+function arrivalWords(facts: IntakeFacts): string | null {
+  if (didNotTravel(facts)) return "e você não chegou a viajar";
+  const late = arrivalDelayMinutes(facts);
+  return late === null ? null : `e você chegou ao destino final ${lateWords(late)}`;
+}
+
 /** What happened, in the summary's words. */
 function eventWords(facts: IntakeFacts): string {
-  const hours = facts.atraso_horas ? facts.atraso_horas.replace(".", ",") : null;
   const notice = facts.aviso ? NOTICE_WORDS[facts.aviso] : null;
+  const arrival = arrivalWords(facts);
+  const joined = (...parts: (string | null)[]) => parts.filter(Boolean).join(", ").replace(/, e /g, " e ");
   switch (facts.problema) {
     case "cancellation":
-      return ["cancelado", notice].filter(Boolean).join(", ");
+      return joined("cancelado", notice, arrival);
     case "change":
-      return ["mudado pela companhia", notice].filter(Boolean).join(", ");
+      return joined("mudado pela companhia", notice, arrival);
     case "delay":
-      return hours ? `atrasou, com ${hours} horas de atraso na chegada` : "atrasou";
+      return joined("atrasou", arrival);
     case "missed_connection":
-      return hours ? `conexão perdida, com ${hours} horas de atraso na chegada` : "conexão perdida";
+      return joined("conexão perdida", arrival);
     case "overbooking":
       return "embarque negado";
     case "baggage_lost":
@@ -304,13 +415,10 @@ function eventWords(facts: IntakeFacts): string {
   }
 }
 
-/** Who travelled, in the summary's words. */
-const companionWords = (facts: IntakeFacts): string =>
-  !facts.acompanhantes || facts.acompanhantes === "nenhum" || facts.acompanhantes === "mais"
-    ? "Só você viajou."
-    : `Viajou com você: ${facts.acompanhantes.replace(/[.;,\s]+$/, "")}.`;
-
-/** The summary ONE asks the person to confirm before anything is decided. */
+/**
+ * The summary ONE asks the person to confirm before the rule decides: what decides the right, with the airline, the
+ * flight and the cities only when the person told them (the documents bring them later, 0239).
+ */
 export function intakeSummary(facts: IntakeFacts, names: IntakeNames): string {
   const flight = [
     facts.voo ? `Voo ${facts.voo.toUpperCase()}` : "Voo",
@@ -318,10 +426,12 @@ export function intakeSummary(facts: IntakeFacts, names: IntakeNames): string {
     names.origin && names.destination ? `, de ${names.origin} para ${names.destination}` : "",
   ].join("");
   const day = dayWords(facts.data);
+  // With nothing of the flight told, it is "O seu voo de 22/10/2099"; with the airline or the cities, ", em" the day.
+  const told = flight !== "Voo";
+  const when = day ? (told ? `, em ${day}` : ` de ${day}`) : "";
   const lines = [
-    `Confere, ${first(facts.nome)}.`,
-    `${flight}${day ? `, em ${day}` : ""}: ${eventWords(facts)}.`,
-    companionWords(facts),
+    "Confere o que eu entendi.",
+    `${told ? flight : "O seu voo"}${when}: ${eventWords(facts)}.`,
     "Está certo?",
   ];
   return `${lines.join(" ")}\n${optionsText(OPTIONS.resumo)}`;
@@ -355,7 +465,7 @@ export const intakeDoubts = (faq: string): string =>
  * with a word that does not press. Null when nothing is missing (the intake is the database's to decide then).
  */
 export function leadFollowupText(facts: IntakeFacts, count: number): string | null {
-  const ask = intakeMissing(facts)[0];
+  const ask = intakeNextAsk(facts);
   if (!ask) return null;
   const opening =
     count === 0
@@ -364,10 +474,9 @@ export function leadFollowupText(facts: IntakeFacts, count: number): string | nu
   return `${opening} ${questionText(ask, facts)}`;
 }
 
-/** What the rule of qualification reads of an intake (`qualificacao-v1`). */
+/** What the rule of qualification reads of an intake (`qualificacao-v2`). */
 export function intakeQualificationInput(facts: IntakeFacts, today: string): QualificationInput {
   const problem: QualificationProblem = isQualificationProblem(facts.problema) ? facts.problema : "other";
-  const hours = facts.atraso_horas ? Number(facts.atraso_horas) : null;
   const notice = (["at_airport", "late", "early"] as const).includes(facts.aviso as NoticeStanding)
     ? (facts.aviso as NoticeStanding)
     : null;
@@ -376,7 +485,8 @@ export function intakeQualificationInput(facts: IntakeFacts, today: string): Qua
     flightDay: facts.data && /^\d{4}-\d{2}-\d{2}$/.test(facts.data) ? facts.data : null,
     today,
     international: null,
-    arrivalDelayMinutes: hours !== null && Number.isFinite(hours) ? Math.round(hours * 60) : null,
+    arrivalDelayMinutes: arrivalDelayMinutes(facts),
+    travelled: facts.viajou === "nao" ? false : facts.viajou === "sim" ? true : null,
     notice,
   };
 }

@@ -1,5 +1,6 @@
 "use client";
 
+import { ClientSection } from "./client-section";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 
@@ -7,15 +8,12 @@ import {
   Alert,
   Box,
   Button,
-  Card,
-  CardContent,
   FormControl,
   FormControlLabel,
   FormLabel,
   Radio,
   RadioGroup,
   TextField,
-  Typography,
 } from "@mui/material";
 
 import StateLine from "@/components/product/state-line";
@@ -103,83 +101,76 @@ function ResidenceItem({
   };
 
   return (
-    <Card component="section" aria-labelledby={`residence-${item.id}`}>
-      <CardContent className="flex flex-col gap-4">
-        <Box className="flex flex-col gap-1">
-          <Typography id={`residence-${item.id}`} variant="h6" component="h2" className="mb-0">
-            {t("client-residence-title")}
-          </Typography>
-          <Typography variant="body2" className="text-text-secondary">
-            {t("client-residence-body", { holder: item.holder })}
-          </Typography>
-        </Box>
-
-        {item.issued ? (
-          <StateLine tone="done">{t("client-residence-issued")}</StateLine>
-        ) : !editing && said ? (
-          <Box className="flex flex-col gap-2">
-            <StateLine tone="done">{t("client-residence-answered", { holder: item.holder, relation: said })}</StateLine>
-            {editable ? (
-              <Box>
-                <Button variant="text" size="small" onClick={() => setEditing(true)}>
-                  {t("client-residence-change")}
-                </Button>
-              </Box>
-            ) : null}
-          </Box>
-        ) : editable ? (
-          <Box
-            component="form"
-            className="flex flex-col gap-4"
-            onSubmit={(event) => {
-              event.preventDefault();
-              void send();
-            }}
-          >
-            {problem ? (
-              <Alert severity="error" className="neutral bg-background-paper/60!" role="alert">
-                {t(residenceErrorKey(problem))}
-              </Alert>
-            ) : null}
-            <FormControl component="fieldset">
-              <FormLabel component="legend" id={`residence-relation-${item.id}`} className="mb-1">
-                {t("client-residence-question", { holder: item.holder })}
-              </FormLabel>
-              <RadioGroup
-                aria-labelledby={`residence-relation-${item.id}`}
-                name={`relation-${item.id}`}
-                value={relation}
-                onChange={(event) => setRelation(event.target.value as ResidenceRelation)}
-              >
-                {RESIDENCE_RELATIONS.map((option) => (
-                  <FormControlLabel key={option} value={option} control={<Radio />} label={t(RELATION_KEY[option])} />
-                ))}
-              </RadioGroup>
-            </FormControl>
-            {relation === "outro" ? (
-              <TextField
-                label={t("residence-field-note")}
-                value={note}
-                onChange={(event) => setNote(event.target.value)}
-                helperText={t("residence-field-note-help")}
-                slotProps={{ htmlInput: { maxLength: 60 } }}
-              />
-            ) : null}
-            <TextField
-              label={t("client-residence-holder")}
-              value={holder}
-              onChange={(event) => setHolder(event.target.value)}
-              helperText={t("client-residence-holder-help")}
-              slotProps={{ htmlInput: { maxLength: 120 } }}
-            />
+    <ClientSection
+      id={`residence-${item.id}`}
+      title={t("client-residence-title")}
+      lead={t("client-residence-body", { holder: item.holder })}
+    >
+      {item.issued ? (
+        <StateLine tone="done">{t("client-residence-issued")}</StateLine>
+      ) : !editing && said ? (
+        <Box className="flex flex-col gap-2">
+          <StateLine tone="done">{t("client-residence-answered", { holder: item.holder, relation: said })}</StateLine>
+          {editable ? (
             <Box>
-              <Button type="submit" variant="contained" disabled={busy}>
-                {busy ? t("residence-saving") : t("client-residence-send")}
+              <Button variant="text" size="small" onClick={() => setEditing(true)}>
+                {t("client-residence-change")}
               </Button>
             </Box>
+          ) : null}
+        </Box>
+      ) : editable ? (
+        <Box
+          component="form"
+          className="flex flex-col gap-4"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void send();
+          }}
+        >
+          {problem ? (
+            <Alert severity="error" className="neutral bg-background-paper/60!" role="alert">
+              {t(residenceErrorKey(problem))}
+            </Alert>
+          ) : null}
+          <FormControl component="fieldset">
+            <FormLabel component="legend" id={`residence-relation-${item.id}`} className="mb-1">
+              {t("client-residence-question", { holder: item.holder })}
+            </FormLabel>
+            <RadioGroup
+              aria-labelledby={`residence-relation-${item.id}`}
+              name={`relation-${item.id}`}
+              value={relation}
+              onChange={(event) => setRelation(event.target.value as ResidenceRelation)}
+            >
+              {RESIDENCE_RELATIONS.map((option) => (
+                <FormControlLabel key={option} value={option} control={<Radio />} label={t(RELATION_KEY[option])} />
+              ))}
+            </RadioGroup>
+          </FormControl>
+          {relation === "outro" ? (
+            <TextField
+              label={t("residence-field-note")}
+              value={note}
+              onChange={(event) => setNote(event.target.value)}
+              helperText={t("residence-field-note-help")}
+              slotProps={{ htmlInput: { maxLength: 60 } }}
+            />
+          ) : null}
+          <TextField
+            label={t("client-residence-holder")}
+            value={holder}
+            onChange={(event) => setHolder(event.target.value)}
+            helperText={t("client-residence-holder-help")}
+            slotProps={{ htmlInput: { maxLength: 120 } }}
+          />
+          <Box>
+            <Button type="submit" variant="contained" disabled={busy}>
+              {busy ? t("residence-saving") : t("client-residence-send")}
+            </Button>
           </Box>
-        ) : null}
-      </CardContent>
-    </Card>
+        </Box>
+      ) : null}
+    </ClientSection>
   );
 }

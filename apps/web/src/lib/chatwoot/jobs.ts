@@ -3,6 +3,7 @@ import "server-only";
 import { accountByChatwootId, ensureAccount, readyAccount, serviceAccount } from "@/lib/chatwoot/accounts";
 import { mirrorConversations } from "@/lib/chatwoot/mirror";
 import { chatwootProvider } from "@/lib/chatwoot/provider";
+import { syncRooms } from "@/lib/chatwoot/rooms";
 import type { Sweep } from "@/lib/jobs/schedule";
 import { isChatwootNotFound } from "@flyee/chatwoot/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -10,7 +11,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 /**
  * The firms' panel of attendance (migration 0223), kept by the clock: the conversations whose panel is behind (what
  * a work right after a message did not finish), the account of each firm with a real number made before anybody
- * enters it, and what was taken out of ONE taken out of the panel. Counts only.
+ * enters it, what was taken out of ONE taken out of the panel, and the team's rooms (0238) brought up to what the firm
+ * set. Counts only.
  */
 
 /** A firm with a real number (Meta's or WhatsApp Web's) has its account made, so its conversations wait there. */
@@ -87,7 +89,12 @@ export const chatwootSweeps: Sweep[] = [
     key: "chatwoot-mirror",
     when: { every: 5 },
     whileUsed: true,
-    run: async (service, until) => ({ ...(await mirrorConversations(service, { limit: 20, until })) }),
+    run: async (service, until) => {
+      const mirrored = await mirrorConversations(service, { limit: 20, until });
+      // The team's rooms never hold back the clients' conversations: a failed claim counts as one failure.
+      const rooms = await syncRooms(service, { limit: 10, until }).catch(() => null);
+      return { ...mirrored, rooms: rooms?.done ?? 0, roomsFailed: rooms ? rooms.failed : 1 };
+    },
   },
   {
     key: "chatwoot-upkeep",

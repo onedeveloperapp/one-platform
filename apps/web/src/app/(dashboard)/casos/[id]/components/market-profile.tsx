@@ -7,6 +7,7 @@ import { Box, Button, Typography } from "@mui/material";
 
 import StateLine from "@/components/product/state-line";
 import UsageMeter from "@/components/product/usage-meter";
+import NiChartBar from "@/icons/nexture/ni-chart-bar";
 import { type LawsuitMarket, readLawsuitMarket } from "@/lib/jurimetrics/actions";
 import { brl, MARKET_PROBLEM_KEY, type MarketNumbers } from "@/lib/jurimetrics/profile";
 
@@ -31,8 +32,17 @@ export default function MarketProfile({ proceedingId }: { proceedingId: string }
   };
   if (!read) {
     return (
-      <Box>
-        <Button variant="text" color="grey" size="small" className="-ml-2" disabled={busy} onClick={() => void load()}>
+      // At the lawsuit's foot, in the shape of a card's foot (the owner, 2026-11-13): an icon and the words.
+      <Box className="border-grey-100 border-t pt-2">
+        <Button
+          variant="text"
+          color="grey"
+          size="small"
+          startIcon={<NiChartBar size="small" />}
+          className="justify-start text-left"
+          disabled={busy}
+          onClick={() => void load()}
+        >
           {busy ? t("cases-working") : t("market-show")}
         </Button>
       </Box>

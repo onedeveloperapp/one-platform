@@ -125,17 +125,31 @@ export default function InboxView({ state }: { state: InboxState }) {
         crumbs={scopeCrumbs(t("inbox-home"), t("inbox-title"), ready?.scope.current ?? null)}
         description={ready ? t("inbox-description", { firm: ready.firm.name }) : undefined}
         action={
-          ready?.panel.available ? (
-            // The firm's panel of attendance (0223), entered signed in, in a tab of its own.
-            <Button
-              variant="contained"
-              href="/atendimento/painel"
-              target="_blank"
-              rel="noopener"
-              startIcon={<NiSendUpRight size="small" />}
-            >
-              {t("inbox-panel-open")}
-            </Button>
+          ready ? (
+            <Box className="flex flex-wrap items-center gap-2">
+              {/* The team's rooms (0238): its people talk among themselves there, in the panel. */}
+              <Button
+                variant="outlined"
+                color="grey"
+                href="/atendimento/salas"
+                LinkComponent={Link}
+                startIcon={<NiUsers size="small" />}
+              >
+                {t("inbox-rooms-open")}
+              </Button>
+              {ready.panel.available ? (
+                // The firm's panel of attendance (0223), entered signed in, in a tab of its own.
+                <Button
+                  variant="contained"
+                  href="/atendimento/painel"
+                  target="_blank"
+                  rel="noopener"
+                  startIcon={<NiSendUpRight size="small" />}
+                >
+                  {t("inbox-panel-open")}
+                </Button>
+              ) : null}
+            </Box>
           ) : undefined
         }
       />

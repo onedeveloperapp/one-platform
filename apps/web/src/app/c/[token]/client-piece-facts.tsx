@@ -1,9 +1,10 @@
 "use client";
 
+import { ClientSection } from "./client-section";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 
-import { Alert, Box, Button, Card, CardContent, TextField, Typography } from "@mui/material";
+import { Alert, Box, Button, TextField, Typography } from "@mui/material";
 
 import StateLine from "@/components/product/state-line";
 import { answerClientFacts } from "@/lib/cases/client-link-actions";
@@ -26,21 +27,11 @@ export default function ClientPieceFacts({
   const t = useTranslations("product");
   if (items.length === 0) return null;
   return (
-    <Card component="section" aria-labelledby="piece-facts-title">
-      <CardContent className="flex flex-col gap-4">
-        <Box className="flex flex-col gap-1">
-          <Typography id="piece-facts-title" variant="h6" component="h2" className="mb-0">
-            {t("client-piece-facts-title")}
-          </Typography>
-          <Typography variant="body2" className="text-text-secondary">
-            {t("client-piece-facts-body")}
-          </Typography>
-        </Box>
-        {items.map((item) => (
-          <FactsItem key={item.id} token={token} item={item} several={items.length > 1} onSaved={onSaved} />
-        ))}
-      </CardContent>
-    </Card>
+    <ClientSection id="piece-facts-title" title={t("client-piece-facts-title")} hint={t("client-piece-facts-body")}>
+      {items.map((item) => (
+        <FactsItem key={item.id} token={token} item={item} several={items.length > 1} onSaved={onSaved} />
+      ))}
+    </ClientSection>
   );
 }
 

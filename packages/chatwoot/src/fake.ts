@@ -2,13 +2,13 @@ import { createHmac, randomBytes } from "node:crypto";
 
 import {
   type ChatwootAccount,
-  type ChatwootConversationStatus,
   type ChatwootFeatures,
   type ChatwootMessageStatus,
   type ChatwootPlatform,
   type ChatwootProfile,
   type ChatwootProvider,
   ChatwootRequestError,
+  type ChatwootStatusToSet,
   type ChatwootUser,
   type NewChatwootMessage,
 } from "@flyee/chatwoot/types";
@@ -30,8 +30,10 @@ type FakeInbox = {
   webhookUrl: string;
   window: number;
   members: Set<number>;
+  /** An inbox of the team alone: nobody assigned by rotation, no webhook. */
+  team: boolean;
 };
-type FakeContact = { id: number; accountId: number; name: string; phone: string; identifier: string };
+type FakeContact = { id: number; accountId: number; name: string; phone: string | null; identifier: string };
 type FakeConversation = {
   id: number;
   accountId: number;
@@ -40,6 +42,8 @@ type FakeConversation = {
   status: string;
   /** The robot the conversation is with, when it is. */
   botId?: number | null;
+  /** Who takes part in it and is told of its messages. */
+  participants: Set<number>;
 };
 export type FakeMessage = {
   id: number;
@@ -145,6 +149,11 @@ export class FakeChatwootProvider implements ChatwootProvider {
       }
       return user;
     };
+    const inboxOf = (inboxId: number): FakeInbox => {
+      const inbox = this.inboxes.get(inboxId);
+      if (!inbox || inbox.accountId !== accountId) throw new ChatwootRequestError(404, "resource_could_not_be_found");
+      return inbox;
+    };
     const conversation = (id: number): FakeConversation => {
       const found = this.conversations.get(`${accountId}:${id}`);
       if (!found) throw new ChatwootRequestError(404, "resource_could_not_be_found");
@@ -156,8 +165,43 @@ export class FakeChatwootProvider implements ChatwootProvider {
         admin();
         const id = this.id();
         const secret = this.token();
-        this.inboxes.set(id, { id, accountId, name, secret, webhookUrl, window: replyWindowHours, members: new Set() });
+        this.inboxes.set(id, {
+          id,
+          accountId,
+          name,
+          secret,
+          webhookUrl,
+          window: replyWindowHours,
+          members: new Set(),
+          team: false,
+        });
         return { id, secret };
+      },
+      createTeamInbox: async ({ name }) => {
+        admin();
+        const id = this.id();
+        this.inboxes.set(id, {
+          id,
+          accountId,
+          name,
+          secret: this.token(),
+          webhookUrl: "",
+          window: 0,
+          members: new Set(),
+          team: true,
+        });
+        return { id };
+      },
+      renameInbox: async (inboxId, name) => {
+        admin();
+        inboxOf(inboxId).name = name;
+      },
+      setInboxMembers: async (inboxId, userIds) => {
+        admin();
+        const inbox = inboxOf(inboxId);
+        const account = this.accountOf(accountId);
+        if (userIds.some((id) => !account.users.has(id))) throw new ChatwootRequestError(422, "invalid_user_ids");
+        inbox.members = new Set(userIds);
       },
       inbox: async (inboxId) => {
         admin();
@@ -184,12 +228,20 @@ export class FakeChatwootProvider implements ChatwootProvider {
         caller();
         const taken = [...this.contacts.values()].some(
           (contact) =>
-            contact.accountId === accountId && (contact.phone === phone || contact.identifier === identifier),
+            contact.accountId === accountId &&
+            ((phone && contact.phone === phone) || contact.identifier === identifier),
         );
         if (taken) throw new ChatwootRequestError(422, "phone_number_has_already_been_taken");
         const id = this.id();
-        this.contacts.set(id, { id, accountId, name, phone, identifier });
+        this.contacts.set(id, { id, accountId, name, phone: phone || null, identifier });
         return { id };
+      },
+      renameContact: async (contactId, name) => {
+        caller();
+        const contact = this.contacts.get(contactId);
+        if (!contact || contact.accountId !== accountId)
+          throw new ChatwootRequestError(404, "resource_could_not_be_found");
+        contact.name = name;
       },
       deleteContact: async (contactId) => {
         admin();
@@ -206,7 +258,14 @@ export class FakeChatwootProvider implements ChatwootProvider {
         if (!this.contacts.has(contactId)) throw new ChatwootRequestError(404, "resource_could_not_be_found");
         const id = account.nextConversation;
         account.nextConversation += 1;
-        this.conversations.set(`${accountId}:${id}`, { id, accountId, inboxId, contactId, status });
+        this.conversations.set(`${accountId}:${id}`, {
+          id,
+          accountId,
+          inboxId,
+          contactId,
+          status,
+          participants: new Set(),
+        });
         return { id };
       },
       deleteConversation: async (conversationId) => {
@@ -214,9 +273,26 @@ export class FakeChatwootProvider implements ChatwootProvider {
         conversation(conversationId);
         this.conversations.delete(`${accountId}:${conversationId}`);
       },
-      setConversationStatus: async (conversationId, status: ChatwootConversationStatus) => {
+      setConversationStatus: async (conversationId, status: ChatwootStatusToSet) => {
         caller();
         conversation(conversationId).status = status;
+      },
+      conversationStatus: async (conversationId) => {
+        caller();
+        return conversation(conversationId).status;
+      },
+      setParticipants: async (conversationId, userIds) => {
+        admin();
+        const found = conversation(conversationId);
+        if (userIds.length === 0) throw new ChatwootRequestError(422, "no_participants");
+        const inbox = inboxOf(found.inboxId);
+        if (userIds.some((id) => !inbox.members.has(id))) throw new ChatwootRequestError(422, "invalid_participant_ids");
+        found.participants = new Set(userIds);
+      },
+      removeParticipants: async (conversationId, userIds) => {
+        admin();
+        const found = conversation(conversationId);
+        for (const id of userIds) found.participants.delete(id);
       },
       agentBot: async (name) => {
         admin();

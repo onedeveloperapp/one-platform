@@ -6,7 +6,7 @@ import { choiceOf, type IntakeOption, optionsText } from "@/lib/conversations/in
  * confirm or correct. Pure: the database says what is owed and keeps the answer as on the link.
  */
 
-export type ChatQuestionKind = "free_justice" | "civil_court" | "residence";
+export type ChatQuestionKind = "free_justice" | "civil_court" | "residence" | "account" | "leg";
 
 export type ChatQuestion = {
   conversationId: string;
@@ -24,11 +24,18 @@ const text = (value: unknown): string | null => (typeof value === "string" && va
 export function chatQuestionOf(raw: unknown): ChatQuestion | null {
   if (typeof raw !== "object" || raw === null) return null;
   const row = raw as Record<string, unknown>;
-  const kind = row.kind === "free_justice" || row.kind === "civil_court" || row.kind === "residence" ? row.kind : null;
+  const kind =
+    row.kind === "free_justice" ||
+    row.kind === "civil_court" ||
+    row.kind === "residence" ||
+    row.kind === "account" ||
+    row.kind === "leg"
+      ? row.kind
+      : null;
   const conversationId = text(row.conversation_id);
   const partyId = text(row.party_id);
   if (!kind || !conversationId || !partyId) return null;
-  if ((kind === "civil_court" || kind === "residence") && !text(row.wording)) return null;
+  if ((kind === "civil_court" || kind === "residence" || kind === "leg") && !text(row.wording)) return null;
   return {
     conversationId,
     kind,
@@ -59,6 +66,8 @@ const FREE_JUSTICE_WHAT =
 
 /** ONE's question for a word the client owes. */
 export function chatQuestionText(question: ChatQuestion): string {
+  if (question.kind === "account") return ACCOUNT_ASK;
+  if (question.kind === "leg") return legAsk(question.wording ?? "");
   if (question.kind === "residence") {
     return `A conta de endereço que você mandou está em nome de ${question.wording ?? ""}. ${residenceAsk(question.wording ?? "")}`;
   }
@@ -197,3 +206,51 @@ export function residenceNoteOf(reply: string): string | null {
 /** ONE's word once the relation is kept: the declaration it prepares, signed with the other papers. */
 export const RESIDENCE_ANSWERED =
   "Anotado. O escritório prepara uma declaração de residência, dizendo que você mora nesse endereço, para você assinar junto com os outros documentos.";
+
+// ---------- The client's own account of what happened (0239) ----------
+
+/**
+ * What ONE asks once the papers are signed (the owner, 2026-11-13): the client tells what happened in their own words,
+ * by audio or text, and ONE asks after it only what the action still lacks, one question at a time.
+ */
+export const ACCOUNT_ASK =
+  "Agora me conte, do seu jeito, o que aconteceu na viagem: o que a companhia disse ou ofereceu, como você ficou esperando e o que perdeu ou gastou por causa disso. Pode mandar um áudio ou escrever aqui.";
+
+/** What ONE says once the account arrived in writing: it is put in order, and what it lacks comes one at a time. */
+export const ACCOUNT_RECEIVED =
+  "Obrigado. Vou organizar o que você contou e, se faltar alguma informação para a ação, pergunto aqui, uma de cada vez.";
+
+/** What ONE asks of a reply too short to be the account. */
+export const ACCOUNT_SHORT =
+  "Conte com um pouco mais de detalhes, por favor: o que aconteceu, o que a companhia disse ou ofereceu e o que você perdeu ou gastou. Se preferir, mande um áudio.";
+
+// ---------- On which leg the problem was (0240) ----------
+
+/** The legs as the database lists them (one a line, in the order of the trip), and "Não lembro" after them. */
+export function legOptions(legs: string): IntakeOption[] {
+  const lines = legs
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+  return [
+    ...lines.map((line, index) => {
+      const flight = line.split(",")[0]?.trim() ?? "";
+      return { value: String(index + 1), label: line, words: flight ? [flight.toLowerCase()] : [] };
+    }),
+    { value: "0", label: "Não lembro", words: ["nao lembro", "nao sei", "nao me lembro"] },
+  ];
+}
+
+/** ONE asks the client on which leg the problem was, never the firm: they were there. */
+export const legAsk = (legs: string): string =>
+  `Em qual destes voos aconteceu o problema?\n${optionsText(legOptions(legs))}`;
+
+/** The leg a reply chose (its place in the list, 0 for "Não lembro"); null when it chose none. */
+export function legChoice(legs: string, reply: string): number | null {
+  const choice = choiceOf(legOptions(legs), reply);
+  return choice === null ? null : Number(choice);
+}
+
+/** ONE's word once the client said it. */
+export const legAnswered = (flight: string | null): string =>
+  flight ? `Anotado: o problema foi no voo ${flight}.` : "Tudo bem. O ONE confere pelo registro oficial dos voos.";

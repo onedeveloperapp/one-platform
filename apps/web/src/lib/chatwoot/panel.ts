@@ -4,6 +4,7 @@ import { randomBytes } from "node:crypto";
 
 import { ensureAccount, serviceAccount, userToken } from "@/lib/chatwoot/accounts";
 import { chatwootProvider, FIRST_UI_SETTINGS } from "@/lib/chatwoot/provider";
+import { roomToOpen, syncRooms } from "@/lib/chatwoot/rooms";
 import type { MemberContext } from "@/lib/member/context";
 import { createServiceClient } from "@flyee/auth/service";
 import { ChatwootRequestError, ChatwootUnavailableError } from "@flyee/chatwoot/types";
@@ -15,7 +16,9 @@ import { ChatwootRequestError, ChatwootUnavailableError } from "@flyee/chatwoot/
  * inbox, sees every conversation the first time, and gets the link that enters signed in (five minutes, once).
  * The link enters the firm's account, on the conversation asked for when it is one of the firm's the panel already
  * has (`sso_account_id` and `sso_conversation_id`, which Chatwoot 4.19.1 reads in `getLoginRedirectURL`); without
- * one, on the panel's list, where every conversation of the firm is, ONE's included.
+ * one, on the panel's list, where every conversation of the firm is, ONE's included. A room of the team (0238) opens
+ * the same way for a person of it, brought up to date first; a person who enters for the first time joins the rooms
+ * they were put in meanwhile.
  * The firm's settings stay in ONE: nobody of the firm administers the panel. A support visit enters nobody's panel.
  */
 
@@ -25,7 +28,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export async function openPanel(
   context: MemberContext,
-  target: { conversation?: string | null } = {},
+  target: { conversation?: string | null; room?: string | null } = {},
 ): Promise<PanelOutcome> {
   const provider = chatwootProvider();
   if (!provider) return { ok: false, code: "not_configured" };
@@ -81,11 +84,17 @@ export async function openPanel(
     // Calling again puts back what somebody undid in the panel: the role, and the inbox.
     await provider.platform.addAccountUser(account.accountId, userId, "agent");
     await (await serviceAccount(provider, account)).addInboxMembers(account.inboxId, [userId]);
-    if (joining) await provider.profile(await userToken(provider, userId)).mergeUiSettings(FIRST_UI_SETTINGS);
+    if (joining) {
+      await provider.profile(await userToken(provider, userId)).mergeUiSettings(FIRST_UI_SETTINGS);
+      // The rooms the person was put in before they had entered: they join them now (a failure is the clock's).
+      await syncRooms(service, { orgId, limit: 20 }).catch(() => null);
+    }
 
     const url = new URL(await provider.platform.ssoLink(userId));
     url.searchParams.set("sso_account_id", String(account.accountId));
-    const conversation = await panelConversationOf(context, orgId, target.conversation);
+    const conversation = target.room
+      ? await roomToOpen(context, service, account, personId, target.room)
+      : await panelConversationOf(context, orgId, target.conversation);
     if (conversation) url.searchParams.set("sso_conversation_id", String(conversation));
     return { ok: true, url: url.toString() };
   } catch (failure) {

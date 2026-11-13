@@ -1,15 +1,18 @@
 /**
- * Whether a passenger's problem qualifies (`qualificacao-v1`, the owner's
- * decisions of 2026-11-07 and 2026-11-10): ONE decides it alone, before a
- * case is opened, and always says why.
+ * Whether a passenger's problem qualifies (`qualificacao-v2`, the owner's
+ * decisions of 2026-11-07, 2026-11-10 and 2026-11-13): ONE decides it alone,
+ * before a case is opened, and always says why.
  *
  *   - A cancellation qualifies, unless the airline told of it 72 hours or
  *     more before the flight and none of the exceptions happened (Resolução
- *     ANAC nº 400/2016, art. 12).
+ *     ANAC nº 400/2016, art. 12), or the passenger arrived less than 4 hours
+ *     after the time scheduled (v2). A passenger who did not travel after it
+ *     is decided by the notice alone.
  *   - A scheduled change qualifies when told less than 72 hours before and
- *     it moved the flight more than 30 minutes (a domestic flight) or one hour
- *     (an international one), art. 12, § 1º, II; told 72 hours or more
- *     before, only with an exception.
+ *     the passenger arrived 4 hours or more after the time scheduled (v2);
+ *     with no arrival known, when it moved the flight more than 30 minutes (a
+ *     domestic flight) or one hour (an international one), art. 12, § 1º, II;
+ *     told 72 hours or more before, only with an exception.
  *   - A delay, and a connection lost, qualify when the passenger arrived 4
  *     hours or more after the time scheduled: the same number the flight's
  *     alert tells at.
@@ -33,7 +36,7 @@
 
 import { readDay } from "@flyee/rules/person";
 
-export const QUALIFICATION_RULE = "qualificacao-v1";
+export const QUALIFICATION_RULE = "qualificacao-v2";
 
 /** How late the arrival is for a delay to qualify: the alert's own number (`flight-problem`). */
 export const QUALIFYING_DELAY_MINUTES = 240;
@@ -76,8 +79,13 @@ export type QualificationInput = {
   today: string;
   /** Whether the flight was international (a leg abroad); null when not known. */
   international: boolean | null;
-  /** For a delay or a lost connection: how late the passenger arrived at the end of the journey. */
+  /**
+   * How late the passenger arrived at the end of the journey: for a delay or a lost connection, and, since v2, for a
+   * cancellation or a change the passenger travelled after.
+   */
   arrivalDelayMinutes?: number | null;
+  /** For a cancellation or a change: false when the passenger did not travel after it (v2); null when not known. */
+  travelled?: boolean | null;
   /** For a change: how far the flight was moved. */
   changeMinutes?: number | null;
   /** For a cancellation or a change: when the airline told of it (`noticeStanding` of the interview). */
@@ -177,6 +185,11 @@ export function qualify(input: QualificationInput): QualificationResult {
           : done("not_qualified", "cancelled_early_notice");
       }
       if (notice === null) assumptions.push("notice_unknown");
+      // Who travelled after it and arrived less than 4 hours late has no claim (v2); who did not travel, the notice decides.
+      const late = input.travelled === false ? null : input.arrivalDelayMinutes;
+      if (late !== null && late !== undefined && Number.isFinite(late) && late < QUALIFYING_DELAY_MINUTES) {
+        return done("not_qualified", "delay_short");
+      }
       return done("qualifies", "cancelled");
     }
     case "change": {
@@ -184,6 +197,16 @@ export function qualify(input: QualificationInput): QualificationResult {
         return exceptions.length > 0
           ? done("qualifies", "changed_with_exception")
           : done("not_qualified", "changed_early_notice");
+      }
+      // The arrival decides a change the passenger travelled after (v2), and the notice one they did not travel after.
+      const late = input.travelled === false ? null : input.arrivalDelayMinutes;
+      if (late !== null && late !== undefined && Number.isFinite(late)) {
+        if (notice === null) assumptions.push("notice_unknown");
+        return late >= QUALIFYING_DELAY_MINUTES ? done("qualifies", "changed") : done("not_qualified", "delay_short");
+      }
+      if (input.travelled === false) {
+        if (notice === null) assumptions.push("notice_unknown");
+        return done("qualifies", "changed");
       }
       const moved = input.changeMinutes;
       if (moved === null || moved === undefined || !Number.isFinite(moved))

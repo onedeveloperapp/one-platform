@@ -59,10 +59,14 @@ export function caseStepsMessage(input: {
   agency?: string | null;
   /** ONE sends the power of attorney once the documents are accepted, and asks its questions after it is signed (0181). */
   signFirst?: boolean;
+  /** The platform opens the interview of the start (off since 0239: the client tells their own account instead). */
+  interview?: boolean;
 }): string {
   const questions = input.signFirst
-    ? "Assine a procuração que vai aparecer no seu link. Depois disso, vou fazer aqui algumas perguntas sobre o que aconteceu, uma de cada vez."
-    : "Responda aqui as perguntas que vou fazer agora sobre o que aconteceu, uma de cada vez.";
+    ? "Assine a procuração que vai aparecer no seu link. Depois disso, vou pedir que você conte aqui, por áudio ou por escrito, o que aconteceu."
+    : input.interview
+      ? "Responda aqui as perguntas que vou fazer agora sobre o que aconteceu, uma de cada vez."
+      : "Conte aqui, por áudio ou por escrito, o que aconteceu na viagem.";
   const name = firstNameOf(input.passengerName) || input.passengerName;
   const others = input.minors.map((minor) => firstNameOf(minor) || minor).filter(Boolean);
   const list = new Intl.ListFormat("pt-BR", { style: "long", type: "conjunction" });
@@ -132,12 +136,17 @@ export const byPersonMessage = (passengerName: string): string =>
  * A yes to a problem the rule does not qualify (0147): no case is opened, said in the firm's name, with no promise
  * and no advice, and the way to a person kept open.
  */
-export const notQualifiedMessage = (passengerName: string): string =>
-  `Obrigado por responder, ${firstNameOf(passengerName) || passengerName}. Pelo que vimos deste voo, o escritório não vai abrir um caso agora. Se quiser falar com uma pessoa do escritório, é só escrever aqui.`;
+export const notQualifiedMessage = (passengerName: string): string => {
+  // Before the "Quero seguir" ONE knows no name (0239): the sentence goes without one.
+  const name = firstNameOf(passengerName) || passengerName.trim();
+  return `Obrigado por responder${name ? `, ${name}` : ""}. Pelo que vimos deste voo, o escritório não vai abrir um caso agora. Se quiser falar com uma pessoa do escritório, é só escrever aqui.`;
+};
 
 /** The end of a no. */
-export const declinedMessage = (passengerName: string): string =>
-  `Tudo bem, ${firstNameOf(passengerName) || passengerName}. O escritório não vai seguir com este caso. Se mudar de ideia, é só escrever aqui.`;
+export const declinedMessage = (passengerName: string): string => {
+  const name = firstNameOf(passengerName) || passengerName.trim();
+  return `Tudo bem${name ? `, ${name}` : ""}. O escritório não vai seguir com este caso. Se mudar de ideia, é só escrever aqui.`;
+};
 
 /** What ONE says when it calls a person and the model said nothing. */
 export const calledMessage = "Uma pessoa do escritório vai continuar esta conversa com você.";

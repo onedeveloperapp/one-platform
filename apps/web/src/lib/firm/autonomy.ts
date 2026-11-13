@@ -19,6 +19,7 @@ export const AUTONOMY_DECISIONS = [
   "deadline_confirm",
   "file_or_hold",
   "create_lawsuits",
+  "court_system",
   "start_piece",
   "request_package",
   "sign_package",
@@ -97,6 +98,7 @@ export const DECISION_KEY: Record<AutonomyDecision, { title: string; body: strin
   deadline_confirm: { title: "autonomy-deadline-confirm", body: "autonomy-deadline-confirm-body" },
   file_or_hold: { title: "autonomy-file-or-hold", body: "autonomy-file-or-hold-body" },
   create_lawsuits: { title: "autonomy-create-lawsuits", body: "autonomy-create-lawsuits-body" },
+  court_system: { title: "autonomy-court-system", body: "autonomy-court-system-body" },
   start_piece: { title: "autonomy-start-piece", body: "autonomy-start-piece-body" },
   request_package: { title: "autonomy-request-package", body: "autonomy-request-package-body" },
   sign_package: { title: "autonomy-sign-package", body: "autonomy-sign-package-body" },
@@ -130,7 +132,7 @@ export const AUTONOMY_STAGES: readonly { key: string; title: string; decisions: 
   {
     key: "processos",
     title: "autonomy-stage-lawsuits",
-    decisions: ["create_lawsuits", "start_piece", "piece_text", "file_or_hold"],
+    decisions: ["create_lawsuits", "court_system", "start_piece", "piece_text", "file_or_hold"],
   },
   { key: "protocolo", title: "autonomy-stage-filing", decisions: ["request_package", "sign_package", "file_lawsuit"] },
   {

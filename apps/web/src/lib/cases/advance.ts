@@ -38,6 +38,7 @@ export const ADVANCE_WAITING = [
   "too_many_documents",
   "paper_incomplete",
   "paper_unwritable",
+  "paper_model_marks",
   "power_of_attorney_unsigned",
   "residence_relation_missing",
   "residence_address_conflict",
@@ -104,6 +105,8 @@ export const WAIT_PLACE: Record<AdvanceWaiting, WaitPlace> = {
   too_many_documents: FIRM("anyone", "documents"),
   paper_incomplete: FIRM("anyone", "people"),
   paper_unwritable: FIRM("anyone", "signatures"),
+  // The firm's model of a paper has a field ONE does not know ([[FC]]): the model is put right in the library (0240).
+  paper_model_marks: FIRM("lawyer", null),
   power_of_attorney_unsigned: CLIENT("signatures"),
   // A bill in somebody else's name (0123): the client says who the holder is and signs; an address of another city
   // waits for a person of the firm, since it decides the forum.
@@ -220,6 +223,7 @@ const WAITING_KEY: Record<AdvanceWaiting, string> = {
   too_many_documents: "advance-waiting-too-many-documents",
   paper_incomplete: "advance-waiting-paper-incomplete",
   paper_unwritable: "advance-waiting-paper-unwritable",
+  paper_model_marks: "advance-waiting-paper-model-marks",
   power_of_attorney_unsigned: "advance-waiting-power-of-attorney",
   residence_relation_missing: "advance-waiting-residence-relation",
   residence_address_conflict: "advance-waiting-residence-conflict",
@@ -265,6 +269,7 @@ const WAITING_TAG_KEY: Record<AdvanceWaiting, string> = {
   too_many_documents: "advance-tag-documents",
   paper_incomplete: "advance-tag-paper",
   paper_unwritable: "advance-tag-paper",
+  paper_model_marks: "advance-tag-paper",
   power_of_attorney_unsigned: "advance-tag-paper",
   residence_relation_missing: "advance-tag-documents",
   residence_address_conflict: "advance-tag-documents",

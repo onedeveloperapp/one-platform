@@ -438,6 +438,13 @@ insert into public.firm_marketing_terms (org_id, version, text) values
 insert into public.marketing_segments (org_id, name, filters) values
   ('b1000000-0000-4000-8000-00000000000a', 'Segmento A', '{}'),
   ('b1000000-0000-4000-8000-00000000000b', 'Segmento B', '{}');
+-- A room of each firm's team in its panel of attendance, with the firm's owner in it (0238).
+insert into public.chatwoot_rooms (id, org_id, name) values
+  ('e2380000-0000-4000-8000-00000000000a', 'b1000000-0000-4000-8000-00000000000a', 'Sala A'),
+  ('e2380000-0000-4000-8000-00000000000b', 'b1000000-0000-4000-8000-00000000000b', 'Sala B');
+insert into public.chatwoot_room_members (room_id, org_id, user_id) values
+  ('e2380000-0000-4000-8000-00000000000a', 'b1000000-0000-4000-8000-00000000000a', 'a1000000-0000-4000-8000-000000000001'),
+  ('e2380000-0000-4000-8000-00000000000b', 'b1000000-0000-4000-8000-00000000000b', 'a1000000-0000-4000-8000-000000000004');
 -- The agenda's preferences and an e-mail of the morning of each firm's owner (0132): each reads only their own.
 insert into public.agenda_preferences (org_id, user_id, digest_off) values
   ('b1000000-0000-4000-8000-00000000000a', 'a1000000-0000-4000-8000-000000000001', false),
@@ -704,7 +711,7 @@ select is(
     'admin_complaints', 'agenda_digests', 'agenda_preferences', 'ai_runs', 'approvals', 'audit_events', 'billing_operations', 'case_advances', 'case_costs', 'case_document_answers', 'case_documents',
     'case_draft_citations', 'case_draft_versions', 'case_drafts', 'case_events', 'case_fee_splits', 'case_fees', 'case_interview_answers', 'case_interviews',
     'case_papers', 'case_parties', 'case_statements',
-    'case_weather', 'cases', 'certificate_inventory', 'civil_court_answers', 'client_consents', 'client_links', 'client_notices', 'client_payment_accounts', 'closing_goals', 'connections',
+    'case_weather', 'cases', 'certificate_inventory', 'chatwoot_room_members', 'chatwoot_rooms', 'civil_court_answers', 'client_consents', 'client_links', 'client_notices', 'client_payment_accounts', 'closing_goals', 'connections',
     'consent_acceptances',
     'deadlines', 'djen_captures', 'dossiers', 'draft_templates', 'entitlement_grants', 'fee_terms', 'files', 'filing_package_items', 'filing_packages',
     'filing_receipts', 'filing_submissions', 'finance_access', 'finance_accountants', 'finance_accounts', 'finance_bill_payments', 'finance_bills', 'finance_budgets', 'finance_categories', 'finance_closings', 'finance_cost_centers', 'finance_entries', 'finance_imports', 'finance_invoices', 'finance_package_sends', 'finance_receipts', 'finance_rules', 'finance_series',
@@ -924,7 +931,7 @@ select is(
     'admin_complaints', 'agenda_digests', 'agenda_preferences', 'ai_runs', 'approvals', 'audit_events', 'billing_operations', 'case_advances', 'case_costs', 'case_document_answers', 'case_documents',
     'case_draft_citations', 'case_draft_versions', 'case_drafts', 'case_events', 'case_fee_splits', 'case_fees', 'case_interview_answers', 'case_interviews',
     'case_papers', 'case_parties', 'case_statements',
-    'case_weather', 'cases', 'certificate_inventory', 'civil_court_answers', 'client_consents', 'client_links', 'client_notices', 'client_payment_accounts', 'closing_goals', 'connections',
+    'case_weather', 'cases', 'certificate_inventory', 'chatwoot_room_members', 'chatwoot_rooms', 'civil_court_answers', 'client_consents', 'client_links', 'client_notices', 'client_payment_accounts', 'closing_goals', 'connections',
     'consent_acceptances',
     'deadlines', 'djen_captures', 'dossiers', 'draft_templates', 'entitlement_grants', 'fee_terms', 'files', 'filing_package_items', 'filing_packages',
     'filing_receipts', 'filing_submissions', 'finance_access', 'finance_accountants', 'finance_accounts', 'finance_bill_payments', 'finance_bills', 'finance_budgets', 'finance_categories', 'finance_closings', 'finance_cost_centers', 'finance_entries', 'finance_imports', 'finance_invoices', 'finance_package_sends', 'finance_receipts', 'finance_rules', 'finance_series',

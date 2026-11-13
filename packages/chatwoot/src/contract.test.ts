@@ -88,6 +88,39 @@ function chatwootStandIn(state: FakeChatwootProvider, platformToken: string) {
       const account = state.account(Number(match[1]), token);
       const rest = match[2]!;
       let inner: RegExpExecArray | null;
+      if (method === "POST" && rest === "inboxes" && !(input.channel as Record<string, unknown>).webhook_url) {
+        // An inbox of the team: no webhook, nobody assigned by rotation.
+        if (input.enable_auto_assignment !== false) return { status: 422, body: { error: "rotation_on" } };
+        const { id } = await account.createTeamInbox({ name: String(input.name) });
+        return { status: 200, body: { id, name: input.name, channel_type: "Channel::Api" } };
+      }
+      if ((inner = /^inboxes\/(\d+)$/.exec(rest)) && method === "PATCH") {
+        await account.renameInbox(Number(inner[1]), String(input.name));
+        return { status: 200, body: { id: Number(inner[1]), name: input.name } };
+      }
+      if (method === "PATCH" && rest === "inbox_members") {
+        await account.setInboxMembers(Number(input.inbox_id), (input.user_ids as number[]) ?? []);
+        return { status: 200, body: { payload: [] } };
+      }
+      if ((inner = /^contacts\/(\d+)$/.exec(rest)) && method === "PUT") {
+        await account.renameContact(Number(inner[1]), String(input.name));
+        return { status: 200, body: { payload: { id: Number(inner[1]), name: input.name } } };
+      }
+      if ((inner = /^conversations\/(\d+)$/.exec(rest)) && method === "GET") {
+        const status = await account.conversationStatus(Number(inner[1]));
+        return { status: 200, body: { id: Number(inner[1]), status } };
+      }
+      if ((inner = /^conversations\/(\d+)\/participants$/.exec(rest))) {
+        const ids = (input.user_ids as number[]) ?? [];
+        if (method === "PATCH") {
+          await account.setParticipants(Number(inner[1]), ids);
+          return { status: 200, body: ids.map((id) => ({ id })) };
+        }
+        if (method === "DELETE") {
+          await account.removeParticipants(Number(inner[1]), ids);
+          return { status: 200 };
+        }
+      }
       if (method === "POST" && rest === "inboxes") {
         const channel = input.channel as Record<string, unknown>;
         const attributes = (channel.additional_attributes ?? {}) as Record<string, unknown>;
@@ -125,7 +158,7 @@ function chatwootStandIn(state: FakeChatwootProvider, platformToken: string) {
         const { id } = await account.createContact({
           inboxId: Number(input.inbox_id),
           name: String(input.name),
-          phone: String(input.phone_number),
+          phone: typeof input.phone_number === "string" ? input.phone_number : null,
           identifier: String(input.identifier),
         });
         return {
@@ -472,6 +505,67 @@ for (const run of runs()) {
       await assert.rejects(account.setConversationStatus(conversation.id, "pending"), isChatwootNotFound);
       await account.deleteContact(contact.id);
       assert.equal(await account.findContact("5562999990000"), null);
+    });
+
+    it("makes a room of the team: its people in its inbox and its conversation, renamed, emptied and brought back", async () => {
+      const { provider, fake } = run.make();
+      const { account, accountId } = await firm(provider);
+      const people: number[] = [];
+      for (const name of ["Ana", "Bia", "Caio"]) {
+        const { id } = await provider.platform.createUser({
+          name,
+          email: `${name.toLowerCase()}@sala.invalid`,
+          password: "Xx1!aaaaaaaa",
+        });
+        await provider.platform.addAccountUser(accountId, id, "agent");
+        people.push(id);
+      }
+      const [ana, bia, caio] = people as [number, number, number];
+      const inbox = await account.createTeamInbox({ name: "Sala: Comercial" });
+      const contact = await account.createContact({
+        inboxId: inbox.id,
+        name: "Sala: Comercial",
+        identifier: "sala:1",
+      });
+      const second = await account.createContact({ inboxId: inbox.id, name: "Sala: Prazos", identifier: "sala:2" });
+      assert.notEqual(second.id, contact.id, "two contacts with no phone are two");
+      const room = await account.createConversation({ inboxId: inbox.id, contactId: contact.id, status: "open" });
+      assert.equal(fake.inboxes.get(inbox.id)!.team, true);
+      assert.equal(fake.inboxes.get(inbox.id)!.webhookUrl, "", "nothing written in a room goes anywhere");
+      assert.equal(fake.contacts.get(contact.id)!.phone, null);
+
+      await assert.rejects(
+        account.setParticipants(room.id, [ana]),
+        (error: unknown) => error instanceof ChatwootRequestError && error.status === 422,
+        "only who is in the inbox takes part",
+      );
+      await account.setInboxMembers(inbox.id, [ana, bia]);
+      await account.setParticipants(room.id, [ana, bia]);
+      assert.deepEqual([...fake.inboxes.get(inbox.id)!.members].sort(), [ana, bia].sort());
+      assert.deepEqual([...fake.conversation(accountId, room.id)!.participants].sort(), [ana, bia].sort());
+
+      await account.setInboxMembers(inbox.id, [ana, caio]);
+      await account.setParticipants(room.id, [ana, caio]);
+      assert.deepEqual([...fake.inboxes.get(inbox.id)!.members].sort(), [ana, caio].sort());
+      assert.deepEqual([...fake.conversation(accountId, room.id)!.participants].sort(), [ana, caio].sort());
+
+      await account.renameInbox(inbox.id, "Sala: Vendas");
+      await account.renameContact(contact.id, "Sala: Vendas");
+      assert.equal(fake.inboxes.get(inbox.id)!.name, "Sala: Vendas");
+      assert.equal(fake.contacts.get(contact.id)!.name, "Sala: Vendas");
+
+      await account.removeParticipants(room.id, [ana, caio]);
+      await account.setInboxMembers(inbox.id, []);
+      await account.setConversationStatus(room.id, "resolved");
+      assert.equal(fake.inboxes.get(inbox.id)!.members.size, 0);
+      assert.equal(fake.conversation(accountId, room.id)!.participants.size, 0);
+      assert.equal(await account.conversationStatus(room.id), "resolved");
+
+      await account.setInboxMembers(inbox.id, [bia]);
+      await account.setParticipants(room.id, [bia]);
+      await account.setConversationStatus(room.id, "open");
+      assert.equal(await account.conversationStatus(room.id), "open");
+      await assert.rejects(account.setParticipants(room.id, []), ChatwootRequestError, "the last ones are taken out, never set to none");
     });
 
     it("joins a person's preferences of the panel to the ones they have", async () => {

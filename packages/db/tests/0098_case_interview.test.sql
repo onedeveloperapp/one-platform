@@ -2,6 +2,9 @@ begin;
 create extension if not exists pgtap;
 select plan(21);
 
+-- The interview of a case's start is off since 0239 (the client tells their account instead): on here, to test it.
+update public.platform_settings set value = value || '{"start": true}'::jsonb where key = 'interview';
+
 -- ============================================================
 -- The passenger's interview, one question at a time (0095): opened for a
 -- case of a flight's problem still being gathered, it is the case's account

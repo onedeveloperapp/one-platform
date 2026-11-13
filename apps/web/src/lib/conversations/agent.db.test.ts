@@ -102,6 +102,8 @@ describe.skipIf(!DB_URL)("ONE in the conversation, from the first word on a flig
     clientAs = standIn(sql, { bucket });
     process.env.AI_FAKE_PROVIDER = "1";
     await sql.unsafe(`
+      -- The interview of the start is off since 0239 (the client tells their own account): on here, to test it.
+      update public.platform_settings set value = value || '{"start": true}'::jsonb where key = 'interview';
       delete from public.organizations where id = '${FIRM}';
       delete from auth.users where id in ('${ANA}', '${BIA}');
       insert into auth.users (id, instance_id, aud, role, email, encrypted_password, email_confirmed_at, raw_app_meta_data, raw_user_meta_data, created_at, updated_at)
@@ -148,6 +150,9 @@ describe.skipIf(!DB_URL)("ONE in the conversation, from the first word on a flig
   afterAll(async () => {
     delete process.env.AI_FAKE_PROVIDER;
     if (!sql) return;
+    await sql.unsafe(
+      `update public.platform_settings set value = value || '{"start": false}'::jsonb where key = 'interview'`,
+    );
     if (debounce !== null && debounce !== undefined) {
       await sql.unsafe(
         `update public.platform_settings set value = jsonb_set(value, '{debounce_seconds}', $1::jsonb) where key = 'conversation_agent'`,

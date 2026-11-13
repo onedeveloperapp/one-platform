@@ -82,16 +82,21 @@ import {
   intakeInput,
   intakeMissing,
   type IntakeNames,
+  intakeNextAsk,
   intakeOffer,
+  intakePersonalMissing,
   intakeQualificationInput,
   intakeQuestion,
   intakeReadingOf,
   intakeSummary,
   isChild,
   OPTIONS,
+  questionText,
 } from "@/lib/conversations/intake";
 import { nextPaperAsk, NOT_HAVE_LINE, type PapersOwed, papersOwedOf, saysNotHave } from "@/lib/conversations/papers";
 import {
+  ACCOUNT_RECEIVED,
+  ACCOUNT_SHORT,
   FACTS_CONFIRMED,
   FACTS_CORRECTED,
   FACTS_CORRECTION,
@@ -99,6 +104,9 @@ import {
   FACTS_TOO_SHORT,
   factsChoice,
   freeJusticeExplained,
+  legAnswered,
+  legAsk,
+  legChoice,
   questionAnswered,
   questionChoice,
   RESIDENCE_ANSWERED,
@@ -165,6 +173,12 @@ async function rpc(
   const { data, error } = await service.rpc(name, args);
   if (error) throw new Error(`${name} failed`);
   return (data ?? {}) as Record<string, unknown>;
+}
+
+/** Whether the platform opens the interview of a case's start (off since 0239); a read that fails says no. */
+async function interviewOpens(service: SupabaseClient): Promise<boolean> {
+  const { data } = await service.from("platform_settings").select("value").eq("key", "interview").maybeSingle();
+  return (data as { value?: { start?: unknown } } | null)?.value?.start === true;
 }
 
 /** Whether the passenger signs the power of attorney before ONE's questions (0181); a read that fails says no. */
@@ -608,6 +622,80 @@ async function takeDataCheck(
 }
 
 /**
+ * On which leg the problem was, as the client says it in the chat (0240): a leg of the list, or "Não lembro" (ANAC's
+ * record decides then). A question of theirs is ONE's usual answer, the step still waiting. Answers whether it took
+ * the turn.
+ */
+async function takeLegAnswer(
+  service: SupabaseClient,
+  held: Held,
+  reply: string,
+  chatStep: Record<string, unknown>,
+): Promise<boolean> {
+  const caseId = typeof chatStep.case === "string" ? chatStep.case : null;
+  if (!caseId || !reply.trim()) return false;
+  const { data: legs } = await service
+    .from("flight_segments")
+    .select("flight_number, origin_iata, destination_iata, position")
+    .eq("case_id", caseId)
+    .order("position");
+  const listed = (
+    (legs ?? []) as { flight_number: string | null; origin_iata: string | null; destination_iata: string | null }[]
+  )
+    .map((leg) =>
+      [
+        leg.flight_number,
+        leg.origin_iata && leg.destination_iata ? `de ${leg.origin_iata} para ${leg.destination_iata}` : null,
+      ]
+        .filter(Boolean)
+        .join(", "),
+    )
+    .join("\n");
+  const choice = legChoice(listed, reply);
+  if (choice === null) {
+    if (reply.includes("?")) return false;
+    await say(service, held, `Responda com o número da opção.\n${legAsk(listed)}`);
+    return true;
+  }
+  const kept = await rpc(service, "one_answer_problem_leg", {
+    target_conversation: held.conversationId,
+    target_claim: held.claim,
+    target_choice: choice,
+  });
+  if (kept.ok !== true) return false;
+  await say(service, held, legAnswered(typeof kept.flight === "string" ? kept.flight : null));
+  return true;
+}
+
+/**
+ * The client's own account of what happened, written in the chat after ONE asked for it (0239): it becomes their
+ * account and ONE puts it in order, then asks what it lacks one question at a time (0235). A short question of theirs
+ * is ONE's usual answer, the account still asked; a reply too short to be one asks for more. An audio joined as the
+ * account already (0050). Answers whether it took the turn.
+ */
+async function takeAccountStory(service: SupabaseClient, held: Held, context: TurnContext): Promise<boolean> {
+  const told = lastClientWords(context.messages).join("\n").trim();
+  if (!told) return false;
+  if (told.length < 80 && told.includes("?")) return false;
+  const written = await rpc(service, "one_write_account", {
+    target_conversation: held.conversationId,
+    target_claim: held.claim,
+    target_text: told,
+    target_message: null,
+  });
+  if (written.ok === true && typeof written.statement_id === "string") {
+    await say(service, held, ACCOUNT_RECEIVED);
+    await workStatement(written.statement_id);
+    return true;
+  }
+  if (written.code === "statement_length") {
+    await say(service, held, ACCOUNT_SHORT);
+    return true;
+  }
+  return false;
+}
+
+/**
  * The client's answer to who the holder of their bill is (0237), kept as on their link: an option, or after "Outra
  * pessoa" their own words; then the next document owed. A question of theirs is left to ONE's usual answer, the step
  * still waiting. Answers whether it took the turn.
@@ -693,6 +781,8 @@ async function takeChatQuestion(
   const chatStep = (row as { chat_step?: Record<string, unknown> } | null)?.chat_step ?? {};
   const step = chatStep.step;
   if (step === "residence") return takeResidenceAnswer(service, held, context, reply, chatStep, report);
+  if (step === "account") return takeAccountStory(service, held, context);
+  if (step === "leg") return takeLegAnswer(service, held, reply, chatStep);
   if (step !== "free_justice" && step !== "civil_court") return false;
   const choice = questionChoice(step, reply);
   if (step === "free_justice" && choice === "explicar") {
@@ -960,6 +1050,7 @@ async function openCase(service: SupabaseClient, held: Held, context: TurnContex
   }
   const agency = await agencyOfAlert(service, alert.alertId);
   const signFirst = await signsFirst(service, context.orgId);
+  const interview = await interviewOpens(service);
   const token = randomBytes(32).toString("base64url");
   const answer = await rpc(service, "one_open_case_from_alert", {
     target_conversation: held.conversationId,
@@ -976,6 +1067,7 @@ async function openCase(service: SupabaseClient, held: Held, context: TurnContex
         minors: minorsOf(context, today()),
         agency,
         signFirst,
+        interview,
       }),
       { nome: greeting(alert.passengerName), link: `${BRAND.siteUrl}/c/${token}` },
     ),
@@ -1102,12 +1194,19 @@ async function takeIntake(
   }
 
   // A choice among the options of the question that waits is the answer itself; anything else, the task reads.
-  const asked = known.etapa ? null : intakeMissing(known)[0];
-  const options = asked === "problema" || asked === "aviso" || asked === "acompanhantes" ? OPTIONS[asked] : null;
+  const asked = intakeNextAsk(known);
+  const arrivalAsked = asked === "chegada" || asked === "chegada_real";
+  const options =
+    asked === "problema" || asked === "aviso" || asked === "acompanhantes"
+      ? OPTIONS[asked]
+      : arrivalAsked && (known.problema === "cancellation" || known.problema === "change")
+        ? OPTIONS.chegada
+        : null;
   const choice = options && asked ? choiceOf(options, reply) : null;
   let facts: IntakeFacts | null;
   if (choice && asked) {
-    facts = await keep({ [asked]: choice });
+    // "Não cheguei a viajar": the notice alone decides a cancellation or a change then (0239).
+    facts = await keep(arrivalAsked ? { viajou: choice } : { [asked]: choice });
   } else {
     const run = await runFirmTask({
       orgId: context.orgId,
@@ -1123,6 +1222,17 @@ async function takeIntake(
   }
   if (!facts) return false;
 
+  // After the "Quero seguir": how to call them and who travelled along, then the case opens (0239).
+  if (facts.etapa === "seguir") {
+    const next = intakePersonalMissing(facts)[0];
+    if (!next) return openFromIntake(service, held, context, report, facts);
+    return tell(intakeQuestion({ ask: next, first: false, firm: context.firm, before: known, after: facts }));
+  }
+  // An answer that already rules the right out ends the intake at once, whatever is still missing (0239): a flight
+  // older than 5 years, a notice of 72 hours or more, an arrival less than 4 hours late.
+  if (qualify(intakeQualificationInput(facts, today())).outcome === "not_qualified") {
+    return decideIntake(service, held, context, report, facts, keep, tell);
+  }
   const missing = intakeMissing(facts);
   if (missing.length > 0) {
     if (facts.etapa) await keep({}, ["etapa"]);
@@ -1148,13 +1258,9 @@ async function decideIntake(
       target_conversation: held.conversationId,
       target_claim: held.claim,
       target_result: verdict,
-      target_body: await wordsOf(
-        service,
-        context.orgId,
-        "not_qualified",
-        notQualifiedMessage(facts.nome ?? context.contactName ?? ""),
-        { nome: greeting(facts.nome ?? context.contactName) },
-      ),
+      target_body: await wordsOf(service, context.orgId, "not_qualified", notQualifiedMessage(facts.nome ?? ""), {
+        nome: greeting(facts.nome ?? ""),
+      }),
     });
     if (answer.code === "not_qualified") await send(service, answer.message_id);
     report.answered += 1;
@@ -1193,10 +1299,17 @@ async function takeOffer(
   tell: Tell,
 ): Promise<boolean> {
   const choice = choiceOf(facts.etapa === "duvidas" ? OPTIONS.duvidas : OPTIONS.oferta, reply);
-  if (choice === "seguir") return openFromIntake(service, held, context, report, facts);
+  if (choice === "seguir") {
+    // Only now ONE asks what is not of the right: how to call them and who travelled along (0239).
+    const next = intakePersonalMissing(facts)[0];
+    if (!next) return openFromIntake(service, held, context, report, facts);
+    const going = await keep({ etapa: "seguir" });
+    if (!going) return false;
+    return tell(`Combinado. ${questionText(next, going)}`);
+  }
   if (choice === "agora_nao") {
     if (!(await keep({ etapa: "recusou" }))) return false;
-    const name = facts.nome ?? context.contactName ?? "";
+    const name = facts.nome ?? "";
     return tell(await wordsOf(service, context.orgId, "declined", declinedMessage(name), { nome: greeting(name) }));
   }
   if (facts.etapa === "recusou") {

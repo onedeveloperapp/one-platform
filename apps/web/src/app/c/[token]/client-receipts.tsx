@@ -1,11 +1,11 @@
 "use client";
 
+import { ClientSection } from "./client-section";
 import { useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
 
-import { Box, Button, Card, CardContent, Typography } from "@mui/material";
+import { Box, Button, Typography } from "@mui/material";
 
-import CardTitle from "@/components/product/card-title";
 import NiReceipt from "@/icons/nexture/ni-receipt";
 import { type ClientReceipt, clientReceipts, downloadClientReceipt } from "@/lib/cases/client-link-actions";
 import { formatCents } from "@flyee/rules/finance";
@@ -45,49 +45,47 @@ export default function ClientReceipts({ token }: { token: string }) {
   };
 
   return (
-    <Card>
-      <CardContent className="flex flex-col gap-3">
-        <CardTitle
-          id="client-receipts"
-          icon={<NiReceipt size="medium" />}
-          tone="primary"
-          title={t("client-receipts-title")}
-          description={t("client-receipts-hint")}
-        />
-        <Box component="ul" className="m-0 flex list-none flex-col p-0">
-          {receipts.map((receipt) => (
-            <Box
-              component="li"
-              key={receipt.id}
-              className="border-grey-100 flex flex-wrap items-center justify-between gap-3 border-b py-3 last:border-b-0"
-            >
-              <Box className="flex min-w-0 flex-col gap-1">
-                <Typography variant="body1">{receipt.about}</Typography>
-                <Typography variant="body2" className="text-text-secondary">
-                  {t("client-receipts-line", {
-                    value: formatCents(receipt.cents),
-                    day: formatDayBr(receipt.paidOn) ?? receipt.paidOn,
-                    code: receipt.verifyCode,
-                  })}
-                </Typography>
-              </Box>
-              <Button
-                variant="outlined"
-                size="small"
-                disabled={busy === receipt.id}
-                onClick={() => void download(receipt)}
-              >
-                {t("client-receipts-download")}
-              </Button>
+    <ClientSection
+      id="client-receipts"
+      icon={<NiReceipt size="medium" />}
+      tone="primary"
+      title={t("client-receipts-title")}
+      hint={t("client-receipts-hint")}
+      gap={3}
+    >
+      <Box component="ul" className="m-0 flex list-none flex-col p-0">
+        {receipts.map((receipt) => (
+          <Box
+            component="li"
+            key={receipt.id}
+            className="border-grey-100 flex flex-wrap items-center justify-between gap-3 border-b py-3 last:border-b-0"
+          >
+            <Box className="flex min-w-0 flex-col gap-1">
+              <Typography variant="body1">{receipt.about}</Typography>
+              <Typography variant="body2" className="text-text-secondary">
+                {t("client-receipts-line", {
+                  value: formatCents(receipt.cents),
+                  day: formatDayBr(receipt.paidOn) ?? receipt.paidOn,
+                  code: receipt.verifyCode,
+                })}
+              </Typography>
             </Box>
-          ))}
-        </Box>
-        {problem ? (
-          <Typography variant="body2" className="text-error" role="alert">
-            {problem}
-          </Typography>
-        ) : null}
-      </CardContent>
-    </Card>
+            <Button
+              variant="outlined"
+              size="small"
+              disabled={busy === receipt.id}
+              onClick={() => void download(receipt)}
+            >
+              {t("client-receipts-download")}
+            </Button>
+          </Box>
+        ))}
+      </Box>
+      {problem ? (
+        <Typography variant="body2" className="text-error" role="alert">
+          {problem}
+        </Typography>
+      ) : null}
+    </ClientSection>
   );
 }

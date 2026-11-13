@@ -1,13 +1,16 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  arrivalDelayMinutes,
   choiceOf,
   intakeDoubts,
   intakeFactsOf,
   intakeLead,
   intakeMissing,
+  intakeNextAsk,
   intakeOffer,
   intakeOpening,
+  intakePersonalMissing,
   intakeQualificationInput,
   intakeQuestion,
   intakeReadingOf,
@@ -63,34 +66,55 @@ describe("who writes to the firm with no alert", () => {
     expect(intakeFactsOf({ nome: "Lia", etapa: "inventada" })).toEqual({ nome: "Lia" });
   });
 
-  it("asks the name first, then the trip, then who travelled along", () => {
-    expect(intakeMissing({})).toEqual(["nome", "problema", "voo", "data", "acompanhantes"]);
-    expect(intakeMissing({ nome: "Lucas", problema: "delay", voo: "LA3456", data: "2099-10-22" })).toEqual([
-      "atraso",
-      "acompanhantes",
+  it("asks first what decides the right, never the airline nor the flight, and the person only after the yes (0239)", () => {
+    expect(intakeMissing({})).toEqual(["problema", "data"]);
+    expect(intakeMissing({ problema: "delay", data: "2099-10-22" })).toEqual(["chegada"]);
+    expect(intakeMissing({ problema: "cancellation", data: "2099-10-22" })).toEqual(["aviso", "chegada"]);
+    expect(intakeMissing({ problema: "delay", data: "2099-10-22", chegada_prevista: "14:00" })).toEqual([
+      "chegada_real",
     ]);
+    expect(intakeMissing({ problema: "delay", data: "2099-10-22", chegada_real: "20:00" })).toEqual([
+      "chegada_prevista",
+    ]);
+    // Who did not travel after a cancellation is decided by the notice alone.
+    expect(intakeMissing({ problema: "cancellation", data: "2099-10-22", aviso: "late", viajou: "nao" })).toEqual([]);
+    expect(intakeMissing({ problema: "overbooking", data: "2099-10-22" })).toEqual([]);
+    // Nothing of the person is asked before the "Quero seguir".
+    expect(intakeNextAsk({ problema: "overbooking", data: "2099-10-22", etapa: "oferta" })).toBeNull();
+    expect(intakePersonalMissing({})).toEqual(["nome", "acompanhantes"]);
+    expect(intakeNextAsk({ etapa: "seguir", nome: "Lia" })).toBe("acompanhantes");
+    expect(intakeNextAsk({ etapa: "seguir", nome: "Lia", acompanhantes: "mais" })).toBe("nomes");
+  });
+
+  it("counts how late the passenger arrived from the two times, past midnight on the next day (0239)", () => {
+    const day = { data: "2099-10-22" };
+    expect(arrivalDelayMinutes({ ...day, chegada_prevista: "14:00", chegada_real: "20:30" })).toBe(390);
+    expect(arrivalDelayMinutes({ ...day, chegada_prevista: "22:00", chegada_real: "01:30" })).toBe(210);
     expect(
-      intakeMissing({ nome: "Lia", problema: "cancellation", origem: "VCP", destino: "BSB", data: "2099-10-22" }),
-    ).toEqual(["aviso", "acompanhantes"]);
-    expect(
-      intakeMissing({ nome: "Lia", problema: "overbooking", voo: "G31450", data: "2099-10-22", acompanhantes: "mais" }),
-    ).toEqual(["nomes"]);
-    expect(
-      intakeMissing({
-        nome: "Lia",
-        problema: "overbooking",
-        voo: "G31450",
-        data: "2099-10-22",
-        acompanhantes: "nenhum",
-      }),
-    ).toEqual([]);
+      arrivalDelayMinutes({ ...day, chegada_prevista: "2099-10-22T22:00", chegada_real: "2099-10-23T09:00" }),
+    ).toBe(660);
+    expect(arrivalDelayMinutes({ ...day, atraso_horas: "4,5" })).toBe(270);
+    expect(arrivalDelayMinutes({ ...day, chegada_prevista: "14:00" })).toBeNull();
+    expect(arrivalDelayMinutes({ chegada_prevista: "14:00", chegada_real: "20:00" })).toBeNull();
   });
 
   it("opens by saying who speaks, and thanks or cares once for what the reply brought", () => {
-    const first = intakeQuestion({ ask: "nome", first: true, firm: "Souza Advogados", before: {}, after: {} });
-    expect(first).toBe(
-      "Oi, aqui é o assistente virtual do escritório Souza Advogados. Vou te ajudar a ver se o escritório pode cuidar do seu caso. São poucas perguntas, uns 2 minutos. Como posso te chamar?",
+    const first = intakeQuestion({ ask: "problema", first: true, firm: "Souza Advogados", before: {}, after: {} });
+    expect(first.split("\n")[0]).toBe(
+      "Oi, aqui é o assistente virtual do escritório Souza Advogados. Vou te ajudar a ver se o escritório pode cuidar do seu caso. São poucas perguntas, uns 2 minutos. O que aconteceu com o voo?",
     );
+    expect(
+      intakeQuestion({
+        ask: "chegada",
+        first: false,
+        firm: "Souza Advogados",
+        before: { problema: "cancellation", data: "2099-10-22" },
+        after: { problema: "cancellation", data: "2099-10-22", aviso: "late" },
+      }),
+    ).toBe(
+      "A que horas você deveria chegar ao destino final, e a que horas chegou? Se chegou em outro dia, diga o dia também.\n1. Não cheguei a viajar",
+    );
+    expect(questionText("chegada", { problema: "delay" })).not.toContain("Não cheguei a viajar");
     expect(intakeOpening("")).toContain("assistente virtual do escritório.");
     expect(intakeLead({ problema: "cancellation" }, { problema: "cancellation", nome: "Nídia" })).toBe(
       "Obrigado, Nídia.",
@@ -110,7 +134,17 @@ describe("who writes to the firm with no alert", () => {
     expect(asked).toBe(
       "Sinto muito pelo cancelamento. Quando a companhia avisou do cancelamento?\n1. No aeroporto\n2. Menos de 72 horas antes\n3. Com mais antecedência",
     );
-    for (const ask of ["nome", "problema", "voo", "data", "atraso", "aviso", "acompanhantes", "nomes"] as const) {
+    for (const ask of [
+      "nome",
+      "problema",
+      "data",
+      "aviso",
+      "chegada",
+      "chegada_prevista",
+      "chegada_real",
+      "acompanhantes",
+      "nomes",
+    ] as const) {
       plainCopy(questionText(ask, { problema: "change" }));
     }
     // Every option fits a row of the vendor's list, so the official API shows them as buttons or a list.
@@ -135,38 +169,40 @@ describe("who writes to the firm with no alert", () => {
     expect(choiceOf(OPTIONS.oferta, "agora não")).toBe("agora_nao");
     expect(choiceOf(OPTIONS.oferta, "quanto vou pagar?")).toBeNull();
     expect(choiceOf(OPTIONS.duvidas, "2")).toBe("pessoa");
+    expect(choiceOf(OPTIONS.chegada, "1")).toBe("nao");
+    expect(choiceOf(OPTIONS.chegada, "não viajei")).toBe("nao");
+    expect(choiceOf(OPTIONS.chegada, "cheguei as 22h")).toBeNull();
   });
 
-  it("sums up what it understood, with the year, for the person to confirm", () => {
+  it("sums up what decides the right, with the year, for the person to confirm", () => {
     const summary = intakeSummary(
       {
-        nome: "Nídia Teste",
         problema: "cancellation",
         companhia: "AD",
         data: "2099-10-25",
         origem: "VCP",
         destino: "BSB",
         aviso: "late",
-        acompanhantes: "nenhum",
+        chegada_prevista: "10:00",
+        chegada_real: "16:00",
       },
       { airline: "Azul", origin: "Campinas", destination: "Brasília" },
     );
     expect(summary).toBe(
-      "Confere, Nídia. Voo da Azul, de Campinas para Brasília, em 25/10/2099: cancelado, com aviso menos de 72 horas antes. Só você viajou. Está certo?\n1. Está certo\n2. Corrigir",
+      "Confere o que eu entendi. Voo da Azul, de Campinas para Brasília, em 25/10/2099: cancelado, com aviso menos de 72 horas antes e você chegou ao destino final 6 horas depois do previsto. Está certo?\n1. Está certo\n2. Corrigir",
     );
     const late = intakeSummary(
-      {
-        nome: "Lucas",
-        problema: "delay",
-        voo: "la 3456",
-        data: "2099-10-22",
-        atraso_horas: "4.5",
-        acompanhantes: "Pedro, 8 anos;",
-      },
+      { problema: "delay", data: "2099-10-22", atraso_horas: "4.5" },
       { airline: null, origin: null, destination: null },
     );
-    expect(late).toContain("Voo LA 3456, em 22/10/2099: atrasou, com 4,5 horas de atraso na chegada.");
-    expect(late).toContain("Viajou com você: Pedro, 8 anos.");
+    expect(late).toContain(
+      "O seu voo de 22/10/2099: atrasou e você chegou ao destino final 4 horas e 30 minutos depois do previsto.",
+    );
+    const stayed = intakeSummary(
+      { problema: "cancellation", data: "2099-10-22", aviso: "at_airport", viajou: "nao" },
+      { airline: null, origin: null, destination: null },
+    );
+    expect(stayed).toContain("cancelado, com aviso só no aeroporto e você não chegou a viajar.");
     plainCopy(summary);
     plainCopy(late);
   });
@@ -194,18 +230,34 @@ describe("who writes to the firm with no alert", () => {
     expect(qualify(short).outcome).toBe("not_qualified");
     const told = intakeQualificationInput({ problema: "cancellation", data: "2099-10-22", aviso: "early" }, TODAY);
     expect(told.notice).toBe("early");
+    // v2: the arrival decides a cancellation the passenger travelled after, and the notice one they did not.
+    const close = intakeQualificationInput(
+      { problema: "cancellation", data: "2099-10-22", aviso: "late", chegada_prevista: "10:00", chegada_real: "12:00" },
+      TODAY,
+    );
+    expect(qualify(close).outcome).toBe("not_qualified");
+    const stayed = intakeQualificationInput(
+      { problema: "cancellation", data: "2099-10-22", aviso: "late", viajou: "nao" },
+      TODAY,
+    );
+    expect(qualify(stayed).outcome).toBe("qualifies");
+    expect(qualify(intakeQualificationInput({ problema: "delay", data: "2093-10-22" }, TODAY)).outcome).toBe(
+      "not_qualified",
+    );
   });
 });
 
 describe("the follow-up of a lead who stopped answering (0207)", () => {
   it("asks again what is still missing, the second time saying how to stop", () => {
-    const first = leadFollowupText({ nome: "Lia", problema: "cancellation" }, 0);
-    expect(first).toBe(
-      "Oi, ainda posso te ajudar com o que aconteceu no seu voo. Qual era a companhia aérea e o número do voo? Se não souber o número, diga de qual cidade para qual cidade era.",
-    );
-    const second = leadFollowupText({ nome: "Lia", problema: "cancellation", voo: "AD 4040" }, 1);
+    const first = leadFollowupText({ problema: "cancellation" }, 0);
+    expect(first).toBe("Oi, ainda posso te ajudar com o que aconteceu no seu voo. Em que dia era o voo?");
+    const second = leadFollowupText({ problema: "cancellation", data: "2099-10-22", aviso: "late" }, 1);
     expect(second).toContain("responda SAIR");
-    expect(second).toContain("Em que dia era o voo?");
+    expect(second).toContain("A que horas você deveria chegar ao destino final");
+    // After the "Quero seguir", what is missing of the person.
+    expect(leadFollowupText({ problema: "overbooking", data: "2099-10-22", etapa: "seguir" }, 0)).toContain(
+      "Como posso te chamar?",
+    );
     for (const text of [first, second]) plainCopy(String(text));
   });
 
@@ -214,11 +266,10 @@ describe("the follow-up of a lead who stopped answering (0207)", () => {
       leadFollowupText(
         {
           problema: "cancellation",
-          voo: "AD 4040",
           data: "2099-10-22",
           aviso: "late",
-          nome: "Maria Teste",
-          acompanhantes: "nenhum",
+          chegada_prevista: "10:00",
+          chegada_real: "18:00",
         },
         0,
       ),

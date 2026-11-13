@@ -13,7 +13,11 @@
  *
  * Shapes read in the code of Chatwoot 4.19.1 (`-ce`) on 2026-11-12: `config/routes.rb`, the Platform API's
  * users and accounts, `Api::V1::Accounts::{Inboxes,Contacts,Conversations,Conversations::Messages}Controller`,
- * `Messages::MessageBuilder`, `Channel::Api`, `WebhookListener` and `Webhooks::Trigger`.
+ * `Messages::MessageBuilder`, `Channel::Api`, `WebhookListener` and `Webhooks::Trigger`; the team's rooms (migration
+ * 0238, the kit's D26) on 2026-11-13: `InboxMembersController` (`update` makes the list the inbox's whole membership,
+ * an empty one included), `Conversations::ParticipantsController` (`update` the same for the conversation's
+ * participants, each of whom must be in its inbox; `destroy` takes out those named) and `Channel::Api`, which sends a
+ * reply only to its webhook or to the contact's e-mail, so an inbox with neither keeps what is written in it.
  */
 
 /** The account's functions, on or off, as the Platform API takes them (`features`). */
@@ -33,6 +37,9 @@ export type ChatwootInbox = { id: number; secret: string | null };
 
 /** What a conversation's status means to ONE: pending while ONE answers, open while a person does. */
 export type ChatwootConversationStatus = "open" | "pending";
+
+/** A status ONE sets: a client's conversation's, or `resolved` for a room of the team that was archived. */
+export type ChatwootStatusToSet = ChatwootConversationStatus | "resolved";
 
 /** The status of a message written into an inbox of the API kind, which the inbox's owner keeps. */
 export type ChatwootMessageStatus = "sent" | "delivered" | "read" | "failed";
@@ -75,9 +82,20 @@ export interface ChatwootAccount {
   /** The inbox, with its secret (an administrator reads it). */
   inbox(inboxId: number): Promise<ChatwootInbox>;
   addInboxMembers(inboxId: number, userIds: number[]): Promise<void>;
+  /**
+   * An inbox of the team alone (a room): of the API kind with no webhook and no reply window, nobody assigned by
+   * rotation. With a contact with no phone and no e-mail, what is written there leaves nowhere, and only the inbox's
+   * members see it.
+   */
+  createTeamInbox(input: { name: string }): Promise<{ id: number }>;
+  renameInbox(inboxId: number, name: string): Promise<void>;
+  /** Exactly these people in the inbox: who is not named leaves it, and an empty list empties it. */
+  setInboxMembers(inboxId: number, userIds: number[]): Promise<void>;
   /** The contact whose identifier is this one (ONE writes the client's WhatsApp number there), or null. */
   findContact(identifier: string): Promise<{ id: number } | null>;
-  createContact(input: { inboxId: number; name: string; phone: string; identifier: string }): Promise<{ id: number }>;
+  /** A client's contact has their phone; a room's has none. */
+  createContact(input: { inboxId: number; name: string; phone?: string | null; identifier: string }): Promise<{ id: number }>;
+  renameContact(contactId: number, name: string): Promise<void>;
   deleteContact(contactId: number): Promise<void>;
   /** A conversation of the contact in the inbox; its id is the account's own number of it (`display_id`). */
   createConversation(input: {
@@ -86,7 +104,15 @@ export interface ChatwootAccount {
     status: ChatwootConversationStatus;
   }): Promise<{ id: number }>;
   deleteConversation(conversationId: number): Promise<void>;
-  setConversationStatus(conversationId: number, status: ChatwootConversationStatus): Promise<void>;
+  setConversationStatus(conversationId: number, status: ChatwootStatusToSet): Promise<void>;
+  /** The conversation's status as the panel has it (`open`, `pending`, `resolved`, `snoozed`). */
+  conversationStatus(conversationId: number): Promise<string>;
+  /**
+   * Exactly these people take part in the conversation, and the panel tells them of its new messages; each must be
+   * in the conversation's inbox, and there is at least one (`removeParticipants` takes the last ones out).
+   */
+  setParticipants(conversationId: number, userIds: number[]): Promise<void>;
+  removeParticipants(conversationId: number, userIds: number[]): Promise<void>;
   /**
    * The account's robot of this name, made once (with no address: Chatwoot sends it nothing). A conversation
    * assigned to it is pending and shows the panel's "Assumir atendimento", which hands it to the person and opens it.

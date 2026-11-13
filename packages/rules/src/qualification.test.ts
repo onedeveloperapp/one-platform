@@ -150,6 +150,49 @@ const TABLE: {
     outcome: "review",
     reasons: ["outside_rule"],
   },
+  // v2 (the owner, 2026-11-13): the arrival decides a cancellation or a change the passenger travelled after.
+  {
+    name: "a cancellation told late, arrived 3 hours late",
+    input: { notice: "late", arrivalDelayMinutes: 180 },
+    outcome: "not_qualified",
+    reasons: ["delay_short"],
+  },
+  {
+    name: "a cancellation told at the airport, arrived 4 hours late",
+    input: { notice: "at_airport", arrivalDelayMinutes: 240 },
+    outcome: "qualifies",
+    reasons: ["cancelled"],
+  },
+  {
+    name: "a cancellation told late the passenger did not travel after",
+    input: { notice: "late", arrivalDelayMinutes: 60, travelled: false },
+    outcome: "qualifies",
+    reasons: ["cancelled"],
+  },
+  {
+    name: "a cancellation told early, arrived 8 hours late",
+    input: { notice: "early", arrivalDelayMinutes: 480 },
+    outcome: "not_qualified",
+    reasons: ["cancelled_early_notice"],
+  },
+  {
+    name: "a change told late, arrived 5 hours late",
+    input: { problem: "change", notice: "late", arrivalDelayMinutes: 300 },
+    outcome: "qualifies",
+    reasons: ["changed"],
+  },
+  {
+    name: "a change told late that moved the flight 2 hours, arrived 2 hours late",
+    input: { problem: "change", notice: "late", changeMinutes: 120, arrivalDelayMinutes: 120 },
+    outcome: "not_qualified",
+    reasons: ["delay_short"],
+  },
+  {
+    name: "a change told late the passenger did not travel after",
+    input: { problem: "change", notice: "late", travelled: false },
+    outcome: "qualifies",
+    reasons: ["changed"],
+  },
 ];
 
 for (const row of TABLE) {

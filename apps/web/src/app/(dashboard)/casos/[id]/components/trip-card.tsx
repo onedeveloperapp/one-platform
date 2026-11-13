@@ -190,7 +190,8 @@ export default function TripCard({
       {unmarked && writable ? (
         // The question of the leg, with its answers beside it: one click on the leg (the owner, 2026-11-12).
         <Box className="flex flex-col gap-3">
-          <StateLine tone={checking ? "waiting" : "attention"} emphasis>
+          {/* ONE asks the client in the chat (0240): a wait, never the firm's task. */}
+          <StateLine tone="waiting" emphasis>
             <strong>{t("case-trip-ask-title")}</strong> {checking ? t("case-trip-ask-waiting") : t("case-trip-ask-why")}
           </StateLine>
           <Box className="grid grid-cols-1 gap-2 sm:grid-cols-2">

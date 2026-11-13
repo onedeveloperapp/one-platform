@@ -1,9 +1,10 @@
 "use client";
 
+import { ClientSection } from "./client-section";
 import { useTranslations } from "next-intl";
 import { useRef, useState } from "react";
 
-import { Alert, Box, Button, Card, CardContent, Typography } from "@mui/material";
+import { Alert, Box, Button, Typography } from "@mui/material";
 
 import StateLine from "@/components/product/state-line";
 import { answerFreeJustice, finishClientUpload, startClientUpload } from "@/lib/cases/client-link-actions";
@@ -94,95 +95,89 @@ export default function ClientFreeJustice({
   };
 
   return (
-    <Card component="section" aria-labelledby="client-free-justice">
-      <CardContent className="flex flex-col gap-4">
-        <Box className="flex flex-col gap-1">
-          <Typography id="client-free-justice" variant="h5" component="h2" className="mb-0">
-            {t("client-free-justice-title")}
-          </Typography>
-          <Typography variant="body2" className="text-text-secondary">
-            {t(appeal ? "client-free-justice-body-appeal" : "client-free-justice-body")}
-          </Typography>
-        </Box>
-        {view.items.map((item) => (
-          <Box
-            key={item.partyId}
-            className="border-grey-100 flex flex-col gap-3 rounded-2xl border p-4 sm:flex-row sm:items-center sm:justify-between"
-          >
-            <Box className="flex min-w-0 flex-col gap-1">
-              <Typography variant="body1" className="font-semibold">
-                {item.minor ? t("client-free-justice-minor", { name: item.name }) : t("client-free-justice-own")}
-              </Typography>
-              {item.asks === true ? (
-                <StateLine tone="done">{t("client-free-justice-asks")}</StateLine>
-              ) : item.asks === false ? (
-                <StateLine tone="info">{t("client-free-justice-not-asks")}</StateLine>
-              ) : (
-                <StateLine tone="attention">{t("client-free-justice-waiting")}</StateLine>
-              )}
-            </Box>
-            {editable || item.appeal ? (
-              <Box className="flex flex-wrap gap-2">
-                <Button
-                  variant={item.asks === true ? "contained" : "outlined"}
-                  size="small"
-                  disabled={busy !== null || item.asks === true}
-                  onClick={() => void answer(item.partyId, true)}
-                >
-                  {busy === item.partyId ? t("client-working") : t("client-free-justice-yes")}
-                </Button>
-                <Button
-                  variant={item.asks === false ? "contained" : "outlined"}
-                  color="grey"
-                  size="small"
-                  disabled={busy !== null || item.asks === false}
-                  onClick={() => void answer(item.partyId, false)}
-                >
-                  {t("client-free-justice-no")}
-                </Button>
-              </Box>
-            ) : null}
+    <ClientSection
+      id="client-free-justice"
+      title={t("client-free-justice-title")}
+      lead={t(appeal ? "client-free-justice-body-appeal" : "client-free-justice-body")}
+    >
+      {view.items.map((item) => (
+        <Box
+          key={item.partyId}
+          className="border-grey-100 flex flex-col gap-3 rounded-2xl border p-4 sm:flex-row sm:items-center sm:justify-between"
+        >
+          <Box className="flex min-w-0 flex-col gap-1">
+            <Typography variant="body1" className="font-semibold">
+              {item.minor ? t("client-free-justice-minor", { name: item.name }) : t("client-free-justice-own")}
+            </Typography>
+            {item.asks === true ? (
+              <StateLine tone="done">{t("client-free-justice-asks")}</StateLine>
+            ) : item.asks === false ? (
+              <StateLine tone="info">{t("client-free-justice-not-asks")}</StateLine>
+            ) : (
+              <StateLine tone="attention">{t("client-free-justice-waiting")}</StateLine>
+            )}
           </Box>
-        ))}
-        {asking && answered ? (
-          <StateLine tone={view.issued ? "done" : "waiting"}>
-            {view.issued ? t("client-free-justice-issued") : t("client-free-justice-issuing")}
-          </StateLine>
-        ) : null}
-        {asking && view.ownParty ? (
-          view.income ? (
-            <StateLine tone="done">{t("client-free-justice-income-sent")}</StateLine>
-          ) : editable ? (
-            <Box className="flex flex-col gap-2">
-              <Typography variant="body2" className="text-text-secondary">
-                {t("client-free-justice-income-help")}
-              </Typography>
-              <Box>
-                <Button variant="outlined" size="small" disabled={busy !== null} onClick={() => input.current?.click()}>
-                  {busy === "income" ? t("client-working") : t("client-free-justice-income")}
-                </Button>
-              </Box>
-              <input
-                ref={input}
-                type="file"
-                accept="application/pdf,image/*"
-                hidden
-                aria-label={t("client-free-justice-income")}
-                onChange={(event) => {
-                  const file = event.target.files?.[0];
-                  event.target.value = "";
-                  if (file) void send(file);
-                }}
-              />
+          {editable || item.appeal ? (
+            <Box className="flex flex-wrap gap-2">
+              <Button
+                variant={item.asks === true ? "contained" : "outlined"}
+                size="small"
+                disabled={busy !== null || item.asks === true}
+                onClick={() => void answer(item.partyId, true)}
+              >
+                {busy === item.partyId ? t("client-working") : t("client-free-justice-yes")}
+              </Button>
+              <Button
+                variant={item.asks === false ? "contained" : "outlined"}
+                color="grey"
+                size="small"
+                disabled={busy !== null || item.asks === false}
+                onClick={() => void answer(item.partyId, false)}
+              >
+                {t("client-free-justice-no")}
+              </Button>
             </Box>
-          ) : null
-        ) : null}
-        {problem ? (
-          <Alert severity="error" className="neutral bg-background-paper/60!" role="alert">
-            {t(freeJusticeErrorKey(problem))}
-          </Alert>
-        ) : null}
-      </CardContent>
-    </Card>
+          ) : null}
+        </Box>
+      ))}
+      {asking && answered ? (
+        <StateLine tone={view.issued ? "done" : "waiting"}>
+          {view.issued ? t("client-free-justice-issued") : t("client-free-justice-issuing")}
+        </StateLine>
+      ) : null}
+      {asking && view.ownParty ? (
+        view.income ? (
+          <StateLine tone="done">{t("client-free-justice-income-sent")}</StateLine>
+        ) : editable ? (
+          <Box className="flex flex-col gap-2">
+            <Typography variant="body2" className="text-text-secondary">
+              {t("client-free-justice-income-help")}
+            </Typography>
+            <Box>
+              <Button variant="outlined" size="small" disabled={busy !== null} onClick={() => input.current?.click()}>
+                {busy === "income" ? t("client-working") : t("client-free-justice-income")}
+              </Button>
+            </Box>
+            <input
+              ref={input}
+              type="file"
+              accept="application/pdf,image/*"
+              hidden
+              aria-label={t("client-free-justice-income")}
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                event.target.value = "";
+                if (file) void send(file);
+              }}
+            />
+          </Box>
+        ) : null
+      ) : null}
+      {problem ? (
+        <Alert severity="error" className="neutral bg-background-paper/60!" role="alert">
+          {t(freeJusticeErrorKey(problem))}
+        </Alert>
+      ) : null}
+    </ClientSection>
   );
 }
