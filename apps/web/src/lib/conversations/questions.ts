@@ -6,7 +6,7 @@ import { choiceOf, type IntakeOption, optionsText } from "@/lib/conversations/in
  * confirm or correct. Pure: the database says what is owed and keeps the answer as on the link.
  */
 
-export type ChatQuestionKind = "free_justice" | "civil_court";
+export type ChatQuestionKind = "free_justice" | "civil_court" | "residence";
 
 export type ChatQuestion = {
   conversationId: string;
@@ -24,11 +24,11 @@ const text = (value: unknown): string | null => (typeof value === "string" && va
 export function chatQuestionOf(raw: unknown): ChatQuestion | null {
   if (typeof raw !== "object" || raw === null) return null;
   const row = raw as Record<string, unknown>;
-  const kind = row.kind === "free_justice" || row.kind === "civil_court" ? row.kind : null;
+  const kind = row.kind === "free_justice" || row.kind === "civil_court" || row.kind === "residence" ? row.kind : null;
   const conversationId = text(row.conversation_id);
   const partyId = text(row.party_id);
   if (!kind || !conversationId || !partyId) return null;
-  if (kind === "civil_court" && !text(row.wording)) return null;
+  if ((kind === "civil_court" || kind === "residence") && !text(row.wording)) return null;
   return {
     conversationId,
     kind,
@@ -59,6 +59,9 @@ const FREE_JUSTICE_WHAT =
 
 /** ONE's question for a word the client owes. */
 export function chatQuestionText(question: ChatQuestion): string {
+  if (question.kind === "residence") {
+    return `A conta de endereço que você mandou está em nome de ${question.wording ?? ""}. ${residenceAsk(question.wording ?? "")}`;
+  }
   const whose = question.own ? "" : ` para ${first(question.partyName)}`;
   if (question.kind === "free_justice") {
     const when = question.appeal ? "Para o recurso" : "Antes de a ação ir para a Justiça";
@@ -80,11 +83,11 @@ export const freeJusticeExplained = (): string =>
   `${FREE_JUSTICE_WHAT} Quer pedir?\n${optionsText(FREE_JUSTICE_OPTIONS.slice(0, 2))}`;
 
 /** What a reply chose for the question that waits; null when it is something else. */
-export const questionChoice = (kind: ChatQuestionKind, reply: string): string | null =>
+export const questionChoice = (kind: "free_justice" | "civil_court", reply: string): string | null =>
   choiceOf(kind === "free_justice" ? FREE_JUSTICE_OPTIONS : CIVIL_OPTIONS, reply);
 
 /** ONE's word once the answer is kept. */
-export function questionAnswered(kind: ChatQuestionKind, value: boolean): string {
+export function questionAnswered(kind: "free_justice" | "civil_court", value: boolean): string {
   if (kind === "free_justice") {
     return value
       ? "Anotado: você pede a justiça gratuita. A declaração para assinar chega por aqui."
@@ -116,3 +119,81 @@ export const FACTS_TOO_SHORT = "Conte um pouco mais do que está errado, para o 
 
 /** What a reply to the facts chose; null when it is something else. */
 export const factsChoice = (reply: string): string | null => choiceOf(FACTS_OPTIONS, reply);
+
+// ---------- Who the holder of a bill is (0237) ----------
+
+/**
+ * Who the holder of a bill in somebody else's name is to the client, as the link asks it (0123): the relations its
+ * declaration of residence says, the client's own words for anybody else.
+ */
+export const RESIDENCE_OPTIONS: readonly IntakeOption[] = [
+  { value: "mae", label: "Mãe", words: ["mae", "minha mae", "mamae"] },
+  { value: "pai", label: "Pai", words: ["pai", "meu pai", "papai"] },
+  {
+    value: "conjuge",
+    label: "Cônjuge ou companheiro",
+    words: [
+      "conjuge",
+      "marido",
+      "esposa",
+      "esposo",
+      "companheiro",
+      "companheira",
+      "meu marido",
+      "minha esposa",
+      "minha mulher",
+    ],
+  },
+  { value: "filho", label: "Filho ou filha", words: ["filho", "filha", "meu filho", "minha filha"] },
+  { value: "irmao", label: "Irmão ou irmã", words: ["irmao", "irma", "meu irmao", "minha irma"] },
+  { value: "avo", label: "Avô ou avó", words: ["avo", "vo", "vovo", "meu avo", "minha avo"] },
+  {
+    value: "parente",
+    label: "Outro parente",
+    words: [
+      "outro parente",
+      "parente",
+      "tio",
+      "tia",
+      "primo",
+      "prima",
+      "sogro",
+      "sogra",
+      "cunhado",
+      "cunhada",
+      "meu tio",
+      "minha tia",
+      "meu primo",
+      "minha prima",
+      "meu sogro",
+      "minha sogra",
+    ],
+  },
+  {
+    value: "proprietario",
+    label: "Dono do imóvel",
+    words: ["dono do imovel", "dono", "dona", "proprietario", "proprietaria", "locador", "locadora", "dono da casa"],
+  },
+  { value: "outro", label: "Outra pessoa", words: ["outra pessoa", "outro", "outra"] },
+];
+
+/** The question of who the holder is, after the bill was said back: a bill of one's own spares the declaration. */
+export const residenceAsk = (holder: string): string =>
+  `Se tiver uma conta no seu nome, pode mandar no lugar. Se não, quem é ${first(holder) || "essa pessoa"} para você?\n${optionsText(RESIDENCE_OPTIONS)}`;
+
+/** What ONE asks after "Outra pessoa": the client's own words, which the declaration writes. */
+export const residenceNoteAsk = (holder: string): string =>
+  `Escreva em poucas palavras quem é ${first(holder) || "essa pessoa"} para você, por exemplo: minha madrinha.`;
+
+/** What a reply chose for who the holder is; null when it is something else. */
+export const residenceChoice = (reply: string): string | null => choiceOf(RESIDENCE_OPTIONS, reply);
+
+/** The client's own words for "Outra pessoa", as the declaration keeps them (2 to 60 characters); null when not. */
+export function residenceNoteOf(reply: string): string | null {
+  const said = reply.trim().replace(/\s+/g, " ");
+  return said.length >= 2 && said.length <= 60 && !said.includes("?") ? said : null;
+}
+
+/** ONE's word once the relation is kept: the declaration it prepares, signed with the other papers. */
+export const RESIDENCE_ANSWERED =
+  "Anotado. O escritório prepara uma declaração de residência, dizendo que você mora nesse endereço, para você assinar junto com os outros documentos.";

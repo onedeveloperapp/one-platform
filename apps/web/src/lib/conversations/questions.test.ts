@@ -9,6 +9,11 @@ import {
   freeJusticeExplained,
   questionAnswered,
   questionChoice,
+  RESIDENCE_ANSWERED,
+  residenceAsk,
+  residenceChoice,
+  residenceNoteAsk,
+  residenceNoteOf,
 } from "@/lib/conversations/questions";
 
 // Every person here is invented.
@@ -94,5 +99,39 @@ describe("what the client is asked before the action goes to court, in the chat 
     expect(factsChoice("1")).toBe("certo");
     expect(factsChoice("tem algo errado")).toBe("errado");
     expect(asked).not.toMatch(/[—–!]/);
+  });
+});
+
+describe("who the holder of a bill is, in the chat (0237)", () => {
+  it("asks it with the holder's first name, a bill of one's own offered first", () => {
+    const question = chatQuestionOf({
+      conversation_id: "w-1",
+      kind: "residence",
+      party_id: "p-1",
+      party_name: "Lia Teste",
+      own: true,
+      wording: "Maria de Souza Teste",
+    });
+    expect(question?.kind).toBe("residence");
+    expect(chatQuestionOf({ conversation_id: "w-1", kind: "residence", party_id: "p-1" })).toBeNull();
+    const asked = chatQuestionText(question!);
+    expect(asked.split("\n").slice(0, 2)).toEqual([
+      "A conta de endereço que você mandou está em nome de Maria de Souza Teste. Se tiver uma conta no seu nome, pode mandar no lugar. Se não, quem é Maria para você?",
+      "1. Mãe",
+    ]);
+    expect(residenceAsk("Maria de Souza Teste").split("\n")).toHaveLength(10);
+    for (const text of [asked, residenceNoteAsk("Maria"), RESIDENCE_ANSWERED]) expect(text).not.toMatch(/[—–!]/);
+  });
+
+  it("reads the answer by its number, its label or the client's words", () => {
+    expect(residenceChoice("1")).toBe("mae");
+    expect(residenceChoice("é minha mãe")).toBe("mae");
+    expect(residenceChoice("Cônjuge ou companheiro")).toBe("conjuge");
+    expect(residenceChoice("minha tia")).toBe("parente");
+    expect(residenceChoice("9")).toBe("outro");
+    expect(residenceChoice("é a dona da pensão onde eu moro faz anos")).toBeNull();
+    expect(residenceNoteOf("  minha   madrinha ")).toBe("minha madrinha");
+    expect(residenceNoteOf("x")).toBeNull();
+    expect(residenceNoteOf("pode ser qualquer pessoa?")).toBeNull();
   });
 });

@@ -3063,6 +3063,7 @@
     "case-now-civil-declined": "{name} não aceitou a vara cível: decida o que fazer em Como este caso vai a juízo.",
     "case-now-civil-declined-minor": "Quem responde por {name} não aceitou a vara cível: decida o que fazer em Como este caso vai a juízo.",
     "case-now-account-missing": "O cliente conta o que aconteceu na viagem, pelo link ou no WhatsApp.",
+    "case-now-account-after-signature": "O ONE pergunta ao cliente no WhatsApp o que aconteceu na viagem, depois que ele assinar.",
     "case-now-account-proposed": "Aprove a ordem dos fatos do relato do cliente.",
     "case-now-account-incomplete": "O cliente responde o que faltou contar do relato, pelo link.",
     "case-now-interview-chat": "O cliente responde no WhatsApp as perguntas sobre o que aconteceu: pergunta {position} de {total}.",

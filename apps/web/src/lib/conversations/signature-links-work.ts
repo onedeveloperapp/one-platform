@@ -1,8 +1,11 @@
 import "server-only";
 
+import { createHash, randomBytes } from "node:crypto";
+
 import { papersToSignOf, signatureLinksMessage } from "@/lib/conversations/papers";
 import type { Sweep } from "@/lib/jobs/schedule";
 import { deliverOutbox } from "@/lib/whatsapp/send";
+import { BRAND } from "@flyee/content";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 /**
@@ -17,13 +20,25 @@ export async function tellSignatureLinks(service: SupabaseClient, limit = 20): P
   let told = 0;
   for (const row of (data ?? []) as { conversation_id: string; full_name: string | null; papers: unknown }[]) {
     const papers = papersToSignOf(row.papers);
-    const body = signatureLinksMessage(row.full_name, papers);
-    if (!body) continue;
-    const written = await service.rpc("one_tell_signature_links", {
-      target_conversation: row.conversation_id,
-      target_papers: papers.map((paper) => paper.paperId),
-      target_body: body,
-    });
+    // A paper signed by gov.br is on the client's link: a new one goes with this message, since the case opened in
+    // the chat sent none (0237). Where it cannot be made, the message says the link of the case.
+    const token = papers.some((paper) => paper.method === "govbr") ? randomBytes(32).toString("base64url") : null;
+    const tell = async (withLink: boolean) => {
+      const link = withLink && token ? token : null;
+      const body = signatureLinksMessage(row.full_name, papers, link ? `${BRAND.siteUrl}/c/${link}` : null);
+      if (!body) return null;
+      return service.rpc("one_tell_signature_links", {
+        target_conversation: row.conversation_id,
+        target_papers: papers.map((paper) => paper.paperId),
+        target_body: body,
+        target_token_hash: link ? createHash("sha256").update(link, "utf8").digest("hex") : null,
+      });
+    };
+    let written = await tell(true);
+    if (written && token && String((written.data as { code?: unknown } | null)?.code ?? "").startsWith("link_")) {
+      written = await tell(false);
+    }
+    if (!written) continue;
     const answer = (written.data ?? {}) as { ok?: boolean; message_id?: unknown };
     if (written.error || !answer.ok) continue;
     told += 1;

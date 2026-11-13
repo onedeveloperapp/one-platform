@@ -105,6 +105,11 @@ describe("caseNow", () => {
     }
     // What the firm decides of an account still asks the firm: its approval writes the piece again.
     expect(ids(caseNow(base({ account: "proposed", proceedings: [planned] })).blocking)).toContain("account:proposed");
+    // Before anything is signed, ONE asks the account in the chat after the signature: its work to come, never what
+    // holds the case (the owner's test of 2026-11-13).
+    const before = caseNow(base({ account: "missing", accountAfterSignature: true }));
+    expect(ids(before.blocking)).not.toContain("account:missing");
+    expect(ids(before.working)).toContain("account:after-signature");
   });
 
   it("says the piece waits for the client while ONE asks what it lacks, else for a lawyer (0099)", () => {

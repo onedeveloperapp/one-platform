@@ -11,6 +11,7 @@ import {
   accountQuestionOf,
   accountThanksMessage,
 } from "@/lib/cases/account";
+import { queueCaseAdvance } from "@/lib/cases/advance-work";
 import { firstNameOf } from "@/lib/cases/cases";
 import { base64, MODEL_IMAGE, processCaseDocuments, queueDocumentProcessing } from "@/lib/cases/documents-work";
 import {
@@ -100,6 +101,11 @@ import {
   freeJusticeExplained,
   questionAnswered,
   questionChoice,
+  RESIDENCE_ANSWERED,
+  residenceAsk,
+  residenceChoice,
+  residenceNoteAsk,
+  residenceNoteOf,
 } from "@/lib/conversations/questions";
 import { supabaseFileStore } from "@/lib/files/store";
 import { fillMessage } from "@/lib/firm/messages";
@@ -266,6 +272,7 @@ async function joinFiles(service: SupabaseClient, held: Held, context: TurnConte
 
   const outcomes: FileOutcome[] = [];
   const statements: string[] = [];
+  let residence: { partyId: string; holder: string } | null = null;
   for (const file of files) {
     const role = fileRole(file);
     if (role === "failed" || role === "not_taken") {
@@ -297,16 +304,37 @@ async function joinFiles(service: SupabaseClient, held: Held, context: TurnConte
       .maybeSingle();
     const status =
       decided?.status === "accepted" ? "accepted" : decided?.status === "rejected" ? "rejected" : "waiting";
+    const owing =
+      status === "accepted" && paper.kind === "address_proof"
+        ? await residenceOwedBy(service, joined.document_id).catch(() => null)
+        : null;
+    if (owing) residence = owing;
     outcomes.push({
       kind: "paper",
       paper: paper.kind,
       status,
       reason: typeof decided?.rejected_reason === "string" ? decided.rejected_reason : null,
       named: status === "accepted" ? await nameTakenFrom(service, joined.document_id).catch(() => null) : null,
+      holder: owing?.holder ?? null,
     });
   }
 
   const said = filesMessage(outcomes);
+  // A bill in somebody else's name the firm took: who the holder is to the client is asked at once, in the same
+  // message, as the conversation's step (0237); the next document waits for the answer.
+  if (residence) {
+    const asked = await rpc(service, "one_ask_chat_question", {
+      target_conversation: held.conversationId,
+      target_kind: "residence",
+      target_party: residence.partyId,
+      target_body: [said, residenceAsk(residence.holder)].filter(Boolean).join("\n"),
+    }).catch((): Record<string, unknown> => ({}));
+    if (asked.ok === true) {
+      if (typeof asked.message_id === "string") await send(service, asked.message_id);
+      for (const statementId of statements) await workStatement(statementId);
+      return true;
+    }
+  }
   // What came of the files, and the next document owed, in one message (0230); after a paper refused, its reason
   // already says what to send, and the next one waits for it (0236).
   const papers = outcomes.filter((outcome) => outcome.kind === "paper");
@@ -336,6 +364,35 @@ async function nameTakenFrom(service: SupabaseClient, documentId: string): Promi
   return typeof name === "string" && name.trim() ? name.trim() : null;
 }
 
+/**
+ * The declaration of residence an accepted bill in somebody else's name opened (0123), still waiting for who the holder
+ * is to the client (0237): its holder and the party it is asked of; null when it opened none.
+ */
+async function residenceOwedBy(
+  service: SupabaseClient,
+  documentId: string,
+): Promise<{ partyId: string; holder: string } | null> {
+  const { data: declaration } = await service
+    .from("residence_declarations")
+    .select("holder_name")
+    .eq("document_id", documentId)
+    .eq("status", "open")
+    .is("relation", null)
+    .maybeSingle();
+  const holder = (declaration as { holder_name?: unknown } | null)?.holder_name;
+  if (typeof holder !== "string" || !holder.trim()) return null;
+  const { data: document } = await service.from("case_documents").select("party_id").eq("id", documentId).maybeSingle();
+  const partyId = (document as { party_id?: unknown } | null)?.party_id;
+  return typeof partyId === "string" ? { partyId, holder: holder.trim() } : null;
+}
+
+/** How many months back a proof of address may be dated (0237): the platform's setting, three when unread. */
+async function addressMonths(service: SupabaseClient): Promise<number> {
+  const { data } = await service.from("platform_settings").select("value").eq("key", "address_proof").maybeSingle();
+  const months = Number((data as { value?: { max_age_months?: unknown } } | null)?.value?.max_age_months);
+  return Number.isInteger(months) && months >= 1 && months <= 24 ? months : 3;
+}
+
 /** The documents the case this conversation gathers still owes, as the database says it; null with no case. */
 async function papersOwed(service: SupabaseClient, held: Held): Promise<PapersOwed | null> {
   return papersOwedOf(
@@ -359,7 +416,10 @@ async function nextPaper(service: SupabaseClient, held: Held, context: TurnConte
     const check = await startDataCheck(service, held).catch(() => null);
     if (check) return check;
   }
-  return nextPaperAsk(papers, { dispensablesAsked: dispensablesAsked(context) });
+  return nextPaperAsk(papers, {
+    dispensablesAsked: dispensablesAsked(context),
+    addressMonths: await addressMonths(service).catch(() => 3),
+  });
 }
 
 /** The passenger's data of the case this conversation gathers (0232); null with no case. */
@@ -427,6 +487,9 @@ async function nextDataStep(
     return missing.question;
   }
   await keepStep(service, held, {}, data.caseId);
+  // The client gave the last of their data: ONE prepares the papers to sign right after, never at the sweep's next
+  // round (0237); the database already woke the case.
+  await queueCaseAdvance(data.caseId);
   const after = await nextPaper(service, held, context).catch(() => null);
   return [dataDone(data.fullName), after].filter(Boolean).join("\n");
 }
@@ -545,6 +608,72 @@ async function takeDataCheck(
 }
 
 /**
+ * The client's answer to who the holder of their bill is (0237), kept as on their link: an option, or after "Outra
+ * pessoa" their own words; then the next document owed. A question of theirs is left to ONE's usual answer, the step
+ * still waiting. Answers whether it took the turn.
+ */
+async function takeResidenceAnswer(
+  service: SupabaseClient,
+  held: Held,
+  context: TurnContext,
+  reply: string,
+  chatStep: Record<string, unknown>,
+  report: TurnReport,
+): Promise<boolean> {
+  const caseId = typeof chatStep.case === "string" ? chatStep.case : null;
+  const partyId = typeof chatStep.party === "string" ? chatStep.party : null;
+  if (!caseId || !partyId) return false;
+  const { data: declaration } = await service
+    .from("residence_declarations")
+    .select("holder_name")
+    .eq("case_id", caseId)
+    .eq("status", "open")
+    .maybeSingle();
+  const holder = String((declaration as { holder_name?: unknown } | null)?.holder_name ?? "");
+  const answer = async (relation: string, note: string | null) => {
+    const kept = await rpc(service, "one_answer_residence", {
+      target_conversation: held.conversationId,
+      target_claim: held.claim,
+      target_relation: relation,
+      target_note: note,
+      target_message: null,
+    });
+    if (kept.ok !== true) {
+      await say(service, held, await wordsOf(service, context.orgId, "called_person", calledMessage)).catch(
+        () => undefined,
+      );
+      await callPerson(
+        service,
+        held,
+        "O cliente disse no chat quem é o titular da conta de endereço, mas a resposta não pôde ser guardada: uma pessoa do escritório confere.",
+      );
+      report.called += 1;
+      return true;
+    }
+    const next = await nextPaper(service, held, context).catch(() => null);
+    await say(service, held, [RESIDENCE_ANSWERED, next].filter(Boolean).join("\n"));
+    return true;
+  };
+  if (chatStep.ask === "note") {
+    const note = residenceNoteOf(reply);
+    if (note) return answer("outro", note);
+    if (reply.includes("?")) return false;
+    await say(service, held, residenceNoteAsk(holder));
+    return true;
+  }
+  const choice = residenceChoice(reply);
+  if (choice === "outro") {
+    await keepStep(service, held, { step: "residence", party: partyId, case: caseId, ask: "note" });
+    await say(service, held, residenceNoteAsk(holder));
+    return true;
+  }
+  if (choice) return answer(choice, null);
+  if (reply.includes("?")) return false;
+  await say(service, held, `Responda com o número da opção.\n${residenceAsk(holder)}`);
+  return true;
+}
+
+/**
  * The client's answer to a word ONE asked in the chat (0233): free justice or the civil court, kept as on the link.
  * Answers whether it took the turn.
  */
@@ -561,7 +690,9 @@ async function takeChatQuestion(
     .select("chat_step")
     .eq("id", held.conversationId)
     .maybeSingle();
-  const step = ((row as { chat_step?: Record<string, unknown> } | null)?.chat_step ?? {}).step;
+  const chatStep = (row as { chat_step?: Record<string, unknown> } | null)?.chat_step ?? {};
+  const step = chatStep.step;
+  if (step === "residence") return takeResidenceAnswer(service, held, context, reply, chatStep, report);
   if (step !== "free_justice" && step !== "civil_court") return false;
   const choice = questionChoice(step, reply);
   if (step === "free_justice" && choice === "explicar") {

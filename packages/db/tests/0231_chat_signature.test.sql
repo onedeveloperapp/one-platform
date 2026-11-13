@@ -130,7 +130,7 @@ select is(
 reset role;
 select set_config('request.jwt.claims', '', true);
 select ok(
-  not has_function_privilege('authenticated', 'public.one_tell_signature_links(uuid, uuid[], text)', 'EXECUTE')
+  not has_function_privilege('authenticated', 'public.one_tell_signature_links(uuid, uuid[], text, text)', 'EXECUTE')
     and not has_function_privilege('authenticated', 'public.signature_links_owed(integer)', 'EXECUTE'),
   'only the backend writes and reads what is owed'
 );

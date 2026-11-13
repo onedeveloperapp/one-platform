@@ -381,9 +381,9 @@ describe.skipIf(!DB_URL)("ONE in the conversation, from the first word on a flig
     expect(String(told?.body)).toBe(
       [
         "Recebi o documento de identidade e já juntei ao seu caso. Está tudo certo.",
-        "Recebi o seu áudio e juntei ao seu caso como o relato do que aconteceu. Depois você vai ver os fatos em ordem no seu link, para confirmar.",
+        "Recebi o seu áudio e juntei ao seu caso como o relato do que aconteceu. Depois eu te mostro os fatos em ordem, para você confirmar.",
         // The next document owed, asked in the same message (0230).
-        "Agora um comprovante de endereço recente: conta de luz, água, telefone ou internet. Se estiver no nome de outra pessoa da casa, pode mandar assim mesmo.",
+        "Agora um comprovante de endereço no seu nome, dos últimos 3 meses: conta de luz, água, telefone ou internet.",
       ].join("\n"),
     );
     const events = await sql.unsafe(

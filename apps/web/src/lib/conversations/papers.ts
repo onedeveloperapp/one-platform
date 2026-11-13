@@ -61,8 +61,15 @@ export function papersOwedOf(raw: unknown): PapersOwed | null {
 
 const first = (name: string | null): string => (name ?? "").trim().split(/\s+/)[0] ?? "";
 
-/** How ONE asks one document, by whose it is. */
-export function paperAsk(owed: PaperOwed): string {
+/** "dos últimos 3 meses", or "do último mês": how far back a proof of address may be dated (0237). */
+export const monthsWords = (months: number): string =>
+  months <= 1 ? "do último mês" : `dos últimos ${Math.round(months)} meses`;
+
+/**
+ * How ONE asks one document, by whose it is. A proof of address is asked in the client's own name and recent, never
+ * offered in somebody else's, which costs more steps (the owner, 2026-11-13); one in another name is taken up after.
+ */
+export function paperAsk(owed: PaperOwed, addressMonths = 3): string {
   const whose = owed.own ? null : first(owed.name) || null;
   switch (owed.kind) {
     case "identity":
@@ -71,7 +78,7 @@ export function paperAsk(owed: PaperOwed): string {
         ? `Agora a certidão de nascimento ou o RG de ${whose}.`
         : `Agora a foto do documento de identidade de ${whose}, RG ou CNH, com a frente e o verso.`;
     case "address_proof":
-      return "Agora um comprovante de endereço recente: conta de luz, água, telefone ou internet. Se estiver no nome de outra pessoa da casa, pode mandar assim mesmo.";
+      return `Agora um comprovante de endereço no seu nome, ${monthsWords(addressMonths)}: conta de luz, água, telefone ou internet.`;
     case "ticket":
     case "boarding_pass":
       return "Agora o cartão de embarque, o bilhete ou o print da reserva.";
@@ -110,9 +117,12 @@ export const AWAITING_SIGNATURE =
  * one already says to send it again); with nothing essential left, the dispensable ones, or the word that the link to
  * sign comes here. Null when there is nothing to ask.
  */
-export function nextPaperAsk(papers: PapersOwed, options: { dispensablesAsked: boolean }): string | null {
+export function nextPaperAsk(
+  papers: PapersOwed,
+  options: { dispensablesAsked: boolean; addressMonths?: number },
+): string | null {
   const next = papers.owed.find((owed) => !owed.rejected);
-  if (next) return paperAsk(next);
+  if (next) return paperAsk(next, options.addressMonths);
   if (papers.owed.length > 0) return null;
   if (papers.waitsSignature) return AWAITING_SIGNATURE;
   return options.dispensablesAsked ? null : dispensablesAsk(papers.dispensables);
@@ -158,9 +168,14 @@ export function papersToSignOf(raw: unknown): PaperToSign[] {
 
 /**
  * ONE's message with the links to sign: each paper the provider signs with its own address, the ones signed by gov.br
- * said to be on the client's link, and that ONE goes on here once it is signed. Null when there is nothing to tell.
+ * said to be on the client's link (`linkUrl`, made with this message since the case opened in the chat sends none,
+ * 0237), and that ONE goes on here once it is signed. Null when there is nothing to tell.
  */
-export function signatureLinksMessage(name: string | null, papers: readonly PaperToSign[]): string | null {
+export function signatureLinksMessage(
+  name: string | null,
+  papers: readonly PaperToSign[],
+  linkUrl: string | null = null,
+): string | null {
   const online = papers.filter((paper) => paper.method === "zapsign" && paper.signUrl);
   const govbr = papers.filter((paper) => paper.method === "govbr");
   if (online.length === 0 && govbr.length === 0) return null;
@@ -175,7 +190,7 @@ export function signatureLinksMessage(name: string | null, papers: readonly Pape
   if (govbr.length > 0) {
     const names = govbr.map((paper) => paperInSentence(paper.kind)).join(", ");
     lines.push(
-      `${online.length > 0 ? "E" : "O escritório preparou"} ${govbr.length > 1 ? "estes documentos, que se assinam" : "este documento, que se assina"} pelo gov.br: ${names}. O documento e os passos estão no seu link, aquele que te mandei quando o caso abriu.`,
+      `${online.length > 0 ? "E" : "O escritório preparou"} ${govbr.length > 1 ? "estes documentos, que se assinam" : "este documento, que se assina"} pelo gov.br: ${names}. ${linkUrl ? `O documento e os passos estão neste link: ${linkUrl}` : "O documento e os passos estão no link do seu caso."}`,
     );
   }
   lines.push("Depois de assinar, eu continuo por aqui.");

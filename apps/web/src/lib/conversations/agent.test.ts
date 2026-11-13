@@ -177,7 +177,7 @@ describe("ONE in a conversation", () => {
       "Recebi o documento de identidade e já juntei ao seu caso. Está tudo certo.",
       "Não deu para aceitar o comprovante de endereço. A foto ficou cortada. Envie a conta inteira.",
       "Recebi o cartão de embarque e juntei ao seu caso. O escritório confere e avisa se precisar de outro.",
-      "Não consegui receber um arquivo. Envie de novo, por aqui ou pelo link do seu caso.",
+      "Não consegui receber um arquivo. Envie de novo por aqui, por favor.",
     ]);
     expect(message).not.toMatch(/[–—!]/);
     expect(fileLine({ kind: "no_case" })).toBe("Recebi o arquivo. Ele fica aqui na conversa para o escritório ver.");
@@ -190,7 +190,7 @@ describe("ONE in a conversation", () => {
     expect(filesMessage([])).toBeNull();
     // Two files that failed alike are told once.
     expect(filesMessage([{ kind: "failed" }, { kind: "failed" }])).toBe(
-      "Não consegui receber um arquivo. Envie de novo, por aqui ou pelo link do seu caso.",
+      "Não consegui receber um arquivo. Envie de novo por aqui, por favor.",
     );
   });
 

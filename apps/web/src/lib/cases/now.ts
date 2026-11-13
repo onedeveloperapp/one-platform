@@ -147,6 +147,11 @@ export type CaseNowInput = {
   /** The claimants of a lawsuit planned in the civil court whose word on it is missing or a no. */
   civilCourt: { partyId: string; accepted: boolean | null | undefined; minor: boolean }[];
   account: AccountState | null;
+  /**
+   * The client's account is asked by ONE in an interview that starts once something of the case is signed (0181):
+   * until then it is ONE's work to come, never what holds the case (the owner's test of 2026-11-13).
+   */
+  accountAfterSignature?: boolean;
   interview: Interview;
   /** What ONE waits for to carry the case on (0039), and since when. */
   waiting: string | null;
@@ -475,6 +480,18 @@ export function caseNow(input: CaseNowInput): CaseNow {
     switch (input.account) {
       case "missing":
         if (!accountHolds) break;
+        if (input.accountAfterSignature) {
+          working.push(
+            item({
+              id: "account:after-signature",
+              owner: "one",
+              tone: "waiting",
+              text: { key: "case-now-account-after-signature" },
+              section: "statements",
+            }),
+          );
+          break;
+        }
         blocking.push(
           item({
             id: "account:missing",

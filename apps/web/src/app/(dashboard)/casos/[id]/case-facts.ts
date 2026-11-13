@@ -12,6 +12,8 @@ type ReadyCase = Extract<CaseState, { kind: "ready" }>;
 
 /** The stages a paper sent to be signed waits in: ONE sending it, the client signing it, the firm confirming it. */
 const SIGNATURE_WAITS = ["reserved", "opening", "pending", "received", "uncertain"];
+/** The kinds of problem whose account ONE asks in an interview (`interview_owed`, 0181). */
+const INTERVIEWED_INCIDENTS = ["delay", "cancellation", "overbooking", "missed_connection", "downgrade", "other"];
 
 /**
  * What happens in a case now, read from what its screen read (pure): the top of the case (`caseNow`: what ONE is
@@ -57,6 +59,16 @@ export function caseFacts(ready: ReadyCase) {
     missing,
     civilCourt: civil,
     account: ready.account,
+    // ONE asks the account in the chat once something is signed (0181): a case of a kind it interviews, with no
+    // interview yet, no lawsuit and nothing signed, waits for the signature before it.
+    accountAfterSignature:
+      ready.account === "missing" &&
+      interview === null &&
+      ready.proceedings.length === 0 &&
+      INTERVIEWED_INCIDENTS.includes(ready.case.incident ?? "") &&
+      !ready.envelopes.some(
+        (envelope) => envelope.signers.length > 0 && envelope.signers.every((signer) => Boolean(signer.signedAt)),
+      ),
     interview,
     waiting: ready.advance?.waiting ?? null,
     waitingSince: ready.pulse?.advance.waitingSince ?? null,

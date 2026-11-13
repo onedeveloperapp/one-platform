@@ -57,7 +57,12 @@ describe("the documents ONE asks in the chat (0230)", () => {
     expect(paperAsk(owed("identity", { own: false, name: "Bia Teste", minor: true }))).toBe(
       "Agora a certidão de nascimento ou o RG de Bia.",
     );
-    expect(paperAsk(owed("address_proof"))).toContain("comprovante de endereço recente");
+    // In the client's own name and recent, never offering one in somebody else's (0237).
+    expect(paperAsk(owed("address_proof"))).toBe(
+      "Agora um comprovante de endereço no seu nome, dos últimos 3 meses: conta de luz, água, telefone ou internet.",
+    );
+    expect(paperAsk(owed("address_proof"), 1)).toContain("no seu nome, do último mês:");
+    expect(paperAsk(owed("address_proof"))).not.toContain("outra pessoa");
     expect(paperAsk(owed("ticket"))).toBe("Agora o cartão de embarque, o bilhete ou o print da reserva.");
     for (const kind of ["identity", "address_proof", "ticket", "baggage_report", "other"]) {
       expect(paperAsk(owed(kind))).not.toMatch(/[—–!]/);
@@ -120,6 +125,15 @@ describe("the links to sign, in the chat (0231)", () => {
     );
     const govbr = signatureLinksMessage(null, [{ paperId: "p-4", kind: "procuracao", method: "govbr", signUrl: null }]);
     expect(govbr).toContain("O escritório preparou este documento, que se assina pelo gov.br: a procuração.");
+    expect(govbr).toContain("O documento e os passos estão no link do seu caso.");
+    // With the link made for this message (0237).
+    expect(
+      signatureLinksMessage(
+        "Lia",
+        [{ paperId: "p-4", kind: "procuracao", method: "govbr", signUrl: null }],
+        "https://one.invalid/c/t",
+      ),
+    ).toContain("O documento e os passos estão neste link: https://one.invalid/c/t");
     expect(
       signatureLinksMessage("Nídia", [{ paperId: "p-5", kind: "contrato", method: "zapsign", signUrl: null }]),
     ).toBeNull();

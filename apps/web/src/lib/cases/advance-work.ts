@@ -19,6 +19,7 @@ import { queueDraftWork } from "@/lib/cases/drafts-work";
 import { queueFilingPackage } from "@/lib/cases/filing-work";
 import { caseQualification } from "@/lib/cases/qualification";
 import { lawsuitPlan, type MinimumWage, type RuleParty } from "@/lib/cases/rules";
+import { tellSignatureLinks } from "@/lib/conversations/signature-links-work";
 import { supabaseFileStore } from "@/lib/files/store";
 import { fillMessage } from "@/lib/firm/messages";
 import { firmMessageTextOfCase } from "@/lib/firm/messages-read";
@@ -756,6 +757,9 @@ export async function advanceClaimedCase(
       // An envelope of the firm's ZapSign account is opened by the backend (0023), right after; the sweep catches
       // what that did not.
       if (papers.zapsign) soon("signature-open", () => openReservedEnvelopes(createServiceClient(), 10));
+      // A paper signed by gov.br needs no opening: the client hears of it in the chat right after (0237), never at
+      // the sweep's next round.
+      else if (papers.envelopes > 0) soon("signature-links", () => tellSignatureLinks(createServiceClient()));
     }
     // Once the papers went, the client hears that what they sent arrived and what comes next (0055, 0057).
     if (held.receivedDue || created) {

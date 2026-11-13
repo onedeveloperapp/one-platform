@@ -344,6 +344,8 @@ export type FileOutcome =
       reason: string | null;
       /** The name an accepted identity gave the person in place of the one typed (0236). */
       named?: string | null;
+      /** Whose an accepted bill in somebody else's name is, its declaration waiting for the relation (0237). */
+      holder?: string | null;
     }
   | { kind: "statement" }
   | { kind: "no_case" }
@@ -369,6 +371,9 @@ export function fileLine(outcome: FileOutcome): string {
       if (outcome.status === "accepted" && outcome.named?.trim()) {
         return `Recebi ${paper} e já juntei ao seu caso. Vou usar o nome como está nele: ${outcome.named.trim()}.`;
       }
+      if (outcome.status === "accepted" && outcome.holder?.trim()) {
+        return `Recebi ${paper} e juntei ao seu caso. A conta está em nome de ${outcome.holder.trim()}.`;
+      }
       if (outcome.status === "accepted") return `Recebi ${paper} e já juntei ao seu caso. Está tudo certo.`;
       if (outcome.status === "rejected") {
         const reason = cleanReply(outcome.reason, 400);
@@ -379,13 +384,13 @@ export function fileLine(outcome: FileOutcome): string {
       return `Recebi ${paper} e juntei ao seu caso. O escritório confere e avisa se precisar de outro.`;
     }
     case "statement":
-      return "Recebi o seu áudio e juntei ao seu caso como o relato do que aconteceu. Depois você vai ver os fatos em ordem no seu link, para confirmar.";
+      return "Recebi o seu áudio e juntei ao seu caso como o relato do que aconteceu. Depois eu te mostro os fatos em ordem, para você confirmar.";
     case "no_case":
       return "Recebi o arquivo. Ele fica aqui na conversa para o escritório ver.";
     case "not_taken":
       return "Recebi o arquivo, mas ao caso eu junto só fotos, PDFs e áudios. O escritório vai ver o que você mandou.";
     case "failed":
-      return "Não consegui receber um arquivo. Envie de novo, por aqui ou pelo link do seu caso.";
+      return "Não consegui receber um arquivo. Envie de novo por aqui, por favor.";
   }
 }
 
