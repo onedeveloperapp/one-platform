@@ -15,7 +15,7 @@ export type SweepsReport = {
  * Runs the sweeps of a round, one after the other, each on its own: one that fails leaves the others to run, and
  * once the time given is over nothing more is started (a work under way may still finish; its claim fences it).
  * The clock's round runs what is due at its beat; a round while ONE is used runs the sweeps that serve what people
- * wait on. The answer holds counts only: the job runner keeps it.
+ * wait on. The answer holds counts only: the clock logs it.
  */
 export async function runSweeps(
   service: SupabaseClient,

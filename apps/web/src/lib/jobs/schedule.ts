@@ -4,21 +4,21 @@ import type { SupabaseClient } from "@supabase/supabase-js";
  * When the backend's sweeps run (the owner's decision of 2026-11-04). Pure: what is due at a moment, and in which
  * order, decided from the clock alone.
  *
- * The work a person waits on is done right after their answer (`lib/jobs/soon.ts`), never through the job runner.
+ * The work a person waits on is done right after their answer (`lib/jobs/soon.ts`), never through a queue.
  * What is left (a work that failed, one that waits for an hour of the day, the upkeep) is the sweeps': one clock,
- * `one-tick` (`lib/jobs/tick.ts`), beats every five minutes and runs every sweep due at that beat, in one step, so a
- * month of beats spends about 18 thousand of the 50 thousand executions the job runner's free plan gives. While
- * somebody uses ONE, the sweeps that serve what people wait on also run now and then (`lib/jobs/while-used.ts`), so
- * a clock held (the plan's quota spent) holds nothing a person is looking at.
+ * on ONE's own server since 2026-11-14 (`clock/main.ts`, from the same commit as the app), beats every five
+ * minutes and runs every sweep due at that beat, one beat at a time. While somebody uses ONE and the clock has been
+ * silent, the sweeps that serve what people wait on also run now and then on the app's host
+ * (`lib/jobs/while-used.ts`), so a server that stops holds nothing a person is looking at.
  */
 
-/** The clock's beat, in minutes: `one-tick` runs every five. */
+/** The clock's beat, in minutes: it beats every five. */
 export const TICK_MINUTES = 5;
 
 /** When the clock runs a sweep: every so many minutes, at a minute of every hour, or at a time of every day (UTC). */
 export type SweepWhen = { every: 5 | 10 | 15 | 30 } | { hourly: number } | { daily: { hour: number; minute: number } };
 
-/** What a sweep did, in counts and switches only: it is kept by the job runner, and nothing of a person goes there. */
+/** What a sweep did, in counts and switches only: it goes to the clock's log, and nothing of a person goes there. */
 export type SweepReport = Record<string, unknown>;
 
 export type Sweep = {

@@ -44,7 +44,7 @@ import NiUser from "@/icons/nexture/ni-user";
 import NiUserCross from "@/icons/nexture/ni-user-cross";
 import NiUsers from "@/icons/nexture/ni-users";
 import type { WaitingDecisions } from "@/lib/ai/decisions";
-import { readHomePulse } from "@/lib/cases/pulse-actions";
+import { readHomePulse } from "@/lib/cases/pulse-read";
 import { homeTiles, type PendingGroup, sayPending, withDecisions } from "@/lib/firm/pending";
 import { type FirmToday, somethingForMe, type TodayNeed, todayNeeds } from "@/lib/firm/today";
 import type { ModuleOffer } from "@/lib/modules/offer";
@@ -63,7 +63,7 @@ export type HomeState =
   | {
       kind: "ready";
       firstName: string;
-      firm: { name: string };
+      firm: { id: string; name: string };
       manager: boolean;
       today: FirmToday;
       /** What holds a case until somebody of the firm acts (late, then waiting on the firm); null when unread. */
@@ -347,15 +347,17 @@ export default function HomeView({ state }: { state: HomeState }) {
   const router = useRouter();
 
   const ready = state.kind === "ready" ? state : null;
+  const firmId = ready?.firm.id ?? null;
 
   // The home follows the firm while it is open (the owner, 2026-11-05): what ONE did, what a client sent, what a
   // colleague decided, read again when the mark of what it shows changes, with no reload.
   const live = useLiveRead({
     stamp: ready?.pulse ?? null,
     read: useCallback(async () => {
-      const answer = await readHomePulse();
+      if (!firmId) return null;
+      const answer = await readHomePulse(firmId);
       return answer.ok ? answer.pulse : null;
-    }, []),
+    }, [firmId]),
     busy: false,
     onChange: useCallback(() => router.refresh(), [router]),
   });

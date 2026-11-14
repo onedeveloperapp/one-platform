@@ -194,7 +194,7 @@ async function loadHome(): Promise<
   return {
     kind: "ready",
     firstName: context.profile.displayName.trim().split(/\s+/)[0] ?? "",
-    firm: { name: firm.name },
+    firm: { id: firm.id, name: firm.name },
     manager,
     today: read,
     // What holds a case until somebody of the firm acts, as the center of the header says it (0044, 0053); null

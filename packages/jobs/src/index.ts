@@ -1,15 +1,13 @@
 import { Inngest } from "inngest";
 
 /**
- * The platform's clock at the job runner (the owner's decision of 2026-11-04).
- * ONE sends the runner no events: the work a person's action leaves owed is
- * done right after their answer, on the same server, and the one function the
- * runner holds is the beat that runs the sweeps (`one-tick`, in
- * apps/web/src/lib/jobs/tick.ts). So a month of beats spends a fixed share of
- * the runner's quota, and a runner that stops holds nothing a person waits on.
+ * The job runner, which holds no function of ONE since 2026-11-14: the platform's
+ * one clock runs on ONE's own server (apps/web/clock/), and the work a person's
+ * action leaves owed is done right after their answer. The client stays for the
+ * serve route, whose sync tells the runner it has nothing left to call.
  */
 
-/** Whether this environment has the runner's keys (the signing key is what serves the clock). */
+/** Whether this environment has the runner's keys. */
 export const isInngestConfigured = Boolean(process.env.INNGEST_SIGNING_KEY);
 
 /**

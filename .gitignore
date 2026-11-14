@@ -71,3 +71,6 @@ next-env.d.ts
 # machine and out of the repository, by the owner's decision (2026-10-09).
 /attachments/*
 !/attachments/README.md
+
+# The clock's bundle (apps/web/clock/build.mjs), built by the production deploy.
+apps/web/clock/dist/

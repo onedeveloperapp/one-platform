@@ -1,18 +1,11 @@
-// The clock's beat runs every sweep due in one step (lib/jobs/tick.ts); most
-// take seconds, and a round stops starting sweeps after a little over three
-// minutes, so a step has the most the Vercel Hobby plan accepts. A work that
-// still runs out goes back to the line by itself (its claim expires).
-export const maxDuration = 300;
-
-import { tickFunction } from "@/lib/jobs/tick";
 import { inngest } from "@flyee/jobs";
 import { serve } from "@flyee/jobs/next";
 
-// The platform's one function at the job runner (the owner's decision of
-// 2026-11-04): the clock. The work a person's action leaves owed is done right
-// after their answer (lib/jobs/soon.ts), and every sweep is listed in
-// lib/jobs/registry.ts. A function that is not listed here never runs.
+// The job runner holds no function of ONE since 2026-11-14 (the owner's yes): the platform's one clock runs on ONE's
+// own server (apps/web/clock/), from the same commit, and the work a person's action leaves owed is done right after
+// their answer (lib/jobs/soon.ts). The route stays only so the production deploy's sync tells the runner it has
+// nothing left to call: a runner synced with a function it no longer finds would keep calling this route.
 export const { GET, POST, PUT } = serve({
   client: inngest,
-  functions: [tickFunction],
+  functions: [],
 });

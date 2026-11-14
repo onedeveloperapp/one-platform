@@ -69,7 +69,7 @@ import NiTimeline from "@/icons/nexture/ni-timeline";
 import NiUsers from "@/icons/nexture/ni-users";
 import { caseHolder, caseLabel, groupOf, STATUS_KEY } from "@/lib/cases/cases";
 import { SECTION_ANCHOR } from "@/lib/cases/now";
-import { readCasePulse } from "@/lib/cases/pulse-actions";
+import { readCasePulse } from "@/lib/cases/pulse-read";
 import { CASE_SECTIONS, type CaseSection } from "@/lib/cases/sections";
 import { sayPending } from "@/lib/firm/pending";
 import { caseKindLabelKey } from "@/lib/modules/registry";

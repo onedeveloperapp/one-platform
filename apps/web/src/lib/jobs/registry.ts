@@ -40,7 +40,7 @@ import { signatureSweeps } from "@/lib/signatures/jobs";
 import { whatsappSweeps } from "@/lib/whatsapp/jobs";
 
 /**
- * Every sweep of the platform, in one list: the clock (`lib/jobs/tick.ts`) and a round while ONE is used
+ * Every sweep of the platform, in one list: the clock (`clock/main.ts`) and a round while ONE is used
  * (`lib/jobs/while-used.ts`) run from it. A sweep missing from this list never runs, whatever its file declares.
  */
 export const SWEEPS: readonly Sweep[] = [

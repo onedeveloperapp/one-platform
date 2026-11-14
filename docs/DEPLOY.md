@@ -140,7 +140,7 @@ Operação:
 | --- | --- |
 | `ASAAS_API_KEY` / `ASAAS_WEBHOOK_TOKEN` / `ASAAS_BASE_URL` | cobrança em BRL (produção: `https://api.asaas.com/v3`) |
 | `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` | cobrança em USD |
-| `INNGEST_SIGNING_KEY` | o relógio do ONE (`one-tick`, de 5 em 5 minutos), que roda as varreduras: o que ficou pendente, o que tem hora (lembretes, novas tentativas) e a manutenção. Sem ela, o trabalho que alguém espera roda logo depois de cada ação e as varreduras rodam enquanto o ONE está em uso, mas nada roda pelo relógio quando ninguém usa: obrigatória em produção. O ONE não envia eventos ao Inngest, então `INNGEST_EVENT_KEY` não é usada |
+| `INNGEST_SIGNING_KEY` | só para a sincronização que avisa o Inngest de que o ONE não tem mais função lá (desde 2026-11-14 o relógio roda no servidor do ONE: "O relógio do ONE", abaixo). O ONE não envia eventos ao Inngest, então `INNGEST_EVENT_KEY` não é usada |
 | `RESEND_API_KEY` / `EMAIL_FROM` | e-mails do app (sem elas os avisos ficam só no sino do painel). **Obrigatórias para a lista de espera**: sem o e-mail de confirmação ninguém confirma, e o formulário responde que a lista está fora do ar. Ver "E-mails e jobs" |
 | `CONTACT_FORM_TO` | destino do formulário de contato |
 | `PUBLIC_FORMS_IP_SALT` | segredo da janela por rede da lista de espera (HMAC do IP). Sem ele não há limite por rede |
@@ -155,6 +155,10 @@ Operação:
    - `VERCEL_TOKEN` — o token criado
    - `VERCEL_ORG_ID` — `orgId` do `.vercel/project.json`
    - `VERCEL_PROJECT_ID` — `projectId` do `.vercel/project.json`
+   - `ONE_VPS_CLOCK_KEY` — a chave privada de deploy do relógio (ver "O relógio do ONE")
+3. Na aba **Variables** do mesmo lugar: `ONE_VPS_SSH` (`one@187.53.106.93`) e
+   `ONE_VPS_KNOWN_HOSTS` (a linha `ssh-keyscan -t ed25519 187.53.106.93`,
+   conferida com a impressão digital do servidor).
 
 ### 5. Domínio
 
@@ -172,13 +176,8 @@ barra final).
 
 ## Pós-deploy (primeira vez)
 
-- **Inngest**: no dashboard do Inngest, sincronizar o app apontando para
-  `https://<domínio>/api/inngest` (depois de setar a chave de assinatura). A
-  partir daí, cada deploy de produção sincroniza sozinho (o passo "Sync the jobs
-  with Inngest" do workflow faz `PUT` em `https://<domínio>/api/inngest`; o
-  domínio vem da variável `PRODUCTION_URL` do repositório, ou do endereço
-  atual). Sem a sincronização, o relógio não fica registrado e nada roda pelo
-  relógio. Para sincronizar à mão: `curl -X PUT https://<domínio>/api/inngest`.
+- **O relógio**: ver "O relógio do ONE". O Inngest não tem mais função do ONE;
+  o passo "Sync the jobs with Inngest" do workflow só o avisa disso.
 - **Webhooks de billing**: apontar Stripe para
   `https://<domínio>/api/webhooks/stripe` e Asaas para
   `https://<domínio>/api/webhooks/asaas`.
@@ -200,11 +199,11 @@ cadastro continuam acessíveis, só não aparecem nos botões.
    `npm run db:gate:remote`, que aplica todas as migrações (`0000`–`0023`) num
    projeto vazio e roda o pgTAP. O gate recusa um banco que ele não construiu.
 2. **Variáveis na Vercel**: as obrigatórias acima, mais `RESEND_API_KEY` e
-   `EMAIL_FROM` com o domínio verificado no Resend, `PUBLIC_FORMS_IP_SALT` e a
-   chave de assinatura do Inngest. A varredura diária `purge-leads` apaga em 7
+   `EMAIL_FROM` com o domínio verificado no Resend e `PUBLIC_FORMS_IP_SALT`; e
+   o relógio no servidor do ONE ("O relógio do ONE"). A varredura diária `purge-leads` apaga em 7
    dias os endereços não confirmados, prazo que a página e o e-mail prometem.
 3. **Deploy** pelo workflow, e então o Supabase Auth (Site URL e redirect URLs)
-   e a sincronização do Inngest (`one-tick` deve aparecer na lista).
+   e o relógio batendo no servidor (o log mostra uma linha `beat` a cada 5 minutos).
 4. **Sua conta de operador.** Crie a conta em `/auth/sign-up` e promova-a no SQL
    Editor do Supabase (a sessão do editor não tem JWT, e a trava de
    superadmin permite):
@@ -285,27 +284,38 @@ conta sem ele lê em português).
 O `supabase/config.toml` aponta para os mesmos arquivos, para quem ligar a
 confirmação por e-mail no Supabase local.
 
-### Jobs (Inngest)
+### O relógio do ONE
 
-Desde 2026-11-04, o ONE tem uma só função no Inngest: o relógio `one-tick`, de
-5 em 5 minutos, que roda num passo todas as varreduras que vencem naquele
-tique. São duas execuções por tique, umas 18 mil por mês, dentro das 50 mil do
-plano gratuito. A lista das varreduras, com o horário de cada uma, fica em
-`apps/web/src/lib/jobs/registry.ts`. Depois de sincronizar o app em
-`https://<domínio>/api/inngest`, só `one-tick` deve aparecer na lista; a
-sincronização tira as funções de antes.
+Desde 2026-11-14 (com o sim do dono), o relógio que roda as varreduras fica no
+servidor do ONE, a VPS compartilhada (`one@187.53.106.93`), e não mais no
+Inngest: as batidas de 5 em 5 minutos na Vercel, cada uma carregando o app e
+rodando as varreduras que vencem, eram a maior parte da CPU que o plano Hobby
+permite. A lista das varreduras, com o horário de cada uma, fica em
+`apps/web/src/lib/jobs/registry.ts`.
+
+- **O código** é o mesmo do app, do mesmo commit: `apps/web/clock/main.ts`,
+  empacotado por `apps/web/clock/build.mjs` num arquivo só.
+- **O deploy de produção** empacota o relógio depois do deploy da Vercel e o
+  envia por SSH com a chave `ONE_VPS_CLOCK_KEY`, que no servidor só pode rodar
+  `/opt/atendimento/one/relogio/receber.sh` (o `authorized_keys` do usuário
+  `one` traz `restrict,command="..."` nessa chave). O script confere o pacote,
+  carrega-o com as chaves do servidor e só então troca o relógio, depois que a
+  batida em curso termina. As três últimas versões ficam em
+  `/opt/atendimento/one/relogio/versoes/`.
+- **As chaves** do relógio são as de produção da Vercel, em
+  `/opt/atendimento/one/segredos/relogio.env` (600, usuário `one`). Uma chave
+  nova ou trocada na Vercel tem de ser posta lá também; as marcadas como
+  sensíveis na Vercel não se leem de volta e são preenchidas à mão.
+- **Se o relógio parar**: cada batida marca `clock_beat` em
+  `platform_settings`; com a marca mais velha que 15 minutos, o app volta a
+  rodar as varreduras que servem a quem espera enquanto o ONE está em uso. Ver
+  o relógio: `ssh one@187.53.106.93 'docker logs --tail 20 one-relogio-relogio-1'`.
+- **`apps/web/clock/receber.sh` muda à mão**: o deploy nunca o reescreve.
+  Depois de mudar, copie para o servidor e dê `chmod 755`.
 
 O trabalho que alguém espera (ler um documento, conferir um papel, a resposta
-do ONE na conversa, o próximo passo de um caso) não passa pelo Inngest: roda
-logo depois da resposta de cada ação, no mesmo servidor. As varreduras que
-servem a quem espera também rodam enquanto o ONE está em uso, uma vez a cada 5
-minutos por servidor.
-
-**Sem a chave do Inngest**, ou com a cota do mês esgotada, tudo isso continua
-funcionando, mas **nada roda pelo relógio** quando ninguém usa o ONE: lembretes
-de audiência, avisos com hora marcada, a leitura do DJEN e dos tribunais, o
-backup e a limpeza esperam alguém usar o sistema (o backup e as leituras do
-DJEN, dos tribunais e da ANAC, só o relógio roda).
+do ONE na conversa, o próximo passo de um caso) não passa pelo relógio: roda
+logo depois da resposta de cada ação, na Vercel.
 
 Cada mensagem agendada é reservada no banco antes de ser enviada (migração
 `0023`), então uma função que roda duas vezes não escreve duas vezes para a

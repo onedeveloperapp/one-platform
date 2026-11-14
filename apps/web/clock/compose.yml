@@ -1,0 +1,30 @@
+# The platform's one clock on ONE's server (clock/main.ts). Shipped with each version (clock/build.mjs copies it into
+# the bundle) and brought up by receber.sh from that version's folder, so a bind mount always holds one version whole.
+name: one-relogio
+
+services:
+  relogio:
+    image: node:22-slim
+    user: node
+    working_dir: /app
+    command: ["node", "relogio.mjs"]
+    volumes:
+      - ./:/app:ro
+    env_file:
+      - /opt/atendimento/one/segredos/relogio.env
+    environment:
+      ONE_COMMIT: ${ONE_COMMIT:-unknown}
+      # The same guards as the app's production: no simulator, no fake provider is honoured here.
+      NODE_ENV: production
+      VERCEL_ENV: production
+      TZ: UTC
+    restart: unless-stopped
+    # A new version waits for the beat under way (a beat starts sweeps for 200 seconds).
+    stop_grace_period: 5m
+    mem_limit: 768m
+    cpus: 1.0
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

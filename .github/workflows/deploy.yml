@@ -119,14 +119,12 @@ jobs:
           echo "Production: $url"
           echo "### Vercel production" >> "$GITHUB_STEP_SUMMARY"
           echo "$url" >> "$GITHUB_STEP_SUMMARY"
-      # Inngest learns the app's functions only when the app is synced: a
-      # deploy that adds or changes a function and is not synced leaves it
-      # unregistered, and its events and crons run nothing (found on
-      # 2026-10-24, when ONE's turns in the test chat never ran). A PUT to the
-      # serve route is the dashboard's "Sync". It goes to the production
-      # address, which is public: a deployment's own address sits behind
-      # Vercel's login, which Inngest cannot pass. A sync that fails warns and
-      # leaves the deploy as it went.
+      # Inngest holds no function of ONE since 2026-11-14 (the clock moved to
+      # ONE's own server, below). The sync tells it so: a runner synced with a
+      # function it no longer finds keeps calling the route. A PUT to the serve
+      # route is the dashboard's "Sync", sent to the public production address
+      # (a deployment's own address sits behind Vercel's login). A sync that
+      # fails warns and leaves the deploy as it went.
       - name: Sync the jobs with Inngest
         env:
           PRODUCTION_URL: ${{ vars.PRODUCTION_URL || 'https://one-platform-two.vercel.app' }}
@@ -143,3 +141,29 @@ jobs:
           done
           echo "::warning::Inngest was not synced: sync the app at $PRODUCTION_URL/api/inngest (docs/DEPLOY.md)"
           echo "Inngest sync failed: see this step's log" >> "$GITHUB_STEP_SUMMARY"
+      # The platform's one clock (apps/web/clock/) runs on ONE's own server,
+      # from this same commit (the owner, 2026-11-14: its beats were most of
+      # what Vercel's plan allows). Bundled here, received there by
+      # receber.sh, the one command this key may run: it tries the version
+      # with the server's keys and puts it in the place of the running clock
+      # once the beat under way ends. Without the key the step fails, the
+      # deploy above stands, and the app runs its own rounds while ONE is used
+      # until the clock beats again (lib/jobs/while-used.ts).
+      - name: Ship the clock to ONE's server
+        env:
+          CLOCK_KEY: ${{ secrets.ONE_VPS_CLOCK_KEY }}
+          KNOWN_HOSTS: ${{ vars.ONE_VPS_KNOWN_HOSTS }}
+          VPS: ${{ vars.ONE_VPS_SSH || 'one@187.53.106.93' }}
+        run: |
+          if [ -z "$CLOCK_KEY" ] || [ -z "$KNOWN_HOSTS" ]; then
+            echo "::error::Missing ONE_VPS_CLOCK_KEY / ONE_VPS_KNOWN_HOSTS: the clock was not updated (docs/DEPLOY.md)"
+            exit 1
+          fi
+          npm ci --no-audit --no-fund
+          node apps/web/clock/build.mjs
+          install -m 700 -d ~/.ssh
+          echo "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          echo "$CLOCK_KEY" > ~/.ssh/relogio
+          chmod 600 ~/.ssh/relogio
+          tar -C apps/web/clock/dist -cz . | ssh -i ~/.ssh/relogio -o BatchMode=yes "$VPS" "$GITHUB_SHA"
+          echo "Clock: $GITHUB_SHA on ONE's server" >> "$GITHUB_STEP_SUMMARY"
