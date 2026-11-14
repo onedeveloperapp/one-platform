@@ -1,6 +1,16 @@
 import "server-only";
 
-import { briefDue, briefFactsOf, briefLines, staffParams, whenLabel } from "@/lib/hearings/brief";
+import { runFirmTask } from "@/lib/ai/executor";
+import { briefDue, type BriefFacts, briefFactsOf, briefLines, staffParams, whenLabel } from "@/lib/hearings/brief";
+import {
+  GUIDE_TASK,
+  guideFactLines,
+  type GuideFacts,
+  guideFactsOf,
+  guideInput,
+  guideReadingLines,
+  guideReadingOf,
+} from "@/lib/hearings/guide";
 import type { Sweep } from "@/lib/jobs/schedule";
 import { deliverOutbox } from "@/lib/whatsapp/send";
 import { sendHearingBriefEmail } from "@flyee/email";
@@ -38,6 +48,55 @@ async function tellStaff(
   return "queued";
 }
 
+/** The longest brief the database keeps (0246). */
+const BRIEF_MAX = 40000;
+
+/** How many guides one sweep writes: each asks the model, and the rest are the next sweep's. */
+const GUIDES_PER_SWEEP = 3;
+
+/** ONE's reading of the case for the hearing (0246); null when it could not be had. */
+async function readGuide(facts: BriefFacts, guide: GuideFacts) {
+  const run = await runFirmTask({
+    orgId: facts.orgId,
+    task: GUIDE_TASK,
+    input: guideInput(facts, guide),
+    subject: { type: "hearing", id: facts.hearingId },
+    idempotencyKey: `hearing-guide:${facts.hearingId}`,
+  }).catch(() => null);
+  return run && run.kind === "finished" && !run.approvalId ? guideReadingOf(run.output) : null;
+}
+
+/**
+ * The guide of who goes (0246): the brief's lines, what the case holds of the trip, the weather, the account and the
+ * court, and ONE's reading of them; with no reading, the case's facts and a word that it did not come.
+ */
+async function guideLines(service: SupabaseClient, facts: BriefFacts): Promise<string[]> {
+  const lines = briefLines(facts);
+  const { data, error } = await service.rpc("hearing_guide_facts", { target_hearing: facts.hearingId });
+  const guide = error ? null : guideFactsOf(data);
+  if (!guide) return lines;
+  const reading = await readGuide(facts, guide);
+  return [
+    ...lines,
+    ...guideFactLines(facts, guide),
+    ...(reading
+      ? guideReadingLines(reading)
+      : ["", "A leitura do ONE para a audiência não ficou pronta: os dados acima são os do caso."]),
+  ];
+}
+
+/** The lines as the database keeps them: whole lines, within its limit. */
+function within(lines: string[]): string[] {
+  const kept: string[] = [];
+  let size = 0;
+  for (const line of lines) {
+    if (size + line.length + 1 > BRIEF_MAX) break;
+    kept.push(line);
+    size += line.length + 1;
+  }
+  return kept;
+}
+
 export async function writeBriefs(service: SupabaseClient): Promise<Record<string, number>> {
   const { data, error } = await service.rpc("hearing_briefs_owed", { target_limit: 30 });
   if (error) throw new Error("hearing_briefs_owed failed");
@@ -47,7 +106,8 @@ export async function writeBriefs(service: SupabaseClient): Promise<Record<strin
   let told = 0;
   for (const facts of briefFactsOf(data)) {
     if (!briefDue(facts, today)) continue;
-    const lines = briefLines(facts);
+    if (written >= GUIDES_PER_SWEEP) break;
+    const lines = within(await guideLines(service, facts));
     const { data: firm } = await service.from("organizations").select("name").eq("id", facts.orgId).maybeSingle();
     let sent = false;
     if (facts.attendeeEmail && process.env.RESEND_API_KEY) {

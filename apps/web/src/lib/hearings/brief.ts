@@ -157,7 +157,7 @@ export function briefLines(facts: BriefFacts): string[] {
       ? `Acordo: o escritório aceita a partir de ${brl(facts.floorCents)} por pessoa, pela regra do escritório.`
       : "Acordo: o escritório não definiu um valor mínimo para este tipo de problema.",
   );
-  lines.push("O que a companhia já alegou: a contestação não foi lida pelo ONE ainda.");
+  // What the airline alleged, the trip and the account, and ONE's reading, follow in the guide (0246).
   return lines;
 }
 

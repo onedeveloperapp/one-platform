@@ -472,6 +472,16 @@ export const TASK_OUTPUT_KEYS: Record<string, readonly string[]> = {
   // Since 0104 the database also reads how sure the AI is: only an answer it is sure of is the triage.
   "publicacao.triagem": ["resumo", "categoria", "certeza", "urgente"],
   "caso.peca.minuta": ["texto", "observacoes"],
+  // The guide of who goes to a hearing (0246): every section is read by `guideReadingOf`.
+  "audiencia.preparo": [
+    "resumo",
+    "pontos_fortes",
+    "alegacoes_da_re",
+    "perguntas_ao_cliente",
+    "perguntas_do_advogado",
+    "pontos_de_atencao",
+    "acordo",
+  ],
   // Read by the database, which takes each only where the publication's words say it (0040).
   "publicacao.prazo": ["ha_prazo", "dias", "contagem", "a_partir", "ato", "trecho"],
   "publicacao.audiencia": ["ha_audiencia", "situacao", "data", "hora", "tipo", "modo", "local", "link", "trecho"],
