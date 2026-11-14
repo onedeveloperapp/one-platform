@@ -75,7 +75,9 @@ const KEYS = [
 const STEPS: readonly IntakeStep[] = ["resumo", "corrigir", "oferta", "duvidas", "recusou", "seguir"];
 
 /** What the task read: whether it is a problem with a flight, and the facts it found. Null for an answer that is not. */
-export function intakeReadingOf(raw: unknown): { flight: boolean; facts: Record<string, string> } | null {
+export function intakeReadingOf(
+  raw: unknown,
+): { flight: boolean; facts: Record<string, string>; question: string | null } | null {
   if (typeof raw !== "object" || raw === null) return null;
   const row = raw as Record<string, unknown>;
   if (row.assunto !== "problema_voo" && row.assunto !== "outro") return null;
@@ -85,7 +87,9 @@ export function intakeReadingOf(raw: unknown): { flight: boolean; facts: Record<
     // A mark of a masked identifier is never a fact of the passenger's.
     if (value && !/\[[a-z]+ \d+\]/i.test(value)) facts[key] = value;
   }
-  return { flight: row.assunto === "problema_voo", facts };
+  // The doubt the person asked in their last message (0249), ONE's to answer before going on; never a fact.
+  const question = typeof row.pergunta === "string" ? row.pergunta.trim().slice(0, 300) : "";
+  return { flight: row.assunto === "problema_voo", facts, question: question || null };
 }
 
 /** The facts as the database keeps them. */
@@ -388,7 +392,13 @@ export function intakeQuestion(input: {
 }
 
 /** What the summary names: the airline and the two cities as the platform's tables have them, null when unknown. */
-export type IntakeNames = { airline: string | null; origin: string | null; destination: string | null };
+export type IntakeNames = {
+  airline: string | null;
+  origin: string | null;
+  destination: string | null;
+  /** The airline's code, when the platform's table knows it (0249: the market's forecast reads it). */
+  airlineIata?: string | null;
+};
 
 const dayWords = (day: string | undefined): string | null => {
   if (!day || !/^\d{4}-\d{2}-\d{2}$/.test(day)) return null;

@@ -55,8 +55,13 @@ describe("who writes to the firm with no alert", () => {
         atraso_horas: "6",
         acompanhantes: "nenhum",
       },
+      question: null,
     });
-    expect(intakeReadingOf({ assunto: "outro" })).toEqual({ flight: false, facts: {} });
+    expect(intakeReadingOf({ assunto: "outro" })).toEqual({ flight: false, facts: {}, question: null });
+    // The doubt asked is read apart, never as a fact (0249).
+    expect(
+      intakeReadingOf({ assunto: "problema_voo", problema: "delay", pergunta: " Quanto eu posso ganhar? " }),
+    ).toEqual({ flight: true, facts: { problema: "delay" }, question: "Quanto eu posso ganhar?" });
     expect(intakeReadingOf({ assunto: "talvez" })).toBeNull();
     expect(intakeReadingOf(null)).toBeNull();
   });

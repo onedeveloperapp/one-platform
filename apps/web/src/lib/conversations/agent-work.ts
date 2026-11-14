@@ -70,6 +70,18 @@ import {
   readValue,
   valueQuestion,
 } from "@/lib/conversations/data-check";
+import {
+  DOUBT_ASK,
+  DOUBT_TASK,
+  type DoubtAnswer,
+  doubtAnswered,
+  doubtAnswerOf,
+  doubtInput,
+  forecastOf,
+  marketProblemOf,
+  standingWords,
+  withAnswer,
+} from "@/lib/conversations/doubts";
 import { takeHearingReport } from "@/lib/conversations/hearing-report-work";
 import {
   arrivalOptions,
@@ -85,6 +97,7 @@ import {
   type IntakeNames,
   intakeNextAsk,
   intakeOffer,
+  intakeOpening,
   intakePersonalMissing,
   intakeQualificationInput,
   intakeQuestion,
@@ -1121,6 +1134,7 @@ async function intakeNames(service: SupabaseClient, facts: IntakeFacts): Promise
     rows.find((row) => prefix.length === 2 && row.iata === prefix);
   if (found) airline = found.name;
   else if (/^[\p{L} ]{3,40}$/u.test(said)) airline = said;
+  const airlineIata = found?.iata ?? null;
   const codes = [facts.origem, facts.destino].filter((code): code is string => !!code && /^[A-Za-z]{3}$/.test(code));
   const cities = new Map<string, string>();
   if (codes.length > 0) {
@@ -1136,7 +1150,74 @@ async function intakeNames(service: SupabaseClient, facts: IntakeFacts): Promise
     }
   }
   const city = (code: string | undefined) => (code ? (cities.get(code.toUpperCase()) ?? code.toUpperCase()) : null);
-  return { airline, origin: city(facts.origem), destination: city(facts.destino) };
+  return { airline, airlineIata, origin: city(facts.origem), destination: city(facts.destino) };
+}
+
+/**
+ * A doubt of who still decides, answered by ONE (0249): how much they may get by the market's forecast (its median,
+ * with where it comes from, never a promise), what it costs by the firm's own words on its fees, what they may lose by
+ * the law of the small-claims court, as the task `atendimento.duvida` writes it. Null when the task said nothing (the
+ * message held no doubt) or failed: ONE goes on as before then.
+ */
+async function answerDoubt(
+  service: SupabaseClient,
+  held: Held,
+  context: TurnContext,
+  facts: IntakeFacts,
+  question: string,
+): Promise<DoubtAnswer | null> {
+  const names = await intakeNames(service, facts).catch(() => null);
+  const problem = marketProblemOf(facts.problema);
+  const forecast = problem
+    ? forecastOf(
+        await rpc(service, "market_forecast", {
+          target_problem: problem,
+          target_airline: names?.airlineIata ?? null,
+        }).catch(() => null),
+      )
+    : null;
+  const [fees, faq] = await Promise.all([
+    firmMessageText(service, context.orgId, "fees").catch(() => null),
+    firmMessageText(service, context.orgId, "faq").catch(() => null),
+  ]);
+  const values = { nome: greeting(facts.nome) };
+  const run = await runFirmTask({
+    orgId: context.orgId,
+    task: DOUBT_TASK,
+    input: doubtInput({
+      firm: context.firm,
+      question,
+      facts,
+      airline: names?.airline ?? null,
+      standing: standingWords(facts, today()),
+      fees: fees ? fillMessage(fees, values) : null,
+      faq: faq ? fillMessage(faq, values) : null,
+      forecast,
+    }),
+    subject: { type: "wa_conversation", id: held.conversationId },
+    idempotencyKey: `doubt:${held.conversationId}:${held.claim}`,
+  }).catch(() => null);
+  if (!run || run.kind !== "finished") return null;
+  return doubtAnswerOf(run.output);
+}
+
+/** A doubt only a person of the firm answers (0249): ONE's word that one does, and the person called. */
+async function doubtToPerson(
+  service: SupabaseClient,
+  held: Held,
+  context: TurnContext,
+  report: TurnReport,
+  words: string,
+): Promise<boolean> {
+  const said = words || (await wordsOf(service, context.orgId, "called_person", calledMessage));
+  await say(service, held, said).catch(() => undefined);
+  await callPerson(
+    service,
+    held,
+    "O passageiro tem uma dúvida que só uma pessoa do escritório responde, antes de seguir com o caso.",
+  );
+  report.called += 1;
+  return true;
 }
 
 type Keep = (facts: Record<string, string>, clear?: string[]) => Promise<IntakeFacts | null>;
@@ -1205,6 +1286,7 @@ async function takeIntake(
         : null;
   const choice = options && asked ? choiceOf(options, reply) : null;
   let facts: IntakeFacts | null;
+  let question: string | null = null;
   if (choice && asked) {
     // The arrival's band (0242), or "Não cheguei a viajar": the notice alone decides a cancellation or a change then.
     facts = await keep(
@@ -1222,14 +1304,24 @@ async function takeIntake(
     const reading = intakeReadingOf(run.output);
     if (!reading || (!reading.flight && !started)) return false;
     facts = await keep(reading.facts);
+    question = reading.question;
   }
   if (!facts) return false;
+  const settled: IntakeFacts = facts;
+
+  // A doubt asked on the way (how much, what it costs, what they may lose) is answered first, and the question ONE was
+  // asking goes on after it (0249); one only a person answers hands the conversation to the firm.
+  const answering = async (body: string, opening: string | null = null): Promise<boolean> => {
+    const answer = question ? await answerDoubt(service, held, context, settled, question) : null;
+    if (answer?.callPerson) return doubtToPerson(service, held, context, report, answer.text);
+    return tell(withAnswer(answer?.text || null, body, opening));
+  };
 
   // After the "Quero seguir": how to call them and who travelled along, then the case opens (0239).
   if (facts.etapa === "seguir") {
     const next = intakePersonalMissing(facts)[0];
     if (!next) return openFromIntake(service, held, context, report, facts);
-    return tell(intakeQuestion({ ask: next, first: false, firm: context.firm, before: known, after: facts }));
+    return answering(intakeQuestion({ ask: next, first: false, firm: context.firm, before: known, after: facts }));
   }
   // An answer that already rules the right out ends the intake at once, whatever is still missing (0239): a flight
   // older than 5 years, a notice of 72 hours or more, an arrival less than 4 hours late.
@@ -1239,10 +1331,13 @@ async function takeIntake(
   const missing = intakeMissing(facts);
   if (missing.length > 0) {
     if (facts.etapa) await keep({}, ["etapa"]);
-    return tell(intakeQuestion({ ask: missing[0], first: !started, firm: context.firm, before: known, after: facts }));
+    return answering(
+      intakeQuestion({ ask: missing[0], first: !started, firm: context.firm, before: known, after: facts }),
+      started ? null : intakeOpening(context.firm),
+    );
   }
   if (!(await keep({ etapa: "resumo" }))) return false;
-  return tell(intakeSummary(facts, await intakeNames(service, facts)));
+  return answering(intakeSummary(facts, await intakeNames(service, facts)));
 }
 
 /** The summary confirmed: the rule decides, and a problem that qualifies is offered with the firm's words on its fees. */
@@ -1319,10 +1414,28 @@ async function takeOffer(
     // Who said no and writes again is offered again: "Se mudar de ideia, é só escrever aqui".
     return decideIntake(service, held, context, report, facts, keep, tell);
   }
-  const faq = facts.etapa === "oferta" ? await firmMessageText(service, context.orgId, "faq") : null;
-  if (faq && choice !== "pessoa") {
-    if (!(await keep({ etapa: "duvidas" }))) return false;
-    return tell(intakeDoubts(fillMessage(faq, { nome: greeting(facts.nome) })));
+  if (choice !== "pessoa") {
+    // A doubt in the person's own words (how much, what it costs, what they may lose): ONE answers it and asks again,
+    // selling the service, never a promise (0249).
+    // "Tenho dúvidas sobre o valor" is a doubt said; "Tenho dúvidas" or its number alone is not.
+    const said = reply.trim();
+    const question = choice === null || (choice === "duvidas" && said.split(/\s+/).length > 2) ? said : "";
+    const answer = question ? await answerDoubt(service, held, context, facts, question) : null;
+    if (answer?.callPerson) return doubtToPerson(service, held, context, report, answer.text);
+    if (answer) {
+      if (!(await keep({ etapa: "duvidas" }))) return false;
+      return tell(doubtAnswered(answer.text));
+    }
+    const faq = facts.etapa === "oferta" ? await firmMessageText(service, context.orgId, "faq") : null;
+    if (faq) {
+      if (!(await keep({ etapa: "duvidas" }))) return false;
+      return tell(intakeDoubts(fillMessage(faq, { nome: greeting(facts.nome) })));
+    }
+    if (choice === "duvidas") {
+      // "Tenho dúvidas" with no doubt said and no answers of the firm's: ONE asks what it is.
+      if (!(await keep({ etapa: "duvidas" }))) return false;
+      return tell(DOUBT_ASK);
+    }
   }
   await say(service, held, await wordsOf(service, context.orgId, "called_person", calledMessage)).catch(
     () => undefined,

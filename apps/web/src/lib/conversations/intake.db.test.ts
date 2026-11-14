@@ -25,6 +25,8 @@ vi.mock("@flyee/jobs", () => ({ sendEvent: async () => ({ sent: false, hint: "no
 const model = vi.hoisted(() => ({
   intake: ((): unknown => ({})) as (briefing: string) => unknown,
   conversation: ((): unknown => ({})) as (briefing: string) => unknown,
+  // The answer to a doubt of who still decides (0249).
+  doubt: ((): unknown => ({ resposta: "", chamar_pessoa: false })) as (briefing: string) => unknown,
   briefings: [] as string[],
 }));
 
@@ -35,7 +37,8 @@ vi.mock("@flyee/ai/fake", async (original) => {
       super(name, (_output, messages) => {
         const briefing = messages.map((message) => String(message.content ?? "")).join("\n");
         model.briefings.push(briefing);
-        return briefing.includes("fatos_anotados") ? model.intake(briefing) : model.conversation(briefing);
+        if (briefing.includes("fatos_anotados")) return model.intake(briefing);
+        return briefing.includes("regra_ate_agora") ? model.doubt(briefing) : model.conversation(briefing);
       });
     }
   }
@@ -54,6 +57,7 @@ const LUCAS = "5500988880007";
 const RITA = "5500988880008";
 const BETO = "5500988880009";
 const DORA = "5500988880010";
+const EVA = "5500988880011";
 let numberId = "";
 
 async function call(name: string, args: Row): Promise<Row> {
@@ -134,6 +138,7 @@ describe.skipIf(!DB_URL)("any passenger on the firm's WhatsApp", () => {
     }
     await sql.unsafe(`delete from public.organizations where id = '${FIRM}'`);
     await sql.unsafe(`delete from auth.users where id = '${ANA}'`);
+    await sql.unsafe(`delete from public.market_decisions where key like 'entrada-duvida-%'`);
     await sql.end({ timeout: 5 });
   });
 
@@ -155,6 +160,7 @@ describe.skipIf(!DB_URL)("any passenger on the firm's WhatsApp", () => {
       nome: "",
       // Who referred the person (0183) and who travelled along (0227), empty when not told.
       indicado_por: "",
+      pergunta: "",
       acompanhantes: "",
     };
     const countCases = async () =>
@@ -333,6 +339,7 @@ describe.skipIf(!DB_URL)("any passenger on the firm's WhatsApp", () => {
       aviso: "late",
       nome: "Dora",
       indicado_por: "",
+      pergunta: "",
       acompanhantes: "nenhum",
     });
     await writes(
@@ -354,6 +361,91 @@ describe.skipIf(!DB_URL)("any passenger on the firm's WhatsApp", () => {
     expect(await takeConversationTurns(backend() as never)).toMatchObject({ opened: 1, failed: 0 });
   });
 
+  it("answers a doubt on the way and at the offer, with the market's forecast and no promise, and goes on (0249)", async () => {
+    const { takeConversationTurns } = await import("@/lib/conversations/agent-work");
+    const { intakeOpening } = await import("@/lib/conversations/intake");
+    // Decisions of the market on cancellations, invented, for the forecast to read.
+    await sql.unsafe(
+      `insert into public.market_decisions (key, source, court, party, day, instance, result, moral_cents, problem)
+       select 'entrada-duvida-' || n, 'fake', 'TJGO', 'Companhia Teste', current_date - 10, 'first', 'procedente', 300000, 'cancellation'
+       from generate_series(1, 6) n on conflict (key) do nothing`,
+    );
+    const blank = {
+      companhia: "",
+      voo: "",
+      origem: "",
+      destino: "",
+      atraso_horas: "",
+      chegada_prevista: "",
+      chegada_real: "",
+      viajou: "",
+      aviso: "",
+      nome: "",
+      indicado_por: "",
+      pergunta: "",
+      acompanhantes: "",
+    };
+    const cost = "Quanto eu posso ganhar com isso?";
+    model.intake = () => ({
+      assunto: "problema_voo",
+      problema: "cancellation",
+      ...blank,
+      data: day(-3),
+      pergunta: cost,
+    });
+    model.doubt = () => ({
+      resposta:
+        "Em decisões recentes do TJGO sobre cancelamento, o valor mais comum ficou perto de R$ 3.000. Não é uma promessa: cada caso depende do juiz e das provas.",
+      chamar_pessoa: false,
+    });
+    model.briefings = [];
+    await writes(EVA, "Meu voo foi cancelado anteontem, quanto eu posso ganhar com isso?");
+    expect(await takeConversationTurns(backend() as never)).toMatchObject({ claimed: 1, answered: 1, failed: 0 });
+    const opening = intakeOpening("Souza Advogados");
+    expect(await sentTo(EVA)).toEqual([
+      `${opening}\n\nEm decisões recentes do TJGO sobre cancelamento, o valor mais comum ficou perto de R$ 3.000. Não é uma promessa: cada caso depende do juiz e das provas.\n\nSinto muito pelo cancelamento. Quando a companhia avisou do cancelamento?\n1. No aeroporto\n2. Menos de 72 horas antes\n3. Com mais antecedência`,
+    ]);
+    // The task was handed the doubt and the market's median, with where it was read.
+    const briefing = model.briefings.find((text) => text.includes("regra_ate_agora")) ?? "";
+    expect(briefing).toContain(cost);
+    expect(briefing).toContain("mediana_do_dano_moral");
+    expect(briefing).toContain("TJGO");
+
+    // What decides the right, in the options; then the summary, confirmed, and the offer.
+    await writes(EVA, "1");
+    await takeConversationTurns(backend() as never);
+    await writes(EVA, "2");
+    await takeConversationTurns(backend() as never);
+    expect((await sentTo(EVA)).at(-1)).toContain("Confere o que eu entendi.");
+    await writes(EVA, "1");
+    await takeConversationTurns(backend() as never);
+    expect((await sentTo(EVA)).at(-1)).toContain("Quer que o escritório siga com o seu caso?");
+
+    // A doubt in her own words at the offer: answered, and the offer again with a person one choice away.
+    model.doubt = () => ({
+      resposta:
+        "Você não paga nada agora. No juizado, se perder na primeira instância, você não paga custas nem o advogado da companhia.",
+      chamar_pessoa: false,
+    });
+    await writes(EVA, "E se eu perder, pago alguma coisa?");
+    expect(await takeConversationTurns(backend() as never)).toMatchObject({ answered: 1, called: 0, failed: 0 });
+    expect((await sentTo(EVA)).at(-1)).toBe(
+      "Você não paga nada agora. No juizado, se perder na primeira instância, você não paga custas nem o advogado da companhia.\n\nQuer seguir com o seu caso?\n1. Quero seguir\n2. Falar com uma pessoa\n3. Agora não",
+    );
+
+    // One only a person answers: ONE says so and hands the conversation to the firm.
+    model.doubt = () => ({ resposta: "Sobre isso, uma pessoa do escritório responde aqui.", chamar_pessoa: true });
+    await writes(EVA, "Vocês também cuidam de problema com hotel?");
+    expect(await takeConversationTurns(backend() as never)).toMatchObject({ called: 1, failed: 0 });
+    expect((await sentTo(EVA)).at(-1)).toBe("Sobre isso, uma pessoa do escritório responde aqui.");
+    const [conversation] = await sql.unsafe(
+      `select agent from public.wa_conversations where org_id = $1 and contact_wa_id = $2`,
+      [FIRM, EVA],
+    );
+    expect(conversation).toEqual({ agent: "person" });
+    model.doubt = () => ({ resposta: "", chamar_pessoa: false });
+  });
+
   it("tells a delay too short kindly at once, and keeps the person as not qualified (0239)", async () => {
     const { takeConversationTurns } = await import("@/lib/conversations/agent-work");
     model.intake = () => ({
@@ -371,6 +463,7 @@ describe.skipIf(!DB_URL)("any passenger on the firm's WhatsApp", () => {
       aviso: "",
       nome: "Rita Teste",
       indicado_por: "",
+      pergunta: "",
       acompanhantes: "nenhum",
     });
     await writes(RITA, "Meu voo G3 1450 de Brasília para o Rio atrasou duas horas anteontem. Rita Teste, viajei só");
@@ -406,6 +499,7 @@ describe.skipIf(!DB_URL)("any passenger on the firm's WhatsApp", () => {
       aviso: "",
       nome: "",
       indicado_por: "",
+      pergunta: "",
       acompanhantes: "",
     });
     model.conversation = () => ({
