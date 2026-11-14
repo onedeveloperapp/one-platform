@@ -37,6 +37,12 @@ insert into public.memberships (org_id, user_id, role, firm_function) values
   ('bd100000-0000-4000-8000-00000000000a', 'ad100000-0000-4000-8000-000000000002', 'member', 'atendimento'),
   ('bd100000-0000-4000-8000-00000000000b', 'ad100000-0000-4000-8000-000000000004', 'owner', 'advogado');
 
+-- What a hosted database already holds of other firms (a tester's notices and templates) stays out of what this test
+-- counts: it is set aside here, inside the transaction that rolls back.
+delete from public.client_notices where org_id not in ('bd100000-0000-4000-8000-00000000000a', 'bd100000-0000-4000-8000-00000000000b');
+delete from public.wa_messages
+where kind = 'template' and org_id not in ('bd100000-0000-4000-8000-00000000000a', 'bd100000-0000-4000-8000-00000000000b');
+
 insert into public.connections (id, org_id, provider, external_id, label, status, connected_by, connected_at) values
   ('dd100000-0000-4000-8000-00000000000a', 'bd100000-0000-4000-8000-00000000000a', 'whatsapp', 'waba-a', 'WhatsApp A', 'connected',
    'ad100000-0000-4000-8000-000000000001', now()),
@@ -672,7 +678,9 @@ reset role;
 
 select pg_temp.as_backend();
 set local role service_role;
-insert into res select 'firms', jsonb_agg(f.org_id) from public.notice_firms() f;
+-- Of this test's two firms (a hosted database has firms of its own).
+insert into res select 'firms', jsonb_agg(f.org_id) from public.notice_firms() f
+where f.org_id in ('bd100000-0000-4000-8000-00000000000a', 'bd100000-0000-4000-8000-00000000000b');
 reset role;
 select ok(
   (select payload = '["bd100000-0000-4000-8000-00000000000a"]'::jsonb from res where name = 'firms'),
