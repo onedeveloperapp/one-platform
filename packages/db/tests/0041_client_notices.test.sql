@@ -99,7 +99,7 @@ reset role;
 select ok(
   (select array_agg(kind order by position) = array['hearing_change', 'hearing_reminder', 'payment_alert', 'lawsuit_update',
                                                     'document_refused', 'flight_problem', 'case_received', 'lawsuit_filed',
-                                                    'case_questions', 'trip_departure', 'trip_arrival', 'welcome', 'hearing_brief', 'hearing_result']
+                                                    'case_questions', 'trip_departure', 'trip_arrival', 'welcome', 'hearing_brief', 'hearing_result', 'hearing_outcome']
    from public.notice_kinds)
   and (select bool_and(cardinality(params) = cardinality(examples)
                        and (select count(*) from regexp_matches(body, '\{\{([0-9])\}\}', 'g')) = cardinality(params))
@@ -536,7 +536,7 @@ select ok(
           and not (payload -> 'due' @> '[{"blocker": "kind_off"}]'::jsonb)
    from res where name = 'case_view')
   and (select (payload ->> 'last_day')::integer >= 1 and payload ->> 'daily_max' = '250' and payload ->> 'accounts' = '1'
-              and jsonb_array_length(payload -> 'kinds') = 14 from res where name = 'firm_view')
+              and jsonb_array_length(payload -> 'kinds') = 15 from res where name = 'firm_view')
   and (select payload = '[]'::jsonb from res where name = 'unwarned_ok'),
   'anybody of the firm reads the case''s people, what went and what is due, and the firm''s kinds'
 );
