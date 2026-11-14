@@ -1,7 +1,7 @@
 import "server-only";
 
 import { momentLabel } from "@/lib/ai/approvals";
-import { isModelDocument, type ModelDocument } from "@/lib/cases/drafts";
+import { isModelDocument, isPieceDocument, type ModelDocument } from "@/lib/cases/drafts";
 import {
   type ChangeShown,
   changesShown,
@@ -40,6 +40,10 @@ export type PreparedModel = {
   name: string;
   documentKind: ModelDocument;
   proceedingKind: "juizado" | "comum" | null;
+  /** Of a petition, the problem it was written for (0244). */
+  problem: string | null;
+  /** Of a piece of the process, its kind of piece (0244). */
+  pieceKind: string | null;
   body: string;
   changes: ChangeShown[];
   checks: ModelCheck[];
@@ -52,6 +56,8 @@ export type SavedModel = {
   name: string;
   documentKind: ModelDocument;
   proceedingKind: "juizado" | "comum" | null;
+  problem: string | null;
+  pieceKind: string | null;
   isDefault: boolean;
   body: string;
 };
@@ -128,30 +134,35 @@ const PREPARED: readonly ImportStatus[] = ["saving", "ready", "saved"];
 /**
  * A request as the dialog reads it: the model ONE prepared, written whole,
  * once there is one; what ONE asks, or why it refused; and the model ONE
- * saved, read beside it ("saved").
+ * saved, read beside it ("saved"). What the firm's record writes
+ * (`firmRecordTexts`, 0244) is never pointed out as the original case's.
  */
-export function importView(row: ImportRow, saved: SavedModel | null = null): TemplateImportView {
+export function importView(
+  row: ImportRow,
+  saved: SavedModel | null = null,
+  recordTexts: readonly string[] = [],
+): TemplateImportView {
   const status = statusOf(row.status);
   const proposal = PREPARED.includes(status) ? proposalOf(row.proposal) : null;
   const paragraphs = paragraphsOf(row.paragraphs);
   let prepared: PreparedModel | null = null;
   if (proposal) {
     const body = composeModel(paragraphs, proposal.changes);
-    const unwritable = proposal.documentKind === "piece" ? unwritableCharacters(body) : [];
+    const unwritable = isPieceDocument(proposal.documentKind) ? unwritableCharacters(body) : [];
     prepared = {
       name: proposal.name,
       documentKind: proposal.documentKind,
       proceedingKind: proposal.proceedingKind,
+      problem: proposal.problem,
+      pieceKind: proposal.pieceKind,
       body,
       changes: changesShown(paragraphs, proposal.changes),
       checks: [
         // The firm's own data, once it said they are its own, are no original case's (0093).
-        ...modelChecks(
-          body,
-          proposal.people,
-          proposal.documentKind,
-          firmTextsOf(paragraphs, proposal, exchangesOf(row.exchanges)),
-        ),
+        ...modelChecks(body, proposal.people, proposal.documentKind, [
+          ...firmTextsOf(paragraphs, proposal, exchangesOf(row.exchanges)),
+          ...recordTexts,
+        ]),
         ...(unwritable.length > 0 ? [{ kind: "unwritable" as const, characters: unwritable }] : []),
       ],
       notes: proposal.notes,

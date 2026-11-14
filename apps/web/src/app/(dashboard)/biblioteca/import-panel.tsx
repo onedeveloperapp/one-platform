@@ -3,8 +3,11 @@
 import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { Alert, Box, Button, Collapse, LinearProgress, TextField, Typography } from "@mui/material";
+import { Alert, Box, Button, Collapse, TextField, Typography } from "@mui/material";
 
+import InfoHint from "@/components/product/info-hint";
+import StateLine from "@/components/product/state-line";
+import NiChevronRightSmall from "@/icons/nexture/ni-chevron-right-small";
 import NiUploadCloud from "@/icons/nexture/ni-upload-cloud";
 import type { ModelDocument } from "@/lib/cases/drafts";
 import { mimeOf, uploadToSignedUrl } from "@/lib/files/browser-upload";
@@ -358,31 +361,36 @@ export default function ImportPanel({
   );
 
   if (phase.kind === "idle" || phase.kind === "refused") {
+    // The dialog of a new model opens here (the owner, 2026-11-13): the document first, what ONE does behind the "i".
     return (
-      <Box component="section" aria-labelledby="library-import-intro" className="flex flex-col gap-2">
+      <Box
+        component="section"
+        aria-labelledby="library-import-intro"
+        className="border-grey-200 flex flex-col items-center gap-3 rounded-2xl border-2 border-dashed px-4 py-8 text-center"
+      >
         {fileInput}
-        <Typography id="library-import-intro" variant="subtitle2" component="h3" className="mb-0">
-          {t("library-import-intro-title")}
-        </Typography>
-        <Typography variant="body2" className="text-text-secondary">
-          {t("library-import-intro-body")}
-        </Typography>
-        <Box className="flex flex-wrap items-center gap-3">
-          <Button
-            variant="outlined"
-            color="grey"
-            startIcon={<NiUploadCloud size="medium" />}
-            disabled={disabled}
-            onClick={choose}
-          >
-            {t("library-import-choose")}
-          </Button>
-          <Typography variant="body2" className="text-text-secondary">
-            {limits ? t("library-import-limits", limits) : t("library-import-formats")}
-          </Typography>
+        <Box aria-hidden className="text-primary flex">
+          <NiUploadCloud size="large" />
         </Box>
+        <Box className="flex items-center justify-center gap-1">
+          <Typography id="library-import-intro" variant="subtitle1" component="h3" className="mb-0 font-semibold">
+            {t("library-import-send-title")}
+          </Typography>
+          <InfoHint label={t("library-import-intro-body")} placement="bottom" className="self-center" />
+        </Box>
+        <Typography variant="body2" className="text-text-secondary">
+          {expected
+            ? t("library-import-send-expected", { document: t(DOCUMENT_NAMED_KEY[expected]) })
+            : t("library-import-send-any")}
+        </Typography>
+        <Button variant="contained" startIcon={<NiUploadCloud size="small" />} disabled={disabled} onClick={choose}>
+          {t("library-import-choose")}
+        </Button>
+        <Typography variant="caption" className="text-text-secondary">
+          {limits ? t("library-import-limits", limits) : t("library-import-formats")}
+        </Typography>
         {phase.kind === "refused" ? (
-          <Alert severity="error" className="neutral bg-background-paper/60!">
+          <Alert severity="error" className="neutral bg-background-paper/60! w-full text-left">
             {t(importRefusalKey(phase.code), { most: phase.most ?? 0 })}
           </Alert>
         ) : null}
@@ -402,30 +410,51 @@ export default function ImportPanel({
             : phase.work === "marking"
               ? "library-import-marking-title"
               : "library-import-reading-title";
-    const title = t(titleKey, { file: name });
+    // Where ONE is: read the document, mark what changes in each case, leave it ready to check.
+    const at = phase.kind === "sending" || phase.work === "reading" ? 0 : phase.work === "marking" ? 1 : 2;
     return (
-      <Box component="section" aria-labelledby="library-import-progress" className="flex flex-col gap-2">
+      <Box component="section" aria-labelledby="library-import-progress" className="flex flex-col gap-3">
         {fileInput}
-        <Typography id="library-import-progress" variant="subtitle2" component="h3" className="mb-0" role="status">
-          {title}
+        <Typography
+          id="library-import-progress"
+          variant="subtitle1"
+          component="h3"
+          className="mb-0 font-semibold"
+          role="status"
+        >
+          {t(titleKey, { file: name })}
         </Typography>
-        <LinearProgress aria-label={t("library-import-progress-label")} />
+        <Box
+          component="ol"
+          aria-label={t("library-import-progress-label")}
+          className="m-0 flex list-none flex-col gap-2 p-0"
+        >
+          {(["library-import-step-read", "library-import-step-marking", "library-import-step-ready"] as const).map(
+            (key, index) => (
+              <Box component="li" key={key}>
+                <StateLine tone={index < at ? "done" : index === at ? "waiting" : "info"}>{t(key)}</StateLine>
+              </Box>
+            ),
+          )}
+        </Box>
         {phase.kind === "waiting" ? (
-          <Box className="flex flex-wrap items-center gap-3">
-            <Typography variant="body2" className="text-text-secondary min-w-0 flex-1 basis-60">
-              {t("library-import-reading-body")}
-            </Typography>
-            <Button
-              variant="text"
-              color="grey"
-              size="small"
-              disabled={leaving}
-              onClick={() => void giveUp(phase.importId)}
-              aria-label={t("library-import-give-up-label", { file: name })}
-            >
-              {t("library-import-give-up")}
-            </Button>
-          </Box>
+          <StateLine
+            tone="info"
+            action={
+              <Button
+                variant="text"
+                color="grey"
+                size="small"
+                disabled={leaving}
+                onClick={() => void giveUp(phase.importId)}
+                aria-label={t("library-import-give-up-label", { file: name })}
+              >
+                {t("library-import-give-up")}
+              </Button>
+            }
+          >
+            {t("library-import-may-close")}
+          </StateLine>
         ) : null}
       </Box>
     );
@@ -437,12 +466,14 @@ export default function ImportPanel({
     return (
       <Box component="section" aria-labelledby="library-import-asking" className="flex flex-col gap-3">
         {fileInput}
-        <Alert severity="info" className="neutral bg-background-paper/60!">
-          <Typography id="library-import-asking" variant="body2" component="h3" className="mb-0 font-semibold">
-            {t("library-import-asking-title", { file: phase.fileName })}
-          </Typography>
-          <Typography variant="body2">{t("library-import-asking-body")}</Typography>
-        </Alert>
+        <StateLine tone="attention" emphasis>
+          <Box component="span" className="flex items-center gap-1">
+            <span id="library-import-asking" className="font-semibold">
+              {t("library-import-asking-title", { file: phase.fileName })}
+            </span>
+            <InfoHint label={t("library-import-asking-body")} className="self-center" />
+          </Box>
+        </StateLine>
         <Box component="ol" className="m-0 flex list-none flex-col gap-4 p-0">
           {phase.questions.map((asked, index) => (
             <Box component="li" key={`${phase.round}:${index}`}>
@@ -500,19 +531,21 @@ export default function ImportPanel({
 
   if (phase.kind === "rejected" || phase.kind === "failed") {
     const rejected = phase.kind === "rejected";
+    // Why, beside the way to send another (the owner, 2026-11-13).
     return (
       <Box component="section" className="flex flex-col gap-2">
         {fileInput}
-        <Alert
-          severity={rejected ? "warning" : "error"}
-          className="neutral bg-background-paper/60!"
+        <StateLine
+          tone={rejected ? "attention" : "failed"}
+          emphasis
           action={
-            <Box className="flex flex-wrap gap-1">
-              <Button color="inherit" size="small" disabled={disabled} onClick={() => sendAnother(phase.importId)}>
+            <Box className="flex flex-wrap items-center gap-1">
+              <Button variant="contained" size="small" disabled={disabled} onClick={() => sendAnother(phase.importId)}>
                 {t("library-import-again")}
               </Button>
               <Button
-                color="inherit"
+                variant="text"
+                color="grey"
                 size="small"
                 disabled={leaving}
                 onClick={() => void giveUp(phase.importId)}
@@ -523,32 +556,37 @@ export default function ImportPanel({
             </Box>
           }
         >
-          <Typography variant="body2" className="font-semibold">
-            {t(rejected ? "library-import-refusal-title" : "library-import-failed-title", { file: phase.fileName })}
-          </Typography>
-          <Typography variant="body2">
-            {rejected ? refusalWords(t, phase.refusal, phase.expected) : t(importFailureKey(phase.failure))}
-          </Typography>
-        </Alert>
+          <Box component="span" className="flex flex-col gap-0.5">
+            <span className="font-semibold">
+              {t(rejected ? "library-import-refusal-title" : "library-import-failed-title", { file: phase.fileName })}
+            </span>
+            <span>
+              {rejected ? refusalWords(t, phase.refusal, phase.expected) : t(importFailureKey(phase.failure))}
+            </span>
+          </Box>
+        </StateLine>
       </Box>
     );
   }
 
   if (phase.kind === "saved") {
     return (
-      <Box component="section" aria-labelledby="library-import-saved" className="flex flex-col gap-3">
-        <Alert severity="success" className="neutral bg-background-paper/60!">
-          <Typography id="library-import-saved" variant="body2" component="h3" className="mb-0 font-semibold">
-            {phase.saved
-              ? t("library-import-saved-title", { name: phase.saved.name })
-              : t("library-import-saved-gone", { file: phase.fileName })}
-          </Typography>
-          {phase.saved ? (
-            <Typography variant="body2">
-              {t(phase.saved.isDefault ? "library-import-saved-body-used" : "library-import-saved-body")}
-            </Typography>
-          ) : null}
-        </Alert>
+      <Box component="section" aria-labelledby="library-import-saved" className="flex flex-col gap-2">
+        <StateLine tone="done" emphasis>
+          <Box component="span" className="flex items-center gap-1">
+            <span id="library-import-saved" className="font-semibold">
+              {phase.saved
+                ? t("library-import-saved-title", { name: phase.saved.name })
+                : t("library-import-saved-gone", { file: phase.fileName })}
+            </span>
+            {phase.saved ? (
+              <InfoHint
+                label={t(phase.saved.isDefault ? "library-import-saved-body-used" : "library-import-saved-body")}
+                className="self-center"
+              />
+            ) : null}
+          </Box>
+        </StateLine>
         {phase.prepared ? (
           <PreparedDetails
             prepared={phase.prepared}
@@ -564,14 +602,16 @@ export default function ImportPanel({
   // A PDF was transcribed by a model: its text may differ from the original in a word, and the panel says so.
   const readyBody = phase.source === "pdf" ? "library-import-ready-body-pdf" : "library-import-ready-body";
   return (
-    <Box component="section" aria-labelledby="library-import-ready" className="flex flex-col gap-3">
-      <Alert severity="info" className="neutral bg-background-paper/60!">
-        <Typography id="library-import-ready" variant="body2" component="h3" className="mb-0 font-semibold">
-          {t("library-import-ready-title", { file: phase.fileName })}
-        </Typography>
-        {phase.heldReason ? <Typography variant="body2">{t(HELD_KEY[phase.heldReason])}</Typography> : null}
-        <Typography variant="body2">{t(readyBody)}</Typography>
-      </Alert>
+    <Box component="section" aria-labelledby="library-import-ready" className="flex flex-col gap-2">
+      <StateLine tone="attention" emphasis>
+        <Box component="span" className="flex items-center gap-1">
+          <span id="library-import-ready" className="font-semibold">
+            {t("library-import-ready-title", { file: phase.fileName })}
+          </span>
+          <InfoHint label={t(readyBody)} className="self-center" />
+        </Box>
+      </StateLine>
+      {phase.heldReason ? <StateLine tone="info">{t(HELD_KEY[phase.heldReason])}</StateLine> : null}
       <PreparedDetails
         prepared={prepared}
         showChanges={showChanges}
@@ -581,7 +621,11 @@ export default function ImportPanel({
   );
 }
 
-/** What ONE changed of the document, what still looks like the original case, and what it asks to check. */
+/**
+ * What ONE changed of the document, one click away; what still looks like the original case and what it asks to
+ * check, one line each in their tone (the owner, 2026-11-13: four coloured boxes, each with its title, one over the
+ * other).
+ */
 function PreparedDetails({
   prepared,
   showChanges,
@@ -596,11 +640,18 @@ function PreparedDetails({
   const afterWord = t("library-import-change-after");
   return (
     <>
-      <Box className="flex flex-wrap items-center gap-2">
-        <Typography variant="body2" className="min-w-0 flex-1 font-semibold">
-          {t("library-import-changes-title", { count: prepared.changes.length })}
-        </Typography>
-        {prepared.changes.length > 0 ? (
+      {prepared.checks.map((check) => (
+        <StateLine key={checkKey(check)} tone="attention">
+          {checkWords(t, check)}
+        </StateLine>
+      ))}
+      {prepared.notes.map((note) => (
+        <StateLine key={note} tone="info">
+          {note}
+        </StateLine>
+      ))}
+      {prepared.changes.length > 0 ? (
+        <Box>
           <Button
             variant="text"
             color="grey"
@@ -608,11 +659,21 @@ function PreparedDetails({
             aria-expanded={showChanges}
             aria-controls="library-import-changes"
             onClick={onToggleChanges}
+            endIcon={
+              <Box
+                component="span"
+                className={showChanges ? "flex rotate-90 transition-transform" : "flex transition-transform"}
+              >
+                <NiChevronRightSmall size="small" />
+              </Box>
+            }
           >
-            {t(showChanges ? "library-import-changes-hide" : "library-import-changes-show")}
+            {t("library-import-changes-title", { count: prepared.changes.length })}
           </Button>
-        ) : null}
-      </Box>
+        </Box>
+      ) : (
+        <StateLine tone="info">{t("library-import-changes-title", { count: 0 })}</StateLine>
+      )}
       <Collapse in={showChanges} unmountOnExit>
         <Box
           component="ol"
@@ -657,37 +718,6 @@ function PreparedDetails({
           ))}
         </Box>
       </Collapse>
-
-      {prepared.checks.length > 0 ? (
-        <Alert severity="warning" className="neutral bg-background-paper/60!">
-          <Typography variant="body2" component="h3" className="mb-0 font-semibold">
-            {t("library-import-checks-title")}
-          </Typography>
-          <Typography variant="body2">{t("library-import-checks-body")}</Typography>
-          <Box component="ul" className="m-0 mt-1 flex flex-col gap-0.5 pl-5">
-            {prepared.checks.map((check) => (
-              <Typography component="li" variant="body2" key={checkKey(check)}>
-                {checkWords(t, check)}
-              </Typography>
-            ))}
-          </Box>
-        </Alert>
-      ) : null}
-
-      {prepared.notes.length > 0 ? (
-        <Alert severity="info" className="neutral bg-background-paper/60!">
-          <Typography variant="body2" component="h3" className="mb-0 font-semibold">
-            {t("library-import-notes-title")}
-          </Typography>
-          <Box component="ul" className="m-0 mt-1 flex flex-col gap-0.5 pl-5">
-            {prepared.notes.map((note) => (
-              <Typography component="li" variant="body2" key={note}>
-                {note}
-              </Typography>
-            ))}
-          </Box>
-        </Alert>
-      ) : null}
     </>
   );
 }

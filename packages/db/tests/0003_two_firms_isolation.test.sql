@@ -378,6 +378,10 @@ where e.org_id in ('b1000000-0000-4000-8000-00000000000a', 'b1000000-0000-4000-8
 insert into public.lawsuit_facts (org_id, case_id, proceeding_id, kind, result, happened_on, source) values
   ('b1000000-0000-4000-8000-00000000000a', 'a3000000-0000-4000-8000-00000000000a', 'a5000000-0000-4000-8000-00000000000a', 'sentenca', 'procedente', date '2026-11-01', 'person'),
   ('b1000000-0000-4000-8000-00000000000b', 'a3000000-0000-4000-8000-00000000000b', 'a5000000-0000-4000-8000-00000000000b', 'sentenca', 'procedente', date '2026-11-01', 'person');
+-- Each firm's forecast of its lawsuit (0250).
+insert into public.case_forecasts (proceeding_id, org_id, case_id, level, merits, chance_percent) values
+  ('a5000000-0000-4000-8000-00000000000a', 'b1000000-0000-4000-8000-00000000000a', 'a3000000-0000-4000-8000-00000000000a', 'court', 40, 80),
+  ('a5000000-0000-4000-8000-00000000000b', 'b1000000-0000-4000-8000-00000000000b', 'a3000000-0000-4000-8000-00000000000b', 'court', 40, 80);
 -- A session of judgment of each firm's appeal (0219).
 insert into public.judgment_sessions (org_id, case_id, proceeding_id, kind, starts_on, source) values
   ('b1000000-0000-4000-8000-00000000000a', 'a3000000-0000-4000-8000-00000000000a', 'a5000000-0000-4000-8000-00000000000a', 'virtual', date '2026-12-01', 'person'),
@@ -713,7 +717,7 @@ select is(
    from pg_temp.firm_rows('b1000000-0000-4000-8000-00000000000a') where visible > 0),
   array[
     'admin_complaints', 'agenda_digests', 'agenda_preferences', 'ai_runs', 'approvals', 'audit_events', 'billing_operations', 'case_advances', 'case_costs', 'case_document_answers', 'case_documents',
-    'case_draft_citations', 'case_draft_versions', 'case_drafts', 'case_events', 'case_fee_splits', 'case_fees', 'case_interview_answers', 'case_interviews',
+    'case_draft_citations', 'case_draft_versions', 'case_drafts', 'case_events', 'case_fee_splits', 'case_fees', 'case_forecasts', 'case_interview_answers', 'case_interviews',
     'case_papers', 'case_parties', 'case_statements',
     'case_weather', 'cases', 'certificate_inventory', 'chatwoot_room_members', 'chatwoot_rooms', 'civil_court_answers', 'client_consents', 'client_links', 'client_notices', 'client_payment_accounts', 'closing_goals', 'connections',
     'consent_acceptances',
@@ -891,7 +895,7 @@ select is(
    from pg_temp.firm_rows('b1000000-0000-4000-8000-00000000000a') where visible > 0),
   array[
     'admin_complaints', 'ai_runs', 'approvals', 'case_advances', 'case_costs', 'case_document_answers', 'case_documents', 'case_draft_citations', 'case_draft_versions',
-    'case_drafts', 'case_events', 'case_interview_answers', 'case_interviews', 'case_papers', 'case_parties', 'case_statements',
+    'case_drafts', 'case_events', 'case_forecasts', 'case_interview_answers', 'case_interviews', 'case_papers', 'case_parties', 'case_statements',
     'case_weather', 'cases', 'certificate_inventory', 'civil_court_answers', 'client_consents',
     'client_links', 'client_notices', 'closing_goals',
     'consent_acceptances', 'deadlines', 'djen_captures', 'dossiers', 'draft_templates', 'entitlement_grants', 'files',
@@ -933,7 +937,7 @@ select is(
    from pg_temp.firm_rows('b1000000-0000-4000-8000-00000000000b') where visible > 0),
   array[
     'admin_complaints', 'agenda_digests', 'agenda_preferences', 'ai_runs', 'approvals', 'audit_events', 'billing_operations', 'case_advances', 'case_costs', 'case_document_answers', 'case_documents',
-    'case_draft_citations', 'case_draft_versions', 'case_drafts', 'case_events', 'case_fee_splits', 'case_fees', 'case_interview_answers', 'case_interviews',
+    'case_draft_citations', 'case_draft_versions', 'case_drafts', 'case_events', 'case_fee_splits', 'case_fees', 'case_forecasts', 'case_interview_answers', 'case_interviews',
     'case_papers', 'case_parties', 'case_statements',
     'case_weather', 'cases', 'certificate_inventory', 'chatwoot_room_members', 'chatwoot_rooms', 'civil_court_answers', 'client_consents', 'client_links', 'client_notices', 'client_payment_accounts', 'closing_goals', 'connections',
     'consent_acceptances',

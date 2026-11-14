@@ -12,6 +12,7 @@ import {
   guideReadingOf,
 } from "@/lib/hearings/guide";
 import type { Sweep } from "@/lib/jobs/schedule";
+import { caseForecastOf } from "@/lib/jurimetrics/forecast";
 import { deliverOutbox } from "@/lib/whatsapp/send";
 import { sendHearingBriefEmail } from "@flyee/email";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -72,9 +73,14 @@ async function readGuide(facts: BriefFacts, guide: GuideFacts) {
  */
 async function guideLines(service: SupabaseClient, facts: BriefFacts): Promise<string[]> {
   const lines = briefLines(facts);
-  const { data, error } = await service.rpc("hearing_guide_facts", { target_hearing: facts.hearingId });
+  const [{ data, error }, forecast] = await Promise.all([
+    service.rpc("hearing_guide_facts", { target_hearing: facts.hearingId }),
+    service.rpc("hearing_forecast", { target_hearing: facts.hearingId }),
+  ]);
   const guide = error ? null : guideFactsOf(data);
   if (!guide) return lines;
+  // The lawsuit's forecast (0250): a guide whose forecast could not be read keeps the unit's and the court's numbers.
+  guide.forecast = forecast.error ? null : caseForecastOf(forecast.data);
   const reading = await readGuide(facts, guide);
   return [
     ...lines,

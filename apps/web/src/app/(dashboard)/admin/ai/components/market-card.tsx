@@ -1,6 +1,14 @@
 "use client";
 
-import { checkMarketThesis, type MarketHealth, readMarketHealth, releaseMarketTheses } from "../market-actions";
+import {
+  checkMarketReading,
+  checkMarketThesis,
+  type MarketHealth,
+  type MarketReading,
+  readMarketHealth,
+  readMarketReading,
+  releaseMarketTheses,
+} from "../market-actions";
 import { useEffect, useState } from "react";
 
 import { Alert, Box, Button, MenuItem, TextField, Typography } from "@mui/material";
@@ -19,12 +27,15 @@ import { formatDate, formatNumber } from "@/lib/admin/format";
  */
 export default function MarketCard({ captureOn }: { captureOn: boolean }) {
   const [health, setHealth] = useState<MarketHealth | null>(null);
+  const [reading, setReading] = useState<MarketReading | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const load = async () => {
     const read = await readMarketHealth().catch(() => ({ ok: false as const, code: "failed" }));
     if (read.ok) setHealth(read.health);
     else setProblem("Não foi possível ler a jurimetria agora.");
+    const checked = await readMarketReading().catch(() => ({ ok: false as const, code: "failed" }));
+    setReading(checked.ok ? checked.reading : null);
   };
   useEffect(() => {
     void load();
@@ -99,6 +110,59 @@ export default function MarketCard({ captureOn }: { captureOn: boolean }) {
               }${capture.lastError ? ` · última leitura falhou (${capture.lastError})` : ""}`,
             }))}
           />
+          {reading ? (
+            <Box className="flex flex-col gap-2">
+              <Typography variant="subtitle2" component="h3">
+                {`A leitura das decisões (${reading.rule})`}
+              </Typography>
+              <Typography variant="body2" className="text-text-secondary">
+                {`${formatNumber(reading.readByRule)} de ${formatNumber(reading.decisions)} decisões já lidas por esta regra. Confira na fonte o resultado, o dano moral, se é por autor, o problema e o motivo da extinção.`}
+              </Typography>
+              <MetricBars
+                total={reading.checked}
+                items={[
+                  { key: "right", label: "Leitura certa", value: reading.right, tone: "primary" },
+                  {
+                    key: "wrong",
+                    label: "Leitura errada",
+                    value: Math.max(reading.checked - reading.right, 0),
+                    tone: "attention",
+                  },
+                ]}
+              />
+              {reading.sample.map((decision) => (
+                <Box key={decision.id} className="flex flex-wrap items-center gap-2">
+                  <Typography variant="body2" className="min-w-0 flex-1">
+                    <a href={decision.url} target="_blank" rel="noopener noreferrer">
+                      {`${decision.court} · ${decision.unit ?? "unidade não dita"} · ${formatDate(decision.day)}`}
+                    </a>
+                    {` · a regra leu: ${decision.result}, ${decision.problem}${
+                      decision.moralCents !== null
+                        ? `, dano moral ${(decision.moralCents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}${decision.perClaimant ? " por autor" : ""}`
+                        : ""
+                    }${decision.extinctionReason ? `, extinta por ${decision.extinctionReason}` : ""}${decision.judge ? `, juiz ${decision.judge}` : ""}`}
+                  </Typography>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    disabled={busy}
+                    onClick={() => void act(() => checkMarketReading(decision.id, true))}
+                  >
+                    Certa
+                  </Button>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    color="grey"
+                    disabled={busy}
+                    onClick={() => void act(() => checkMarketReading(decision.id, false))}
+                  >
+                    Errada
+                  </Button>
+                </Box>
+              ))}
+            </Box>
+          ) : null}
           {theses ? (
             <Box className="flex flex-col gap-2">
               <Typography variant="subtitle2" component="h3">

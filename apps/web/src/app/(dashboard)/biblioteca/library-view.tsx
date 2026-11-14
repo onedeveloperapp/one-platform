@@ -6,18 +6,20 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { type ReactNode, useEffect, useMemo, useRef, useState, useTransition } from "react";
 
-import { Alert, Box, Button, Card, CardContent, Grid, MenuItem, TextField, Typography } from "@mui/material";
+import { Alert, Box, Button, Card, CardContent, MenuItem, TextField, Typography } from "@mui/material";
 
 import CardTitle from "@/components/product/card-title";
 import ConfirmActionDialog from "@/components/product/confirm-action-dialog";
 import EmptyState from "@/components/product/empty-state";
+import FactGrid from "@/components/product/fact-grid";
+import InfoHint from "@/components/product/info-hint";
 import ListBar, { type ListChip, type ListView } from "@/components/product/list-bar";
-import NumberCard from "@/components/product/number-card";
 import PageHeader from "@/components/product/page-header";
 import QuickActions, { type QuickAction } from "@/components/product/quick-actions";
 import SidePanel from "@/components/product/side-panel";
-import StatusChip from "@/components/product/status-chip";
-import type { TileTone } from "@/components/product/tile-tone";
+import StateLine from "@/components/product/state-line";
+import StatusChip, { type StatusTone } from "@/components/product/status-chip";
+import { TILE_TONE, type TileTone } from "@/components/product/tile-tone";
 import IllustrationConfigure from "@/icons/illustrations/illustration-configure";
 import IllustrationDocumentation from "@/icons/illustrations/illustration-documentation";
 import NiBinEmpty from "@/icons/nexture/ni-bin-empty";
@@ -31,9 +33,16 @@ import NiShieldCheck from "@/icons/nexture/ni-shield-check";
 import NiUploadCloud from "@/icons/nexture/ni-upload-cloud";
 import NiUsers from "@/icons/nexture/ni-users";
 import type { ModelDocument } from "@/lib/cases/drafts";
-import { isModelDocument, libraryErrorKey, MODEL_DOCUMENTS } from "@/lib/cases/drafts";
+import { isModelDocument, isPieceDocument, libraryErrorKey, MODEL_DOCUMENTS } from "@/lib/cases/drafts";
 import { readDraftTemplate, removeDraftTemplate, retireLegalSource, saveLegalSource } from "@/lib/library/actions";
-import type { LibraryData, LibrarySource, LibraryTemplate, MissingSource } from "@/lib/library/facts";
+import type {
+  LibraryData,
+  LibrarySource,
+  LibraryTemplate,
+  MissingSource,
+  ModelUse,
+  ProcessPiece,
+} from "@/lib/library/facts";
 import { dismissModelFromDocument, watchModelImports } from "@/lib/library/import-actions";
 import type { LibraryImport } from "@/lib/library/import-read";
 import { IMPORT_ACCEPT, IMPORT_STATUS_KEY, IMPORT_WORKING, importFailureKey } from "@/lib/library/imports";
@@ -50,9 +59,12 @@ import {
   libraryRows,
   type LibrarySort,
   type LibraryView,
+  waitingOnPerson,
 } from "@/lib/library/list";
 import { downloadWord } from "@/lib/library/word-download";
+import { caseKindLabelKey } from "@/lib/modules/registry";
 import { countText } from "@/lib/numbers/compare";
+import { cn } from "@/lib/utils";
 
 export type LibraryState =
   | {
@@ -91,7 +103,7 @@ const IMPORT_TONE: Record<LibraryImport["status"], "info" | "positive" | "attent
 
 /** What stays when a model leaves: the pieces written from it, or the papers sent to clients. */
 const removeStaysKey = (template: LibraryTemplate): string =>
-  template.documentKind === "piece" ? "library-template-remove-stays" : "library-template-remove-stays-paper";
+  isPieceDocument(template.documentKind) ? "library-template-remove-stays" : "library-template-remove-stays-paper";
 
 /** What a failure nobody named says. */
 const FAILED_KEY = libraryErrorKey("failed");
@@ -167,6 +179,8 @@ export default function LibraryView({ state, citation }: { state: LibraryState; 
     importId?: string;
     /** A document the person just chose, for ONE to prepare the model from. */
     file?: File;
+    /** What the document is sent as, from a use that has no model of the firm's: ONE refuses another thing. */
+    expected?: ModelDocument;
   } | null>(null);
   const documentInput = useRef<HTMLInputElement>(null);
   const [dismissing, setDismissing] = useState<string | null>(null);
@@ -193,6 +207,18 @@ export default function LibraryView({ state, citation }: { state: LibraryState; 
   const addSource = (typed: string) => setSourceForm({ source: null, citation: typed });
   // The file chooser opens in the person's own click: the panel opens once a document is chosen.
   const chooseDocument = () => documentInput.current?.click();
+  // A use with no model of the firm's: the dialog opens on the upload, the document sent as that use's.
+  const sendFor = (document: ModelDocument) => setTemplateForm({ template: null, expected: document });
+  // A model opens to be edited; one of the platform opens the firm's copy of it.
+  const openTemplate = (template: LibraryTemplate) =>
+    setTemplateForm(template.platform ? { template: null, copyOf: template } : { template });
+  const waiting = data ? waitingOnPerson(data) : null;
+  // The model a citation is written in, the firm's first: where a citation nobody can check is put right.
+  const citingOf = (source: MissingSource): LibraryTemplate | null => {
+    const names = new Set(source.templates);
+    const citing = (data?.templates ?? []).filter((template) => names.has(template.name));
+    return citing.find((template) => !template.platform) ?? citing[0] ?? null;
+  };
   const imports = data?.imports ?? [];
   const pick = (next: LibraryView) => {
     setView(next);
@@ -246,14 +272,8 @@ export default function LibraryView({ state, citation }: { state: LibraryState; 
     family === "modelos" && writes !== null
       ? [{ key: "writes", label: t(DOCUMENT_KEY[writes].label), onRemove: () => setWrites(null) }]
       : [];
+  // A new model opens on the upload, with "Escrever à mão" inside (the owner, 2026-11-13).
   const createActions: QuickAction[] = [
-    {
-      key: "document",
-      label: t("library-new-from-document"),
-      icon: <NiUploadCloud size="medium" />,
-      onClick: chooseDocument,
-      disabled: full,
-    },
     {
       key: "template",
       label: t("library-new-template"),
@@ -347,22 +367,29 @@ export default function LibraryView({ state, citation }: { state: LibraryState; 
 
       {data && counts && rows && !empty ? (
         <>
-          {/* How many each holds under the search; each card opens the list it counts. */}
-          <Grid container spacing={2.5}>
-            {(Object.keys(CARD) as LibraryFamily[]).map((key) => (
-              <Grid key={key} size={{ xs: 6, lg: 3 }}>
-                <NumberCard
-                  icon={CARD[key].icon}
-                  tone={CARD[key].tone}
-                  label={t(`library-card-${key}`)}
-                  hint={t(`library-card-${key}-hint`)}
-                  value={countText(counts[key])}
-                  onClick={() => pick(view === key && key !== "modelos" ? "modelos" : key)}
-                  pressed={view === key || (key === "modelos" && family === "modelos")}
-                />
-              </Grid>
-            ))}
-          </Grid>
+          {waiting && (waiting.imports.length > 0 || waiting.missing > 0) ? (
+            <WaitingCard
+              imports={waiting.imports}
+              missing={waiting.missing}
+              mayWrite={mayWrite}
+              full={full}
+              busy={dismissing}
+              onOpen={(item) => setTemplateForm({ template: null, importId: item.id })}
+              onAgain={chooseDocument}
+              onDismiss={(item) => void dismissImport(item)}
+              onMissing={() => pick("faltam")}
+            />
+          ) : null}
+
+          <UsesCard
+            uses={data.uses}
+            pieces={data.processPieces}
+            templates={data.templates}
+            mayWrite={mayWrite}
+            full={full}
+            onSend={sendFor}
+            onOpen={openTemplate}
+          />
 
           <Box className="flex flex-col gap-2">
             <ListBar
@@ -478,6 +505,7 @@ export default function LibraryView({ state, citation }: { state: LibraryState; 
                         source={source}
                         mayWrite={mayWrite}
                         onAdd={() => addSource(source.label)}
+                        onOpen={citingOf(source) ? () => openTemplate(citingOf(source)!) : undefined}
                       />
                     ))}
                     {rows.imports.slice(0, shown).map((item) => (
@@ -496,9 +524,7 @@ export default function LibraryView({ state, citation }: { state: LibraryState; 
                         template={template}
                         mayWrite={mayWrite}
                         full={full}
-                        onOpen={() =>
-                          setTemplateForm(template.platform ? { template: null, copyOf: template } : { template })
-                        }
+                        onOpen={() => openTemplate(template)}
                         onRemove={() => setRemoving(template)}
                       />
                     ))}
@@ -573,14 +599,20 @@ export default function LibraryView({ state, citation }: { state: LibraryState; 
           copyOf={templateForm.copyOf ?? null}
           importId={templateForm.importId ?? null}
           initialFile={templateForm.file ?? null}
+          expected={templateForm.expected ?? null}
+          initialDocument={templateForm.expected}
           importLimits={data?.importLimits ?? null}
+          pieceKinds={data?.processPieces ?? []}
           onImportRequested={changed}
           defaults={Object.fromEntries(
             (data?.templates ?? [])
               .filter(
                 (template) => template.isDefault && !template.platform && template.id !== templateForm.template?.id,
               )
-              .map((template) => [defaultSlot(template.documentKind, template.proceedingKind), template.name]),
+              .map((template) => [
+                defaultSlot(template.documentKind, template.proceedingKind, template.problem, template.pieceKind),
+                template.name,
+              ]),
           )}
           onClose={() => setTemplateForm(null)}
           onSaved={() => {
@@ -660,7 +692,18 @@ function ViewEmpty({
 }
 
 /** A source the models cite and the library does not answer for: what to register, or what to put right in the model. */
-function MissingRow({ source, mayWrite, onAdd }: { source: MissingSource; mayWrite: boolean; onAdd: () => void }) {
+function MissingRow({
+  source,
+  mayWrite,
+  onAdd,
+  onOpen,
+}: {
+  source: MissingSource;
+  mayWrite: boolean;
+  onAdd: () => void;
+  /** Opens the model that writes it: where a citation nobody can check is put right. */
+  onOpen?: () => void;
+}) {
   const t = useTranslations("product");
   return (
     <Box component="li" className="border-grey-100 flex flex-wrap items-center gap-3 border-b py-3 last:border-b-0">
@@ -680,7 +723,19 @@ function MissingRow({ source, mayWrite, onAdd }: { source: MissingSource; mayWri
       </Box>
       {/* What nobody could check as it is written is put right in the model, never registered. */}
       {source.gap !== null ? (
-        <StatusChip tone="attention" label={t("library-missing-fix-chip")} />
+        mayWrite && onOpen ? (
+          <Button
+            variant="outlined"
+            color="grey"
+            size="small"
+            onClick={onOpen}
+            aria-label={t("library-missing-open-label", { source: source.label })}
+          >
+            {t("library-missing-open")}
+          </Button>
+        ) : (
+          <StatusChip tone="attention" label={t("library-missing-fix-chip")} />
+        )
       ) : mayWrite ? (
         <Button
           variant="outlined"
@@ -837,59 +892,89 @@ function TemplateRow({
         ]
       : []),
   ];
-  const facts = [
-    template.platform ? t("library-template-platform-chip") : null,
-    template.provisional ? t("library-template-provisional-chip") : null,
-    template.documentKind !== "piece"
-      ? t(DOCUMENT_KEY[template.documentKind].label)
-      : t(template.proceedingKind ? KIND_KEY[template.proceedingKind] : "library-template-kind-any"),
-    template.documentKind === "piece" ? t("library-template-cited", { count: template.cited }) : null,
-    template.updatedBy
-      ? t("library-template-updated", { name: template.updatedBy, when: template.updatedLabel })
-      : t("library-template-updated-at", { when: template.updatedLabel }),
-  ];
+  const problemKey = template.problem ? caseKindLabelKey(template.problem) : null;
+  const process = t(template.proceedingKind ? KIND_KEY[template.proceedingKind] : "library-template-kind-any");
+  // One state, the most urgent: what keeps its pieces from being approved, then whether ONE takes it now.
+  const state: { tone: StatusTone; label: string } | null =
+    template.missing > 0
+      ? { tone: "attention", label: t("library-template-missing", { count: template.missing }) }
+      : template.usedByOne
+        ? { tone: "info", label: t("library-template-used-chip") }
+        : template.isDefault && !template.platform
+          ? { tone: "info", label: t("library-template-default-chip") }
+          : null;
   return (
-    <Box component="li" className="border-grey-100 flex flex-wrap items-center gap-3 border-b py-3 last:border-b-0">
-      <Box className="flex min-w-0 flex-1 basis-60 flex-col items-start">
-        {opens ? (
-          <Button
-            variant="text"
-            color="inherit"
-            onClick={onOpen}
-            className="-mx-1 min-h-0 px-1 py-0 text-left font-semibold break-words hover:underline"
-            aria-label={t(template.platform ? "library-template-copy-label" : "library-template-edit-label", {
-              name: template.name,
-            })}
-          >
-            {template.name}
-          </Button>
-        ) : (
-          <Typography variant="body1" className="font-semibold break-words">
-            {template.name}
-          </Typography>
-        )}
-        <Typography variant="body2" className="text-text-secondary break-words">
-          {facts.filter(Boolean).join(" · ")}
-        </Typography>
-        {template.preparedByOne ? (
-          <Typography variant="body2" className="text-text-secondary">
-            {t("library-template-prepared-by-one")}
-          </Typography>
-        ) : null}
-      </Box>
-      <Box className="flex flex-wrap items-center gap-1.5">
-        {template.usedByOne ? (
-          <StatusChip tone="info" label={t("library-template-used-chip")} />
-        ) : template.isDefault && !template.platform ? (
-          <StatusChip tone="info" label={t("library-template-default-chip")} />
-        ) : null}
-        {template.missing > 0 ? (
-          <StatusChip tone="attention" label={t("library-template-missing", { count: template.missing })} />
-        ) : template.cited > 0 ? (
-          <StatusChip tone="positive" label={t("library-template-covered")} />
-        ) : null}
+    <Box component="li" className="border-grey-100 flex flex-col gap-2 border-b py-3 last:border-b-0">
+      <Box className="flex items-start gap-2">
+        <Box className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1">
+          {opens ? (
+            <Button
+              variant="text"
+              color="inherit"
+              onClick={onOpen}
+              className="-mx-1 min-h-0 px-1 py-0 text-left font-semibold break-words hover:underline"
+              aria-label={t(template.platform ? "library-template-copy-label" : "library-template-edit-label", {
+                name: template.name,
+              })}
+            >
+              {template.name}
+            </Button>
+          ) : (
+            <Typography variant="body1" className="font-semibold break-words">
+              {template.name}
+            </Typography>
+          )}
+          {template.preparedByOne ? (
+            // ONE made it from the firm's document and nobody saved it since: that it may err is behind the "i".
+            <InfoHint label={t("library-template-prepared-by-one")} placement="bottom-start" className="self-center" />
+          ) : null}
+          {state ? <StatusChip tone={state.tone} label={state.label} /> : null}
+        </Box>
         <QuickActions label={t("library-row-actions", { name: template.name })} actions={actions} />
       </Box>
+      <FactGrid
+        pairs
+        facts={[
+          // What it is written for, one fact so the row stays one row: a piece of the process says which piece and
+          // for which lawsuit, a petition its lawsuit and the problem it was written for (0244), a paper what it is.
+          template.documentKind === "peca_processo"
+            ? {
+                key: "piece",
+                label: t("library-fact-piece"),
+                value: [template.pieceKindName, process].filter(Boolean).join(" · "),
+              }
+            : isPieceDocument(template.documentKind)
+              ? {
+                  key: "process",
+                  label: t(problemKey ? "library-fact-process-problem" : "library-fact-process"),
+                  value: [process, problemKey ? t(problemKey) : null].filter(Boolean).join(" · "),
+                }
+              : { key: "type", label: t("library-fact-type"), value: t(DOCUMENT_KEY[template.documentKind].label) },
+          {
+            key: "origin",
+            label: t("library-fact-origin"),
+            value: t(
+              template.platform
+                ? template.provisional
+                  ? "library-origin-provisional"
+                  : "library-origin-platform"
+                : "library-origin-firm",
+            ),
+          },
+          {
+            key: "cited",
+            label: t("library-fact-cited"),
+            value: isPieceDocument(template.documentKind) ? String(template.cited) : null,
+          },
+          {
+            key: "updated",
+            label: t("library-fact-updated"),
+            value: template.updatedBy
+              ? t("library-fact-updated-by", { name: template.updatedBy, when: template.updatedLabel })
+              : template.updatedLabel,
+          },
+        ]}
+      />
     </Box>
   );
 }
@@ -1132,5 +1217,283 @@ function SourcePanel({ form, onClose, onSaved }: { form: SourceForm; onClose: ()
         />
       ) : null}
     </SidePanel>
+  );
+}
+
+/** The words of a use: what ONE writes or sends with its model. */
+const USE_KEY: Record<ModelUse["key"], string> = {
+  "piece-juizado": "library-use-piece-juizado",
+  "piece-comum": "library-use-piece-comum",
+  procuracao: "library-use-procuracao",
+  contrato: "library-use-contrato",
+  declaracao_residencia: "library-use-declaracao-residencia",
+  declaracao_hipossuficiencia: "library-use-declaracao-hipossuficiencia",
+};
+
+/**
+ * What waits on a person of the firm, first on the page (the owner, 2026-11-13: responding to ONE or checking a model it
+ * had ready sat inside the fourth card): each thing on its line with its one button, the reason of a refusal beside
+ * the way to send another. What ONE is still doing is not here: it is ONE's work, in "Enviados ao ONE".
+ */
+function WaitingCard({
+  imports,
+  missing,
+  mayWrite,
+  full,
+  busy,
+  onOpen,
+  onAgain,
+  onDismiss,
+  onMissing,
+}: {
+  imports: LibraryImport[];
+  missing: number;
+  mayWrite: boolean;
+  full: boolean;
+  busy: string | null;
+  onOpen: (item: LibraryImport) => void;
+  onAgain: () => void;
+  onDismiss: (item: LibraryImport) => void;
+  onMissing: () => void;
+}) {
+  const t = useTranslations("product");
+  const count = imports.length + (missing > 0 ? 1 : 0);
+  return (
+    <Card component="section" aria-labelledby="library-waiting">
+      <CardContent className="flex flex-col gap-3">
+        <CardTitle
+          id="library-waiting"
+          icon={<NiExclamationSquare size="medium" />}
+          tone="accent-3"
+          title={t("library-waiting-title")}
+          chip={<StatusChip tone="attention" label={countText(count)} />}
+        />
+        {imports.map((item) => {
+          const closed = item.status === "refused" || item.status === "failed";
+          const asks = item.status === "asking";
+          const words =
+            item.status === "asking"
+              ? t("library-waiting-asking", { file: item.fileName })
+              : item.status === "ready"
+                ? t("library-waiting-ready", { file: item.fileName })
+                : item.status === "refused"
+                  ? t("library-waiting-refused", {
+                      file: item.fileName,
+                      reason: refusalWords(t, item.refusal, item.expected),
+                    })
+                  : t("library-waiting-failed", { file: item.fileName, reason: t(importFailureKey(item.failure)) });
+          return (
+            <StateLine
+              key={item.id}
+              tone="attention"
+              action={
+                <Box className="flex flex-wrap items-center gap-1">
+                  {closed ? (
+                    <>
+                      {mayWrite && !full ? (
+                        <Button variant="contained" size="small" onClick={onAgain}>
+                          {t("library-import-again")}
+                        </Button>
+                      ) : null}
+                      <Button
+                        variant="text"
+                        color="grey"
+                        size="small"
+                        disabled={busy === item.id}
+                        onClick={() => onDismiss(item)}
+                        aria-label={t("library-import-discard-label", { file: item.fileName })}
+                      >
+                        {t("library-import-discard")}
+                      </Button>
+                    </>
+                  ) : (
+                    <Button
+                      variant="contained"
+                      size="small"
+                      onClick={() => onOpen(item)}
+                      aria-label={
+                        asks
+                          ? t("library-import-answer-label", { file: item.fileName })
+                          : t("library-import-review-label", { file: item.fileName })
+                      }
+                    >
+                      {asks ? t("library-import-answer") : t("library-import-review")}
+                    </Button>
+                  )}
+                </Box>
+              }
+            >
+              {words}
+            </StateLine>
+          );
+        })}
+        {missing > 0 ? (
+          <StateLine
+            tone="attention"
+            action={
+              <Button variant="outlined" color="grey" size="small" onClick={onMissing}>
+                {t("library-waiting-missing-action")}
+              </Button>
+            }
+          >
+            {t("library-waiting-missing", { count: missing })}
+          </StateLine>
+        ) : null}
+      </CardContent>
+    </Card>
+  );
+}
+
+/**
+ * Which model ONE writes or sends with, one tile per use (the owner, 2026-11-13): the firm's own, or the platform's
+ * while the firm has none, and the way to send the firm's own, the upload opened as that use's.
+ */
+function UsesCard({
+  uses,
+  pieces,
+  templates,
+  mayWrite,
+  full,
+  onSend,
+  onOpen,
+}: {
+  uses: ModelUse[];
+  pieces: ProcessPiece[];
+  templates: LibraryTemplate[];
+  mayWrite: boolean;
+  full: boolean;
+  onSend: (document: ModelDocument) => void;
+  onOpen: (template: LibraryTemplate) => void;
+}) {
+  const t = useTranslations("product");
+  const ownPieces = pieces.filter((piece) => piece.template !== null);
+  return (
+    <Card component="section" aria-labelledby="library-uses">
+      <CardContent className="flex flex-col gap-3">
+        <CardTitle
+          id="library-uses"
+          icon={<NiDocumentFull size="medium" />}
+          tone="secondary"
+          title={t("library-uses-title")}
+          description={t("library-uses-hint")}
+        />
+        <Box component="ul" className="m-0 grid list-none grid-cols-1 gap-3 p-0 sm:grid-cols-2 lg:grid-cols-3">
+          {uses.map((use) => {
+            const model = use.template
+              ? (templates.find((template) => template.id === use.template?.id) ?? null)
+              : null;
+            const own = use.template !== null && !use.template.platform;
+            return (
+              <Box
+                component="li"
+                key={use.key}
+                className="border-grey-100 flex min-w-0 flex-col gap-1.5 rounded-xl border p-3"
+              >
+                <Typography variant="caption" className="text-text-secondary">
+                  {t(USE_KEY[use.key])}
+                </Typography>
+                {use.template && model && mayWrite && (!model.platform || !full) ? (
+                  <Button
+                    variant="text"
+                    color="inherit"
+                    onClick={() => onOpen(model)}
+                    className="-mx-1 min-h-0 justify-start px-1 py-0 text-left font-semibold break-words hover:underline"
+                  >
+                    {use.template.name}
+                  </Button>
+                ) : (
+                  <Typography
+                    variant="body2"
+                    className={cn("font-semibold break-words", !use.template && "text-text-secondary")}
+                  >
+                    {use.template ? use.template.name : t("library-use-none")}
+                  </Typography>
+                )}
+                {use.byProblem.length > 0 ? (
+                  // The cases of these problems are written from the firm's model of each first (0244).
+                  <Typography variant="caption" className="text-text-secondary break-words">
+                    {t("library-use-by-problem", {
+                      problems: use.byProblem
+                        .map((item) => {
+                          const key = caseKindLabelKey(item.problem);
+                          return key ? t(key) : item.problem;
+                        })
+                        .join(", "),
+                    })}
+                  </Typography>
+                ) : null}
+                <Box className="flex flex-wrap items-center gap-2">
+                  {use.template ? (
+                    <span
+                      className={cn(
+                        "rounded-md px-2 py-0.5 text-xs font-semibold",
+                        own ? "bg-success/10 text-text-primary" : cn(TILE_TONE.primary.bg, "text-text-primary"),
+                      )}
+                    >
+                      {t(own ? "library-use-firm" : "library-use-platform")}
+                    </span>
+                  ) : null}
+                  {!own && mayWrite && !full ? (
+                    <Button
+                      variant="text"
+                      size="small"
+                      startIcon={<NiUploadCloud size="small" />}
+                      onClick={() => onSend(use.documentKind)}
+                      aria-label={t("library-use-send-label", { use: t(USE_KEY[use.key]) })}
+                    >
+                      {t("library-use-send")}
+                    </Button>
+                  ) : null}
+                </Box>
+              </Box>
+            );
+          })}
+          {pieces.length > 0 ? (
+            // The pieces of the process ONE writes: from the firm's model of each where it has one (0244).
+            <Box component="li" className="border-grey-100 flex min-w-0 flex-col gap-1.5 rounded-xl border p-3">
+              <Typography variant="caption" className="text-text-secondary">
+                {t("library-use-peca-processo")}
+              </Typography>
+              <Typography
+                variant="body2"
+                className={cn("font-semibold break-words", ownPieces.length === 0 && "text-text-secondary")}
+              >
+                {ownPieces.length > 0
+                  ? t("library-use-pieces-own", { count: ownPieces.length, total: pieces.length })
+                  : t("library-use-pieces-none")}
+              </Typography>
+              {ownPieces.length > 0 ? (
+                <Typography variant="caption" className="text-text-secondary break-words">
+                  {ownPieces.map((piece) => piece.name).join(", ")}
+                </Typography>
+              ) : null}
+              <Box className="flex flex-wrap items-center gap-2">
+                <span
+                  className={cn(
+                    "rounded-md px-2 py-0.5 text-xs font-semibold",
+                    ownPieces.length > 0
+                      ? "bg-success/10 text-text-primary"
+                      : cn(TILE_TONE.primary.bg, "text-text-primary"),
+                  )}
+                >
+                  {t(ownPieces.length > 0 ? "library-use-firm" : "library-use-platform")}
+                </span>
+                {ownPieces.length < pieces.length && mayWrite && !full ? (
+                  <Button
+                    variant="text"
+                    size="small"
+                    startIcon={<NiUploadCloud size="small" />}
+                    onClick={() => onSend("peca_processo")}
+                    aria-label={t("library-use-send-label", { use: t("library-use-peca-processo") })}
+                  >
+                    {t("library-use-send")}
+                  </Button>
+                ) : null}
+              </Box>
+            </Box>
+          ) : null}
+        </Box>
+      </CardContent>
+    </Card>
   );
 }

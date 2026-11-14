@@ -9,6 +9,70 @@
 
 export const OUTCOME_RULE = "resultado-v1";
 
+/** Where a judgment's operative part begins: the last of these marks ("Ante o exposto", "Isto posto" and their kin). */
+
+export const OPERATIVE_MARK =
+  /(?:ante|diante|em face|face|pelo|por|ao teor|na confluencia)(?: de)?(?: todo)?(?: d?o| ao)? exposto|isto posto|isso posto|posto isso/g;
+
+const ACCENTS: Record<string, string> = {
+  acute: "\u0301",
+  grave: "\u0300",
+  circ: "\u0302",
+  tilde: "\u0303",
+  uml: "\u0308",
+  cedil: "\u0327",
+  ring: "\u030a",
+};
+const NAMED: Record<string, string> = {
+  nbsp: " ",
+  amp: "&",
+  quot: '"',
+  apos: "'",
+  lt: "<",
+  gt: ">",
+  ordm: "º",
+  ordf: "ª",
+  sect: "§",
+  deg: "°",
+  ndash: "-",
+  mdash: "-",
+  ldquo: '"',
+  rdquo: '"',
+  lsquo: "'",
+  rsquo: "'",
+  hellip: "...",
+  bull: "·",
+  rarr: "->",
+  euro: "€",
+  sup1: "¹",
+  sup2: "²",
+  sup3: "³",
+  laquo: "«",
+  raquo: "»",
+  shy: "",
+};
+
+/**
+ * A court's text with its HTML entities decoded and each letter joined to its accent: the DJEN hands every text
+ * escaped ("ju&iacute;za", "&nbsp;", "a&#771;"), which no rule read (a hand check of 60 real judgments, 2026-11-14,
+ * found the judge, the clauses and the reasons of extinction lost to it). Decoding a decoded text changes nothing.
+ */
+export function decodeEntities(text: string): string {
+  return String(text ?? "")
+    .replace(/&(#x[0-9a-f]+|#\d+|[a-z][a-z0-9]*);/gi, (whole, name: string) => {
+      if (name[0] === "#") {
+        const code = /^#x/i.test(name) ? Number.parseInt(name.slice(2), 16) : Number.parseInt(name.slice(1), 10);
+        return Number.isInteger(code) && code > 0 && code <= 0x10ffff
+          ? String.fromCodePoint(code === 8239 || code === 160 ? 32 : code)
+          : whole;
+      }
+      if (Object.hasOwn(NAMED, name)) return NAMED[name];
+      const accent = /^([a-z])(acute|grave|circ|tilde|uml|cedil|ring)$/i.exec(name);
+      return accent ? accent[1] + ACCENTS[accent[2].toLowerCase()] : whole;
+    })
+    .normalize("NFC");
+}
+
 export type FactKind =
   | "sentenca"
   | "acordao"
@@ -100,9 +164,14 @@ export function certifiesFinal(text: string): boolean {
 
 /** The result a judgment's words say: denied, granted in part, or granted. */
 function judgmentResultOf(words: string): JudgmentResult | null {
-  if (/\bimprocedente/.test(words)) return "improcedente";
-  if (/parcialmente procedente|procedente em parte|parcial procedencia/.test(words)) return "parcial";
-  if (/\bprocedente/.test(words)) return "procedente";
+  if (/\bimprocedent/.test(words)) return "improcedente";
+  if (
+    /parcia(?:l)?mente procedente|procedentes?,? em parte|procedentes? parcia(?:l)?mente|parcial procedencia/.test(
+      words,
+    )
+  )
+    return "parcial";
+  if (/\bprocedent/.test(words)) return "procedente";
   return null;
 }
 
@@ -142,9 +211,12 @@ export type ClaimReading = {
 const CLAIM_MENTIONS: readonly (readonly [ClaimKind, RegExp])[] = [
   [
     "danos_morais",
-    /\bdanos? mora(?:is|l)\b|\bdanos? extrapatrimonia(?:is|l)\b|\bdanos? materia(?:is|l) e mora(?:is|l)\b/g,
+    /\bdanos? mora(?:is|l)\b|\bdanos? extrapatrimonia(?:is|l)\b|\bdanos? imateria(?:is|l)\b|\b(?:reparacao|compensacao|indenizacao) mora(?:is|l)\b|\bdanos? materia(?:is|l) e mora(?:is|l)\b/g,
   ],
-  ["danos_materiais", /\bdanos? materia(?:is|l)\b|\bdanos? emergentes?\b|\bdanos? mora(?:is|l) e materia(?:is|l)\b/g],
+  [
+    "danos_materiais",
+    /\bdanos? materia(?:is|l)\b|\b(?:reparacao|indenizacao) materia(?:is|l)\b|\bdanos? emergentes?\b|\bdanos? mora(?:is|l) e materia(?:is|l)\b/g,
+  ],
   ["lucros_cessantes", /\blucros? cessantes?\b/g],
   [
     "restituicao",
@@ -160,7 +232,11 @@ const DECISION =
 const VALUE_GAP =
   /^[\s,:]*(?:no valor de|na quantia de|no importe de|no montante de|o valor de|a quantia de|arbitrad\w* em|fixad\w* em|de|em)?[\s,:]*$/;
 
-const PER_CLAIMANT = /^[^;.]{0,80}?(?:por|para cada|a cada) (?:autor|autora|parte autora|requerente|passageir)/;
+const PER_CLAIMANT =
+  /^[^;.]{0,80}?(?:por|para cada|a cada|de cada)(?: um[a]? d[oa]s)? (?:autor|parte autora|requerente|reclamante|promovente|demandante|passageir)/;
+
+const PER_CLAIMANT_BEFORE =
+  /(?:a|para|em favor de) cada (?:um[a]? d[oa]s )?(?:autor|parte autora|requerente|reclamante|promovente|demandante|passageir)[^;]{0,120}$/;
 
 /** A text folded for the rule with its length kept, so a place in it is the same place in the court's words. */
 function foldKeepingPlaces(text: string): string {
@@ -175,15 +251,15 @@ function foldKeepingPlaces(text: string): string {
 
 /** The claims a judgment's operative part decided (`pedidos-v1`): each named claim once, in the order it is named. */
 export function readClaims(text: string): ClaimReading[] {
-  const raw = String(text ?? "")
-    .normalize("NFC")
-    .replace(/\s+/g, " ");
+  const raw = decodeEntities(String(text ?? "")).replace(/\s+/g, " ");
   const folded = foldKeepingPlaces(raw);
-  const marks = [
-    ...folded.matchAll(/ante o exposto|isto posto|diante do exposto|pelo exposto|posto isso|em face do exposto/g),
-  ];
+  const marks = [...folded.matchAll(OPERATIVE_MARK)];
   const from = marks.length ? (marks[marks.length - 1].index ?? 0) : 0;
   const claims = new Map<ClaimKind, ClaimReading>();
+  const leads = [...folded.slice(from).matchAll(DECISION)].map((match) => ({
+    at: from + (match.index ?? 0),
+    granted: match[1] === undefined,
+  }));
   // Each clause of the operative part on its own: a sentence, a part after a semicolon, an item of a list.
   const clauseBreak = /[.;](?=\s)|\s[a-z]\)\s|\s[ivx]+\s?[-)]\s/g;
   const cuts = [
@@ -209,10 +285,15 @@ export function readClaims(text: string): ClaimReading[] {
       end: (match.index ?? 0) + match[0].length,
       granted: match[1] === undefined,
     }));
-    const values = [...clauseRaw.matchAll(/r\$\s*(?:[0-9]{1,3}(?:\.[0-9]{3})*|[0-9]+),[0-9]{2}/gi)].map((match) => ({
+    // A value with "R$", or written alone with its words after it ("4.000,00 (quatro mil reais)").
+    const values = [
+      ...clauseRaw.matchAll(
+        /r\$\s*(?:[0-9]{1,3}(?:\.[0-9]{3})*|[0-9]+),[0-9]{2}|(?:[0-9]{1,3}(?:\.[0-9]{3})*|[0-9]+),[0-9]{2}(?=\s*\([^)]{0,80}\breais\))/gi,
+      ),
+    ].map((match) => ({
       at: match.index ?? 0,
       end: (match.index ?? 0) + match[0].length,
-      cents: centsOf(match[0]),
+      cents: centsOf(/^r\$/i.test(match[0]) ? match[0] : `R$ ${match[0]}`),
     }));
     const mentionBetween = (low: number, high: number, self: number) =>
       mentions.some((other, place) => place !== self && other.at >= low && other.at < high);
@@ -221,10 +302,14 @@ export function readClaims(text: string): ClaimReading[] {
       const before = decisions.filter((decision) => decision.end <= mention.at).pop();
       const after = decisions.find((decision) => decision.at >= mention.end);
       const verb = mention.claim === "restituicao" && /^(?:restituir|reembolsar|devolver)$/.test(mention.word);
-      const granted = before ? before.granted : after ? after.granted : verb ? true : null;
+      const item = /^\s*\(?(?:[a-z](?:\.\d+)?|[ivx]+)\)\s|^\s*[ivx]+\s?-\s/.test(clause);
+      const lead = item ? leads.filter((decision) => decision.at < start).pop() : undefined;
+      const granted = before ? before.granted : after ? after.granted : verb ? true : lead ? lead.granted : null;
       if (granted === null) return;
       let cents: number | null = null;
       let valueEnd = -1;
+      let perHint = false;
+      let valueStart = -1;
       if (granted) {
         const next = values.find((value) => value.at >= mention.end);
         const prev = [...values].reverse().find((value) => value.end <= mention.at);
@@ -238,16 +323,34 @@ export function readClaims(text: string): ClaimReading[] {
             : next && VALUE_GAP.test(clause.slice(mention.end, next.at)) && !mentionBetween(mention.end, next.at, place)
               ? next
               : (prevFits ?? nextFits(160));
+        let picked = chosen;
         if (chosen) {
-          cents = chosen.cents;
-          valueEnd = chosen.end;
+          const earlier = [...values].reverse().find((value) => value.end <= chosen.at);
+          if (
+            earlier &&
+            /^[^;.]{0,40}?(?:para cada|por|a cada|de cada)[^;.]{0,40}?(?:totaliz|perfaz|no total|ao todo)/.test(
+              clause.slice(earlier.end, chosen.at),
+            )
+          ) {
+            picked = earlier;
+            perHint = true;
+          }
+        }
+        if (picked) {
+          cents = picked.cents;
+          valueEnd = picked.end;
+          valueStart = picked.at;
         }
       }
       claims.set(mention.claim, {
         claim: mention.claim,
         result: granted ? "concedido" : "negado",
         cents,
-        perClaimant: cents !== null && PER_CLAIMANT.test(clause.slice(valueEnd)),
+        perClaimant:
+          cents !== null &&
+          (perHint ||
+            PER_CLAIMANT.test(clause.slice(valueEnd)) ||
+            PER_CLAIMANT_BEFORE.test(clause.slice(Math.max(0, valueStart - 160), valueStart))),
       });
     });
   }
@@ -268,23 +371,46 @@ function centsOf(text: string): number | null {
  * approved with its value. Null when the words say nothing clear.
  */
 export function readJudgment(text: string): JudgmentReading | null {
-  const raw = String(text ?? "").replace(/\s+/g, " ");
+  const raw = decodeEntities(String(text ?? "")).replace(/\s+/g, " ");
   const lowered = plain(raw);
   if (!lowered) return null;
   // The operative part: from the last "ante o exposto" (or its kin), else the whole text.
-  const marks = [
-    ...lowered.matchAll(/ante o exposto|isto posto|diante do exposto|pelo exposto|posto isso|em face do exposto/g),
-  ];
+  const marks = [...lowered.matchAll(OPERATIVE_MARK)];
   const from = marks.length ? (marks[marks.length - 1].index ?? 0) : 0;
   const operative = lowered.slice(from);
   const operativeRaw = raw.slice(from);
-  if (/homolog\w* (o |por sentenca o |por sentenca )?acordo/.test(operative)) {
+  // A settlement approved, in part or "o livre acordo de vontades", the agreement named in the same sentence.
+  // Never a condition ("havendo a homologação de acordo, cancele-se a penhora").
+  const approval = /homolog\w*(?: parcialmente)?[^.;]{0,80}?\bacordo\b/.exec(operative);
+  if (
+    approval &&
+    !/(?:havendo|em caso de|se houver|caso haja|apos)(?: a)?\s*$/.test(
+      operative.slice(Math.max(0, approval.index - 24), approval.index),
+    )
+  ) {
     const cents = centsOf(operativeRaw);
     return { result: "acordo", cents, perClaimant: false, words: operativeRaw.slice(0, 400).trim(), claims: [] };
   }
-  const verb = /julgo (parcialmente )?(im)?procedente|julgo procedente em parte/.exec(operative);
-  if (!verb) return null;
-  const result = judgmentResultOf(verb[0]);
+  // The judge's verb, or a lay judge's project ("sugiro julgar procedentes", "opino em julgar", "hei por bem julgá-los").
+  const verb =
+    /(?:julgo|(?:sugiro|opino|proponho|hei por bem)[^.;]{0,80}?julga(?:r|-l[oa]s?)) (?:totalmente |parcialmente |parciamente )?(im)?procedentes?(?:,? em parte|,? parcialmente)?|julgo procedente em parte|(?:sugiro|opino|proponho)[^.;]{0,20}?(?:pela|a|por) (?:parcial |total )?(?:im)?procedencia/.exec(
+      operative,
+    );
+  // A ruling on the airline's challenge to the amount or on embargos is no judgment of the claim.
+  if (
+    verb &&
+    /^ (?:[ao]s? )?(?:impugnacao|embargos|excecao de pre-?executividade)/.test(
+      operative.slice((verb.index ?? 0) + verb[0].length),
+    )
+  )
+    return null;
+  const impliedWin =
+    !verb &&
+    /(?:extingo|julgo extint\w*) (?:o processo|o feito) com resolucao do merito/.test(operative) &&
+    /\bconden(?:o|ar)\b/.test(operative) &&
+    !/\b92[45]\b|execuc|cumprimento de sentenca/.test(operative);
+  if (!verb && !impliedWin) return null;
+  const result = verb ? judgmentResultOf(verb[0]) : "procedente";
   if (!result) return null;
   let cents: number | null = null;
   let perClaimant = false;
@@ -294,10 +420,14 @@ export function readJudgment(text: string): JudgmentReading | null {
       const after = operativeRaw.slice(condemnation, condemnation + 400);
       cents = centsOf(after);
       perClaimant =
-        cents !== null && /(por|para cada|a cada) (autor|autora|parte autora|requerente)/i.test(plain(after));
+        cents !== null &&
+        (/(por|para cada|a cada|de cada)( um[a]? d[oa]s)? (autor|parte autora|requerente|reclamante|promovente)/i.test(
+          plain(after),
+        ) ||
+          /^r\$\s*[\d.,]+\s*(\([^)]*\))?,? totaliz/.test(plain(after.slice(after.search(/R\$/i)))));
     }
   }
-  const start = Math.max((verb.index ?? 0) - 40, 0);
+  const start = Math.max((verb?.index ?? 0) - 40, 0);
   return { result, cents, perClaimant, words: operativeRaw.slice(start, start + 400).trim(), claims: readClaims(raw) };
 }
 
@@ -306,7 +436,7 @@ export function readJudgment(text: string): JudgmentReading | null {
  * when the words order no release (an order to pay costs never is one) or say no value.
  */
 export function readRelease(text: string): { release: ReleaseKind; cents: number } | null {
-  const raw = String(text ?? "").replace(/\s+/g, " ");
+  const raw = decodeEntities(String(text ?? "")).replace(/\s+/g, " ");
   const lowered = plain(raw);
   if (/custas|preparo/.test(lowered) && !/alvara|levantamento/.test(lowered)) return null;
   const release: ReleaseKind | null = /precatorio/.test(lowered)

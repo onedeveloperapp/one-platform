@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useTranslations } from "next-intl";
-import { type ElementType, useEffect, useRef, useState, useTransition } from "react";
+import { type ElementType, type ReactNode, useEffect, useRef, useState, useTransition } from "react";
 
 import {
   Alert,
@@ -21,6 +21,8 @@ import DeadlinePanel from "@/components/deadlines/deadline-panel";
 import AttendeeChoice from "@/components/hearings/attendee-choice";
 import HearingPanel from "@/components/hearings/hearing-panel";
 import DialogHeader from "@/components/product/dialog-header";
+import FactGrid from "@/components/product/fact-grid";
+import InfoHint from "@/components/product/info-hint";
 import QuickActions, { type QuickAction } from "@/components/product/quick-actions";
 import StateLine from "@/components/product/state-line";
 import StatusChip, { type StatusTone } from "@/components/product/status-chip";
@@ -36,7 +38,6 @@ import NiFolder from "@/icons/nexture/ni-folder";
 import NiInbox from "@/icons/nexture/ni-inbox";
 import NiMoney from "@/icons/nexture/ni-money";
 import NiScale from "@/icons/nexture/ni-scale";
-import NiUser from "@/icons/nexture/ni-user";
 import { caseLabel } from "@/lib/cases/cases";
 import { STATUS_KEY as DEADLINE_STATUS_KEY } from "@/lib/deadlines/deadlines";
 import type { DeadlineAct } from "@/lib/deadlines/facts";
@@ -122,6 +123,7 @@ export default function PublicationCard({
   onSeen,
   onAcknowledged,
   inline = false,
+  oneReading,
 }: {
   row: PublicationRow;
   /** What ONE recorded of it since the list was read, while ONE reads it. */
@@ -143,6 +145,8 @@ export default function PublicationCard({
    * awareness of ONE's triage, so the card leaves out its head, the way to the case and that awareness.
    */
   inline?: boolean;
+  /** What ONE read of the publication (the case's publications), placed under the court's words. */
+  oneReading?: ReactNode;
 }) {
   const t = useTranslations("product");
   const [pending, startTransition] = useTransition();
@@ -320,12 +324,20 @@ export default function PublicationCard({
   const open = (url: string) => window.open(url, "_blank", "noopener,noreferrer");
   /** What the card keeps one click away: what a person seldom needs on every publication. */
   const offered: (QuickAction | null)[] = [
-    mayTriage && row.active && category !== "prazo"
+    mayTriage && row.active && (category !== "prazo" || deadlines.length > 0 || Boolean(counted))
       ? {
           key: "deadline",
           label: t("publication-deadline-action"),
           icon: <NiClock size="small" />,
           onClick: () => setCounting(true),
+        }
+      : null,
+    mayTriage && row.active && row.proceedingId && category === "audiencia" && (hearings.length > 0 || scheduled)
+      ? {
+          key: "hearing",
+          label: t("publication-hearing-action"),
+          icon: <NiCalendar size="small" />,
+          onClick: () => setScheduling(true),
         }
       : null,
     row.link
@@ -344,6 +356,15 @@ export default function PublicationCard({
     },
   ];
   const more = offered.filter((action): action is QuickAction => action !== null);
+  /** What is still to do from the card itself: count the deadline it opens, write the hearing it sets. */
+  const deadlineOwed = mayTriage && row.active && category === "prazo" && deadlines.length === 0 && !counted;
+  const hearingOwed =
+    mayTriage &&
+    row.active &&
+    Boolean(row.proceedingId) &&
+    category === "audiencia" &&
+    hearings.length === 0 &&
+    !scheduled;
   const answers = (
     <TriageAnswers
       current={category}
@@ -383,27 +404,38 @@ export default function PublicationCard({
                 {[row.court, row.unit].filter(Boolean).join(" · ")}
               </Typography>
             </Box>
-            <Box className="flex flex-none flex-wrap justify-end gap-1">
+            <Box className="flex flex-none flex-wrap items-center justify-end gap-1">
               {!row.active ? <StatusChip tone="danger" label={t("publication-cancelled")} /> : null}
               {category ? (
                 <StatusChip tone={CATEGORY_TONE[category]} label={t(CATEGORY_KEY[category])} />
               ) : row.active ? (
                 <StatusChip tone="attention" label={t("publications-view-untriaged")} />
               ) : null}
+              <QuickActions label={t("publication-more-actions")} actions={more} />
             </Box>
           </Box>
         )}
 
-        <Typography variant="body2" className={cn("text-text-secondary", !inline && "-mt-2")}>
-          {[
-            inline ? [row.court, row.unit].filter(Boolean).join(" · ") : null,
-            t("publication-case-number", { number: row.cnj }),
-            t("publication-available-on", { day: formatDayBr(row.availableOn) ?? row.availableOn }),
-            row.className,
-          ]
-            .filter(Boolean)
-            .join(" · ")}
-        </Typography>
+        {/* Each fact under its name (the owner, 2026-11-13): a run joined by "·" left the reader to guess each. */}
+        <Box className="flex items-start gap-2">
+          <FactGrid
+            className="min-w-0 flex-1"
+            pairs
+            facts={[
+              { key: "unit", label: t("publication-fact-unit"), value: inline ? row.unit : null, wide: true },
+              { key: "court", label: t("publication-fact-court"), value: inline ? row.court : null },
+              { key: "case", label: t("publication-fact-case"), value: row.cnj },
+              {
+                key: "available",
+                label: t("publication-fact-available"),
+                value: formatDayBr(row.availableOn) ?? row.availableOn,
+              },
+              { key: "class", label: t("publication-fact-class"), value: row.className },
+              { key: "to", label: t("publication-fact-to"), value: row.lawyers.join(", ") },
+            ]}
+          />
+          {inline ? <QuickActions label={t("publication-more-actions")} actions={more} /> : null}
+        </Box>
 
         {!row.active ? (
           <Alert
@@ -429,7 +461,7 @@ export default function PublicationCard({
           </Alert>
         ) : null}
 
-        {/* The court's own words: what the person reads before saying what it is. */}
+        {/* The court's own words: what the person reads before anything ONE says of them. */}
         <Box className="bg-grey-25 flex flex-col gap-1 rounded-2xl p-4">
           <Typography variant="body1" className="break-words">
             {row.head || t("publication-no-text")}
@@ -458,133 +490,66 @@ export default function PublicationCard({
           ) : null}
         </Box>
 
-        {readingWords && leftToPerson ? (
-          <Alert severity="warning" className="neutral bg-background-paper/60!">
-            {readingWords}
-          </Alert>
-        ) : readingWords ? (
-          <Typography variant="body2" className="text-text-secondary" role="status">
-            {readingWords}
-          </Typography>
-        ) : null}
-        {staysWords.length > 0 ? (
-          <Typography variant="body2" className="text-text-secondary">
-            {staysWords.join(" ")}
-          </Typography>
-        ) : null}
+        {/* What ONE read of it, where the screen has it (the case's publications). */}
+        {oneReading}
 
-        {category === "decisao" && row.active ? (
-          judgment && !judgmentAsked ? (
-            <StateLine
-              tone={judgment.source === "person" ? "done" : "info"}
-              action={
-                mayTriage ? (
+        {/* What is still owed, each its own line with its answer beside it. */}
+        {readingWords && leftToPerson ? (
+          <StateLine tone="attention" emphasis>
+            {readingWords}
+          </StateLine>
+        ) : null}
+        {category === "decisao" && row.active && !(judgment && !judgmentAsked) ? (
+          <StateLine
+            tone="attention"
+            action={
+              mayTriage ? (
+                <Box className="flex flex-wrap gap-2">
                   <Button
-                    variant="text"
+                    variant="outlined"
                     color="grey"
                     size="small"
                     disabled={pending}
-                    onClick={() => setJudgmentAsked(true)}
+                    onClick={() => sayJudgment(true)}
                   >
-                    {t("publication-judgment-change")}
+                    {t("publication-judgment-yes")}
                   </Button>
-                ) : undefined
-              }
-            >
-              {t(judgmentWordsKey(judgment))}
-            </StateLine>
-          ) : (
-            <StateLine
-              tone="attention"
-              action={
-                mayTriage ? (
-                  <Box className="flex flex-wrap gap-2">
-                    <Button
-                      variant="outlined"
-                      color="grey"
-                      size="small"
-                      disabled={pending}
-                      onClick={() => sayJudgment(true)}
-                    >
-                      {t("publication-judgment-yes")}
-                    </Button>
-                    <Button
-                      variant="outlined"
-                      color="grey"
-                      size="small"
-                      disabled={pending}
-                      onClick={() => sayJudgment(false)}
-                    >
-                      {t("publication-judgment-no")}
-                    </Button>
-                  </Box>
-                ) : undefined
-              }
-            >
-              {t("publication-judgment-ask")}
-            </StateLine>
-          )
+                  <Button
+                    variant="outlined"
+                    color="grey"
+                    size="small"
+                    disabled={pending}
+                    onClick={() => sayJudgment(false)}
+                  >
+                    {t("publication-judgment-no")}
+                  </Button>
+                </Box>
+              ) : undefined
+            }
+          >
+            {t("publication-judgment-ask")}
+          </StateLine>
         ) : null}
-
-        {hearings.length > 0 || scheduled ? (
-          <Box className="flex flex-col gap-1" role="status">
-            {hearings.map((hearing) => {
-              const when = momentIn(hearing.startsAt, hearing.timeZone);
-              // Brasília goes unsaid, as on the hearing's own card.
-              const zoneWords =
-                hearing.timeZone !== "America/Sao_Paulo" && isHearingZone(hearing.timeZone)
-                  ? t(ZONE_KEY[hearing.timeZone])
-                  : null;
-              return (
-                <Typography key={hearing.id} variant="body2">
-                  {t("publication-hearing", {
-                    day: when.day,
-                    time: when.time,
-                    status: t(HEARING_STATUS_KEY[hearing.status]),
-                  })}
-                  {zoneWords ? ` · ${zoneWords}` : ""}
-                </Typography>
-              );
-            })}
-            {scheduled && hearings.length === 0 ? (
-              <Typography variant="body2">{t("hearing-scheduled-notice")}</Typography>
-            ) : null}
-          </Box>
-        ) : null}
-
-        {deadlines.length > 0 || counted ? (
-          <Box className="flex flex-col gap-1" role="status">
-            {deadlines.map((deadline) => (
-              <Typography key={deadline.id} variant="body2">
-                {deadline.urgentOn
-                  ? t("publication-deadline", {
-                      title: deadline.title,
-                      day: formatDayBr(deadline.urgentOn) ?? deadline.urgentOn,
-                      status: t(DEADLINE_STATUS_KEY[deadline.status]),
-                    })
-                  : t("publication-deadline-counting", { title: deadline.title })}
-              </Typography>
-            ))}
-            {counted ? <Typography variant="body2">{counted}</Typography> : null}
-          </Box>
-        ) : null}
-
         {row.byAi && row.reviewDue && !said && category && !controls && row.active ? (
-          <Alert
-            severity="info"
-            className="neutral bg-background-paper/60!"
+          <StateLine
+            tone="attention"
             action={
               mayTriage ? (
-                <Button color="inherit" size="small" disabled={pending} onClick={() => triage(category)}>
+                <Button
+                  variant="outlined"
+                  color="grey"
+                  size="small"
+                  disabled={pending}
+                  onClick={() => triage(category)}
+                >
                   {t("publication-by-ai-confirm")}
                 </Button>
               ) : undefined
             }
           >
             {t("publication-by-ai-review", { category: t(CATEGORY_KEY[category]) })}
-          </Alert>
+          </StateLine>
         ) : null}
-
         {/* Who goes to the hearing, said where the firm takes notice of it (the owner, 2026-11-14). */}
         {!inline &&
         row.ackOwed &&
@@ -622,46 +587,6 @@ export default function PublicationCard({
               : t("publication-ack-owed-anyone", { category: t(CATEGORY_KEY[category]) })}
           </StateLine>
         ) : null}
-
-        {category && !controls ? (
-          <Box className="flex flex-wrap items-center gap-3">
-            {" "}
-            <Typography variant="body2" className="text-text-secondary min-w-0 flex-1" role="status">
-              {[
-                said
-                  ? t("publication-triage-done", { category: t(CATEGORY_KEY[category]) })
-                  : row.byAi && row.triagedLabel
-                    ? // What ONE classified may be wrong, until a person checked it.
-                      row.reviewedBy
-                      ? t("publication-by-ai", { when: row.triagedLabel })
-                      : [t("publication-by-ai", { when: row.triagedLabel }), t("publication-one-may-err")].join(" · ")
-                    : row.triagedBy && row.triagedLabel
-                      ? t("publication-triaged-by", { name: row.triagedBy, when: row.triagedLabel })
-                      : row.triagedLabel
-                        ? t("publication-triaged-at", { when: row.triagedLabel })
-                        : null,
-                !said && row.reviewedBy && row.reviewedLabel
-                  ? t("publication-reviewed-by", { name: row.reviewedBy, when: row.reviewedLabel })
-                  : null,
-                // The awareness of ONE's triage (0104), once given.
-                !said && acked
-                  ? t("publication-acked-now")
-                  : !said && row.ackedBy && row.ackedLabel
-                    ? t("publication-acked-by", { name: row.ackedBy, when: row.ackedLabel })
-                    : null,
-                savedNote,
-              ]
-                .filter(Boolean)
-                .join(" · ")}
-            </Typography>
-            {mayTriage && row.active ? (
-              <Button ref={changeButton} variant="text" color="grey" size="small" onClick={() => setChanging(true)}>
-                {t(row.ackOwed && !acked && !said ? "publication-correct" : "publication-change")}
-              </Button>
-            ) : null}
-          </Box>
-        ) : null}
-
         {category === null && row.triageState && row.active ? (
           <StateLine tone={row.triageState === "working" ? "waiting" : "info"}>
             {t(TRIAGE_STATE_KEY[row.triageState])}
@@ -674,61 +599,204 @@ export default function PublicationCard({
           </Alert>
         ) : null}
 
-        {/* Of which case, to whom, what the publication set in motion, and what is kept one click away. */}
-        <Box className="border-grey-100 flex flex-wrap items-center justify-between gap-2 border-t pt-3">
-          <Box className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1">
-            {inline ? null : row.caseId ? (
-              <Button
-                variant="text"
-                color="primary"
-                size="small"
-                href={`/casos/${row.caseId}`}
-                LinkComponent={Link}
-                startIcon={<NiFolder size="small" />}
-                className="-ml-2"
+        {/* What is done, a line each with its way to it: the triage, the hearing in the agenda, the deadline counted. */}
+        {(category && !controls) || hearings.length > 0 || scheduled || deadlines.length > 0 || counted ? (
+          <Box className="flex flex-col gap-2" role="status">
+            {category && !controls ? (
+              <StateLine
+                tone="done"
+                action={
+                  mayTriage && row.active ? (
+                    <Button
+                      ref={changeButton}
+                      variant="text"
+                      color="grey"
+                      size="small"
+                      onClick={() => setChanging(true)}
+                    >
+                      {t(row.ackOwed && !acked && !said ? "publication-correct" : "publication-change")}
+                    </Button>
+                  ) : undefined
+                }
               >
-                {row.caseSeq !== null
-                  ? t("publication-open-case", { label: caseLabel(row.caseSeq) })
-                  : t("publication-open-case-plain")}
-              </Button>
-            ) : (
-              <Typography variant="body2" className="text-text-secondary">
-                {t("publication-no-case")}
-              </Typography>
-            )}
-            {row.lawyers.length > 0 ? (
-              <Box className="flex flex-row items-center gap-1.5">
-                <NiUser size="small" className="text-text-secondary" />
+                <Box component="span" className="inline-flex flex-wrap items-center gap-x-1">
+                  <span>
+                    {[
+                      said
+                        ? t("publication-triage-done", { category: t(CATEGORY_KEY[category]) })
+                        : row.byAi && row.triagedLabel
+                          ? t("publication-by-ai-as", { category: t(CATEGORY_KEY[category]), when: row.triagedLabel })
+                          : row.triagedBy && row.triagedLabel
+                            ? t("publication-triaged-by", { name: row.triagedBy, when: row.triagedLabel })
+                            : row.triagedLabel
+                              ? t("publication-triaged-at", { when: row.triagedLabel })
+                              : t("publication-triage-done", { category: t(CATEGORY_KEY[category]) }),
+                      !said && row.reviewedBy && row.reviewedLabel
+                        ? t("publication-reviewed-by", { name: row.reviewedBy, when: row.reviewedLabel })
+                        : null,
+                      // The awareness of ONE's triage (0104), once given.
+                      !said && acked
+                        ? t("publication-acked-now")
+                        : !said && row.ackedBy && row.ackedLabel
+                          ? t("publication-acked-by", { name: row.ackedBy, when: row.ackedLabel })
+                          : null,
+                      savedNote,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </span>
+                  {/* What ONE classified may be wrong, until a person checked it: said behind the "i". */}
+                  {!said && row.byAi && !row.reviewedBy ? (
+                    <InfoHint label={t("publication-one-may-err")} className="self-center" />
+                  ) : null}
+                </Box>
+              </StateLine>
+            ) : null}
+            {category === "decisao" && row.active && judgment && !judgmentAsked ? (
+              <StateLine
+                tone={judgment.source === "person" ? "done" : "info"}
+                action={
+                  mayTriage ? (
+                    <Button
+                      variant="text"
+                      color="grey"
+                      size="small"
+                      disabled={pending}
+                      onClick={() => setJudgmentAsked(true)}
+                    >
+                      {t("publication-judgment-change")}
+                    </Button>
+                  ) : undefined
+                }
+              >
+                {t(judgmentWordsKey(judgment))}
+              </StateLine>
+            ) : null}
+            {hearings.map((hearing, index) => {
+              const when = momentIn(hearing.startsAt, hearing.timeZone);
+              // Brasília goes unsaid, as on the hearing's own card.
+              const zoneWords =
+                hearing.timeZone !== "America/Sao_Paulo" && isHearingZone(hearing.timeZone)
+                  ? t(ZONE_KEY[hearing.timeZone])
+                  : null;
+              return (
+                <StateLine
+                  key={hearing.id}
+                  tone="done"
+                  action={
+                    index === 0 ? (
+                      <Button variant="text" color="grey" size="small" href="/agenda" LinkComponent={Link}>
+                        {t("publication-hearing-see")}
+                      </Button>
+                    ) : undefined
+                  }
+                >
+                  <Box component="span" className="inline-flex flex-wrap items-center gap-x-1">
+                    <span>
+                      {t("publication-hearing", {
+                        day: when.day,
+                        time: when.time,
+                        status: t(HEARING_STATUS_KEY[hearing.status]),
+                      })}
+                      {zoneWords ? ` · ${zoneWords}` : ""}
+                    </span>
+                    {readingWords && !leftToPerson && index === 0 && readingNow?.kind !== "deadline" ? (
+                      <InfoHint label={readingWords} className="self-center" />
+                    ) : null}
+                  </Box>
+                </StateLine>
+              );
+            })}
+            {scheduled && hearings.length === 0 ? (
+              <StateLine
+                tone="done"
+                action={
+                  <Button variant="text" color="grey" size="small" href="/agenda" LinkComponent={Link}>
+                    {t("publication-hearing-see")}
+                  </Button>
+                }
+              >
+                {t("hearing-scheduled-notice")}
+              </StateLine>
+            ) : null}
+            {deadlines.map((deadline, index) => (
+              <StateLine
+                key={deadline.id}
+                tone="done"
+                action={
+                  index === 0 ? (
+                    <Button variant="text" color="grey" size="small" href="/prazos" LinkComponent={Link}>
+                      {t("publication-deadline-see")}
+                    </Button>
+                  ) : undefined
+                }
+              >
+                <Box component="span" className="inline-flex flex-wrap items-center gap-x-1">
+                  <span>
+                    {deadline.urgentOn
+                      ? t("publication-deadline", {
+                          title: deadline.title,
+                          day: formatDayBr(deadline.urgentOn) ?? deadline.urgentOn,
+                          status: t(DEADLINE_STATUS_KEY[deadline.status]),
+                        })
+                      : t("publication-deadline-counting", { title: deadline.title })}
+                  </span>
+                  {readingWords && !leftToPerson && index === 0 && readingNow?.kind === "deadline" ? (
+                    <InfoHint label={readingWords} className="self-center" />
+                  ) : null}
+                </Box>
+              </StateLine>
+            ))}
+            {counted ? <StateLine tone="done">{counted}</StateLine> : null}
+          </Box>
+        ) : null}
+        {readingWords && !leftToPerson && hearings.length === 0 && deadlines.length === 0 ? (
+          <StateLine tone="info">{readingWords}</StateLine>
+        ) : null}
+        {staysWords.map((words) => (
+          <StateLine key={words} tone="info">
+            {words}
+          </StateLine>
+        ))}
+
+        {/* Of which case, and what is still to do from here; the rest one click away. */}
+        {!inline || hearingOwed || deadlineOwed ? (
+          <Box className="border-grey-100 flex flex-wrap items-center justify-between gap-2 border-t pt-3">
+            <Box className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1">
+              {inline ? null : row.caseId ? (
+                <Button
+                  variant="text"
+                  color="primary"
+                  size="small"
+                  href={`/casos/${row.caseId}`}
+                  LinkComponent={Link}
+                  startIcon={<NiFolder size="small" />}
+                  className="-ml-2"
+                >
+                  {row.caseSeq !== null
+                    ? t("publication-open-case", { label: caseLabel(row.caseSeq) })
+                    : t("publication-open-case-plain")}
+                </Button>
+              ) : (
                 <Typography variant="body2" className="text-text-secondary">
-                  {t("publication-addressed-to", { names: row.lawyers.join(", ") })}
+                  {t("publication-no-case")}
                 </Typography>
-              </Box>
-            ) : null}
+              )}
+            </Box>
+            <Box className="ml-auto flex flex-wrap items-center gap-2">
+              {deadlineOwed ? (
+                <Button variant="outlined" color="grey" size="small" onClick={() => setCounting(true)}>
+                  {t("publication-deadline-action")}
+                </Button>
+              ) : null}
+              {hearingOwed ? (
+                <Button variant="outlined" color="grey" size="small" onClick={() => setScheduling(true)}>
+                  {t("publication-hearing-action")}
+                </Button>
+              ) : null}
+            </Box>
           </Box>
-          <Box className="flex flex-wrap items-center gap-2">
-            {mayTriage && row.active && category === "prazo" ? (
-              <Button variant="outlined" color="grey" size="small" onClick={() => setCounting(true)}>
-                {t("publication-deadline-action")}
-              </Button>
-            ) : null}
-            {deadlines.length > 0 ? (
-              <Button variant="text" color="grey" size="small" href="/prazos" LinkComponent={Link}>
-                {t("publication-deadline-see")}
-              </Button>
-            ) : null}
-            {mayTriage && row.active && row.proceedingId && category === "audiencia" ? (
-              <Button variant="outlined" color="grey" size="small" onClick={() => setScheduling(true)}>
-                {t("publication-hearing-action")}
-              </Button>
-            ) : null}
-            {hearings.length > 0 || scheduled ? (
-              <Button variant="text" color="grey" size="small" href="/agenda" LinkComponent={Link}>
-                {t("publication-hearing-see")}
-              </Button>
-            ) : null}
-            <QuickActions label={t("publication-more-actions")} actions={more} />
-          </Box>
-        </Box>
+        ) : null}
       </Inner>
 
       {scheduling && row.proceedingId ? (

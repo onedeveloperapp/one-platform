@@ -10,11 +10,15 @@ import {
   LIBRARY_VIEWS,
   libraryCounts,
   libraryRows,
+  waitingOnPerson,
 } from "@/lib/library/list";
 
 const template = (patch: Partial<LibraryTemplate> & { id: string; name: string }): LibraryTemplate => ({
   documentKind: "piece",
   proceedingKind: "juizado",
+  problem: null,
+  pieceKind: null,
+  pieceKindName: null,
   isDefault: false,
   platform: false,
   provisional: false,
@@ -76,6 +80,8 @@ const data = (patch: Partial<LibraryData> = {}): LibraryData => ({
       templates: ["Inicial do juizado"],
     },
   ],
+  uses: [],
+  processPieces: [],
   maxTemplates: 40,
   imports: [request({ id: "i1" }), request({ id: "i2", fileName: "contrato.pdf", source: "pdf", status: "ready" })],
   importLimits: { megabytes: 10, pages: 30 },
@@ -146,11 +152,27 @@ describe("the library's list", () => {
     expect(libraryRows(library, "fontes", { ...query, sort: "recent" }).sources.map((s) => s.id)).toEqual(["s2", "s1"]);
   });
 
-  it("opens on what keeps a piece from being approved, then on what ONE asks of a person", () => {
-    expect(firstView(data())).toBe("faltam");
-    expect(firstView(data({ missing: [] }))).toBe("enviados");
-    expect(firstView(data({ missing: [], imports: [request({ id: "i1" })] }))).toBe("modelos");
-    expect(firstView(data({ missing: [], imports: [], templates: [] }))).toBe("fontes");
-    expect(firstView(data({ missing: [], imports: [], templates: [], sources: [] }))).toBe("modelos");
+  it("opens on the firm's own models, or on every model while the firm has none", () => {
+    expect(firstView(data())).toBe("do-escritorio");
+    expect(firstView(data({ templates: [template({ id: "p1", name: "Inicial do ONE", platform: true })] }))).toBe(
+      "modelos",
+    );
+    expect(firstView(data({ templates: [] }))).toBe("modelos");
+  });
+
+  it("says what waits on a person: questions first, then models to check, refusals and citations", () => {
+    const waiting = waitingOnPerson(
+      data({
+        imports: [
+          request({ id: "i1", status: "refused" }),
+          request({ id: "i2", status: "reading" }),
+          request({ id: "i3", status: "ready" }),
+          request({ id: "i4", status: "asking" }),
+          request({ id: "i5", status: "saved" }),
+        ],
+      }),
+    );
+    expect(waiting.imports.map((item) => item.id)).toEqual(["i4", "i3", "i1"]);
+    expect(waiting.missing).toBe(1);
   });
 });

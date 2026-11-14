@@ -31,6 +31,12 @@
       "use": "A consumption readout — used vs remaining, with each pool NAMED. Use for any x-of-y allowance (minutes, quota). Beats a plain progress bar when the pools differ in nature (cycle vs purchased)."
     },
     {
+      "name": "ValueRange",
+      "from": "@/components/product/value-range",
+      "props": "low, median, high (cents), max?, marker? ({ cents, label }), format, caption, ariaLabel, className?",
+      "use": "Where a value usually falls (the forecast of a case, 0250): a grey track, the band of the middle half (first to third quartile), the median as a tick and, when given, one value placed among them with its words above it (an offer at a hearing). The numbers are said under it, never by colour alone. Closest to UsageMeter; use it for a spread with a point inside, never for an x-of-y allowance."
+    },
+    {
       "name": "MetricBars",
       "from": "@/components/product/metric-bars",
       "props": "items[{key,label,value,tone?,hint?,action?}], total?, spacing?, whole?",

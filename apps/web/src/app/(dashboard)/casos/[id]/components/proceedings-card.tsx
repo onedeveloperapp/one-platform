@@ -4,7 +4,6 @@ import type { CaseProceeding, CaseState } from "../case-types";
 import { useCaseAction } from "./case-action";
 import CourtCourse from "./court-course";
 import CourtSystem, { courtSystemFact, systemWaits } from "./court-system";
-import MarketProfile from "./market-profile";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 
@@ -353,7 +352,6 @@ export default function ProceedingsCard({
               onChanged={onChanged}
             />
             {/* How its unit and judge usually decide, from the market's public decisions (0190): only to prepare. */}
-            {proceeding.court ? <MarketProfile proceedingId={proceeding.id} /> : null}
           </Box>
         );
       })}

@@ -46,11 +46,11 @@ select set_config('request.jwt.claims', '{"role":"service_role"}', true);
 set local role service_role;
 insert into res values ('due', jsonb_build_object('list', public.market_days_due(5)));
 insert into res values ('recorded', public.record_market_day('c1880000-0000-4000-8000-000000000001', current_date - 10,
-  pg_temp.decisions('dia1-', '1º Juizado Especial Cível de Goiânia', 'Ana Paula Exemplo'), true));
+  pg_temp.decisions('dia1-', '1º Juizado Especial Cível de Goiânia', 'Ana Paula Exemplo'), true, 'mercado-v2'));
 insert into res values ('wrong_day', public.record_market_day('c1880000-0000-4000-8000-000000000001', current_date - 10,
-  pg_temp.decisions('dia1-', '1º Juizado Especial Cível de Goiânia', 'Ana Paula Exemplo'), true));
+  pg_temp.decisions('dia1-', '1º Juizado Especial Cível de Goiânia', 'Ana Paula Exemplo'), true, 'mercado-v2'));
 insert into res values ('again', public.record_market_day('c1880000-0000-4000-8000-000000000001', current_date - 9,
-  pg_temp.decisions('dia1-', '1º Juizado Especial Cível de Goiânia', 'Ana Paula Exemplo'), false));
+  pg_temp.decisions('dia1-', '1º Juizado Especial Cível de Goiânia', 'Ana Paula Exemplo'), false, 'mercado-v2'));
 reset role;
 
 select ok(
@@ -146,7 +146,7 @@ select throws_ok($$ select count(*) from public.market_decisions $$, '42501', nu
 reset role;
 
 select ok(
-  not has_function_privilege('authenticated', 'public.record_market_day(uuid, date, jsonb, boolean)', 'EXECUTE')
+  not has_function_privilege('authenticated', 'public.record_market_day(uuid, date, jsonb, boolean, text)', 'EXECUTE')
   and not has_function_privilege('authenticated', 'public.market_days_due(integer)', 'EXECUTE')
   and not has_function_privilege('authenticated', 'public.unit_theses_for_piece(uuid)', 'EXECUTE')
   and has_function_privilege('authenticated', 'public.market_profile(text, text, text)', 'EXECUTE')

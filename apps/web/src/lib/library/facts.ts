@@ -1,7 +1,7 @@
 import "server-only";
 
 import { momentLabel } from "@/lib/ai/approvals";
-import { isModelDocument, type ModelDocument, sourceLabel } from "@/lib/cases/drafts";
+import { isModelDocument, isPieceDocument, type ModelDocument, sourceLabel } from "@/lib/cases/drafts";
 import { type ImportLimits, importLimitsOf, type LibraryImport, readLibraryImports } from "@/lib/library/import-read";
 import { type AttorneyPowers, attorneyPowers } from "@/lib/library/powers";
 import {
@@ -67,6 +67,11 @@ export type LibraryTemplate = {
   documentKind: ModelDocument;
   /** The kind of lawsuit a piece is written for; a paper serves every lawsuit. */
   proceedingKind: "juizado" | "comum" | null;
+  /** The kind of problem a petition was written for (0244, `cases.incident`); null when it serves every problem. */
+  problem: string | null;
+  /** The kind of piece a model of the process writes (0244, `piece_kinds`), and its name. */
+  pieceKind: string | null;
+  pieceKindName: string | null;
   /** The default of its kind: the firm's, or the platform's (0039, 0045). */
   isDefault: boolean;
   /** A model of the platform (0045): read here, copied to be changed, kept by the operator. */
@@ -86,9 +91,44 @@ export type LibraryTemplate = {
   missing: number;
 };
 
+/**
+ * The uses ONE writes or sends a model for, in the order "Com que modelo o ONE escreve" shows them (the owner,
+ * 2026-11-13: nobody could tell at a glance which model ONE writes each piece and each paper from).
+ */
+export const MODEL_USES = [
+  { key: "piece-juizado", documentKind: "piece", proceedingKind: "juizado" },
+  { key: "piece-comum", documentKind: "piece", proceedingKind: "comum" },
+  { key: "procuracao", documentKind: "procuracao", proceedingKind: null },
+  { key: "contrato", documentKind: "contrato", proceedingKind: null },
+  { key: "declaracao_residencia", documentKind: "declaracao_residencia", proceedingKind: null },
+  { key: "declaracao_hipossuficiencia", documentKind: "declaracao_hipossuficiencia", proceedingKind: null },
+] as const satisfies readonly {
+  key: string;
+  documentKind: ModelDocument;
+  proceedingKind: "juizado" | "comum" | null;
+}[];
+export type ModelUseKey = (typeof MODEL_USES)[number]["key"];
+
+/** One use and the model ONE takes for it now (as `draft_template_for` and `paper_template_for` decide), or none. */
+export type ModelUse = {
+  key: ModelUseKey;
+  documentKind: ModelDocument;
+  proceedingKind: "juizado" | "comum" | null;
+  template: { id: string; name: string; platform: boolean } | null;
+  /** Of a petition, the firm's models ONE takes first for the cases of a problem (0244), by problem. */
+  byProblem: { problem: string; template: { id: string; name: string } }[];
+};
+
+/** A kind of piece of the process (0189) and the firm's model ONE writes it from (0244), or none: the platform's. */
+export type ProcessPiece = { slug: string; name: string; template: { id: string; name: string } | null };
+
 export type LibraryData = {
   sources: LibrarySource[];
   templates: LibraryTemplate[];
+  /** Which model ONE takes for each use now. */
+  uses: ModelUse[];
+  /** The pieces of the process ONE writes, in their order, each with the firm's model of it (0244). */
+  processPieces: ProcessPiece[];
   missing: MissingSource[];
   /** How many models a firm keeps, as the setting says. */
   maxTemplates: number;
@@ -123,6 +163,8 @@ type TemplateRow = {
   name: string;
   document_kind: string | null;
   proceeding_kind: string | null;
+  problem?: string | null;
+  piece_kind?: string | null;
   is_default: boolean | null;
   body: string;
   updated_by: string | null;
@@ -134,6 +176,10 @@ type ModelRow = {
   org_id: string | null;
   document_kind?: string | null;
   proceeding_kind: string | null;
+  /** Of a petition, the problem it was written for (0244); a row read before said none. */
+  problem?: string | null;
+  /** Of a model of the process, its kind of piece (0244). */
+  piece_kind?: string | null;
   is_default: boolean | null;
 };
 
@@ -175,23 +221,63 @@ async function readSources(supabase: SupabaseClient, firmId: string): Promise<So
 }
 
 /**
- * The model ONE writes a kind of piece from, as `draft_template_for` (0045, 0054) decides it, among the models
- * that write a piece: a firm with models of the kind keeps its rule (its default of the kind, else of both kinds,
- * else its only model of the kind, else none), and a firm with none writes from the platform's default.
+ * The model ONE writes the petition of a kind of lawsuit from, for a case of a problem, as `draft_template_for`
+ * (0045, 0054, 0244) decides it, among the models that write a petition: a firm with petitions that serve the kind
+ * and the problem keeps its rule (its default of the problem and the kind, else of the problem, else of the kind,
+ * else of both, else its only one, else none), and a firm with none writes from the platform's default. A petition
+ * of another problem is never taken.
  */
-export function modelForKind(rows: readonly ModelRow[], firmId: string, kind: "juizado" | "comum"): string | null {
+export function modelForKind(
+  rows: readonly ModelRow[],
+  firmId: string,
+  kind: "juizado" | "comum",
+  problem: string | null = null,
+): string | null {
   const pieces = rows.filter((t) => documentOf(t) === "piece");
-  const firm = pieces.filter((t) => t.org_id === firmId && (t.proceeding_kind === kind || t.proceeding_kind === null));
+  const firm = pieces.filter(
+    (t) =>
+      t.org_id === firmId &&
+      (t.proceeding_kind === kind || t.proceeding_kind === null) &&
+      (!t.problem || t.problem === problem),
+  );
   if (firm.length > 0) {
+    const of = (process: string | null, matter: string | null) =>
+      firm.find((t) => t.is_default === true && t.proceeding_kind === process && (t.problem || null) === matter)?.id;
     return (
-      firm.find((t) => t.is_default === true && t.proceeding_kind === kind)?.id ??
-      firm.find((t) => t.is_default === true && t.proceeding_kind === null)?.id ??
+      (problem ? (of(kind, problem) ?? of(null, problem)) : undefined) ??
+      of(kind, null) ??
+      of(null, null) ??
       (firm.length === 1 ? firm[0].id : null)
     );
   }
   const platform = pieces.filter((t) => t.org_id === null && t.is_default === true);
   return (
     platform.find((t) => t.proceeding_kind === kind)?.id ?? platform.find((t) => t.proceeding_kind === null)?.id ?? null
+  );
+}
+
+/**
+ * The firm's model ONE writes a piece of the process of a kind from, in a lawsuit of a kind, as
+ * `piece_template_for` (0244) decides it: its default of the piece for the kind of lawsuit, else for both, else its
+ * only one that serves the lawsuit, else none (ONE writes it from the platform's model of the piece).
+ */
+export function pieceModelFor(
+  rows: readonly ModelRow[],
+  firmId: string,
+  piece: string,
+  kind: "juizado" | "comum",
+): string | null {
+  const firm = rows.filter(
+    (t) =>
+      t.org_id === firmId &&
+      documentOf(t) === "peca_processo" &&
+      t.piece_kind === piece &&
+      (t.proceeding_kind === kind || t.proceeding_kind === null),
+  );
+  return (
+    firm.find((t) => t.is_default === true && t.proceeding_kind === kind)?.id ??
+    firm.find((t) => t.is_default === true && t.proceeding_kind === null)?.id ??
+    (firm.length === 1 ? firm[0].id : null)
   );
 }
 
@@ -263,6 +349,9 @@ export async function loadSetupPapers(
     name: row.name,
     documentKind: documentOf(row),
     proceedingKind: null,
+    problem: null,
+    pieceKind: null,
+    pieceKindName: null,
     isDefault: row.is_default === true,
     platform: row.org_id === null,
     provisional: row.org_id === null && row.provisional === true,
@@ -296,20 +385,23 @@ export async function loadLibrary(
   firmId: string,
   timeZone: string | null | undefined,
 ): Promise<LibraryData> {
-  const [sourceRows, templates, team, settings, importSetting] = await Promise.all([
+  const [sourceRows, templates, team, settings, importSetting, kinds] = await Promise.all([
     readSources(supabase, firmId),
     supabase
       .from("draft_templates")
       .select(
-        "id, org_id, provisional, prepared_by_one, name, document_kind, proceeding_kind, is_default, body, updated_by, updated_at",
+        "id, org_id, provisional, prepared_by_one, name, document_kind, proceeding_kind, problem, piece_kind, is_default, body, updated_by, updated_at",
       )
       .or(`org_id.eq.${firmId},org_id.is.null`)
       .order("name"),
     supabase.rpc("firm_team", { target_org: firmId }),
     supabase.from("platform_settings").select("value").eq("key", "drafts").maybeSingle(),
     supabase.from("platform_settings").select("value").eq("key", "template_imports").maybeSingle(),
+    supabase.from("piece_kinds").select("slug, name").order("position"),
   ]);
-  if (templates.error || team.error) throw new Error("the library could not be read");
+  if (templates.error || team.error || kinds.error) throw new Error("the library could not be read");
+  const pieceKinds = (kinds.data ?? []) as { slug: string; name: string }[];
+  const pieceName = new Map(pieceKinds.map((kind) => [kind.slug, kind.name]));
 
   const names = new Map(
     ((team.data ?? []) as TeamRow[]).map((person) => [
@@ -323,22 +415,58 @@ export async function loadLibrary(
   const templateRows = ((templates.data ?? []) as TemplateRow[])
     // The firm's own first, then the platform's.
     .sort((a, b) => Number(a.org_id === null) - Number(b.org_id === null) || a.name.localeCompare(b.name));
+  const usedBy: Record<ModelUseKey, string | null> = {
+    "piece-juizado": modelForKind(templateRows, firmId, "juizado"),
+    "piece-comum": modelForKind(templateRows, firmId, "comum"),
+    procuracao: paperModelFor(templateRows, firmId, "procuracao"),
+    contrato: paperModelFor(templateRows, firmId, "contrato"),
+    declaracao_residencia: paperModelFor(templateRows, firmId, "declaracao_residencia"),
+    declaracao_hipossuficiencia: paperModelFor(templateRows, firmId, "declaracao_hipossuficiencia"),
+  };
+  // The problems the firm wrote petitions for, and the model ONE takes first for the cases of each (0244).
+  const problems = [
+    ...new Set(
+      templateRows.flatMap((row) =>
+        row.org_id === firmId && documentOf(row) === "piece" && row.problem ? [row.problem] : [],
+      ),
+    ),
+  ];
+  const byProblem = (kind: "juizado" | "comum") =>
+    problems.flatMap((problem) => {
+      const row = templateRows.find((template) => template.id === modelForKind(templateRows, firmId, kind, problem));
+      // Only a problem with a model of its own: its other cases go to the use's model.
+      return row && row.problem === problem ? [{ problem, template: { id: row.id, name: row.name } }] : [];
+    });
+  const processPieces: ProcessPiece[] = pieceKinds.map((kind) => {
+    const id =
+      pieceModelFor(templateRows, firmId, kind.slug, "juizado") ??
+      pieceModelFor(templateRows, firmId, kind.slug, "comum");
+    const row = templateRows.find((template) => template.id === id);
+    return { slug: kind.slug, name: kind.name, template: row ? { id: row.id, name: row.name } : null };
+  });
   const used = new Set(
     [
-      modelForKind(templateRows, firmId, "juizado"),
-      modelForKind(templateRows, firmId, "comum"),
-      paperModelFor(templateRows, firmId, "procuracao"),
-      paperModelFor(templateRows, firmId, "contrato"),
-      paperModelFor(templateRows, firmId, "declaracao_residencia"),
-      paperModelFor(templateRows, firmId, "declaracao_hipossuficiencia"),
+      ...Object.values(usedBy),
+      ...(["juizado", "comum"] as const).flatMap((kind) => [
+        ...byProblem(kind).map((item) => item.template.id),
+        ...pieceKinds.map((piece) => pieceModelFor(templateRows, firmId, piece.slug, kind)),
+      ]),
     ].filter((id): id is string => id !== null),
   );
+  const uses: ModelUse[] = MODEL_USES.map((use) => {
+    const row = templateRows.find((template) => template.id === usedBy[use.key]);
+    return {
+      ...use,
+      template: row ? { id: row.id, name: row.name, platform: row.org_id === null } : null,
+      byProblem: use.documentKind === "piece" && use.proceedingKind ? byProblem(use.proceedingKind) : [],
+    };
+  });
 
   const missing = new Map<string, MissingSource>();
   const templateList: LibraryTemplate[] = templateRows.map((template) => {
     const documentKind = documentOf(template);
     // What a paper cites is no piece's: no gate reads it, and the library is not asked for it.
-    const cited = documentKind === "piece" ? distinctCitations(extractCitations(template.body)) : [];
+    const cited = isPieceDocument(documentKind) ? distinctCitations(extractCitations(template.body)) : [];
     const outside = cited.filter((citation) => !isCovered(citation, verified));
     for (const citation of outside) {
       const known = missing.get(citation.key);
@@ -362,6 +490,10 @@ export async function loadLibrary(
         template.proceeding_kind === "juizado" || template.proceeding_kind === "comum"
           ? template.proceeding_kind
           : null,
+      problem: documentKind === "piece" ? (template.problem ?? null) : null,
+      pieceKind: documentKind === "peca_processo" ? (template.piece_kind ?? null) : null,
+      pieceKindName:
+        documentKind === "peca_processo" && template.piece_kind ? (pieceName.get(template.piece_kind) ?? null) : null,
       isDefault: template.is_default === true,
       platform: template.org_id === null,
       provisional: template.org_id === null && template.provisional === true,
@@ -402,6 +534,8 @@ export async function loadLibrary(
         : [],
     ),
     templates: templateList,
+    uses,
+    processPieces,
     missing: [...missing.values()],
     maxTemplates: Number.isFinite(configured) && configured > 0 ? configured : 40,
     imports,

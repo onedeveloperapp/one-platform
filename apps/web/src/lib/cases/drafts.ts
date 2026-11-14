@@ -160,11 +160,12 @@ export const PAPER_MARK_KEY: Record<
 };
 
 /**
- * What a model of the library writes (0054): the piece of a lawsuit, a power of attorney, a fee contract, or a
- * declaration of residence (0123).
+ * What a model of the library writes (0054): the petition of a lawsuit, a piece of a lawsuit in course (0244, of a
+ * kind of `piece_kinds`), a power of attorney, a fee contract, or a declaration (0123, 0125).
  */
 export const MODEL_DOCUMENTS = [
   "piece",
+  "peca_processo",
   "procuracao",
   "contrato",
   "declaracao_residencia",
@@ -175,9 +176,13 @@ export type ModelDocument = (typeof MODEL_DOCUMENTS)[number];
 export const isModelDocument = (value: unknown): value is ModelDocument =>
   (MODEL_DOCUMENTS as readonly unknown[]).includes(value);
 
+/** A model of a piece a lawyer files (a petition, a piece of the process), never a paper a client signs. */
+export const isPieceDocument = (document: ModelDocument): boolean =>
+  document === "piece" || document === "peca_processo";
+
 /** The marks a model of a document may use. */
 export const modelMarks = (document: ModelDocument): readonly string[] =>
-  document === "piece"
+  isPieceDocument(document)
     ? DRAFT_MARKS
     : document === "declaracao_residencia"
       ? DECLARATION_MARKS

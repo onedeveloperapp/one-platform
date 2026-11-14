@@ -1,9 +1,13 @@
 import { describe, expect, it } from "vitest";
 
+import { MODEL_DOCUMENTS } from "@/lib/cases/drafts";
 import {
   changesShown,
   composeModel,
+  DOCUMENT_NAMED_KEY,
   exchangesOf,
+  type FirmRecord,
+  firmRecordTexts,
   firmTextsOf,
   HELD_KEY,
   HELD_REASONS,
@@ -281,6 +285,8 @@ describe("the marking's answer as the database kept it", () => {
       name: "Procuração do escritório",
       documentKind: "procuracao",
       proceedingKind: null,
+      problem: null,
+      pieceKind: null,
       changes: [
         { from: 1, to: 2, text: "[[OUTORGANTE]]", reason: "o cliente", pieces: [] },
         { from: 3, to: 3, text: "", reason: "o nome", pieces: [{ before: "{{NOME}}", after: "[[NOME]]" }] },
@@ -291,6 +297,128 @@ describe("the marking's answer as the database kept it", () => {
     });
     expect(proposalOf({ document_kind: "outro" })).toBeNull();
     expect(proposalOf(null)).toBeNull();
+  });
+
+  it("keeps the problem of a petition and the kind of a piece of the process, and neither of another document (0244)", () => {
+    expect(
+      proposalOf({ document_kind: "piece", proceeding_kind: "comum", problem: "cancellation", piece_kind: "replica" }),
+    ).toMatchObject({ documentKind: "piece", proceedingKind: "comum", problem: "cancellation", pieceKind: null });
+    expect(
+      proposalOf({
+        document_kind: "peca_processo",
+        proceeding_kind: "juizado",
+        problem: "delay",
+        piece_kind: "replica",
+      }),
+    ).toMatchObject({ documentKind: "peca_processo", proceedingKind: "juizado", problem: null, pieceKind: "replica" });
+    expect(
+      proposalOf({ document_kind: "declaracao_hipossuficiencia", proceeding_kind: "juizado", problem: "delay" }),
+    ).toMatchObject({
+      documentKind: "declaracao_hipossuficiencia",
+      proceedingKind: null,
+      problem: null,
+      pieceKind: null,
+    });
+    expect(proposalOf({ document_kind: "piece", problem: "Cancelamento de voo" })?.problem).toBeNull();
+  });
+});
+
+describe("the firm's record (0244)", () => {
+  const record: FirmRecord = {
+    name: "Souza Advogados",
+    cnpj: "11222333000181",
+    society: "OAB/RJ 9876",
+    lawyers: [
+      { name: "Ana Souza", oab: "OAB/RJ 123456" },
+      { name: null, oab: "OAB/GO 7788" },
+    ],
+    address: "Rua das Palmeiras, 100, Centro, Goiânia/GO",
+    postalCode: "74000000",
+    email: "contato@souza-exemplo.invalid",
+    phone: "62999990001",
+  };
+
+  it("is read by the marking before the document, without the e-mail, the telephone or the CEP", () => {
+    const briefing = markingBriefing(PARAGRAPHS, { firmRecord: record });
+    expect(briefing).toContain(
+      [
+        "Os dados do escritório no cadastro:",
+        "Nome: Souza Advogados",
+        "CNPJ: 11.222.333/0001-81",
+        "Registro da sociedade na OAB: OAB/RJ 9876",
+        "Advogado: Ana Souza, OAB/RJ 123456",
+        "Advogado: OAB/GO 7788",
+        "Endereço: Rua das Palmeiras, 100, Centro, Goiânia/GO",
+      ].join("\n"),
+    );
+    expect(briefing.indexOf("Os dados do escritório no cadastro")).toBeLessThan(briefing.indexOf("§1"));
+    expect(briefing).not.toContain("contato@souza-exemplo.invalid");
+    expect(briefing).not.toContain("99999-0001");
+    expect(markingBriefing(PARAGRAPHS)).not.toContain("cadastro");
+    expect(markingBriefing(PARAGRAPHS, { firmRecord: null })).not.toContain("cadastro");
+  });
+
+  it("is no original case's however the document writes it, and another registration still is", () => {
+    const body = [
+      "SOUZA ADVOGADOS, CNPJ 11222333000181, registrada na OAB/RJ nº 9.876, e a advogada ANA SOUZA, OAB/RJ 123.456.",
+      "CEP 74000-000, CONTATO@SOUZA-EXEMPLO.INVALID, telefone +55 62 99999-0001.",
+    ].join("\n");
+    expect(modelChecks(body, [], "procuracao")).toEqual([
+      { kind: "identifier", identifier: "cnpj", count: 1 },
+      { kind: "identifier", identifier: "cep", count: 1 },
+      { kind: "identifier", identifier: "telefone", count: 1 },
+      { kind: "identifier", identifier: "email", count: 1 },
+      { kind: "identifier", identifier: "oab", count: 2 },
+    ]);
+    expect(modelChecks(body, [], "procuracao", firmRecordTexts(record))).toEqual([]);
+    expect(
+      modelChecks(`${body} O advogado do caso, OAB/RJ 123.457.`, [], "procuracao", firmRecordTexts(record)),
+    ).toEqual([{ kind: "identifier", identifier: "oab", count: 1 }]);
+    expect(
+      saveGate({
+        body,
+        people: [],
+        document: "procuracao",
+        notes: [],
+        unwritable: [],
+        firmTexts: firmRecordTexts(record),
+      }),
+    ).toEqual({ save: true });
+  });
+
+  it("never takes a CPF as the firm's, nor what the firm did not give", () => {
+    expect(firmRecordTexts({ ...record, cnpj: "52998224725" }).some((text) => text.includes("CNPJ"))).toBe(false);
+    expect(
+      firmRecordTexts({
+        name: "Souza Advogados",
+        cnpj: null,
+        society: null,
+        lawyers: [],
+        address: null,
+        postalCode: null,
+        email: null,
+        phone: null,
+      }),
+    ).toEqual([]);
+    expect(firmRecordTexts(null)).toEqual([]);
+  });
+});
+
+describe("a piece of the process (0244)", () => {
+  it("is sent as one, and what it leaves to complete is a lawyer's, as in a petition", () => {
+    expect(markingBriefing(["RÉPLICA"], { expected: "peca_processo" })).toContain(
+      "O escritório mandou este documento como uma peça que o escritório apresenta num processo em curso.",
+    );
+    expect(modelChecks("Processo nº [COMPLETAR: número do processo].", [], "peca_processo")).toEqual([]);
+    expect(
+      saveGate({ body: "Texto", people: [], document: "peca_processo", notes: [], unwritable: ["\u0007"] }),
+    ).toEqual({ save: false, reason: "checks" });
+  });
+
+  it("is named inside a refusal, as every model ONE uses", () => {
+    expect(MODEL_DOCUMENTS.map((document) => DOCUMENT_NAMED_KEY[document]).filter((key) => !(key in words))).toEqual(
+      [],
+    );
   });
 });
 

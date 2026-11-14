@@ -17,7 +17,9 @@ import type { AiProviderName, ChatAttachment } from "@flyee/ai/types";
  * is nothing to look at. A PDF is transcribed by the model first. A document
  * that is no model ONE uses, or that is not what it was sent as, is refused
  * with why; what only the firm knows is asked, and the answer is in the
- * model ONE saves. Another firm reads nothing of it.
+ * model ONE saves. A piece of the process whose firm data match the firm's
+ * record is saved by ONE as the firm's model of its kind, nothing asked
+ * (0244). Another firm reads nothing of it.
  *
  * It runs only when a migrated database is at hand
  * (`npm run test:db:roundtrip`); otherwise it is skipped. What stands in is
@@ -37,10 +39,12 @@ const model = vi.hoisted(() => ({
   asked: [] as { task: string; text: string; attachments: ChatAttachment[] }[],
 }));
 
-/** An answer of the marking (its third version, 0093), the parts a scenario does not say filled in. */
+/** An answer of the marking (its fourth version, 0244), the parts a scenario does not say filled in. */
 const marking = (fields: Record<string, unknown>) => {
   const answer: Record<string, unknown> = {
     documento: "peca",
+    tipo_de_peca: "nenhum",
+    problema: "todos",
     o_que_e: "",
     faltas: [],
     perguntas: [],
@@ -79,6 +83,28 @@ vi.mock("@flyee/ai/fake", async (original) => {
         model.asked.push({ task: "marcacao", text, attachments });
         if (text.includes("CONTESTAÇÃO")) {
           return marking({ documento: "outro", o_que_e: "uma contestação" });
+        }
+        if (text.includes("RÉPLICA")) {
+          // The letterhead matches the firm's record: kept as the firm's, nothing asked (0244).
+          return marking({
+            documento: "peca_do_processo",
+            tipo_de_peca: "replica",
+            o_que_e: "uma réplica",
+            tipo_de_processo: "juizado",
+            trocas: [
+              { de: 2, ate: 2, motivo: "o juízo", texto: "EXCELENTÍSSIMO SENHOR JUIZ DE DIREITO DO [[JUIZO]]" },
+              { de: 3, ate: 3, motivo: "o número do processo", texto: "Processo nº [COMPLETAR: número do processo]" },
+              {
+                de: 4,
+                ate: 4,
+                motivo: "quem pede e a companhia",
+                texto: "[[NOMES_DAS_PARTES]], já qualificada, vem apresentar RÉPLICA à contestação de [[RE]].",
+              },
+              { de: 6, ate: 6, motivo: "quem assina", texto: "[[ADVOGADOS]]" },
+            ],
+            paragrafos_do_escritorio: [1],
+            pessoas: ["MARIA TESTE DE SOUZA"],
+          });
         }
         if (text.includes("{{NOME COMPLETO}}")) {
           // The firm's own form: the society and its lawyer are asked about first, and kept once the firm says so.
@@ -173,6 +199,7 @@ vi.mock("@flyee/ai/fake", async (original) => {
           documento: "peca",
           o_que_e: "uma petição inicial",
           tipo_de_processo: "juizado",
+          problema: "cancellation",
           nome: "Inicial do juizado: cancelamento",
           trocas: [
             { de: 1, ate: 1, motivo: "o juízo", texto: "EXCELENTÍSSIMO SENHOR JUIZ DE DIREITO DO [[JUIZO]]" },
@@ -265,6 +292,16 @@ const FORM = [
   "Goiânia, {{DIA}} de {{MÊS}} de {{ANO}}.",
 ];
 
+/** A réplica the firm filed, on its letterhead: its society and its lawyer as the firm's record has them. */
+const REPLICA = [
+  "SOUZA ADVOGADOS · CNPJ 11.222.333/0001-81 · Sociedade OAB/RJ 9.876 · Ana Souza, OAB/RJ 246.810",
+  "EXCELENTÍSSIMO SENHOR JUIZ DE DIREITO DO JUIZADO ESPECIAL CÍVEL DA COMARCA DE GOIÂNIA",
+  "Processo nº 1000301-27.2099.8.09.0100",
+  "MARIA TESTE DE SOUZA, já qualificada, vem apresentar RÉPLICA à contestação de AÉREA EXEMPLO S.A.",
+  "A ré alega força maior, mas o cancelamento decorreu de problema técnico, fortuito interno, nos termos do art. 14 da Lei nº 8.078.",
+  "Ana Souza\nOAB/RJ 246.810",
+];
+
 const CONTRACT = [
   "CONTRATO DE HONORÁRIOS",
   "CONTRATANTE: MARIA TESTE DE SOUZA.",
@@ -310,8 +347,8 @@ describe.skipIf(!DB_URL)("the firm's own model made from a document it already u
     return { importId: String(asked.import_id), path };
   }
 
-  /** What the dialog reads of a request, under the lawyer's own session. */
-  async function view(importId: string) {
+  /** What the dialog reads of a request, under the lawyer's own session, with what the firm's record writes. */
+  async function view(importId: string, recordTexts: string[] = []) {
     const { importView, IMPORT_VIEW_COLUMNS } = await import("@/lib/library/import-read");
     const { data } = await asAna()
       .from("template_imports")
@@ -319,7 +356,7 @@ describe.skipIf(!DB_URL)("the firm's own model made from a document it already u
       .eq("id", importId)
       .maybeSingle();
     expect(data).not.toBeNull();
-    return importView(data as never);
+    return importView(data as never, null, recordTexts);
   }
 
   /** The firm keeps the models ONE prepares to a person, or lets ONE save them (its default). */
@@ -382,6 +419,8 @@ describe.skipIf(!DB_URL)("the firm's own model made from a document it already u
     expect(read.heldReason).toBe("autonomy");
     expect(read.prepared?.documentKind).toBe("piece");
     expect(read.prepared?.proceedingKind).toBe("juizado");
+    // The problem the petition was written for (0244).
+    expect(read.prepared?.problem).toBe("cancellation");
     expect(read.prepared?.body).toBe(
       [
         "EXCELENTÍSSIMO SENHOR JUIZ DE DIREITO DO [[JUIZO]]",
@@ -412,16 +451,18 @@ describe.skipIf(!DB_URL)("the firm's own model made from a document it already u
         name: "Inicial do juizado: cancelamento",
         document_kind: "piece",
         proceeding_kind: "juizado",
+        problem: read.prepared?.problem,
         is_default: false,
         body: read.prepared?.body,
       },
     });
     expect(saved.code).toBe("saved");
     const [template] = await sql.unsafe(
-      `select body, org_id, prepared_by_one from public.draft_templates where id = $1`,
+      `select body, org_id, prepared_by_one, problem from public.draft_templates where id = $1`,
       [String(saved.template_id)],
     );
     expect(template?.org_id).toBe(FIRM);
+    expect(template?.problem).toBe("cancellation");
     expect(template?.body).toBe(read.prepared?.body);
     expect(template?.prepared_by_one).toBe(false);
     const left = await sql.unsafe(`select id from public.template_imports where id = $1`, [sent.importId]);
@@ -564,6 +605,56 @@ describe.skipIf(!DB_URL)("the firm's own model made from a document it already u
     );
     const shown = await view(sent.importId);
     expect(shown.prepared?.checks).toEqual([]);
+  });
+
+  it("saves a piece of the process whose firm data match the record as the firm's model of its kind, nothing asked (0244)", async () => {
+    await sql.unsafe(
+      `update public.organizations set billing_cpf_cnpj = '11222333000181', oab_society_uf = 'RJ', oab_society_number = '9876'
+       where id = '${FIRM}'`,
+    );
+    await sql.unsafe(`insert into public.oab_registrations (user_id, uf, number) values ('${ANA}', 'RJ', '246810')`);
+    const { importNext } = await import("@/lib/library/import-work");
+    const sent = await send("Replica.docx", DOCX, wordFile(REPLICA), "peca_processo");
+    expect(await importNext(backend() as never, sent.importId)).toBe("read");
+    expect(await importNext(backend() as never, sent.importId)).toBe("saving");
+    const marked = model.asked.at(-1);
+    expect(marked?.text).toContain(
+      "O escritório mandou este documento como uma peça que o escritório apresenta num processo em curso.",
+    );
+    expect(marked?.text).toContain(
+      [
+        "Os dados do escritório no cadastro:",
+        "Nome: Souza Advogados",
+        "CNPJ: 11.222.333/0001-81",
+        "Registro da sociedade na OAB: OAB/RJ 9876",
+        "Advogado: Ana Souza, OAB/RJ 246810",
+      ].join("\n"),
+    );
+    // The CNPJ and the registrations are the firm's record: nothing is left for a person to look at.
+    expect(await importNext(backend() as never, sent.importId)).toBe("saved");
+    const [template] = await sql.unsafe(
+      `select t.name, t.document_kind, t.piece_kind, t.proceeding_kind, t.problem, t.is_default, t.body
+       from public.draft_templates t join public.template_imports i on i.saved_template_id = t.id where i.id = $1`,
+      [sent.importId],
+    );
+    expect(template).toMatchObject({
+      name: "Réplica do escritório",
+      document_kind: "peca_processo",
+      piece_kind: "replica",
+      proceeding_kind: "juizado",
+      problem: null,
+      is_default: true,
+    });
+    expect(template?.body).toContain("SOUZA ADVOGADOS · CNPJ 11.222.333/0001-81 · Sociedade OAB/RJ 9.876");
+    expect(template?.body).toContain("Processo nº [COMPLETAR: número do processo]");
+
+    // The lawyer's own session reads the same record, and the dialog points out nothing of the firm's.
+    const { readFirmRecord } = await import("@/lib/library/firm-record");
+    const { firmRecordTexts } = await import("@/lib/library/imports");
+    const record = await readFirmRecord(asAna() as never, FIRM);
+    expect(record?.lawyers).toEqual([{ name: "Ana Souza", oab: "OAB/RJ 246810" }]);
+    expect((await view(sent.importId, firmRecordTexts(record))).prepared?.checks).toEqual([]);
+    expect((await view(sent.importId)).prepared?.checks.length).toBeGreaterThan(0);
   });
 
   it("refuses a document that is no model ONE uses, and another firm reads nothing of what ONE does", async () => {

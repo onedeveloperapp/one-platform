@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import { isModelDocument, type ModelDocument } from "@/lib/cases/drafts";
 import { discardUpload, finishUpload, startUpload } from "@/lib/files/uploads";
+import { readFirmRecord } from "@/lib/library/firm-record";
 import {
   IMPORT_VIEW_COLUMNS,
   type ImportRow,
@@ -14,7 +15,7 @@ import {
   workingMinutesOf,
 } from "@/lib/library/import-read";
 import { queueTemplateImport } from "@/lib/library/import-work";
-import { IMPORT_WORKING, type ImportStatus, isOtherTextFormat } from "@/lib/library/imports";
+import { firmRecordTexts, IMPORT_WORKING, type ImportStatus, isOtherTextFormat } from "@/lib/library/imports";
 import { getMemberContext } from "@/lib/member/context";
 import { isSupportVisit } from "@/lib/whatsapp/session";
 
@@ -139,7 +140,7 @@ export async function readModelFromDocument(
   if (found.status === "saved" && found.saved_template_id && isId(found.saved_template_id)) {
     const { data: template } = await context.supabase
       .from("draft_templates")
-      .select("id, name, document_kind, proceeding_kind, is_default, body")
+      .select("id, name, document_kind, proceeding_kind, problem, piece_kind, is_default, body")
       .eq("id", found.saved_template_id)
       .eq("org_id", context.firm.id)
       .maybeSingle();
@@ -152,12 +153,18 @@ export async function readModelFromDocument(
           template.proceeding_kind === "juizado" || template.proceeding_kind === "comum"
             ? template.proceeding_kind
             : null,
+        problem: typeof template.problem === "string" ? template.problem : null,
+        pieceKind: typeof template.piece_kind === "string" ? template.piece_kind : null,
         isDefault: template.is_default === true,
         body: String(template.body ?? ""),
       };
     }
   }
-  return { ok: true, view: importView(found, saved) };
+  // What the firm's record writes is the firm's own, as ONE's check took it (0244).
+  const record = ["saving", "ready", "saved"].includes(found.status)
+    ? await readFirmRecord(context.supabase, context.firm.id)
+    : null;
+  return { ok: true, view: importView(found, saved, firmRecordTexts(record)) };
 }
 
 /** The longest answer, as the setting says it: the dialog counts it before anything is sent. */

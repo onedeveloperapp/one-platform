@@ -141,32 +141,34 @@ export default function PublicationsCard({
       opener: line.action === "open" && mayTriage && opener ? t(opener) : undefined,
       openLabel: t("case-rows-pub-open-label", { day }),
       content: () => (
-        <>
-          <PublicationActionBox view={state.publicationActions.find((item) => item.publicationId === row.id) ?? null} />
-          <PublicationCard
-            inline
-            row={row}
-            progress={null}
-            acts={state.deadlineActs}
-            colleagues={state.colleagues}
-            courtZones={state.courtZones}
-            mayTriage={mayTriage}
-            said={said[row.id] ?? null}
-            seen={seen[row.id] === true}
-            onSaid={(value) => {
-              setSaid((current) => ({ ...current, [row.id]: value }));
-              onChanged();
-            }}
-            onSeen={() => {
-              setSeen((current) => ({ ...current, [row.id]: true }));
-              onChanged();
-            }}
-            onAcknowledged={() => {
-              setAcked((current) => ({ ...current, [row.id]: true }));
-              onChanged();
-            }}
-          />
-        </>
+        <PublicationCard
+          inline
+          oneReading={
+            <PublicationActionBox
+              view={state.publicationActions.find((item) => item.publicationId === row.id) ?? null}
+            />
+          }
+          row={row}
+          progress={null}
+          acts={state.deadlineActs}
+          colleagues={state.colleagues}
+          courtZones={state.courtZones}
+          mayTriage={mayTriage}
+          said={said[row.id] ?? null}
+          seen={seen[row.id] === true}
+          onSaid={(value) => {
+            setSaid((current) => ({ ...current, [row.id]: value }));
+            onChanged();
+          }}
+          onSeen={() => {
+            setSeen((current) => ({ ...current, [row.id]: true }));
+            onChanged();
+          }}
+          onAcknowledged={() => {
+            setAcked((current) => ({ ...current, [row.id]: true }));
+            onChanged();
+          }}
+        />
       ),
     };
   };

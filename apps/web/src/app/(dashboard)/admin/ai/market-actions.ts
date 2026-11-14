@@ -102,6 +102,73 @@ export async function checkMarketThesis(decisionId: string, thesis: string): Pro
   return { ok: Boolean(answer.ok), code: answer.code };
 }
 
+export type MarketReading = {
+  rule: string;
+  readByRule: number;
+  decisions: number;
+  checked: number;
+  right: number;
+  sample: {
+    id: string;
+    url: string;
+    court: string;
+    unit: string | null;
+    day: string;
+    result: string;
+    moralCents: number | null;
+    perClaimant: boolean;
+    problem: string;
+    extinctionReason: string | null;
+    judge: string | null;
+  }[];
+};
+
+/** How the reading of the decisions goes by the rule in force (0250), with a sample to check at the source. */
+export async function readMarketReading(): Promise<{ ok: true; reading: MarketReading } | { ok: false; code: string }> {
+  const session = await requireSuperadmin();
+  if (!session) return { ok: false, code: "forbidden" };
+  const { data, error } = await session.supabase.rpc("admin_market_reading");
+  if (error || !data) return { ok: false, code: "failed" };
+  const raw = data as Record<string, unknown>;
+  const num = (value: unknown) => Number(value) || 0;
+  return {
+    ok: true,
+    reading: {
+      rule: String(raw.rule ?? ""),
+      readByRule: num(raw.read_by_rule),
+      decisions: num(raw.decisions),
+      checked: num(raw.checked),
+      right: num(raw.right),
+      sample: ((raw.sample ?? []) as Record<string, unknown>[]).map((row) => ({
+        id: String(row.id),
+        url: djenCertificateUrl(String(row.key)),
+        court: String(row.court),
+        unit: typeof row.unit === "string" ? row.unit : null,
+        day: String(row.day),
+        result: String(row.result),
+        moralCents: row.moral_cents === null || row.moral_cents === undefined ? null : Number(row.moral_cents),
+        perClaimant: row.per_claimant === true,
+        problem: String(row.problem),
+        extinctionReason: typeof row.extinction_reason === "string" ? row.extinction_reason : null,
+        judge: typeof row.judge === "string" ? row.judge : null,
+      })),
+    },
+  };
+}
+
+/** The operator's word on a sampled decision's reading: right or wrong against the source. */
+export async function checkMarketReading(decisionId: string, right: boolean): Promise<{ ok: boolean; code?: string }> {
+  const session = await requireSuperadmin();
+  if (!session) return { ok: false, code: "forbidden" };
+  const { data, error } = await session.supabase.rpc("admin_check_market_reading", {
+    target_decision: decisionId,
+    target_ok: right === true,
+  });
+  if (error) return { ok: false, code: "failed" };
+  const answer = (data ?? {}) as { ok?: boolean; code?: string };
+  return { ok: Boolean(answer.ok), code: answer.code };
+}
+
 export async function releaseMarketTheses(released: boolean): Promise<{ ok: boolean; code?: string }> {
   const session = await requireSuperadmin();
   if (!session) return { ok: false, code: "forbidden" };

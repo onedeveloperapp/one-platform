@@ -10,6 +10,19 @@ export type MarketProblem = "delay" | "cancellation" | "overbooking" | "baggage"
 /** What the decision came to: a judgment's result, a settlement approved, or the lawsuit extinguished. */
 export type MarketResult = "procedente" | "parcial" | "improcedente" | "acordo" | "extinto";
 
+/**
+ * Why a lawsuit was extinguished without a judgment of its merits (`mercado-v2`): the claimant absent from a hearing
+ * (Lei 9.099, art. 51, I), the claimant giving it up, no prior complaint to the airline, the small-claims court not
+ * the one (the cause's complexity, an expert's examination), the claimant abandoning it, or another reason.
+ */
+export type MarketExtinction =
+  | "ausencia_autor"
+  | "desistencia"
+  | "reclamacao_previa"
+  | "incompetencia"
+  | "abandono"
+  | "outro";
+
 export type MarketDecision = {
   /** The source's own key of the communication (the DJEN's hash): a decision is read once. */
   key: string;
@@ -33,6 +46,10 @@ export type MarketDecision = {
   problem: MarketProblem;
   /** Extinguished for want of a prior complaint (pretensão resistida, interesse de agir). */
   priorComplaint: boolean;
+  /** Why it was extinguished, when it was; null otherwise. */
+  extinctionReason: MarketExtinction | null;
+  /** The key of its text (the court, the unit, the day and the words, folded): the same decision published twice is one. */
+  contentKey: string;
   /**
    * The grounds and the operative part, with identifiers taken out, for the theses' reading at the moment it is read:
    * never kept.

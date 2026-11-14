@@ -16,6 +16,7 @@ import {
   Typography,
 } from "@mui/material";
 
+import { useViewer } from "@/components/layout/viewer-context";
 import ConfirmActionDialog from "@/components/product/confirm-action-dialog";
 import SidePanel from "@/components/product/side-panel";
 import WordDownloadButton from "@/components/product/word-download-button";
@@ -25,6 +26,7 @@ import {
   DRAFT_MARKS,
   FREE_JUSTICE_MARKS,
   isModelDocument,
+  isPieceDocument,
   libraryErrorKey,
   type ModelDocument,
   modelMarks,
@@ -36,6 +38,7 @@ import {
 import { readDraftTemplate, saveDraftTemplate } from "@/lib/library/actions";
 import type { LibraryTemplate } from "@/lib/library/facts";
 import type { ImportLimits, PreparedModel, SavedModel } from "@/lib/library/import-read";
+import { caseKindLabelKey, firmCaseKinds } from "@/lib/modules/registry";
 
 export type Kind = "juizado" | "comum" | null;
 export const KIND_KEY: Record<"juizado" | "comum", string> = {
@@ -46,6 +49,7 @@ export const KIND_KEY: Record<"juizado" | "comum", string> = {
 /** What a model writes (0054), in the screen's words, and what ONE does with it. */
 export const DOCUMENT_KEY: Record<ModelDocument, { label: string; help: string }> = {
   piece: { label: "library-document-piece", help: "library-document-piece-help" },
+  peca_processo: { label: "library-document-peca-processo", help: "library-document-peca-processo-help" },
   procuracao: { label: "library-document-procuracao", help: "library-document-procuracao-help" },
   contrato: { label: "library-document-contrato", help: "library-document-contrato-help" },
   declaracao_residencia: {
@@ -58,9 +62,21 @@ export const DOCUMENT_KEY: Record<ModelDocument, { label: string; help: string }
   },
 };
 
-/** Which default a model would take the place of: a piece's is of its kind of lawsuit, a paper's of the paper. */
-export const defaultSlot = (writes: ModelDocument, kind: Kind): string =>
-  writes === "piece" ? (kind ?? "any") : writes;
+/**
+ * Which default a model would take the place of: a petition's is of its kind of lawsuit and its problem (0244), a
+ * piece of the process's of its kind of piece and of lawsuit, a paper's of the paper.
+ */
+export const defaultSlot = (
+  writes: ModelDocument,
+  kind: Kind,
+  problem: string | null = null,
+  piece: string | null = null,
+): string =>
+  writes === "piece"
+    ? `${kind ?? "any"}${problem ? `:${problem}` : ""}`
+    : writes === "peca_processo"
+      ? `peca:${piece ?? ""}:${kind ?? "any"}`
+      : writes;
 
 /** What an action's refusal says. */
 export function Refusal({ code }: { code: string | null }) {
@@ -81,7 +97,9 @@ function copyName(name: string): string {
 }
 
 /** What saying a model is the default means, for what it writes and the kind it is written for. */
-function defaultKey(writes: ModelDocument, kind: Kind): string {
+function defaultKey(writes: ModelDocument, kind: Kind, problem: string | null, piece: string | null): string {
+  if (writes === "peca_processo") return piece ? "library-template-default-peca" : "library-template-default-peca-any";
+  if (writes === "piece" && problem) return "library-template-default-problem";
   if (writes === "procuracao") return "library-template-default-procuracao";
   if (writes === "contrato") return "library-template-default-contrato";
   if (writes === "declaracao_residencia") return "library-template-default-declaracao";
@@ -127,6 +145,7 @@ export default function TemplatePanel({
   importLimits = null,
   expected = null,
   makeDefault = false,
+  pieceKinds = [],
   onImportRequested,
   onClose,
   onSaved,
@@ -150,22 +169,43 @@ export default function TemplatePanel({
   expected?: ModelDocument | null;
   /** The model ONE saves from it takes the place of the firm's default of it. */
   makeDefault?: boolean;
+  /** The pieces of the process ONE writes (0189), for a model of one of them (0244). */
+  pieceKinds?: readonly { slug: string; name: string }[];
   /** ONE was asked for a model of a document: the screen behind the dialog lists the request. */
   onImportRequested?: () => void;
   onClose: () => void;
   onSaved: () => void;
 }) {
   const t = useTranslations("product");
+  // The problems of the modules the firm uses, for a petition written for one of them (0244).
+  const problems = firmCaseKinds(useViewer()?.modules);
   const [pending, startTransition] = useTransition();
   // The model being edited: the one the dialog opened on, or the one ONE saved from a document sent here.
-  const [own, setOwn] = useState<{ id: string; name: string; kind: Kind } | null>(
-    template ? { id: template.id, name: template.name, kind: template.proceedingKind } : null,
+  const [own, setOwn] = useState<{
+    id: string;
+    name: string;
+    kind: Kind;
+    problem: string | null;
+    piece: string | null;
+  } | null>(
+    template
+      ? {
+          id: template.id,
+          name: template.name,
+          kind: template.proceedingKind,
+          problem: template.problem,
+          piece: template.pieceKind,
+        }
+      : null,
   );
   const [name, setName] = useState(template?.name ?? (copyOf ? copyName(copyOf.name) : ""));
   const [writes, setWrites] = useState<ModelDocument>(
     template?.documentKind ?? copyOf?.documentKind ?? initialDocument ?? "piece",
   );
   const [kind, setKind] = useState<Kind>(template?.proceedingKind ?? copyOf?.proceedingKind ?? null);
+  // The problem a petition is written for, and the kind of a piece of the process (0244).
+  const [problem, setProblem] = useState<string | null>(template?.problem ?? null);
+  const [piece, setPiece] = useState<string | null>(template?.pieceKind ?? null);
   // Whether it is the default as it was read when the dialog opened, and as it is on screen.
   const [savedDefault, setSavedDefault] = useState(template?.isDefault ?? false);
   const [isDefault, setIsDefault] = useState(template?.isDefault ?? initialDefault);
@@ -180,9 +220,17 @@ export default function TemplatePanel({
     name: string;
     writes: ModelDocument;
     kind: Kind;
+    problem: string | null;
+    piece: string | null;
     body: string;
   } | null>(null);
   const [importBusy, setImportBusy] = useState(false);
+  // A new model opens on the upload (the owner, 2026-11-13); writing it by hand is the exception the person asks for.
+  const [manual, setManual] = useState(false);
+  // "Modelo padrão" ticked by ONE: the firm had no model of its own for this use.
+  const [autoDefault, setAutoDefault] = useState(false);
+  const defaultsNow = useRef(defaults);
+  defaultsNow.current = defaults;
   const templateId = own?.id ?? null;
   // What is read when the dialog opens: the model being edited, or the platform's one a copy starts from.
   const readId = templateId ?? copyOf?.id ?? null;
@@ -218,37 +266,45 @@ export default function TemplatePanel({
   }, [readId, copying]);
 
   // A power of attorney or a contract, which a client signs: written with the client's facts, never a lawsuit's.
-  const paper = writes !== "piece";
+  const paper = !isPieceDocument(writes);
   const odd = unknownMarks(body ?? "", modelMarks(writes));
   // The marks this document is written with, each with what the platform writes in its place.
-  const marks: { mark: string; key: string }[] =
-    writes === "piece"
-      ? DRAFT_MARKS.map((mark) => ({ mark, key: DRAFT_MARK_KEY[mark] }))
-      : [
-          ...PAPER_MARKS,
-          ...(writes === "declaracao_residencia" ? RESIDENCE_MARKS : []),
-          ...(writes === "declaracao_hipossuficiencia" ? FREE_JUSTICE_MARKS : []),
-        ].map((mark) => ({
-          mark,
-          key: PAPER_MARK_KEY[mark],
-        }));
-  const complete = name.trim().length >= 2 && (body ?? "").trim().length >= 20;
+  const marks: { mark: string; key: string }[] = !paper
+    ? DRAFT_MARKS.map((mark) => ({ mark, key: DRAFT_MARK_KEY[mark] }))
+    : [
+        ...PAPER_MARKS,
+        ...(writes === "declaracao_residencia" ? RESIDENCE_MARKS : []),
+        ...(writes === "declaracao_hipossuficiencia" ? FREE_JUSTICE_MARKS : []),
+      ].map((mark) => ({
+        mark,
+        key: PAPER_MARK_KEY[mark],
+      }));
+  const complete =
+    name.trim().length >= 2 && (body ?? "").trim().length >= 20 && (writes !== "peca_processo" || piece !== null);
   // What "changed" is measured against: the model read, a new one, or what ONE prepared from a document.
   const base = imported ?? {
     name: own?.name ?? "",
     writes: startDocument,
     kind: own?.kind ?? null,
+    problem: own?.problem ?? null,
+    piece: own?.piece ?? null,
     body: saved ?? "",
   };
   const changed =
     name !== base.name ||
     writes !== base.writes ||
     kind !== base.kind ||
+    problem !== base.problem ||
+    piece !== base.piece ||
     isDefault !== startDefault ||
     (body ?? "") !== base.body;
   // A new model that may start from a document: neither a model being edited nor a copy of the platform's.
   // Once open on a document, the panel stays: what ONE saved from it is said there while the model is edited.
   const [mayImport] = useState(templateId === null && !copying);
+  // The fields show once there is something to read in them: a model, what ONE prepared, or the person's own hand.
+  const fieldsShown = !mayImport || manual || imported !== null || own !== null;
+  // What ONE read is marked so, until the person changes it.
+  const read = (same: boolean) => (imported !== null && same ? t("library-template-read") : null);
   // While ONE is sent the document or works on it, the fields wait: what it prepares fills them.
   const locked = pending || importBusy;
 
@@ -263,17 +319,40 @@ export default function TemplatePanel({
     setName(named);
     setWrites(model.documentKind);
     setKind(model.proceedingKind);
+    setProblem(model.problem);
+    setPiece(model.pieceKind);
     setBody(model.body);
-    setImported({ id, name: named, writes: model.documentKind, kind: model.proceedingKind, body: model.body });
+    setImported({
+      id,
+      name: named,
+      writes: model.documentKind,
+      kind: model.proceedingKind,
+      problem: model.problem,
+      piece: model.pieceKind,
+      body: model.body,
+    });
+    // With no model of its own for this use, the firm's document becomes what ONE writes with: ticked, and said.
+    const none =
+      !defaultsNow.current[defaultSlot(model.documentKind, model.proceedingKind, model.problem, model.pieceKind)];
+    setIsDefault(none);
+    setAutoDefault(none);
   }, []);
 
   /** The model ONE saved from the document: the dialog edits it from now on, as it is saved. */
   const savedByOne = useCallback((model: SavedModel) => {
-    setOwn({ id: model.templateId, name: model.name, kind: model.proceedingKind });
+    setOwn({
+      id: model.templateId,
+      name: model.name,
+      kind: model.proceedingKind,
+      problem: model.problem,
+      piece: model.pieceKind,
+    });
     setName(model.name);
     setWrites(model.documentKind);
     setStartDocument(model.documentKind);
     setKind(model.proceedingKind);
+    setProblem(model.problem);
+    setPiece(model.pieceKind);
     setBody(model.body);
     setSaved(model.body);
     setSavedDefault(model.isDefault);
@@ -282,8 +361,21 @@ export default function TemplatePanel({
   }, []);
   // The default of one document or kind is not the default of another: said again for a new one, by the person;
   // back to its own, the model is what it was.
-  const defaultFor = (nextDocument: ModelDocument, nextKind: Kind) =>
-    nextDocument === startDocument && nextKind === (own?.kind ?? null) ? startDefault : false;
+  const defaultFor = (
+    nextDocument: ModelDocument,
+    nextKind: Kind,
+    nextProblem: string | null,
+    nextPiece: string | null,
+  ) =>
+    nextDocument === startDocument &&
+    nextKind === (own?.kind ?? null) &&
+    nextProblem === (own?.problem ?? null) &&
+    nextPiece === (own?.piece ?? null)
+      ? startDefault
+      : false;
+  const slot = defaultSlot(writes, kind, problem, piece);
+  const pieceName = pieceKinds.find((item) => item.slug === piece)?.name ?? "";
+  const problemKey = problem ? caseKindLabelKey(problem) : null;
   // Nothing closes the dialog while a save is on its way (a refusal must find it open), nor over unsaved text.
   const close = () => {
     if (pending) return;
@@ -308,7 +400,9 @@ export default function TemplatePanel({
           importId: imported?.id ?? null,
           name,
           documentKind: writes,
-          proceedingKind: writes === "piece" ? kind : null,
+          proceedingKind: isPieceDocument(writes) ? kind : null,
+          problem: writes === "piece" ? problem : null,
+          pieceKind: writes === "peca_processo" ? piece : null,
           isDefault,
           body: body ?? "",
         });
@@ -339,19 +433,27 @@ export default function TemplatePanel({
       description={t(paper ? "library-template-panel-paper" : "library-template-panel-piece")}
       actions={
         <>
-          {/* What ONE prepared is saved as it came, too: reading it is the person's part. */}
-          <Button variant="contained" disabled={locked || !complete || !(changed || imported)} onClick={save}>
-            {t("library-save")}
-          </Button>
+          {fieldsShown ? (
+            <>
+              {/* What ONE prepared is saved as it came, too: reading it is the person's part. */}
+              <Button variant="contained" disabled={locked || !complete || !(changed || imported)} onClick={save}>
+                {t("library-save")}
+              </Button>
+            </>
+          ) : null}
           <Button variant="text" color="grey" disabled={pending} onClick={close}>
             {t("library-cancel")}
           </Button>
-          {/* The text as it is on the screen, saved or not: what ONE prepared included, to be read in Word. */}
-          <WordDownloadButton
-            name={name.trim() || t("word-download-fallback")}
-            text={body ?? ""}
-            disabled={locked || !(body ?? "").trim()}
-          />
+          {fieldsShown ? (
+            <>
+              {/* The text as it is on the screen, saved or not: what ONE prepared included, to be read in Word. */}
+              <WordDownloadButton
+                name={name.trim() || t("word-download-fallback")}
+                text={body ?? ""}
+                disabled={locked || !(body ?? "").trim()}
+              />
+            </>
+          ) : null}
         </>
       }
     >
@@ -371,110 +473,191 @@ export default function TemplatePanel({
             onRequested={onImportRequested}
           />
         ) : null}
-        <Box className="flex flex-wrap gap-3">
-          <TextField
-            label={t("library-template-name")}
-            value={name}
-            onChange={(event) => setName(event.target.value.slice(0, 120))}
-            disabled={locked}
-            className="min-w-64 flex-1"
-          />
-          <TextField
-            select
-            label={t("library-template-document")}
-            value={writes}
-            // Chosen once the model is read: what it is now is what the choice starts from.
-            onChange={(event) => {
-              const next: ModelDocument = isModelDocument(event.target.value) ? event.target.value : "piece";
-              // A paper serves every lawsuit: it names no kind of lawsuit.
-              const nextKind = next === "piece" ? kind : null;
-              setWrites(next);
-              setKind(nextKind);
-              setIsDefault(defaultFor(next, nextKind));
-            }}
-            disabled={locked || body === null}
-            helperText={t(DOCUMENT_KEY[writes].help)}
-            className="min-w-56 flex-1"
-          >
-            <MenuItem value="piece">{t(DOCUMENT_KEY.piece.label)}</MenuItem>
-            <MenuItem value="procuracao">{t(DOCUMENT_KEY.procuracao.label)}</MenuItem>
-            <MenuItem value="contrato">{t(DOCUMENT_KEY.contrato.label)}</MenuItem>
-            <MenuItem value="declaracao_residencia">{t(DOCUMENT_KEY.declaracao_residencia.label)}</MenuItem>
-            <MenuItem value="declaracao_hipossuficiencia">{t(DOCUMENT_KEY.declaracao_hipossuficiencia.label)}</MenuItem>
-          </TextField>
-          {writes === "piece" ? (
-            <TextField
-              select
-              label={t("library-template-kind")}
-              value={kind ?? "any"}
-              onChange={(event) => {
-                const next: Kind =
-                  event.target.value === "juizado" || event.target.value === "comum" ? event.target.value : null;
-                setKind(next);
-                setIsDefault(defaultFor(writes, next));
-              }}
-              disabled={locked || body === null}
-              className="min-w-56"
-            >
-              <MenuItem value="any">{t("library-template-kind-any")}</MenuItem>
-              <MenuItem value="juizado">{t(KIND_KEY.juizado)}</MenuItem>
-              <MenuItem value="comum">{t(KIND_KEY.comum)}</MenuItem>
-            </TextField>
-          ) : null}
-        </Box>
-        <Box className="flex flex-col">
-          <FormControlLabel
-            control={
-              <Checkbox
-                checked={isDefault}
-                onChange={(event) => setIsDefault(event.target.checked)}
-                disabled={locked || body === null}
-              />
-            }
-            label={t(defaultKey(writes, kind))}
-          />
-          {isDefault && defaults[defaultSlot(writes, kind)] ? (
-            <Typography variant="body2" className="text-text-secondary">
-              {t("library-template-default-replaces", { name: defaults[defaultSlot(writes, kind)] })}
-            </Typography>
-          ) : null}
-        </Box>
-        {body === null && !errorCode ? (
-          <Box className="flex justify-center py-10">
-            <CircularProgress aria-label={t("library-loading")} />
+        {!fieldsShown ? (
+          <Box>
+            <Button variant="text" color="grey" disabled={importBusy} onClick={() => setManual(true)}>
+              {t("library-template-by-hand")}
+            </Button>
           </Box>
-        ) : body !== null ? (
+        ) : null}
+        {fieldsShown ? (
           <>
-            <TextField
-              label={t("library-template-body")}
-              helperText={t(paper ? "library-template-body-help-paper" : "library-template-body-help")}
-              value={body}
-              onChange={(event) => setBody(event.target.value)}
-              disabled={locked}
-              multiline
-              minRows={16}
-              maxRows={30}
-              fullWidth
-              slotProps={{ htmlInput: { spellCheck: true, lang: "pt-BR" } }}
-            />
-            <Box component="dl" className="m-0 grid grid-cols-1 gap-x-6 gap-y-1 sm:grid-cols-2">
-              {marks.map(({ mark, key }) => (
-                <Box key={mark} className="flex flex-wrap gap-x-1">
-                  <Typography component="dt" variant="body2" className="font-semibold">
-                    {`[[${mark}]]`}
-                  </Typography>
-                  <Typography component="dd" variant="body2" className="text-text-secondary m-0">
-                    {t(key)}
-                  </Typography>
-                </Box>
-              ))}
+            <Box className="flex flex-wrap gap-3">
+              <TextField
+                label={t("library-template-name")}
+                value={name}
+                onChange={(event) => setName(event.target.value.slice(0, 120))}
+                disabled={locked}
+                helperText={read(name === imported?.name)}
+                className="min-w-64 flex-1"
+              />
+              <TextField
+                select
+                label={t("library-template-document")}
+                value={writes}
+                // Chosen once the model is read: what it is now is what the choice starts from.
+                onChange={(event) => {
+                  const next: ModelDocument = isModelDocument(event.target.value) ? event.target.value : "piece";
+                  // A paper serves every lawsuit: it names no kind of lawsuit; only a petition says a problem.
+                  const nextKind = isPieceDocument(next) ? kind : null;
+                  const nextProblem = next === "piece" ? problem : null;
+                  const nextPiece = next === "peca_processo" ? piece : null;
+                  setWrites(next);
+                  setKind(nextKind);
+                  setProblem(nextProblem);
+                  setPiece(nextPiece);
+                  setIsDefault(defaultFor(next, nextKind, nextProblem, nextPiece));
+                }}
+                disabled={locked || body === null}
+                helperText={read(writes === imported?.writes) ?? t(DOCUMENT_KEY[writes].help)}
+                className="min-w-56 flex-1"
+              >
+                <MenuItem value="piece">{t(DOCUMENT_KEY.piece.label)}</MenuItem>
+                <MenuItem value="peca_processo">{t(DOCUMENT_KEY.peca_processo.label)}</MenuItem>
+                <MenuItem value="procuracao">{t(DOCUMENT_KEY.procuracao.label)}</MenuItem>
+                <MenuItem value="contrato">{t(DOCUMENT_KEY.contrato.label)}</MenuItem>
+                <MenuItem value="declaracao_residencia">{t(DOCUMENT_KEY.declaracao_residencia.label)}</MenuItem>
+                <MenuItem value="declaracao_hipossuficiencia">
+                  {t(DOCUMENT_KEY.declaracao_hipossuficiencia.label)}
+                </MenuItem>
+              </TextField>
             </Box>
-            {odd.length > 0 ? (
-              <Alert severity="warning" className="neutral bg-background-paper/60!">
-                {t(paper ? "paper-unknown-marks" : "draft-unknown-marks", {
-                  marks: odd.map((mark) => `[[${mark}]]`).join(", "),
+            {/* What a piece is written for, on a row of its own: the kind of piece, of lawsuit and the problem. */}
+            {isPieceDocument(writes) ? (
+              <Box className="flex flex-wrap gap-3">
+                {writes === "peca_processo" ? (
+                  <TextField
+                    select
+                    required
+                    label={t("library-template-piece-kind")}
+                    value={piece ?? ""}
+                    onChange={(event) => {
+                      const next = pieceKinds.some((item) => item.slug === event.target.value)
+                        ? event.target.value
+                        : null;
+                      setPiece(next);
+                      setIsDefault(defaultFor(writes, kind, null, next));
+                    }}
+                    disabled={locked || body === null}
+                    helperText={read(piece === imported?.piece)}
+                    className="min-w-56 flex-1"
+                  >
+                    {pieceKinds.map((item) => (
+                      <MenuItem key={item.slug} value={item.slug}>
+                        {item.name}
+                      </MenuItem>
+                    ))}
+                  </TextField>
+                ) : null}
+                {isPieceDocument(writes) ? (
+                  <TextField
+                    select
+                    label={t("library-template-kind")}
+                    value={kind ?? "any"}
+                    onChange={(event) => {
+                      const next: Kind =
+                        event.target.value === "juizado" || event.target.value === "comum" ? event.target.value : null;
+                      setKind(next);
+                      setIsDefault(defaultFor(writes, next, problem, piece));
+                    }}
+                    disabled={locked || body === null}
+                    helperText={read(kind === imported?.kind)}
+                    className="min-w-56 flex-1"
+                  >
+                    <MenuItem value="any">{t("library-template-kind-any")}</MenuItem>
+                    <MenuItem value="juizado">{t(KIND_KEY.juizado)}</MenuItem>
+                    <MenuItem value="comum">{t(KIND_KEY.comum)}</MenuItem>
+                  </TextField>
+                ) : null}
+                {writes === "piece" && problems.length > 0 ? (
+                  <TextField
+                    select
+                    label={t("library-template-problem")}
+                    value={problem ?? "any"}
+                    onChange={(event) => {
+                      const next = problems.some((item) => item.key === event.target.value) ? event.target.value : null;
+                      setProblem(next);
+                      setIsDefault(defaultFor(writes, kind, next, null));
+                    }}
+                    disabled={locked || body === null}
+                    helperText={read(problem === imported?.problem) ?? t("library-template-problem-help")}
+                    className="min-w-56 flex-1"
+                  >
+                    <MenuItem value="any">{t("library-template-problem-any")}</MenuItem>
+                    {problems.map((item) => (
+                      <MenuItem key={item.key} value={item.key}>
+                        {t(item.labelKey)}
+                      </MenuItem>
+                    ))}
+                  </TextField>
+                ) : null}
+              </Box>
+            ) : null}
+            <Box className="flex flex-col">
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={isDefault}
+                    onChange={(event) => {
+                      setIsDefault(event.target.checked);
+                      setAutoDefault(false);
+                    }}
+                    disabled={locked || body === null}
+                  />
+                }
+                label={t(defaultKey(writes, kind, problem, piece), {
+                  problem: problemKey ? t(problemKey).toLocaleLowerCase("pt-BR") : "",
+                  piece: pieceName.toLocaleLowerCase("pt-BR"),
                 })}
-              </Alert>
+              />
+              {isDefault && defaults[slot] ? (
+                <Typography variant="body2" className="text-text-secondary">
+                  {t("library-template-default-replaces", { name: defaults[slot] })}
+                </Typography>
+              ) : isDefault && autoDefault ? (
+                <Typography variant="body2" className="text-text-secondary">
+                  {t("library-template-default-auto")}
+                </Typography>
+              ) : null}
+            </Box>
+            {body === null && !errorCode ? (
+              <Box className="flex justify-center py-10">
+                <CircularProgress aria-label={t("library-loading")} />
+              </Box>
+            ) : body !== null ? (
+              <>
+                <TextField
+                  label={t("library-template-body")}
+                  helperText={t(paper ? "library-template-body-help-paper" : "library-template-body-help")}
+                  value={body}
+                  onChange={(event) => setBody(event.target.value)}
+                  disabled={locked}
+                  multiline
+                  minRows={16}
+                  maxRows={30}
+                  fullWidth
+                  slotProps={{ htmlInput: { spellCheck: true, lang: "pt-BR" } }}
+                />
+                <Box component="dl" className="m-0 grid grid-cols-1 gap-x-6 gap-y-1 sm:grid-cols-2">
+                  {marks.map(({ mark, key }) => (
+                    <Box key={mark} className="flex flex-wrap gap-x-1">
+                      <Typography component="dt" variant="body2" className="font-semibold">
+                        {`[[${mark}]]`}
+                      </Typography>
+                      <Typography component="dd" variant="body2" className="text-text-secondary m-0">
+                        {t(key)}
+                      </Typography>
+                    </Box>
+                  ))}
+                </Box>
+                {odd.length > 0 ? (
+                  <Alert severity="warning" className="neutral bg-background-paper/60!">
+                    {t(paper ? "paper-unknown-marks" : "draft-unknown-marks", {
+                      marks: odd.map((mark) => `[[${mark}]]`).join(", "),
+                    })}
+                  </Alert>
+                ) : null}
+              </>
             ) : null}
           </>
         ) : null}

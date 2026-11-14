@@ -1,5 +1,6 @@
 import type { BriefFacts } from "@/lib/hearings/brief";
 import { KIND_WORDS } from "@/lib/hearings/brief";
+import type { CaseForecast, ForecastCut } from "@/lib/jurimetrics/forecast";
 
 /**
  * The guide of a hearing for who goes for the firm (migration 0246, the owner's request of 2026-11-13: the lawyer
@@ -54,6 +55,8 @@ export type GuideFacts = {
   defenseInCase: boolean;
   piece: string | null;
   market: { unit: MarketNumbers | null; court: MarketNumbers | null };
+  /** The lawsuit's forecast (0250), read by the backend beside the facts; null where it could not be read. */
+  forecast: CaseForecast | null;
 };
 
 const text = (value: unknown): string | null => (typeof value === "string" && value.trim() ? value.trim() : null);
@@ -140,6 +143,7 @@ export function guideFactsOf(raw: unknown): GuideFacts | null {
     defenseInCase: row.defense_in_case === true,
     piece: text(row.piece),
     market: { unit: numbersOf(obj(row.market).unit), court: numbersOf(obj(row.market).court) },
+    forecast: null,
   };
 }
 
@@ -240,6 +244,72 @@ function marketLine(label: string, numbers: MarketNumbers | null, incident: stri
   return parts.join("; ") + ".";
 }
 
+const MARKET_PROBLEM_WORDS: Record<string, string> = {
+  delay: "atraso",
+  cancellation: "cancelamento",
+  overbooking: "embarque negado",
+  baggage: "bagagem",
+  other: "outro problema",
+};
+
+const day = (iso: string | null): string => {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso ?? "");
+  return match ? `${match[3]}/${match[2]}/${match[1]}` : "";
+};
+
+/** Where a cut of the forecast was read, as the guide says it. */
+function cutPlace(cut: ForecastCut, courts: string[]): string {
+  if (cut.level === "judge" && cut.judge) return `quem julga o caso (${cut.judge})`;
+  if (cut.level === "unit" && cut.unit) return cut.unit;
+  if (cut.level === "comarca" && cut.comarca) return `a comarca de ${cut.comarca}`;
+  if (cut.level === "court" && cut.court) return `todo o ${cut.court}`;
+  return `todos os tribunais lidos (${courts.join(", ")})`;
+}
+
+/**
+ * The lawsuit's forecast as the guide says it (0250), every number the database's: the cut, the chance, the moral
+ * damages' median and middle half, each level beside it, what the airline does at the place and what going on is worth.
+ */
+export function forecastLines(read: CaseForecast | null): string[] {
+  const forecast = read?.forecast;
+  if (!read || !forecast || forecast.chancePercent === null) return [];
+  const lines: string[] = [];
+  const parts = [cutPlace(forecast.cut, forecast.courts)];
+  if (forecast.cut.airline) parts.push(`contra a companhia do caso`);
+  parts.push(MARKET_PROBLEM_WORDS[forecast.cut.problem] ?? forecast.cut.problem);
+  lines.push(
+    `Recorte: ${parts.join(" · ")} · ${forecast.decisions} decisões, de ${day(forecast.from)} a ${day(forecast.to)}.`,
+  );
+  lines.push(
+    `Chance de ganhar: ${forecast.chancePercent}% (${forecast.won} de ${forecast.merits} com mérito)` +
+      (forecast.outcomes.parcial > forecast.outcomes.procedente ? ", quase sempre em parte." : "."),
+  );
+  if (forecast.moral.median !== null && forecast.moral.p25 !== null && forecast.moral.p75 !== null) {
+    lines.push(
+      `Dano moral: mediana ${brl(forecast.moral.median)}; metade entre ${brl(forecast.moral.p25)} e ${brl(forecast.moral.p75)}.`,
+    );
+  }
+  for (const level of read.levels) {
+    if (level.level === forecast.cut.level || level.chancePercent === null) continue;
+    lines.push(
+      `${cutPlace(level.cut, forecast.courts)}: ${level.chancePercent}% (${level.won} de ${level.merits})` +
+        (level.median !== null ? `, mediana ${brl(level.median)}.` : "."),
+    );
+  }
+  if (read.hearing) {
+    const place =
+      read.hearing.level === "unit" ? "nesta unidade" : read.hearing.level === "comarca" ? "na comarca" : "no tribunal";
+    const absent = read.hearing.reasons.ausencia_autor ?? 0;
+    lines.push(
+      `Acordo com a companhia ${place}: ${read.hearing.acordo} em ${read.hearing.decisions}. ` +
+        `Extintas: ${read.hearing.extinto} em ${read.hearing.decisions}` +
+        (absent > 0 ? `, ${absent} por ausência do autor.` : "."),
+    );
+  }
+  if (read.expectedCents !== null) lines.push(`Seguir com a ação vale em média ${brl(read.expectedCents)}.`);
+  return lines;
+}
+
 /** What the case holds of the trip, the weather, the account and the court, said as it is (no reading of ONE's). */
 export function guideFactLines(brief: Pick<BriefFacts, "incident" | "kind">, guide: GuideFacts): string[] {
   const lines: string[] = [];
@@ -281,6 +351,12 @@ export function guideFactLines(brief: Pick<BriefFacts, "incident" | "kind">, gui
       ? "A contestação da companhia está no caso: leia antes da audiência."
       : "A contestação da companhia ainda não está no caso.",
   );
+  const forecast = forecastLines(guide.forecast);
+  if (forecast.length > 0) {
+    lines.push("", "COMO ESTE JUÍZO DECIDE CASOS ASSIM", ...forecast);
+    lines.push("Números das decisões públicas do mercado, para preparar e projetar, nunca para escolher juízo.");
+    return lines;
+  }
   const unit = marketLine("A unidade", guide.market.unit, brief.incident);
   const court = marketLine("O tribunal", guide.market.court, brief.incident);
   if (unit || court) {
@@ -326,6 +402,7 @@ export function guideInput(brief: BriefFacts, guide: GuideFacts): Record<string,
       piso_do_escritorio: brief.floorCents ? brl(brief.floorCents) : null,
       unidade: guide.market.unit,
       tribunal: guide.market.court,
+      previsao: forecastLines(guide.forecast),
     },
   };
 }

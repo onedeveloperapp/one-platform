@@ -1,4 +1,4 @@
-import { isModelDocument, maskIdentifiers, type ModelDocument } from "@/lib/cases/drafts";
+import { isModelDocument, isPieceDocument, maskIdentifiers, type ModelDocument } from "@/lib/cases/drafts";
 import { isValidCnpj, isValidCpf } from "@flyee/fields";
 
 /**
@@ -16,7 +16,9 @@ import { isValidCnpj, isValidCpf } from "@flyee/fields";
  * was there; and what still looks like the original case (a name the marking
  * listed, a CPF, a registration at the bar) is pointed out. Where nothing is
  * left to look at, ONE saves the model by itself (`saveGate`), as the firm
- * lets it; otherwise a lawyer saves it or not.
+ * lets it; otherwise a lawyer saves it or not. The marking reads the firm's
+ * record beside the document (0244), and what the record writes is never the
+ * original case's (`firmRecordTexts`).
  */
 
 export const TRANSCRIBE_TASK = "biblioteca.modelo.transcricao";
@@ -86,6 +88,10 @@ export type ImportProposal = {
   name: string;
   documentKind: ModelDocument;
   proceedingKind: "juizado" | "comum" | null;
+  /** Of a petition, the problem it was written for, when it serves only that one (0244). */
+  problem: string | null;
+  /** Of a piece of the process, its kind of piece (0244, `piece_kinds`). */
+  pieceKind: string | null;
   changes: ModelChange[];
   /** The people of the original case the document names, as it writes them. */
   people: string[];
@@ -96,6 +102,9 @@ export type ImportProposal = {
 };
 
 const text = (value: unknown): string => (typeof value === "string" ? value : "");
+/** A key as the database writes a problem or a kind of piece: it checked which ones exist (0244). */
+const slugOf = (value: unknown): string | null =>
+  typeof value === "string" && /^[a-z][a-z_]{2,40}$/.test(value) ? value : null;
 const strings = (value: unknown): string[] =>
   Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
 
@@ -124,7 +133,9 @@ export function proposalOf(value: unknown): ImportProposal | null {
   return {
     name: text(kept.name),
     documentKind: kept.document_kind,
-    proceedingKind: kept.document_kind === "piece" ? kind : null,
+    proceedingKind: isPieceDocument(kept.document_kind) ? kind : null,
+    problem: kept.document_kind === "piece" ? slugOf(kept.problem) : null,
+    pieceKind: kept.document_kind === "peca_processo" ? slugOf(kept.piece_kind) : null,
     changes,
     people: strings(kept.people),
     notes: strings(kept.notes),
@@ -191,15 +202,74 @@ export function refusalOf(value: unknown): ImportRefusal | null {
 export const heldReasonOf = (value: unknown): HeldReason | null =>
   (HELD_REASONS as readonly unknown[]).includes(value) ? (value as HeldReason) : null;
 
-/** What the firm sent a document as, in the words the marking reads. */
+/** What the firm sent a document as, in the words the marking reads (every one of them since 0244). */
 const SENT_AS: Record<ModelDocument, string> = {
   piece: "a petição inicial que o escritório usa",
+  peca_processo: "uma peça que o escritório apresenta num processo em curso",
   procuracao: "a procuração que o escritório usa",
   contrato: "o contrato de honorários que o escritório usa",
-  // Never sent: a request takes only the three above (0079); the firm writes its declaration in the library.
   declaracao_residencia: "a declaração de residência que o escritório usa",
   declaracao_hipossuficiencia: "a declaração de hipossuficiência que o escritório usa",
 };
+
+/**
+ * What the firm gave of itself (its setup, 0217, and its team's registrations at the bar), as the marking reads it
+ * beside the document and the check of a model takes it as the firm's own (0244).
+ */
+export type FirmRecord = {
+  name: string;
+  /** Digits only. */
+  cnpj: string | null;
+  /** The society's registration at the bar, as "OAB/GO 1234". */
+  society: string | null;
+  /** The firm's lawyers, each registration at the bar as "OAB/GO 12345", with the name when it was read. */
+  lawyers: { name: string | null; oab: string }[];
+  /** Where the firm is: the street, the number, the complement, the district, the city and the state. */
+  address: string | null;
+  /** Digits only. */
+  postalCode: string | null;
+  email: string | null;
+  /** Digits only. */
+  phone: string | null;
+};
+
+const cnpjWritten = (digits: string): string =>
+  digits.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5");
+
+/**
+ * The firm's own identifiers as the check of a model reads them (`firmTexts`): its CNPJ, its registrations at the
+ * bar, its CEP, its e-mail and its telephone, which a model of the firm writes in every case. Never a CPF.
+ */
+export function firmRecordTexts(record: FirmRecord | null | undefined): string[] {
+  if (!record) return [];
+  const phone = record.phone?.replace(/\D/g, "") ?? "";
+  const postal = record.postalCode?.replace(/\D/g, "") ?? "";
+  return [
+    record.cnpj && /^\d{14}$/.test(record.cnpj) ? `CNPJ ${cnpjWritten(record.cnpj)}` : null,
+    record.society,
+    ...record.lawyers.map((lawyer) => lawyer.oab),
+    postal.length === 8 ? `${postal.slice(0, 5)}-${postal.slice(5)}` : null,
+    record.email,
+    phone.length >= 10 ? `(${phone.slice(0, 2)}) ${phone.slice(2, -4)}-${phone.slice(-4)}` : null,
+  ].filter((item): item is string => typeof item === "string" && item.trim() !== "");
+}
+
+/**
+ * The firm's record as the marking reads it before the document (0244): what the document writes of the firm and
+ * matches it is the firm's in every case, kept as written and never asked. The e-mail, the telephone and the CEP
+ * are taken out of the document before it reads it, so they are not said here either.
+ */
+export function firmRecordLines(record: FirmRecord | null | undefined): string[] {
+  if (!record) return [];
+  const lines = [
+    record.name.trim() ? `Nome: ${record.name.trim()}` : null,
+    record.cnpj && /^\d{14}$/.test(record.cnpj) ? `CNPJ: ${cnpjWritten(record.cnpj)}` : null,
+    record.society ? `Registro da sociedade na OAB: ${record.society}` : null,
+    ...record.lawyers.map((lawyer) => `Advogado: ${lawyer.name ? `${lawyer.name}, ` : ""}${lawyer.oab}`),
+    record.address ? `Endereço: ${record.address}` : null,
+  ].filter((line): line is string => line !== null);
+  return lines.length > 0 ? lines.map(maskIdentifiers) : [];
+}
 
 /** What the marking is told of a request besides its text. */
 export type MarkingContext = {
@@ -209,6 +279,8 @@ export type MarkingContext = {
   exchanges?: readonly ImportExchange[];
   /** No question may be asked any more. */
   lastRound?: boolean;
+  /** What the firm gave of itself, compared with the document (0244). */
+  firmRecord?: FirmRecord | null;
 };
 
 /**
@@ -231,8 +303,10 @@ export function markingBriefing(paragraphs: readonly string[], context: MarkingC
       }),
     ].join("\n"),
   );
+  const record = firmRecordLines(context.firmRecord);
   return [
     purpose,
+    ...(record.length > 0 ? [["Os dados do escritório no cadastro:", ...record].join("\n")] : []),
     `Documento com ${paragraphs.length} parágrafos, cada um depois do seu número.`,
     ...paragraphs.map((paragraph, index) => `§${index + 1}\n${maskIdentifiers(paragraph)}`),
     ...(rounds.length > 0 ? ["Perguntas que você já fez e o que o escritório respondeu.", ...rounds] : []),
@@ -344,7 +418,7 @@ const IDENTIFIER_PATTERNS: readonly [Identifier, RegExp, (match: string) => bool
   ["cnpj", /(?<!\d)\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2}(?!\d)/g, isValidCnpj],
   ["cpf", /(?<!\d)\d{3}\.?\d{3}\.?\d{3}-?\d{2}(?!\d)/g, isValidCpf],
   ["cep", /(?<!\d)\d{5}-\d{3}(?!\d)/g, () => true],
-  ["oab", /\bOAB\s*[/-]?\s*[A-Z]{2}\s*(?:n[º°o.]*\s*)?\d/g, () => true],
+  ["oab", /\bOAB\s*[/-]?\s*[A-Z]{2}\s*(?:n[º°o.]*\s*)?\d[\d.]*/g, () => true],
   ["telefone", /(?:\+?55[\s.-]?)?\(?(?<![\p{L}\p{N}])\d{2}\)?[\s.-]?9?\d{4}[\s.-]?\d{4}(?![\p{L}\p{N}])/gu, () => true],
 ];
 
@@ -363,19 +437,34 @@ function identifiersIn(text: string): { identifier: Identifier; match: string }[
 }
 
 /**
+ * One identifier however it is written: the digits of a number (a telephone without the country's code), the state
+ * and the number of a registration at the bar without its dots and zeros before it, an e-mail in small letters.
+ */
+function identifierKey(identifier: Identifier, match: string): string {
+  if (identifier === "email") return `email:${match.toLowerCase()}`;
+  if (identifier === "oab") {
+    const parts = /OAB\s*[/-]?\s*([A-Z]{2})\s*(?:n[º°o.]*\s*)?([\d.]+)/i.exec(match);
+    return parts ? `oab:${parts[1].toUpperCase()}${parts[2].replace(/\D/g, "").replace(/^0+/, "")}` : `oab:${match}`;
+  }
+  const digits = match.replace(/\D/g, "");
+  return `${identifier}:${identifier === "telefone" ? digits.replace(/^55(?=\d{10,11}$)/, "") : digits}`;
+}
+
+/**
  * The identifiers of a text, each kind with how many, but the firm's own: what the paragraphs of the firm's own
- * data write (`firmTextsOf`), never a CPF, which is a person's.
+ * data write (`firmTextsOf`) and what its record says (`firmRecordTexts`), however each is written, never a CPF,
+ * which is a person's.
  */
 function identifiersLeft(body: string, firmTexts: readonly string[] = []): ModelCheck[] {
   const own = new Set(
     firmTexts
       .flatMap(identifiersIn)
       .filter((item) => item.identifier !== "cpf")
-      .map((item) => `${item.identifier}:${item.match}`),
+      .map((item) => identifierKey(item.identifier, item.match)),
   );
   const counts = new Map<Identifier, number>();
   for (const { identifier, match } of identifiersIn(body)) {
-    if (own.has(`${identifier}:${match}`)) continue;
+    if (own.has(identifierKey(identifier, match))) continue;
     counts.set(identifier, (counts.get(identifier) ?? 0) + 1);
   }
   return IDENTIFIERS.flatMap((identifier): ModelCheck[] => {
@@ -398,7 +487,7 @@ export function modelChecks(
   document: ModelDocument,
   firmTexts: readonly string[] = [],
 ): ModelCheck[] {
-  const toComplete = document === "piece" ? 0 : (body.match(/\[\s*COMPLETAR/gi)?.length ?? 0);
+  const toComplete = isPieceDocument(document) ? 0 : (body.match(/\[\s*COMPLETAR/gi)?.length ?? 0);
   return [
     ...peopleLeft(body, people),
     ...identifiersLeft(body, firmTexts),
@@ -426,7 +515,7 @@ export function saveGate(input: {
   if (modelChecks(input.body, input.people, input.document, input.firmTexts ?? []).length > 0) {
     return { save: false, reason: "checks" };
   }
-  if (input.document === "piece" && input.unwritable.length > 0) return { save: false, reason: "checks" };
+  if (isPieceDocument(input.document) && input.unwritable.length > 0) return { save: false, reason: "checks" };
   if (input.notes.some((note) => note.trim() !== "")) return { save: false, reason: "notes" };
   return { save: true };
 }
@@ -508,6 +597,7 @@ export const MISSING_KEY: Record<MissingCode, string> = {
 /** A model ONE uses, as a refusal names it inside a sentence ("é ... e não ..."). */
 export const DOCUMENT_NAMED_KEY: Record<ModelDocument, string> = {
   piece: "library-import-named-piece",
+  peca_processo: "library-import-named-peca-processo",
   procuracao: "library-import-named-procuracao",
   contrato: "library-import-named-contrato",
   declaracao_residencia: "library-import-named-declaracao-residencia",

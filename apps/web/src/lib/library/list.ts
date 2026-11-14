@@ -128,12 +128,21 @@ export function libraryRows(data: LibraryData, view: LibraryView, query: Library
 export const importWaitsOnPerson = (item: LibraryImport) => item.status === "asking" || item.status === "ready";
 
 /**
- * The view the library opens on: what keeps a piece from being approved, then a document ONE asks something of or
- * has ready, then the models; a library with no model yet opens on its sources.
+ * The view the library opens on: the firm's own models (the owner, 2026-11-13). What waits on a person is said above
+ * the list, in "Esperam você", and never moves the list away from the models.
  */
 export function firstView(data: LibraryData): LibraryView {
-  if (data.missing.length > 0) return "faltam";
-  if (data.imports.some(importWaitsOnPerson)) return "enviados";
-  if (data.templates.length > 0 || data.sources.every((source) => source.status !== "verified")) return "modelos";
-  return "fontes";
+  return data.templates.some((template) => !template.platform) ? "do-escritorio" : "modelos";
+}
+
+/**
+ * What waits on a person of the firm, in the order "Esperam você" says it: what ONE asks, what it has ready to check,
+ * what it refused or could not read (to send another or let go), then the citations no source answers for.
+ */
+export function waitingOnPerson(data: LibraryData): { imports: LibraryImport[]; missing: number } {
+  const order: Record<string, number> = { asking: 0, ready: 1, refused: 2, failed: 3 };
+  return {
+    imports: data.imports.filter((item) => item.status in order).sort((a, b) => order[a.status]! - order[b.status]!),
+    missing: data.missing.length,
+  };
 }

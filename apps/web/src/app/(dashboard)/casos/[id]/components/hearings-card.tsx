@@ -1,6 +1,7 @@
 "use client";
 
 import type { CaseProceeding, CaseState } from "../case-types";
+import HearingForecast from "./hearing-forecast";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 
@@ -64,6 +65,10 @@ export default function HearingsCard({
     hearings.upcoming.find((row) => row.status === "scheduled" && Date.parse(row.startsAt) > nowAt) ?? null;
   const comingAt = coming ? momentIn(coming.startsAt, coming.timeZone) : null;
   const soon = coming !== null && Date.parse(coming.startsAt) - nowAt < 7 * 24 * 60 * 60 * 1000;
+  const forecastVersion = (proceedingId: string) => {
+    const lawsuit = state.proceedings.find((proceeding) => proceeding.id === proceedingId);
+    return lawsuit ? `${lawsuit.status}|${lawsuit.unit ?? ""}|${lawsuit.cnj ?? ""}` : "";
+  };
 
   return (
     <CollapsibleCard
@@ -114,6 +119,14 @@ export default function HearingsCard({
                 onChanged={onChanged}
               />
               <HearingBriefBox brief={state.hearingBriefs.find((brief) => brief.hearingId === row.id) ?? null} />
+              {/* What to expect of the airline there and what an offer is worth (0250), under the next hearing only. */}
+              {coming?.id === row.id ? (
+                <HearingForecast
+                  proceedingId={row.proceedingId}
+                  version={forecastVersion(row.proceedingId)}
+                  airlines={state.airlines}
+                />
+              ) : null}
             </Box>
           ))}
         </Box>

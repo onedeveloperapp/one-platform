@@ -3,12 +3,14 @@ import "server-only";
 import { createHash } from "node:crypto";
 
 import { runFirmTask } from "@/lib/ai/executor";
-import { isModelDocument } from "@/lib/cases/drafts";
+import { isModelDocument, isPieceDocument } from "@/lib/cases/drafts";
 import { supabaseFileStore } from "@/lib/files/store";
 import { soon } from "@/lib/jobs/soon";
 import { readDocx } from "@/lib/library/docx";
+import { readFirmRecord } from "@/lib/library/firm-record";
 import {
   exchangesOf,
+  firmRecordTexts,
   MARK_TASK,
   markingBriefing,
   paragraphsOf,
@@ -225,8 +227,9 @@ export async function workClaimedImport(service: SupabaseClient, held: ImportCla
       people: textsOf(row.people),
       document: row.document_kind,
       notes: textsOf(row.notes),
-      unwritable: row.document_kind === "piece" ? unwritableCharacters(body) : [],
-      firmTexts: textsOf(row.firm_texts),
+      unwritable: isPieceDocument(row.document_kind) ? unwritableCharacters(body) : [],
+      // What the firm said is its own, and what its record says (0244): never the original case's.
+      firmTexts: [...textsOf(row.firm_texts), ...firmRecordTexts(await readFirmRecord(service, row.org_id))],
     });
     if (!gate.save) return record("review", { failure: gate.reason });
     return record("saved", { hash: createHash("sha256").update(body, "utf8").digest("hex") });
@@ -238,6 +241,8 @@ export async function workClaimedImport(service: SupabaseClient, held: ImportCla
     expected: isModelDocument(row.expected_kind) ? row.expected_kind : null,
     exchanges: exchangesOf(row.exchanges),
     lastRound: row.last_round === true,
+    // The firm's record beside the document: what matches it is the firm's, never asked (0244).
+    firmRecord: await readFirmRecord(service, row.org_id),
   };
   const result = await runFirmTask({
     orgId: row.org_id,

@@ -1,5 +1,6 @@
 "use client";
 
+import FirmForecastCard from "./forecast-card";
 import MarketCard from "./market-card";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
@@ -460,6 +461,9 @@ export default function NumbersView({ state }: { state: NumbersState }) {
                 ) : null}
               </CardContent>
             </Card>
+
+            {/* The firm's open lawsuits as the market forecasts them, and how the forecast came out (0250). */}
+            <FirmForecastCard tests={state.tests} />
 
             {/* How the market decides by unit, beside the firm's own numbers above (0190, item 5.5). */}
             <MarketCard courts={[...new Set(state.rows.map((row) => row.court).filter(Boolean))].sort()} />

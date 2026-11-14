@@ -293,6 +293,8 @@ select is(
     'court_comarcas.court',
     -- A court's way of paying (0135) is platform data of a court, which is never deleted.
     'court_payment_paths.court',
+    -- The kind of piece a firm's model of the process writes (0244) is the platform's, which is never deleted.
+    'draft_templates.piece_kind',
     'filing_package_items.file_id',
     'filing_package_items.signed_file_id',
     'filing_receipts.file_id',

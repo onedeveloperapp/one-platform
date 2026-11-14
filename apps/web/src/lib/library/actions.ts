@@ -116,6 +116,10 @@ export async function saveDraftTemplate(input: {
   /** What the model writes; a piece when not said. */
   documentKind?: ModelDocument;
   proceedingKind: "juizado" | "comum" | null;
+  /** Of a petition, the problem it was written for (0244); none when it serves every problem. */
+  problem?: string | null;
+  /** Of a piece of the process, its kind of piece (0244). */
+  pieceKind?: string | null;
   /** The model ONE writes the pieces of its kind from: the one before stops being it. */
   isDefault: boolean;
   body: string;
@@ -129,6 +133,9 @@ export async function saveDraftTemplate(input: {
     document_kind: isModelDocument(input.documentKind) ? input.documentKind : "piece",
     proceeding_kind:
       input.proceedingKind === "juizado" || input.proceedingKind === "comum" ? input.proceedingKind : null,
+    // Which problems and kinds of piece exist is the database's to say (0244): it refuses another.
+    problem: typeof input.problem === "string" ? clean(input.problem, 40).trim() || null : null,
+    piece_kind: typeof input.pieceKind === "string" ? clean(input.pieceKind, 40).trim() || null : null,
     is_default: input.isDefault === true,
     body: clean(input.body, 250_000),
   };

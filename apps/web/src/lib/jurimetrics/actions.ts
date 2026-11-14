@@ -1,62 +1,75 @@
 "use server";
 
+import { type CaseForecast, caseForecastOf } from "@/lib/jurimetrics/forecast";
 import { type MarketNumbers, marketNumbersOf } from "@/lib/jurimetrics/profile";
 import { getMemberContext } from "@/lib/member/context";
 
 /**
- * What the screens read of the market (migration 0190): how a lawsuit's unit and its judge decide, beside the whole
- * court, and the projection by unit. Public data, read under the person's session; only to prepare and to project.
+ * What the screens read of the market (migrations 0190 and 0250): a lawsuit's forecast, the firm's, and the projection
+ * by unit. Read under the person's session; only to prepare and to project, never to choose a judge.
  */
 
 const ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
-export type LawsuitMarket =
-  | {
-      ok: true;
-      unit: string | null;
-      judge: string | null;
-      unitNumbers: MarketNumbers | null;
-      judgeNumbers: MarketNumbers | null;
-      courtNumbers: MarketNumbers | null;
-    }
-  | { ok: false; code: string };
-
-/** How a lawsuit's unit and judge decide: the unit the lawsuit records, the judge its course shows. */
-export async function readLawsuitMarket(proceedingId: string): Promise<LawsuitMarket> {
+/** A lawsuit's forecast (0250): the case's card and its hearing read it, under the person's session. */
+export async function readCaseForecast(proceedingId: string): Promise<CaseForecast | null> {
   const context = await getMemberContext();
-  if (!context?.firm || !ID.test(proceedingId)) return { ok: false, code: "not_found" };
-  const [{ data: lawsuit }, { data: tracking }] = await Promise.all([
-    context.supabase
-      .from("proceedings")
-      .select("court, unit")
-      .eq("id", proceedingId)
-      .eq("org_id", context.firm.id)
-      .maybeSingle(),
-    context.supabase.from("proceeding_tracking").select("snapshot").eq("proceeding_id", proceedingId).maybeSingle(),
-  ]);
-  const court = (lawsuit as { court?: string | null } | null)?.court ?? null;
-  if (!court) return { ok: false, code: "not_found" };
-  const unit = (lawsuit as { unit?: string | null } | null)?.unit ?? null;
-  // The judge as the court's course names them among who answers for the lawsuit (`lib/courts/course-facts.ts`).
-  const snapshot = (tracking as { snapshot?: unknown } | null)?.snapshot as { responsibles?: unknown } | null;
-  const listed = snapshot?.responsibles;
-  const responsibles = Array.isArray(listed) ? (listed as { name?: unknown; role?: unknown }[]) : [];
-  const named = responsibles.find((person) => /juiz/i.test(String(person?.role ?? "")))?.name;
-  const judge = typeof named === "string" && named.trim() ? named.trim() : null;
-  const { data, error } = await context.supabase.rpc("market_profile", {
-    target_court: court,
-    target_unit: unit,
-    target_judge: judge,
+  if (!context?.firm || !ID.test(String(proceedingId ?? ""))) return null;
+  const { data, error } = await context.supabase.rpc("case_forecast", { target_proceeding: proceedingId });
+  if (error) throw new Error("case_forecast failed");
+  return caseForecastOf(data);
+}
+
+export type FirmForecast = {
+  refreshedAt: string | null;
+  withForecast: number;
+  withoutForecast: number;
+  expectedCents: number;
+  bands: { high: number; mid: number; low: number };
+  airlines: { airline: string | null; name: string | null; lawsuits: number; expectedCents: number }[];
+  accuracy: {
+    judged: number;
+    asForecast: number;
+    forecastPercent: number | null;
+    wonPercent: number | null;
+    minSample: number;
+  };
+};
+
+/** The firm's forecast (0250): its open lawsuits summed, and how the forecast came out. */
+export async function readFirmForecast(withTests: boolean): Promise<FirmForecast | null> {
+  const context = await getMemberContext();
+  if (!context?.firm) return null;
+  const { data, error } = await context.supabase.rpc("firm_forecast", {
+    target_org: context.firm.id,
+    with_tests: withTests === true,
   });
-  if (error) return { ok: false, code: "failed" };
-  const answer = (data ?? {}) as { unit?: unknown; judge?: unknown; court?: unknown };
+  if (error) throw new Error("firm_forecast failed");
+  if (!data || typeof data !== "object") return null;
+  const row = data as Record<string, unknown>;
+  const n = (value: unknown) => Number(value) || 0;
+  const maybe = (value: unknown) => (value === null || value === undefined ? null : Number(value));
+  const bands = (row.bands ?? {}) as Record<string, unknown>;
+  const accuracy = (row.accuracy ?? {}) as Record<string, unknown>;
   return {
-    ok: true,
-    unit,
-    judge,
-    unitNumbers: marketNumbersOf(answer.unit),
-    judgeNumbers: marketNumbersOf(answer.judge),
-    courtNumbers: marketNumbersOf(answer.court),
+    refreshedAt: typeof row.refreshed_at === "string" ? row.refreshed_at : null,
+    withForecast: n(row.with_forecast),
+    withoutForecast: n(row.without_forecast),
+    expectedCents: n(row.expected_cents),
+    bands: { high: n(bands.high), mid: n(bands.mid), low: n(bands.low) },
+    airlines: (Array.isArray(row.airlines) ? (row.airlines as Record<string, unknown>[]) : []).map((item) => ({
+      airline: typeof item.airline === "string" ? item.airline : null,
+      name: typeof item.name === "string" ? item.name : null,
+      lawsuits: n(item.lawsuits),
+      expectedCents: n(item.expected_cents),
+    })),
+    accuracy: {
+      judged: n(accuracy.judged),
+      asForecast: n(accuracy.as_forecast),
+      forecastPercent: maybe(accuracy.forecast_percent),
+      wonPercent: maybe(accuracy.won_percent),
+      minSample: n(accuracy.min_sample) || 5,
+    },
   };
 }
 
