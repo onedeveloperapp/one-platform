@@ -186,6 +186,9 @@ export type CaseNowInput = {
   statementsWorking: { id: string; spoken: boolean; since: string | null }[];
 };
 
+/** ONE's lines of work still to come, said on the case but never what holds it (the owner's test of 2026-11-13). */
+const TO_COME: ReadonlySet<string> = new Set(["account:after-signature"]);
+
 const KIND_KEY: Record<Lawsuit["kind"], string> = {
   juizado: "case-proceeding-kind-juizado",
   comum: "case-proceeding-kind-comum",
@@ -1178,11 +1181,13 @@ export function caseNow(input: CaseNowInput): CaseNow {
   blocking.sort((a, b) => OWNER_ORDER[a.owner] - OWNER_ORDER[b.owner] || FIRM_FIRST[a.tone] - FIRM_FIRST[b.tone]);
   working.sort((a, b) => (a.since ?? "9").localeCompare(b.since ?? "9"));
 
+  // ONE's work to come (the account it asks after the signature) is said, and never what holds the case.
+  const onesNow = working.some((line) => !TO_COME.has(line.id));
   const holder: NowHolder = ended
     ? "ended"
     : blocking.some((line) => line.owner === "firm")
       ? "firm"
-      : working.length > 0
+      : onesNow
         ? "one"
         : blocking.some((line) => line.owner === "client")
           ? "client"

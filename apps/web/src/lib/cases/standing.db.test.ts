@@ -168,11 +168,14 @@ describe.skipIf(!DB_URL)("who has each case: the controladoria and the top of th
       values ('${ANA}', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'ana@posicao.invalid', '', now(), '{}', '{"display_name":"Ana Souza"}', now(), now());
       insert into public.organizations (id, name, slug, created_by) values ('${FIRM}', 'Souza Advogados', 'souza-posicao-app', '${ANA}');
       insert into public.memberships (org_id, user_id, role, firm_function) values ('${FIRM}', '${ANA}', 'owner', 'socio');
+      -- The firm keeps the court system with a person (ONE decides it by default since 0240), so a case shows that path.
+      insert into public.firm_autonomy (org_id, decision, mode) values ('${FIRM}', 'court_system', 'approval');
     `);
 
     // The client still owes their data.
     cases.lacks = (await opened("Lia Teste", false)).caseId;
-    // Everything there, and no account of what happened yet: the client's.
+    // Everything there, and no account of what happened yet: ONE asks it in the chat after the signature, its work to
+    // come, so the case is ONE's (0239, 0252).
     cases.account = (await opened("Caio Teste", true)).caseId;
     // A document waits for the firm to decide it.
     const waits = await opened("Duda Teste", true);
@@ -297,7 +300,7 @@ describe.skipIf(!DB_URL)("who has each case: the controladoria and the top of th
     // Each case shows what it was made to show, so the comparison went through every kind of holder.
     expect(seen).toMatchObject({
       lacks: "client",
-      account: "client",
+      account: "one",
       documents: "firm",
       checking: "one",
       looking: "one",

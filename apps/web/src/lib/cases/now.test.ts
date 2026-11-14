@@ -110,6 +110,11 @@ describe("caseNow", () => {
     const before = caseNow(base({ account: "missing", accountAfterSignature: true }));
     expect(ids(before.blocking)).not.toContain("account:missing");
     expect(ids(before.working)).toContain("account:after-signature");
+    expect(before.holder).toBe("one");
+    // While the client still owes their data, the case is the client's, the account said as ONE's work to come.
+    const owing = caseNow(base({ account: "missing", accountAfterSignature: true, missing: [{ type: "flight" }] }));
+    expect(ids(owing.working)).toContain("account:after-signature");
+    expect(owing.holder).toBe("client");
   });
 
   it("says the piece waits for the client while ONE asks what it lacks, else for a lawyer (0099)", () => {
