@@ -155,6 +155,12 @@ const ERROR_KEY: Record<string, string> = {
   reason_required: "hearing-error-reason",
   zone_required: "hearing-error-zone",
   invalid_data: "hearing-error-invalid",
+  // Who goes from outside the firm (0251).
+  phone_required: "hearing-error-phone-required",
+  invalid_phone: "hearing-error-phone-invalid",
+  firm_number: "hearing-error-phone-firm",
+  member_number: "hearing-error-phone-member",
+  not_scheduled: "hearing-error-closed",
 };
 
 /**

@@ -18,6 +18,7 @@ import {
 } from "@mui/material";
 
 import DeadlinePanel from "@/components/deadlines/deadline-panel";
+import AttendeeChoice from "@/components/hearings/attendee-choice";
 import HearingPanel from "@/components/hearings/hearing-panel";
 import DialogHeader from "@/components/product/dialog-header";
 import QuickActions, { type QuickAction } from "@/components/product/quick-actions";
@@ -173,6 +174,8 @@ export default function PublicationCard({
   const savedNote = said ? said.note : row.note;
   const deadlines = progress?.deadlines ?? row.deadlines;
   const hearings = progress?.hearings ?? row.hearings;
+  /** The hearing to come the publication set, whose attendee the firm says where it takes notice of it (0251). */
+  const nextHearing = hearings.find((hearing) => hearing.status === "scheduled") ?? null;
   /** What ONE read of what the publication set, or is reading now. */
   const readingNow = row.active
     ? readingOnCard(category, progress?.readings ?? row.readings, said?.reading ?? null, said?.at, progress?.readAt)
@@ -582,6 +585,26 @@ export default function PublicationCard({
           </Alert>
         ) : null}
 
+        {/* Who goes to the hearing, said where the firm takes notice of it (the owner, 2026-11-14). */}
+        {!inline &&
+        row.ackOwed &&
+        !acked &&
+        !said &&
+        category === "audiencia" &&
+        !controls &&
+        row.active &&
+        mayTriage &&
+        nextHearing ? (
+          <AttendeeChoice
+            hearingId={nextHearing.id}
+            colleagues={colleagues}
+            current={{
+              userId: nextHearing.attendeeUserId ?? null,
+              contactId: nextHearing.attendeeContactId ?? null,
+              name: nextHearing.attendeeName ?? null,
+            }}
+          />
+        ) : null}
         {!inline && row.ackOwed && !acked && !said && category && !controls && row.active ? (
           <StateLine
             tone="attention"

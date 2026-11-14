@@ -14,7 +14,7 @@ import { firmPulseOf } from "@/lib/cases/pulse";
 import { readFinanceAttention } from "@/lib/finance/attention";
 import { readFilingAttention } from "@/lib/firm/filing-attention";
 import { attentionGroups, pendingGroups, readFirmPending } from "@/lib/firm/pending";
-import { personFlowKey, personSetupOwed, signsAtTheBar } from "@/lib/firm/person-setup";
+import { personFlowKey, personSetupOwed, personSetupShown, signsAtTheBar } from "@/lib/firm/person-setup";
 import { readPublicationAcks } from "@/lib/firm/publication-acks";
 import { isManager } from "@/lib/firm/roles";
 import { readFirmToday, todayViewerOf } from "@/lib/firm/today";
@@ -106,6 +106,7 @@ async function loadHome(): Promise<
     finance,
     outcomes,
     djen,
+    ownWhatsapp,
   ] = await Promise.all([
     context.supabase.rpc("firm_today", { target_org: firm.id }),
     context.supabase.rpc("firm_pending", { target_org: firm.id }),
@@ -165,16 +166,25 @@ async function loadHome(): Promise<
     context.supabase
       .rpc("firm_djen_outage", { target_org: firm.id })
       .then(({ data, error }) => (error ? null : readDjenOutage(data))),
+    // The person's own WhatsApp, required (the owner, 2026-11-14).
+    context.supabase.from("profiles").select("whatsapp").eq("id", context.userId).maybeSingle(),
   ]);
   if (manager && facts && !isSetupAnswered(facts)) return { kind: "setup", setup: await loadSetupState(context) };
   // Read failures owe nothing: a registration that could not be read is never said to be missing.
   const registered = ownRegistration.error ? true : (ownRegistration.data ?? []).length > 0;
+  const hasWhatsapp = ownWhatsapp.error
+    ? true
+    : Boolean((ownWhatsapp.data as { whatsapp?: string | null } | null)?.whatsapp);
   const owed = personSetupOwed({
     hasFactor: assurance.error ? true : assurance.data?.nextLevel === "aal2",
     firmFunction: firm.firmFunction,
     registered,
+    hasWhatsapp,
   });
-  if (owed && !personFlow.completedAt && !cookieStore.has(IMPERSONATION_MARKER_COOKIE)) {
+  if (
+    personSetupShown({ owed, answered: Boolean(personFlow.completedAt), hasWhatsapp }) &&
+    !cookieStore.has(IMPERSONATION_MARKER_COOKIE)
+  ) {
     return { kind: "person-setup", setup: await loadPersonSetupState(context) };
   }
   const read = today.error ? null : readFirmToday(today.data);

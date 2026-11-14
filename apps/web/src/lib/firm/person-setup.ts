@@ -7,15 +7,18 @@ import type { FlowKey } from "@flyee/onboarding";
  * back, importing the portfolio and authorizing a signature in the cloud ask for it), and one who never registered
  * at the bar had their publications unread, since ONE reads the DJEN by the registrations of the firm's people.
  *
- * So each person leaves their own work ready: the second factor first, then, for who signs at the bar (a partner or
- * a lawyer), their registration. It opens on the home while something is owed and the person never answered it, and
- * at `/configurar` for anybody who does not manage the firm; who manages it answers the same in the firm's setup,
- * whose finish answers this one too. Only the person's own state is kept (`onboarding_state`, flow below).
+ * So each person leaves their own work ready: the second factor first, then their own WhatsApp, which everybody
+ * gives (the owner, 2026-11-14: by it a person is linked to a hearing, gets its guide and reports it; the firm's main
+ * number is the only one connected), then, for who signs at the bar (a partner or a lawyer), their registration. It
+ * opens on the home while something is owed and the person never answered it, and while their WhatsApp is missing
+ * whatever they answered; and at `/configurar` for anybody who does not manage the firm; who manages it answers the
+ * rest in the firm's setup, whose finish answers this one too. Only the person's own state is kept
+ * (`onboarding_state`, flow below).
  */
 
 export const PERSON_SETUP_FLOW = "person-setup";
 
-export const PERSON_SETUP_STEPS = ["seguranca", "oab"] as const;
+export const PERSON_SETUP_STEPS = ["seguranca", "whatsapp", "oab"] as const;
 export type PersonSetupStep = (typeof PERSON_SETUP_STEPS)[number];
 
 export const isPersonSetupStep = (value: unknown): value is PersonSetupStep =>
@@ -25,18 +28,29 @@ export const isPersonSetupStep = (value: unknown): value is PersonSetupStep =>
 export const signsAtTheBar = (firmFunction: FirmFunction | null | undefined): boolean =>
   firmFunction === "socio" || firmFunction === "advogado";
 
-/** The steps a person walks: the factor, and the registration for who signs at the bar. */
+/** The steps a person walks: the factor, their WhatsApp, and the registration for who signs at the bar. */
 export const personSetupSteps = (firmFunction: FirmFunction | null | undefined): PersonSetupStep[] =>
-  signsAtTheBar(firmFunction) ? ["seguranca", "oab"] : ["seguranca"];
+  signsAtTheBar(firmFunction) ? ["seguranca", "whatsapp", "oab"] : ["seguranca", "whatsapp"];
 
-/** Something of the person's own work is still owed: the account has no factor, or a lawyer has no registration. */
+/**
+ * Something of the person's own work is still owed: the account has no factor, the person no WhatsApp, or a lawyer
+ * no registration.
+ */
 export function personSetupOwed(input: {
   hasFactor: boolean;
   firmFunction: FirmFunction | null | undefined;
   registered: boolean;
+  hasWhatsapp: boolean;
 }): boolean {
-  return !input.hasFactor || (signsAtTheBar(input.firmFunction) && !input.registered);
+  return !input.hasFactor || !input.hasWhatsapp || (signsAtTheBar(input.firmFunction) && !input.registered);
 }
+
+/**
+ * Whether the person's setup opens on the home: while something is owed and they never answered it, and while their
+ * WhatsApp is missing whatever they answered, since it is required (the owner, 2026-11-14).
+ */
+export const personSetupShown = (input: { owed: boolean; answered: boolean; hasWhatsapp: boolean }): boolean =>
+  (input.owed && !input.answered) || !input.hasWhatsapp;
 
 /**
  * Where the person's setup opens: the step asked for when the person has it, else the first one; a session without

@@ -1,13 +1,14 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 
 import {
   Alert,
   Box,
   Button,
   FormControlLabel,
+  ListSubheader,
   MenuItem,
   Radio,
   RadioGroup,
@@ -19,6 +20,7 @@ import { PhoneField } from "@/components/product/fields";
 import SidePanel from "@/components/product/side-panel";
 import NiCalendar from "@/icons/nexture/ni-calendar";
 import { saveHearing } from "@/lib/hearings/actions";
+import { type HearingContact, hearingContacts } from "@/lib/hearings/contacts";
 import type { Colleague, HearingRow } from "@/lib/hearings/facts";
 import {
   type CourtZones,
@@ -36,6 +38,7 @@ import {
   startingZone,
   ZONE_KEY,
 } from "@/lib/hearings/hearings";
+import { formatPhoneBr, isValidPhoneBr } from "@flyee/fields";
 
 /** A new hearing's lawsuit, and the publication of it the person came from. */
 export type HearingSubject = {
@@ -50,6 +53,11 @@ export type HearingSubject = {
 /** A colleague who attends, somebody from outside the firm, or nobody yet. */
 const OTHER = "outra";
 const NOBODY = "";
+/** An attendee from outside of the firm's list (0251), by its id. */
+const CONTACT = "contato:";
+
+/** A WhatsApp as the list shows it: the number without the country's 55, masked. */
+const phoneWords = (digits: string): string => formatPhoneBr(digits.startsWith("55") ? digits.slice(2) : digits);
 
 /**
  * Where a person writes a hearing: what it is, the day and the time as the
@@ -108,7 +116,29 @@ export default function HearingPanel({
   const zoneHelpKey = several && !editing ? "hearing-field-zone-several" : "hearing-field-zone-help";
   const [place, setPlace] = useState(editing?.place ?? "");
   const [link, setLink] = useState(editing?.link ?? "");
-  const [attendee, setAttendee] = useState<string>(editing?.attendeeUserId ?? (editing?.attendee ? OTHER : NOBODY));
+  const [attendee, setAttendee] = useState<string>(
+    editing?.attendeeUserId ??
+      (editing?.attendeeContactId ? `${CONTACT}${editing.attendeeContactId}` : editing?.attendee ? OTHER : NOBODY),
+  );
+  // The firm's attendees from outside (0251), read as the panel opens; a read that fails offers only "Outra pessoa".
+  const [contacts, setContacts] = useState<HearingContact[]>([]);
+  useEffect(() => {
+    let alive = true;
+    void hearingContacts()
+      .then((read) => {
+        if (alive && read.ok) setContacts(read.contacts);
+      })
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, []);
+  const chosenContact = attendee.startsWith(CONTACT)
+    ? (contacts.find((contact) => `${CONTACT}${contact.id}` === attendee) ?? null)
+    : null;
+  // Somebody from outside written anew gives their WhatsApp, by which ONE sends the guide and knows the report; a
+  // hearing written before with a name and no WhatsApp keeps it so.
+  const keepsOldPhone = Boolean(editing && !editing.attendeeUserId && !editing.attendeeContactId && editing.attendee);
   const [attendeeName, setAttendeeName] = useState(editing && !editing.attendeeUserId ? (editing.attendee ?? "") : "");
   const [attendeePhone, setAttendeePhone] = useState("");
   const [notes, setNotes] = useState(editing?.notes ?? "");
@@ -132,6 +162,10 @@ export default function HearingPanel({
       setProblem({ code: "zone_required", field: "time_zone" });
       return;
     }
+    if (attendee === OTHER && !keepsOldPhone && !isValidPhoneBr(attendeePhone)) {
+      setProblem({ code: attendeePhone ? "invalid_phone" : "phone_required", field: "attendee_phone" });
+      return;
+    }
     setBusy(true);
     setProblem(null);
     try {
@@ -145,9 +179,16 @@ export default function HearingPanel({
         timeZone: zone,
         place: showsPlace ? place : null,
         link: showsLink ? link : null,
-        attendeeUserId: attendee && attendee !== OTHER ? attendee : null,
-        attendeeName: attendee === OTHER ? attendeeName : null,
-        attendeePhone: attendee === OTHER ? attendeePhone : null,
+        attendeeUserId: attendee && attendee !== OTHER && !attendee.startsWith(CONTACT) ? attendee : null,
+        // An attendee of the list taken out of it since stays on the hearing as it was.
+        attendeeName: chosenContact
+          ? chosenContact.name
+          : attendee === OTHER
+            ? attendeeName
+            : attendee.startsWith(CONTACT)
+              ? (editing?.attendee ?? null)
+              : null,
+        attendeePhone: chosenContact ? chosenContact.phone : attendee === OTHER ? attendeePhone : null,
         notes,
         publicationId: editing ? null : (subject?.publicationId ?? null),
       });
@@ -325,6 +366,16 @@ export default function HearingPanel({
                 {person.name}
               </MenuItem>
             ))}
+            {contacts.length > 0 ? <ListSubheader>{t("hearing-attendee-contacts")}</ListSubheader> : null}
+            {contacts.map((contact) => (
+              <MenuItem key={contact.id} value={`${CONTACT}${contact.id}`}>
+                {t("hearing-attendee-contact", { name: contact.name, phone: phoneWords(contact.phone) })}
+              </MenuItem>
+            ))}
+            {/* The attendee of a hearing written before, from outside, not in the list (yet): still a choice. */}
+            {attendee.startsWith(CONTACT) && !chosenContact && editing?.attendee ? (
+              <MenuItem value={attendee}>{editing.attendee}</MenuItem>
+            ) : null}
             <MenuItem value={OTHER}>{t("hearing-attendee-other")}</MenuItem>
           </TextField>
           {attendee === OTHER ? (
@@ -352,7 +403,7 @@ export default function HearingPanel({
               error={Boolean(fieldError("attendee_phone"))}
               helperText={
                 fieldError("attendee_phone") ??
-                t(editing ? "hearing-field-attendee-phone-keep" : "hearing-field-attendee-phone-help")
+                t(keepsOldPhone ? "hearing-field-attendee-phone-keep" : "hearing-field-attendee-phone-help")
               }
             />
           ) : null}

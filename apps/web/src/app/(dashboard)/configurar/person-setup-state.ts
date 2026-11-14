@@ -21,7 +21,7 @@ export async function loadPersonSetupState(
 ): Promise<PersonSetupState> {
   const firm = context?.firm ?? null;
   if (!context || !firm) return { kind: "unavailable" };
-  const [registrations, assurance, cookieStore, declaredCpf, cloudSigning] = await Promise.all([
+  const [registrations, assurance, cookieStore, declaredCpf, cloudSigning, profile] = await Promise.all([
     context.supabase.from("oab_registrations").select("id, uf, number, kind").eq("user_id", context.userId),
     context.supabase.auth.mfa.getAuthenticatorAssuranceLevel(),
     cookies(),
@@ -29,8 +29,10 @@ export async function loadPersonSetupState(
     // nothing (the team's card asks it when a lawsuit needs it).
     context.supabase.from("lawyer_cpfs").select("user_id").eq("user_id", context.userId).maybeSingle(),
     cloudSigningOffered(context.supabase).catch(() => false),
+    // Their own WhatsApp (0187), which everybody gives (the owner, 2026-11-14).
+    context.supabase.from("profiles").select("whatsapp").eq("id", context.userId).maybeSingle(),
   ]);
-  if (registrations.error) return { kind: "error" };
+  if (registrations.error || profile.error) return { kind: "error" };
   const secondFactor: SecondFactorState =
     assurance.data?.currentLevel === "aal2" ? "ok" : assurance.data?.nextLevel === "aal2" ? "challenge" : "missing";
   return {
@@ -43,6 +45,7 @@ export async function loadPersonSetupState(
       (OAB_STATES as readonly string[]).includes(registration.uf),
     ),
     asksCpf: cloudSigning && !declaredCpf.error && declaredCpf.data === null,
+    whatsapp: (profile.data as { whatsapp?: string | null } | null)?.whatsapp ?? null,
     secondFactor,
     supportVisit: cookieStore.has(IMPERSONATION_MARKER_COOKIE),
     step,

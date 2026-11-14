@@ -108,6 +108,7 @@ const CONNECT_ERROR_KEYS: Record<string, string> = {
   not_allowed_in_support_session: "connections-error-support-session",
   not_authorized: "connections-error-not-authorized",
   number_in_use: "connections-error-number-in-use",
+  firm_has_number: "connections-error-firm-has-number",
   simulator_off: "connections-error-simulator-off",
   simulator_not_allowed: "connections-error-simulator-not-allowed",
   test_chat_not_allowed: "connections-error-test-chat-not-allowed",

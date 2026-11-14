@@ -10,6 +10,13 @@ import { saveMyWhatsapp } from "@/lib/firm/whatsapp-actions";
 import { createClient } from "@flyee/auth/client";
 import { onlyDigits } from "@flyee/fields";
 
+/** Why a WhatsApp was refused, in the words of the person's setup (0251). */
+const WHATSAPP_REFUSAL: Record<string, string> = {
+  firm_number: "person-setup-whatsapp-error-firm",
+  member_number: "person-setup-whatsapp-error-member",
+  invalid_phone: "person-setup-whatsapp-error-invalid",
+};
+
 /**
  * The person's own WhatsApp (migration 0187): ONE knows them by it when they send the firm's WhatsApp the result of a
  * hearing they went to, and records it on the hearing. Kept on their profile and nowhere else.
@@ -20,6 +27,8 @@ export default function WhatsappCard() {
   const [loaded, setLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState<"saved" | "error" | null>(null);
+  /** Why it was refused, when the database says (0251): the firm's number, a colleague's, a number that is none. */
+  const [refusal, setRefusal] = useState<string | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -39,9 +48,11 @@ export default function WhatsappCard() {
   const save = async () => {
     setSaving(true);
     setStatus(null);
+    setRefusal(null);
     try {
       const result = await saveMyWhatsapp(onlyDigits(phone));
       setStatus(result.ok ? "saved" : "error");
+      if (!result.ok) setRefusal(WHATSAPP_REFUSAL[result.code] ?? null);
     } catch {
       setStatus("error");
     } finally {
@@ -66,7 +77,7 @@ export default function WhatsappCard() {
           </Alert>
         ) : status === "error" ? (
           <Alert severity="error" className="neutral bg-background-paper/60!">
-            {t("settings-whatsapp-error")}
+            {t(refusal ?? "settings-whatsapp-error")}
           </Alert>
         ) : null}
         <Box className="flex flex-wrap items-end gap-3">

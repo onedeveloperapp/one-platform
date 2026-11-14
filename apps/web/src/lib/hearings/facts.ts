@@ -36,6 +36,8 @@ export type HearingRow = {
   place: string | null;
   link: string | null;
   attendeeUserId: string | null;
+  /** The attendee from outside of the firm's list it was chosen for (0251), when one was. */
+  attendeeContactId: string | null;
   /** Who attends: the colleague's name, or the name written for somebody from outside the firm. */
   attendee: string | null;
   notes: string | null;
@@ -104,6 +106,7 @@ type RawRow = {
   link: string | null;
   attendee_user_id: string | null;
   attendee_name: string | null;
+  attendee_contact_id?: string | null;
   notes: string | null;
   source: string;
   publication_id: string | null;
@@ -161,6 +164,7 @@ function toRow(raw: RawRow, names: Map<string, string>, timeZone: string | null 
     place: raw.place,
     link: raw.link,
     attendeeUserId: raw.attendee_user_id,
+    attendeeContactId: raw.attendee_contact_id ?? null,
     attendee: raw.attendee_name ?? (raw.attendee_user_id ? names.get(raw.attendee_user_id) || null : null),
     notes: raw.notes,
     source: raw.source === "publication" ? "publication" : "person",
@@ -327,13 +331,19 @@ export async function colleagues(supabase: SupabaseClient, firmId: string): Prom
     .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
 }
 
-/** A hearing written from a publication, as the publication's card says it; `auto` when ONE wrote it (0040). */
+/**
+ * A hearing written from a publication, as the publication's card says it; `auto` when ONE wrote it (0040); and who
+ * goes, which the firm says where it takes notice of it (0251).
+ */
 export type PublicationHearing = {
   id: string;
   startsAt: string;
   timeZone: string;
   status: HearingStatus;
   auto: boolean;
+  attendeeUserId?: string | null;
+  attendeeContactId?: string | null;
+  attendeeName?: string | null;
 };
 
 /** The hearings written from some publications, by publication. */
@@ -346,7 +356,9 @@ export async function publicationHearings(
   if (publicationIds.length === 0) return found;
   const { data, error } = await supabase
     .from("hearings")
-    .select("id, publication_id, starts_at, time_zone, status, created_auto")
+    .select(
+      "id, publication_id, starts_at, time_zone, status, created_auto, attendee_user_id, attendee_contact_id, attendee_name",
+    )
     .eq("org_id", firmId)
     .in("publication_id", [...publicationIds])
     .order("starts_at", { ascending: true })
@@ -359,6 +371,9 @@ export async function publicationHearings(
     time_zone: string;
     status: string;
     created_auto: boolean | null;
+    attendee_user_id: string | null;
+    attendee_contact_id: string | null;
+    attendee_name: string | null;
   }[]) {
     if (!isHearingStatus(row.status)) continue;
     const list = found.get(row.publication_id) ?? [];
@@ -368,6 +383,9 @@ export async function publicationHearings(
       timeZone: row.time_zone,
       status: row.status,
       auto: row.created_auto === true,
+      attendeeUserId: row.attendee_user_id,
+      attendeeContactId: row.attendee_contact_id,
+      attendeeName: row.attendee_name,
     });
     found.set(row.publication_id, list);
   }

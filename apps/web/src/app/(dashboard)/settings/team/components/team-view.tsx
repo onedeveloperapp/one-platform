@@ -8,6 +8,7 @@ import type { TeamState } from "../team-types";
 import CertificatesCard from "./certificates-card";
 import CloudSignatureCard from "./cloud-signature-card";
 import FirmCard from "./firm-card";
+import HearingContactsCard from "./hearing-contacts-card";
 import InvitePanel from "./invite-panel";
 import OabCard from "./oab-card";
 import OfficeCard from "./office-card";
@@ -223,6 +224,10 @@ export default function TeamView({ state, part }: { state: TeamState; part: Team
                 onInvite={() => setInviting(true)}
                 onClearSearch={() => setSearch("")}
               />
+            </Grid>
+            {/* Who goes to hearings for the firm with no account in ONE (0251), for everybody of the firm. */}
+            <Grid size={12}>
+              <HearingContactsCard />
             </Grid>
             {/* The team's authorizations, for a partner or who manages the firm: each lawyer's own is theirs, in
                 Atuação profissional. */}

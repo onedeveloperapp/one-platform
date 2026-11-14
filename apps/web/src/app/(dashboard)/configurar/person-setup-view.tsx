@@ -19,6 +19,7 @@ import {
   Typography,
 } from "@mui/material";
 
+import { PhoneField } from "@/components/product/fields";
 import PageHeader from "@/components/product/page-header";
 import SecondFactorPrompt from "@/components/product/second-factor-prompt";
 import SetupWizard, { type WizardStep } from "@/components/product/setup-wizard";
@@ -26,8 +27,10 @@ import type { SecondFactorState } from "@/lib/ai/approvals";
 import { addOabRegistration } from "@/lib/firm/actions";
 import { personFlowKey, personSetupOpening, type PersonSetupStep, personSetupSteps } from "@/lib/firm/person-setup";
 import { type FirmFunction, formatOab, OAB_STATES, type OabRegistration } from "@/lib/firm/roles";
+import { saveMyWhatsapp } from "@/lib/firm/whatsapp-actions";
 import { enterAfterSessionChange } from "@/lib/safe-next";
 import { createClient } from "@flyee/auth/client";
+import { isValidPhoneBr, onlyDigits } from "@flyee/fields";
 import { completeFlow } from "@flyee/onboarding";
 
 /** What a person's own setup shows (2026-11-03), read under their session by `person-setup-state.ts`. */
@@ -44,11 +47,23 @@ export type PersonSetupState =
       registrations: OabRegistration[];
       /** Their CPF for the signature in the cloud is asked: a provider can be used here and they declared none. */
       asksCpf: boolean;
+      /** Their own WhatsApp, the digits with the country's 55; null while they gave none (it is required). */
+      whatsapp: string | null;
       secondFactor: SecondFactorState;
       supportVisit: boolean;
       /** The step the address asked for (`?passo=`). */
       step: PersonSetupStep | null;
     };
+
+/** Why a WhatsApp was refused, in the words the step says it. */
+const WHATSAPP_ERROR: Record<string, string> = {
+  firm_number: "person-setup-whatsapp-error-firm",
+  member_number: "person-setup-whatsapp-error-member",
+  invalid_phone: "person-setup-whatsapp-error-invalid",
+};
+
+/** A WhatsApp as the field shows it: the number without the country's 55. */
+const localPhone = (digits: string | null): string => (digits?.startsWith("55") ? digits.slice(2) : (digits ?? ""));
 
 /** Digits and, in the sections that use one, the letter at the end: what the bar writes. */
 const NUMBER_PATTERN = /^[0-9]{1,7}[A-Za-z]?$/;
@@ -56,8 +71,9 @@ const cleanNumber = (value: string) => value.replace(/[^0-9A-Za-z]/g, "");
 
 /**
  * What a person who joins a firm leaves ready for their own work, one decision per screen: the second factor first,
- * which approving what the AI prepared and deciding for the firm ask for, then, for a partner or a lawyer, their
- * registration at the bar, by which ONE reads their publications in the DJEN. It opens on the home while something
+ * which approving what the AI prepared and deciding for the firm ask for, then their own WhatsApp, required (by it
+ * ONE links them to a hearing, sends its guide and knows their report, the owner, 2026-11-14), then, for a partner or
+ * a lawyer, their registration at the bar, by which ONE reads their publications in the DJEN. It opens on the home while something
  * of it is owed and the person never answered it (a lawyer dropped on the home met the factor half way and had
  * their publications unread, 2026-11-03), and at `/configurar` for anybody who does not manage the firm. Nothing
  * on it leads away; "Fazer depois" sets it aside on purpose.
@@ -96,6 +112,30 @@ function PersonSetupFlow({ state }: { state: Extract<PersonSetupState, { kind: "
   const onFactor = () => {
     setConfirmedHere(true);
     if (opening.afterFactor) setStepIndex(Math.max(0, keys.indexOf(opening.afterFactor)));
+  };
+
+  // ---------- Their WhatsApp ----------
+  const [phone, setPhone] = useState(localPhone(state.whatsapp));
+  const [savedPhone, setSavedPhone] = useState(state.whatsapp);
+  const [phoneTouched, setPhoneTouched] = useState(false);
+  const [phoneError, setPhoneError] = useState<string | null>(null);
+  const phoneOk = isValidPhoneBr(phone);
+  /** Required: until a WhatsApp is kept, the setup is not set aside. */
+  const whatsappMissing = !savedPhone;
+
+  const saveWhatsapp = async (): Promise<boolean> => {
+    setPhoneError(null);
+    setPhoneTouched(true);
+    if (!phoneOk) return false;
+    const digits = onlyDigits(phone);
+    if (savedPhone && localPhone(savedPhone) === digits) return true;
+    const saved = await saveMyWhatsapp(digits).catch(() => ({ ok: false as const, code: "failed" }));
+    if (!saved.ok) {
+      setPhoneError(t(WHATSAPP_ERROR[saved.code] ?? "person-setup-whatsapp-error"));
+      return false;
+    }
+    setSavedPhone(`55${digits}`);
+    return true;
   };
 
   // ---------- The registration at the bar ----------
@@ -160,14 +200,11 @@ function PersonSetupFlow({ state }: { state: Extract<PersonSetupState, { kind: "
     </Alert>
   ) : null;
 
-  const factorLast = keys.length === 1;
   const factorStep: WizardStep = {
     title: t("setup-factor-title"),
     hint: factor === "challenge" ? t("setup-factor-challenge") : t("person-setup-factor-hint"),
     canAdvance: factorOk && !blocked,
     hidePrimary: !factorOk && !blocked,
-    // Who does not sign at the bar has this step alone: once the factor is on, it finishes the setup.
-    ...(factorLast ? { primaryLabel: t("setup-finish"), onPrimary: finish, busy: leaving } : {}),
     content: (
       <Box className="flex flex-col gap-4">
         {factorOk ? (
@@ -177,7 +214,45 @@ function PersonSetupFlow({ state }: { state: Extract<PersonSetupState, { kind: "
         ) : blocked ? null : (
           <SecondFactorPrompt state={factor} onConfirmed={onFactor} />
         )}
-        {factorLast ? finishProblem : null}
+      </Box>
+    ),
+  };
+
+  // Who does not sign at the bar ends on their WhatsApp.
+  const whatsappLast = keys[keys.length - 1] === "whatsapp";
+  const whatsappStep: WizardStep = {
+    title: t("person-setup-whatsapp-title"),
+    hint: t("person-setup-whatsapp-hint"),
+    canAdvance: phoneOk && !blocked && !leaving,
+    ...(whatsappLast
+      ? {
+          primaryLabel: t("setup-finish"),
+          busy: leaving,
+          onPrimary: async () => (await saveWhatsapp()) && (await finish()),
+        }
+      : { onPrimary: saveWhatsapp }),
+    content: (
+      <Box className="flex flex-col gap-4">
+        <PhoneField
+          id="person-setup-whatsapp"
+          label={t("person-setup-whatsapp-label")}
+          value={phone}
+          disabled={blocked}
+          onChange={(event) => {
+            setPhone(event.target.value);
+            setPhoneError(null);
+          }}
+          onBlur={() => setPhoneTouched(true)}
+          error={Boolean(phoneError) || (phoneTouched && phone.length > 0 && !phoneOk)}
+          helperText={
+            phoneError ??
+            (phoneTouched && phone.length > 0 && !phoneOk
+              ? t("person-setup-whatsapp-error-invalid")
+              : t("person-setup-whatsapp-help"))
+          }
+          className="max-w-sm"
+        />
+        {whatsappLast ? finishProblem : null}
       </Box>
     ),
   };
@@ -282,7 +357,7 @@ function PersonSetupFlow({ state }: { state: Extract<PersonSetupState, { kind: "
     ),
   };
 
-  const steps = keys.map((key) => (key === "seguranca" ? factorStep : oabStep));
+  const steps = keys.map((key) => (key === "seguranca" ? factorStep : key === "whatsapp" ? whatsappStep : oabStep));
 
   return (
     <Box className="mx-auto flex w-full max-w-2xl flex-col gap-6">
@@ -291,8 +366,9 @@ function PersonSetupFlow({ state }: { state: Extract<PersonSetupState, { kind: "
         description={t("person-setup-description", { firm: state.firmName })}
         // No crumb leads away: the setup is left only by finishing it or setting it aside.
         crumbs={[{ label: state.firmName }, { label: t("person-setup-crumb") }]}
+        // The WhatsApp is required: until it is given, the setup is not set aside.
         action={
-          !blocked ? (
+          !blocked && !whatsappMissing ? (
             <Button variant="text" color="grey" disabled={leaving} onClick={() => void finish()}>
               {t("setup-later")}
             </Button>

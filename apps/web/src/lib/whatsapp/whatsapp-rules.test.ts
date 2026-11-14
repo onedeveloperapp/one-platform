@@ -344,6 +344,7 @@ describe("the rules of the conversations screen", () => {
         "not_allowed_in_support_session",
         "not_authorized",
         "number_in_use",
+        "firm_has_number",
         "simulator_off",
         "simulator_not_allowed",
         "not_recorded",

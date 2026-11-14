@@ -180,3 +180,28 @@ export async function retryHearingSyncs(): Promise<HearingActionResult> {
   }
   return result;
 }
+
+/**
+ * Who goes to a hearing, said where the firm takes notice of it (migration 0251): a colleague, an attendee of the
+ * firm's list from outside, or nobody yet. ONE sends who goes the hearing's guide and knows their report by their
+ * WhatsApp.
+ */
+export async function chooseHearingAttendee(input: {
+  hearingId: string;
+  userId?: string | null;
+  contactId?: string | null;
+}): Promise<HearingActionResult> {
+  const context = await getMemberContext();
+  if (!context?.firm) return { ok: false, code: "failed" };
+  if (!isId(input?.hearingId)) return { ok: false, code: "not_found" };
+  const userId = isId(input.userId) ? input.userId : null;
+  const contactId = isId(input.contactId) ? input.contactId : null;
+  const { data, error } = await context.supabase.rpc("set_hearing_attendee", {
+    target_hearing: input.hearingId,
+    target_user: userId,
+    target_contact: contactId,
+  });
+  const result = fold(data, error);
+  if (result.ok && result.code !== "unchanged") refresh(await caseOf(input.hearingId));
+  return result;
+}

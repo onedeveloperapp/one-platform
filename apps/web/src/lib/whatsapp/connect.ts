@@ -64,6 +64,8 @@ const KNOWN_CODES = [
   "connection_not_found",
   "connection_not_connected",
   "number_in_use",
+  // The firm has one WhatsApp, its main number (0251).
+  "firm_has_number",
   "simulator_not_allowed",
   "test_chat_not_allowed",
   "not_found",
@@ -235,7 +237,10 @@ async function undo(context: MemberContext, connectionId: string, leave?: () => 
 
 /** What the screen is told when a number could not be recorded: the reason when it is the firm's to act on. */
 const notRecorded = (code: string): string =>
-  code === "number_in_use" || code === "simulator_not_allowed" || code === "test_chat_not_allowed"
+  code === "number_in_use" ||
+  code === "firm_has_number" ||
+  code === "simulator_not_allowed" ||
+  code === "test_chat_not_allowed"
     ? code
     : "not_recorded";
 
