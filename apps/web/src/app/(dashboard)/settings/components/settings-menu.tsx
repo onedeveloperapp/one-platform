@@ -13,6 +13,7 @@ import NiEraser from "@/icons/nexture/ni-eraser";
 import NiListCheck from "@/icons/nexture/ni-list-check";
 import NiMessage from "@/icons/nexture/ni-message";
 import NiPlug from "@/icons/nexture/ni-plug";
+import NiPuzzle from "@/icons/nexture/ni-puzzle";
 import NiRobot from "@/icons/nexture/ni-robot";
 import NiUser from "@/icons/nexture/ni-user";
 import NiUsers from "@/icons/nexture/ni-users";
@@ -31,6 +32,7 @@ export type SettingsMenuActive =
   | "messages"
   | "connections"
   | "billing"
+  | "modules"
   | "data"
   /** A page of a module's own settings: the item is the one at the page's address. */
   | "module"
@@ -162,6 +164,13 @@ export default function SettingsMenu({ active }: { active: SettingsMenuActive })
               label={t("settings-billing")}
               icon={<NiWallet size="medium" />}
               selected={active === "billing"}
+            />
+            {/* ONE's modules beside the plan they are packages of (2026-11-14: the menu of the modules went). */}
+            <Item
+              href="/settings/modulos"
+              label={t("modules-title")}
+              icon={<NiPuzzle size="medium" />}
+              selected={active === "modules"}
             />
             {clearsFirm ? (
               <Item

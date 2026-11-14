@@ -279,61 +279,65 @@ function ForecastBody({
             />
           </Box>
         </Box>
-      </Box>
-
-      {read.levels.length > 1 ? (
-        <Box className="border-grey-100 flex flex-col gap-3 rounded-xl border p-4">
-          <SectionTitle
-            id="case-forecast-levels"
-            title={t("forecast-levels-title")}
-            description={t("forecast-levels-hint")}
-            as="h3"
-            variant="subtitle1"
-          />
-          <Box component="ul" className="m-0 flex list-none flex-col gap-3 p-0">
-            {read.levels.map((row) => (
-              <Box component="li" key={row.level} className="flex flex-row items-center gap-3">
-                {row.chancePercent !== null ? (
-                  <RatioGauge
-                    value={row.won}
-                    total={row.merits}
-                    size={44}
-                    tone={row.level === used ? "primary" : "secondary"}
-                    label={t("forecast-chance-gauge", { percent: row.chancePercent })}
-                  />
-                ) : null}
-                <Box className="flex min-w-0 flex-1 flex-col">
-                  <Typography variant="subtitle2" className="text-text-primary">
-                    {levelWords(t, row.level, row.cut, airlineName)}
-                    {row.level === used ? (
-                      <Typography component="span" variant="caption" className="text-text-secondary ms-2">
-                        {t("forecast-level-used")}
-                      </Typography>
+        <Box className="grid grid-cols-1 gap-3 @2xl:grid-cols-2">
+          {read.levels.length > 1 ? (
+            <Box className="border-grey-100 flex flex-col gap-3 rounded-xl border p-4">
+              <SectionTitle
+                id="case-forecast-levels"
+                title={t("forecast-levels-title")}
+                description={t("forecast-levels-hint")}
+                as="h3"
+                variant="subtitle1"
+              />
+              <Box component="ul" className="m-0 flex list-none flex-col gap-3 p-0">
+                {read.levels.map((row) => (
+                  <Box component="li" key={row.level} className="flex flex-row items-center gap-3">
+                    {row.chancePercent !== null ? (
+                      <RatioGauge
+                        value={row.won}
+                        total={row.merits}
+                        size={44}
+                        tone={row.level === used ? "primary" : "secondary"}
+                        label={t("forecast-chance-gauge", { percent: row.chancePercent })}
+                      />
                     ) : null}
-                  </Typography>
-                  <Typography variant="body2" className="text-text-secondary">
-                    {row.median !== null
-                      ? t("forecast-level-detail", { won: row.won, merits: row.merits, value: brl(row.median) })
-                      : t("forecast-level-detail-novalue", { won: row.won, merits: row.merits })}
-                  </Typography>
-                </Box>
+                    <Box className="flex min-w-0 flex-1 flex-col">
+                      <Typography variant="subtitle2" className="text-text-primary">
+                        {levelWords(t, row.level, row.cut, airlineName)}
+                        {row.level === used ? (
+                          <Typography component="span" variant="caption" className="text-text-secondary ms-2">
+                            {t("forecast-level-used")}
+                          </Typography>
+                        ) : null}
+                      </Typography>
+                      <Typography variant="body2" className="text-text-secondary">
+                        {row.median !== null
+                          ? t("forecast-level-detail", { won: row.won, merits: row.merits, value: brl(row.median) })
+                          : t("forecast-level-detail-novalue", { won: row.won, merits: row.merits })}
+                      </Typography>
+                    </Box>
+                  </Box>
+                ))}
               </Box>
-            ))}
-          </Box>
-        </Box>
-      ) : null}
+            </Box>
+          ) : null}
 
-      {trend.length >= 3 ? (
-        <Box className="border-grey-100 rounded-xl border p-4">
-          <TrendSparkline
-            label={t("forecast-trend-title")}
-            data={trend.map((item) => item.percent)}
-            plotType="line"
-            formatValue={(value) => `${value}%`}
-            caption={t("forecast-trend-caption", { first: trend[0].percent, last: trend[trend.length - 1].percent })}
-          />
+          {trend.length >= 3 ? (
+            <Box className="border-grey-100 rounded-xl border p-4">
+              <TrendSparkline
+                label={t("forecast-trend-title")}
+                data={trend.map((item) => item.percent)}
+                plotType="line"
+                formatValue={(value) => `${value}%`}
+                caption={t("forecast-trend-caption", {
+                  first: trend[0].percent,
+                  last: trend[trend.length - 1].percent,
+                })}
+              />
+            </Box>
+          ) : null}
         </Box>
-      ) : null}
+      </Box>
 
       {read.stage === "before" ? <StateLine tone="info">{t("forecast-before")}</StateLine> : null}
 

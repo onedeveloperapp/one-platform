@@ -835,8 +835,8 @@ function CasesList({ ready }: { ready: Ready }) {
             scope
               ? [
                   { label: t("cases-home"), href: "/inicio" },
-                  { label: scope.module.name, href: `/modulos/${scope.module.key}` },
-                  { label: t("cases-title") },
+                  { label: t("cases-title"), href: "/casos" },
+                  { label: scope.module.name },
                 ]
               : [{ label: t("cases-home"), href: "/inicio" }, { label: t("cases-title") }]
           }

@@ -192,8 +192,9 @@ export function moduleScopeOf(value: unknown, contracted: readonly string[]): st
 }
 
 /**
- * The way back of a page of the work: home, then, under a module, the module's area, then the page. The labels are
- * the screen's words.
+ * The way back of a page of the work: home, then the page, then, under a module, the module it is cut by (a module
+ * has no area of its own since 2026-11-14: its work is the pages of the work under it). The labels are the screen's
+ * words.
  */
 export function scopeCrumbs(
   home: string,
@@ -201,7 +202,7 @@ export function scopeCrumbs(
   current: ModuleCard | null,
 ): { label: string; href?: string }[] {
   return current
-    ? [{ label: home, href: "/inicio" }, { label: current.name, href: `/modulos/${current.key}` }, { label: title }]
+    ? [{ label: home, href: "/inicio" }, { label: title }, { label: current.name }]
     : [{ label: home, href: "/inicio" }, { label: title }];
 }
 

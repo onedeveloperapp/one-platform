@@ -103,7 +103,6 @@ describe("the menu by role", () => {
   it("gives each person the menu that is theirs", () => {
     expect(ids(visibleItems(leftMenuItems, viewer()))).toEqual([
       "inicio",
-      "modulos",
       "casos",
       // The firm's people are anybody of the firm's to find (0133); the money is not in them.
       "pessoas",
@@ -118,7 +117,6 @@ describe("the menu by role", () => {
     ]);
     expect(ids(visibleItems(leftMenuItems, viewer({ role: "owner", firmFunction: "socio" })))).toEqual([
       "inicio",
-      "modulos",
       "casos",
       "pessoas",
       "controladoria",
@@ -139,34 +137,10 @@ describe("the menu by role", () => {
     expect(visibleItems(leftMenuItems, operator)[0].children?.length).toBeGreaterThan(5);
   });
 
-  it("lists ONE's modules under Módulos, each where it stands for the firm", () => {
-    const group = visibleItems(leftMenuItems, viewer()).find((item) => item.id === "modulos");
-    expect(group?.children?.map((child) => [child.id, child.href, child.tag ?? null, child.text ?? null])).toEqual([
-      ["modulo-direito-do-passageiro", "/modulos/direito-do-passageiro", null, "Direito do Passageiro"],
-      ["modulo-direito-previdenciario", "/modulos#direito-previdenciario", "soon", "Direito Previdenciário"],
-    ]);
-    // The overview of the modules is the group's own page, beside the submenu's title, never one of its items.
-    expect(group?.href).toBe("/modulos");
-    // Each module with its own icon; one the firm did not contract carries the lock.
-    expect(group?.children?.[0].icon).toBe("NiPlane");
-    const locked = visibleItems(
-      leftMenuItems,
-      viewer({
-        moduleMenu: [{ key: "direito-trabalhista", name: "Direito Trabalhista", icon: null, state: "locked" }],
-      }),
-    ).find((item) => item.id === "modulos");
-    expect(locked?.children?.[0]).toMatchObject({
-      tag: "locked",
-      href: "/modulos#direito-trabalhista",
-      icon: "NiPuzzle",
-    });
-    // With no module read, Módulos is still its own page, a plain item.
-    const bare = visibleItems(leftMenuItems, viewer({ moduleMenu: [] })).find((item) => item.id === "modulos");
-    expect(bare).toMatchObject({ href: "/modulos" });
-    expect(bare?.children).toBeUndefined();
-    // Nobody of no firm, and nobody of a partner, has the firm's modules in the menu.
-    expect(ids(visibleItems(leftMenuItems, operator))).not.toContain("modulos");
-    expect(ids(visibleItems(leftMenuItems, viewer({ hasFirm: false, partner: true })))).not.toContain("modulos");
+  it("has no menu of the modules: a module's cases are the cases under it, and the overview is in the settings", () => {
+    // The owner, 2026-11-14: the access is almost always through Casos, and the module's area repeated pages the
+    // menu already has.
+    expect(ids(visibleItems(leftMenuItems, viewer()))).not.toContain("modulos");
   });
 
   it("has a label for every item it can show", () => {

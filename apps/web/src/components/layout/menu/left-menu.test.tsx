@@ -46,17 +46,15 @@ vi.mock("@/hooks/use-screen", async () => {
   };
 });
 
+// The operator's consoles are the group with a submenu (the firm's menu of the modules went on 2026-11-14).
 const VIEWER: MenuViewer = {
-  hasFirm: true,
-  role: "owner",
-  firmFunction: "socio",
-  modules: ["direito-do-passageiro"],
-  moduleMenu: [
-    { key: "direito-do-passageiro", name: "Direito do Passageiro", icon: "NiPlane", state: "contracted" },
-    { key: "direito-previdenciario", name: "Direito Previdenciário", icon: "NiUmbrella", state: "soon" },
-  ],
+  hasFirm: false,
+  role: null,
+  firmFunction: null,
+  modules: [],
+  moduleMenu: [],
   partner: false,
-  isSuperadmin: false,
+  isSuperadmin: true,
   owesSecondFactor: false,
 };
 
@@ -69,9 +67,9 @@ const Shell = () => (
   </LayoutContextProvider>
 );
 
-const rail = () => screen.getByRole("button", { name: "menu-modulos" });
-const passenger = () => screen.getByRole("link", { name: "Direito do Passageiro" });
-const social = () => screen.getByRole("link", { name: "Direito Previdenciário, menu-tag-soon" });
+const rail = () => screen.getByRole("button", { name: "menu-admin" });
+const passenger = () => screen.getByRole("link", { name: "menu-admin-firms" });
+const social = () => screen.getByRole("link", { name: "menu-admin-leads" });
 /** Closed, the submenu is out of the eye (no width) and out of the keyboard's and a screen reader's reach (`inert`). */
 const closed = () => {
   expect(rail()).toHaveAttribute("aria-expanded", "false");
@@ -83,7 +81,7 @@ const open = () => {
 };
 
 beforeEach(() => {
-  place.pathname = "/modulos/direito-do-passageiro";
+  place.pathname = "/admin/escritorios";
 });
 afterEach(cleanup);
 
@@ -108,7 +106,7 @@ describe("the submenu of the rail", () => {
     const view = render(<Shell />);
     fireEvent.click(rail());
     open();
-    place.pathname = "/modulos/direito-previdenciario";
+    place.pathname = "/admin/leads";
     view.rerender(<Shell />);
     closed();
     fireEvent.click(rail());
@@ -116,7 +114,7 @@ describe("the submenu of the rail", () => {
   });
 
   it("closes on following a link that stays on the path, which no change of page would tell", () => {
-    place.pathname = "/modulos";
+    place.pathname = "/admin";
     render(<Shell />);
     fireEvent.click(rail());
     open();
@@ -144,38 +142,8 @@ describe("the submenu of the rail", () => {
     fireEvent.click(backdrop as Element);
     // The page belongs to no group, so the submenu goes with its links.
     expect(rail()).toHaveAttribute("aria-expanded", "false");
-    expect(screen.queryByRole("link", { name: "Direito do Passageiro" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "menu-admin-firms" })).toBeNull();
     // Nothing is left over the page to catch the next click.
     expect(container.querySelector(".fixed.inset-0")).toBeNull();
-  });
-});
-
-describe("the submenu of the operator's consoles", () => {
-  it("follows the same rule: closed on a page of its group, the page marked when opened", () => {
-    place.pathname = "/admin/escritorios";
-    render(
-      <LayoutContextProvider>
-        <ViewerProvider viewer={{ ...VIEWER, hasFirm: false, role: null, firmFunction: null, isSuperadmin: true }}>
-          <LeftMenu />
-        </ViewerProvider>
-      </LayoutContextProvider>,
-    );
-    const consoles = screen.getByRole("button", { name: "menu-admin" });
-    const firms = screen.getByRole("link", { name: "menu-admin-firms" });
-    expect(consoles).toHaveAttribute("aria-expanded", "false");
-    expect(firms.closest("[inert]")).not.toBeNull();
-    fireEvent.click(consoles);
-    expect(consoles).toHaveAttribute("aria-expanded", "true");
-    expect(firms.closest("[inert]")).toBeNull();
-    expect(firms).toHaveAttribute("aria-current", "page");
-  });
-});
-
-describe("the state of a module on its line", () => {
-  it("floats at the end of the line, never beside the icon, and is said in the item's own name", () => {
-    render(<Shell />);
-    const tag = screen.getByText("menu-tag-soon");
-    expect(tag.closest("a")).toBe(social());
-    expect(tag.closest(".MuiButton-startIcon")).toBeNull();
   });
 });

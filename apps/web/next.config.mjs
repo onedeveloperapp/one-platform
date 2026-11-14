@@ -60,8 +60,10 @@ const nextConfig = {
   // redirect inside the shell is the client router's, which broke the screen in the production build).
   async redirects() {
     return [
-      // ONE's modules left the settings for the main menu on 2026-10-30.
-      { source: "/settings/modulos", destination: "/modulos", permanent: false },
+      // The menu of the modules went on 2026-11-14 (the owner: the access is almost always through Casos): the overview
+      // is in the firm's settings again, and a module's area is its cases.
+      { source: "/modulos", destination: "/settings/modulos", permanent: false },
+      { source: "/modulos/:modulo", destination: "/casos?modulo=:modulo", permanent: false },
     ];
   },
 };

@@ -11,11 +11,10 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 /**
- * /modulos: ONE's modules for the firm (migrations 0075, 0078): each module the firm contracted, a package of its
- * subscription of ONE, with since when, what it brings and the way into its area; the modules to come; and the ones
- * out that the firm did not contract. Anybody of the firm reads it; the checkout that adds a package to the
- * subscription is ONE's billing (M3), so nothing is bought here. It was a page of the settings until 2026-10-30,
- * whose address still leads here (`next.config.mjs`).
+ * /settings/modulos: ONE's modules for the firm (migrations 0075, 0078), in the settings of the firm beside "Plano e
+ * pagamentos", where a package is contracted (the owner, 2026-11-14, who found the menu of the modules a repetition of
+ * Casos): each module the firm contracted with since when and what it covers, the way to its cases; the modules to
+ * come; and the ones out that the firm did not contract. Anybody of the firm reads it; nothing is bought here.
  */
 async function loadModules(): Promise<ModulesState> {
   const context = await getMemberContext();
@@ -26,6 +25,6 @@ async function loadModules(): Promise<ModulesState> {
   return { kind: "ready", firm: context.firm.name, offer };
 }
 
-export default async function ModulesPage() {
+export default async function SettingsModulesPage() {
   return <ModulesView state={await loadModules()} />;
 }

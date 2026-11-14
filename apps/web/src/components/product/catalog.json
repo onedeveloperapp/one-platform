@@ -160,13 +160,13 @@
       "name": "HomeHero",
       "from": "@/components/product/home-hero",
       "props": "id, title, description?, aside?, ornaments?[{key,icon,tone}] (up to six), children (the row of quick actions)",
-      "use": "The top of a home: one wide card with the greeting and a line centred over a row of quick actions (ModulesQuickAccess inHero), dashed arcs at both sides carrying small tinted icons (decoration, aria-hidden, lg and up only). The template's AI hero. One per home, never a second header: the page's h1 stays in PageHeader."
+      "use": "The top of a home: one wide card with the greeting and a line centred over the line of the firm's modules (ModulesQuickAccess), dashed arcs at both sides carrying small tinted icons (decoration, aria-hidden, lg and up only). The template's AI hero. One per home, never a second header: the page's h1 stays in PageHeader."
     },
     {
       "name": "ModulesQuickAccess",
       "from": "@/components/product/modules-quick-access",
-      "props": "offer (ModuleOffer of lib/modules/offer.ts), inHero?",
-      "use": "ONE's modules as the home's quick access: one QuickActionTile per module with its own icon (ModuleIcon), three across so a module's name and its state share a line, a contracted one opening its area (/modulos/<key>), one to come badged Em breve and one not contracted with a lock, both to the overview (/modulos#<key>). Never in the setup: nothing there leads away from it. Renders nothing for an empty offer. `inHero` draws only the centred row of outlined tiles for HomeHero, each saying its state in its eyebrow."
+      "props": "offer (ModuleOffer), inHero? (kept for the home; the line is the same)",
+      "use": "ONE's modules as one discreet line under the home's greeting (the owner, 2026-11-14): each contracted module's icon and name leading to its cases (/casos?modulo=), the modules to come and the ones the firm could add named, and \"Ver módulos\" to the overview in the firm's settings (/settings/modulos). There is no menu of the modules and no area of a module."
     },
     {
       "name": "ModuleIcon",

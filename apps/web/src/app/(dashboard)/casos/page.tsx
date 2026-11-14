@@ -4,7 +4,7 @@ import { loadCases } from "./load-cases";
 /**
  * /casos: the firm's cases, of every module it contracted or of one (`?modulo=`, migration 0078). The list is for
  * finding a case and seeing where each one stands; every change happens inside the case. A module's own list, with
- * what only that module has, is also its area's (`/modulos/<key>`).
+ * what only that module has, is a module's own place since its area went (2026-11-14).
  */
 export default async function CasesPage({
   searchParams,
