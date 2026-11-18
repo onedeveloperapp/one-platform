@@ -74,3 +74,5 @@ next-env.d.ts
 
 # The clock's bundle (apps/web/clock/build.mjs), built by the production deploy.
 apps/web/clock/dist/
+# The lawyer's browser extension (apps/web/extension/build.mjs), built by hand and zipped to send.
+apps/web/extension/dist/
