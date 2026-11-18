@@ -44,6 +44,7 @@ const one = <T>(value: Embedded<T>): T | null => (Array.isArray(value) ? (value[
 
 const METHOD_KEY: Record<string, string> = {
   zapsign: "case-signature-method-zapsign",
+  d4sign: "case-signature-method-d4sign",
   govbr: "case-signature-method-govbr",
   enotariado: "case-signature-method-enotariado",
 };

@@ -861,6 +861,9 @@ const ERROR_KEYS: Record<string, string> = {
   minor_cannot_sign: "case-error-minor-sign",
   already_open: "case-error-signature-open",
   no_signature_account: "case-error-no-signature-account",
+  // D4Sign names every signer by an e-mail of their own (0254).
+  signer_email_missing: "case-signature-failed-email",
+  signer_email_shared: "case-signature-failed-email-shared",
   invalid_url: "case-error-url",
   already_ended: "case-error-signature-ended",
   signed_by_provider: "case-error-signed-by-provider",

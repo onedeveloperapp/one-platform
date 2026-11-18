@@ -18,6 +18,7 @@ import {
   startClientSignedUpload,
 } from "@/lib/cases/client-link-actions";
 import { mimeOf, uploadToSignedUrl } from "@/lib/files/browser-upload";
+import { isAccountMethod } from "@/lib/signatures/methods";
 
 /** The service of the federal government where a person signs a PDF with their gov.br account. */
 const GOVBR_SIGNER = "https://assinador.iti.br/";
@@ -86,7 +87,7 @@ export function ClientTerms({ token, terms, onSaved }: { token: string; terms: C
 }
 
 /**
- * What the client signs. By ZapSign, their own address to sign; by gov.br,
+ * What the client signs. By the firm's account (ZapSign or D4Sign), their own address to sign; by gov.br,
  * the three steps (download, sign at gov.br, send it back); by e-Notariado,
  * the link of the act. A document waits for the firm once the client did
  * their part.
@@ -209,7 +210,7 @@ export function ClientSignatures({
             {editable &&
               signature.status === "pending" &&
               !done &&
-              signature.method === "zapsign" &&
+              isAccountMethod(signature.method) &&
               signature.sign_url && (
                 <Box>
                   <Button variant="contained" href={signature.sign_url} target="_blank" rel="noopener noreferrer">
@@ -219,7 +220,7 @@ export function ClientSignatures({
               )}
 
             {/* A minor of 16 or 17 this person assists signs the same document beside them (0224). */}
-            {signature.status === "pending" && signature.method === "zapsign"
+            {signature.status === "pending" && isAccountMethod(signature.method)
               ? (signature.assisted ?? []).map((part) =>
                   part.signed_at ? (
                     <StateLine key={part.name} tone="done">

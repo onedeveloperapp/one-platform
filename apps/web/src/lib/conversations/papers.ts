@@ -1,4 +1,5 @@
 import { choiceOf, type IntakeOption, optionsText } from "@/lib/conversations/intake";
+import { isAccountMethod } from "@/lib/signatures/methods";
 
 /**
  * The documents ONE asks in the chat, one at a time (migration 0230, the chat's script of 2026-11-12): after the files
@@ -176,7 +177,7 @@ export function signatureLinksMessage(
   papers: readonly PaperToSign[],
   linkUrl: string | null = null,
 ): string | null {
-  const online = papers.filter((paper) => paper.method === "zapsign" && paper.signUrl);
+  const online = papers.filter((paper) => isAccountMethod(paper.method) && paper.signUrl);
   const govbr = papers.filter((paper) => paper.method === "govbr");
   if (online.length === 0 && govbr.length === 0) return null;
   const who = first(name);

@@ -63,6 +63,7 @@ import { isCaseKindOf } from "@/lib/modules/registry";
 import { caseNotices } from "@/lib/notices/facts";
 import { publicationActionsOf } from "@/lib/publications/actions-read";
 import { loadCasePublications } from "@/lib/publications/facts";
+import { signatureAccountOf } from "@/lib/signatures/methods";
 import { loadFlightChecks } from "@/modules/direito-do-passageiro/flights/facts";
 import { weatherProvider } from "@/modules/direito-do-passageiro/flights/weather";
 import { IMPERSONATION_MARKER_COOKIE } from "@flyee/auth";
@@ -221,7 +222,7 @@ export async function loadCase(id: string): Promise<CaseState> {
     setting,
     envelopes,
     consents,
-    zapsign,
+    signatureAccount,
     cookieStore,
     facts,
     told,
@@ -317,8 +318,8 @@ export async function loadCase(id: string): Promise<CaseState> {
       .eq("org_id", firm)
       .is("revoked_at", null)
       .order("accepted_at"),
-    // The account itself is shown to who manages the firm only; whether there is one, to anybody of it.
-    supabase.rpc("firm_has_signature_account", { target_org: firm }),
+    // The account itself is shown to who manages the firm only; which provider it is (0253), to anybody of it.
+    supabase.rpc("firm_signature_account", { target_org: firm }),
     cookies(),
     // What the rules decide on. A read that failed is an error of the page, never a case with no rules.
     loadRuleFacts(supabase, firm, id, Number(todayInBrazil().slice(0, 4))).catch(() => undefined),
@@ -865,7 +866,7 @@ export async function loadCase(id: string): Promise<CaseState> {
       version: consent.term_version,
       acceptedAt: consent.accepted_at,
     })),
-    zapsign: zapsign.data === true,
+    signatureAccount: signatureAccountOf(signatureAccount.data),
     courtSystems: (
       (systems.data ?? []) as {
         court: string;

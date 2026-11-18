@@ -35,6 +35,7 @@ import type { CourtZones } from "@/lib/hearings/hearings";
 import type { CaseNotices } from "@/lib/notices/facts";
 import type { PublicationActionView } from "@/lib/publications/actions-read";
 import type { PublicationRow } from "@/lib/publications/facts";
+import type { SignatureAccount, SignatureMethod } from "@/lib/signatures/methods";
 import type { FlightChecks } from "@/modules/direito-do-passageiro/flights/facts";
 
 export type CasePerson = PersonData & {
@@ -171,7 +172,7 @@ export type CaseEvent = {
 export type CaseEnvelope = {
   id: string;
   documentId: string;
-  method: "zapsign" | "govbr" | "enotariado";
+  method: SignatureMethod;
   status: string;
   signers: { position: number; personId: string; name: string; signUrl: string | null; signedAt: string | null }[];
   enotariadoUrl: string | null;
@@ -310,8 +311,8 @@ export type CaseState =
       linksOwed: LinkOwed[];
       envelopes: CaseEnvelope[];
       consents: CaseConsent[];
-      /** The firm has its ZapSign account connected. */
-      zapsign: boolean;
+      /** The firm's connected signature account (ZapSign or D4Sign, 0253) and its environment, or null. */
+      signatureAccount: SignatureAccount | null;
       /** Every time the case entered a stage, the oldest first: the dates of its progress. */
       stageMoments: StageMoment[];
       /** The day the case's judgment and first payment were published (its steps in court besides the hearings). */

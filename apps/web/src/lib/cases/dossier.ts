@@ -1,3 +1,4 @@
+import { isAccountMethod } from "@/lib/signatures/methods";
 import type { TextBlock } from "@flyee/documents/text-pdf";
 
 /**
@@ -245,7 +246,7 @@ export function dossierSignature(
     document: words.document,
     method: words.method,
     state,
-    by: state !== "signed" ? null : envelope.method === "zapsign" ? "provider" : "firm",
+    by: state !== "signed" ? null : isAccountMethod(envelope.method) ? "provider" : "firm",
     signedOn: state === "signed" ? dossierMoment(envelope.updated_at) : null,
     signers,
     fingerprint: state === "signed" ? (envelope.signed_sha256?.slice(0, 16) ?? null) : null,

@@ -9,6 +9,7 @@ import { type ClientPieceFacts, clientPieceFactsOf } from "@/lib/cases/piece-fac
 import { type PriorComplaint, priorComplaintOf } from "@/lib/cases/prior-complaint";
 import { createAnonClient } from "@/lib/public-content";
 import { type ClientPublicationNews, clientPublicationNewsOf } from "@/lib/publications/actions-read";
+import type { SignatureMethod } from "@/lib/signatures/methods";
 
 /**
  * What a client's link shows (`client_link_open`, migration 0022), read with
@@ -101,17 +102,17 @@ export async function openClientLink(token: string): Promise<ClientLinkView> {
 /** A document the client signs, as their link shows it (`client_link_signatures`, migration 0023). */
 export type ClientSignature = {
   id: string;
-  method: "zapsign" | "govbr" | "enotariado";
+  method: SignatureMethod;
   status: "pending" | "received" | "signed";
   kind: string;
   name: string;
-  /** Their own address to sign at ZapSign. */
+  /** Their own address to sign at the firm's account (ZapSign or D4Sign). */
   sign_url: string | null;
   signed_at: string | null;
   enotariado_url: string | null;
   /**
    * Who signs the same document beside this person (migration 0224): each minor of 16 or 17 they assist, with their
-   * own address at ZapSign and whether they signed.
+   * own address at the firm's account and whether they signed.
    */
   assisted?: { name: string; sign_url: string | null; signed_at: string | null }[];
 };

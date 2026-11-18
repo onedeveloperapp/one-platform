@@ -8,6 +8,7 @@ import { getVault } from "@/lib/connections/vault";
 import { isManager } from "@/lib/firm/roles";
 import { getMemberContext } from "@/lib/member/context";
 import { firmNotices } from "@/lib/notices/facts";
+import { ACCOUNT_METHODS, isAccountMethod } from "@/lib/signatures/methods";
 import { testChatCardOf } from "@/lib/test-chat/test-chat";
 import { isSimulatorOn, metaApp, openWaPlatform, signupWindowConfig } from "@/lib/whatsapp/config";
 import type {
@@ -22,6 +23,7 @@ import { BRAND } from "@flyee/content";
 
 type ConnectionRow = {
   id: string;
+  provider?: string;
   status: string;
   last_error: string | null;
   metadata: Record<string, unknown> | null;
@@ -109,13 +111,13 @@ export async function loadConnections(agenda: string | null): Promise<Connection
     signupWindowConfig(),
     supabase
       .from("connections")
-      .select("id, status, last_error, metadata")
+      .select("id, provider, status, last_error, metadata, connected_at")
       .eq("org_id", firm.id)
-      .eq("provider", "zapsign")
+      // The firm's signature account, ZapSign or D4Sign (0253): one row per provider, the one connected shown first.
+      .in("provider", [...ACCOUNT_METHODS])
       .neq("status", "disconnected")
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle(),
+      .order("connected_at", { ascending: false, nullsFirst: false })
+      .limit(ACCOUNT_METHODS.length),
     supabase
       .from("connections")
       .select("id, status")
@@ -152,7 +154,10 @@ export async function loadConnections(agenda: string | null): Promise<Connection
   ) {
     return { kind: "error" };
   }
-  const signatureRow = (signature.data ?? null) as ConnectionRow | null;
+  // The account that signs is the connected one; with none connected, the most recently connected, whatever happened
+  // to it, so the firm sees what to put right.
+  const signatureRows = (signature.data ?? []) as ConnectionRow[];
+  const signatureRow = signatureRows.find((row) => row.status === "connected") ?? signatureRows[0] ?? null;
 
   const numberRows = (numbers.data ?? []) as NumberRow[];
   const connectionRows = (connections.data ?? []) as ConnectionRow[];
@@ -239,8 +244,10 @@ export async function loadConnections(agenda: string | null): Promise<Connection
     signature: signatureRow
       ? {
           connectionId: signatureRow.id,
+          provider: isAccountMethod(signatureRow.provider) ? signatureRow.provider : "zapsign",
           status: signatureRow.status,
           environment: signatureRow.metadata?.environment === "sandbox" ? "sandbox" : "production",
+          safeName: typeof signatureRow.metadata?.safe_name === "string" ? signatureRow.metadata.safe_name : null,
           lastError: signatureRow.last_error,
         }
       : null,

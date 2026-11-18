@@ -74,6 +74,44 @@ export interface SignatureProvider {
   createEnvelope(input: CreateEnvelopeInput): Promise<Envelope>;
   /** The envelope as it stands; null when the provider does not know the id. */
   getStatus(envelopeId: string): Promise<Envelope | null>;
-  /** The signed PDF and its evidence. Throws `EnvelopeNotSignedError` unless the envelope is `signed`. */
-  downloadSigned(envelopeId: string): Promise<SignedDocument>;
+  /**
+   * The signed PDF and its evidence. Throws `EnvelopeNotSignedError` unless the envelope is `signed`. `known`, the
+   * state the caller just read, spares a provider that counts its calls a second reading (D4Sign, 0254).
+   */
+  downloadSigned(envelopeId: string, known?: Envelope | null): Promise<SignedDocument>;
+}
+
+/** The provider refused the account's credentials: the firm reconnects. Never carries a credential. */
+export class SignatureAuthError extends Error {
+  constructor(message = "the provider refused the account's credentials") {
+    super(message);
+    this.name = "SignatureAuthError";
+  }
+}
+
+/**
+ * The provider answered something ONE cannot use, or did not answer (status null). Carries the status and, where the
+ * provider said more than its status (a limit of calls, a signer it cannot take), a short code; never the body.
+ */
+export class SignatureUnavailableError extends Error {
+  readonly status: number | null;
+  readonly code: string | null;
+  constructor(status: number | null, message?: string, code?: string) {
+    super(message ?? (status === null ? "the provider did not answer" : `the provider answered ${status}`));
+    this.name = "SignatureUnavailableError";
+    this.status = status;
+    this.code = code ?? null;
+  }
+}
+
+/** What a cancel sent to the provider came to. */
+export type CancelAnswer = "cancelled" | "already_ended" | "already_signed" | "not_found";
+
+/**
+ * A provider a firm connects with its own account (ZapSign, D4Sign): besides opening and reading envelopes, it
+ * cancels one still waiting, so its signing addresses stop working. Its refusals are `SignatureAuthError` and
+ * `SignatureUnavailableError` (or kinds of them).
+ */
+export interface AccountSignatureProvider extends SignatureProvider {
+  cancelDocument(envelopeId: string, reason: string): Promise<CancelAnswer>;
 }

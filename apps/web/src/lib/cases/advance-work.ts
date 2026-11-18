@@ -25,6 +25,7 @@ import { fillMessage } from "@/lib/firm/messages";
 import { firmMessageTextOfCase } from "@/lib/firm/messages-read";
 import { soon } from "@/lib/jobs/soon";
 import { WHATSAPP_COPY } from "@/lib/messages/whatsapp-copy";
+import { isAccountMethod } from "@/lib/signatures/methods";
 import { openReservedEnvelopes } from "@/lib/signatures/work";
 import { deliverOutbox } from "@/lib/whatsapp/send";
 import { createServiceClient } from "@flyee/auth/service";
@@ -364,7 +365,7 @@ async function createLawsuits(
 }
 
 /** What issuing a held case's papers came to: what it waits for, an envelope the backend opens, whether it was lost. */
-type PapersSent = { lost: boolean; failed: boolean; waiting: string | null; envelopes: number; zapsign: boolean };
+type PapersSent = { lost: boolean; failed: boolean; waiting: string | null; envelopes: number; byAccount: boolean };
 
 /** How many papers one look issues at most: each a PDF and an envelope. */
 const PAPERS_PER_LOOK = 6;
@@ -464,7 +465,7 @@ async function keepPaperPdf(
  * them (`paper_incomplete`). Throws when the database could not be asked.
  */
 async function sendPapers(service: SupabaseClient, held: HeldAdvance): Promise<PapersSent> {
-  const sent: PapersSent = { lost: false, failed: false, waiting: null, envelopes: 0, zapsign: false };
+  const sent: PapersSent = { lost: false, failed: false, waiting: null, envelopes: 0, byAccount: false };
   const store = supabaseFileStore(service);
   for (let turn = 0; turn < PAPERS_PER_LOOK; turn += 1) {
     const { data, error } = await service.rpc("advance_paper_to_issue", {
@@ -512,7 +513,7 @@ async function sendPapers(service: SupabaseClient, held: HeldAdvance): Promise<P
       return { ...sent, failed: true };
     }
     sent.envelopes += 1;
-    if (result.method === "zapsign") sent.zapsign = true;
+    if (isAccountMethod(result.method)) sent.byAccount = true;
   }
   return sent;
 }
@@ -530,7 +531,7 @@ export type AppealPapersIssued = { issued: number; waiting: string | null; faile
 export async function issueAppealPapers(service: SupabaseClient, caseId: string): Promise<AppealPapersIssued> {
   const done: AppealPapersIssued = { issued: 0, waiting: null, failed: false };
   const store = supabaseFileStore(service);
-  let zapsign = false;
+  let byAccount = false;
   for (let turn = 0; turn < PAPERS_PER_LOOK; turn += 1) {
     const { data, error } = await service.rpc("appeal_paper_to_issue", { target_case: caseId });
     if (error) throw new Error("appeal papers could not be read");
@@ -569,11 +570,11 @@ export async function issueAppealPapers(service: SupabaseClient, caseId: string)
       break;
     }
     done.issued += 1;
-    if (result.method === "zapsign") zapsign = true;
+    if (isAccountMethod(result.method)) byAccount = true;
   }
-  // An envelope of the firm's ZapSign account is opened by the backend (0023), right after; the sweep catches what
-  // that did not.
-  if (zapsign) soon("signature-open", () => openReservedEnvelopes(createServiceClient(), 10));
+  // An envelope of the firm's signature account (ZapSign or D4Sign) is opened by the backend (0023), right after; the
+  // sweep catches what that did not.
+  if (byAccount) soon("signature-open", () => openReservedEnvelopes(createServiceClient(), 10));
   return done;
 }
 
@@ -780,9 +781,9 @@ export async function advanceClaimedCase(
       if (papers.failed) failed = true;
       papersWaiting = papers.waiting;
       if (papers.envelopes > 0) asked.papers = papers.envelopes;
-      // An envelope of the firm's ZapSign account is opened by the backend (0023), right after; the sweep catches
-      // what that did not.
-      if (papers.zapsign) soon("signature-open", () => openReservedEnvelopes(createServiceClient(), 10));
+      // An envelope of the firm's signature account (ZapSign or D4Sign) is opened by the backend (0023), right after;
+      // the sweep catches what that did not.
+      if (papers.byAccount) soon("signature-open", () => openReservedEnvelopes(createServiceClient(), 10));
       // A paper signed by gov.br needs no opening: the client hears of it in the chat right after (0237), never at
       // the sweep's next round.
       else if (papers.envelopes > 0) soon("signature-links", () => tellSignatureLinks(createServiceClient()));

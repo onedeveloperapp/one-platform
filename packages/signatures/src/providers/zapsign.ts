@@ -1,12 +1,15 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 
 import {
+  type AccountSignatureProvider,
+  type CancelAnswer,
   type CreateEnvelopeInput,
   type Envelope,
   EnvelopeNotSignedError,
   type EnvelopeStatus,
-  type SignatureProvider,
+  SignatureAuthError,
   type SignedDocument,
+  SignatureUnavailableError,
 } from "@flyee/signatures/types";
 
 /**
@@ -65,7 +68,7 @@ export type ZapSignOptions = {
 };
 
 /** ZapSign refused the token: the firm reconnects. Never carries the token. */
-export class ZapSignAuthError extends Error {
+export class ZapSignAuthError extends SignatureAuthError {
   constructor() {
     super("zapsign refused the api token");
     this.name = "ZapSignAuthError";
@@ -73,12 +76,10 @@ export class ZapSignAuthError extends Error {
 }
 
 /** ZapSign answered something ONE cannot use. Carries the status, never the body. */
-export class ZapSignUnavailableError extends Error {
-  readonly status: number | null;
+export class ZapSignUnavailableError extends SignatureUnavailableError {
   constructor(status: number | null) {
-    super(status === null ? "zapsign did not answer" : `zapsign answered ${status}`);
+    super(status, status === null ? "zapsign did not answer" : `zapsign answered ${status}`);
     this.name = "ZapSignUnavailableError";
-    this.status = status;
   }
 }
 
@@ -112,7 +113,7 @@ function phoneFields(phone: string | undefined): { phone_country: string; phone_
   return brazil ? { phone_country: "55", phone_number: brazil[1] } : { phone_country: "", phone_number: digits };
 }
 
-export class ZapSignProvider implements SignatureProvider {
+export class ZapSignProvider implements AccountSignatureProvider {
   readonly name = "zapsign";
 
   private readonly options: Required<Omit<ZapSignOptions, "fetch">> & { fetch: typeof fetch };
@@ -181,10 +182,7 @@ export class ZapSignProvider implements SignatureProvider {
    * Cancels a document still waiting for signatures: its signing addresses
    * stop working. A document already signed is not cancelled.
    */
-  async cancelDocument(
-    envelopeId: string,
-    reason: string,
-  ): Promise<"cancelled" | "already_ended" | "already_signed" | "not_found"> {
+  async cancelDocument(envelopeId: string, reason: string): Promise<CancelAnswer> {
     if (!isDocumentToken(envelopeId)) return "not_found";
     let response: Response;
     try {

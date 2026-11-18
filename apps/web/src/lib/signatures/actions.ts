@@ -7,20 +7,31 @@ import { queueInterview } from "@/lib/cases/interview-work";
 import { getVault } from "@/lib/connections/vault";
 import { supabaseFileStore } from "@/lib/files/store";
 import { isManager } from "@/lib/firm/roles";
+import { soon } from "@/lib/jobs/soon";
 import { getMemberContext } from "@/lib/member/context";
-import { openReservedEnvelopes, sendProviderCancels, SETTLED, syncEnvelope, zapSignFor } from "@/lib/signatures/work";
+import { ACCOUNT_METHODS, type SignatureMethod } from "@/lib/signatures/methods";
+import {
+  d4signWebhookSecret,
+  openReservedEnvelopes,
+  sendProviderCancels,
+  SETTLED,
+  syncEnvelope,
+  zapSignFor,
+} from "@/lib/signatures/work";
 import { connectionRefusal, isSupportVisit } from "@/lib/whatsapp/session";
 import { createServiceClient } from "@flyee/auth/service";
 import { BRAND } from "@flyee/content";
 import { takeBackFile } from "@flyee/documents/files";
 import { measureFile } from "@flyee/documents/measure";
+import { D4SignProvider } from "@flyee/signatures/providers/d4sign";
 import { webhookSecretHash, ZapSignAuthError, ZapSignProvider } from "@flyee/signatures/providers/zapsign";
+import { SignatureAuthError, SignatureUnavailableError } from "@flyee/signatures/types";
 
 /**
- * What a person of a firm does with signatures (migration 0023), as server
+ * What a person of a firm does with signatures (migration 0023, D4Sign since 0253), as server
  * actions. The rules are the database's (`request_signature`,
  * `cancel_signature`, `confirm_signature`); what is here is what it cannot
- * do: talk to ZapSign with the firm's token, and seal that token.
+ * do: talk to the firm's signature account (ZapSign or D4Sign) with its keys, and seal them.
  *
  * A server action is a public endpoint: the firm comes from the caller's own
  * session, and every id is read again by the database under it.
@@ -30,8 +41,19 @@ export type SignatureResult<T extends object = object> =
   | ({ ok: true; code: string } & T)
   | { ok: false; code: string; field?: string | null };
 
+/** The D4Sign account has several safes and none was chosen (or the one chosen is gone): the firm picks one of these. */
+export type D4SignSafeChoice = {
+  ok: false;
+  code: "choose_safe" | "safe_not_found";
+  safes: { uuid: string; name: string }[];
+};
+
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const isId = (value: unknown): value is string => typeof value === "string" && UUID.test(value);
+/** A safe's id at D4Sign, a UUID of any version. */
+const UUID_ANY = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/** What a provider's key looks like: never anything that could carry more than a key. */
+const KEY = /^[A-Za-z0-9._-]{16,200}$/;
 
 const RAISED = [
   "not_allowed_in_support_session",
@@ -85,6 +107,10 @@ export async function connectSignatureAccount(input: {
   const access = getVault();
   if (!access.ok) return { ok: false, code: "vault_not_configured" };
 
+  // One signature account at a time (0253): a D4Sign account connected is cut first.
+  if (await otherAccountConnected(context.supabase, context.firm.id, "zapsign")) {
+    return { ok: false, code: "already_connected" };
+  }
   const { data: before } = await context.supabase
     .from("connections")
     .select("id, status")
@@ -160,7 +186,10 @@ export async function connectSignatureAccount(input: {
   return { ok: true, code: "connected" };
 }
 
-/** Cuts the firm's ZapSign: its webhook is removed at ZapSign while the token still opens, then the token is discarded. */
+/**
+ * Cuts the firm's signature account. ZapSign's webhook is removed at ZapSign while the token still opens; D4Sign's are
+ * the documents' own and end with them. Then the keys are discarded.
+ */
 export async function disconnectSignatureAccount(connectionId: string): Promise<SignatureResult> {
   const context = await getMemberContext();
   if (!context?.firm || !isManager(context.firm.role) || !isId(connectionId)) {
@@ -171,14 +200,30 @@ export async function disconnectSignatureAccount(connectionId: string): Promise<
   // Read under the person's session: a connection of another firm is not found.
   const { data: connection } = await context.supabase
     .from("connections")
-    .select("id")
+    .select("id, provider, status")
     .eq("id", connectionId)
     .eq("org_id", context.firm.id)
-    .eq("provider", "zapsign")
+    .in("provider", [...ACCOUNT_METHODS])
     .maybeSingle();
   if (!connection) return { ok: false, code: "not_found" };
-  const access = await zapSignFor({ orgId: context.firm.id, connectionId }, "signatures.disconnect");
-  if (access.ok && access.webhookId) await access.provider.deleteWebhook(access.webhookId).catch(() => undefined);
+  // A connected account with papers still signing by it stays (0254): cut, nobody would hear of them again, while
+  // their addresses keep working at the provider. They are cancelled in their cases, or signed, first. An account
+  // in error is cut at once: its keys no longer answer for them anyway.
+  if (connection.status === "connected") {
+    const { data: open, error: openError } = await context.supabase
+      .from("signature_envelopes")
+      .select("id")
+      .eq("org_id", context.firm.id)
+      .eq("connection_id", connectionId)
+      .or("status.in.(reserved,opening,pending),provider_cancel_pending.eq.true")
+      .limit(1);
+    if (openError) return { ok: false, code: "failed" };
+    if ((open ?? []).length > 0) return { ok: false, code: "open_papers" };
+  }
+  if (connection.provider === "zapsign") {
+    const access = await zapSignFor({ orgId: context.firm.id, connectionId }, "signatures.disconnect");
+    if (access.ok && access.webhookId) await access.provider.deleteWebhook(access.webhookId).catch(() => undefined);
+  }
 
   const { data, error } = await context.supabase.rpc("disconnect_connection", { target_connection: connectionId });
   const result = fold(data, error, () => ({}));
@@ -186,12 +231,158 @@ export async function disconnectSignatureAccount(connectionId: string): Promise<
   return result;
 }
 
+type Session = NonNullable<Awaited<ReturnType<typeof getMemberContext>>>["supabase"];
+
+/** Whether the firm has a signature account of the other provider connected: one account at a time (0253). */
+async function otherAccountConnected(
+  supabase: Session,
+  orgId: string,
+  provider: "zapsign" | "d4sign",
+): Promise<boolean> {
+  const { data } = await supabase
+    .from("connections")
+    .select("id")
+    .eq("org_id", orgId)
+    .in(
+      "provider",
+      ACCOUNT_METHODS.filter((method) => method !== provider),
+    )
+    .eq("status", "connected")
+    .limit(1);
+  return (data ?? []).length > 0;
+}
+
+/**
+ * Connects the firm's D4Sign account (0253) with its keys (D4Sign: the `tokenAPI`, and the `cryptKey` where the account
+ * enabled it) in the
+ * environment chosen, and the safe its clients' papers go into. ONE reads the account's safes first: one safe is taken
+ * as it is; with several, the firm chooses (the answer `choose_safe` brings them). The keys, the safe and a secret of
+ * ONE's own are sealed in the vault; beside the connection, only the safe's name, the environment and the secret's
+ * hash, which checks a delivery of a document's webhook before the vault is opened. A ZapSign account connected is cut
+ * first. An account reconnected after an error keeps what it had when this attempt fails.
+ */
+export async function connectD4SignAccount(input: {
+  tokenApi: string;
+  cryptKey: string;
+  environment: "production" | "sandbox";
+  safeUuid?: string | null;
+}): Promise<SignatureResult | D4SignSafeChoice> {
+  const context = await getMemberContext();
+  if (!context?.firm || !isManager(context.firm.role)) return { ok: false, code: "not_authorized" };
+  const refusal = await connectionRefusal(context);
+  if (refusal) return { ok: false, code: refusal };
+  const tokenApi = String(input?.tokenApi ?? "").trim();
+  const cryptKey = String(input?.cryptKey ?? "").trim();
+  const environment = input?.environment === "sandbox" ? "sandbox" : "production";
+  const chosen = typeof input?.safeUuid === "string" && UUID_ANY.test(input.safeUuid) ? input.safeUuid : null;
+  if (!KEY.test(tokenApi)) return { ok: false, code: "invalid_token", field: "token" };
+  // The cryptKey only where the account enabled it (D4Sign's reference): an empty one is not sent.
+  if (cryptKey && !KEY.test(cryptKey)) return { ok: false, code: "invalid_token", field: "crypt_key" };
+  const access = getVault();
+  if (!access.ok) return { ok: false, code: "vault_not_configured" };
+  if (await otherAccountConnected(context.supabase, context.firm.id, "d4sign")) {
+    return { ok: false, code: "already_connected" };
+  }
+
+  const { data: before } = await context.supabase
+    .from("connections")
+    .select("id, status")
+    .eq("org_id", context.firm.id)
+    .eq("provider", "d4sign")
+    .maybeSingle();
+  if (before?.status === "connected") return { ok: false, code: "already_connected" };
+  const hadKeys = before?.status === "error";
+
+  const provider = new D4SignProvider({ tokenApi, cryptKey: cryptKey || null, environment });
+  let safes: { uuid: string; name: string }[];
+  try {
+    safes = await provider.listSafes();
+  } catch (thrown) {
+    // Keys that cannot read the account's own safes are, to the firm, keys D4Sign did not take.
+    const refusedKeys =
+      thrown instanceof SignatureAuthError ||
+      (thrown instanceof SignatureUnavailableError && thrown.code === "provider_forbidden");
+    if (thrown instanceof SignatureUnavailableError && thrown.code === "provider_rate_limited") {
+      return { ok: false, code: "provider_rate_limited" };
+    }
+    return { ok: false, code: refusedKeys ? "token_refused" : "provider_unavailable" };
+  }
+  if (safes.length === 0) return { ok: false, code: "no_safe" };
+  const safe = chosen ? safes.find((item) => item.uuid === chosen) : safes.length === 1 ? safes[0] : null;
+  if (!safe) return { ok: false, code: chosen ? "safe_not_found" : "choose_safe", safes };
+
+  const { data, error } = await context.supabase.rpc("begin_connection", {
+    target_org: context.firm.id,
+    target_provider: "d4sign",
+    target_external_id: null,
+    target_label: environment === "sandbox" ? "D4Sign (sandbox)" : "D4Sign",
+  });
+  const started = fold(data, error, (answer) => ({ connectionId: String(answer.connection_id) }));
+  if (!started.ok) return started;
+  const place = { orgId: context.firm.id, connectionId: started.connectionId };
+  // What a failed attempt leaves: nothing new, and the keys an errored account had stay where they were.
+  const undo = async () => {
+    if (!hadKeys) await context.supabase.rpc("disconnect_connection", { target_connection: started.connectionId });
+  };
+
+  // The envelopes still open on this connection live in one D4Sign account: keys of another account would ask for
+  // them where they are not. D4Sign must know each of them.
+  const { data: open } = await context.supabase
+    .from("signature_envelopes")
+    .select("provider_id")
+    .eq("org_id", context.firm.id)
+    .eq("connection_id", started.connectionId)
+    .or("status.eq.pending,provider_cancel_pending.eq.true")
+    .not("provider_id", "is", null)
+    .limit(20);
+  try {
+    for (const row of (open ?? []) as { provider_id: string }[]) {
+      if (!(await provider.getStatus(row.provider_id))) {
+        await undo();
+        return { ok: false, code: "other_account" };
+      }
+    }
+  } catch (thrown) {
+    await undo();
+    return { ok: false, code: thrown instanceof SignatureAuthError ? "token_refused" : "provider_unavailable" };
+  }
+
+  // Each document's webhook carries the secret in its address (0254): an account connected again keeps the one its
+  // documents already have, so their deliveries are still taken; a new one only when the old seal does not open.
+  const previousSecret = hadKeys ? await d4signWebhookSecret(place, "signatures.reconnect") : null;
+  const secret = previousSecret ?? randomBytes(32).toString("base64url");
+  const sealed = await access.vault.seal(
+    place,
+    {
+      provider: "d4sign",
+      token_api: tokenApi,
+      ...(cryptKey ? { crypt_key: cryptKey } : {}),
+      safe_uuid: safe.uuid,
+      environment,
+      webhook_secret: secret,
+    },
+    {
+      metadata: {
+        environment,
+        safe_name: safe.name.slice(0, 120),
+        webhook_secret_sha256: webhookSecretHash(secret),
+      },
+    },
+  );
+  if (sealed.kind !== "sealed") {
+    await undo();
+    return { ok: false, code: `vault_${sealed.code}` };
+  }
+  refresh();
+  return { ok: true, code: "connected" };
+}
+
 // ---------- A document to be signed ----------
 
 export async function requestSignature(input: {
   caseId: string;
   documentId: string;
-  method: "zapsign" | "govbr" | "enotariado";
+  method: SignatureMethod;
   signers: string[];
   enotariadoUrl?: string | null;
 }): Promise<SignatureResult<{ envelopeId: string }>> {
@@ -214,14 +405,19 @@ export async function requestSignature(input: {
       // Still reserved: the sweep opens it.
     }
   }
+  if (result.ok && input.method === "d4sign") {
+    // D4Sign takes several calls to open one (0254): opened right after the answer, the sweep taking what did not end.
+    const envelopeId = result.envelopeId;
+    soon("signatures.open", () => openReservedEnvelopes(createServiceClient(), 1, envelopeId));
+  }
   if (result.ok) refresh(input.caseId);
   return result;
 }
 
 /**
  * Ends an envelope. The database cancels it at once (`cancel_signature`);
- * one pending at ZapSign has its cancel there recorded as owed, sent here
- * right away and by the sweep until ZapSign answered. A cut account never
+ * one pending at the firm's signature account has its cancel there recorded as owed, sent here
+ * right away and by the sweep until the provider answered. A cut account never
  * keeps an envelope open in ONE.
  */
 export async function cancelSignature(caseId: string, envelopeId: string, reason: string): Promise<SignatureResult> {
@@ -263,7 +459,7 @@ export async function confirmSignature(
   return result;
 }
 
-/** Asks ZapSign now how an envelope of the firm stands, instead of waiting for its webhook. */
+/** Asks the firm's signature account now how an envelope stands, instead of waiting for its webhook. */
 export async function refreshSignature(caseId: string, envelopeId: string): Promise<SignatureResult> {
   const context = await getMemberContext();
   if (!context?.firm || !isId(envelopeId)) return { ok: false, code: "not_found" };

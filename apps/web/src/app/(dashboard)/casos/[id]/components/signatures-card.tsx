@@ -43,34 +43,56 @@ import {
   requestSignature,
   simulateTestSignature,
 } from "@/lib/signatures/actions";
+import { type AccountMethod, accountPanelUrl, isAccountMethod } from "@/lib/signatures/methods";
 import { isMinorOn } from "@flyee/rules/person";
 
 type Ready = Extract<CaseState, { kind: "ready" }>;
 type Method = CaseEnvelope["method"];
 
-const METHODS: readonly Method[] = ["zapsign", "govbr", "enotariado"];
-
 const METHOD_KEY: Record<Method, string> = {
   zapsign: "case-signature-method-zapsign",
+  d4sign: "case-signature-method-d4sign",
   govbr: "case-signature-method-govbr",
   enotariado: "case-signature-method-enotariado",
 };
 
 /**
- * The level of each way of signing (Lei 14.063/2020, art. 4º): a ZapSign signature is a simple electronic one, gov.br's
+ * The level of each way of signing (Lei 14.063/2020, art. 4º): a ZapSign or D4Sign signature is a simple electronic one, gov.br's
  * an advanced one, and an act of e-Notariado a qualified one, with an ICP-Brasil certificate. Said beside each paper,
  * since the CNJ's Recomendação 159/2024 names a signature with no ICP-Brasil certificate among the signs it watches.
  */
 const LEVEL_KEY: Record<Method, string> = {
   zapsign: "case-signature-level-simple",
+  d4sign: "case-signature-level-simple",
   govbr: "case-signature-level-advanced",
   enotariado: "case-signature-level-qualified",
 };
 
 const METHOD_HINT_KEY: Record<Method, string> = {
   zapsign: "case-signature-method-zapsign-hint",
+  d4sign: "case-signature-method-d4sign-hint",
   govbr: "case-signature-method-govbr-hint",
   enotariado: "case-signature-method-enotariado-hint",
+};
+
+/** The button that opens the provider's own panel, by the account an envelope went through. */
+const OPEN_PANEL_KEY: Record<AccountMethod, string> = {
+  zapsign: "case-signature-open-zapsign",
+  d4sign: "case-signature-open-d4sign",
+};
+
+/** Why the provider did not take a paper, where it said more than a refusal (D4Sign, 0253 and 0254). */
+const FAILED_KEY: Record<string, string> = {
+  signer_email_missing: "case-signature-failed-email",
+  signer_email_shared: "case-signature-failed-email-shared",
+  provider_rate_limited: "case-signature-failed-limit",
+  provider_forbidden: "case-signature-failed-forbidden",
+  safe_not_found: "case-signature-failed-safe",
+};
+
+/** Why a paper waits in the queue of the firm's account before it is opened (0254): ONE opens it by itself. */
+const WAITING_KEY: Record<string, string> = {
+  provider_rate_limited: "case-signature-waiting-limit",
 };
 
 const STATUS: Record<string, { key: string; tone: StatusTone }> = {
@@ -94,15 +116,15 @@ const ENDED_STATE: Record<string, StateTone> = {
   expired: "info",
   cancelled: "info",
 };
-/** What waits for the firm: a file the client signed elsewhere and sent back, or an envelope ZapSign did not take. */
+/** What waits for the firm: a file the client signed elsewhere and sent back, or an envelope the provider did not take. */
 const NEEDS_PERSON = ["received", "failed", "uncertain"];
 const SIGNABLE_KINDS = ["power_of_attorney", "contract", "other"];
 
 /**
  * What the client signs: the power of attorney, the contract, a declaration.
  * The firm adds the PDF to the case's documents, sends it to be signed by
- * ZapSign, gov.br or e-Notariado, and follows it here; what ZapSign signs
- * comes back by itself, what was signed elsewhere a person confirms.
+ * the firm's signature account (ZapSign or D4Sign), gov.br or e-Notariado, and follows it here; what the account
+ * signs comes back by itself, what was signed elsewhere a person confirms.
  */
 export default function SignaturesCard({
   state,
@@ -174,6 +196,10 @@ export default function SignaturesCard({
   };
   const statusOf = (envelope: CaseEnvelope) => t((STATUS[envelope.status] ?? STATUS.pending).key);
   const needs = state.envelopes.find((envelope) => NEEDS_PERSON.includes(envelope.status)) ?? null;
+  // The provider's panel in the environment the firm's account was connected in; an envelope of a provider the firm
+  // no longer has opens that provider's own panel.
+  const panelEnvironment = (method: AccountMethod) =>
+    state.signatureAccount?.method === method ? state.signatureAccount.environment : "production";
 
   // What opens in a paper's line: the file, who signs it and how far, what went wrong, and what may be done.
   const envelopeBody = (envelope: CaseEnvelope) => {
@@ -183,9 +209,9 @@ export default function SignaturesCard({
       (document) => document.envelopeId === envelope.id && document.id !== envelope.signedDocumentId,
     );
     const ended = ENDED.includes(envelope.status);
-    // What was signed outside ZapSign is signed once a person of the firm confirmed it: no provider says when
-    // each signer signed, and the line says it was the firm that checked.
-    const confirmedByFirm = envelope.status === "signed" && envelope.method !== "zapsign";
+    // What was signed outside the firm's account is signed once a person of the firm confirmed it: no provider says
+    // when each signer signed, and the line says it was the firm that checked.
+    const confirmedByFirm = envelope.status === "signed" && !isAccountMethod(envelope.method);
     return (
       <Box className="flex flex-col gap-2">
         {original && (
@@ -214,30 +240,39 @@ export default function SignaturesCard({
           </Box>
         ))}
 
-        {envelope.lastError && (envelope.status === "failed" || envelope.status === "uncertain") && (
-          <StateLine
-            tone="attention"
-            action={
-              <Button
-                variant="outlined"
-                color="grey"
-                size="small"
-                href="https://app.zapsign.com.br"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                {t("case-signature-open-zapsign")}
-              </Button>
-            }
-          >
-            {t("case-signature-failed-help")}
-          </StateLine>
+        {envelope.lastError &&
+          isAccountMethod(envelope.method) &&
+          (envelope.status === "failed" || envelope.status === "uncertain") && (
+            <StateLine
+              tone="attention"
+              action={
+                <Button
+                  variant="outlined"
+                  color="grey"
+                  size="small"
+                  href={accountPanelUrl(envelope.method, panelEnvironment(envelope.method))}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  {t(OPEN_PANEL_KEY[envelope.method])}
+                </Button>
+              }
+            >
+              {t(FAILED_KEY[envelope.lastError ?? ""] ?? "case-signature-failed-help")}
+            </StateLine>
+          )}
+        {envelope.status === "reserved" && envelope.lastError && (
+          <StateLine tone="waiting">{t(WAITING_KEY[envelope.lastError] ?? "case-signature-waiting-retry")}</StateLine>
         )}
-        {envelope.status === "pending" && envelope.lastError && (
+        {envelope.status === "pending" && envelope.lastError && isAccountMethod(envelope.method) && (
           <Typography variant="body2" className="text-text-secondary">
             {t("case-signature-pending-problem")}
           </Typography>
         )}
+        {/* ONE sent it by gov.br, the firm's D4Sign naming every signer by an e-mail the person has not given (0254). */}
+        {envelope.method === "govbr" &&
+          envelope.lastError === "d4sign_email_missing" &&
+          !ENDED.includes(envelope.status) && <StateLine tone="info">{t("case-signature-govbr-no-email")}</StateLine>}
         {envelope.endedReason && (
           <Typography variant="body2" className="text-text-secondary">
             {t("case-closed-reason", { reason: envelope.endedReason })}
@@ -282,7 +317,7 @@ export default function SignaturesCard({
                 : t("case-signature-simulate")}
             </Button>
           )}
-          {writable && envelope.method === "zapsign" && envelope.status === "pending" && (
+          {writable && isAccountMethod(envelope.method) && envelope.status === "pending" && (
             <Button
               variant="text"
               size="small"
@@ -295,7 +330,7 @@ export default function SignaturesCard({
             </Button>
           )}
           {writable &&
-            envelope.method !== "zapsign" &&
+            !isAccountMethod(envelope.method) &&
             (envelope.status === "pending" || envelope.status === "received") && (
               <Button variant="contained" size="small" disabled={action.busy} onClick={() => setConfirming(envelope)}>
                 {t("case-signature-confirm")}
@@ -445,7 +480,10 @@ function RequestDialog({
     .filter((person, index, all) => all.findIndex((other) => other.person_id === person.person_id) === index)
     .filter((person) => isMinorOn(person.birth_date, state.today) !== true);
   const [documentId, setDocumentId] = useState(documents[0]?.id ?? "");
-  const [method, setMethod] = useState<Method>(state.zapsign ? "zapsign" : "govbr");
+  // The firm's own account first, whichever provider it is (0253); with none, gov.br.
+  const accountMethod: AccountMethod = state.signatureAccount?.method ?? "zapsign";
+  const methods: readonly Method[] = [accountMethod, "govbr", "enotariado"];
+  const [method, setMethod] = useState<Method>(state.signatureAccount ? state.signatureAccount.method : "govbr");
   const [signers, setSigners] = useState<string[]>(adults[0] ? [adults[0].person_id] : []);
   const [url, setUrl] = useState("");
   const [busy, setBusy] = useState(false);
@@ -551,11 +589,11 @@ function RequestDialog({
               value={method}
               onChange={(event) => setMethod(event.target.value as Method)}
             >
-              {METHODS.map((value) => (
+              {methods.map((value) => (
                 <FormControlLabel
                   key={value}
                   value={value}
-                  disabled={busy || (value === "zapsign" && !state.zapsign)}
+                  disabled={busy || (isAccountMethod(value) && !state.signatureAccount)}
                   control={<Radio size="small" />}
                   label={
                     <Box className="flex flex-col pt-0.5">
@@ -571,10 +609,10 @@ function RequestDialog({
                 />
               ))}
             </RadioGroup>
-            {!state.zapsign && (
+            {!state.signatureAccount && (
               <Typography variant="body2" className="text-text-secondary">
-                {t("case-signature-zapsign-off")}{" "}
-                <Link href="/settings/connections">{t("case-signature-zapsign-connect")}</Link>
+                {t("case-signature-account-off")}{" "}
+                <Link href="/settings/connections">{t("case-signature-account-connect")}</Link>
               </Typography>
             )}
           </Box>

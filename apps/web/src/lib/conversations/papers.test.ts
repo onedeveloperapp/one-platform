@@ -139,4 +139,21 @@ describe("the links to sign, in the chat (0231)", () => {
     ).toBeNull();
     for (const text of [signatureLinksMessage("Nídia", papers), govbr]) expect(String(text)).not.toMatch(/[—–!]/);
   });
+
+  it("gives the address of a paper the firm's D4Sign signs as it gives ZapSign's (0253)", () => {
+    const papers = papersToSignOf([
+      {
+        paper_id: "p-6",
+        kind: "procuracao",
+        method: "d4sign",
+        sign_url: "https://sandbox.d4sign.example/embed/viewblob/doc?key_signer=k",
+      },
+    ]);
+    expect(signatureLinksMessage("Nídia", papers)).toBe(
+      "Falta só assinar, Nídia. O escritório preparou a procuração, e leva uns 2 minutos: https://sandbox.d4sign.example/embed/viewblob/doc?key_signer=k\nDepois de assinar, eu continuo por aqui.",
+    );
+    expect(
+      signatureLinksMessage("Nídia", [{ paperId: "p-7", kind: "contrato", method: "d4sign", signUrl: null }]),
+    ).toBeNull();
+  });
 });

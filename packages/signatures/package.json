@@ -3,12 +3,13 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Electronic signature of the client's documents behind a provider interface: envelopes, their status and the signed PDF with its evidence. The ZapSign provider, with its webhook, joins the fake that walks an envelope through its states.",
+  "description": "Electronic signature of the client's documents behind a provider interface: envelopes, their status and the signed PDF with its evidence. The ZapSign and D4Sign providers, with their webhooks, join the fake that walks an envelope through its states.",
   "exports": {
     ".": "./src/index.ts",
     "./types": "./src/types.ts",
     "./fake": "./src/fake.ts",
-    "./providers/zapsign": "./src/providers/zapsign.ts"
+    "./providers/zapsign": "./src/providers/zapsign.ts",
+    "./providers/d4sign": "./src/providers/d4sign.ts"
   },
   "scripts": {
     "test": "node --experimental-strip-types --test src/contract.test.ts"

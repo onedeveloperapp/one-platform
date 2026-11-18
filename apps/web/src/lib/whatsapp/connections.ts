@@ -1,6 +1,7 @@
 import type { StatusTone } from "@/components/product/status-chip";
 import type { SecondFactorState } from "@/lib/ai/approvals";
 import type { FirmNotices } from "@/lib/notices/facts";
+import type { AccountMethod } from "@/lib/signatures/methods";
 import type { TestChatCard } from "@/lib/test-chat/test-chat";
 
 /**
@@ -68,8 +69,16 @@ export type ConnectionsData = {
   secondFactor: SecondFactorState;
   supportVisit: boolean;
   environment: ConnectEnvironment;
-  /** The firm's ZapSign account (migration 0023), or null when it never connected one. */
-  signature: { connectionId: string; status: string; environment: string; lastError: string | null } | null;
+  /** The firm's signature account, ZapSign (migration 0023) or D4Sign (0253), or null when it never connected one. */
+  signature: {
+    connectionId: string;
+    provider: AccountMethod;
+    status: string;
+    environment: string;
+    /** The D4Sign safe the clients' papers go into (0253); null for ZapSign. */
+    safeName: string | null;
+    lastError: string | null;
+  } | null;
   /** The firm's calendar of hearings in Google (migration 0037). */
   calendar: {
     available: boolean;

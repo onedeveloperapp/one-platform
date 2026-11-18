@@ -3,6 +3,13 @@ import { createHash } from "node:crypto";
 import { describe, it } from "node:test";
 
 import { FakeSignatureProvider } from "./fake.ts";
+import {
+  D4SignAuthError,
+  D4SignProvider,
+  D4SignUnavailableError,
+  d4signWebhookUrl,
+  readD4SignWebhook,
+} from "./providers/d4sign.ts";
 import { type CreateEnvelopeInput, EnvelopeNotSignedError, type SignatureProvider } from "./types.ts";
 import {
   readZapSignWebhook,
@@ -16,12 +23,14 @@ import {
 
 const PDF = new TextEncoder().encode("%PDF-1.7\n% procuração de teste\n%%EOF\n");
 
-const INPUT: CreateEnvelopeInput = {
+const BASE_INPUT: CreateEnvelopeInput = {
   pdf: PDF,
   title: "Procuração",
   signers: [{ name: "Ana Souza", phone: "5562999990001" }, { name: "Carlos Souza" }],
   externalId: "case-1/procuracao/v1",
 };
+
+const INPUT = BASE_INPUT;
 
 /** A provider plus what a scenario plays on the client's side. */
 type Harness = {
@@ -37,7 +46,20 @@ type Harness = {
  * the fake today. The ZapSign provider (M2) joins this suite with responses
  * recorded from its sandbox and has to pass the same cases.
  */
-function signatureContract(name: string, make: () => Harness) {
+function signatureContract(
+  name: string,
+  make: () => Harness,
+  options: {
+    /** What the envelopes are opened with (a provider that names signers by e-mail gets them). */
+    input?: CreateEnvelopeInput;
+    /**
+     * Whether a read gives back the envelope whole, its addresses and our reference included. D4Sign reads the
+     * phase and the signatures only: its addresses cost a call each under a limit of calls an hour.
+     */
+    readsBack?: boolean;
+  } = {},
+) {
+  const INPUT = options.input ?? BASE_INPUT;
   describe(`signature provider contract: ${name}`, () => {
     it("opens an envelope pending, with one signing address per signer and our own reference", async () => {
       const { provider } = make();
@@ -54,7 +76,17 @@ function signatureContract(name: string, make: () => Harness) {
       const addresses = envelope.signers.map((signer) => signer.signUrl);
       assert.ok(addresses.every((address) => URL.canParse(address)));
       assert.equal(new Set(addresses).size, addresses.length);
-      assert.deepEqual(await provider.getStatus(envelope.id), envelope);
+      const read = await provider.getStatus(envelope.id);
+      if (options.readsBack ?? true) {
+        assert.deepEqual(read, envelope);
+      } else {
+        assert.equal(read?.id, envelope.id);
+        assert.equal(read?.status, "pending");
+        assert.deepEqual(
+          read?.signers.map((signer) => signer.signedAt),
+          envelope.signers.map(() => null),
+        );
+      }
     });
 
     it("does not know an envelope it never opened", async () => {
@@ -325,7 +357,10 @@ describe("the ZapSign provider", () => {
 
   it("points the account's webhook at ONE with the secret in its own header", async () => {
     const { provider, standIn } = zapSignHarness();
-    const id = await provider.registerWebhook({ url: "https://one.test/api/webhooks/zapsign", secret: "segredo-longo" });
+    const id = await provider.registerWebhook({
+      url: "https://one.test/api/webhooks/zapsign",
+      secret: "segredo-longo",
+    });
     assert.equal(id, "1");
     assert.deepEqual(standIn.webhooks[0], {
       url: "https://one.test/api/webhooks/zapsign",
@@ -382,5 +417,413 @@ describe("the ZapSign provider", () => {
     assert.equal(readZapSignWebhook({ header: "segredo-longo", secretSha256, body: strange }), null);
     assert.equal(zapSignExternalId(body), "envelope-1");
     assert.equal(zapSignExternalId("nada"), null);
+  });
+});
+
+// ---------- D4Sign (0253), against a stand-in that answers in the shapes of its reference ----------
+
+const D4_TOKEN = "live_token-de-teste-d4sign";
+const D4_CRYPT = "live_crypt-de-teste-d4sign";
+const D4_API = "https://sandbox.d4sign.com.br/api/v1";
+const D4_FILES = "https://sandbox.d4sign.com.br/download";
+const D4_SAFE = "9f08bf18-bf4b-410f-9701-c286e5b1cad1";
+
+const D4_INPUT: CreateEnvelopeInput = {
+  ...BASE_INPUT,
+  signers: [
+    { name: "Ana Souza", email: "ana@souza.invalid", phone: "5562999990001" },
+    { name: "Carlos Souza", email: "carlos@souza.invalid" },
+  ],
+};
+
+type D4StandInSigner = { key: string; email: string; userName: string; signed: boolean; at: string | null };
+type D4StandInDocument = { uuid: string; name: string; statusId: string; pdf: Uint8Array; signers: D4StandInSigner[] };
+
+/**
+ * D4Sign as its reference describes it (read on 2026-11-17): the keys in the address of every call, a document from a
+ * base64 PDF in a safe, its signers by e-mail with a `key_signer` each, sent to signature, a signer's own address by
+ * the decoded `key_signer`, the document's phase and each signer's signature, the temporary address of the signed PDF,
+ * and the cancel. It answers a key it does not know with D4Sign's 401, and its limit of calls when told to.
+ */
+function d4signStandIn(
+  options: {
+    crypt?: string | null;
+    failOn?: string;
+    /** An answer of D4Sign's for a call, in place of the reference's, where the reference does not say it (0254). */
+    answer?: (method: string, path: string) => Response | null;
+  } = {},
+) {
+  const documents = new Map<string, D4StandInDocument>();
+  const calls: { method: string; path: string; query: URLSearchParams; headers: Headers; body: unknown }[] = [];
+  const webhooks: { uuid: string; url: string }[] = [];
+  let sequence = 0;
+  let signerSequence = 4703160;
+  let limited = false;
+  const json = (status: number, body: unknown) =>
+    new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+
+  const fetchStandIn = (async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+    const url = new URL(String(input));
+    if (`${url.origin}${url.pathname}`.startsWith(D4_FILES)) {
+      const document = documents.get(url.pathname.split("/").pop() ?? "");
+      if (!document || document.statusId !== "4") return new Response("", { status: 404 });
+      const marker = new TextEncoder().encode(`\n%% assinado na D4Sign: ${document.uuid}\n`);
+      const pdf = new Uint8Array(document.pdf.length + marker.length);
+      pdf.set(document.pdf, 0);
+      pdf.set(marker, document.pdf.length);
+      return new Response(pdf, { status: 200, headers: { "content-type": "application/pdf" } });
+    }
+    const path = url.pathname.slice(new URL(D4_API).pathname.length);
+    const method = init?.method ?? "GET";
+    const body = init?.body ? (JSON.parse(String(init.body)) as Record<string, unknown>) : {};
+    calls.push({ method, path, query: url.searchParams, headers: new Headers(init?.headers), body });
+    if (
+      url.searchParams.get("tokenAPI") !== D4_TOKEN ||
+      (url.searchParams.get("cryptKey") ?? null) !== (options.crypt ?? null)
+    ) {
+      return json(401, { message: "API error: Check API user.", mensagem_pt: "Chave de API inválida." });
+    }
+    const forced = options.answer?.(method, path) ?? null;
+    if (forced) return forced;
+    if (limited) return json(400, { message: "Esta chave da API já atingiu o tempo limite para este método" });
+    if (options.failOn && path.endsWith(options.failOn)) return json(400, { message: null });
+
+    if (method === "GET" && path === "/safes") {
+      return json(200, [
+        { "uuid-safe": D4_SAFE, "name-safe": "Clientes" },
+        { "uuid-safe": "06b3ddb1-abc9-4ab8-b944-0d7c940486af", "name-safe": "Atendimento" },
+      ]);
+    }
+    const upload = /^\/documents\/([0-9a-f-]{36})\/uploadbinary$/.exec(path);
+    if (method === "POST" && upload) {
+      if (upload[1] !== D4_SAFE) return json(400, { message: "not permission this safe" });
+      sequence += 1;
+      const uuid = `aea20243-475a-43fc-8ba5-${String(sequence).padStart(12, "0")}`;
+      documents.set(uuid, {
+        uuid,
+        name: String(body.name ?? ""),
+        statusId: "2",
+        pdf: Uint8Array.from(Buffer.from(String(body.base64_binary_file), "base64")),
+        signers: [],
+      });
+      return json(200, { uuid });
+    }
+    const action = /^\/documents\/([0-9a-f-]{36})\/([a-z]+)(?:\/(.+))?$/.exec(path);
+    const document = action ? documents.get(action[1]) : undefined;
+    if (action && !document) return json(404, { message: "document not found" });
+    if (!action || !document) return new Response("false - metodo desconhecido", { status: 400 });
+    const [, , verb, argument] = action;
+    if (method === "POST" && verb === "webhooks") {
+      webhooks.push({ uuid: document.uuid, url: String(body.url) });
+      return json(200, { message: "Webhook successfully registered" });
+    }
+    if (method === "POST" && verb === "createlist") {
+      const added = (body.signers as { email: string }[]).map((signer) => {
+        signerSequence += 1;
+        const entry = {
+          key: Buffer.from(String(signerSequence)).toString("base64"),
+          email: signer.email,
+          userName: "",
+          signed: false,
+          at: null,
+        };
+        document.signers.push(entry);
+        return entry;
+      });
+      return json(200, {
+        message: added.map((signer) => ({ key_signer: signer.key, email: signer.email, act: "1", status: "created" })),
+      });
+    }
+    if (method === "POST" && verb === "sendtosigner") {
+      if (body.skip_email !== "1" || body.workflow !== "0") return json(400, { message: null });
+      document.statusId = "3";
+      return json(200, { message: "File sent to successfully signing" });
+    }
+    if (method === "GET" && verb === "signaturelink") {
+      if (document.statusId !== "3") return json(400, { message: "Link de assinatura indisponível" });
+      const signer = document.signers.find((item) => Buffer.from(item.key, "base64").toString("utf8") === argument);
+      if (!signer) return json(400, { message: null });
+      return json(200, { link: `https://sandbox.d4sign.com.br/w/i/${document.uuid}/${argument}-link/feee` });
+    }
+    if (method === "GET" && verb === "list") {
+      return json(200, [
+        {
+          uuidDoc: document.uuid,
+          nameDoc: document.name,
+          statusId: document.statusId,
+          statusName: document.statusId,
+          list: document.signers.map((signer) => ({
+            key_signer: signer.key,
+            user_name: signer.userName,
+            email: signer.email,
+            signed: signer.signed ? "1" : "0",
+            sign_info: signer.at ? { date_signed: "", date_signed_atom: signer.at } : {},
+          })),
+        },
+      ]);
+    }
+    if (method === "POST" && verb === "download") {
+      if (document.statusId !== "4") return json(400, { message: "Documento não finalizado" });
+      return json(200, { url: `${D4_FILES}/${document.uuid}`, name: `${document.name}.pdf` });
+    }
+    if (method === "POST" && verb === "cancel") {
+      if (document.statusId !== "2" && document.statusId !== "3")
+        return json(400, { message: "Não é possível cancelar" });
+      document.statusId = "6";
+      return json(200, { uuidDoc: document.uuid, statusId: "6", statusName: "Cancelado" });
+    }
+    return new Response("false - metodo desconhecido", { status: 400 });
+  }) as typeof fetch;
+
+  return {
+    fetch: fetchStandIn,
+    documents,
+    calls,
+    webhooks,
+    limit: () => {
+      limited = true;
+    },
+    sign(uuid: string, position: number, name: string) {
+      const document = documents.get(uuid);
+      const signer = document?.signers[position - 1];
+      if (!document || !signer) throw new Error("no such signer");
+      signer.signed = true;
+      signer.userName = name;
+      signer.at = `2026-11-17T10:0${position}:00-03:00`;
+      if (document.signers.every((item) => item.signed)) document.statusId = "4";
+    },
+    refuse(uuid: string) {
+      const document = documents.get(uuid);
+      if (document) document.statusId = "6";
+    },
+  };
+}
+
+function d4signHarness() {
+  const standIn = d4signStandIn({ crypt: D4_CRYPT });
+  const provider = new D4SignProvider({
+    tokenApi: D4_TOKEN,
+    cryptKey: D4_CRYPT,
+    environment: "sandbox",
+    safeUuid: D4_SAFE,
+    webhookFor: (externalId) => d4signWebhookUrl("https://one.invalid", externalId, "segredo-da-conexao-longo"),
+    fetch: standIn.fetch,
+  });
+  const names = ["Ana Souza", "Carlos Souza"];
+  return {
+    provider,
+    standIn,
+    sign: (envelopeId: string, position: number) => standIn.sign(envelopeId, position, names[position - 1]),
+    refuse: (envelopeId: string) => standIn.refuse(envelopeId),
+  };
+}
+
+signatureContract("d4sign (stand-in)", d4signHarness, { input: D4_INPUT, readsBack: false });
+
+describe("the D4Sign provider", () => {
+  it("sends the keys in the address of every call, the cryptKey only where the account has one", async () => {
+    const { provider, standIn } = d4signHarness();
+    await provider.createEnvelope(D4_INPUT);
+    assert.ok(standIn.calls.length >= 6);
+    for (const call of standIn.calls) {
+      assert.equal(call.query.get("tokenAPI"), D4_TOKEN);
+      assert.equal(call.query.get("cryptKey"), D4_CRYPT);
+      assert.equal(call.headers.get("tokenAPI"), D4_TOKEN);
+    }
+    const plain = d4signStandIn({ crypt: null });
+    const noCrypt = new D4SignProvider({ tokenApi: D4_TOKEN, environment: "sandbox", fetch: plain.fetch });
+    assert.equal((await noCrypt.listSafes()).length, 2);
+    assert.equal(plain.calls[0].query.has("cryptKey"), false);
+  });
+
+  it("puts the document in the firm's safe, sends it with no e-mail of D4Sign's and points its webhook at ONE", async () => {
+    const { provider, standIn } = d4signHarness();
+    const envelope = await provider.createEnvelope(D4_INPUT);
+    const steps = standIn.calls.map((call) => `${call.method} ${call.path.replace(envelope.id, "{doc}")}`);
+    assert.deepEqual(steps.slice(0, 4), [
+      `POST /documents/${D4_SAFE}/uploadbinary`,
+      "POST /documents/{doc}/webhooks",
+      "POST /documents/{doc}/createlist",
+      "POST /documents/{doc}/sendtosigner",
+    ]);
+    const created = standIn.calls.find((call) => call.path.endsWith("/createlist"))?.body as {
+      signers: Record<string, string>[];
+    };
+    assert.deepEqual(
+      created.signers.map((signer) => [signer.email, signer.act, signer.skipemail, signer.certificadoicpbr]),
+      [
+        ["ana@souza.invalid", "1", "1", "0"],
+        ["carlos@souza.invalid", "1", "1", "0"],
+      ],
+    );
+    assert.deepEqual(standIn.webhooks, [
+      {
+        uuid: envelope.id,
+        url: `https://one.invalid/api/webhooks/d4sign?envelope=${encodeURIComponent(D4_INPUT.externalId)}&key=segredo-da-conexao-longo`,
+      },
+    ]);
+    assert.ok(envelope.signers.every((signer) => signer.signUrl.startsWith("https://sandbox.d4sign.com.br/w/i/")));
+  });
+
+  it("sends nothing when a signer has no e-mail, which D4Sign names every signer by", async () => {
+    const { provider, standIn } = d4signHarness();
+    await assert.rejects(
+      provider.createEnvelope({ ...D4_INPUT, signers: [{ name: "Ana Souza" }] }),
+      (error: unknown) => error instanceof D4SignUnavailableError && error.code === "signer_email_missing",
+    );
+    assert.equal(standIn.calls.length, 0);
+  });
+
+  it("takes refused keys as the firm's to reconnect, and the hour's limit as a wait", async () => {
+    const standIn = d4signStandIn({ crypt: D4_CRYPT });
+    const wrong = new D4SignProvider({
+      tokenApi: "outra-chave-qualquer",
+      cryptKey: D4_CRYPT,
+      environment: "sandbox",
+      fetch: standIn.fetch,
+    });
+    await assert.rejects(wrong.listSafes(), D4SignAuthError);
+    const { provider, standIn: limitedStandIn } = d4signHarness();
+    limitedStandIn.limit();
+    await assert.rejects(
+      provider.createEnvelope(D4_INPUT),
+      (error: unknown) => error instanceof D4SignUnavailableError && error.code === "provider_rate_limited",
+    );
+  });
+
+  it("takes a 403 for an access refused and never for the keys' end, and a 429 or a bare message for the limit", async () => {
+    const answering = (response: () => Response) =>
+      new D4SignProvider({
+        tokenApi: D4_TOKEN,
+        environment: "sandbox",
+        fetch: d4signStandIn({ crypt: null, answer: (_method, path) => (path === "/safes" ? response() : null) }).fetch,
+      });
+    const reply = (status: number, body: unknown) =>
+      new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+    await assert.rejects(
+      answering(() => reply(403, { message: "Forbidden" })).listSafes(),
+      (error: unknown) =>
+        error instanceof D4SignUnavailableError &&
+        error.code === "provider_forbidden" &&
+        !(error instanceof D4SignAuthError),
+    );
+    for (const limit of [
+      () => reply(429, {}),
+      () => reply(200, { message: "Esta chave da API já atingiu o tempo limite para este método" }),
+    ]) {
+      await assert.rejects(
+        answering(limit).listSafes(),
+        (error: unknown) => error instanceof D4SignUnavailableError && error.code === "provider_rate_limited",
+      );
+    }
+    await assert.rejects(
+      answering(() => reply(200, { message: "API error: Check API user." })).listSafes(),
+      D4SignAuthError,
+    );
+  });
+
+  it("never takes the words of a document for D4Sign's refusal", async () => {
+    const { provider } = d4signHarness();
+    const envelope = await provider.createEnvelope({ ...D4_INPUT, title: "Prazo e tempo limite: check api user" });
+    assert.equal((await provider.getStatus(envelope.id))?.status, "pending");
+  });
+
+  it("says a safe D4Sign does not know, with nothing made there", async () => {
+    const standIn = d4signStandIn({
+      crypt: null,
+      answer: (_method, path) => (path.endsWith("/uploadbinary") ? new Response("", { status: 404 }) : null),
+    });
+    const provider = new D4SignProvider({
+      tokenApi: D4_TOKEN,
+      environment: "sandbox",
+      safeUuid: D4_SAFE,
+      fetch: standIn.fetch,
+    });
+    await assert.rejects(
+      provider.createEnvelope(D4_INPUT),
+      (error: unknown) => error instanceof D4SignUnavailableError && error.code === "safe_not_found",
+    );
+    assert.equal(standIn.documents.size, 0);
+  });
+
+  it("sends nothing when two signers share an e-mail, which would give them one code and one address", async () => {
+    const { provider, standIn } = d4signHarness();
+    await assert.rejects(
+      provider.createEnvelope({
+        ...D4_INPUT,
+        signers: [
+          { name: "Ana Souza", email: "familia@souza.invalid" },
+          { name: "Carlos Souza", email: "Familia@Souza.invalid" },
+        ],
+      }),
+      (error: unknown) => error instanceof D4SignUnavailableError && error.code === "signer_email_shared",
+    );
+    assert.equal(standIn.calls.length, 0);
+  });
+
+  it("hands over the signed PDF from the state just read, with no second reading", async () => {
+    const { provider, standIn } = d4signHarness();
+    const envelope = await provider.createEnvelope(D4_INPUT);
+    standIn.sign(envelope.id, 1, "Ana Souza");
+    standIn.sign(envelope.id, 2, "Carlos Souza");
+    const state = await provider.getStatus(envelope.id);
+    const before = standIn.calls.length;
+    const signed = await provider.downloadSigned(envelope.id, state);
+    assert.deepEqual(
+      standIn.calls.slice(before).map((call) => call.path.replace(envelope.id, "{doc}")),
+      ["/documents/{doc}/download"],
+    );
+    assert.equal(Buffer.from(signed.pdf.subarray(0, 4)).toString("latin1"), "%PDF");
+  });
+
+  it("cancels at D4Sign a document left half made, so nothing waits there for nobody", async () => {
+    const standIn = d4signStandIn({ crypt: null, failOn: "/createlist" });
+    const provider = new D4SignProvider({
+      tokenApi: D4_TOKEN,
+      environment: "sandbox",
+      safeUuid: D4_SAFE,
+      fetch: standIn.fetch,
+    });
+    await assert.rejects(provider.createEnvelope(D4_INPUT), D4SignUnavailableError);
+    assert.equal(standIn.documents.size, 1);
+    assert.equal([...standIn.documents.values()][0].statusId, "6");
+  });
+
+  it("cancels only what waits, and says what a signed or ended document is", async () => {
+    const { provider, standIn } = d4signHarness();
+    const open = await provider.createEnvelope(D4_INPUT);
+    assert.equal(await provider.cancelDocument(open.id, "Documento errado"), "cancelled");
+    assert.equal(await provider.cancelDocument(open.id, ""), "already_ended");
+    const signed = await provider.createEnvelope(D4_INPUT);
+    standIn.sign(signed.id, 1, "Ana Souza");
+    standIn.sign(signed.id, 2, "Carlos Souza");
+    assert.equal(await provider.cancelDocument(signed.id, ""), "already_signed");
+    assert.equal(await provider.cancelDocument("aea20243-475a-43fc-8ba5-999999999999", ""), "not_found");
+    assert.equal(await provider.cancelDocument("não-é-um-documento", ""), "not_found");
+  });
+
+  it("reads the account's safes by either spelling of their keys", async () => {
+    const { provider } = d4signHarness();
+    assert.deepEqual(await provider.listSafes(), [
+      { uuid: D4_SAFE, name: "Clientes" },
+      { uuid: "06b3ddb1-abc9-4ab8-b944-0d7c940486af", name: "Atendimento" },
+    ]);
+  });
+
+  it("reads a delivery only when it names a document and an event", () => {
+    assert.deepEqual(
+      readD4SignWebhook({ uuid: "9f08bf18-bf4b-410f-9701-c286e5b1cad1", type_post: "4", message: "Signed" }),
+      {
+        documentUuid: "9f08bf18-bf4b-410f-9701-c286e5b1cad1",
+        typePost: "4",
+      },
+    );
+    assert.equal(readD4SignWebhook({ uuid: "doc", type_post: "4" }), null);
+    assert.equal(readD4SignWebhook({ uuid: "9f08bf18-bf4b-410f-9701-c286e5b1cad1", type_post: "" }), null);
+    assert.equal(readD4SignWebhook({}), null);
+    assert.equal(
+      d4signWebhookUrl("https://one.invalid/", "env-1", "k k"),
+      "https://one.invalid/api/webhooks/d4sign?envelope=env-1&key=k+k",
+    );
   });
 });
