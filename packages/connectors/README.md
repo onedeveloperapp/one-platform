@@ -6,6 +6,8 @@ A firm connects its accounts at its vendors (its WhatsApp Business account, its 
 
 What it never keeps: a lawyer's own credential. A password, a PIN, a one-time code or its seed, a digital certificate or a private key is refused by name before anything is sealed (`isCredentialName`, the same rule as `is_credential_name` in the database), and a catalog test refuses a column named for one anywhere.
 
+Two custodies the owner decided are the exception, each with its own door and its own rules in the database (root `CLAUDE.md`, "Safety"): a lawyer's authorization at their cloud certificate's provider (migration 0041, opened through `openAnswer` from `lawyer_signature_open`), and, since 2026-11-20, the lawyer's own court login for ONE's browser (migration 0263): `sealLawyerCourtLogin` is the only seal that takes a field named as a credential (`login` and `senha`, of a connection `begin_court_login` gave), and it opens only from `court_login_open`, for a batch that lawyer approved (0264), never through `open`. The code a court asks at a batch is sealed to that batch (`sealBatchCode`, `openBatchCode`), kept two minutes by the database and given once; a second factor's seed is never kept.
+
 ## How a token is kept
 
 - **Sealed in the backend** with AES-256-GCM, under a fresh 12-byte nonce, with a key that never enters the database: `VAULT_KEYS` in the environment.

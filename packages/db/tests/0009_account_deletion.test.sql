@@ -293,8 +293,11 @@ select is(
     'court_comarcas.court',
     -- A court's way of paying (0135) is platform data of a court, which is never deleted.
     'court_payment_paths.court',
+    -- The court systems ONE works on and the texts of the filing ways (0263, 0264) are the platform's, never deleted.
+    'court_screen_maps.system_key',
     -- The kind of piece a firm's model of the process writes (0244) is the platform's, which is never deleted.
     'draft_templates.piece_kind',
+    'filing_batches.system_key',
     'filing_package_items.file_id',
     'filing_package_items.signed_file_id',
     'filing_receipts.file_id',
@@ -304,12 +307,15 @@ select is(
     'finance_entries.category_id',
     'finance_statement_lines.account_id',
     'finance_statements.account_id',
+    'firm_filing_ways.term_id',
     'firm_modules.module_key',
     'firm_notice_kinds.kind',
     'flight_segments.destination_iata',
     'flight_segments.origin_iata',
     'impersonation_sessions.actor_id',
     'issued_documents.file_id',
+    'lawyer_filing_ways.system_key',
+    'lawyer_filing_ways.term_id',
     'leads.consent_term_id',
     -- A version of a module (0212) names its module, which is never deleted.
     'module_versions.module',

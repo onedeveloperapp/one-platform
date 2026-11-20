@@ -1,5 +1,12 @@
 import { type Keyring, openSecret, sealSecret, VaultOpenError } from "@flyee/connectors/crypto";
-import type { ReadAnswer, SealedPlace, SecretPayload, StoredConnection, VaultStore } from "@flyee/connectors/types";
+import type {
+  Envelope,
+  ReadAnswer,
+  SealedPlace,
+  SecretPayload,
+  StoredConnection,
+  VaultStore,
+} from "@flyee/connectors/types";
 
 /**
  * The vault of the firms' vendor tokens: what the backend does to seal a
@@ -52,6 +59,21 @@ export function checkPayload(payload: SecretPayload): string | null {
   return null;
 }
 
+/**
+ * Why a lawyer's court login cannot be sealed, or null: a login and a password
+ * of a person's size, with no line breaks or control characters. What the
+ * court accepts is the court's to say (`court_login_checked`).
+ */
+export function courtLoginProblem(given: { login: string; senha: string }): string | null {
+  const login = typeof given?.login === "string" ? given.login.trim() : "";
+  const senha = typeof given?.senha === "string" ? given.senha : "";
+  if (login.length === 0 || senha.length === 0) return "empty";
+  if (login.length > 120 || senha.length > 200) return "too_large";
+  // eslint-disable-next-line no-control-regex
+  if (/[\u0000-\u001f\u007f]/.test(login) || /[\u0000-\u001f\u007f]/.test(senha)) return "invalid_value";
+  return null;
+}
+
 export type SealResult = { kind: "sealed"; replaced: boolean } | { kind: "refused"; code: string };
 
 export type OpenResult =
@@ -98,6 +120,59 @@ export class Vault {
     return answer.ok
       ? { kind: "sealed", replaced: answer.code === "replaced" }
       : { kind: "refused", code: answer.code };
+  }
+
+  /**
+   * The one door through which a lawyer's own court login enters the vault
+   * (the owner, 2026-11-20, root `CLAUDE.md`, "Three ways to file"): the login
+   * and the password the lawyer typed for themself, sealed at once under the
+   * connection `begin_court_login` gave (migration 0263). It is the only seal
+   * that takes a field named as a credential; a second factor's seed, a PIN or
+   * a certificate stay refused everywhere, here too. The database keeps it
+   * apart from every vendor token: the vault's general read refuses it (0041),
+   * and only `court_login_open` hands it out, for a batch that lawyer approved
+   * (0264), opened with `openAnswer`.
+   */
+  async sealLawyerCourtLogin(where: SealedPlace, given: { login: string; senha: string }): Promise<SealResult> {
+    const problem = courtLoginProblem(given);
+    if (problem) return { kind: "refused", code: problem };
+    const payload: SecretPayload = { login: given.login.trim(), senha: given.senha };
+    const answer = await this.store.store({
+      place: where,
+      envelope: sealSecret(this.keyring, payload, where),
+      expiresAt: null,
+      metadata: null,
+    });
+    return answer.ok
+      ? { kind: "sealed", replaced: answer.code === "replaced" }
+      : { kind: "refused", code: answer.code };
+  }
+
+  /**
+   * Seals the code a court asked, typed by the lawyer for a batch of theirs
+   * (0264): bound to its firm and batch, so it opens for that batch alone. It
+   * is never stored by the vault itself: the backend hands the envelope to
+   * `give_filing_batch_code`, which keeps it two minutes and gives it once.
+   */
+  sealBatchCode(
+    orgId: string,
+    batchId: string,
+    code: string,
+  ): { kind: "sealed"; envelope: Envelope } | { kind: "refused"; code: string } {
+    const clean = code.replace(/\s+/g, "");
+    if (!/^[A-Za-z0-9]{4,12}$/.test(clean)) return { kind: "refused", code: "invalid_code" };
+    return { kind: "sealed", envelope: sealSecret(this.keyring, { valor: clean }, { orgId, connectionId: batchId }) };
+  }
+
+  /** Opens a batch's code taken from `take_filing_batch_code`; null when it is not that batch's. */
+  openBatchCode(orgId: string, batchId: string, envelope: Envelope): string | null {
+    try {
+      const payload = openSecret(this.keyring, envelope, { orgId, connectionId: batchId });
+      return typeof payload.valor === "string" ? payload.valor : null;
+    } catch (error) {
+      if (error instanceof VaultOpenError) return null;
+      throw error;
+    }
   }
 
   /**

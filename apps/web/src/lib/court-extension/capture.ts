@@ -251,20 +251,34 @@ function kindOf(element: Element): MappedField["kind"] | null {
   return null;
 }
 
-/** A link worth mapping: a step of the system (a menu, "Incluir outros advogados"), never a document or a person. */
-function isActionLink(element: Element, label: string | null): boolean {
+/**
+ * The words of an action a row of a table offers ("Incluir", "Remover", "Endereço"), never a person's name: what ONE's
+ * robot may press inside a table (the eproc lists a party it found with "Incluir" in the row).
+ */
+const ROW_ACTION =
+  /^(incluir|adicionar|remover|excluir|editar|alterar|selecionar|escolher|consultar|detalhar|endere[cç]o( e contato)?|contato|favorito|principal|definir)\b/i;
+
+/**
+ * A link worth mapping: a step of the system (a menu, "Incluir outros advogados"), never a document or a person. In a
+ * table only for ONE's robot (`rows`), and only one whose words are an action.
+ */
+function isActionLink(element: Element, label: string | null, rows: boolean): boolean {
   if (!label || label.length > 60) return false;
   if (/\.(pdf|p7s|doc|docx|html?|jpe?g|png)\b/i.test(label) || /\[número\]|\[e-mail\]/.test(label)) return false;
-  return !element.closest("td, th");
+  if (!element.closest("td, th")) return true;
+  return rows && ROW_ACTION.test(label);
 }
 
-/** A field as the map keeps it, or null for what is not mapped (a hidden field, a link that is not a step). */
-export function mapField(element: Element): MappedField | null {
+/**
+ * A field as the map keeps it, or null for what is not mapped (a hidden field, a link that is not a step). `rows`: the
+ * capture of ONE's robot, which also keeps the actions of a table's rows.
+ */
+export function mapField(element: Element, rows = false): MappedField | null {
   const kind = kindOf(element);
   if (!kind) return null;
   if (element instanceof HTMLInputElement && element.type === "hidden") return null;
   const label = labelOf(element);
-  if (kind === "link" && !isActionLink(element, label)) return null;
+  if (kind === "link" && !isActionLink(element, label, rows)) return null;
   const id = element.getAttribute("id");
   const name = element.getAttribute("name");
   const about = `${label ?? ""} ${id ?? ""} ${name ?? ""}`;
@@ -297,15 +311,23 @@ export function mapField(element: Element): MappedField | null {
   };
 }
 
-/** The structure of the screen in this document (one frame): what the extension saves when the lawyer asks. */
-export function captureScreen(document: Document, place: Place, now: Date): MappedScreen {
+/**
+ * The structure of the screen in this document (one frame): what the extension saves when the lawyer asks, and what
+ * ONE's robot reads of a screen (`{ rows: true }`: with the actions of a table's rows, still never what is in them).
+ */
+export function captureScreen(
+  document: Document,
+  place: Place,
+  now: Date,
+  options: { rows?: boolean } = {},
+): MappedScreen {
   const fields: MappedField[] = [];
   const seen = new Set<string>();
   for (const element of Array.from(
     document.querySelectorAll("input, select, textarea, button, a[href], [role=button]"),
   )) {
     if (fields.length >= FIELD_LIMIT) break;
-    const field = mapField(element);
+    const field = mapField(element, options.rows === true);
     if (!field) continue;
     // A button repeated on every row of a table ("Incluir") is one button of the screen, found in any row.
     if (element.closest("tr")) {

@@ -32,15 +32,15 @@ grant select, insert on results to authenticated;
 
 select is(
   (select array_agg(slug || ':' || locale order by slug) from public.current_consent_terms('pt-BR')),
-  array['newsletter:pt-BR'],
-  'the only text that ships is the sentence of the waitlist form: no legal document is seeded'
+  array['newsletter:pt-BR', 'protocolo-advogado:pt-BR', 'protocolo-escritorio:pt-BR'],
+  'what ships is the sentence of the waitlist form and the acknowledgments of the filing ways (0263): no legal document is seeded'
 );
 
 select set_config('request.jwt.claims', '{"role":"anon"}', true);
 set local role anon;
 select is(
   (select count(*)::int from public.consent_terms),
-  1,
+  3,
   'an anonymous visitor reads the texts in force, which is what the legal pages render'
 );
 reset role;

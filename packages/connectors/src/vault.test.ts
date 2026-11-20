@@ -287,3 +287,56 @@ test("what another audited door read opens only for its own place, and its refus
   // Nothing was read through the store's general door.
   assert.deepEqual(store.reads, []);
 });
+
+test("a lawyer's court login enters only through its own door, and opens only for its own connection", async () => {
+  const { store, vault, id, where } = setup();
+  // The general seal still refuses a password, whatever the account.
+  assert.deepEqual(await vault.seal(where, { login: "52998224725", senha: "segredo-de-teste" }), {
+    kind: "refused",
+    code: "credential_field",
+  });
+  // The court login's door seals it, and nothing of it is held in the clear.
+  assert.deepEqual(await vault.sealLawyerCourtLogin(where, { login: " 52998224725 ", senha: "segredo-de-teste" }), {
+    kind: "sealed",
+    replaced: false,
+  });
+  const envelope = store.connections.get(id)?.envelope;
+  assert.ok(envelope);
+  assert.ok(!JSON.stringify(envelope).includes("segredo-de-teste"));
+  assert.ok(!Buffer.from(envelope.ciphertext, "base64").toString("utf8").includes("segredo-de-teste"));
+  // It opens from what `court_login_open` answers, for that connection alone.
+  const answer = {
+    ok: true as const,
+    envelope,
+    orgId: "firm-a",
+    provider: "court.eproc-tjsp",
+    externalId: "pessoa-1",
+    status: "connected" as const,
+    expiresAt: null,
+  };
+  const opened = vault.openAnswer(where, answer);
+  assert.equal(opened.kind, "opened");
+  if (opened.kind === "opened") assert.deepEqual(opened.payload, { login: "52998224725", senha: "segredo-de-teste" });
+  assert.equal(vault.openAnswer({ orgId: "firm-a", connectionId: "outra" }, answer).kind, "refused");
+  // A login of no size, or with a line break, is refused before anything is sealed.
+  assert.deepEqual(await vault.sealLawyerCourtLogin(where, { login: "", senha: "x" }), {
+    kind: "refused",
+    code: "empty",
+  });
+  assert.deepEqual(await vault.sealLawyerCourtLogin(where, { login: "a", senha: "linha\nquebrada" }), {
+    kind: "refused",
+    code: "invalid_value",
+  });
+});
+
+test("the code a court asked is sealed to its batch and opens for that batch alone", () => {
+  const { vault } = setup();
+  const sealed = vault.sealBatchCode("firm-a", "lote-1", " 123 456 ");
+  assert.equal(sealed.kind, "sealed");
+  if (sealed.kind !== "sealed") return;
+  assert.ok(!JSON.stringify(sealed.envelope).includes("123456"));
+  assert.equal(vault.openBatchCode("firm-a", "lote-1", sealed.envelope), "123456");
+  assert.equal(vault.openBatchCode("firm-a", "lote-2", sealed.envelope), null);
+  assert.equal(vault.openBatchCode("firm-b", "lote-1", sealed.envelope), null);
+  assert.deepEqual(vault.sealBatchCode("firm-a", "lote-1", "12"), { kind: "refused", code: "invalid_code" });
+});

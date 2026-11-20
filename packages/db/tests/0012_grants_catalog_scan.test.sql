@@ -143,6 +143,8 @@ select is(
     -- The copy of the firms' files and the removals it owes (0205): the backend's alone.
     'file_copies',
     'file_copy_removals',
+    -- The code a court asked, sealed, for two minutes (0264): read once through its function.
+    'filing_batch_codes',
     'hearing_event_removals',
     'lead_submissions',
     -- What the market's reading plans, and the decisions it read (0190): read through their functions, in numbers.

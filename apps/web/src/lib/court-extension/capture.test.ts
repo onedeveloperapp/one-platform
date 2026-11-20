@@ -246,3 +246,23 @@ describe("the map of a court's screen (the lawyer's extension)", () => {
     expect(document.querySelectorAll(locate(inputs[1]).selector)[0]).toBe(inputs[1]);
   });
 });
+
+describe("the screen as ONE's robot reads it", () => {
+  it("keeps the action a table's row offers, never the person the row shows", () => {
+    document.body.innerHTML = `
+      <h1>Peticionamento Eletrônico (3 de 5) - Partes</h1>
+      <table>
+        <thead><tr><th>Nome</th><th>Ações</th></tr></thead>
+        <tbody><tr>
+          <td><a href="#pessoa">Marina Teste</a></td>
+          <td><a href="#incluir" id="lnkIncluir">Incluir</a></td>
+        </tr></tbody>
+      </table>`;
+    const mapped = captureScreen(document, EPROC, NOW);
+    const robot = captureScreen(document, EPROC, NOW, { rows: true });
+    expect(mapped.fields.map((field) => field.label)).toEqual([]);
+    expect(robot.fields.map((field) => field.label)).toEqual(["Incluir"]);
+    expect(JSON.stringify(robot)).not.toContain("Marina");
+    expect(robot.tables[0]).toMatchObject({ headers: ["Nome", "Ações"], rows: 1 });
+  });
+});

@@ -53,8 +53,8 @@ select is_empty(
 
 select is(
   (select array_agg(slug || ':' || locale || ':' || version order by slug) from public.consent_terms where is_active),
-  array['newsletter:pt-BR:1'],
-  'the one text in force is the sentence of the waitlist form, in Portuguese'
+  array['newsletter:pt-BR:1', 'protocolo-advogado:pt-BR:1', 'protocolo-escritorio:pt-BR:1'],
+  'the texts in force are the sentence of the waitlist form and the acknowledgments of the filing ways (0263), in Portuguese'
 );
 
 select * from finish();
