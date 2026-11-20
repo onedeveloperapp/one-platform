@@ -81,6 +81,11 @@ export type TemplateImportView = {
   /** The model ONE saved ("saved"), read with the request; null when it was removed since. */
   saved: SavedModel | null;
   prepared: PreparedModel | null;
+  /**
+   * Since when the platform's AI is down, while ONE's work on the request waits for it (migration 0255); null when it
+   * answers or the request waits for nothing of it.
+   */
+  aiDownSince: string | null;
 };
 
 /** A request as the library lists it. */
@@ -183,6 +188,7 @@ export function importView(
     heldReason: status === "ready" ? heldReasonOf(row.held_reason) : null,
     saved: status === "saved" ? saved : null,
     prepared,
+    aiDownSince: null,
   };
 }
 

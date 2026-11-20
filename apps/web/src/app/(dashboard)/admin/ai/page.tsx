@@ -2,6 +2,7 @@ import AiConsoleView from "./components/ai-console-view";
 
 import {
   loadAiAccuracy,
+  loadAiHealth,
   loadAiSpend,
   loadAutonomyCatalog,
   loadDjenHealth,
@@ -37,7 +38,7 @@ export const maxDuration = 60;
  */
 export default async function AdminAiPage() {
   const state = await loadConsole(async ({ supabase }) => {
-    const [spend, accuracy, firms, prompts, triage, djen, autonomy, flights] = await Promise.all([
+    const [spend, accuracy, firms, prompts, triage, djen, autonomy, flights, health] = await Promise.all([
       loadAiSpend(supabase, 30),
       loadAiAccuracy(supabase, 90),
       loadFirmChoices(supabase),
@@ -46,6 +47,7 @@ export default async function AdminAiPage() {
       loadDjenHealth(supabase),
       loadAutonomyCatalog(supabase),
       loadFlightWatch(supabase),
+      loadAiHealth(supabase),
     ]);
     return {
       spend,
@@ -56,6 +58,7 @@ export default async function AdminAiPage() {
       djen,
       autonomy,
       flights,
+      health,
       flightSourceOn: flightStatusProvider() !== null,
       djenCaptureOn: isDjenCaptureOn(),
       marketCaptureOn: isMarketCaptureOn(),

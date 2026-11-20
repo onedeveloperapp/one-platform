@@ -20,6 +20,7 @@ describe("the platform's sweeps (2026-11-04)", () => {
     expect([...keys].sort()).toEqual(
       [
         "agenda-digests",
+        "ai-health",
         "ai-stale-runs",
         "appeal-papers",
         "backup",
@@ -29,6 +30,7 @@ describe("the platform's sweeps (2026-11-04)", () => {
         "case-advance",
         "case-documents",
         "case-drafts",
+        "case-forecasts",
         "case-interviews",
         "case-statements",
         "chat-data-checks",

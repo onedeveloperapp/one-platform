@@ -123,6 +123,8 @@ export const publicationActionSweeps: Sweep[] = [
   {
     // What each triaged publication of a case asks (0186): also while ONE is used, since each is claimed under a number.
     key: "publication-actions",
+    // Its work is a model's: it waits while the provider of these tasks refuses the platform's AI account (0255).
+    ai: [PUBLICATION_ACTION_TASK],
     when: { every: 10 },
     whileUsed: true,
     run: (service, until) => publicationActionsRound(service, until),

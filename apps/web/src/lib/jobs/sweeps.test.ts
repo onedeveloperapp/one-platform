@@ -70,4 +70,47 @@ describe("a round of the sweeps (2026-11-04)", () => {
     await runSweeps(service, sweeps, { at: Date.UTC(2026, 10, 4, 10, 5), budgetMs: 60_000 });
     expect(ran).toEqual(["clock"]);
   });
+
+  // The order matters: what the runner read of the providers is trusted for a while, and a failed read is not kept.
+  it("never pauses the work of a model on a read of the providers that failed (0255)", async () => {
+    const ran: string[] = [];
+    const failing = { rpc: async () => ({ data: null, error: { message: "down" } }) } as never;
+    const sweeps: Sweep[] = [
+      {
+        key: "model",
+        when: { every: 5 },
+        ai: ["caso.documento.conferencia"],
+        run: async () => (ran.push("model"), {}),
+      },
+    ];
+    await runSweeps(failing, sweeps, { at, budgetMs: 60_000 });
+    expect(ran).toEqual(["model"]);
+  });
+
+  it("pauses the work of a model while its provider refuses the platform's AI account, and runs the rest (0255)", async () => {
+    const ran: string[] = [];
+    const refused = {
+      rpc: async (name: string) => ({
+        data:
+          name === "ai_providers_down"
+            ? [{ provider: "gemini", model: "m", since: "2026-11-06T13:12:00Z", tasks: ["caso.relato.transcricao"] }]
+            : null,
+        error: null,
+      }),
+    } as never;
+    const sweeps: Sweep[] = [
+      { key: "audio", when: { every: 5 }, ai: ["caso.relato.transcricao"], run: async () => (ran.push("audio"), {}) },
+      // Another provider's task goes on: a Gemini key refused never stops what Anthropic answers.
+      {
+        key: "check",
+        when: { every: 5 },
+        ai: ["caso.documento.conferencia"],
+        run: async () => (ran.push("check"), {}),
+      },
+      { key: "rest", when: { every: 5 }, run: async () => (ran.push("rest"), {}) },
+    ];
+    const report = await runSweeps(refused, sweeps, { at, budgetMs: 60_000 });
+    expect(ran.sort()).toEqual(["check", "rest"]);
+    expect(report.ran.audio).toEqual({ paused: "ai" });
+  });
 });

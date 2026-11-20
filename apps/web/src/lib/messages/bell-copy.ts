@@ -132,6 +132,21 @@ const ptBR = {
     body: `O ONE triou como ${what} uma publicação${where ? ` ${where}` : ""} há mais de ${hours} horas, e ninguém confirmou que está ciente.`,
   }),
 
+  /**
+   * The platform's operators only (migration 0255): a provider of the AI refuses the platform's account (its key, its
+   * credit). `since` is already formatted for the reader.
+   */
+  aiDown: (provider: string, since: string): BellText => ({
+    title: "A IA do ONE parou",
+    body: `Desde ${since}, a ${provider} recusa a conta da plataforma. O que depende dela está pausado nos escritórios, sem gastar tentativas, e volta sozinho quando a chave ou o crédito forem acertados.`,
+  }),
+
+  /** The platform's operators only (0255): the provider answers again. */
+  aiUp: (provider: string, since: string): BellText => ({
+    title: "A IA do ONE voltou",
+    body: `Desde ${since}, a ${provider} voltou a responder. O que esperava por ela continua sozinho.`,
+  }),
+
   /** Support opened the account. `operator` is the name of who did, when known. */
   supportAccess: (operator: string | null, reason: string, minutes: number): BellText => ({
     title: "Acesso de suporte à sua conta",

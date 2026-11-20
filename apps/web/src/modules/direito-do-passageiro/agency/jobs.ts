@@ -1,7 +1,11 @@
 import "server-only";
 
 import type { Sweep } from "@/lib/jobs/schedule";
-import { claimPaxReadings, readClaimedPaxDocument } from "@/modules/direito-do-passageiro/agency/reading-work";
+import {
+  claimPaxReadings,
+  PAX_READING_TASK,
+  readClaimedPaxDocument,
+} from "@/modules/direito-do-passageiro/agency/reading-work";
 import { removeForgottenBytes, sweepRetention } from "@/modules/direito-do-passageiro/agency/retention-work";
 import { tellUnagreedDepartures } from "@/modules/direito-do-passageiro/agency/unagreed-notices";
 
@@ -17,6 +21,8 @@ export const agencySweeps: Sweep[] = [
    */
   {
     key: "pax-readings",
+    // Its work is a model's: it waits while the provider of these tasks refuses the platform's AI account (0255).
+    ai: [PAX_READING_TASK],
     when: { every: 5 },
     whileUsed: true,
     run: async (service, until) => {

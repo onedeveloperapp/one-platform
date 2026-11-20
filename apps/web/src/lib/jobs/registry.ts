@@ -1,6 +1,7 @@
 import "server-only";
 
 import { agendaSweeps } from "@/lib/agenda/digest-work";
+import { aiHealthSweeps } from "@/lib/ai/health";
 import { aiSweeps } from "@/lib/ai/jobs";
 import { backupSweeps } from "@/lib/backup-jobs";
 import { billingSweeps } from "@/lib/billing-jobs";
@@ -64,6 +65,7 @@ export const SWEEPS: readonly Sweep[] = [
   ...librarySweeps,
   ...signatureSweeps,
   ...aiSweeps,
+  ...aiHealthSweeps,
   ...fileSweeps,
   ...fileCopySweeps,
   ...connectionSweeps,

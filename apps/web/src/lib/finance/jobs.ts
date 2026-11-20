@@ -1,6 +1,7 @@
 import "server-only";
 
 import { supabaseFileStore } from "@/lib/files/store";
+import { CATEGORIZE_TASK } from "@/lib/finance/categorize";
 import { categorizeRound } from "@/lib/finance/categorize-work";
 import { receiptRound } from "@/lib/finance/receipt-work";
 import type { Sweep } from "@/lib/jobs/schedule";
@@ -19,6 +20,8 @@ export const financeSweeps: Sweep[] = [
     // The lines of a statement no rule decided, read by the AI (0128): also while ONE is used, since the database
     // claims each statement under a number.
     key: "finance-categorize",
+    // Its work is a model's: it waits while the provider of these tasks refuses the platform's AI account (0255).
+    ai: [CATEGORIZE_TASK],
     when: { every: 5 },
     whileUsed: true,
     run: (service, until) => categorizeRound(service, until),

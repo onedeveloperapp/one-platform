@@ -4,6 +4,8 @@ import { djenClient } from "@/lib/courts/djen";
 import type { Sweep } from "@/lib/jobs/schedule";
 import { tellPublicationAcks } from "@/lib/publications/ack-notices";
 import { captureNext, prepareDjenCaptures } from "@/lib/publications/capture";
+import { TRIAGE_TASK } from "@/lib/publications/publications";
+import { READING_TASK } from "@/lib/publications/reading";
 import { readingReadyKinds, readNext, settlePublicationReadings } from "@/lib/publications/reading-work";
 import { queuePublicationTriage, triageNext, triageReady } from "@/lib/publications/triage-work";
 
@@ -78,6 +80,8 @@ export const publicationSweeps: Sweep[] = [
    */
   {
     key: "publication-triage",
+    // Its work is a model's: it waits while the provider of these tasks refuses the platform's AI account (0255).
+    ai: [TRIAGE_TASK],
     when: { every: 5 },
     whileUsed: true,
     run: async (service, until) => {
@@ -108,6 +112,8 @@ export const publicationSweeps: Sweep[] = [
    */
   {
     key: "publication-reading",
+    // Its work is a model's: it waits while the provider of these tasks refuses the platform's AI account (0255).
+    ai: Object.values(READING_TASK),
     when: { every: 5 },
     whileUsed: true,
     run: async (service, until) => {

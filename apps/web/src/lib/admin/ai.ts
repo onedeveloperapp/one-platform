@@ -224,6 +224,36 @@ export async function loadTriageMeasure(supabase: SupabaseClient, windowDays = 9
  * migration 0028). Counts only: a reading that is late or keeps failing is a
  * firm that may be missing what the courts told it.
  */
+/** How the platform's account stands at an AI provider that went down at least once (migration 0255). */
+export type AiProviderHealth = {
+  provider: string;
+  /** Set while the provider refuses the platform's account. */
+  downSince: string | null;
+  failures: number;
+  model: string | null;
+  lastFailureAt: string | null;
+  lastOkAt: string | null;
+  checkedAt: string | null;
+  recoveredAt: string | null;
+};
+
+/** Each provider's account as the runs found it (`admin_ai_health`). */
+export async function loadAiHealth(supabase: SupabaseClient): Promise<AiProviderHealth[]> {
+  const { data, error } = await supabase.rpc("admin_ai_health");
+  if (error) throw new Error("ai_health_failed");
+  const text = (value: unknown) => (typeof value === "string" ? value : null);
+  return (Array.isArray(data) ? (data as Record<string, unknown>[]) : []).map((row) => ({
+    provider: String(row.provider ?? ""),
+    downSince: text(row.down_since),
+    failures: typeof row.failures === "number" ? row.failures : 0,
+    model: text(row.model),
+    lastFailureAt: text(row.last_failure_at),
+    lastOkAt: text(row.last_ok_at),
+    checkedAt: text(row.checked_at),
+    recoveredAt: text(row.recovered_at),
+  }));
+}
+
 export type DjenHealth = {
   /** After how many hours a reading is late, as the setting says. */
   lateHours: number;

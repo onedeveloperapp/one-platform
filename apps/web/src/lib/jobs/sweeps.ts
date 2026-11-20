@@ -1,5 +1,6 @@
 import "server-only";
 
+import { aiPausedFor } from "@/lib/ai/health";
 import { clockOrder, slotOf, type Sweep, type SweepReport, whileUsedOrder } from "@/lib/jobs/schedule";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -29,6 +30,11 @@ export async function runSweeps(
   for (const sweep of order) {
     if (Date.now() >= until) {
       report.skipped.push(sweep.key);
+      continue;
+    }
+    // The work of a model waits while the provider of its tasks refuses the platform's AI account (0255).
+    if (sweep.ai && (await aiPausedFor(service, sweep.ai).catch(() => false))) {
+      report.ran[sweep.key] = { paused: "ai" };
       continue;
     }
     try {

@@ -41,6 +41,15 @@ const FIRST_LOOKS_MS = 3_000;
 const LATER_LOOKS_MS = 6_000;
 const OFTEN_FOR_MS = 60_000;
 const WATCH_FOR_MS = 10 * 60_000;
+/** A moment as the panel says it: the day and the hour in Brasília. */
+const sinceLabel = (at: string): string =>
+  new Intl.DateTimeFormat("pt-BR", {
+    day: "numeric",
+    month: "long",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "America/Sao_Paulo",
+  }).format(new Date(at));
 /** The longest answer, as the setting says it. */
 const MOST_ANSWER = 1000;
 
@@ -49,7 +58,7 @@ type Working = "reading" | "marking" | "saving";
 type Phase =
   | { kind: "idle" }
   | { kind: "sending"; fileName: string }
-  | { kind: "waiting"; importId: string; fileName: string | null; work: Working }
+  | { kind: "waiting"; importId: string; fileName: string | null; work: Working; aiDownSince?: string | null }
   | { kind: "asking"; importId: string; fileName: string; questions: ImportQuestion[]; round: number }
   | {
       kind: "ready";
@@ -115,6 +124,7 @@ const ANSWER_ERROR_KEY: Record<string, string> = {
  */
 export default function ImportPanel({
   importId,
+  initialView = null,
   initialFile,
   limits,
   expected = null,
@@ -127,6 +137,8 @@ export default function ImportPanel({
   onRequested,
 }: {
   importId: string | null;
+  /** A first read of the request, when the screen has one: drawn at once (also from fixtures, with no session). */
+  initialView?: TemplateImportView | null;
   initialFile: File | null;
   limits: ImportLimits | null;
   /** What the document is sent as: ONE refuses another thing. */
@@ -213,6 +225,7 @@ export default function ImportPanel({
         importId: view.id,
         fileName: view.fileName,
         work: view.status === "saving" ? "saving" : view.status === "marking" ? "marking" : "reading",
+        aiDownSince: view.aiDownSince,
       });
     }
   }, []);
@@ -256,6 +269,14 @@ export default function ImportPanel({
     },
     [expected, makeDefault],
   );
+
+  // A first read handed by the screen is drawn at once; the panel looks again by itself only while ONE works.
+  const drewInitial = useRef(false);
+  useEffect(() => {
+    if (!initialView || drewInitial.current) return;
+    drewInitial.current = true;
+    settle(initialView);
+  }, [initialView, settle]);
 
   // A file chosen before the dialog opened is sent once.
   const sentInitial = useRef(false);
@@ -437,6 +458,12 @@ export default function ImportPanel({
             ),
           )}
         </Box>
+        {phase.kind === "waiting" && phase.aiDownSince ? (
+          // The platform's AI is down (0255): the document waits with no try spent, and the platform was told.
+          <StateLine tone="waiting" emphasis>
+            {t("library-import-ai-down", { since: sinceLabel(phase.aiDownSince) })}
+          </StateLine>
+        ) : null}
         {phase.kind === "waiting" ? (
           <StateLine
             tone="info"
@@ -474,11 +501,31 @@ export default function ImportPanel({
             <InfoHint label={t("library-import-asking-body")} className="self-center" />
           </Box>
         </StateLine>
-        <Box component="ol" className="m-0 flex list-none flex-col gap-4 p-0">
+        <Box component="ol" className="m-0 flex list-none flex-col gap-5 p-0">
           {phase.questions.map((asked, index) => (
-            <Box component="li" key={`${phase.round}:${index}`}>
+            <Box component="li" key={`${phase.round}:${index}`} className="flex flex-col gap-1.5">
+              {/* The question whole, as ONE wrote it: a field's label is one line, and cut a long question short. */}
+              <Typography
+                id={`library-import-question-${index}`}
+                variant="body1"
+                component="p"
+                className="mb-0 font-medium"
+              >
+                {asked.question}
+              </Typography>
+              {asked.why ? (
+                <Typography id={`library-import-why-${index}`} variant="body2" className="text-text-secondary">
+                  {asked.why}
+                </Typography>
+              ) : null}
               <TextField
-                label={asked.question}
+                placeholder={t("library-import-answer-placeholder")}
+                slotProps={{
+                  htmlInput: {
+                    "aria-labelledby": `library-import-question-${index}`,
+                    "aria-describedby": asked.why ? `library-import-why-${index}` : undefined,
+                  },
+                }}
                 value={answers[index] ?? ""}
                 onChange={(event) =>
                   setAnswers((before) => {
@@ -492,11 +539,11 @@ export default function ImportPanel({
                 helperText={
                   (answers[index] ?? "").length > MOST_ANSWER
                     ? t("library-import-answer-too-long", { most: MOST_ANSWER })
-                    : asked.why || undefined
+                    : undefined
                 }
                 multiline
-                minRows={1}
-                maxRows={5}
+                minRows={3}
+                maxRows={10}
                 fullWidth
               />
             </Box>

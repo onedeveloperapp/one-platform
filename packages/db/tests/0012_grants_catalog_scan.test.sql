@@ -129,6 +129,8 @@ select is(
       and c.relname <> 'schema_migrations'
   ),
   array[
+    -- How the platform's account at each AI provider stands (0255): read through its functions, never the reason.
+    'ai_provider_health',
     'billing_webhook_events',
     -- The firms' panel of attendance (0223): its accounts, its people and what is to be taken out of it.
     'chatwoot_accounts',

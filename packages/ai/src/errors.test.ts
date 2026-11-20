@@ -62,7 +62,38 @@ test("a truncated answer is retryable while a refusal is not", () => {
   assert.equal(providerFailureCode(truncated), "provider_unavailable");
   assert.equal(providerFailureCode(blocked), "provider_rejected");
   assert.equal(providerFailureCode({ status: 500 }), "provider_unavailable");
-  assert.equal(providerFailureCode({ status: 403 }), "provider_rejected");
+  assert.equal(providerFailureCode({ status: 404 }), "provider_rejected");
+});
+
+test("the platform's account refused is told apart from a refused request", () => {
+  // What Anthropic answered every run of ONE from 2026-11-06 to 2026-11-20: the key had been revoked.
+  const revoked = Object.assign(new Error("401 authentication_error: invalid x-api-key"), { status: 401 });
+  assert.equal(providerFailureCode(revoked), "provider_account");
+  assert.equal(providerFailureCode({ status: 403 }), "provider_account");
+  assert.equal(
+    providerFailureCode(
+      Object.assign(new Error("Your credit balance is too low to access the Anthropic API."), { status: 400 }),
+    ),
+    "provider_account",
+    "an empty balance comes as a 400",
+  );
+  assert.equal(
+    providerFailureCode(Object.assign(new Error("API key not valid. Please pass a valid API key."), { status: 400 })),
+    "provider_account",
+    "Gemini's bad key",
+  );
+  assert.equal(
+    providerFailureCode(Object.assign(new Error("credits are depleted"), { status: 429 })),
+    "provider_account",
+  );
+  assert.equal(providerFailureCode({ status: 429, message: "rate limit" }), "provider_unavailable");
+  assert.equal(
+    providerFailureCode(Object.assign(new Error("messages: text content blocks must be non-empty"), { status: 400 })),
+    "provider_rejected",
+    "a request the provider refused is the request's",
+  );
+  assert.equal(classifyAiError(revoked).account, true);
+  assert.equal(classifyAiError(new Error("network aborted")).account, false);
 });
 
 test("the log description never carries model output", () => {

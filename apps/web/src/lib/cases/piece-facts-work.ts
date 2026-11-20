@@ -61,9 +61,10 @@ async function writeClaimed(service: SupabaseClient, checkId: string, claim: num
     idempotencyKey: `fatos:${checkId}:${claim}`,
   });
   if (result.kind === "refused") {
-    return record(result.code === "provider_unavailable" || result.code === "no_key" ? "released" : "retry");
+    return record(["provider_unavailable", "provider_account", "no_key"].includes(result.code) ? "released" : "retry");
   }
-  if (result.kind === "failed") return record("retry", result.runId);
+  // The platform's AI account refused (0255) is no fault of the piece: the claim is given back with no try spent.
+  if (result.kind === "failed") return record(result.code === "provider_account" ? "released" : "retry", result.runId);
   if (result.kind === "replayed" && result.status !== "succeeded") return record("retry");
   return record("done", result.runId);
 }

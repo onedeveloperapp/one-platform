@@ -1,6 +1,7 @@
 import "server-only";
 
 import { runFirmTask } from "@/lib/ai/executor";
+import { soonAi } from "@/lib/ai/health";
 import {
   DRAFT_TASK,
   draftBlocks,
@@ -11,7 +12,6 @@ import {
 } from "@/lib/cases/drafts";
 import { interviewForPiece, queueInterview } from "@/lib/cases/interview-work";
 import { supabaseFileStore } from "@/lib/files/store";
-import { soon } from "@/lib/jobs/soon";
 import { createServiceClient } from "@flyee/auth/service";
 import { takeBackFile } from "@flyee/documents/files";
 import { measureFile } from "@flyee/documents/measure";
@@ -424,7 +424,7 @@ export async function settleDraftReading(draftId: string): Promise<void> {
  * document of a text ONE approved. The sweep takes what that did not finish.
  */
 export async function queueDraftWork(draftId: string): Promise<void> {
-  soon("case-draft", async () => {
+  soonAi("case-draft", [DRAFT_TASK], async () => {
     const service = createServiceClient();
     // The work owed, then what follows it: the reading of a text the AI wrote, and the document of a text ONE
     // approved after reading it.

@@ -164,7 +164,15 @@ export async function readModelFromDocument(
   const record = ["saving", "ready", "saved"].includes(found.status)
     ? await readFirmRecord(context.supabase, context.firm.id)
     : null;
-  return { ok: true, view: importView(found, saved, firmRecordTexts(record)) };
+  const view = importView(found, saved, firmRecordTexts(record));
+  // ONE's work on the request waits for the platform's AI: the panel says so while it is down (0255).
+  // (A Word file is read by ONE itself; a PDF is transcribed and every document marked by a model.)
+  if (view.status === "marking" || (view.status === "reading" && view.source === "pdf")) {
+    const { data: platform } = await context.supabase.rpc("platform_ai_status");
+    const said = (platform ?? {}) as { down?: unknown; since?: unknown };
+    if (said.down === true && typeof said.since === "string") view.aiDownSince = said.since;
+  }
+  return { ok: true, view };
 }
 
 /** The longest answer, as the setting says it: the dialog counts it before anything is sent. */

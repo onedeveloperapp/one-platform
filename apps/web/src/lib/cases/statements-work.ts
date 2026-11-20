@@ -1,6 +1,7 @@
 import "server-only";
 
 import { runFirmTask } from "@/lib/ai/executor";
+import { soonAi } from "@/lib/ai/health";
 import { accountQuestionsMessage } from "@/lib/cases/account";
 import { answerFromStatement } from "@/lib/cases/interview-work";
 import {
@@ -10,7 +11,6 @@ import {
   TRANSCRIPTION_TASK,
 } from "@/lib/cases/statements";
 import { supabaseFileStore } from "@/lib/files/store";
-import { soon } from "@/lib/jobs/soon";
 import { deliverOutbox } from "@/lib/whatsapp/send";
 import { createServiceClient } from "@flyee/auth/service";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -254,7 +254,7 @@ export async function processCaseStatements(
  * the client's conversation (0092). The sweep takes what that did not finish.
  */
 export async function queueStatementWork(statementId: string): Promise<void> {
-  soon("case-statement", async () => {
+  soonAi("case-statement", [TRANSCRIPTION_TASK, CHRONOLOGY_TASK], async () => {
     const service = createServiceClient();
     const first = await processCaseStatements(service, 1, statementId);
     if (first.transcribed) {

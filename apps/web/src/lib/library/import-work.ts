@@ -3,9 +3,9 @@ import "server-only";
 import { createHash } from "node:crypto";
 
 import { runFirmTask } from "@/lib/ai/executor";
+import { soonAi } from "@/lib/ai/health";
 import { isModelDocument, isPieceDocument } from "@/lib/cases/drafts";
 import { supabaseFileStore } from "@/lib/files/store";
-import { soon } from "@/lib/jobs/soon";
 import { readDocx } from "@/lib/library/docx";
 import { readFirmRecord } from "@/lib/library/firm-record";
 import {
@@ -171,6 +171,9 @@ export async function workClaimedImport(service: SupabaseClient, held: ImportCla
       return PASSING_REFUSALS.has(result.code) ? record("retry") : record("failed", { failure: "no_provider" });
     }
     if (result.kind === "failed") {
+      // The platform's AI account was refused (0255): nothing of the document is at fault. Looked at again with no
+      // try spent; while the account is refused the sweep takes nothing, and the work goes on once it answers.
+      if (result.code === "provider_account") return record("in_course");
       if (NO_PROVIDER.has(result.code)) return record("failed", { runId: result.runId, failure: "no_provider" });
       // An answer cut short says the text did not fit what the model may write.
       if (result.code === "output_truncated") return record("failed", { runId: result.runId, failure: cutShort });
@@ -279,5 +282,5 @@ export async function expireTemplateImports(service: SupabaseClient): Promise<nu
  * one, so each work has a request's whole time.
  */
 export async function queueTemplateImport(importId: string): Promise<void> {
-  soon("template-import", () => importNext(createServiceClient(), importId));
+  soonAi("template-import", [TRANSCRIBE_TASK, MARK_TASK], () => importNext(createServiceClient(), importId));
 }

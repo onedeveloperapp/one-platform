@@ -2,6 +2,7 @@ import "server-only";
 
 import type { Sweep } from "@/lib/jobs/schedule";
 import { expireTemplateImports, importNext } from "@/lib/library/import-work";
+import { MARK_TASK, TRANSCRIBE_TASK } from "@/lib/library/imports";
 
 /** How many works on requests one sweep does: the next sweep takes the rest. */
 const IMPORTS_PER_ROUND = 2;
@@ -19,6 +20,8 @@ const IMPORTS_PER_ROUND = 2;
 export const librarySweeps: Sweep[] = [
   {
     key: "template-imports",
+    // Its work is a model's: it waits while the provider of these tasks refuses the platform's AI account (0255).
+    ai: [TRANSCRIBE_TASK, MARK_TASK],
     when: { every: 5 },
     whileUsed: true,
     run: async (service, until) => {

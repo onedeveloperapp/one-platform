@@ -1,9 +1,9 @@
 import "server-only";
 
 import { runFirmTask } from "@/lib/ai/executor";
+import { soonAi } from "@/lib/ai/health";
 import { base64, MODEL_IMAGE } from "@/lib/cases/documents-work";
 import { supabaseFileStore } from "@/lib/files/store";
-import { soon } from "@/lib/jobs/soon";
 import type { PaxDocumentKind } from "@/modules/direito-do-passageiro/agency/passengers";
 import { createServiceClient } from "@flyee/auth/service";
 import { normalizeImage } from "@flyee/documents/normalize";
@@ -34,7 +34,14 @@ const KIND_FOR_MODEL: Record<PaxDocumentKind, string> = {
 const IMAGE_MIMES = ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"];
 
 /** What fails for a moment and is tried again, never counted as the document's fault. */
-const PASSING = ["provider_unavailable", "store_unavailable", "run_already_closed", "read_running", "file_unreadable"];
+const PASSING = [
+  "provider_unavailable",
+  "provider_account",
+  "store_unavailable",
+  "run_already_closed",
+  "read_running",
+  "file_unreadable",
+];
 
 type ToRead = {
   document_id: string;
@@ -168,5 +175,5 @@ export async function readPaxDocuments(
  * catches what that did not finish.
  */
 export async function queuePaxReading(documentId: string): Promise<void> {
-  soon("pax-reading", () => readPaxDocuments(createServiceClient(), 1, documentId));
+  soonAi("pax-reading", [PAX_READING_TASK], () => readPaxDocuments(createServiceClient(), 1, documentId));
 }

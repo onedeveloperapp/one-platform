@@ -30,6 +30,12 @@ export type Sweep = {
    * notice) and is safe to run from any server at once, since the database claims each work under a number.
    */
   whileUsed?: boolean;
+  /**
+   * The AI tasks its work runs: while the provider their instructions in force name refuses the platform's account
+   * (migration 0255) it waits instead of running, so no work of a firm spends a try on a key or a credit that is the
+   * platform's to put right.
+   */
+  ai?: readonly string[];
   /** Runs one round; `until` is the moment by which it claims nothing more. Throws only when it could not run. */
   run: (service: SupabaseClient, until: number) => Promise<SweepReport>;
 };

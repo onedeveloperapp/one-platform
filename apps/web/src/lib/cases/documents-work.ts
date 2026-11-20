@@ -1,11 +1,11 @@
 import "server-only";
 
 import { runFirmTask } from "@/lib/ai/executor";
+import { soonAi } from "@/lib/ai/health";
 import { checkBriefing, DOCUMENT_CHECK_TASK, isPassingFailure, processingPlan } from "@/lib/cases/document-check";
 import { readQuality } from "@/lib/cases/document-quality";
 import { keepQuality, measurePhoto } from "@/lib/cases/document-quality-work";
 import { supabaseFileStore } from "@/lib/files/store";
-import { soon } from "@/lib/jobs/soon";
 import { createServiceClient } from "@flyee/auth/service";
 import { takeBackFile } from "@flyee/documents/files";
 import { measureFile } from "@flyee/documents/measure";
@@ -265,5 +265,5 @@ export async function processCaseDocuments(
  * what that did not finish.
  */
 export async function queueDocumentProcessing(documentId: string): Promise<void> {
-  soon("case-document", () => processCaseDocuments(createServiceClient(), 1, documentId));
+  soonAi("case-document", [DOCUMENT_CHECK_TASK], () => processCaseDocuments(createServiceClient(), 1, documentId));
 }

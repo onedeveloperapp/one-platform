@@ -134,12 +134,22 @@ test("a provider that is down, one that rejects and one that refuses are told ap
   });
 
   const rejected = setup();
-  rejected.provider.failNextWith(Object.assign(new Error("invalid api key"), { status: 401 }));
+  rejected.provider.failNextWith(Object.assign(new Error("model not found"), { status: 404 }));
   assert.deepEqual(await runAiTask(rejected.deps, { orgId: "firm-a", task: TASK, input: {} }), {
     kind: "failed",
     runId: "run-1",
     code: "provider_rejected",
   });
+
+  // The platform's key refused: nothing of the firm's work is at fault (0255 marks the provider down).
+  const account = setup();
+  account.provider.failNextWith(Object.assign(new Error("invalid api key"), { status: 401 }));
+  assert.deepEqual(await runAiTask(account.deps, { orgId: "firm-a", task: TASK, input: {} }), {
+    kind: "failed",
+    runId: "run-1",
+    code: "provider_account",
+  });
+  assert.equal(account.store.runs[0].errorCode, "provider_account");
 
   const refused = setup();
   refused.provider.failNextWith(new StructuredOutputError({ failure: "blocked", provider: "anthropic" }));

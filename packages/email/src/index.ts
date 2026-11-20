@@ -7,6 +7,7 @@ import AccessEndedEmail, { type AccessEndedEmailProps } from "./templates/access
 import AccountantPackageEmail, { type AccountantPackageEmailProps } from "./templates/accountant-package";
 import HearingBriefEmail, { type HearingBriefEmailProps } from "./templates/hearing-brief";
 import AgendaDigestEmail, { type AgendaDigestEmailProps } from "./templates/agenda-digest";
+import AiHealthEmail, { type AiHealthEmailProps } from "./templates/ai-health";
 import ContactFormEmail, { type ContactFormEmailProps } from "./templates/contact-form";
 import FirmInvitationEmail, { type FirmInvitationEmailProps } from "./templates/firm-invitation";
 import KitReceiptEmail, { type KitReceiptEmailProps } from "./templates/kit-receipt";
@@ -37,6 +38,7 @@ export type {
   AccountantPackageEmailProps,
   AgendaDigestEmailProps,
   CancelCause,
+  AiHealthEmailProps,
   ContactFormEmailProps,
   FirmInvitationEmailProps,
   KitReceiptEmailProps,
@@ -234,6 +236,17 @@ export const sendNewsletterBatch = (messages: NewsletterMessage[]): Promise<Send
       unsubscribeUrl: message.unsubscribeUrl,
     })),
   );
+
+/**
+ * Tells an operator of the platform that a provider of the AI refused the platform's account, or answers again
+ * (migration 0255). Internal, so no unsubscribe; nothing of a firm in it.
+ */
+export const sendAiHealthEmail = (to: string, props: AiHealthEmailProps): Promise<SendResult> =>
+  send({
+    to,
+    subject: props.kind === "down" ? `A IA do ONE parou: ${props.provider}` : `A IA do ONE voltou: ${props.provider}`,
+    react: createElement(AiHealthEmail, props),
+  });
 
 /**
  * Forwards a public contact-form submission to CONTACT_FORM_TO (falls back to

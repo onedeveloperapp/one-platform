@@ -35,6 +35,7 @@ import NiSparkle from "@/icons/nexture/ni-sparkle";
 import {
   acceptedShare,
   type AiAccuracy,
+  type AiProviderHealth,
   type AiSpendOverview,
   type AiTaskMeasure,
   approversLabel,
@@ -53,7 +54,7 @@ import {
   type TaskPrompts,
   type TriageMeasure,
 } from "@/lib/admin/ai";
-import { formatDate, formatNumber, formatPercent } from "@/lib/admin/format";
+import { formatDate, formatDateTime, formatNumber, formatPercent } from "@/lib/admin/format";
 import type { ConsoleState } from "@/lib/admin/session";
 
 export type AiConsoleState = ConsoleState<{
@@ -69,6 +70,8 @@ export type AiConsoleState = ConsoleState<{
   /** What ONE decides alone in the firms, and what the operator holds for all of them. */
   autonomy: AutonomyCatalogEntry[];
   flights: FlightWatchStatus;
+  /** The platform's account at each AI provider, as the runs found it (0255). */
+  health: AiProviderHealth[];
   flightSourceOn: boolean;
   djenCaptureOn: boolean;
   marketCaptureOn: boolean;
@@ -76,6 +79,14 @@ export type AiConsoleState = ConsoleState<{
   /** False without SUPABASE_SERVICE_ROLE_KEY: no run can be started from here. */
   serviceAvailable: boolean;
 }>;
+
+/** The providers by the names the operator knows them. */
+const PROVIDER_LABEL: Record<string, string> = {
+  anthropic: "Anthropic",
+  gemini: "Gemini",
+  openai: "OpenAI",
+  openrouter: "OpenRouter",
+};
 
 const CRUMBS = [{ label: "Início", href: "/inicio" }, { label: "Admin", href: "/admin" }, { label: "IA" }];
 
@@ -163,6 +174,7 @@ export default function AiConsoleView({ state }: { state: AiConsoleState }) {
     djen,
     autonomy,
     flights,
+    health,
     flightSourceOn,
     djenCaptureOn,
     marketCaptureOn,
@@ -182,6 +194,23 @@ export default function AiConsoleView({ state }: { state: AiConsoleState }) {
     <CollapsibleGroup>
       <Grid container spacing={5}>
         <Grid size={12}>{header}</Grid>
+
+        {health
+          .filter((row) => row.downSince)
+          .map((row) => (
+            // The platform's AI account refused (0255): the work of a model waits in every firm, with no try spent.
+            <Grid key={row.provider} size={12}>
+              <Alert severity="error" className="neutral bg-background-paper/60!">
+                A IA parou: {PROVIDER_LABEL[row.provider] ?? row.provider} recusa a conta da plataforma (chave ou
+                crédito) desde {formatDateTime(row.downSince)}, em {formatNumber(row.failures)}{" "}
+                {row.failures === 1 ? "execução" : "execuções"}
+                {row.model ? ` do modelo ${row.model}` : ""}. Os trabalhos que dependem de um modelo estão pausados em
+                todos os escritórios, sem gastar tentativas. O ONE confere a conta a cada cinco minutos
+                {row.checkedAt ? ` (a última vez em ${formatDateTime(row.checkedAt)})` : ""} e retoma sozinho quando ela
+                responder: troque a chave na Vercel e no servidor do relógio, ou ponha crédito na conta.
+              </Alert>
+            </Grid>
+          ))}
 
         {readiness.fake ? (
           <Grid size={12}>

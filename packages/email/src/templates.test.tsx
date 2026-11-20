@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import { emailCopyFor } from "./copy";
 import { type EmailLocale, toEmailLocale } from "./locale";
 import AccessEndedEmail from "./templates/access-ended";
+import AiHealthEmail from "./templates/ai-health";
 import AgendaDigestEmail from "./templates/agenda-digest";
 import ContactFormEmail from "./templates/contact-form";
 import FirmInvitationEmail from "./templates/firm-invitation";
@@ -133,6 +134,19 @@ function every(locale: EmailLocale): Record<string, ReactElement> {
       planName: "Plano Escritório",
       endsLabel: "17 de outubro de 2026",
       billingUrl: APP,
+    }),
+    "ai-health-down": createElement(AiHealthEmail, {
+      kind: "down",
+      provider: "Anthropic",
+      atLabel: "6 de novembro de 2026, 10:12",
+      failures: 9,
+      consoleUrl: APP,
+    }),
+    "ai-health-up": createElement(AiHealthEmail, {
+      kind: "up",
+      provider: "Anthropic",
+      atLabel: "20 de novembro de 2026, 13:44",
+      consoleUrl: APP,
     }),
     "lead-confirm": createElement(LeadConfirmEmail, { locale, confirmUrl: APP }),
     newsletter: createElement(NewsletterEmail, {

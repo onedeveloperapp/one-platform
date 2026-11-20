@@ -1,14 +1,19 @@
 import "server-only";
 
+import { aiPausedFor } from "@/lib/ai/health";
 import { advanceOne, appealPapersRound, followSoon } from "@/lib/cases/advance-work";
+import { DOCUMENT_CHECK_TASK } from "@/lib/cases/document-check";
 import { reuseRound } from "@/lib/cases/document-reuse-work";
 import { claimCaseDocuments, processClaimedDocument } from "@/lib/cases/documents-work";
+import { DRAFT_TASK } from "@/lib/cases/drafts";
 import { approveWaitingDrafts, draftNext } from "@/lib/cases/drafts-work";
 import { submitFilings } from "@/lib/cases/filing-submit-work";
 import { buildClaimedPackage, claimFilingPackages } from "@/lib/cases/filing-work";
 import { answerFromStatement, sweepInterviews } from "@/lib/cases/interview-work";
 import { claimPackageSignatures, signClaimedPackage, signFilingPackages } from "@/lib/cases/package-signature-work";
+import { PIECE_FACTS_TASK } from "@/lib/cases/piece-facts";
 import { pieceFactsRound } from "@/lib/cases/piece-facts-work";
+import { CHRONOLOGY_TASK, TRANSCRIPTION_TASK } from "@/lib/cases/statements";
 import { askAccountQuestions, claimCaseStatements, processClaimedStatement } from "@/lib/cases/statements-work";
 import type { Sweep } from "@/lib/jobs/schedule";
 
@@ -48,6 +53,8 @@ export const caseSweeps: Sweep[] = [
    */
   {
     key: "case-documents",
+    // Its work is a model's: it waits while the provider of these tasks refuses the platform's AI account (0255).
+    ai: [DOCUMENT_CHECK_TASK],
     when: { every: 5 },
     whileUsed: true,
     run: async (service, until) => {
@@ -69,6 +76,8 @@ export const caseSweeps: Sweep[] = [
    */
   {
     key: "case-statements",
+    // Its work is a model's: it waits while the provider of these tasks refuses the platform's AI account (0255).
+    ai: [TRANSCRIPTION_TASK, CHRONOLOGY_TASK],
     when: { every: 5 },
     whileUsed: true,
     run: async (service, until) => {
@@ -109,6 +118,8 @@ export const caseSweeps: Sweep[] = [
    */
   {
     key: "piece-facts",
+    // Its work is a model's: it waits while the provider of these tasks refuses the platform's AI account (0255).
+    ai: [PIECE_FACTS_TASK],
     when: { every: 5 },
     whileUsed: true,
     run: (service, until) => pieceFactsRound(service, until),
@@ -189,6 +200,9 @@ export const caseSweeps: Sweep[] = [
       const outcomes: Record<string, number> = {};
       const approved = await approveWaitingDrafts(service);
       if (approved > 0) outcomes.approved = approved;
+      // A draft's works are mostly a model's: they wait while the platform's AI account is refused (0255), and the
+      // approval above, which needs none, goes on.
+      if (await aiPausedFor(service, [DRAFT_TASK])) return { ...outcomes, paused: 1 };
       // A text takes a model a minute or two to write: two works a round at most.
       for (let turn = 0; turn < 2 && Date.now() < until; turn += 1) {
         const outcome = await draftNext(service, null);
