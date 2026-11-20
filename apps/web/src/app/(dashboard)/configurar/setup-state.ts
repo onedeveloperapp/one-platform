@@ -6,6 +6,7 @@ import { cookies } from "next/headers";
 import type { SecondFactorState } from "@/lib/ai/approvals";
 import { cloudSigningOffered } from "@/lib/cases/filing-facts";
 import { EMPTY_OFFICE, OFFICE_COLUMNS, officeOf } from "@/lib/firm/office";
+import { type KnownArea, type OperationArea, operationOf } from "@/lib/firm/operation";
 import { isManager, OAB_STATES, type OabRegistration } from "@/lib/firm/roles";
 import type { SetupStepKey } from "@/lib/firm/setup-steps";
 import { loadSetupPapers } from "@/lib/library/facts";
@@ -51,10 +52,17 @@ export async function loadSetupState(
     declaredCpf,
     cloudSigning,
     office,
+    knownAreas,
+    firmAreas,
+    operation,
   ] = await Promise.all([
     context.supabase.from("oab_registrations").select("id, uf, number, kind").eq("user_id", context.userId),
     context.supabase.from("firm_signers").select("user_id").eq("org_id", firm.id),
-    context.supabase.from("organizations").select("works_alone, setup_answered_at").eq("id", firm.id).maybeSingle(),
+    context.supabase
+      .from("organizations")
+      .select("works_alone, setup_answered_at, operation_answered_at")
+      .eq("id", firm.id)
+      .maybeSingle(),
     context.supabase.from("wa_numbers").select("id").eq("org_id", firm.id).eq("status", "active").limit(1),
     context.supabase.auth.mfa.getAuthenticatorAssuranceLevel(),
     cookies(),
@@ -73,8 +81,19 @@ export async function loadSetupState(
     cloudSigningOffered(context.supabase).catch(() => false),
     // Where the firm is, for the power of attorney (0217): read apart, so a read that fails leaves it empty.
     context.supabase.from("organizations").select(OFFICE_COLUMNS).eq("id", firm.id).maybeSingle(),
+    // How the firm works and its areas (0256), the step "A operação": a read that fails asks them as never answered.
+    context.supabase.from("law_areas").select("key, name, covers, module").is("retired_at", null).order("position"),
+    context.supabase.from("firm_areas").select("law_area, name, source").eq("org_id", firm.id).is("removed_at", null),
+    context.supabase
+      .from("firm_operations")
+      .select(
+        "states, channels, monthly_cases, hours_from, hours_to, saturdays, previous_system, one_filing, one_finance, partners, controladoria",
+      )
+      .eq("org_id", firm.id)
+      .maybeSingle(),
   ]);
   if (registrations.error || signers.error || organization.error || !organization.data) return { kind: "error" };
+  const operationAnswered = (organization.data as { operation_answered_at?: string | null }).operation_answered_at;
 
   const signing = ((signers.data ?? []) as { user_id: string }[]).map((row) => row.user_id);
   const secondFactor: SecondFactorState =
@@ -102,6 +121,14 @@ export async function loadSetupState(
     papers,
     paperImports,
     office: office.error ? EMPTY_OFFICE : officeOf(office.data),
+    operationAnswered: typeof operationAnswered === "string",
+    operation: operation.error ? operationOf(null) : operationOf(operation.data),
+    areas: firmAreas.error
+      ? []
+      : ((firmAreas.data ?? []) as { law_area: string | null; name: string; source: OperationArea["source"] }[]).map(
+          (area) => ({ lawArea: area.law_area, name: area.name, source: area.source }),
+        ),
+    knownAreas: knownAreas.error ? [] : ((knownAreas.data ?? []) as KnownArea[]),
     connections,
     nextSetup: (() => {
       const next = nextModuleSetup(moduleSetups);

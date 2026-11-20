@@ -8,6 +8,7 @@ import TestChatCard from "../settings/connections/components/test-chat-card";
 import NoticesCard from "../settings/mensagens/notices-card";
 import { teamErrorKey } from "../settings/team/team-types";
 import SetupCpf, { declareSetupCpf } from "./setup-cpf";
+import { useOperationStep } from "./setup-operation";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useEffect, useRef, useState } from "react";
@@ -45,6 +46,7 @@ import { addOabRegistration, answerFirmSetup, inviteToFirm } from "@/lib/firm/ac
 import { autonomyErrorKey } from "@/lib/firm/autonomy";
 import { setFirmSigner } from "@/lib/firm/autonomy-actions";
 import { type FirmOffice, officeAddressGiven } from "@/lib/firm/office";
+import type { FirmOperation, KnownArea, OperationArea } from "@/lib/firm/operation";
 import { personFlowKey } from "@/lib/firm/person-setup";
 import { FIRM_FUNCTIONS, type FirmFunction, formatOab, OAB_STATES, type OabRegistration } from "@/lib/firm/roles";
 import { SETUP_STEPS, setupOpening, type SetupStepKey } from "@/lib/firm/setup-steps";
@@ -89,6 +91,13 @@ export type SetupState =
       paperImports: { procuracao: PaperImport | null; contrato: PaperImport | null };
       /** Where the firm is, as the power of attorney says it (0217). */
       office: FirmOffice;
+      /** The firm said how it works and its areas (0256): ONE answers nobody new on the WhatsApp before it did. */
+      operationAnswered: boolean;
+      operation: FirmOperation;
+      /** The firm's areas, its modules' included. */
+      areas: OperationArea[];
+      /** The areas of law ONE knows. */
+      knownAreas: KnownArea[];
       /** The firm's connections as their own screen reads them: the signature account, the test chat, the number. */
       connections: ConnectionsState;
       /**
@@ -292,6 +301,16 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
     };
   }, [paperWorking, router]);
 
+  // ---------- How the firm works and its areas (0256) ----------
+  const operationStep = useOperationStep({
+    answered: state.operationAnswered,
+    operation: state.operation,
+    areas: state.areas,
+    knownAreas: state.knownAreas,
+    registrationStates: state.registrations.map((registration) => registration.uf),
+    blocked: blocked || locked,
+  });
+
   // ---------- The end ----------
   const [finishError, setFinishError] = useState<string | null>(null);
   const [leaving, setLeaving] = useState(false);
@@ -302,6 +321,7 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
   // with none, the judge defines it.
   const missing: [boolean, SetupStepKey][] = [
     [(lawyer && !registered) || (decides && lawyer && !state.signs), "oab"],
+    [!state.operationAnswered, "operacao"],
     [state.worksAlone === null, "equipe"],
     [!state.whatsapp, "canal"],
   ];
@@ -477,7 +497,7 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
       onPrimary: saveOab,
       secondary:
         lawyer && !registered
-          ? { label: t("setup-not-now"), onClick: () => setStepIndex(SETUP_STEPS.indexOf("equipe")) }
+          ? { label: t("setup-not-now"), onClick: () => setStepIndex(SETUP_STEPS.indexOf("operacao")) }
           : undefined,
       content: (
         <Box className="flex flex-col gap-4">
@@ -593,6 +613,11 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
           ) : null}
         </Box>
       ),
+    },
+    {
+      title: t("setup-operation-title"),
+      hint: t("setup-operation-hint"),
+      ...operationStep,
     },
     {
       title: t("setup-team-title"),
@@ -919,6 +944,11 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
       ...finishing,
       content: (
         <Box className="flex flex-col gap-6">
+          {!state.operationAnswered && !realNumber ? (
+            <Alert severity="info" className="neutral bg-background-paper/60!">
+              {t("setup-channel-before-operation")}
+            </Alert>
+          ) : null}
           {!connections ? (
             connectionsError
           ) : (

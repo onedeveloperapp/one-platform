@@ -6,6 +6,7 @@
   "description": "The pure rules of ONE's domain: no I/O, no clock of its own, no framework. The validators of M2 (the unique case number of the CNJ, flight numbers and airport codes, registrations at the bar, a person's age on a date), and since S6 the forum, the kind of proceeding, the reading of a METAR, the Tema 1.417 triage and the count of causes per state, and since S9 the deadline of a procedural act over the court's calendar; prescription joins in M4.",
   "exports": {
     ".": "./src/index.ts",
+    "./areas": "./src/areas.ts",
     "./boleto": "./src/boleto.ts",
     "./cnj": "./src/cnj.ts",
     "./deadlines": "./src/deadlines.ts",
@@ -31,6 +32,6 @@
     "./sessions": "./src/sessions.ts"
   },
   "scripts": {
-    "test": "node --experimental-strip-types --test src/rules.test.ts src/domain.test.ts src/deadlines.test.ts src/flight-problem.test.ts src/interview.test.ts src/judgment.test.ts src/stock.test.ts src/finance.test.ts src/boleto.test.ts src/outcome.test.ts src/internal-deadline.test.ts src/payout.test.ts src/qualification.test.ts src/specificities.test.ts src/paths-update.test.ts src/sessions.test.ts"
+    "test": "node --experimental-strip-types --test src/rules.test.ts src/domain.test.ts src/deadlines.test.ts src/flight-problem.test.ts src/interview.test.ts src/judgment.test.ts src/stock.test.ts src/finance.test.ts src/boleto.test.ts src/outcome.test.ts src/internal-deadline.test.ts src/payout.test.ts src/qualification.test.ts src/specificities.test.ts src/paths-update.test.ts src/sessions.test.ts src/areas.test.ts"
   }
 }

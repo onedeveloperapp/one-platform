@@ -1,4 +1,4 @@
-import { xrayOf } from "./xray";
+import { lawsuitSignsOf, xrayOf } from "./xray";
 import { describe, expect, it } from "vitest";
 
 import type { DjenCommunication } from "@flyee/courts/types";
@@ -65,6 +65,43 @@ describe("the x-ray by the OAB", () => {
     expect(xray.byAirline).toEqual([
       { iata: "ZZ", name: "Companhia de Teste", lawsuits: 1 },
       { iata: "YY", name: "Outra de Teste", lawsuits: 1 },
+    ]);
+  });
+});
+
+describe("the signs of each lawsuit's area", () => {
+  it("reads each lawsuit once, with its court, class and kind, one airline named alone and the INSS", () => {
+    const signs = lawsuitSignsOf(
+      [
+        {
+          key: "1",
+          court: "TJGO",
+          className: "Procedimento do Juizado Especial Cível",
+          unit: "1º Juizado Especial Cível",
+          text: "contra COMPANHIA AEREA DE TESTE SA",
+        },
+        { key: "1", court: "TJGO", className: null, unit: null, text: "intimem-se" },
+        {
+          key: "2",
+          court: "TRF1",
+          className: "Procedimento Comum Cível",
+          unit: null,
+          text: "réu: Instituto Nacional do Seguro Social",
+        },
+        { key: "3", court: "TJGO", className: null, unit: null, text: "COMPANHIA DE TESTE e OUTRA LINHAS DE TESTE" },
+      ],
+      AIRLINES,
+    );
+    expect(signs).toEqual([
+      {
+        court: "TJGO",
+        className: "Procedimento do Juizado Especial Cível",
+        kind: "juizado",
+        airline: true,
+        inss: false,
+      },
+      { court: "TRF1", className: "Procedimento Comum Cível", kind: "comum", airline: false, inss: true },
+      { court: "TJGO", className: null, kind: null, airline: false, inss: false },
     ]);
   });
 });

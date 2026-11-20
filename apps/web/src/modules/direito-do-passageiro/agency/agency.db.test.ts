@@ -117,6 +117,8 @@ describe.skipIf(!DB_URL)("an agency's passenger, from the agency's area to the f
       values ('${ANA}', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'ana@agencia-ponta.invalid', '', now(), '{}', '{"display_name":"Ana Souza"}', now(), now()),
              ('${DUDA}', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'duda@agencia-ponta.invalid', '', now(), '{}', '{"display_name":"Duda Alves"}', now(), now());
       insert into public.organizations (id, name, slug, created_by) values ('${FIRM}', 'Souza Advogados', 'souza-agencia-ponta', '${ANA}');
+      -- ONE attended for the firm before the setup asked its operation (0256): it answers anybody new.
+      update public.organizations set attended_before_operation = true where id = '${FIRM}';
       insert into public.memberships (org_id, user_id, role, firm_function) values ('${FIRM}', '${ANA}', 'owner', 'socio');
       insert into public.connections (id, org_id, provider, external_id, label, status, connected_by, connected_at) values
         ('${CONNECTION}', '${FIRM}', 'whatsapp', 'test-waba-agencia', 'Chat de teste', 'connected', '${ANA}', now());

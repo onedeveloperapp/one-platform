@@ -319,9 +319,12 @@ export const optionsText = (options: readonly IntakeOption[]): string =>
 
 // ---------- What ONE writes ----------
 
-/** The first word of an intake, before its first question: who speaks, for what, how long. */
-export const intakeOpening = (firm: string): string =>
-  `Oi, aqui é o assistente virtual ${firm.trim() ? `do escritório ${firm.trim()}` : "do escritório"}. Vou te ajudar a ver se o escritório pode cuidar do seu caso. São poucas perguntas, uns 2 minutos.`;
+/**
+ * The first word of an intake, before its first question: who speaks, for what, how long. Who ONE already greeted
+ * (0257) is not told again who speaks.
+ */
+export const intakeOpening = (firm: string, greeted = false): string =>
+  `${greeted ? "" : `Oi, aqui é o assistente virtual ${firm.trim() ? `do escritório ${firm.trim()}` : "do escritório"}. `}Vou te ajudar a ver se o escritório pode cuidar do seu caso. São poucas perguntas, uns 2 minutos.`;
 
 /** A word of care for each problem, said once, when it is first told. */
 const CARE: Record<string, string> = {
@@ -383,9 +386,11 @@ export function intakeQuestion(input: {
   firm: string;
   before: IntakeFacts;
   after: IntakeFacts;
+  /** ONE already greeted the person (0257). */
+  greeted?: boolean;
 }): string {
   const lead = intakeLead(input.before, input.after);
-  return [input.first ? intakeOpening(input.firm) : null, lead, questionText(input.ask, input.after)]
+  return [input.first ? intakeOpening(input.firm, input.greeted) : null, lead, questionText(input.ask, input.after)]
     .filter(Boolean)
     .join(" ")
     .replace(/ \n/g, "\n");

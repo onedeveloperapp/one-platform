@@ -129,6 +129,24 @@ import {
   residenceNoteAsk,
   residenceNoteOf,
 } from "@/lib/conversations/questions";
+import {
+  askSummaryText,
+  type Attendance,
+  attendanceOf,
+  greetingText,
+  type LawAreaInfo,
+  listOf,
+  notAttendedText,
+  PASSENGER_MODULE,
+  personReason,
+  type Route,
+  ROUTE_TASK,
+  routeInput,
+  routeOf,
+  routeReadingOf,
+  type RouteState,
+  routeStateOf,
+} from "@/lib/conversations/routing";
 import { supabaseFileStore } from "@/lib/files/store";
 import { fillMessage } from "@/lib/firm/messages";
 import { firmMessageText } from "@/lib/firm/messages-read";
@@ -1231,11 +1249,157 @@ type Tell = (body: string) => Promise<boolean>;
  * intake took the turn; one that is not about a flight leaves it to ONE's usual answer. A read that fails never stops
  * the turn.
  */
+/** The areas of law ONE knows (0256), as the routing hands them to the model; none when they could not be read. */
+async function lawAreasOf(service: SupabaseClient): Promise<LawAreaInfo[]> {
+  const { data, error } = await service
+    .from("law_areas")
+    .select("key, name, covers")
+    .is("retired_at", null)
+    .order("position");
+  if (error) return [];
+  return ((data ?? []) as { key: string; name: string; covers: string }[]).map((area) => ({
+    key: area.key,
+    name: area.name,
+    covers: area.covers,
+  }));
+}
+
+/** ONE takes the way a new contact's subject chose (0257): it says the firm's words, calls a person, or sets aside. */
+async function takeRoute(
+  service: SupabaseClient,
+  held: Held,
+  context: TurnContext,
+  report: TurnReport,
+  firm: Attendance,
+  route: Exclude<Route, { way: "passenger" }>,
+): Promise<boolean> {
+  const keep = (state: Partial<RouteState>, area: string | null = null) =>
+    rpc(service, "record_conversation_route", {
+      target_conversation: held.conversationId,
+      target_claim: held.claim,
+      target_route: state,
+      target_way: route.way,
+      target_area: area,
+    }).catch(() => null);
+  const setAside = (reason: string) =>
+    rpc(service, "one_set_aside", {
+      target_conversation: held.conversationId,
+      target_claim: held.claim,
+      target_reason: reason,
+    }).catch(() => null);
+
+  switch (route.way) {
+    case "closed": {
+      // ONE does not attend for the firm yet (decision 2): a person answers, and ONE says nothing.
+      await keep({});
+      await callPerson(service, held, personReason(route));
+      report.called += 1;
+      return true;
+    }
+    case "greet": {
+      const names = firm.areas.map((area) => area.name);
+      const body = await wordsOf(service, context.orgId, "greeting", greetingText(context.firm, names), {
+        escritorio: context.firm,
+        areas: listOf(names),
+      });
+      await keep({ greeted: true });
+      await say(service, held, body);
+      report.answered += 1;
+      return true;
+    }
+    case "ask": {
+      const body = await wordsOf(service, context.orgId, "ask_summary", askSummaryText(), {
+        area: route.area?.name ?? "",
+      });
+      await keep({ asked: route.key }, route.area?.name ?? null);
+      await say(service, held, body);
+      report.answered += 1;
+      return true;
+    }
+    case "person": {
+      await keep({}, route.area?.name ?? null);
+      await say(service, held, await wordsOf(service, context.orgId, "called_person", calledMessage)).catch(
+        () => undefined,
+      );
+      await callPerson(service, held, personReason(route));
+      report.called += 1;
+      return true;
+    }
+    case "decline": {
+      // Never pointing to another firm (decision 3); the conversation stays with the team, with no urgency.
+      const body = await wordsOf(service, context.orgId, "not_attended", notAttendedText(route.areaName), {
+        area: route.areaName,
+        escritorio: context.firm,
+      });
+      await keep({}, route.areaName);
+      await say(service, held, body);
+      report.answered += 1;
+      await setAside(personReason(route));
+      return true;
+    }
+    case "aside": {
+      await keep({});
+      await setAside(personReason(route));
+      return true;
+    }
+  }
+}
+
+/**
+ * Somebody who writes with no alert and no case (0257): ONE answers nobody new before the firm said its operation,
+ * unless it attended for the firm before (decision 2); a firm that uses the passenger module has a problem with a flight
+ * taken in as before, and anything else, or a change of subject in the middle of it, goes the way the subject chose.
+ */
+async function takeNewContact(
+  service: SupabaseClient,
+  held: Held,
+  context: TurnContext,
+  report: TurnReport,
+): Promise<boolean> {
+  const { data: row, error: readError } = await service
+    .from("wa_conversations")
+    .select("route")
+    .eq("id", held.conversationId)
+    .maybeSingle();
+  const firm = readError
+    ? null
+    : attendanceOf(await rpc(service, "firm_attendance", { target_org: context.orgId }).catch(() => null));
+  // The firm could not be read: the intake goes on as it did before the routing.
+  if (!firm || !row) return takeIntake(service, held, context, report, null, false);
+  const state = routeStateOf(row.route);
+  if (!firm.attends) return takeRoute(service, held, context, report, firm, { way: "closed" });
+
+  const reroute = async (): Promise<boolean | "passenger"> => {
+    const areas = await lawAreasOf(service);
+    const run = await runFirmTask({
+      orgId: context.orgId,
+      task: ROUTE_TASK,
+      input: routeInput(context, firm, areas),
+      subject: { type: "wa_conversation", id: held.conversationId },
+      idempotencyKey: `route:${held.conversationId}:${held.claim}`,
+    }).catch(() => null);
+    const reading = run && run.kind === "finished" ? routeReadingOf(run.output) : null;
+    const route = routeOf(reading, firm, state, areas);
+    if (route.way === "passenger") return "passenger";
+    return takeRoute(service, held, context, report, firm, route);
+  };
+
+  if (firm.modules.includes(PASSENGER_MODULE)) {
+    return takeIntake(service, held, context, report, reroute, state.greeted);
+  }
+  const routed = await reroute();
+  return routed === true;
+}
+
 async function takeIntake(
   service: SupabaseClient,
   held: Held,
   context: TurnContext,
   report: TurnReport,
+  /** The routing of a subject that is no problem with a flight (0257); null where the firm could not be read. */
+  reroute: (() => Promise<boolean | "passenger">) | null,
+  /** ONE already greeted the person and said who it is (0257). */
+  greeted: boolean,
 ): Promise<boolean> {
   const { data: row, error: readError } = await service
     .from("wa_conversations")
@@ -1302,7 +1466,14 @@ async function takeIntake(
     }).catch(() => null);
     if (!run || run.kind !== "finished") return false;
     const reading = intakeReadingOf(run.output);
-    if (!reading || (!reading.flight && !started)) return false;
+    if (!reading) return false;
+    if (!reading.flight && reroute) {
+      // Not a flight, or no longer one: the subject chooses the way; one the routing reads as a flight goes on here.
+      const routed = await reroute();
+      if (routed !== "passenger") return routed;
+    } else if (!reading.flight && !started) {
+      return false;
+    }
     facts = await keep(reading.facts);
     question = reading.question;
   }
@@ -1332,8 +1503,8 @@ async function takeIntake(
   if (missing.length > 0) {
     if (facts.etapa) await keep({}, ["etapa"]);
     return answering(
-      intakeQuestion({ ask: missing[0], first: !started, firm: context.firm, before: known, after: facts }),
-      started ? null : intakeOpening(context.firm),
+      intakeQuestion({ ask: missing[0], first: !started, firm: context.firm, before: known, after: facts, greeted }),
+      started ? null : intakeOpening(context.firm, greeted),
     );
   }
   if (!(await keep({ etapa: "resumo" }))) return false;
@@ -1692,9 +1863,9 @@ async function takeTurn(service: SupabaseClient, held: Held, report: TurnReport)
       words.length > 0 &&
       !context.alert &&
       context.cases.length === 0 &&
-      (await takeIntake(service, held, context, report))
+      (await takeNewContact(service, held, context, report))
     ) {
-      // ONE took them in (0176): asked what is missing, or decided.
+      // ONE took them in (0176), or the way of their subject (0257): asked, decided, called a person or set aside.
     } else if (words.length > 0) {
       const run = await runFirmTask({
         orgId: context.orgId,

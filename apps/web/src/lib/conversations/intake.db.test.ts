@@ -10,7 +10,10 @@ import type { AiProviderName } from "@flyee/ai/types";
  * case about a delay is asked what is missing, one question at a time, the name first; once nothing is, ONE sums it up,
  * the person confirms, the rule qualifies it, ONE offers to go on, and the case opens with the client's link only at
  * their yes; a no is kept kindly and a later word brings the offer back; a delay too short is told kindly and kept as
- * not qualified; and a word that is no problem with a flight goes to ONE's usual answer.
+ * not qualified; and a word that is no problem with a flight goes the way of its subject (0257): a greeting is
+ * greeted with the firm's areas, an area of the firm goes to a person with what the person needs, an area the firm
+ * does not work in is refused kindly and set aside, what is nothing of a client is set aside unanswered, and nobody new
+ * is answered by ONE while the firm never said its areas.
  *
  * It runs only when a migrated database is at hand (`npm run test:db:roundtrip`); otherwise it is skipped.
  *
@@ -25,6 +28,7 @@ vi.mock("@flyee/jobs", () => ({ sendEvent: async () => ({ sent: false, hint: "no
 const model = vi.hoisted(() => ({
   intake: ((): unknown => ({})) as (briefing: string) => unknown,
   conversation: ((): unknown => ({})) as (briefing: string) => unknown,
+  route: ((): unknown => ({})) as (briefing: string) => unknown,
   // The answer to a doubt of who still decides (0249).
   doubt: ((): unknown => ({ resposta: "", chamar_pessoa: false })) as (briefing: string) => unknown,
   briefings: [] as string[],
@@ -37,6 +41,7 @@ vi.mock("@flyee/ai/fake", async (original) => {
       super(name, (_output, messages) => {
         const briefing = messages.map((message) => String(message.content ?? "")).join("\n");
         model.briefings.push(briefing);
+        if (briefing.includes("areas_do_direito")) return model.route(briefing);
         if (briefing.includes("fatos_anotados")) return model.intake(briefing);
         return briefing.includes("regra_ate_agora") ? model.doubt(briefing) : model.conversation(briefing);
       });
@@ -58,6 +63,10 @@ const RITA = "5500988880008";
 const BETO = "5500988880009";
 const DORA = "5500988880010";
 const EVA = "5500988880011";
+const FABIO = "5500988880012";
+const GIL = "5500988880013";
+const HELO = "5500988880014";
+const IVO = "5500988880015";
 let numberId = "";
 
 async function call(name: string, args: Row): Promise<Row> {
@@ -105,6 +114,9 @@ describe.skipIf(!DB_URL)("any passenger on the firm's WhatsApp", () => {
       values ('${ANA}', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'ana@entrada.invalid', '', now(), '{}', '{"display_name":"Ana Souza"}', now(), now());
       insert into public.organizations (id, name, slug, created_by) values ('${FIRM}', 'Souza Advogados', 'souza-entrada-app', '${ANA}');
       insert into public.memberships (org_id, user_id, role, firm_function) values ('${FIRM}', '${ANA}', 'owner', 'socio');
+      -- The firm said how it works and its areas (0256): ONE attends for it, Família among them.
+      update public.organizations set operation_answered_at = now() where id = '${FIRM}';
+      insert into public.firm_areas (org_id, law_area, name, source) values ('${FIRM}', 'familia', 'Família e sucessões', 'person');
       insert into public.connections (id, org_id, provider, external_id, label, status, connected_by, connected_at) values
         ('${CONNECTION}', '${FIRM}', 'whatsapp', 'test-waba-entrada', 'Chat de teste', 'connected', '${ANA}', now());
     `);
@@ -482,9 +494,9 @@ describe.skipIf(!DB_URL)("any passenger on the firm's WhatsApp", () => {
     expect(cases.n).toBe(2);
   });
 
-  it("leaves what is no problem with a flight to ONE's usual answer", async () => {
+  it("goes the way of a subject that is no problem with a flight (0257)", async () => {
     const { takeConversationTurns } = await import("@/lib/conversations/agent-work");
-    model.intake = () => ({
+    const notFlight = {
       assunto: "outro",
       problema: "",
       companhia: "",
@@ -501,14 +513,67 @@ describe.skipIf(!DB_URL)("any passenger on the firm's WhatsApp", () => {
       indicado_por: "",
       pergunta: "",
       acompanhantes: "",
-    });
-    model.conversation = () => ({
-      intencao: "pergunta",
-      resposta: "Bom dia. Em que o escritório pode ajudar?",
-      chamar_pessoa: null,
-    });
+    };
+    model.intake = () => notFlight;
+    const state = async (phone: string) =>
+      (
+        await sql.unsafe(
+          `select agent, called_at is not null as called, called_reason, route from public.wa_conversations
+           where org_id = $1 and contact_wa_id = $2`,
+          [FIRM, phone],
+        )
+      )[0];
+
+    // Only a greeting: ONE says who it is and the firm's areas, once.
+    model.route = () => ({ assunto: "cumprimento", area: "", resumo: "", certeza: "alta" });
     await writes(BETO, "Bom dia");
     expect(await takeConversationTurns(backend() as never)).toMatchObject({ claimed: 1, answered: 1, failed: 0 });
-    expect(await sentTo(BETO)).toEqual(["Bom dia. Em que o escritório pode ajudar?"]);
+    expect(await sentTo(BETO)).toEqual([
+      "Oi, aqui é o assistente virtual do escritório Souza Advogados. O escritório cuida de Direito do Passageiro e Família e sucessões. Me conta em poucas palavras como posso ajudar.",
+    ]);
+    expect((await state(BETO)).route).toEqual({ greeted: true });
+
+    // An area of the firm, told: a person continues with what the person needs.
+    model.route = () => ({
+      assunto: "area",
+      area: "familia",
+      resumo: "Quer se divorciar e tem um filho.",
+      certeza: "alta",
+    });
+    await writes(FABIO, "Quero me divorciar, tenho um filho de 5 anos");
+    expect(await takeConversationTurns(backend() as never)).toMatchObject({ claimed: 1, called: 1, failed: 0 });
+    expect(await sentTo(FABIO)).toEqual(["Uma pessoa do escritório vai continuar esta conversa com você."]);
+    expect(await state(FABIO)).toMatchObject({
+      agent: "person",
+      called: true,
+      called_reason: "Contato novo de Família e sucessões. O que a pessoa precisa: Quer se divorciar e tem um filho.",
+    });
+
+    // An area the firm does not work in: refused kindly, pointing nowhere, and set aside with no urgency.
+    model.route = () => ({ assunto: "area", area: "trabalhista", resumo: "Foi demitido.", certeza: "alta" });
+    await writes(GIL, "Fui demitido sem receber nada");
+    expect(await takeConversationTurns(backend() as never)).toMatchObject({ claimed: 1, answered: 1, failed: 0 });
+    expect(await sentTo(GIL)).toEqual([
+      "Obrigado por escrever. O escritório não atende casos de Trabalhista, por isso não vamos poder ajudar com este assunto. Se tiver outra questão, é só escrever aqui.",
+    ]);
+    expect(await state(GIL)).toMatchObject({ agent: "person", called: false });
+
+    // Nothing of a client: no answer, and the team sees it with no urgency.
+    model.route = () => ({ assunto: "nao_juridico", area: "", resumo: "", certeza: "alta" });
+    await writes(HELO, "Promoção de cartões de visita para escritórios");
+    expect(await takeConversationTurns(backend() as never)).toMatchObject({ claimed: 1, answered: 0, failed: 0 });
+    expect(await sentTo(HELO)).toEqual([]);
+    expect(await state(HELO)).toMatchObject({ agent: "person", called: false });
+
+    // While the firm never said its areas, and ONE never attended for it, a person answers anybody new.
+    await sql.unsafe(`update public.organizations set operation_answered_at = null where id = '${FIRM}'`);
+    try {
+      await writes(IVO, "Meu voo foi cancelado ontem");
+      expect(await takeConversationTurns(backend() as never)).toMatchObject({ claimed: 1, called: 1, failed: 0 });
+      expect(await sentTo(IVO)).toEqual([]);
+      expect(await state(IVO)).toMatchObject({ agent: "person", called: true });
+    } finally {
+      await sql.unsafe(`update public.organizations set operation_answered_at = now() where id = '${FIRM}'`);
+    }
   });
 });

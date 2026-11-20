@@ -17,6 +17,7 @@ import {
   type TemplateOption,
   type ThreadEvent,
   type ThreadMessage,
+  TOLD_WAYS,
 } from "@/lib/whatsapp/conversations";
 import { isInboxView, sortOfParam } from "@/lib/whatsapp/inbox-list";
 import {
@@ -226,6 +227,8 @@ async function loadInbox(
     events = ((happened.data ?? []) as EventRow[])
       // Only what happened while the messages shown were written: nothing older than the first of them.
       .filter((row) => !olderHidden || !firstMessage || row.created_at >= firstMessage)
+      // A new contact's way (0257) is told only where no other event of the thread tells it.
+      .filter((row) => row.kind !== "routed" || (TOLD_WAYS as readonly string[]).includes(String(row.data?.way ?? "")))
       .reverse()
       .map((row) => ({
         id: row.id,
@@ -234,7 +237,13 @@ async function loadInbox(
         momentLabel: momentLabel(row.created_at, timeZone),
         caseId: typeof row.data?.case_id === "string" ? row.data.case_id : null,
         seq: typeof row.data?.seq === "number" ? row.data.seq : null,
-        reason: typeof row.data?.reason === "string" ? row.data.reason : null,
+        reason:
+          typeof row.data?.reason === "string"
+            ? row.data.reason
+            : typeof row.data?.area === "string"
+              ? row.data.area
+              : null,
+        way: typeof row.data?.way === "string" ? row.data.way : null,
         actorName: (row.actor_id && names.get(row.actor_id)) || null,
         fromPhone: row.data?.from_phone === true,
         paper: typeof row.data?.kind === "string" ? row.data.kind : null,

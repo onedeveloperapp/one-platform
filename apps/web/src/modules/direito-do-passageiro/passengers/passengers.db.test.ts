@@ -86,6 +86,8 @@ describe.skipIf(!DB_URL)("a passenger the firm registers itself", () => {
       insert into auth.users (id, instance_id, aud, role, email, encrypted_password, email_confirmed_at, raw_app_meta_data, raw_user_meta_data, created_at, updated_at)
       values ('${ANA}', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'ana@passageiro-escritorio.invalid', '', now(), '{}', '{"display_name":"Ana Souza"}', now(), now());
       insert into public.organizations (id, name, slug, created_by) values ('${FIRM}', 'Souza Advogados', 'souza-passageiro-escritorio', '${ANA}');
+      -- ONE attended for the firm before the setup asked its operation (0256): it answers anybody new.
+      update public.organizations set attended_before_operation = true where id = '${FIRM}';
       insert into public.memberships (org_id, user_id, role, firm_function) values ('${FIRM}', '${ANA}', 'owner', 'atendimento');
       insert into public.connections (id, org_id, provider, external_id, label, status, connected_by, connected_at) values
         ('${CONNECTION}', '${FIRM}', 'whatsapp', 'test-waba-pax', 'Chat de teste', 'connected', '${ANA}', now());

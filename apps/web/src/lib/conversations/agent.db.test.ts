@@ -110,6 +110,8 @@ describe.skipIf(!DB_URL)("ONE in the conversation, from the first word on a flig
       values ('${ANA}', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'ana@one-conversa.invalid', '', now(), '{}', '{"display_name":"Ana Souza"}', now(), now()),
              ('${BIA}', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'bia@one-conversa.invalid', '', now(), '{}', '{"display_name":"Bia Lima"}', now(), now());
       insert into public.organizations (id, name, slug, created_by) values ('${FIRM}', 'Souza Advogados', 'souza-one-conversa', '${ANA}');
+      -- ONE attended for the firm before the setup asked its operation (0256): it answers anybody new.
+      update public.organizations set attended_before_operation = true where id = '${FIRM}';
       insert into public.memberships (org_id, user_id, role, firm_function) values
         ('${FIRM}', '${ANA}', 'owner', 'socio'), ('${FIRM}', '${BIA}', 'member', 'atendimento');
       -- The papers are kept to a person here, so ONE asks its questions right after the yes, as a firm that sends

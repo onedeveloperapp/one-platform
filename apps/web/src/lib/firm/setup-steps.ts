@@ -8,9 +8,12 @@
  * found half way (the owner, 2026-11-03). These are the core's, what every
  * firm needs: what one module needs (the passenger module's Valor da Causa
  * Pedido and its partner agency) is the module's own setup, opened after this
- * one for each module the firm contracted (0081).
+ * one for each module the firm contracted (0081). How the firm works and the
+ * areas it works in come before the channel, the last step: ONE answers
+ * nobody new on the WhatsApp before it knows the firm (0256, the owner,
+ * 2026-11-20).
  */
-export const SETUP_STEPS = ["seguranca", "oab", "equipe", "papeis", "canal"] as const;
+export const SETUP_STEPS = ["seguranca", "oab", "operacao", "equipe", "papeis", "canal"] as const;
 
 export type SetupStepKey = (typeof SETUP_STEPS)[number];
 

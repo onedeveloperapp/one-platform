@@ -87,7 +87,12 @@ export type ThreadEvent = {
   fromPhone: boolean;
   /** The kind of paper ONE joined to the case, for `document_joined`. */
   paper: string | null;
+  /** The way a new contact went, for `routed` (0257); its area is the `reason`. */
+  way?: string | null;
 };
+
+/** The ways of a new contact the thread tells: a person called or a conversation set aside tell themselves. */
+export const TOLD_WAYS = ["greet", "ask", "decline", "closed"] as const;
 
 /**
  * The words of each event of a conversation, with what they name; `paperKey` is the name of a paper ONE
@@ -131,6 +136,18 @@ export function eventWords(event: ThreadEvent): {
       return { key: "inbox-event-stopped", values: {} };
     case "lead_followup":
       return { key: "inbox-event-lead-followup", values: {} };
+    case "routed":
+      return event.way === "greet"
+        ? { key: "inbox-event-routed-greet", values: {} }
+        : event.way === "decline"
+          ? { key: "inbox-event-routed-decline", values: { area: event.reason ?? "" } }
+          : event.way === "closed"
+            ? { key: "inbox-event-routed-closed", values: {} }
+            : event.reason
+              ? { key: "inbox-event-routed-ask-area", values: { area: event.reason } }
+              : { key: "inbox-event-routed-ask", values: {} };
+    case "set_aside":
+      return { key: "inbox-event-set-aside", values: { reason: event.reason ?? "" } };
     case "came_from_ad":
       return event.reason
         ? { key: "inbox-event-came-from-ad", values: { headline: event.reason } }
