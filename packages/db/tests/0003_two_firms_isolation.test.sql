@@ -210,6 +210,26 @@ insert into public.filing_receipts (org_id, package_id, proceeding_id, file_id, 
 insert into public.filing_submissions (org_id, case_id, proceeding_id, package_id, channel, status, protocol) values
   ('b1000000-0000-4000-8000-00000000000a', 'a3000000-0000-4000-8000-00000000000a', 'a8000000-0000-4000-8000-00000000000a', 'a9000000-0000-4000-8000-00000000000a', 'test_court', 'filed', 'TESTE-A'),
   ('b1000000-0000-4000-8000-00000000000b', 'a3000000-0000-4000-8000-00000000000b', 'a8000000-0000-4000-8000-00000000000b', 'a9000000-0000-4000-8000-00000000000b', 'test_court', 'filed', 'TESTE-B');
+-- How each firm files on the courts' screens (0263): its way, a lawyer's way and an extension being linked; and a
+-- batch with the code a court asked and the opening of a login (0264).
+insert into public.firm_filing_ways (org_id, way) values
+  ('b1000000-0000-4000-8000-00000000000a', 'hand'),
+  ('b1000000-0000-4000-8000-00000000000b', 'hand');
+insert into public.lawyer_filing_ways (org_id, user_id, system_key, way) values
+  ('b1000000-0000-4000-8000-00000000000a', 'a1000000-0000-4000-8000-000000000001', 'eproc-tjsp', 'hand'),
+  ('b1000000-0000-4000-8000-00000000000b', 'a1000000-0000-4000-8000-000000000004', 'eproc-tjsp', 'hand');
+insert into public.extension_links (org_id, user_id, code_hash, code_expires_at) values
+  ('b1000000-0000-4000-8000-00000000000a', 'a1000000-0000-4000-8000-000000000001', repeat('a', 64), now() + interval '10 minutes'),
+  ('b1000000-0000-4000-8000-00000000000b', 'a1000000-0000-4000-8000-000000000004', repeat('b', 64), now() + interval '10 minutes');
+insert into public.filing_batches (id, org_id, person_id, system_key, way, status) values
+  ('f2640000-0000-4000-8000-00000000000a', 'b1000000-0000-4000-8000-00000000000a', 'a1000000-0000-4000-8000-000000000001', 'eproc-tjsp', 'extension', 'done'),
+  ('f2640000-0000-4000-8000-00000000000b', 'b1000000-0000-4000-8000-00000000000b', 'a1000000-0000-4000-8000-000000000004', 'eproc-tjsp', 'extension', 'done');
+insert into public.filing_batch_codes (batch_id, org_id, key_version, iv, ciphertext, auth_tag, expires_at) values
+  ('f2640000-0000-4000-8000-00000000000a', 'b1000000-0000-4000-8000-00000000000a', 1, 'AAAAAAAAAAAAAAAA', 'MTIzNDU2', 'AAAAAAAAAAAAAAAAAAAAAA==', now() + interval '2 minutes'),
+  ('f2640000-0000-4000-8000-00000000000b', 'b1000000-0000-4000-8000-00000000000b', 1, 'AAAAAAAAAAAAAAAA', 'MTIzNDU2', 'AAAAAAAAAAAAAAAAAAAAAA==', now() + interval '2 minutes');
+insert into public.court_login_uses (org_id, person_id, batch_id, system_key) values
+  ('b1000000-0000-4000-8000-00000000000a', 'a1000000-0000-4000-8000-000000000001', 'f2640000-0000-4000-8000-00000000000a', 'eproc-tjsp'),
+  ('b1000000-0000-4000-8000-00000000000b', 'a1000000-0000-4000-8000-000000000004', 'f2640000-0000-4000-8000-00000000000b', 'eproc-tjsp');
 insert into public.proceeding_tracking (org_id, case_id, proceeding_id, cnj, source, status) values
   ('b1000000-0000-4000-8000-00000000000a', 'a3000000-0000-4000-8000-00000000000a', 'a8000000-0000-4000-8000-00000000000a', '50002023920998090051', 'projudi', 'tracked'),
   ('b1000000-0000-4000-8000-00000000000b', 'a3000000-0000-4000-8000-00000000000b', 'a8000000-0000-4000-8000-00000000000b', '50003037620998090051', 'projudi', 'tracked');
@@ -720,12 +740,12 @@ select is(
     'case_draft_citations', 'case_draft_versions', 'case_drafts', 'case_events', 'case_fee_splits', 'case_fees', 'case_forecasts', 'case_interview_answers', 'case_interviews',
     'case_papers', 'case_parties', 'case_statements',
     'case_weather', 'cases', 'certificate_inventory', 'chatwoot_room_members', 'chatwoot_rooms', 'civil_court_answers', 'client_consents', 'client_links', 'client_notices', 'client_payment_accounts', 'closing_goals', 'connections',
-    'consent_acceptances',
-    'deadlines', 'djen_captures', 'dossiers', 'draft_templates', 'entitlement_grants', 'fee_terms', 'files', 'filing_package_items', 'filing_packages',
+    'consent_acceptances', 'court_login_uses',
+    'deadlines', 'djen_captures', 'dossiers', 'draft_templates', 'entitlement_grants', 'extension_links', 'fee_terms', 'files', 'filing_batches', 'filing_package_items', 'filing_packages',
     'filing_receipts', 'filing_submissions', 'finance_access', 'finance_accountants', 'finance_accounts', 'finance_bill_payments', 'finance_bills', 'finance_budgets', 'finance_categories', 'finance_closings', 'finance_cost_centers', 'finance_entries', 'finance_imports', 'finance_invoices', 'finance_package_sends', 'finance_receipts', 'finance_rules', 'finance_series',
     'finance_statement_lines', 'finance_statements', 'firm_autonomy', 'firm_calendars',
-    'firm_claim_defaults', 'firm_invitations', 'firm_marketing_terms', 'firm_message_texts', 'firm_modules', 'firm_notice_kinds', 'firm_one_work_cost', 'firm_one_work_minutes', 'firm_settlement_floors', 'firm_signers', 'flight_alerts', 'flight_checks', 'flight_segments', 'free_justice_answers', 'hearing_briefs', 'hearing_contacts', 'hearing_reports', 'hearing_staff_messages', 'hearings', 'import_batches', 'import_rows', 'invoices',
-    'issued_documents', 'judgment_paths', 'judgment_sessions', 'lawsuit_amounts', 'lawsuit_facts', 'lawyer_signature_uses', 'legal_sources', 'marketing_segments', 'memberships',
+    'firm_claim_defaults', 'firm_filing_ways', 'firm_invitations', 'firm_marketing_terms', 'firm_message_texts', 'firm_modules', 'firm_notice_kinds', 'firm_one_work_cost', 'firm_one_work_minutes', 'firm_settlement_floors', 'firm_signers', 'flight_alerts', 'flight_checks', 'flight_segments', 'free_justice_answers', 'hearing_briefs', 'hearing_contacts', 'hearing_reports', 'hearing_staff_messages', 'hearings', 'import_batches', 'import_rows', 'invoices',
+    'issued_documents', 'judgment_paths', 'judgment_sessions', 'lawsuit_amounts', 'lawsuit_facts', 'lawyer_filing_ways', 'lawyer_signature_uses', 'legal_sources', 'marketing_segments', 'memberships',
     'money_releases', 'money_shares', 'money_statements', 'movements', 'notice_optins', 'notice_stops', 'onboarding_state', 'partner_invitations', 'partner_links', 'passenger_welcomes', 'pax_firm_clauses',
     'people', 'person_data_requests',
     'piece_fact_checks', 'proceeding_lawyers', 'proceeding_parties', 'proceeding_tracking', 'proceedings', 'publication_actions', 'publication_readings', 'publications', 'record_versions',
@@ -899,9 +919,9 @@ select is(
     'case_weather', 'cases', 'certificate_inventory', 'civil_court_answers', 'client_consents',
     'client_links', 'client_notices', 'closing_goals',
     'consent_acceptances', 'deadlines', 'djen_captures', 'dossiers', 'draft_templates', 'entitlement_grants', 'files',
-    'filing_package_items', 'filing_packages',
-    'filing_receipts', 'filing_submissions', 'finance_access', 'firm_autonomy', 'firm_calendars', 'firm_claim_defaults', 'firm_marketing_terms', 'firm_message_texts', 'firm_modules', 'firm_notice_kinds', 'firm_settlement_floors', 'firm_signers', 'flight_alerts', 'flight_checks', 'flight_segments', 'free_justice_answers', 'hearing_briefs', 'hearing_contacts', 'hearing_reports', 'hearing_staff_messages', 'hearings', 'import_batches',
-    'import_rows', 'invoices', 'issued_documents', 'judgment_paths', 'judgment_sessions', 'lawsuit_amounts', 'lawsuit_facts', 'lawyer_signature_uses', 'legal_sources',
+    'filing_batches', 'filing_package_items', 'filing_packages',
+    'filing_receipts', 'filing_submissions', 'finance_access', 'firm_autonomy', 'firm_calendars', 'firm_claim_defaults', 'firm_filing_ways', 'firm_marketing_terms', 'firm_message_texts', 'firm_modules', 'firm_notice_kinds', 'firm_settlement_floors', 'firm_signers', 'flight_alerts', 'flight_checks', 'flight_segments', 'free_justice_answers', 'hearing_briefs', 'hearing_contacts', 'hearing_reports', 'hearing_staff_messages', 'hearings', 'import_batches',
+    'import_rows', 'invoices', 'issued_documents', 'judgment_paths', 'judgment_sessions', 'lawsuit_amounts', 'lawsuit_facts', 'lawyer_filing_ways', 'lawyer_signature_uses', 'legal_sources',
     'memberships', 'movements', 'notice_optins', 'notice_stops', 'partner_links', 'passenger_welcomes', 'pax_firm_clauses', 'people', 'piece_fact_checks', 'proceeding_lawyers', 'proceeding_parties', 'proceeding_tracking', 'proceedings',
     'publication_actions', 'publication_readings', 'publications',
     'residence_declarations', 'signature_envelopes',
@@ -940,12 +960,12 @@ select is(
     'case_draft_citations', 'case_draft_versions', 'case_drafts', 'case_events', 'case_fee_splits', 'case_fees', 'case_forecasts', 'case_interview_answers', 'case_interviews',
     'case_papers', 'case_parties', 'case_statements',
     'case_weather', 'cases', 'certificate_inventory', 'chatwoot_room_members', 'chatwoot_rooms', 'civil_court_answers', 'client_consents', 'client_links', 'client_notices', 'client_payment_accounts', 'closing_goals', 'connections',
-    'consent_acceptances',
-    'deadlines', 'djen_captures', 'dossiers', 'draft_templates', 'entitlement_grants', 'fee_terms', 'files', 'filing_package_items', 'filing_packages',
+    'consent_acceptances', 'court_login_uses',
+    'deadlines', 'djen_captures', 'dossiers', 'draft_templates', 'entitlement_grants', 'extension_links', 'fee_terms', 'files', 'filing_batches', 'filing_package_items', 'filing_packages',
     'filing_receipts', 'filing_submissions', 'finance_access', 'finance_accountants', 'finance_accounts', 'finance_bill_payments', 'finance_bills', 'finance_budgets', 'finance_categories', 'finance_closings', 'finance_cost_centers', 'finance_entries', 'finance_imports', 'finance_invoices', 'finance_package_sends', 'finance_receipts', 'finance_rules', 'finance_series',
     'finance_statement_lines', 'finance_statements', 'firm_autonomy', 'firm_calendars',
-    'firm_claim_defaults', 'firm_invitations', 'firm_marketing_terms', 'firm_message_texts', 'firm_modules', 'firm_notice_kinds', 'firm_one_work_cost', 'firm_one_work_minutes', 'firm_settlement_floors', 'firm_signers', 'flight_alerts', 'flight_checks', 'flight_segments', 'free_justice_answers', 'hearing_briefs', 'hearing_contacts', 'hearing_reports', 'hearing_staff_messages', 'hearings', 'import_batches', 'import_rows', 'invoices',
-    'issued_documents', 'judgment_paths', 'judgment_sessions', 'lawsuit_amounts', 'lawsuit_facts', 'lawyer_signature_uses', 'legal_sources', 'marketing_segments', 'memberships',
+    'firm_claim_defaults', 'firm_filing_ways', 'firm_invitations', 'firm_marketing_terms', 'firm_message_texts', 'firm_modules', 'firm_notice_kinds', 'firm_one_work_cost', 'firm_one_work_minutes', 'firm_settlement_floors', 'firm_signers', 'flight_alerts', 'flight_checks', 'flight_segments', 'free_justice_answers', 'hearing_briefs', 'hearing_contacts', 'hearing_reports', 'hearing_staff_messages', 'hearings', 'import_batches', 'import_rows', 'invoices',
+    'issued_documents', 'judgment_paths', 'judgment_sessions', 'lawsuit_amounts', 'lawsuit_facts', 'lawyer_filing_ways', 'lawyer_signature_uses', 'legal_sources', 'marketing_segments', 'memberships',
     'money_releases', 'money_shares', 'money_statements', 'movements', 'notice_optins', 'notice_stops', 'onboarding_state', 'partner_invitations', 'partner_links', 'passenger_welcomes', 'pax_firm_clauses',
     'people', 'person_data_requests',
     'piece_fact_checks', 'proceeding_lawyers', 'proceeding_parties', 'proceeding_tracking', 'proceedings', 'publication_actions', 'publication_readings', 'publications', 'record_versions',
