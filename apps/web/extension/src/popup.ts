@@ -4,7 +4,7 @@
  */
 import { chromeApi } from "./chrome";
 
-import { COURT_SYSTEMS, courtSystemOf } from "@/lib/court-extension/capture";
+import { COURT_SYSTEMS, courtSystemNames, courtSystemOf } from "@/lib/court-extension/capture";
 
 const ext = chromeApi();
 
@@ -47,7 +47,7 @@ async function start() {
     where.textContent = `${COURT_SYSTEMS[system].name}. Entre com o seu login e vá até a tela que quer mapear.`;
     court.hidden = false;
   } else {
-    where.textContent = "Abra o Projudi do TJGO ou o eproc do TJRJ e entre com o seu login.";
+    where.textContent = `Abra ${courtSystemNames()} e entre com o seu login.`;
   }
   show(await ask({ type: "status" }));
 

@@ -9,13 +9,24 @@
  * Pure over a `Document`, so it is tested in jsdom; the extension runs it in each frame of the court's page.
  */
 
-/** The court systems the extension knows, by the host they answer at. */
-export type CourtSystemKey = "projudi-tjgo" | "eproc-tjrj";
+/**
+ * The court systems the extension knows, by the host they answer at. The eproc of TJSP joined on 2026-11-20, the
+ * first one a lawyer of the pilot maps (its small-claims and civil courts file new lawsuits there: `court_systems`
+ * of migration 0021).
+ */
+export type CourtSystemKey = "eproc-tjsp" | "projudi-tjgo" | "eproc-tjrj";
 
 export const COURT_SYSTEMS: Record<CourtSystemKey, { host: string; name: string }> = {
+  "eproc-tjsp": { host: "eproc1g.tjsp.jus.br", name: "eproc do TJSP" },
   "projudi-tjgo": { host: "projudi.tjgo.jus.br", name: "Projudi do TJGO" },
   "eproc-tjrj": { host: "eproc1g.tjrj.jus.br", name: "eproc do TJRJ" },
 };
+
+/** The systems the extension knows, as a sentence lists them ("o a, o b ou o c"; every name is masculine). */
+export function courtSystemNames(): string {
+  const names = Object.values(COURT_SYSTEMS).map((system) => `o ${system.name}`);
+  return names.length > 1 ? `${names.slice(0, -1).join(", ")} ou ${names[names.length - 1]}` : (names[0] ?? "");
+}
 
 /** The system a host is, or null for a page the extension does not map. */
 export function courtSystemOf(host: string): CourtSystemKey | null {

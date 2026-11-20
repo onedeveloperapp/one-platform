@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   captureScreen,
   COURT_SYSTEMS,
+  courtSystemNames,
   courtSystemOf,
   locate,
   pageStep,
@@ -78,11 +79,14 @@ afterEach(() => {
 });
 
 describe("the map of a court's screen (the lawyer's extension)", () => {
-  it("knows the two systems it maps by their hosts, and the extension asks for those hosts alone", () => {
+  it("knows the systems it maps by their hosts, and the extension asks for those hosts alone", () => {
+    expect(courtSystemOf("eproc1g.tjsp.jus.br")).toBe("eproc-tjsp");
     expect(courtSystemOf("projudi.tjgo.jus.br")).toBe("projudi-tjgo");
     expect(courtSystemOf("EPROC1G.TJRJ.JUS.BR")).toBe("eproc-tjrj");
     expect(courtSystemOf("projudi.tjgo.jus.br.evil.invalid")).toBeNull();
     expect(courtSystemOf("pje.tjrj.jus.br")).toBeNull();
+    expect(courtSystemOf("esaj.tjsp.jus.br")).toBeNull();
+    expect(courtSystemNames()).toBe("o eproc do TJSP, o Projudi do TJGO ou o eproc do TJRJ");
     const manifest = JSON.parse(readFileSync(path.join(process.cwd(), "extension", "manifest.json"), "utf8")) as {
       host_permissions: string[];
       content_scripts: { matches: string[] }[];
