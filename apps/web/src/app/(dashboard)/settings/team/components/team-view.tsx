@@ -7,6 +7,7 @@ import { isTeamView, teamCounts, teamRows, type TeamView, teamViewsFor } from ".
 import type { TeamState } from "../team-types";
 import CertificatesCard from "./certificates-card";
 import CloudSignatureCard from "./cloud-signature-card";
+import FilingWaysCard from "./filing-ways-card";
 import FirmCard from "./firm-card";
 import HearingContactsCard from "./hearing-contacts-card";
 import InvitePanel from "./invite-panel";
@@ -244,6 +245,22 @@ export default function TeamView({ state, part }: { state: TeamState; part: Team
             {lawyer && (
               <CloudSignatureCard data={ready.cloudSignature} mayAuthorize readsTeam={false} onChanged={refresh} />
             )}
+            {lawyer && ready.filingWays ? <FilingWaysCard data={ready.filingWays} onChanged={refresh} /> : null}
+            {lawyer && !ready.filingWays ? (
+              <Grid size={12}>
+                <Alert
+                  severity="error"
+                  className="neutral bg-background-paper/60!"
+                  action={
+                    <Button color="inherit" size="small" onClick={refresh}>
+                      {t("team-retry")}
+                    </Button>
+                  }
+                >
+                  {t("filing-ways-read-error")}
+                </Alert>
+              </Grid>
+            ) : null}
           </>
         )}
 

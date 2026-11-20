@@ -11,6 +11,7 @@ import { cookies } from "next/headers";
 
 import { momentLabel, type SecondFactorState } from "@/lib/ai/approvals";
 import { isCertificateKind, isCourtSystemName } from "@/lib/cases/statements";
+import { loadFilingWays } from "@/lib/filing-ways/read";
 import { momentWords, ownSignatureNeed, readFilingAttention } from "@/lib/firm/filing-attention";
 import { EMPTY_OFFICE, OFFICE_COLUMNS, officeOf } from "@/lib/firm/office";
 import {
@@ -316,6 +317,9 @@ export async function loadTeam(signatureOutcome: string | null, backToCase: stri
         )
       : null;
 
+  // How the person files on the courts' screens (0263): a partner's or a lawyer's own card.
+  const filingWays = lawyer ? await loadFilingWays(context) : null;
+
   return {
     kind: "ready",
     firm: { id: firm.id, name: firm.name },
@@ -336,6 +340,7 @@ export async function loadTeam(signatureOutcome: string | null, backToCase: stri
           : null,
       })),
     cloudSignature,
+    filingWays,
     today: new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date()),
     seatCeiling: ceiling > 0 ? ceiling : null,
   };

@@ -1,5 +1,6 @@
 import type { SecondFactorState } from "@/lib/ai/approvals";
 import type { CertificateKind, CourtSystemName } from "@/lib/cases/statements";
+import type { FilingWaysData } from "@/lib/filing-ways/ways";
 import type { FirmOffice } from "@/lib/firm/office";
 import type { FirmFunction, InvitableRole, OabRegistration, OrgRole } from "@/lib/firm/roles";
 import type { AuthorizationState, SignatureOutcome } from "@/lib/psc/signature";
@@ -116,6 +117,8 @@ export type TeamData = {
   myCertificates: CertificateEntry[];
   /** The signatures in the cloud the person may see; null when they could not be read (the card says so). */
   cloudSignature: CloudSignatureData | null;
+  /** How the person files on the courts' screens (0263), for a partner or a lawyer; null when its read failed. */
+  filingWays: FilingWaysData | null;
   /** The day in Brazil's official time. */
   today: string;
   /** The seats of the plan (`assentos_max`), or null when the plan sets no ceiling. */
