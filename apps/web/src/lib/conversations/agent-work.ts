@@ -4,6 +4,28 @@ import { createHash, randomBytes } from "node:crypto";
 
 import { runFirmTask } from "@/lib/ai/executor";
 import {
+  areaIntakeOf,
+  type AreaIntakeState,
+  areaOpenedText,
+  areaOpening,
+  isAreaIntakeOpen,
+  NAME_QUESTION,
+  nameOfReply,
+  NOT_UNDERSTOOD,
+  TRIAGE_TASK,
+  triageReadingOf,
+} from "@/lib/areas/area-intake";
+import { type AreaScript, scriptOf, triageScriptOf } from "@/lib/areas/script";
+import {
+  areaOfferText,
+  refusalText,
+  scriptQuestionText,
+  triageNote,
+  triageReason,
+  typeOptions,
+  typeQuestionText,
+} from "@/lib/areas/triage-texts";
+import {
   accountAnswered,
   accountAnswersText,
   accountBackLine,
@@ -14,6 +36,7 @@ import {
 import { queueCaseAdvance } from "@/lib/cases/advance-work";
 import { firstNameOf } from "@/lib/cases/cases";
 import { base64, MODEL_IMAGE, processCaseDocuments, queueDocumentProcessing } from "@/lib/cases/documents-work";
+import { maskIdentifiers } from "@/lib/cases/drafts";
 import {
   advanceInterview,
   answerInterview,
@@ -133,6 +156,7 @@ import {
   askSummaryText,
   type Attendance,
   attendanceOf,
+  type FirmArea,
   greetingText,
   type LawAreaInfo,
   listOf,
@@ -158,6 +182,7 @@ import { BRAND } from "@flyee/content";
 import { normalizeImage } from "@flyee/documents/normalize";
 import type { FileStore } from "@flyee/documents/types";
 import { viaCep } from "@flyee/fields";
+import { optionOfReply, triageVerdict } from "@flyee/rules/area-triage";
 import { qualify } from "@flyee/rules/qualification";
 import { checkMessage } from "@flyee/whatsapp/rules";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -1302,7 +1327,7 @@ async function takeRoute(
   context: TurnContext,
   report: TurnReport,
   firm: Attendance,
-  route: Exclude<Route, { way: "passenger" }>,
+  route: Exclude<Route, { way: "passenger" | "area" }>,
 ): Promise<boolean> {
   const keep = (state: Partial<RouteState>, area: string | null = null) =>
     rpc(service, "record_conversation_route", {
@@ -1377,6 +1402,281 @@ async function takeRoute(
 }
 
 /**
+ * The triage of a client of an area of the firm, by the area's script (0274): the kind of case and the script's
+ * questions, each with numbered options, one at a time; the AI only reads a reply into one of them, and the firm's
+ * table decides (`@flyee/rules/area-triage`): an answer the firm does not take ends with its words, one a person
+ * decides goes to a person with every answer, and every answer "segue" goes to the name, the offer with the area's
+ * words on fees and, at "Quero seguir", the case ONE opens with the link where the client sends its documents.
+ * `start` begins it for an area the routing chose; with none, a triage under way goes on. Answers true when ONE took
+ * the turn, "reroute" when the client changed subject (the triage ends and the routing reads them again), false when
+ * no triage applies.
+ */
+async function takeAreaIntake(
+  service: SupabaseClient,
+  held: Held,
+  context: TurnContext,
+  report: TurnReport,
+  firm: Attendance,
+  start: FirmArea | null,
+  greeted: boolean,
+): Promise<boolean | "reroute"> {
+  const { data: row, error: readError } = await service
+    .from("wa_conversations")
+    .select("area_intake, intake_case_id")
+    .eq("id", held.conversationId)
+    .maybeSingle();
+  if (readError || !row || row.intake_case_id) return false;
+  const known = areaIntakeOf(row.area_intake);
+  const fresh = !isAreaIntakeOpen(known);
+  if (fresh && !start?.scriptId) return false;
+  let state: AreaIntakeState = fresh
+    ? {
+        area_id: start!.id,
+        script_id: start!.scriptId!,
+        type: null,
+        answers: {},
+        asked: null,
+        tries: 0,
+        nome: null,
+        etapa: "perguntas",
+      }
+    : known!;
+  const area = firm.areas.find((candidate) => candidate.id === state.area_id) ?? start;
+  const areaName = area?.name ?? "";
+
+  // The version the triage follows; withdrawn since, the area's script in force.
+  const scriptRow = async (id: string) =>
+    (await service.from("firm_area_scripts").select("id, status, script").eq("id", id).maybeSingle()).data as {
+      id: string;
+      status: string;
+      script: unknown;
+    } | null;
+  let version = await scriptRow(state.script_id);
+  if (version?.status !== "published" && area?.scriptId && area.scriptId !== state.script_id) {
+    version = await scriptRow(area.scriptId);
+    if (version) state = { ...state, script_id: version.id };
+  }
+  const script = version?.status === "published" ? scriptOf(version.script) : null;
+
+  const keep = async (next: AreaIntakeState): Promise<boolean> => {
+    const kept = await rpc(service, "record_area_intake", {
+      target_conversation: held.conversationId,
+      target_claim: held.claim,
+      target_state: next,
+    }).catch(() => null);
+    if (kept?.ok === true) state = next;
+    return kept?.ok === true;
+  };
+  const tell = async (body: string): Promise<true> => {
+    await say(service, held, body);
+    report.answered += 1;
+    return true;
+  };
+  const toPerson = async (because: "type" | "answers" | "unsure" | "doubt"): Promise<true> => {
+    await keep({ ...state, etapa: "fim" });
+    await say(service, held, await wordsOf(service, context.orgId, "called_person", calledMessage)).catch(
+      () => undefined,
+    );
+    await callPerson(
+      service,
+      held,
+      script
+        ? triageReason({ areaName, script, said: { type: state.type, answers: state.answers }, because })
+        : `Contato de ${areaName || "uma área do escritório"}: o roteiro da área não pôde ser lido.`,
+    );
+    report.called += 1;
+    return true;
+  };
+  if (!script) return toPerson("unsure");
+  if (fresh) {
+    await rpc(service, "record_conversation_route", {
+      target_conversation: held.conversationId,
+      target_claim: held.claim,
+      target_route: {},
+      target_way: "area",
+      target_area: areaName,
+    }).catch(() => null);
+  }
+
+  const reply = lastClientWords(context.messages).join(" ").trim();
+  const triage = triageScriptOf(script);
+
+  const offer = async (): Promise<boolean> => {
+    if (!(await keep({ ...state, etapa: "oferta", asked: null, tries: 0 }))) return false;
+    return tell(areaOfferText(script));
+  };
+
+  /** The next thing the triage asks, or where the firm's table sends the client. */
+  const goOn = async (opening: string | null): Promise<boolean> => {
+    const verdict = triageVerdict(triage, { type: state.type, answers: state.answers });
+    if (verdict.outcome === "pending") {
+      const asked = verdict.next.ask === "type" ? "tipo" : verdict.next.question.key;
+      const question =
+        verdict.next.ask === "type"
+          ? typeQuestionText(script, areaName)
+          : scriptQuestionText(script.perguntas.find((candidate) => candidate.chave === asked)!);
+      if (!(await keep({ ...state, etapa: "perguntas", asked, tries: 0 }))) return false;
+      return tell(opening ? `${opening}\n\n${question}` : question);
+    }
+    if (verdict.outcome === "declined") {
+      // The firm's words, never pointing to another firm; the conversation stays with the team, with no urgency.
+      await keep({ ...state, etapa: "fim" });
+      await tell(refusalText(script, areaName));
+      await rpc(service, "one_set_aside", {
+        target_conversation: held.conversationId,
+        target_claim: held.claim,
+        target_reason: triageReason({
+          areaName,
+          script,
+          said: { type: state.type, answers: state.answers },
+          because: "declined",
+        }),
+      }).catch(() => null);
+      return true;
+    }
+    if (verdict.outcome === "person") return toPerson(verdict.type ? "answers" : "type");
+    state = { ...state, type: verdict.type };
+    if (!state.nome) {
+      if (!(await keep({ ...state, etapa: "nome", asked: null, tries: 0 }))) return false;
+      return tell(NAME_QUESTION);
+    }
+    return offer();
+  };
+
+  if (fresh) return goOn(greeted ? null : areaOpening(context.firm));
+
+  switch (state.etapa) {
+    case "perguntas": {
+      if (!state.asked) return goOn(null);
+      const options =
+        state.asked === "tipo"
+          ? typeOptions(script)
+          : (script.perguntas
+              .find((question) => question.chave === state.asked)
+              ?.opcoes.map((option) => ({ key: option.chave, text: option.texto })) ?? []);
+      let chosen = optionOfReply(options, reply);
+      if (!chosen && options.length > 0) {
+        const question =
+          state.asked === "tipo"
+            ? typeQuestionText(script, areaName)
+            : scriptQuestionText(script.perguntas.find((candidate) => candidate.chave === state.asked)!);
+        const run = await runFirmTask({
+          orgId: context.orgId,
+          task: TRIAGE_TASK,
+          input: {
+            pergunta: question,
+            opcoes: options.map((option) => ({ chave: option.key, texto: option.text })),
+            mensagens: context.messages.slice(-6).map((message) => ({
+              quem: message.author,
+              texto: maskIdentifiers(message.text).slice(0, 1500),
+            })),
+          },
+          subject: { type: "wa_conversation", id: held.conversationId },
+          idempotencyKey: `area-triage:${held.conversationId}:${held.claim}`,
+        }).catch(() => null);
+        const reading = run && run.kind === "finished" ? triageReadingOf(run.output) : null;
+        if (reading?.elsewhere) {
+          // Another subject: the triage ends, and the routing reads them again.
+          await keep({ ...state, etapa: "fim" });
+          return "reroute";
+        }
+        chosen = options.find((option) => option.key === reading?.option) ?? null;
+        if (!chosen) {
+          if (state.tries >= 1) return toPerson("unsure");
+          if (!(await keep({ ...state, tries: state.tries + 1 }))) return false;
+          return tell(`${NOT_UNDERSTOOD}\n\n${question}`);
+        }
+      }
+      if (!chosen) return toPerson("unsure");
+      state =
+        state.asked === "tipo"
+          ? { ...state, type: chosen.key, tries: 0 }
+          : { ...state, answers: { ...state.answers, [state.asked]: chosen.key }, tries: 0 };
+      return goOn(null);
+    }
+    case "nome": {
+      const name = nameOfReply(reply);
+      if (!name) {
+        if (state.tries >= 1) return toPerson("unsure");
+        if (!(await keep({ ...state, tries: state.tries + 1 }))) return false;
+        return tell(NAME_QUESTION);
+      }
+      state = { ...state, nome: name, tries: 0 };
+      return offer();
+    }
+    case "oferta":
+    case "duvidas":
+    case "recusou": {
+      const choice = choiceOf(state.etapa === "duvidas" ? OPTIONS.duvidas : OPTIONS.oferta, reply);
+      if (choice === "seguir") return openAreaCase(service, held, context, report, state, script, areaName, toPerson);
+      if (choice === "agora_nao") {
+        if (!(await keep({ ...state, etapa: "recusou" }))) return false;
+        const name = state.nome ?? "";
+        return tell(await wordsOf(service, context.orgId, "declined", declinedMessage(name), { nome: greeting(name) }));
+      }
+      // Who said no and writes again is offered again.
+      if (state.etapa === "recusou") return offer();
+      if (choice === "pessoa" || state.etapa === "duvidas") return toPerson("doubt");
+      // A doubt: the area's own answers to the common ones, and the question again; with none, a person answers.
+      if (script.duvidas) {
+        if (!(await keep({ ...state, etapa: "duvidas" }))) return false;
+        return tell(intakeDoubts(script.duvidas));
+      }
+      return toPerson("doubt");
+    }
+    default:
+      return false;
+  }
+}
+
+/** The client's "Quero seguir" after the triage of an area: the case opened by ONE, with the client's link. */
+async function openAreaCase(
+  service: SupabaseClient,
+  held: Held,
+  context: TurnContext,
+  report: TurnReport,
+  state: AreaIntakeState,
+  script: AreaScript,
+  areaName: string,
+  toPerson: (because: "type" | "answers" | "unsure" | "doubt") => Promise<true>,
+): Promise<boolean> {
+  const token = randomBytes(32).toString("base64url");
+  const url = `${BRAND.siteUrl}/c/${token}`;
+  const name = state.nome ?? "";
+  const answer = await rpc(service, "one_open_area_case", {
+    target_conversation: held.conversationId,
+    target_claim: held.claim,
+    target_token_hash: createHash("sha256").update(token, "utf8").digest("hex"),
+    target_body: areaOpenedText({ name, firm: context.firm, link: url }),
+    // The firm's note of the case: the triage's answers, as the team reads them.
+    target_note: triageNote(script, areaName, { type: state.type, answers: state.answers }),
+  });
+  if (answer.code === "opened" || answer.code === "opened_without_link") {
+    report.opened += 1;
+    await rpc(service, "record_area_intake", {
+      target_conversation: held.conversationId,
+      target_claim: held.claim,
+      target_state: { ...state, etapa: "fim" },
+    }).catch(() => null);
+    if (answer.code === "opened") await send(service, answer.message_id);
+    else await say(service, held, caseOpenedNoLinkMessage(name));
+    return true;
+  }
+  if (answer.code === "by_person") {
+    await say(service, held, byPersonMessage(name));
+    await callPerson(
+      service,
+      held,
+      `Um cliente de ${areaName} quer seguir, e abrir o caso pela conversa espera uma pessoa do escritório.`,
+    );
+    report.called += 1;
+    return true;
+  }
+  if (answer.code === "has_case" || answer.code === "already_opened") return false;
+  return toPerson("unsure");
+}
+
+/**
  * Somebody who writes with no alert and no case (0257): ONE answers nobody new before the firm said its operation,
  * unless it attended for the firm before (decision 2); a firm that uses the passenger module has a problem with a flight
  * taken in as before, and anything else, or a change of subject in the middle of it, goes the way the subject chose.
@@ -1400,6 +1700,10 @@ async function takeNewContact(
   const state = routeStateOf(row.route);
   if (!firm.attends) return takeRoute(service, held, context, report, firm, { way: "closed" });
 
+  // The triage of an area of the firm under way (0274): the client's reply answers it, unless they changed subject.
+  const inArea = await takeAreaIntake(service, held, context, report, firm, null, state.greeted);
+  if (inArea === true) return true;
+
   const reroute = async (): Promise<boolean | "passenger"> => {
     const areas = await lawAreasOf(service);
     const run = await runFirmTask({
@@ -1412,6 +1716,17 @@ async function takeNewContact(
     const reading = run && run.kind === "finished" ? routeReadingOf(run.output) : null;
     const route = routeOf(reading, firm, state, areas);
     if (route.way === "passenger") return "passenger";
+    if (route.way === "area") {
+      const took = await takeAreaIntake(service, held, context, report, firm, route.area, state.greeted);
+      if (took === true) return true;
+      // The script could not be read: as an area with none, ONE asks once and a person continues.
+      return takeRoute(service, held, context, report, firm, {
+        way: "person",
+        topic: "area",
+        area: route.area,
+        summary: reading?.summary ?? null,
+      });
+    }
     return takeRoute(service, held, context, report, firm, route);
   };
 

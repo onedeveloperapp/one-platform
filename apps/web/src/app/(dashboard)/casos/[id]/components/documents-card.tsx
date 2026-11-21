@@ -377,6 +377,7 @@ export default function DocumentsCard({
       status: document.status,
     })),
     segments: state.segments.length,
+    trip: !state.case.area,
     required: state.required,
     today: state.today,
   }).flatMap((item) => (item.type === "document" ? [item] : []));

@@ -23,13 +23,23 @@ const LAW: LawAreaInfo[] = [
   { key: "trabalhista", name: "Trabalhista", covers: "demissão" },
 ];
 
-const FAMILY = { id: "a1b2c3d4-0000-4000-8000-000000000001", lawArea: "familia", name: "Família e sucessões" };
-const AGRO = { id: "e5f6a7b8-0000-4000-8000-000000000002", lawArea: null, name: "Direito do agronegócio" };
+const FAMILY = {
+  id: "a1b2c3d4-0000-4000-8000-000000000001",
+  lawArea: "familia",
+  name: "Família e sucessões",
+  scriptId: null,
+};
+const AGRO = {
+  id: "e5f6a7b8-0000-4000-8000-000000000002",
+  lawArea: null,
+  name: "Direito do agronegócio",
+  scriptId: null,
+};
 
 const firm = (over: Partial<Attendance> = {}): Attendance => ({
   attends: true,
   declared: true,
-  areas: [{ id: "p", lawArea: "passageiro", name: "Direito do Passageiro" }, FAMILY, AGRO],
+  areas: [{ id: "p", lawArea: "passageiro", name: "Direito do Passageiro", scriptId: null }, FAMILY, AGRO],
   modules: ["direito-do-passageiro"],
   ...over,
 });
@@ -47,6 +57,16 @@ const FRESH = { greeted: false, asked: null };
 describe("routeOf", () => {
   it("lets a person answer while ONE does not attend for the firm, whatever was written", () => {
     expect(routeOf(read({ area: "passageiro" }), firm({ attends: false }), FRESH, LAW)).toEqual({ way: "closed" });
+  });
+
+  it("takes a subject of an area with its script published to the script's triage (0274)", () => {
+    const scripted = { ...FAMILY, scriptId: "c2730000-0000-4000-8000-000000000001" };
+    expect(routeOf(read({ area: "familia" }), firm({ areas: [scripted, AGRO] }), FRESH, LAW)).toEqual({
+      way: "area",
+      area: scripted,
+    });
+    // With no script published, ONE asks once what the person needs and a person continues, as before.
+    expect(routeOf(read({ area: "familia" }), firm(), FRESH, LAW)).toMatchObject({ way: "ask", topic: "area" });
   });
 
   it("takes a problem with a flight to the passenger's intake only where the firm uses the module", () => {
@@ -147,7 +167,7 @@ describe("the readings", () => {
         attends: true,
         declared: false,
         areas: [
-          { id: "x", law_area: null, name: "Agro" },
+          { id: "x", law_area: null, name: "Agro", script_id: "s1" },
           { id: "", name: "sem id" },
         ],
         modules: ["direito-do-passageiro", 3],
@@ -155,7 +175,7 @@ describe("the readings", () => {
     ).toEqual({
       attends: true,
       declared: false,
-      areas: [{ id: "x", lawArea: null, name: "Agro" }],
+      areas: [{ id: "x", lawArea: null, name: "Agro", scriptId: "s1" }],
       modules: ["direito-do-passageiro"],
     });
     expect(attendanceOf({ ok: false })).toBeNull();

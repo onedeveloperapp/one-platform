@@ -52,6 +52,8 @@ export type ClientDocument = {
   created_at: string;
   /** Whether the backend is still reading it (migration 0024): `pending` or `working` while it is. */
   processing?: string;
+  /** What it was sent for, where the case asks it by name (a case of an area of the firm, 0274). */
+  need?: string | null;
 };
 
 export type ClientLinkView =
@@ -69,6 +71,9 @@ export type ClientLinkView =
         flight_date: string | null;
         airline: { iata: string; name: string } | null;
         editable: boolean;
+        /** A case of an area of the firm (0274): its area and its kind of case, never a flight. */
+        area?: string | null;
+        case_type?: string | null;
       };
       people: ClientPerson[];
       segments: ClientSegment[];

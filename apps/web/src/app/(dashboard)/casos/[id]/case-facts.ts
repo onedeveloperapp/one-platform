@@ -30,6 +30,8 @@ export function caseFacts(ready: ReadyCase) {
       status: document.status,
     })),
     segments: ready.segments.length,
+    // A case of an area of the firm has no trip (0274).
+    trip: !ready.case.area,
     required: ready.required,
     today: ready.today,
   });

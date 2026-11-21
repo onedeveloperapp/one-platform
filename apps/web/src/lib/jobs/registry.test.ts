@@ -23,6 +23,7 @@ describe("the platform's sweeps (2026-11-04)", () => {
         "ai-health",
         "ai-stale-runs",
         "appeal-papers",
+        "area-script",
         "backup",
         "billing-cancellations",
         "billing-maintenance",

@@ -28,7 +28,8 @@ export const PASSENGER_MODULE = "direito-do-passageiro";
 /** The area of law of a problem with a flight (0256). */
 export const PASSENGER_AREA = "passageiro";
 
-export type FirmArea = { id: string; lawArea: string | null; name: string };
+/** An area of the firm; one of its own with the script in force (0274), which takes its contacts in by the script. */
+export type FirmArea = { id: string; lawArea: string | null; name: string; scriptId: string | null };
 
 /** What the routing reads of the firm (`firm_attendance`). */
 export type Attendance = { attends: boolean; declared: boolean; areas: FirmArea[]; modules: string[] };
@@ -49,7 +50,12 @@ export function attendanceOf(raw: unknown): Attendance | null {
     areas: areas
       .filter((area): area is Record<string, unknown> => typeof area === "object" && area !== null)
       .filter((area) => text(area.id) && text(area.name))
-      .map((area) => ({ id: text(area.id), lawArea: text(area.law_area) || null, name: text(area.name) })),
+      .map((area) => ({
+        id: text(area.id),
+        lawArea: text(area.law_area) || null,
+        name: text(area.name),
+        scriptId: text(area.script_id) || null,
+      })),
     modules: Array.isArray(row.modules) ? row.modules.filter((key): key is string => typeof key === "string") : [],
   };
 }
@@ -118,6 +124,8 @@ export type Route =
   /** ONE does not attend for the firm yet: a person answers, and ONE says nothing. */
   | { way: "closed" }
   | { way: "passenger" }
+  /** An area of the firm with its script published: the script's triage takes the contact in (0274). */
+  | { way: "area"; area: FirmArea }
   | { way: "greet" }
   /** One question for what the person needs, before a person continues. */
   | { way: "ask"; topic: "area" | "processo" | "outra"; area: FirmArea | null; key: string }
@@ -150,6 +158,7 @@ export function routeOf(
   const key = reading.area ?? "outra";
   if (key === PASSENGER_AREA && firm.modules.includes(PASSENGER_MODULE)) return { way: "passenger" };
   const area = firm.areas.find((candidate) => areaKey(candidate) === key) ?? null;
+  if (area?.scriptId) return { way: "area", area };
   if (area) return askOrPerson("area", area, key);
   const known = lawAreas.find((candidate) => candidate.key === key);
   // An area ONE knows that the firm, having said its areas, does not work in; before it said them, a person decides.

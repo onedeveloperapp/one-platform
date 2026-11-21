@@ -138,6 +138,8 @@ export function clientStanding(view: OpenView, tasks: ClientTasks, today: string
         segments: view.segments.length,
         required: view.required_documents,
         today,
+        // A case of an area of the firm has no trip (0274).
+        trip: !view.case.area,
       })
     : [];
   const fieldsOwed = editable ? missing.filter((item) => item.type === "fields").length : 0;

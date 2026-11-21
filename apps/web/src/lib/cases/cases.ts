@@ -493,7 +493,17 @@ export const ADULT_FIELDS = [
 /** What is asked of a minor who flew: who they are. */
 export const MINOR_FIELDS = ["full_name", "cpf", "birth_date"] as const satisfies readonly (keyof PersonData)[];
 
-export type RequiredDocument = { kind: DocumentKind; per: "claimant" | "holder" | "case"; or?: DocumentKind[] };
+/**
+ * A document a case needs. A case of an area of the firm (0274) asks most of its documents by name: `need` is the key
+ * a document is sent for, and `label` the name the client reads.
+ */
+export type RequiredDocument = {
+  kind: DocumentKind;
+  per: "claimant" | "holder" | "case";
+  or?: DocumentKind[];
+  need?: string;
+  label?: string;
+};
 
 /**
  * The essentials of a kind of problem (0177, `cases.documents_by_problem`): a bag's entry for a bag's problem, else
@@ -536,11 +546,12 @@ export function withVersionDocuments(
   return documents ? { ...base, documents_by_problem: documents } : base;
 }
 
-export type CaseDocumentState = { kind: string; party_id: string | null; status: string };
+/** A document of a case as what it lacks reads it; `need`, what it was sent for, where the case asks by name. */
+export type CaseDocumentState = { kind: string; party_id: string | null; status: string; need?: string | null };
 
 export type Missing =
   | { type: "fields"; personId: string; name: string; fields: string[] }
-  | { type: "document"; kind: DocumentKind; personId: string | null; name: string | null }
+  | { type: "document"; kind: DocumentKind; personId: string | null; name: string | null; label?: string | null }
   | { type: "flight" };
 
 /** The fields of a person still empty. */
@@ -560,6 +571,9 @@ export type DocumentNeed = {
   partyIds: (string | null)[] | null;
   personId: string | null;
   name: string | null;
+  /** What it is sent for and the name the client reads, where the case asks it by name (0274). */
+  need: string | null;
+  label: string | null;
 };
 
 /**
@@ -579,26 +593,42 @@ export function documentNeeds(input: {
   const needs: DocumentNeed[] = [];
   for (const rule of input.required) {
     const kinds = [rule.kind, ...(rule.or ?? [])];
+    const need = rule.need ?? null;
+    const label = rule.label ?? null;
+    const prefix = need ?? rule.kind;
     if (rule.per === "case") {
-      needs.push({ key: `${rule.kind}-case`, kind: rule.kind, kinds, partyIds: null, personId: null, name: null });
+      needs.push({
+        key: `${prefix}-case`,
+        kind: rule.kind,
+        kinds,
+        partyIds: null,
+        personId: null,
+        name: null,
+        need,
+        label,
+      });
     } else if (rule.per === "holder") {
       needs.push({
-        key: `${rule.kind}-holder`,
+        key: `${prefix}-holder`,
         kind: rule.kind,
         kinds,
         partyIds: input.holderPartyIds ?? [input.holder.party_id],
         personId: input.holder.person_id,
         name: input.holder.full_name,
+        need,
+        label,
       });
     } else {
       for (const person of input.claimants) {
         needs.push({
-          key: `${rule.kind}-${person.party_id}`,
+          key: `${prefix}-${person.party_id}`,
           kind: rule.kind,
           kinds,
           partyIds: [person.party_id],
           personId: person.person_id,
           name: person.full_name,
+          need,
+          label,
         });
       }
     }
@@ -610,7 +640,9 @@ export function documentNeeds(input: {
 export const documentsFor = <D extends CaseDocumentState>(need: DocumentNeed, documents: D[]): D[] =>
   documents.filter(
     (document) =>
-      need.kinds.includes(document.kind) && (need.partyIds === null || need.partyIds.includes(document.party_id)),
+      need.kinds.includes(document.kind) &&
+      (need.need === null || document.need === need.need) &&
+      (need.partyIds === null || need.partyIds.includes(document.party_id)),
   );
 
 /** A need is met by a document the firm did not refuse (one waiting for the firm counts as sent). */
@@ -631,13 +663,21 @@ export function missingItems(input: {
   segments: number;
   required: RequiredDocument[];
   today: string;
+  /** Whether the case needs a leg of a trip: a case of the passenger module does, one of an area of the firm not. */
+  trip?: boolean;
 }): Missing[] {
   const missing: Missing[] = [];
   const isMinor = (person: PersonData) => isMinorOn(person.birth_date, input.today) === true;
 
   for (const need of documentNeeds(input)) {
     if (!isNeedMet(need, input.documents)) {
-      missing.push({ type: "document", kind: need.kind, personId: need.personId, name: need.name });
+      missing.push({
+        type: "document",
+        kind: need.kind,
+        personId: need.personId,
+        name: need.name,
+        ...(need.label ? { label: need.label } : {}),
+      });
     }
   }
 
@@ -647,7 +687,7 @@ export function missingItems(input: {
     if (fields.length > 0) missing.push({ type: "fields", personId: person.person_id, name: person.full_name, fields });
   }
 
-  if (input.segments === 0) missing.push({ type: "flight" });
+  if ((input.trip ?? true) && input.segments === 0) missing.push({ type: "flight" });
   return missing;
 }
 
@@ -681,6 +721,8 @@ export function caseMissing(input: {
   segments: number;
   required: RequiredDocument[];
   today: string;
+  /** Whether the case needs a leg of a trip: a case of the passenger module does, one of an area of the firm not. */
+  trip?: boolean;
 }): Missing[] {
   const holder = caseHolder(input.parties, input.today);
   if (!holder) return [];
@@ -694,6 +736,7 @@ export function caseMissing(input: {
     segments: input.segments,
     required: input.required,
     today: input.today,
+    trip: input.trip,
   });
 }
 

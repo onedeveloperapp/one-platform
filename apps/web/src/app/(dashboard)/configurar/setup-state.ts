@@ -5,6 +5,7 @@ import type { SetupState } from "./setup-view";
 import { cookies } from "next/headers";
 
 import type { SecondFactorState } from "@/lib/ai/approvals";
+import { readAreaScripts } from "@/lib/areas/script-actions";
 import { cloudSigningOffered } from "@/lib/cases/filing-facts";
 import { downloadUrl } from "@/lib/files/uploads";
 import { EMPTY_OFFICE, OFFICE_COLUMNS, officeOf } from "@/lib/firm/office";
@@ -60,6 +61,7 @@ export async function loadSetupState(
     operation,
     brandRow,
     personality,
+    areaScripts,
   ] = await Promise.all([
     context.supabase.from("oab_registrations").select("id, uf, number, kind").eq("user_id", context.userId),
     context.supabase.from("firm_signers").select("user_id").eq("org_id", firm.id),
@@ -104,6 +106,8 @@ export async function loadSetupState(
       .maybeSingle(),
     // The firm's profile (0272): a read that fails shows the step as never written, and ONE writes it.
     readFirmPersonality().catch(() => null),
+    // The script of each area of the firm (0273): a read that fails shows the step as unreadable, never as empty.
+    readAreaScripts().catch(() => null),
   ]);
   if (registrations.error || signers.error || organization.error || !organization.data) return { kind: "error" };
   const operationAnswered = (organization.data as { operation_answered_at?: string | null }).operation_answered_at;
@@ -159,6 +163,7 @@ export async function loadSetupState(
     brand,
     letterhead,
     personality,
+    areaScripts,
     operation: operation.error ? operationOf(null) : operationOf(operation.data),
     areas: firmAreas.error
       ? []

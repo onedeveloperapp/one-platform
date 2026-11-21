@@ -191,16 +191,23 @@ export default function ClientFolder({
   const judgmentsOwed = standing.steps.some((step) => step.answers?.includes("judgments"));
 
   const kindKey = caseKindLabelKey(view.case.incident);
-  const facts: Fact[] = [
-    { key: "case", label: t("client-fact-case"), value: caseLabel(view.case.seq) },
-    { key: "problem", label: t("client-fact-problem"), value: kindKey ? t(kindKey) : null },
-    { key: "airline", label: t("client-fact-airline"), value: view.case.airline?.name ?? null },
-    {
-      key: "flight",
-      label: t("client-fact-flight"),
-      value: view.case.flight_date ? formatDayBr(view.case.flight_date) : null,
-    },
-  ];
+  // A case of an area of the firm says its area and its kind of case, never a flight (0274).
+  const facts: Fact[] = view.case.area
+    ? [
+        { key: "case", label: t("client-fact-case"), value: caseLabel(view.case.seq) },
+        { key: "area", label: t("client-fact-area"), value: view.case.area },
+        { key: "type", label: t("client-fact-case-type"), value: view.case.case_type ?? null },
+      ]
+    : [
+        { key: "case", label: t("client-fact-case"), value: caseLabel(view.case.seq) },
+        { key: "problem", label: t("client-fact-problem"), value: kindKey ? t(kindKey) : null },
+        { key: "airline", label: t("client-fact-airline"), value: view.case.airline?.name ?? null },
+        {
+          key: "flight",
+          label: t("client-fact-flight"),
+          value: view.case.flight_date ? formatDayBr(view.case.flight_date) : null,
+        },
+      ];
 
   // Each section once, placed by the rule: in a step while the client owes it, in "Já feito" once done.
   const people = (
@@ -1046,7 +1053,7 @@ function Documents({
   // The form of a document of another kind: opened from "Enviar outro documento", closed once its file arrived.
   const [otherOpen, setOtherOpen] = useState(false);
   const input = useRef<HTMLInputElement>(null);
-  const target = useRef<{ key: string; kind: DocumentKind; partyId: string | null } | null>(null);
+  const target = useRef<{ key: string; kind: DocumentKind; partyId: string | null; need: string | null } | null>(null);
   // The photos the client sent that are hard to read, each said under the line it was sent from, with the two
   // ways on. One per line: what is said of one document's photo stays while the client sends another's.
   const [poor, setPoor] = useState<Record<string, PoorPhoto>>({});
@@ -1083,8 +1090,8 @@ function Documents({
 
   // Choosing a file changes nothing yet: a client who closes the window without one keeps what they had,
   // the photo that waits and the choice to send it included.
-  const pick = (key: string, kind: DocumentKind, partyId: string | null) => {
-    target.current = { key, kind, partyId };
+  const pick = (key: string, kind: DocumentKind, partyId: string | null, need: string | null = null) => {
+    target.current = { key, kind, partyId, need };
     setProblem(null);
     input.current?.click();
   };
@@ -1103,6 +1110,7 @@ function Documents({
         name: file.name,
         mime,
         bytes: file.size,
+        need: chosen.need,
       });
       if (!started.ok) return fail(started.code);
       const uploaded = await uploadToSignedUrl({
@@ -1265,11 +1273,11 @@ function Documents({
     .map((need) => ({
       key: need.key,
       label: need.name
-        ? t("client-documents-again-of", { document: t(DOCUMENT_KIND_KEY[need.kind]), name: need.name })
-        : t(DOCUMENT_KIND_KEY[need.kind]),
+        ? t("client-documents-again-of", { document: need.label ?? t(DOCUMENT_KIND_KEY[need.kind]), name: need.name })
+        : (need.label ?? t(DOCUMENT_KIND_KEY[need.kind])),
       icon: <NiDocumentPlus size="medium" />,
       disabled: busy !== null,
-      onClick: () => pick(need.key, need.kind, partyOf(need)),
+      onClick: () => pick(need.key, need.kind, partyOf(need), need.need),
     }));
   // A photo that waits in the form still has its two ways on when the case no longer takes new files.
   const showOther = (editable && otherOpen) || Boolean(poor[OTHER]) || problem?.key === OTHER;
@@ -1352,7 +1360,7 @@ function Documents({
                         variant="contained"
                         size="small"
                         disabled={busy !== null}
-                        onClick={() => pick(need.key, need.kind, partyOf(need))}
+                        onClick={() => pick(need.key, need.kind, partyOf(need), need.need)}
                       >
                         {state === "rejected" ? t("client-documents-send-more") : t("client-documents-send")}
                       </Button>
@@ -1360,7 +1368,7 @@ function Documents({
                   }
                 >
                   <DocumentWords
-                    kind={t(DOCUMENT_KIND_KEY[need.kind])}
+                    kind={need.label ?? t(DOCUMENT_KIND_KEY[need.kind])}
                     name={need.name}
                     detail={refused?.rejected_reason ? refusal(refused.rejected_reason) : null}
                   />

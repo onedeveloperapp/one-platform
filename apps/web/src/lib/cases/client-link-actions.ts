@@ -269,7 +269,7 @@ function service() {
 /** The first half of sending a file: the reservation, and the signed address the browser sends the bytes to. */
 export async function startClientUpload(
   token: string,
-  input: { kind: string; partyId: string | null; name: string; mime: string; bytes: number },
+  input: { kind: string; partyId: string | null; name: string; mime: string; bytes: number; need?: string | null },
 ): Promise<ClientResult<{ documentId: string; storagePath: string; uploadToken: string }>> {
   const closed = await refusal(token);
   if (closed) return closed;
@@ -284,6 +284,8 @@ export async function startClientUpload(
       target_name: String(input?.name ?? "").slice(0, 200),
       target_mime: String(input?.mime ?? ""),
       target_bytes: Math.trunc(Number(input?.bytes ?? 0)),
+      // What it is sent for, where the case asks it by name (0274).
+      target_need: typeof input?.need === "string" && /^[a-z0-9_]{2,40}$/.test(input.need) ? input.need : null,
     }),
     (answer) => ({ documentId: String(answer.document_id), storagePath: String(answer.storage_path) }),
   );

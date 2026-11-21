@@ -595,6 +595,8 @@ describe("the firm's setup, from facts", () => {
       ["team", "/configurar?passo=equipe"],
       // The firm's profile, which ONE writes and the firm approves (0272).
       ["personality", "/configurar?passo=personalidade"],
+      // The script of each area of the firm that no module serves, which ONE writes and the firm publishes (0273).
+      ["areas", "/configurar?passo=areas"],
       ["channel", "/configurar?passo=canal"],
     ]);
     for (const step of buildOnboardingSteps()) expect(product[step.title], step.title).toBeTruthy();
@@ -631,10 +633,11 @@ describe("the firm's setup, from facts", () => {
       operation: true,
       team: false,
       personality: true,
+      area_scripts: true,
       channel: true,
       first_case: false,
     };
-    expect(buildOnboardingSteps(facts).map((step) => step.done)).toEqual([true, true, true, false, true, true]);
+    expect(buildOnboardingSteps(facts).map((step) => step.done)).toEqual([true, true, true, false, true, true, true]);
     expect(isActivated(facts)).toBe(false);
     // A firm with no case yet is ready: the first case is ONE's to receive.
     expect(
@@ -644,6 +647,7 @@ describe("the firm's setup, from facts", () => {
         operation: true,
         team: true,
         personality: true,
+        area_scripts: true,
         channel: true,
         first_case: false,
       }),
@@ -659,6 +663,7 @@ describe("the firm's setup, from facts", () => {
         brand: true,
         operation: true,
         personality: true,
+        area_scripts: true,
         claim_defaults: false,
         team: true,
         channel: true,
@@ -683,6 +688,7 @@ describe("the firm's setup, from facts", () => {
       brand: true,
       operation: true,
       personality: true,
+      area_scripts: true,
       team: false,
       works_alone: true,
       channel: true,
@@ -693,6 +699,7 @@ describe("the firm's setup, from facts", () => {
       "office",
       "operation",
       "personality",
+      "areas",
       "channel",
     ]);
     expect(isActivated(alone)).toBe(true);

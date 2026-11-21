@@ -12,8 +12,9 @@
  * areas it works in come before the channel, the last step: ONE answers
  * nobody new on the WhatsApp before it knows the firm (0256, the owner,
  * 2026-11-20); the firm's logo and colour (0258) come before them, and the
- * firm's profile (0272), which ONE writes and the firm approves, right before
- * the channel.
+ * firm's profile (0272), which ONE writes and the firm approves, then the
+ * script of each area of the firm that no module serves (0273), which ONE
+ * writes with the profile and the firm publishes, right before the channel.
  */
 export const SETUP_STEPS = [
   "seguranca",
@@ -23,6 +24,7 @@ export const SETUP_STEPS = [
   "equipe",
   "papeis",
   "personalidade",
+  "areas",
   "canal",
 ] as const;
 

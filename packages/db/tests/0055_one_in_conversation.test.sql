@@ -507,10 +507,12 @@ select ok(
   'each case ONE opens takes the firm''s next number'
 );
 
--- The third version (0063) keeps the second's words and names the documents first among the next steps.
+-- The third version (0063) keeps the second's words and names the documents first among the next steps; the versions
+-- after it (the firm's profile, 0272) keep its words too.
 select ok(
-  (select array_agg(v.version::text || ':' || v.is_active::text order by v.version) from public.prompt_versions v
-   where v.task = 'atendimento.conversa') = array['1:false', '2:false', '3:true']
+  (select array_agg(v.version::text order by v.version) from public.prompt_versions v
+   where v.task = 'atendimento.conversa' and v.version <= 3) = array['1', '2', '3']
+  and not (select v.is_active from public.prompt_versions v where v.task = 'atendimento.conversa' and v.version = 2)
   and (select v.system_prompt like '%Responda você mesmo o caminho do caso, sem chamar ninguém%'
               and v.system_prompt like '%os próximos passos (abrir o link, enviar os documentos, conferir os dados%'
        from public.prompt_versions v where v.task = 'atendimento.conversa' and v.is_active),

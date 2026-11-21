@@ -86,6 +86,8 @@ export type CaseDocument = {
   partyId: string | null;
   status: "received" | "accepted" | "rejected";
   rejectedReason: string | null;
+  /** What it was sent for, where the case asks it by name (a case of an area of the firm, 0274). */
+  need?: string | null;
   /** Who sent it: the client, the firm, WhatsApp, the signature provider, or the partner agency (0071). */
   source: "client" | "firm" | "whatsapp" | "signature" | "partner" | "reuse";
   fileId: string;
@@ -225,6 +227,27 @@ export type CaseDetail = {
   responsibleId: string | null;
   closeReason: string | null;
   createdAt: string;
+  /** A case of an area of the firm (0274): its area, kind of case, script, stages and work; null for a module's. */
+  area?: CaseArea | null;
+};
+
+/** The work outside the lawsuit of a case of an area of the firm (0274), and whether it is done. */
+export type CaseTask = {
+  id: string;
+  name: string;
+  who: "cliente" | "escritorio";
+  phase: string;
+  doneAt: string | null;
+};
+
+/** What a case of an area of the firm reads of its area's script (0273, 0274). */
+export type CaseArea = {
+  name: string;
+  typeName: string | null;
+  /** The version of the script the case opened under; null when it could not be read. */
+  version: number | null;
+  stages: { key: string; name: string; phase: string }[];
+  tasks: CaseTask[];
 };
 
 /** What the rules of the domain decide on, and what they answered (migration 0025, `@flyee/rules`). */

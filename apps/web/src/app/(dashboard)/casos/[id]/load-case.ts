@@ -2,6 +2,7 @@ import "server-only";
 
 import type { AirlineOption } from "../cases-types";
 import {
+  type CaseArea,
   type CaseDocument,
   type CaseEnvelope,
   type CaseParty,
@@ -19,6 +20,7 @@ import { cookies } from "next/headers";
 
 import { momentLabel, type SecondFactorState } from "@/lib/ai/approvals";
 import { pendingApprovalsOf, type PendingRow } from "@/lib/ai/pending-approvals";
+import { scriptOf } from "@/lib/areas/script";
 import { caseAdvanceOf } from "@/lib/cases/advance";
 import {
   CAUSES,
@@ -67,6 +69,7 @@ import { signatureAccountOf } from "@/lib/signatures/methods";
 import { loadFlightChecks } from "@/modules/direito-do-passageiro/flights/facts";
 import { weatherProvider } from "@/modules/direito-do-passageiro/flights/weather";
 import { IMPERSONATION_MARKER_COOKIE } from "@flyee/auth";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -191,7 +194,7 @@ export async function loadCase(id: string): Promise<CaseState> {
   const { data: row, error } = await supabase
     .from("cases")
     .select(
-      "id, seq, module, incident, airline_iata, flight_date, cause, status, origin, partnership_id, summary, responsible_id, close_reason, created_at, closed_by_one, close_acked_at, is_test, qualification, qualification_released_by, qualification_released_at, qualification_release_reason",
+      "id, seq, module, incident, airline_iata, flight_date, cause, status, origin, partnership_id, summary, responsible_id, close_reason, created_at, closed_by_one, close_acked_at, is_test, qualification, qualification_released_by, qualification_released_at, qualification_release_reason, area_id, case_type, area_script_id",
     )
     .eq("id", id)
     .eq("org_id", firm)
@@ -263,7 +266,7 @@ export async function loadCase(id: string): Promise<CaseState> {
     supabase
       .from("case_documents")
       .select(
-        "id, kind, party_id, status, rejected_reason, source, file_id, created_at, envelope_id, processing, processing_error, normalized_file_id, quality, files!case_documents_file_id_org_id_fkey(name, detected_mime), ai_runs(output, approvals(status))",
+        "id, kind, party_id, status, rejected_reason, source, file_id, created_at, envelope_id, processing, processing_error, normalized_file_id, quality, need, files!case_documents_file_id_org_id_fkey(name, detected_mime), ai_runs(output, approvals(status))",
       )
       .eq("case_id", id)
       .eq("org_id", firm)
@@ -586,11 +589,16 @@ export async function loadCase(id: string): Promise<CaseState> {
     ];
   });
 
-  // 0177: the essentials of this case's kind of problem.
-  const required = requiredFor(
-    withVersionDocuments(setting.data?.value, setting.documents) as Parameters<typeof requiredFor>[0],
-    typeof row.incident === "string" ? row.incident : null,
-  ) as RequiredDocument[];
+  // A case of an area of the firm (0274): its area, its kind of case and what its script says of it.
+  const area = row.area_script_id ? await loadCaseArea(supabase, firm, row) : null;
+
+  // 0177: the essentials of this case's kind of problem; of a case of an area, of its kind of case (0274).
+  const required = row.area_script_id
+    ? (((documentNeeds.data as { essential?: RequiredDocument[] } | null)?.essential ?? []) as RequiredDocument[])
+    : (requiredFor(
+        withVersionDocuments(setting.data?.value, setting.documents) as Parameters<typeof requiredFor>[0],
+        typeof row.incident === "string" ? row.incident : null,
+      ) as RequiredDocument[]);
 
   return {
     kind: "ready",
@@ -635,7 +643,7 @@ export async function loadCase(id: string): Promise<CaseState> {
         at: row.qualification_released_at ?? null,
         reason: row.qualification_release_reason ?? null,
       }),
-      module: row.module,
+      module: row.module ?? "",
       incident: row.incident,
       airlineIata: row.airline_iata,
       flightDate: row.flight_date,
@@ -647,6 +655,7 @@ export async function loadCase(id: string): Promise<CaseState> {
       responsibleId: row.responsible_id,
       closeReason: row.close_reason,
       createdAt: row.created_at,
+      area,
     },
     parties: partyList,
     segments: (segments.data ?? []) as CaseSegment[],
@@ -665,6 +674,7 @@ export async function loadCase(id: string): Promise<CaseState> {
         processing_error: string | null;
         normalized_file_id: string | null;
         quality: unknown;
+        need: string | null;
         files: { name: string; detected_mime: string | null } | { name: string; detected_mime: string | null }[] | null;
         ai_runs: Embedded<{ output: unknown; approvals: Embedded<{ status: string }> }>;
       }[]
@@ -674,6 +684,7 @@ export async function loadCase(id: string): Promise<CaseState> {
       partyId: document.party_id,
       status: document.status,
       rejectedReason: document.rejected_reason,
+      need: document.need,
       source: document.source,
       fileId: document.file_id,
       name: one(document.files)?.name ?? "",
@@ -965,5 +976,52 @@ export async function loadCase(id: string): Promise<CaseState> {
     statementApprovals,
     secondFactor,
     firmFunction: context.firm.firmFunction,
+  };
+}
+
+/**
+ * What a case of an area of the firm reads of its area (0274): the area's name, the kind of case and the stages by
+ * the version of the script it was opened under, and its work outside the lawsuit. A read that fails leaves what it
+ * could not read empty, never the case unread.
+ */
+async function loadCaseArea(
+  supabase: SupabaseClient,
+  firm: string,
+  row: { id: string; area_id: string | null; case_type: string | null; area_script_id: string | null },
+): Promise<CaseArea> {
+  const [area, script, tasks] = await Promise.all([
+    supabase
+      .from("firm_areas")
+      .select("name")
+      .eq("id", row.area_id ?? "")
+      .eq("org_id", firm)
+      .maybeSingle(),
+    supabase
+      .from("firm_area_scripts")
+      .select("version, script")
+      .eq("id", row.area_script_id ?? "")
+      .maybeSingle(),
+    supabase
+      .from("case_tasks")
+      .select("id, name, who, phase, done_at, position, case_id")
+      .eq("org_id", firm)
+      .eq("case_id", row.id)
+      .order("position"),
+  ]);
+  const read = scriptOf((script.data as { script?: unknown } | null)?.script);
+  return {
+    name: (area.data as { name?: string } | null)?.name ?? "",
+    typeName: read?.tipos.find((type) => type.chave === row.case_type)?.nome ?? row.case_type,
+    version: (script.data as { version?: number } | null)?.version ?? null,
+    stages: (read?.etapas ?? []).map((stage) => ({ key: stage.chave, name: stage.nome, phase: stage.fase })),
+    tasks: (
+      (tasks.data ?? []) as { id: string; name: string; who: string; phase: string; done_at: string | null }[]
+    ).map((task) => ({
+      id: task.id,
+      name: task.name,
+      who: task.who === "cliente" ? "cliente" : "escritorio",
+      phase: task.phase,
+      doneAt: task.done_at,
+    })),
   };
 }

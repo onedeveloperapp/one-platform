@@ -16,7 +16,7 @@ import {
 
 const owed = (
   kind: string,
-  extra: Partial<{ own: boolean; minor: boolean; name: string; rejected: boolean }> = {},
+  extra: Partial<{ own: boolean; minor: boolean; name: string; rejected: boolean; label: string }> = {},
 ) => ({
   kind,
   per: "claimant",
@@ -24,6 +24,7 @@ const owed = (
   own: extra.own ?? true,
   minor: extra.minor ?? false,
   rejected: extra.rejected ?? false,
+  label: extra.label ?? null,
 });
 
 describe("the documents ONE asks in the chat (0230)", () => {
@@ -40,11 +41,30 @@ describe("the documents ONE asks in the chat (0230)", () => {
     ).toEqual({
       caseId: "c-1",
       waitsSignature: true,
-      owed: [{ kind: "address_proof", per: "holder", name: "Nídia Teste", own: true, minor: false, rejected: false }],
+      owed: [
+        {
+          kind: "address_proof",
+          per: "holder",
+          name: "Nídia Teste",
+          own: true,
+          minor: false,
+          rejected: false,
+          label: null,
+        },
+      ],
       dispensables: [{ kind: "receipt", label: "comprovantes", state: "later" }],
     });
     expect(papersOwedOf({ ok: true, code: "no_case" })).toBeNull();
     expect(papersOwedOf(null)).toBeNull();
+  });
+
+  it("asks a document of a case of an area of the firm by its name (0274)", () => {
+    expect(paperAsk(owed("other", { label: "Certidão de casamento" }))).toBe(
+      "Agora Certidão de casamento. Pode mandar a foto aqui.",
+    );
+    expect(paperAsk(owed("other", { own: false, name: "Rui Teste", label: "Certidão de nascimento" }))).toBe(
+      "Agora de Rui: Certidão de nascimento. Pode mandar a foto aqui.",
+    );
   });
 
   it("asks each document by whose it is", () => {

@@ -10,6 +10,7 @@ import { teamErrorKey } from "../settings/team/team-types";
 import SetupCpf, { declareSetupCpf } from "./setup-cpf";
 import { type SetupBrand, type SetupLetterhead, useOfficeStep } from "./setup-office";
 import { useOperationStep } from "./setup-operation";
+import { useAreasStep } from "./setup-areas";
 import { usePersonalityStep } from "./setup-personality";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -50,6 +51,7 @@ import { setFirmSigner } from "@/lib/firm/autonomy-actions";
 import { type FirmOffice, officeAddressGiven } from "@/lib/firm/office";
 import type { FirmOperation, KnownArea, OperationArea } from "@/lib/firm/operation";
 import { personFlowKey } from "@/lib/firm/person-setup";
+import type { AreaScriptsState } from "@/lib/areas/script-actions";
 import type { PersonalityState } from "@/lib/firm/personality-actions";
 import { FIRM_FUNCTIONS, type FirmFunction, formatOab, OAB_STATES, type OabRegistration } from "@/lib/firm/roles";
 import { SETUP_STEPS, setupOpening, type SetupStepKey } from "@/lib/firm/setup-steps";
@@ -100,6 +102,8 @@ export type SetupState =
       letterhead: SetupLetterhead;
       /** The firm's profile (0272): ONE's draft, the approved one, and ONE's writing owed. */
       personality: PersonalityState | null;
+      /** The script of each area of the firm that no module serves (0273); null when it could not be read. */
+      areaScripts: AreaScriptsState | null;
       /** The firm said how it works and its areas (0256): ONE answers nobody new on the WhatsApp before it did. */
       operationAnswered: boolean;
       operation: FirmOperation;
@@ -334,6 +338,10 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
   });
   const approvedProfile = Boolean(state.personality?.approved);
 
+  // ---------- The script of each area of the firm (0273) ----------
+  const areasStep = useAreasStep({ initial: state.areaScripts, blocked: blocked || locked });
+  const scriptsPending = Boolean(state.areaScripts?.areas.some((area) => !area.inForce));
+
   // ---------- How the firm works and its areas (0256) ----------
   const operationStep = useOperationStep({
     answered: state.operationAnswered,
@@ -358,6 +366,7 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
     [!state.operationAnswered, "operacao"],
     [state.worksAlone === null, "equipe"],
     [!approvedProfile, "personalidade"],
+    [scriptsPending, "areas"],
     [!state.whatsapp, "canal"],
   ];
   const opening = setupOpening({
@@ -998,6 +1007,11 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
       title: t("setup-personality-title"),
       hint: t("setup-personality-hint"),
       ...personalityStep,
+    },
+    {
+      title: t("setup-areas-title"),
+      hint: t("setup-areas-hint"),
+      ...areasStep,
     },
     {
       title: t("setup-channel-title"),

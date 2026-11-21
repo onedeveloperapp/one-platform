@@ -118,8 +118,13 @@ export async function claimCaseAdvances(
 }
 
 type LawsuitFacts = {
+  /**
+   * A case of an area of the firm (0274): its documents are its kind's, it has no trip, and ONE creates no lawsuit
+   * for it, since the forum and the kind of proceeding are rules of the passenger module.
+   */
+  ofArea: boolean;
   parties: (MissingParty & { claimCents: number | null })[];
-  documents: { kind: string; party_id: string | null; status: string }[];
+  documents: { kind: string; party_id: string | null; status: string; need?: string | null }[];
   segments: number;
   required: RequiredDocument[];
   wages: MinimumWage[];
@@ -157,7 +162,7 @@ async function qualifyCase(
 async function loadLawsuitFacts(service: SupabaseClient, caseId: string): Promise<LawsuitFacts | null> {
   const { data: row, error } = await service
     .from("cases")
-    .select("id, family_choice, partnership_id, incident")
+    .select("id, family_choice, partnership_id, incident, area_script_id")
     .eq("id", caseId)
     .maybeSingle();
   if (error) throw new Error("case unreadable");
@@ -186,7 +191,7 @@ async function loadLawsuitFacts(service: SupabaseClient, caseId: string): Promis
     // As the case screen reads them: a photo a client is still sending is not a document yet.
     service
       .from("case_documents")
-      .select("kind, party_id, status")
+      .select("kind, party_id, status, need")
       .eq("case_id", caseId)
       .in("status", ["received", "accepted", "rejected"]),
     service.from("flight_segments").select("id", { count: "exact", head: true }).eq("case_id", caseId),
@@ -253,13 +258,21 @@ async function loadLawsuitFacts(service: SupabaseClient, caseId: string): Promis
         },
       ];
     }),
-    documents: (documents.data ?? []) as { kind: string; party_id: string | null; status: string }[],
+    ofArea: Boolean(row.area_script_id),
+    documents: (documents.data ?? []) as {
+      kind: string;
+      party_id: string | null;
+      status: string;
+      need?: string | null;
+    }[],
     segments: segments.count ?? 0,
-    // 0177: the essentials of the case's kind of problem.
-    required: requiredFor(
-      withVersionDocuments(setting("cases"), versionDocumentsOf(version.data)) as Parameters<typeof requiredFor>[0],
-      row.incident as string | null,
-    ) as RequiredDocument[],
+    // 0177: the essentials of the case's kind of problem; of a case of an area, of its kind of case (0274).
+    required: row.area_script_id
+      ? await areaRequired(service, caseId)
+      : (requiredFor(
+          withVersionDocuments(setting("cases"), versionDocumentsOf(version.data)) as Parameters<typeof requiredFor>[0],
+          row.incident as string | null,
+        ) as RequiredDocument[]),
     wages: ((wages.data ?? []) as { valid_from: string; cents: number; act: string }[]).map((wage) => ({
       validFrom: wage.valid_from,
       cents: Number(wage.cents),
@@ -281,6 +294,13 @@ const acceptedOnly = (facts: LawsuitFacts): LawsuitFacts => ({
   documents: facts.documents.filter((document) => document.status === "accepted"),
 });
 
+/** The essentials of a case of an area of the firm, by its kind of case (0274). Throws when they could not be read. */
+async function areaRequired(service: SupabaseClient, caseId: string): Promise<RequiredDocument[]> {
+  const { data, error } = await service.rpc("case_required_documents", { target_case: caseId });
+  if (error) throw new Error("area documents unreadable");
+  return (Array.isArray(data) ? data : []) as RequiredDocument[];
+}
+
 /** What the case screen says the case still lacks, read from the facts the worker read. */
 const missingOf = (facts: LawsuitFacts, day: string) =>
   caseMissing({
@@ -289,6 +309,7 @@ const missingOf = (facts: LawsuitFacts, day: string) =>
     segments: facts.segments,
     required: facts.required,
     today: day,
+    trip: !facts.ofArea,
   });
 
 /**
@@ -768,7 +789,7 @@ export async function advanceClaimedCase(
         return "lost";
       }
     }
-    if (held.lawsuitsDue && facts) {
+    if (held.lawsuitsDue && facts && !facts.ofArea) {
       const lawsuits = await createLawsuits(service, held, facts, day);
       if (lawsuits.lost) {
         await deliverMessages(asked.messages, follow);

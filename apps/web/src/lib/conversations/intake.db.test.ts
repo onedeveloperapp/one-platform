@@ -67,6 +67,8 @@ const FABIO = "5500988880012";
 const GIL = "5500988880013";
 const HELO = "5500988880014";
 const IVO = "5500988880015";
+const JOANA = "5500988880016";
+const KAIO = "5500988880017";
 let numberId = "";
 
 async function call(name: string, args: Row): Promise<Row> {
@@ -578,5 +580,109 @@ describe.skipIf(!DB_URL)("any passenger on the firm's WhatsApp", () => {
     } finally {
       await sql.unsafe(`update public.organizations set operation_answered_at = now() where id = '${FIRM}'`);
     }
+  });
+
+  it("takes a client of an area by the script the firm published, by the firm's table, and opens the case (0274)", async () => {
+    const { takeConversationTurns } = await import("@/lib/conversations/agent-work");
+    const [area] = await sql.unsafe(
+      `select id from public.firm_areas where org_id = $1 and law_area = 'familia' and removed_at is null`,
+      [FIRM],
+    );
+    const scriptText = (value: unknown) => JSON.stringify(value).replace(/'/g, "''");
+    await sql.unsafe(
+      `insert into public.firm_area_scripts (org_id, area_id, version, status, script, published_at)
+       values ($1, $2, 1, 'published', '${scriptText({
+         tipos: [
+           {
+             chave: "divorcio",
+             nome: "Divórcio consensual",
+             documentos: [
+               { chave: "rg", nome: "RG ou CNH", tipo: "identity", por: "pessoa", essencial: true },
+               { chave: "certidao", nome: "Certidão de casamento", tipo: "other", por: "caso", essencial: true },
+             ],
+             pecas: [],
+           },
+         ],
+         perguntas: [
+           {
+             chave: "bens",
+             texto: "Há bens a dividir?",
+             tipos: [],
+             opcoes: [
+               { chave: "nao", texto: "Não", criterio: "segue" },
+               { chave: "exterior", texto: "Sim, no exterior", criterio: "pessoa" },
+             ],
+           },
+         ],
+         etapas: [],
+         tarefas: [{ chave: "lista", nome: "Lista dos bens", quem: "cliente", fase: "documentos", tipos: [] }],
+         honorarios: "Os honorários estão no contrato, que você lê antes de assinar.",
+         duvidas: "",
+         recusa: "",
+         tribunais: [],
+         sensiveis: [],
+       })}'::jsonb, now())`,
+      [FIRM, area!.id],
+    );
+    model.intake = () => ({
+      assunto: "outro",
+      problema: "",
+      companhia: "",
+      voo: "",
+      data: "",
+      origem: "",
+      destino: "",
+      atraso_horas: "",
+      chegada_prevista: "",
+      chegada_real: "",
+      viajou: "",
+      aviso: "",
+      nome: "",
+      indicado_por: "",
+      pergunta: "",
+      acompanhantes: "",
+    });
+    model.route = () => ({ assunto: "area", area: "familia", resumo: "Quer se divorciar.", certeza: "alta" });
+
+    // The script's question, numbered, after ONE says who it is.
+    await writes(JOANA, "Quero me divorciar");
+    expect(await takeConversationTurns(backend() as never)).toMatchObject({ claimed: 1, answered: 1, failed: 0 });
+    expect(await sentTo(JOANA)).toEqual([
+      "Oi, aqui é o assistente virtual do escritório Souza Advogados.\n\nHá bens a dividir?\n1. Não\n2. Sim, no exterior\nResponda com o número.",
+    ]);
+
+    // Every answer "segue": the name, then the offer with the area's words on fees.
+    await writes(JOANA, "1");
+    expect(await takeConversationTurns(backend() as never)).toMatchObject({ claimed: 1, answered: 1, failed: 0 });
+    expect((await sentTo(JOANA)).at(-1)).toBe("Para seguir, qual é o seu nome completo?");
+    await writes(JOANA, "Joana Teste Lima");
+    expect(await takeConversationTurns(backend() as never)).toMatchObject({ claimed: 1, answered: 1, failed: 0 });
+    expect((await sentTo(JOANA)).at(-1)).toContain("Os honorários estão no contrato");
+
+    // "Quero seguir": the case of the area, opened by ONE, with the link where the client sends its documents.
+    await writes(JOANA, "1");
+    expect(await takeConversationTurns(backend() as never)).toMatchObject({ claimed: 1, opened: 1, failed: 0 });
+    expect((await sentTo(JOANA)).at(-1)).toContain(
+      "Pronto, Joana. O seu caso está aberto no escritório Souza Advogados.",
+    );
+    const [opened] = await sql.unsafe(
+      `select k.module, k.case_type, k.area_id, (select count(*)::integer from public.case_tasks t where t.case_id = k.id) as tasks
+       from public.cases k join public.wa_conversations c on c.intake_case_id = k.id
+       where c.org_id = $1 and c.contact_wa_id = $2`,
+      [FIRM, JOANA],
+    );
+    expect(opened).toMatchObject({ module: null, case_type: "divorcio", area_id: area!.id, tasks: 1 });
+
+    // An answer a person decides: the team reads every answer.
+    await writes(KAIO, "Preciso de um divórcio");
+    await takeConversationTurns(backend() as never);
+    await writes(KAIO, "2");
+    expect(await takeConversationTurns(backend() as never)).toMatchObject({ claimed: 1, called: 1, failed: 0 });
+    const [kaio] = await sql.unsafe(
+      `select agent, called_reason from public.wa_conversations where org_id = $1 and contact_wa_id = $2`,
+      [FIRM, KAIO],
+    );
+    expect(kaio).toMatchObject({ agent: "person" });
+    expect(String(kaio!.called_reason)).toContain("Há bens a dividir? Sim, no exterior.");
   });
 });

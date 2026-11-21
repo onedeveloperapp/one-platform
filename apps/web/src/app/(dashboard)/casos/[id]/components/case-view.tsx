@@ -3,6 +3,7 @@
 import { GROUP_TONE } from "../../cases-types";
 import { caseFacts } from "../case-facts";
 import type { CaseState } from "../case-types";
+import AreaCard from "./area-card";
 import { CaseActionProvider, useCaseActions } from "./case-action";
 import CaseAtWork from "./case-at-work";
 import ClientLinkCard from "./client-link-card";
@@ -299,6 +300,8 @@ export default function CaseView({ state: read }: { state: CaseState }) {
 
   const current = state.case;
   const kindKey = caseKindLabelKey(current.incident);
+  // A case of an area of the firm (0274): no trip, no passenger's rules, no complaint to an airline.
+  const ofArea = Boolean(current.area);
   const writable = !state.supportVisit;
   // Whoever answers for the case: the first adult claimant, or else a guardian of the minors, never a minor.
   const holderParty = caseHolder(state.parties, state.today);
@@ -312,7 +315,7 @@ export default function CaseView({ state: read }: { state: CaseState }) {
           { label: t("cases-title"), href: "/casos" },
           { label: caseLabel(current.seq) },
         ]}
-        detail={kindKey ? t(kindKey) : undefined}
+        detail={ofArea ? (current.area?.typeName ?? undefined) : kindKey ? t(kindKey) : undefined}
         action={
           <Box className="flex flex-wrap items-center gap-2">
             <StatusChip tone={GROUP_TONE[groupOf(current.status)]} label={t(STATUS_KEY[current.status])} />
@@ -376,7 +379,7 @@ export default function CaseView({ state: read }: { state: CaseState }) {
         <CaseAtWork caseId={state.case.id} working={facts.now.working} events={state.events} />
 
         {/* What the market decided in lawsuits like this one (0250): open under the top, no click, for the firm alone. */}
-        <ForecastCard proceedings={state.proceedings} airlines={state.airlines} />
+        {ofArea ? null : <ForecastCard proceedings={state.proceedings} airlines={state.airlines} />}
 
         {/* Each card opens by itself when the case's stage is about it or something in it waits for the firm, and
           closes once that is done; the person may open or close every one at once to read the whole case. */}
@@ -386,11 +389,15 @@ export default function CaseView({ state: read }: { state: CaseState }) {
             <Grid size={{ xs: 12, lg: 8 }} className="flex flex-col gap-3">
               {/* In the order the case goes: its people and trip, what happened, the papers, the lawsuits, the court. */}
               <PeopleCard state={state} writable={writable} onChanged={refresh} />
-              <TripCard state={state} writable={writable} onChanged={refresh} />
+              {ofArea ? (
+                <AreaCard state={state} writable={writable} onChanged={refresh} />
+              ) : (
+                <TripCard state={state} writable={writable} onChanged={refresh} />
+              )}
               <StatementsCard state={state} writable={writable} onChanged={refresh} />
               <DocumentsCard state={state} writable={writable} onChanged={refresh} />
               <SignaturesCard state={state} writable={writable} onChanged={refresh} />
-              <RulesCard state={state} writable={writable} onChanged={refresh} />
+              {ofArea ? null : <RulesCard state={state} writable={writable} onChanged={refresh} />}
               <ProceedingsCard state={state} writable={writable} onChanged={refresh} />
               <DraftsCard state={state} writable={writable} onChanged={refresh} />
               <FilingCard state={state} writable={writable} onChanged={refresh} />
@@ -401,7 +408,7 @@ export default function CaseView({ state: read }: { state: CaseState }) {
               <MoneyCard state={state} />
               <FeesCard state={state} writable={writable} onChanged={refresh} />
               <DeadlinesCard state={state} writable={writable} onChanged={refresh} />
-              <ComplaintCard state={state} writable={writable} onChanged={refresh} />
+              {ofArea ? null : <ComplaintCard state={state} writable={writable} onChanged={refresh} />}
             </Grid>
 
             <Grid size={{ xs: 12, lg: 4 }} className="flex flex-col gap-3">
@@ -412,7 +419,7 @@ export default function CaseView({ state: read }: { state: CaseState }) {
                 onChanged={refresh}
               />
               <NoticesCard state={state} writable={writable} onChanged={refresh} />
-              <SummaryCard state={state} writable={writable} onChanged={refresh} />
+              {ofArea ? null : <SummaryCard state={state} writable={writable} onChanged={refresh} />}
               <DossierCard state={state} writable={writable} onChanged={refresh} />
               <TimelineCard state={state} />
             </Grid>

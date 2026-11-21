@@ -3,6 +3,7 @@ import "server-only";
 import { agendaSweeps } from "@/lib/agenda/digest-work";
 import { aiHealthSweeps } from "@/lib/ai/health";
 import { aiSweeps } from "@/lib/ai/jobs";
+import { areaScriptSweeps } from "@/lib/areas/script-work";
 import { backupSweeps } from "@/lib/backup-jobs";
 import { billingSweeps } from "@/lib/billing-jobs";
 import { usageSweeps } from "@/lib/billing-usage-work";
@@ -78,6 +79,8 @@ export const SWEEPS: readonly Sweep[] = [
   ...weeklyDigestSweeps,
   // The firm's profile, written by ONE (0272).
   ...personalitySweeps,
+  // The script of each area of the firm, written by ONE (0273).
+  ...areaScriptSweeps,
   ...moneySweeps,
   ...billingSweeps,
   ...usageSweeps,

@@ -537,6 +537,20 @@ insert into public.firm_personality_requests (org_id, status, finished_at) value
 insert into public.firm_personality_uses (run_id, org_id, personality_id) values
   ('c1000000-0000-4000-8000-00000000000a', 'b1000000-0000-4000-8000-00000000000a', 'e1720000-0000-4000-8000-00000000000a'),
   ('c1000000-0000-4000-8000-00000000000b', 'b1000000-0000-4000-8000-00000000000b', 'e1720000-0000-4000-8000-00000000000b');
+-- Each firm's area of its own, its script and the writing that made it (0273).
+insert into public.firm_areas (id, org_id, law_area, name, source) values
+  ('e1730000-0000-4000-8000-00000000000a', 'b1000000-0000-4000-8000-00000000000a', 'familia', 'Família e sucessões', 'person'),
+  ('e1730000-0000-4000-8000-00000000000b', 'b1000000-0000-4000-8000-00000000000b', 'familia', 'Família e sucessões', 'person');
+insert into public.firm_area_scripts (org_id, area_id, version, script) values
+  ('b1000000-0000-4000-8000-00000000000a', 'e1730000-0000-4000-8000-00000000000a', 1, '{"tipos": []}'),
+  ('b1000000-0000-4000-8000-00000000000b', 'e1730000-0000-4000-8000-00000000000b', 1, '{"tipos": []}');
+insert into public.firm_area_script_requests (org_id, area_id, status, finished_at) values
+  ('b1000000-0000-4000-8000-00000000000a', 'e1730000-0000-4000-8000-00000000000a', 'done', now()),
+  ('b1000000-0000-4000-8000-00000000000b', 'e1730000-0000-4000-8000-00000000000b', 'done', now());
+-- A work outside the lawsuit of each firm's case (0274).
+insert into public.case_tasks (org_id, case_id, key, name, who, phase, position) values
+  ('b1000000-0000-4000-8000-00000000000a', 'a3000000-0000-4000-8000-00000000000a', 'lista', 'Lista dos bens', 'cliente', 'documentos', 1),
+  ('b1000000-0000-4000-8000-00000000000b', 'a3000000-0000-4000-8000-00000000000b', 'lista', 'Lista dos bens', 'cliente', 'documentos', 1);
 insert into public.firm_signers (org_id, user_id) values
   ('b1000000-0000-4000-8000-00000000000a', 'a1000000-0000-4000-8000-000000000001'),
   ('b1000000-0000-4000-8000-00000000000b', 'a1000000-0000-4000-8000-000000000004');
@@ -757,12 +771,12 @@ select is(
   array[
     'admin_complaints', 'agenda_digests', 'agenda_preferences', 'ai_runs', 'approvals', 'audit_events', 'billing_operations', 'case_advances', 'case_costs', 'case_document_answers', 'case_documents',
     'case_draft_citations', 'case_draft_versions', 'case_drafts', 'case_events', 'case_fee_splits', 'case_fees', 'case_forecasts', 'case_interview_answers', 'case_interviews',
-    'case_papers', 'case_parties', 'case_statements',
+    'case_papers', 'case_parties', 'case_statements', 'case_tasks',
     'case_weather', 'cases', 'certificate_inventory', 'chatwoot_room_members', 'chatwoot_rooms', 'civil_court_answers', 'client_consents', 'client_links', 'client_notices', 'client_payment_accounts', 'closing_goals', 'connections',
     'consent_acceptances', 'court_login_uses',
     'deadlines', 'djen_captures', 'dossiers', 'draft_templates', 'entitlement_grants', 'extension_links', 'fee_terms', 'files', 'filing_batches', 'filing_package_items', 'filing_packages',
     'filing_receipts', 'filing_submissions', 'finance_access', 'finance_accountants', 'finance_accounts', 'finance_bill_payments', 'finance_bills', 'finance_budgets', 'finance_categories', 'finance_closings', 'finance_cost_centers', 'finance_entries', 'finance_imports', 'finance_invoices', 'finance_package_sends', 'finance_receipts', 'finance_rules', 'finance_series',
-    'finance_statement_lines', 'finance_statements', 'firm_areas', 'firm_autonomy', 'firm_brands', 'firm_calendars',
+    'finance_statement_lines', 'finance_statements', 'firm_area_script_requests', 'firm_area_scripts', 'firm_areas', 'firm_autonomy', 'firm_brands', 'firm_calendars',
     'firm_claim_defaults', 'firm_filing_ways', 'firm_invitations', 'firm_marketing_terms', 'firm_message_texts', 'firm_modules', 'firm_notice_kinds', 'firm_one_work_cost', 'firm_one_work_minutes', 'firm_operations', 'firm_personalities', 'firm_personality_requests', 'firm_personality_uses', 'firm_settlement_floors', 'firm_signers', 'flight_alerts', 'flight_checks', 'flight_segments', 'free_justice_answers', 'hearing_briefs', 'hearing_contacts', 'hearing_reports', 'hearing_staff_messages', 'hearings', 'import_batches', 'import_rows', 'invoices',
     'issued_documents', 'judgment_paths', 'judgment_sessions', 'lawsuit_amounts', 'lawsuit_facts', 'lawyer_filing_ways', 'lawyer_signature_uses', 'legal_sources', 'marketing_segments', 'memberships',
     'money_releases', 'money_shares', 'money_statements', 'movements', 'notice_optins', 'notice_stops', 'onboarding_state', 'partner_invitations', 'partner_links', 'passenger_welcomes', 'pax_firm_clauses',
@@ -934,12 +948,12 @@ select is(
    from pg_temp.firm_rows('b1000000-0000-4000-8000-00000000000a') where visible > 0),
   array[
     'admin_complaints', 'ai_runs', 'approvals', 'case_advances', 'case_costs', 'case_document_answers', 'case_documents', 'case_draft_citations', 'case_draft_versions',
-    'case_drafts', 'case_events', 'case_forecasts', 'case_interview_answers', 'case_interviews', 'case_papers', 'case_parties', 'case_statements',
+    'case_drafts', 'case_events', 'case_forecasts', 'case_interview_answers', 'case_interviews', 'case_papers', 'case_parties', 'case_statements', 'case_tasks',
     'case_weather', 'cases', 'certificate_inventory', 'civil_court_answers', 'client_consents',
     'client_links', 'client_notices', 'closing_goals',
     'consent_acceptances', 'deadlines', 'djen_captures', 'dossiers', 'draft_templates', 'entitlement_grants', 'files',
     'filing_batches', 'filing_package_items', 'filing_packages',
-    'filing_receipts', 'filing_submissions', 'finance_access', 'firm_areas', 'firm_autonomy', 'firm_brands', 'firm_calendars', 'firm_claim_defaults', 'firm_filing_ways', 'firm_marketing_terms', 'firm_message_texts', 'firm_modules', 'firm_notice_kinds', 'firm_operations', 'firm_personalities', 'firm_personality_requests', 'firm_personality_uses', 'firm_settlement_floors', 'firm_signers', 'flight_alerts', 'flight_checks', 'flight_segments', 'free_justice_answers', 'hearing_briefs', 'hearing_contacts', 'hearing_reports', 'hearing_staff_messages', 'hearings', 'import_batches',
+    'filing_receipts', 'filing_submissions', 'finance_access', 'firm_area_script_requests', 'firm_area_scripts', 'firm_areas', 'firm_autonomy', 'firm_brands', 'firm_calendars', 'firm_claim_defaults', 'firm_filing_ways', 'firm_marketing_terms', 'firm_message_texts', 'firm_modules', 'firm_notice_kinds', 'firm_operations', 'firm_personalities', 'firm_personality_requests', 'firm_personality_uses', 'firm_settlement_floors', 'firm_signers', 'flight_alerts', 'flight_checks', 'flight_segments', 'free_justice_answers', 'hearing_briefs', 'hearing_contacts', 'hearing_reports', 'hearing_staff_messages', 'hearings', 'import_batches',
     'import_rows', 'invoices', 'issued_documents', 'judgment_paths', 'judgment_sessions', 'lawsuit_amounts', 'lawsuit_facts', 'lawyer_filing_ways', 'lawyer_signature_uses', 'legal_sources',
     'memberships', 'movements', 'notice_optins', 'notice_stops', 'partner_links', 'passenger_welcomes', 'pax_firm_clauses', 'people', 'piece_fact_checks', 'proceeding_lawyers', 'proceeding_parties', 'proceeding_tracking', 'proceedings',
     'publication_actions', 'publication_readings', 'publications',
@@ -977,12 +991,12 @@ select is(
   array[
     'admin_complaints', 'agenda_digests', 'agenda_preferences', 'ai_runs', 'approvals', 'audit_events', 'billing_operations', 'case_advances', 'case_costs', 'case_document_answers', 'case_documents',
     'case_draft_citations', 'case_draft_versions', 'case_drafts', 'case_events', 'case_fee_splits', 'case_fees', 'case_forecasts', 'case_interview_answers', 'case_interviews',
-    'case_papers', 'case_parties', 'case_statements',
+    'case_papers', 'case_parties', 'case_statements', 'case_tasks',
     'case_weather', 'cases', 'certificate_inventory', 'chatwoot_room_members', 'chatwoot_rooms', 'civil_court_answers', 'client_consents', 'client_links', 'client_notices', 'client_payment_accounts', 'closing_goals', 'connections',
     'consent_acceptances', 'court_login_uses',
     'deadlines', 'djen_captures', 'dossiers', 'draft_templates', 'entitlement_grants', 'extension_links', 'fee_terms', 'files', 'filing_batches', 'filing_package_items', 'filing_packages',
     'filing_receipts', 'filing_submissions', 'finance_access', 'finance_accountants', 'finance_accounts', 'finance_bill_payments', 'finance_bills', 'finance_budgets', 'finance_categories', 'finance_closings', 'finance_cost_centers', 'finance_entries', 'finance_imports', 'finance_invoices', 'finance_package_sends', 'finance_receipts', 'finance_rules', 'finance_series',
-    'finance_statement_lines', 'finance_statements', 'firm_areas', 'firm_autonomy', 'firm_brands', 'firm_calendars',
+    'finance_statement_lines', 'finance_statements', 'firm_area_script_requests', 'firm_area_scripts', 'firm_areas', 'firm_autonomy', 'firm_brands', 'firm_calendars',
     'firm_claim_defaults', 'firm_filing_ways', 'firm_invitations', 'firm_marketing_terms', 'firm_message_texts', 'firm_modules', 'firm_notice_kinds', 'firm_one_work_cost', 'firm_one_work_minutes', 'firm_operations', 'firm_personalities', 'firm_personality_requests', 'firm_personality_uses', 'firm_settlement_floors', 'firm_signers', 'flight_alerts', 'flight_checks', 'flight_segments', 'free_justice_answers', 'hearing_briefs', 'hearing_contacts', 'hearing_reports', 'hearing_staff_messages', 'hearings', 'import_batches', 'import_rows', 'invoices',
     'issued_documents', 'judgment_paths', 'judgment_sessions', 'lawsuit_amounts', 'lawsuit_facts', 'lawyer_filing_ways', 'lawyer_signature_uses', 'legal_sources', 'marketing_segments', 'memberships',
     'money_releases', 'money_shares', 'money_statements', 'movements', 'notice_optins', 'notice_stops', 'onboarding_state', 'partner_invitations', 'partner_links', 'passenger_welcomes', 'pax_firm_clauses',

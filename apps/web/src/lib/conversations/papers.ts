@@ -15,6 +15,8 @@ export type PaperOwed = {
   own: boolean;
   minor: boolean;
   rejected: boolean;
+  /** The name the case asks it by (a document of a case of an area of the firm, 0274). */
+  label: string | null;
 };
 
 export type DispensableState = { kind: string; label: string; state: string };
@@ -48,6 +50,7 @@ export function papersOwedOf(raw: unknown): PapersOwed | null {
               own: owed.own === true,
               minor: owed.minor === true,
               rejected: owed.rejected === true,
+              label: text(owed.label),
             },
           ]
         : [];
@@ -86,6 +89,8 @@ export function paperAsk(owed: PaperOwed, addressMonths = 3): string {
     case "baggage_report":
       return "Agora o RIB, o registro que você fez no aeroporto do problema com a bagagem.";
     default:
+      // A document a case of an area asks by its name (0274).
+      if (owed.label) return `Agora ${whose ? `de ${whose}: ` : ""}${owed.label}. Pode mandar a foto aqui.`;
       return "Agora o próximo documento que o escritório pediu. Pode mandar a foto aqui.";
   }
 }
