@@ -8,8 +8,12 @@
  * found half way (the owner, 2026-11-03). These are the core's, what every
  * firm needs: what one module needs (the passenger module's Valor da Causa
  * Pedido and its partner agency) is the module's own setup, opened after this
- * one for each module the firm contracted (0081). How the firm works and the
- * areas it works in come before the channel, the last step: ONE answers
+ * one for each module the firm contracted (0081). How the firm files on the
+ * courts' screens comes right after the bar (the owner's three ways,
+ * 2026-11-20): the registrations say which courts its lawyers file in, and who
+ * answers and signs gives their own court login in the same step (0263). How
+ * the firm works and the areas it works in come before the channel, the last
+ * step: ONE answers
  * nobody new on the WhatsApp before it knows the firm (0256, the owner,
  * 2026-11-20); the firm's logo and colour (0258) come before them, and the
  * firm's profile (0272), which ONE writes and the firm approves, then the
@@ -19,6 +23,7 @@
 export const SETUP_STEPS = [
   "seguranca",
   "oab",
+  "protocolo",
   "escritorio",
   "operacao",
   "equipe",

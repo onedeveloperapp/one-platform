@@ -2,6 +2,7 @@
 
 import { teamErrorKey } from "../settings/team/team-types";
 import SetupCpf, { declareSetupCpf } from "./setup-cpf";
+import { useFilingStep } from "./setup-filing";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 
@@ -24,6 +25,7 @@ import PageHeader from "@/components/product/page-header";
 import SecondFactorPrompt from "@/components/product/second-factor-prompt";
 import SetupWizard, { type WizardStep } from "@/components/product/setup-wizard";
 import type { SecondFactorState } from "@/lib/ai/approvals";
+import { type FilingWaysData, personFilingStep } from "@/lib/filing-ways/ways";
 import { addOabRegistration } from "@/lib/firm/actions";
 import { personFlowKey, personSetupOpening, type PersonSetupStep, personSetupSteps } from "@/lib/firm/person-setup";
 import { type FirmFunction, formatOab, OAB_STATES, type OabRegistration } from "@/lib/firm/roles";
@@ -49,6 +51,10 @@ export type PersonSetupState =
       asksCpf: boolean;
       /** Their own WhatsApp, the digits with the country's 55; null while they gave none (it is required). */
       whatsapp: string | null;
+      /** How they file on the courts' screens, the firm's way included (0263); null when it could not be read. */
+      filing: FilingWaysData | null;
+      /** The states of the firm's lawyers' registrations, whose courts a partner choosing the firm's way sees. */
+      firmStates: string[];
       secondFactor: SecondFactorState;
       supportVisit: boolean;
       /** The step the address asked for (`?passo=`). */
@@ -102,11 +108,37 @@ function PersonSetupFlow({ state }: { state: Extract<PersonSetupState, { kind: "
   const [confirmedHere, setConfirmedHere] = useState(false);
   const factor: SecondFactorState = confirmedHere ? "ok" : state.secondFactor;
   const factorOk = factor === "ok";
-  const keys = personSetupSteps(state.firmFunction);
+
+  // ---------- The registration at the bar ----------
+  const [uf, setUf] = useState("");
+  const [number, setNumber] = useState("");
+  const [touched, setTouched] = useState(false);
+  const [oabError, setOabError] = useState<string | null>(null);
+  // The state of the registration given in this setup, before the page reads it again.
+  const [addedUf, setAddedUf] = useState<string | null>(null);
+
+  // ---------- How they file on the courts' screens (0263) ----------
+  // The courts of their states, the one being registered included, where the firm's way offers them a way to choose;
+  // a partner who decides for a firm that chose none chooses the firm's first (the owner's three ways, 2026-11-20).
+  const savedStates = [...state.registrations.map((registration) => registration.uf), ...(addedUf ? [addedUf] : [])];
+  const myStates = Array.from(new Set([...savedStates, ...(!registered && !addedUf && uf ? [uf] : [])]));
+  const filingAsked = state.filing ? personFilingStep(state.filing, myStates) : { shown: false, owed: false };
+  const firmForm = Boolean(state.filing?.decidesForFirm && state.filing.firmWay === null);
+  const filingStep = useFilingStep({
+    filing: state.filing,
+    firmForm,
+    firmStates: Array.from(new Set([...state.firmStates, ...myStates])),
+    myStates,
+    blocked,
+    onSaved: () => undefined,
+  });
+
+  const keys = personSetupSteps(state.firmFunction, filingAsked.shown);
   const opening = personSetupOpening({
     factorOk: state.secondFactor === "ok",
     asked: state.step,
     firmFunction: state.firmFunction,
+    files: filingAsked.shown,
   });
   const [stepIndex, setStepIndex] = useState(Math.max(0, keys.indexOf(opening.open)));
   const onFactor = () => {
@@ -138,11 +170,6 @@ function PersonSetupFlow({ state }: { state: Extract<PersonSetupState, { kind: "
     return true;
   };
 
-  // ---------- The registration at the bar ----------
-  const [uf, setUf] = useState("");
-  const [number, setNumber] = useState("");
-  const [touched, setTouched] = useState(false);
-  const [oabError, setOabError] = useState<string | null>(null);
   const numberOk = NUMBER_PATTERN.test(cleanNumber(number));
   // The CPF for the signature in the cloud, optional: what is typed goes only whole and checked, and one that is not
   // is said under the field when the step goes on.
@@ -182,6 +209,7 @@ function PersonSetupFlow({ state }: { state: Extract<PersonSetupState, { kind: "
         setOabError(t(teamErrorKey(added.code)));
         return false;
       }
+      setAddedUf(uf);
     }
     if (state.asksCpf) {
       setCpfError(null);
@@ -257,14 +285,26 @@ function PersonSetupFlow({ state }: { state: Extract<PersonSetupState, { kind: "
     ),
   };
 
+  // The registration ends the setup, unless how they file follows it. Set aside, the state chosen and not registered
+  // names no court of theirs: the filing follows only for what was saved.
+  const oabLast = keys[keys.length - 1] === "oab";
+  const skipOab = () => {
+    setUf("");
+    if (state.filing && personFilingStep(state.filing, savedStates).shown) setStepIndex(keys.length - 1);
+    else void finish();
+  };
   const oabStep: WizardStep = {
     title: t("person-setup-oab-title"),
     hint: t("person-setup-oab-hint"),
     canAdvance: oabReady && !blocked && !leaving,
-    primaryLabel: t("setup-finish"),
-    busy: leaving,
-    onPrimary: async () => (await saveOab()) && (await finish()),
-    secondary: !registered && !blocked ? { label: t("setup-not-now"), onClick: () => void finish() } : undefined,
+    ...(oabLast
+      ? {
+          primaryLabel: t("setup-finish"),
+          busy: leaving,
+          onPrimary: async () => (await saveOab()) && (await finish()),
+        }
+      : { onPrimary: saveOab }),
+    secondary: !registered && !blocked ? { label: t("setup-not-now"), onClick: skipOab } : undefined,
     content: (
       <Box className="flex flex-col gap-4">
         {registered ? (
@@ -352,12 +392,30 @@ function PersonSetupFlow({ state }: { state: Extract<PersonSetupState, { kind: "
             {oabError}
           </Alert>
         ) : null}
+        {oabLast ? finishProblem : null}
+      </Box>
+    ),
+  };
+
+  const filingWizardStep: WizardStep = {
+    title: firmForm ? t("setup-filing-title") : t("person-setup-filing-title"),
+    hint: firmForm ? t("person-setup-filing-firm-hint") : t("person-setup-filing-hint"),
+    canAdvance: filingStep.canAdvance && !leaving,
+    primaryLabel: t("setup-finish"),
+    busy: leaving,
+    onPrimary: async () => (await filingStep.onPrimary()) && (await finish()),
+    secondary: filingAsked.owed && !blocked ? { label: t("setup-not-now"), onClick: () => void finish() } : undefined,
+    content: (
+      <Box className="flex flex-col gap-4">
+        {filingStep.content}
         {finishProblem}
       </Box>
     ),
   };
 
-  const steps = keys.map((key) => (key === "seguranca" ? factorStep : key === "whatsapp" ? whatsappStep : oabStep));
+  const steps = keys.map((key) =>
+    key === "seguranca" ? factorStep : key === "whatsapp" ? whatsappStep : key === "oab" ? oabStep : filingWizardStep,
+  );
 
   return (
     <Box className="mx-auto flex w-full max-w-2xl flex-col gap-6">

@@ -15,8 +15,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
  * card (`onboarding_state`, one row per person and firm).
  *
  * The list holds only what the firm gives ONE for it to work: a lawyer at
- * the bar chosen to sign what ONE prepares, the team where there is one and
- * a way to the clients. Nothing ONE does by itself is on it: the first case
+ * the bar chosen to sign what ONE prepares, how it files on the courts'
+ * screens, the team where there is one and a way to the clients. Nothing ONE does by itself is on it: the first case
  * arrives through a module the firm contracted and ONE opens it (a
  * passenger's yes to ONE's word about a flight, an agency's passenger), so
  * a step "open the first case" would tell the firm the work is manual (the
@@ -45,6 +45,8 @@ export type ActivationFacts = Record<string, boolean>;
  */
 const STEP_DEFINITIONS: (Omit<OnboardingStep, "done"> & { fact: string; hiddenWhen?: string })[] = [
   { key: "oab", title: "setup-step-oab", href: setupHref("oab"), fact: "oab_signer" },
+  // How the firm files on the courts' screens (0263): the firm's way, chosen with its acknowledgment.
+  { key: "filing", title: "setup-step-filing", href: setupHref("protocolo"), fact: "filing_way" },
   { key: "office", title: "setup-step-office", href: setupHref("escritorio"), fact: "brand" },
   { key: "operation", title: "setup-step-operation", href: setupHref("operacao"), fact: "operation" },
   { key: "team", title: "setup-step-team", href: setupHref("equipe"), fact: "team", hiddenWhen: "works_alone" },

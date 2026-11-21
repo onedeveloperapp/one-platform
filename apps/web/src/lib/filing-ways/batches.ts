@@ -1,4 +1,4 @@
-import { type FilingWaysData, type ScreenSystem, type Way, wayAt } from "@/lib/filing-ways/ways";
+import { type FilingWaysData, type ScreenSystem, type Way, wayInForce, waysOffered } from "@/lib/filing-ways/ways";
 
 /**
  * The batches a lawyer approves on /protocolo (the owner, 2026-11-20; migration 0264) as the screen shows them: the
@@ -25,31 +25,58 @@ export type EligibleGroup = {
   packages: BatchCandidate[];
 };
 
-/**
- * The packages ready that the person may hand ONE to file on the court's screen, by system: ready, kept by nothing,
- * of a lawsuit the person signs, not in a submission already, at a system where the person's way is an automated one.
- */
-export function eligibleGroups(input: {
+type BatchInput = {
   candidates: readonly BatchCandidate[];
   ways: Pick<FilingWaysData, "systems" | "myWays" | "firmWay">;
   /** The lawsuits the person signs. */
   signs: ReadonlySet<string>;
   /** The packages already in a submission (a batch, ONE's channel, or filed). */
   submitted: ReadonlySet<string>;
-}): EligibleGroup[] {
-  const groups = new Map<string, EligibleGroup>();
-  for (const row of input.candidates) {
-    if (row.status !== "ready" || row.blocker !== null) continue;
-    if (input.submitted.has(row.id) || !input.signs.has(row.proceedingId)) continue;
+};
+
+/** The packages ready the person may file now, each with the screen system it goes to. */
+function readyOfMine(input: BatchInput): { row: BatchCandidate; system: ScreenSystem }[] {
+  return input.candidates.flatMap((row) => {
+    if (row.status !== "ready" || row.blocker !== null) return [];
+    if (input.submitted.has(row.id) || !input.signs.has(row.proceedingId)) return [];
     const system = input.ways.systems.find((item) => item.court === row.court && item.system === row.system);
-    if (!system) continue;
-    const way = wayAt(input.ways, system);
+    return system ? [{ row, system }] : [];
+  });
+}
+
+const bySystemName = (a: { system: ScreenSystem }, b: { system: ScreenSystem }) =>
+  a.system.name.localeCompare(b.system.name, "pt-BR");
+
+/**
+ * The packages ready that the person may hand ONE to file on the court's screen, by system: ready, kept by nothing,
+ * of a lawsuit the person signs, not in a submission already, at a system where the person chose an automated way
+ * (the database files by the lawyer's own choice only, 0264: the firm's way is what is marked for them to choose).
+ */
+export function eligibleGroups(input: BatchInput): EligibleGroup[] {
+  const groups = new Map<string, EligibleGroup>();
+  for (const { row, system } of readyOfMine(input)) {
+    const way = wayInForce(input.ways, system);
     if (way === "hand") continue;
     const group = groups.get(system.key) ?? { system, way, packages: [] };
     group.packages.push(row);
     groups.set(system.key, group);
   }
-  return [...groups.values()].sort((a, b) => a.system.name.localeCompare(b.system.name, "pt-BR"));
+  return [...groups.values()].sort(bySystemName);
+}
+
+/**
+ * The packages ready that ONE could file for the person at a system where they never chose a way, though the firm's
+ * way offers them an automated one: what /protocolo tells them they may hand ONE once they choose, by system.
+ */
+export function unchosenGroups(input: BatchInput): { system: ScreenSystem; count: number }[] {
+  const groups = new Map<string, { system: ScreenSystem; count: number }>();
+  for (const { system } of readyOfMine(input)) {
+    if (input.ways.myWays[system.key] || waysOffered(system, input.ways.firmWay).length < 2) continue;
+    const group = groups.get(system.key) ?? { system, count: 0 };
+    group.count += 1;
+    groups.set(system.key, group);
+  }
+  return [...groups.values()].sort(bySystemName);
 }
 
 export const OPEN_BATCH_STATUSES = ["approved", "running", "awaiting_code", "awaiting_confirmation"] as const;

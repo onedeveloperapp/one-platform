@@ -70,13 +70,30 @@ export function waysOffered(system: Pick<ScreenSystem, "ways">, firmWay: Way | n
   return offered.sort((a, b) => WAY_RANK[b] - WAY_RANK[a]);
 }
 
-/** The way a lawyer files at a system now: theirs when they chose one ONE still offers, else the firm's, else by hand. */
-export function wayAt(data: Pick<FilingWaysData, "myWays" | "firmWay">, system: ScreenSystem): Way {
-  const offered = waysOffered(system, data.firmWay);
+/**
+ * The way a lawyer files at a system now, as the database files by it (`approve_filing_batch`, 0264): their own
+ * choice while ONE still offers it, else by hand. The firm's way is only what is marked for them to choose: an
+ * automated way asks each lawyer's own acknowledgment, and a lawyer who never gave it files by hand.
+ */
+export function wayInForce(data: Pick<FilingWaysData, "myWays" | "firmWay">, system: ScreenSystem): Way {
   const mine = data.myWays[system.key];
+  return mine && waysOffered(system, data.firmWay).includes(mine) ? mine : "hand";
+}
+
+/**
+ * The way marked for a lawyer to choose at a system, under a firm's way (the one saved, or the one being chosen on
+ * the same screen): their own choice while it is offered, else the firm's (the canvas the owner approved: "Vem
+ * marcada a forma que o escritório escolheu"), else the most automated way offered.
+ */
+export function wayProposed(
+  mine: Way | null | undefined,
+  system: Pick<ScreenSystem, "ways">,
+  firmWay: Way | null,
+): Way {
+  const offered = waysOffered(system, firmWay);
   if (mine && offered.includes(mine)) return mine;
-  const firm = data.firmWay ?? "hand";
-  return offered.includes(firm) ? firm : (offered[0] ?? "hand");
+  if (firmWay && offered.includes(firmWay)) return firmWay;
+  return offered[0] ?? "hand";
 }
 
 /** The systems a lawyer files in: those of the courts of the states they are registered in, else every one ONE works on. */
@@ -84,6 +101,76 @@ export function systemsFor(systems: readonly ScreenSystem[], myStates: readonly 
   const working = systems.filter((system) => system.ways.length > 0);
   const mine = working.filter((system) => system.uf !== null && myStates.includes(system.uf));
   return mine.length > 0 ? mine : working;
+}
+
+/** The systems ONE files on the screen of in the courts of these states: none when the states have none. */
+export function systemsIn(systems: readonly ScreenSystem[], states: readonly string[]): ScreenSystem[] {
+  return systems.filter((system) => system.ways.length > 0 && system.uf !== null && states.includes(system.uf));
+}
+
+/**
+ * The systems where a lawyer has a way to choose, under a firm's way: those of their states where ONE offers more
+ * than by hand. None while the firm chose no automated way: a lawyer then has nothing to choose.
+ */
+export function systemsToChoose(
+  systems: readonly ScreenSystem[],
+  states: readonly string[],
+  firmWay: Way | null,
+): ScreenSystem[] {
+  return systemsIn(systems, states).filter((system) => waysOffered(system, firmWay).length > 1);
+}
+
+/**
+ * What a lawyer's own setup asks of the filing (the owner's three ways, 2026-11-20): its step is there when the
+ * lawyer has a way to choose at a court of their states, or decides for a firm that chose none yet (the firm's way
+ * comes first); and it is owed while the firm's way, or the lawyer's at one of those courts, was never chosen.
+ */
+export function personFilingStep(
+  data: Pick<FilingWaysData, "systems" | "firmWay" | "myWays" | "decidesForFirm" | "lawyer">,
+  states: readonly string[],
+): { shown: boolean; owed: boolean } {
+  if (!data.lawyer) return { shown: false, owed: false };
+  const firmForm = data.decidesForFirm && data.firmWay === null;
+  const mine = systemsToChoose(data.systems, states, data.firmWay);
+  return {
+    shown: firmForm || mine.length > 0,
+    owed: firmForm || mine.some((system) => !data.myWays[system.key]),
+  };
+}
+
+/**
+ * What a lawyer's choice at a system asks before it is saved: the court login, for ONE's browser with none kept (or
+ * one the court refused, or one being changed); the acknowledgment, for an automated way being chosen or a login
+ * being given, since the database keeps the text it was given for; and whether anything is to be saved at all (by
+ * hand included, the first time: a lawyer who chose it is never asked again, nor told ONE could file for them).
+ */
+export function lawyerChoiceAsks(input: {
+  way: Way;
+  saved: Way | null | undefined;
+  login: Pick<CourtLogin, "state"> | null;
+  changing: boolean;
+}): { login: boolean; aware: boolean; save: boolean } {
+  const login =
+    input.way === "browser" &&
+    (!input.login || input.login.state === "refused" || input.login.state === "blocked" || input.changing);
+  const aware = input.way !== "hand" && (input.way !== input.saved || login);
+  return { login, aware, save: input.way !== input.saved || login || aware };
+}
+
+/** What the firm's choice asks before it is saved: the firm's acknowledgment for an automated way being chosen. */
+export function firmChoiceAsks(input: { way: Way; saved: Way | null }): { aware: boolean; save: boolean } {
+  const save = input.way !== input.saved;
+  return { aware: save && input.way !== "hand", save };
+}
+
+/** The points of an acknowledgment's text, its lines that open with "- ", as the screens list them. */
+export function termPoints(bodyMd: string): string[] {
+  return bodyMd
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.startsWith("- "))
+    .map((line) => line.slice(2).trim())
+    .filter((line) => line.length > 0);
 }
 
 /** Where a court login stands, from its connection: checked by the court, not yet, or refused or blocked by it. */

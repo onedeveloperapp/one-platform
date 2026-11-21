@@ -37,8 +37,8 @@ import {
 } from "@/lib/filing-ways/actions";
 import {
   batchCounts,
-  batchTurn,
   type BatchTurn,
+  batchTurn,
   type BatchView,
   type EligibleGroup,
   heldSubmission,
@@ -98,7 +98,7 @@ export default function FilingBatches({ state, firmId }: { state: FilingBatchesS
     onChange: () => router.refresh(),
   });
 
-  if (state.batches.length === 0 && state.eligible.length === 0) return null;
+  if (state.batches.length === 0 && state.eligible.length === 0 && state.unchosen.length === 0) return null;
 
   return (
     <CollapsibleCard
@@ -119,6 +119,21 @@ export default function FilingBatches({ state, firmId }: { state: FilingBatchesS
           }
         >
           {t("filing-batches-ready", { count: group.packages.length, system: group.system.name })}
+        </StateLine>
+      ))}
+
+      {/* Where the lawyer never chose a way, the firm's way offering one: ONE files there once they choose. */}
+      {state.unchosen.map((group) => (
+        <StateLine
+          key={`choose-${group.system.key}`}
+          tone="info"
+          action={
+            <Button size="small" variant="outlined" href="/settings/atuacao#team-filing-ways">
+              {t("filing-batches-choose")}
+            </Button>
+          }
+        >
+          {t("filing-batches-unchosen", { count: group.count, system: group.system.name })}
         </StateLine>
       ))}
 
@@ -166,7 +181,7 @@ function BatchLine({ batch, viewerId, onChanged }: { batch: BatchView; viewerId:
     }
   }
 
-  async function confirm() {
+  async function confirmFiling() {
     if (!held) return;
     setError(null);
     setBusy(true);
@@ -223,7 +238,7 @@ function BatchLine({ batch, viewerId, onChanged }: { batch: BatchView; viewerId:
               {t("filing-batches-see-screen")}
             </Button>
           ) : null}
-          <Button variant="contained" onClick={() => void confirm()} disabled={busy}>
+          <Button variant="contained" onClick={() => void confirmFiling()} disabled={busy}>
             {t("filing-batches-confirm")}
           </Button>
         </Box>
@@ -270,7 +285,6 @@ function BatchLine({ batch, viewerId, onChanged }: { batch: BatchView; viewerId:
         <DialogTitle>{t("filing-batches-screen-title", { system: batch.systemName })}</DialogTitle>
         <DialogContent>
           {screen ? (
-            // eslint-disable-next-line @next/next/no-img-element
             <img src={screen} alt={t("filing-batches-screen-alt", { system: batch.systemName })} className="w-full" />
           ) : null}
         </DialogContent>

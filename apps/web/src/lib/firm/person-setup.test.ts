@@ -19,6 +19,22 @@ describe("a person's own setup in a firm", () => {
     expect(signsAtTheBar(null)).toBe(false);
   });
 
+  it("asks a lawyer how they file where they have a way to choose, after the registration", () => {
+    // The owner's three ways (2026-11-20): the step is there only when the firm's way offers the lawyer more than by hand.
+    expect(personSetupSteps("advogado", true)).toEqual(["seguranca", "whatsapp", "oab", "protocolo"]);
+    expect(personSetupSteps("atendimento", true)).toEqual(["seguranca", "whatsapp"]);
+    const base = { hasFactor: true, hasWhatsapp: true, registered: true };
+    expect(personSetupOwed({ ...base, firmFunction: "advogado", filingOwed: true })).toBe(true);
+    expect(personSetupOwed({ ...base, firmFunction: "advogado", filingOwed: false })).toBe(false);
+    expect(personSetupOwed({ ...base, firmFunction: "atendimento", filingOwed: true })).toBe(false);
+    expect(personSetupOpening({ factorOk: true, asked: "protocolo", firmFunction: "advogado", files: true }).open).toBe(
+      "protocolo",
+    );
+    // Asked for with nothing to choose, it opens where the setup goes.
+    expect(personSetupOpening({ factorOk: true, asked: "protocolo", firmFunction: "advogado" }).open).toBe("whatsapp");
+    expect(isPersonSetupStep("protocolo")).toBe(true);
+  });
+
   it("is owed while the account has no factor, the person no WhatsApp, or a lawyer no registration", () => {
     const base = { hasFactor: true, hasWhatsapp: true, registered: false };
     expect(personSetupOwed({ ...base, hasFactor: false, firmFunction: "atendimento" })).toBe(true);

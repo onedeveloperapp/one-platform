@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { batchCounts, batchTurn, type BatchCandidate, eligibleGroups } from "@/lib/filing-ways/batches";
+import { type BatchCandidate, batchCounts, batchTurn, eligibleGroups, unchosenGroups } from "@/lib/filing-ways/batches";
 import type { ScreenSystem } from "@/lib/filing-ways/ways";
 
 const TJSP: ScreenSystem = {
@@ -40,7 +40,7 @@ describe("the batches a lawyer hands ONE", () => {
         row("rio", { court: "TJRJ" }),
         row("go", { court: "TJGO", system: "projudi" }),
       ],
-      ways: { systems: [TJSP, TJGO], myWays: { "projudi-tjgo": "hand" }, firmWay: "browser" },
+      ways: { systems: [TJSP, TJGO], myWays: { "eproc-tjsp": "browser", "projudi-tjgo": "hand" }, firmWay: "browser" },
       signs: new Set([
         "lawsuit-a",
         "lawsuit-b",
@@ -55,6 +55,20 @@ describe("the batches a lawyer hands ONE", () => {
     expect(groups.map((group) => [group.system.key, group.way, group.packages.map((item) => item.id)])).toEqual([
       ["eproc-tjsp", "browser", ["a", "b"]],
     ]);
+  });
+
+  it("files only by the lawyer's own choice, and tells them what ONE could file once they choose", () => {
+    const input = {
+      candidates: [row("a"), row("b"), row("go", { court: "TJGO", system: "projudi" }), row("theirs")],
+      ways: { systems: [TJSP, TJGO], myWays: { "projudi-tjgo": "hand" as const }, firmWay: "browser" as const },
+      signs: new Set(["lawsuit-a", "lawsuit-b", "lawsuit-go"]),
+      submitted: new Set<string>(),
+    };
+    // The firm chose ONE's browser, but the lawyer never chose at the eproc: the database would refuse the batch.
+    expect(eligibleGroups(input)).toEqual([]);
+    expect(unchosenGroups(input).map((group) => [group.system.key, group.count])).toEqual([["eproc-tjsp", 2]]);
+    // A firm that files by hand leaves nothing to choose.
+    expect(unchosenGroups({ ...input, ways: { ...input.ways, firmWay: "hand" } })).toEqual([]);
   });
 
   it("offers nothing before the firm chose its way", () => {

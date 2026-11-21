@@ -11,6 +11,7 @@ import SetupCpf, { declareSetupCpf } from "./setup-cpf";
 import { type SetupBrand, type SetupLetterhead, useOfficeStep } from "./setup-office";
 import { useOperationStep } from "./setup-operation";
 import { useAreasStep } from "./setup-areas";
+import { useFilingStep } from "./setup-filing";
 import { usePersonalityStep } from "./setup-personality";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -52,6 +53,7 @@ import { type FirmOffice, officeAddressGiven } from "@/lib/firm/office";
 import type { FirmOperation, KnownArea, OperationArea } from "@/lib/firm/operation";
 import { personFlowKey } from "@/lib/firm/person-setup";
 import type { AreaScriptsState } from "@/lib/areas/script-actions";
+import type { FilingWaysData } from "@/lib/filing-ways/ways";
 import type { PersonalityState } from "@/lib/firm/personality-actions";
 import { FIRM_FUNCTIONS, type FirmFunction, formatOab, OAB_STATES, type OabRegistration } from "@/lib/firm/roles";
 import { SETUP_STEPS, setupOpening, type SetupStepKey } from "@/lib/firm/setup-steps";
@@ -111,6 +113,10 @@ export type SetupState =
       areas: OperationArea[];
       /** The areas of law ONE knows. */
       knownAreas: KnownArea[];
+      /** How the firm and who answers file on the courts' screens (0263); null when it could not be read. */
+      filing: FilingWaysData | null;
+      /** The states of the firm's lawyers' registrations, whose courts the step of the filing shows. */
+      firmStates: string[];
       /** The firm's connections as their own screen reads them: the signature account, the test chat, the number. */
       connections: ConnectionsState;
       /**
@@ -254,6 +260,9 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
   const [cpf, setCpf] = useState("");
   const [cpfError, setCpfError] = useState<string | null>(null);
   const oabReady = !lawyer || registered || (Boolean(uf) && numberOk);
+  // The state of the registration given in this step, before the page reads it again: the step of the filing after
+  // it shows the courts of that state at once.
+  const [addedUf, setAddedUf] = useState<string | null>(null);
 
   // ---------- Alone or with a team ----------
   const [worksAlone, setWorksAlone] = useState<boolean | null>(state.worksAlone);
@@ -338,6 +347,25 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
   });
   const approvedProfile = Boolean(state.personality?.approved);
 
+  // ---------- How the firm files on the courts' screens (0263) ----------
+  // Who decides for the firm chooses the firm's way; who answers and signs, their own way at each court of their
+  // states in the same step (the canvas the owner approved).
+  const myStates = Array.from(
+    new Set([
+      ...state.registrations.map((registration) => registration.uf),
+      ...(state.filing?.myStates ?? []),
+      ...(addedUf ? [addedUf] : []),
+    ]),
+  );
+  const filingStep = useFilingStep({
+    filing: state.filing,
+    firmForm: decides,
+    firmStates: Array.from(new Set([...state.firmStates, ...myStates])),
+    myStates: lawyer ? myStates : [],
+    blocked: blocked || locked,
+    onSaved: refresh,
+  });
+
   // ---------- The script of each area of the firm (0273) ----------
   const areasStep = useAreasStep({ initial: state.areaScripts, blocked: blocked || locked });
   const scriptsPending = Boolean(state.areaScripts?.areas.some((area) => !area.inForce));
@@ -362,6 +390,7 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
   // with none, the judge defines it.
   const missing: [boolean, SetupStepKey][] = [
     [(lawyer && !registered) || (decides && lawyer && !state.signs), "oab"],
+    [filingStep.owed, "protocolo"],
     [!state.brand.logoUrl, "escritorio"],
     [!state.operationAnswered, "operacao"],
     [state.worksAlone === null, "equipe"],
@@ -395,6 +424,7 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
         setOabError(t(teamErrorKey(added.code)));
         return false;
       }
+      setAddedUf(uf);
     }
     if (choosesSigner && signs !== state.signs) {
       const chosen = await setFirmSigner(state.userId, signs);
@@ -541,7 +571,7 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
       onPrimary: saveOab,
       secondary:
         lawyer && !registered
-          ? { label: t("setup-not-now"), onClick: () => setStepIndex(SETUP_STEPS.indexOf("escritorio")) }
+          ? { label: t("setup-not-now"), onClick: () => setStepIndex(SETUP_STEPS.indexOf("protocolo")) }
           : undefined,
       content: (
         <Box className="flex flex-col gap-4">
@@ -657,6 +687,18 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
           ) : null}
         </Box>
       ),
+    },
+    {
+      title: t("setup-filing-title"),
+      hint: t("setup-filing-hint"),
+      content: filingStep.content,
+      canAdvance: filingStep.canAdvance,
+      onPrimary: filingStep.onPrimary,
+      // Set aside on purpose: the list on the home leads back to it.
+      secondary:
+        filingStep.owed && !blocked
+          ? { label: t("setup-not-now"), onClick: () => setStepIndex(SETUP_STEPS.indexOf("escritorio")) }
+          : undefined,
     },
     {
       title: t("setup-office-title"),

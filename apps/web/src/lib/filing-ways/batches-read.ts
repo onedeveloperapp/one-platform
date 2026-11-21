@@ -9,6 +9,7 @@ import {
   eligibleGroups,
   OPEN_BATCH_STATUSES,
   type OpenBatchStatus,
+  unchosenGroups,
 } from "@/lib/filing-ways/batches";
 import { loadFilingWays } from "@/lib/filing-ways/read";
 import type { MemberContext } from "@/lib/member/context";
@@ -19,6 +20,8 @@ export type FilingBatchesState = {
   pulse: string;
   batches: BatchView[];
   eligible: EligibleGroup[];
+  /** The packages ready ONE could file for the person where they never chose a way, by system. */
+  unchosen: { system: { key: string; name: string }; count: number }[];
 };
 
 const BATCHES_SHOWN = 20;
@@ -114,6 +117,7 @@ export async function loadFilingBatches(
   // The packages ready, kept by nothing, and what the person may hand ONE of them.
   const ready = queue.filter((row) => row.status === "ready" && row.blocker === null);
   let eligible: EligibleGroup[] = [];
+  let unchosen: FilingBatchesState["unchosen"] = [];
   if (ways.lawyer && ready.length > 0) {
     const packageIds = ready.map((row) => row.id);
     const [packages, existing] = await Promise.all([
@@ -148,17 +152,22 @@ export async function loadFilingBatches(
           ]
         : [];
     });
-    eligible = eligibleGroups({
+    const input = {
       candidates,
       ways,
       signs: new Set(((signs.data ?? []) as { proceeding_id: string }[]).map((row) => row.proceeding_id)),
       submitted: new Set(((existing.data ?? []) as { package_id: string }[]).map((row) => row.package_id)),
-    });
+    };
+    eligible = eligibleGroups(input);
+    unchosen = unchosenGroups(input).map((group) => ({
+      system: { key: group.system.key, name: group.system.name },
+      count: group.count,
+    }));
   }
 
   const pulse = [...batchRows]
     .sort((a, b) => (a.id < b.id ? -1 : 1))
     .map((row) => `${row.id}:${row.status}:${row.updated_at}`)
     .join("|");
-  return { viewerId: context.userId, pulse, batches: views, eligible };
+  return { viewerId: context.userId, pulse, batches: views, eligible, unchosen };
 }

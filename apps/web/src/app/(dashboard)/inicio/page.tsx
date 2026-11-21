@@ -11,6 +11,8 @@ import { cloudSigningOffered } from "@/lib/cases/filing-facts";
 import { readCaseList, readCaseStock } from "@/lib/cases/list-read";
 import { outcomeAttentionOf } from "@/lib/cases/outcomes";
 import { firmPulseOf } from "@/lib/cases/pulse";
+import { loadFilingWays } from "@/lib/filing-ways/read";
+import { personFilingStep } from "@/lib/filing-ways/ways";
 import { readFinanceAttention } from "@/lib/finance/attention";
 import { readFilingAttention } from "@/lib/firm/filing-attention";
 import { attentionGroups, pendingGroups, readFirmPending } from "@/lib/firm/pending";
@@ -175,12 +177,19 @@ async function loadHome(): Promise<
   const hasWhatsapp = ownWhatsapp.error
     ? true
     : Boolean((ownWhatsapp.data as { whatsapp?: string | null } | null)?.whatsapp);
-  const owed = personSetupOwed({
+  const ownSetup = {
     hasFactor: assurance.error ? true : assurance.data?.nextLevel === "aal2",
     firmFunction: firm.firmFunction,
     registered,
     hasWhatsapp,
-  });
+  };
+  let owed = personSetupOwed(ownSetup);
+  // How a lawyer files on the courts' screens (0263) is read only where it decides whether their setup opens: a
+  // lawyer who never answered it and owes nothing else. A read that fails owes nothing.
+  if (!owed && !personFlow.completedAt && signsAtTheBar(firm.firmFunction)) {
+    const ways = await loadFilingWays(context).catch(() => null);
+    if (ways) owed = personSetupOwed({ ...ownSetup, filingOwed: personFilingStep(ways, ways.myStates).owed });
+  }
   if (
     personSetupShown({ owed, answered: Boolean(personFlow.completedAt), hasWhatsapp }) &&
     !cookieStore.has(IMPERSONATION_MARKER_COOKIE)
