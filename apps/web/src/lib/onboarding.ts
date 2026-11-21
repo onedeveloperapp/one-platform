@@ -45,6 +45,7 @@ export type ActivationFacts = Record<string, boolean>;
  */
 const STEP_DEFINITIONS: (Omit<OnboardingStep, "done"> & { fact: string; hiddenWhen?: string })[] = [
   { key: "oab", title: "setup-step-oab", href: setupHref("oab"), fact: "oab_signer" },
+  { key: "office", title: "setup-step-office", href: setupHref("escritorio"), fact: "brand" },
   { key: "operation", title: "setup-step-operation", href: setupHref("operacao"), fact: "operation" },
   { key: "team", title: "setup-step-team", href: setupHref("equipe"), fact: "team", hiddenWhen: "works_alone" },
   { key: "channel", title: "setup-step-channel", href: setupHref("canal"), fact: "channel" },

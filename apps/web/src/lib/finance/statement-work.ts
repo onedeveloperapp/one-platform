@@ -1,11 +1,12 @@
 import "server-only";
 
+import { firmLetterhead } from "@/lib/brand/letterhead-read";
 import { issueFirmDocument } from "@/lib/documents/issue";
 import { moneyStatementDocument, type StatementFacts } from "@/lib/finance/money-statement";
 import { soon } from "@/lib/jobs/soon";
 import { createServiceClient } from "@flyee/auth/service";
 import { stampVerification } from "@flyee/documents/stamp";
-import { renderTextPdf } from "@flyee/documents/text-pdf";
+import { pageLayout, renderTextPdf } from "@flyee/documents/text-pdf";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 /**
@@ -118,17 +119,23 @@ export async function issueClaimedStatement(
       requestedBy: null,
       fileName: `${written.title}.pdf`,
     },
-    async (render) =>
-      stampVerification(
+    async (render) => {
+      // On the firm's letterhead, once confirmed (0260), with ONE's mark above its footer.
+      const letterhead = await firmLetterhead(service, facts.orgId);
+      return stampVerification(
         await renderTextPdf({
           blocks: written.blocks,
-          header: facts.firm,
+          header: letterhead ? undefined : facts.firm,
           pageNumbers: false,
           title: written.title,
           author: facts.firm,
+          letterhead,
+          stamped: true,
         }),
         { firm: facts.firm, verifyCode: render.verifyCode, verifyUrl: render.verifyUrl },
-      ),
+        { at: pageLayout(letterhead, true).stampAt },
+      );
+    },
   ).catch(() => null);
   if (!issued || issued.kind !== "issued") {
     await record(null, issued?.code ?? "issue_failed");

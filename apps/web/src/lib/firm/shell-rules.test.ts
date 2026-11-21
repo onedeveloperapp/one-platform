@@ -588,6 +588,8 @@ describe("the firm's setup, from facts", () => {
     // not one: a module brings it and ONE opens it (the owner, 2026-11-03).
     expect(buildOnboardingSteps().map((step) => [step.key, step.href])).toEqual([
       ["oab", "/configurar?passo=oab"],
+      // The firm's logo and colour (0258).
+      ["office", "/configurar?passo=escritorio"],
       // How the firm works and its areas (0256): ONE answers nobody new before the firm said them.
       ["operation", "/configurar?passo=operacao"],
       ["team", "/configurar?passo=equipe"],
@@ -621,11 +623,13 @@ describe("the firm's setup, from facts", () => {
   });
 
   it("marks a step done when the thing exists, and never by a click", () => {
-    const facts = { oab_signer: true, operation: true, team: false, channel: true, first_case: false };
-    expect(buildOnboardingSteps(facts).map((step) => step.done)).toEqual([true, true, false, true]);
+    const facts = { oab_signer: true, brand: true, operation: true, team: false, channel: true, first_case: false };
+    expect(buildOnboardingSteps(facts).map((step) => step.done)).toEqual([true, true, true, false, true]);
     expect(isActivated(facts)).toBe(false);
     // A firm with no case yet is ready: the first case is ONE's to receive.
-    expect(isActivated({ oab_signer: true, operation: true, team: true, channel: true, first_case: false })).toBe(true);
+    expect(
+      isActivated({ oab_signer: true, brand: true, operation: true, team: true, channel: true, first_case: false }),
+    ).toBe(true);
     // A firm that never said how it works is not ready (the pilot finds it on its home, with nothing blocked).
     expect(isActivated({ oab_signer: true, operation: false, team: true, channel: true, first_case: true })).toBe(
       false,
@@ -634,6 +638,7 @@ describe("the firm's setup, from facts", () => {
     expect(
       isActivated({
         oab_signer: true,
+        brand: true,
         operation: true,
         claim_defaults: false,
         team: true,
@@ -656,13 +661,14 @@ describe("the firm's setup, from facts", () => {
   it("asks no team of a firm that works alone", () => {
     const alone = {
       oab_signer: true,
+      brand: true,
       operation: true,
       team: false,
       works_alone: true,
       channel: true,
       first_case: true,
     };
-    expect(buildOnboardingSteps(alone).map((step) => step.key)).toEqual(["oab", "operation", "channel"]);
+    expect(buildOnboardingSteps(alone).map((step) => step.key)).toEqual(["oab", "office", "operation", "channel"]);
     expect(isActivated(alone)).toBe(true);
   });
 

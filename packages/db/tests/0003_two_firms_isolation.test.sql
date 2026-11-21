@@ -518,6 +518,13 @@ insert into public.firm_one_work_cost (org_id, hour_cents) values
 insert into public.firm_autonomy (org_id, decision, mode) values
   ('b1000000-0000-4000-8000-00000000000a', 'document_check', 'approval'),
   ('b1000000-0000-4000-8000-00000000000b', 'piece_text', 'approval');
+-- How each firm works (0256) and its brand (0258); its areas come with the module it is given.
+insert into public.firm_operations (org_id, states) values
+  ('b1000000-0000-4000-8000-00000000000a', '{GO}'),
+  ('b1000000-0000-4000-8000-00000000000b', '{SP}');
+insert into public.firm_brands (org_id, color, color_from) values
+  ('b1000000-0000-4000-8000-00000000000a', '#14287a', 'person'),
+  ('b1000000-0000-4000-8000-00000000000b', '#c0392b', 'person');
 insert into public.firm_signers (org_id, user_id) values
   ('b1000000-0000-4000-8000-00000000000a', 'a1000000-0000-4000-8000-000000000001'),
   ('b1000000-0000-4000-8000-00000000000b', 'a1000000-0000-4000-8000-000000000004');
@@ -743,8 +750,8 @@ select is(
     'consent_acceptances', 'court_login_uses',
     'deadlines', 'djen_captures', 'dossiers', 'draft_templates', 'entitlement_grants', 'extension_links', 'fee_terms', 'files', 'filing_batches', 'filing_package_items', 'filing_packages',
     'filing_receipts', 'filing_submissions', 'finance_access', 'finance_accountants', 'finance_accounts', 'finance_bill_payments', 'finance_bills', 'finance_budgets', 'finance_categories', 'finance_closings', 'finance_cost_centers', 'finance_entries', 'finance_imports', 'finance_invoices', 'finance_package_sends', 'finance_receipts', 'finance_rules', 'finance_series',
-    'finance_statement_lines', 'finance_statements', 'firm_autonomy', 'firm_calendars',
-    'firm_claim_defaults', 'firm_filing_ways', 'firm_invitations', 'firm_marketing_terms', 'firm_message_texts', 'firm_modules', 'firm_notice_kinds', 'firm_one_work_cost', 'firm_one_work_minutes', 'firm_settlement_floors', 'firm_signers', 'flight_alerts', 'flight_checks', 'flight_segments', 'free_justice_answers', 'hearing_briefs', 'hearing_contacts', 'hearing_reports', 'hearing_staff_messages', 'hearings', 'import_batches', 'import_rows', 'invoices',
+    'finance_statement_lines', 'finance_statements', 'firm_areas', 'firm_autonomy', 'firm_brands', 'firm_calendars',
+    'firm_claim_defaults', 'firm_filing_ways', 'firm_invitations', 'firm_marketing_terms', 'firm_message_texts', 'firm_modules', 'firm_notice_kinds', 'firm_one_work_cost', 'firm_one_work_minutes', 'firm_operations', 'firm_settlement_floors', 'firm_signers', 'flight_alerts', 'flight_checks', 'flight_segments', 'free_justice_answers', 'hearing_briefs', 'hearing_contacts', 'hearing_reports', 'hearing_staff_messages', 'hearings', 'import_batches', 'import_rows', 'invoices',
     'issued_documents', 'judgment_paths', 'judgment_sessions', 'lawsuit_amounts', 'lawsuit_facts', 'lawyer_filing_ways', 'lawyer_signature_uses', 'legal_sources', 'marketing_segments', 'memberships',
     'money_releases', 'money_shares', 'money_statements', 'movements', 'notice_optins', 'notice_stops', 'onboarding_state', 'partner_invitations', 'partner_links', 'passenger_welcomes', 'pax_firm_clauses',
     'people', 'person_data_requests',
@@ -920,7 +927,7 @@ select is(
     'client_links', 'client_notices', 'closing_goals',
     'consent_acceptances', 'deadlines', 'djen_captures', 'dossiers', 'draft_templates', 'entitlement_grants', 'files',
     'filing_batches', 'filing_package_items', 'filing_packages',
-    'filing_receipts', 'filing_submissions', 'finance_access', 'firm_autonomy', 'firm_calendars', 'firm_claim_defaults', 'firm_filing_ways', 'firm_marketing_terms', 'firm_message_texts', 'firm_modules', 'firm_notice_kinds', 'firm_settlement_floors', 'firm_signers', 'flight_alerts', 'flight_checks', 'flight_segments', 'free_justice_answers', 'hearing_briefs', 'hearing_contacts', 'hearing_reports', 'hearing_staff_messages', 'hearings', 'import_batches',
+    'filing_receipts', 'filing_submissions', 'finance_access', 'firm_areas', 'firm_autonomy', 'firm_brands', 'firm_calendars', 'firm_claim_defaults', 'firm_filing_ways', 'firm_marketing_terms', 'firm_message_texts', 'firm_modules', 'firm_notice_kinds', 'firm_operations', 'firm_settlement_floors', 'firm_signers', 'flight_alerts', 'flight_checks', 'flight_segments', 'free_justice_answers', 'hearing_briefs', 'hearing_contacts', 'hearing_reports', 'hearing_staff_messages', 'hearings', 'import_batches',
     'import_rows', 'invoices', 'issued_documents', 'judgment_paths', 'judgment_sessions', 'lawsuit_amounts', 'lawsuit_facts', 'lawyer_filing_ways', 'lawyer_signature_uses', 'legal_sources',
     'memberships', 'movements', 'notice_optins', 'notice_stops', 'partner_links', 'passenger_welcomes', 'pax_firm_clauses', 'people', 'piece_fact_checks', 'proceeding_lawyers', 'proceeding_parties', 'proceeding_tracking', 'proceedings',
     'publication_actions', 'publication_readings', 'publications',
@@ -963,8 +970,8 @@ select is(
     'consent_acceptances', 'court_login_uses',
     'deadlines', 'djen_captures', 'dossiers', 'draft_templates', 'entitlement_grants', 'extension_links', 'fee_terms', 'files', 'filing_batches', 'filing_package_items', 'filing_packages',
     'filing_receipts', 'filing_submissions', 'finance_access', 'finance_accountants', 'finance_accounts', 'finance_bill_payments', 'finance_bills', 'finance_budgets', 'finance_categories', 'finance_closings', 'finance_cost_centers', 'finance_entries', 'finance_imports', 'finance_invoices', 'finance_package_sends', 'finance_receipts', 'finance_rules', 'finance_series',
-    'finance_statement_lines', 'finance_statements', 'firm_autonomy', 'firm_calendars',
-    'firm_claim_defaults', 'firm_filing_ways', 'firm_invitations', 'firm_marketing_terms', 'firm_message_texts', 'firm_modules', 'firm_notice_kinds', 'firm_one_work_cost', 'firm_one_work_minutes', 'firm_settlement_floors', 'firm_signers', 'flight_alerts', 'flight_checks', 'flight_segments', 'free_justice_answers', 'hearing_briefs', 'hearing_contacts', 'hearing_reports', 'hearing_staff_messages', 'hearings', 'import_batches', 'import_rows', 'invoices',
+    'finance_statement_lines', 'finance_statements', 'firm_areas', 'firm_autonomy', 'firm_brands', 'firm_calendars',
+    'firm_claim_defaults', 'firm_filing_ways', 'firm_invitations', 'firm_marketing_terms', 'firm_message_texts', 'firm_modules', 'firm_notice_kinds', 'firm_one_work_cost', 'firm_one_work_minutes', 'firm_operations', 'firm_settlement_floors', 'firm_signers', 'flight_alerts', 'flight_checks', 'flight_segments', 'free_justice_answers', 'hearing_briefs', 'hearing_contacts', 'hearing_reports', 'hearing_staff_messages', 'hearings', 'import_batches', 'import_rows', 'invoices',
     'issued_documents', 'judgment_paths', 'judgment_sessions', 'lawsuit_amounts', 'lawsuit_facts', 'lawyer_filing_ways', 'lawyer_signature_uses', 'legal_sources', 'marketing_segments', 'memberships',
     'money_releases', 'money_shares', 'money_statements', 'movements', 'notice_optins', 'notice_stops', 'onboarding_state', 'partner_invitations', 'partner_links', 'passenger_welcomes', 'pax_firm_clauses',
     'people', 'person_data_requests',

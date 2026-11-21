@@ -1,10 +1,12 @@
 import "server-only";
 
+import type { SetupBrand, SetupLetterhead } from "./setup-office";
 import type { SetupState } from "./setup-view";
 import { cookies } from "next/headers";
 
 import type { SecondFactorState } from "@/lib/ai/approvals";
 import { cloudSigningOffered } from "@/lib/cases/filing-facts";
+import { downloadUrl } from "@/lib/files/uploads";
 import { EMPTY_OFFICE, OFFICE_COLUMNS, officeOf } from "@/lib/firm/office";
 import { type KnownArea, type OperationArea, operationOf } from "@/lib/firm/operation";
 import { isManager, OAB_STATES, type OabRegistration } from "@/lib/firm/roles";
@@ -55,6 +57,7 @@ export async function loadSetupState(
     knownAreas,
     firmAreas,
     operation,
+    brandRow,
   ] = await Promise.all([
     context.supabase.from("oab_registrations").select("id, uf, number, kind").eq("user_id", context.userId),
     context.supabase.from("firm_signers").select("user_id").eq("org_id", firm.id),
@@ -91,9 +94,36 @@ export async function loadSetupState(
       )
       .eq("org_id", firm.id)
       .maybeSingle(),
+    // The firm's logo and colour (0258): a read that fails asks them as never given.
+    context.supabase
+      .from("firm_brands")
+      .select("logo_file_id, color, color_from, logo_color, letterhead_kind, letterhead_confirmed_at")
+      .eq("org_id", firm.id)
+      .maybeSingle(),
   ]);
   if (registrations.error || signers.error || organization.error || !organization.data) return { kind: "error" };
   const operationAnswered = (organization.data as { operation_answered_at?: string | null }).operation_answered_at;
+  const brandData = (brandRow.error ? null : brandRow.data) as {
+    logo_file_id: string | null;
+    color: string | null;
+    color_from: "logo" | "person" | null;
+    logo_color: string | null;
+    letterhead_kind: "word" | "pdf" | null;
+    letterhead_confirmed_at: string | null;
+  } | null;
+  const logoLink = brandData?.logo_file_id
+    ? await downloadUrl(context, brandData.logo_file_id).catch(() => null)
+    : null;
+  const brand: SetupBrand = {
+    logoUrl: logoLink?.ok ? logoLink.url : null,
+    color: brandData?.color ?? null,
+    colorFrom: brandData?.color_from ?? null,
+    logoColor: brandData?.logo_color ?? null,
+  };
+  const letterhead: SetupLetterhead = {
+    kind: brandData?.letterhead_kind ?? null,
+    confirmed: Boolean(brandData?.letterhead_confirmed_at),
+  };
 
   const signing = ((signers.data ?? []) as { user_id: string }[]).map((row) => row.user_id);
   const secondFactor: SecondFactorState =
@@ -122,6 +152,8 @@ export async function loadSetupState(
     paperImports,
     office: office.error ? EMPTY_OFFICE : officeOf(office.data),
     operationAnswered: typeof operationAnswered === "string",
+    brand,
+    letterhead,
     operation: operation.error ? operationOf(null) : operationOf(operation.data),
     areas: firmAreas.error
       ? []

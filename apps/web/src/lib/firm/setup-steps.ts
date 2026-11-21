@@ -11,9 +11,9 @@
  * one for each module the firm contracted (0081). How the firm works and the
  * areas it works in come before the channel, the last step: ONE answers
  * nobody new on the WhatsApp before it knows the firm (0256, the owner,
- * 2026-11-20).
+ * 2026-11-20); the firm's logo and colour (0258) come before them.
  */
-export const SETUP_STEPS = ["seguranca", "oab", "operacao", "equipe", "papeis", "canal"] as const;
+export const SETUP_STEPS = ["seguranca", "oab", "escritorio", "operacao", "equipe", "papeis", "canal"] as const;
 
 export type SetupStepKey = (typeof SETUP_STEPS)[number];
 

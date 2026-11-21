@@ -2,6 +2,7 @@ import "server-only";
 
 import { runFirmTask } from "@/lib/ai/executor";
 import { soonAi } from "@/lib/ai/health";
+import { firmLetterhead } from "@/lib/brand/letterhead-read";
 import {
   DRAFT_TASK,
   draftBlocks,
@@ -280,6 +281,9 @@ export async function workClaimedDraft(service: SupabaseClient, held: DraftClaim
       author: row.firm ?? undefined,
       producer: row.firm ?? undefined,
       pageNumbers: true,
+      // On the firm's letterhead, once confirmed (0260); a piece takes no mark of ONE's.
+      letterhead: await firmLetterhead(service, row.org_id),
+      stamped: false,
     });
   } catch {
     return record("failed", { code: "render_failed" });

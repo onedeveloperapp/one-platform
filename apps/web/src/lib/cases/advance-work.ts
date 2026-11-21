@@ -2,6 +2,7 @@ import "server-only";
 
 import { createHash, randomBytes } from "node:crypto";
 
+import { firmLetterhead } from "@/lib/brand/letterhead-read";
 import { type AccountState, accountStateOf } from "@/lib/cases/account";
 import { lawsuitsWaiting } from "@/lib/cases/advance";
 import {
@@ -31,6 +32,7 @@ import { deliverOutbox } from "@/lib/whatsapp/send";
 import { createServiceClient } from "@flyee/auth/service";
 import { BRAND } from "@flyee/content";
 import { takeBackFile } from "@flyee/documents/files";
+import type { PdfLetterhead } from "@flyee/documents/letterhead";
 import { measureFile } from "@flyee/documents/measure";
 import { renderTextPdf } from "@flyee/documents/text-pdf";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -419,6 +421,8 @@ type KeptPaper = {
 async function keepPaperPdf(
   store: ReturnType<typeof supabaseFileStore>,
   paper: PaperToIssue & { org_id: string; kind: string; body: string },
+  /** The firm's letterhead, confirmed (0260): the paper is the firm's. */
+  letterhead: PdfLetterhead | null = null,
 ): Promise<KeptPaper | null> {
   let pdf: Uint8Array;
   try {
@@ -428,6 +432,8 @@ async function keepPaperPdf(
       author: paper.firm ?? undefined,
       producer: paper.firm ?? undefined,
       pageNumbers: true,
+      letterhead,
+      stamped: false,
     });
   } catch {
     return null;
@@ -492,7 +498,11 @@ async function sendPapers(service: SupabaseClient, held: HeldAdvance): Promise<P
     if (paper.code !== "due" || !paper.org_id || !paper.person_id || !paper.kind || !paper.template_id || !paper.body) {
       return { ...sent, failed: true };
     }
-    const kept = await keepPaperPdf(store, { ...paper, org_id: paper.org_id, kind: paper.kind, body: paper.body });
+    const kept = await keepPaperPdf(
+      store,
+      { ...paper, org_id: paper.org_id, kind: paper.kind, body: paper.body },
+      await firmLetterhead(service, paper.org_id),
+    );
     if (!kept) return { ...sent, failed: true };
     const { data: recorded, error: refused } = await service.rpc("advance_record_paper", {
       target_case: held.caseId,
@@ -545,12 +555,11 @@ export async function issueAppealPapers(service: SupabaseClient, caseId: string)
       done.failed = true;
       break;
     }
-    const kept = await keepPaperPdf(store, {
-      ...paper,
-      org_id: paper.org_id,
-      kind: "declaracao_hipossuficiencia",
-      body: paper.body,
-    });
+    const kept = await keepPaperPdf(
+      store,
+      { ...paper, org_id: paper.org_id, kind: "declaracao_hipossuficiencia", body: paper.body },
+      await firmLetterhead(service, paper.org_id),
+    );
     if (!kept) {
       done.failed = true;
       break;

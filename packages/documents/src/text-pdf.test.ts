@@ -5,6 +5,7 @@ import { PDFDocument, StandardFonts } from "pdf-lib";
 import { measureFile } from "./measure.ts";
 import { stampVerification } from "./stamp.ts";
 import {
+  pageLayout,
   PLAIN_CODES,
   renderTextPdf,
   type TextBlock,
@@ -132,5 +133,47 @@ describe("a document of text as a PDF", () => {
     });
     assert.equal((await PDFDocument.load(stamped)).getPageCount(), 1);
     assert.ok(stamped.byteLength > odd.byteLength);
+  });
+
+  it("draws the firm's blank page under every page, keeps the text inside its margins and lifts the mark above its footer", async () => {
+    const paper = await PDFDocument.create();
+    const sheet = paper.addPage([595.28, 841.89]);
+    sheet.drawText("Souza Advogados", { x: 60, y: 770, size: 14, font: await paper.embedFont(StandardFonts.Helvetica) });
+    const letterhead = {
+      kind: "page" as const,
+      pdf: await paper.save(),
+      margins: { top: 120, bottom: 90, left: 70, right: 60 },
+    };
+    const blocks = Array.from({ length: 60 }, (_, index) => ({
+      kind: "paragraph" as const,
+      text: `Parágrafo ${index + 1} da peça, escrito no timbrado do escritório.`,
+    }));
+    const bytes = await renderTextPdf({ blocks, letterhead, stamped: true });
+    const loaded = await PDFDocument.load(bytes);
+    assert.ok(loaded.getPageCount() >= 2, "the text runs over pages");
+    const layout = pageLayout(letterhead, true);
+    assert.equal(layout.top, 120);
+    assert.equal(layout.stampAt, 78);
+    // The footer ends 14 points under the margin: the mark sits on it, the text above the mark.
+    assert.equal(layout.bottom, 76 + 56 + 10);
+    // Without the mark, the text goes down to the letterhead's own margin.
+    assert.equal(pageLayout(letterhead, false).bottom, 90);
+    const stamped = await stampVerification(bytes, { firm: "Souza Advogados", verifyCode: "ABCD2345", verifyUrl: "https://one.invalid/verificar" }, { at: layout.stampAt });
+    assert.equal((await PDFDocument.load(stamped)).getPageCount(), loaded.getPageCount());
+  });
+
+  it("draws the header and the footer of a Word letterhead, the text below and above them", async () => {
+    const letterhead = {
+      kind: "bands" as const,
+      header: { lines: [{ text: "Souza & Lima Advogados", align: "center" as const, sizePt: 12, bold: true }], images: [] },
+      footer: { lines: [{ text: "Rua das Flores, 100", align: "right" as const, sizePt: 8, bold: false }], images: [] },
+      margins: { top: 100, bottom: 70, left: 85, right: 57, header: 28, footer: 28 },
+    };
+    const layout = pageLayout(letterhead, false);
+    assert.equal(layout.left, 85);
+    assert.ok(layout.top >= 28 + 12 * 1.3 + 14 && layout.top >= 100);
+    assert.ok(layout.bottom >= 28 + 8 * 1.3 + 14);
+    const bytes = await renderTextPdf({ blocks: [{ kind: "title", text: "Petição inicial" }], letterhead, stamped: false });
+    assert.equal((await PDFDocument.load(bytes)).getPageCount(), 1);
   });
 });

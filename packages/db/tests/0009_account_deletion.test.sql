@@ -283,6 +283,9 @@ select is(
     'ai_runs.task',
     'approvals.task',
     'cases.airline_iata',
+    -- A case's area (0256) is its firm's: both cascade from the firm in the same statement, and an area taken out is
+    -- kept, never deleted.
+    'cases.area_id',
     'cases.module',
     -- The version of its module a case was opened under (0212) is platform data, never deleted once published.
     'cases.module_version_id',
@@ -307,6 +310,8 @@ select is(
     'finance_entries.category_id',
     'finance_statement_lines.account_id',
     'finance_statements.account_id',
+    -- An area of a firm names the area of law ONE knows (0256), which is platform data, never deleted.
+    'firm_areas.law_area',
     'firm_filing_ways.term_id',
     'firm_modules.module_key',
     'firm_notice_kinds.kind',
@@ -314,6 +319,8 @@ select is(
     'flight_segments.origin_iata',
     'impersonation_sessions.actor_id',
     'issued_documents.file_id',
+    -- An area of law names the platform's module that serves it (0256).
+    'law_areas.module',
     'lawyer_filing_ways.system_key',
     'lawyer_filing_ways.term_id',
     'leads.consent_term_id',

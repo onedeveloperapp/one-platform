@@ -1,5 +1,6 @@
-import { PDFDocument, type PDFFont, type PDFPage, rgb, StandardFonts } from "pdf-lib";
+import { type PDFEmbeddedPage, type PDFFont, type PDFImage, PDFDocument, type PDFPage, rgb, StandardFonts } from "pdf-lib";
 
+import type { Band, PdfLetterhead } from "@flyee/documents/letterhead";
 import { A4 } from "@flyee/documents/normalize";
 import { wrapText, writableText } from "@flyee/documents/pdf-text";
 import { STAMP_BAND } from "@flyee/documents/stamp";
@@ -46,6 +47,49 @@ export interface TextDocument {
    * court: nothing in such a file names the platform.
    */
   producer?: string;
+  /** The firm's letterhead (0260): its blank page under every page, or its header and footer on every page. */
+  letterhead?: PdfLetterhead | null;
+  /** The document takes ONE's verification mark: its band is kept free above the letterhead's footer. */
+  stamped?: boolean;
+}
+
+/** Where the text goes on a page, and where the verification mark is drawn: above the letterhead's footer. */
+export type PageLayout = { top: number; bottom: number; left: number; right: number; stampAt: number };
+
+const BAND_GAP = 4;
+const LINE_STEP = 1.3;
+
+/** How tall a header or a footer is, as `drawBand` draws it within a width. */
+function bandHeight(band: Band, width: number): number {
+  let height = 0;
+  for (const image of band.images) height += Math.min(image.heightPt, (image.heightPt * width) / image.widthPt) + BAND_GAP;
+  for (const line of band.lines) height += line.sizePt * LINE_STEP;
+  return height;
+}
+
+/** The layout of a page of the document, with or without the firm's letterhead. */
+export function pageLayout(letterhead: PdfLetterhead | null | undefined, stamped = true): PageLayout {
+  if (!letterhead) {
+    return { top: MARGIN_TOP, bottom: MARGIN_BOTTOM, left: MARGIN_X, right: MARGIN_X, stampAt: 0 };
+  }
+  const margins = letterhead.margins;
+  const width = A4.width - margins.left - margins.right;
+  let top: number;
+  let footerTop: number;
+  let bottom: number;
+  if (letterhead.kind === "page") {
+    top = margins.top;
+    // The measure keeps 14 points between the footer and the text.
+    footerTop = Math.max(0, margins.bottom - 14);
+    bottom = margins.bottom;
+  } else {
+    const bands = letterhead.margins;
+    top = Math.max(bands.top, bands.header + bandHeight(letterhead.header, width) + 14);
+    footerTop = bands.footer + bandHeight(letterhead.footer, width);
+    bottom = Math.max(bands.bottom, footerTop + 14);
+  }
+  if (stamped) bottom = Math.max(bottom, footerTop + STAMP_BAND + 10);
+  return { top, bottom, left: margins.left, right: margins.right, stampAt: stamped ? footerTop + 2 : 0 };
 }
 
 const MARGIN_X = 62;
@@ -61,6 +105,22 @@ export async function renderTextPdf(document: TextDocument): Promise<Uint8Array>
   const pdf = await PDFDocument.create();
   const regular = await pdf.embedFont(StandardFonts.Helvetica);
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
+  const letterhead = document.letterhead ?? null;
+  const layout = pageLayout(letterhead, document.stamped !== false);
+  const MARGIN_X = layout.left;
+  const MARGIN_TOP = layout.top;
+  const MARGIN_BOTTOM = layout.bottom;
+  // The firm's blank page, drawn under each page; or the pictures of its header and footer, embedded once.
+  let paper: PDFEmbeddedPage | null = null;
+  const pictures = new Map<Uint8Array, PDFImage>();
+  if (letterhead?.kind === "page") {
+    [paper] = await pdf.embedPdf(letterhead.pdf, [0]);
+  } else if (letterhead?.kind === "bands") {
+    for (const image of [...letterhead.header.images, ...letterhead.footer.images]) {
+      if (pictures.has(image.bytes)) continue;
+      pictures.set(image.bytes, image.mime === "image/png" ? await pdf.embedPng(image.bytes) : await pdf.embedJpg(image.bytes));
+    }
+  }
   if (document.title) pdf.setTitle(writableText(document.title));
   if (document.author) pdf.setAuthor(writableText(document.author));
   // The same input gives the same bytes: no clock in the file.
@@ -70,7 +130,7 @@ export async function renderTextPdf(document: TextDocument): Promise<Uint8Array>
   pdf.setProducer(producer);
   pdf.setCreator(producer);
 
-  const width = A4.width - MARGIN_X * 2;
+  const width = A4.width - layout.left - layout.right;
   const ink = rgb(0.1, 0.1, 0.12);
   const soft = rgb(0.38, 0.38, 0.42);
   const pages: PDFPage[] = [];
@@ -79,6 +139,7 @@ export async function renderTextPdf(document: TextDocument): Promise<Uint8Array>
 
   const newPage = () => {
     page = pdf.addPage([A4.width, A4.height]);
+    if (paper) page.drawPage(paper, { x: 0, y: 0, width: A4.width, height: A4.height });
     pages.push(page);
     y = A4.height - MARGIN_TOP;
   };
@@ -145,8 +206,40 @@ export async function renderTextPdf(document: TextDocument): Promise<Uint8Array>
     }
   }
 
+  /** A header or a footer of the firm's Word letterhead, from its top down. */
+  const drawBand = (sheet: PDFPage, band: Band, top: number) => {
+    let cursor = top;
+    const xOf = (align: "left" | "center" | "right", wide: number) =>
+      align === "center" ? layout.left + (width - wide) / 2 : align === "right" ? A4.width - layout.right - wide : layout.left;
+    for (const image of band.images) {
+      const picture = pictures.get(image.bytes);
+      if (!picture) continue;
+      const scale = Math.min(1, width / image.widthPt);
+      const wide = image.widthPt * scale;
+      const tall = image.heightPt * scale;
+      sheet.drawImage(picture, { x: xOf(image.align, wide), y: cursor - tall, width: wide, height: tall });
+      cursor -= tall + BAND_GAP;
+    }
+    for (const line of band.lines) {
+      const font = line.bold ? bold : regular;
+      const text = wrapText(writableText(line.text), font, line.sizePt, width)[0] ?? "";
+      sheet.drawText(text, {
+        x: xOf(line.align, font.widthOfTextAtSize(text, line.sizePt)),
+        y: cursor - line.sizePt,
+        size: line.sizePt,
+        font,
+        color: ink,
+      });
+      cursor -= line.sizePt * LINE_STEP;
+    }
+  };
+
   const header = document.header ? writableText(document.header) : "";
   pages.forEach((sheet, index) => {
+    if (letterhead?.kind === "bands") {
+      drawBand(sheet, letterhead.header, A4.height - letterhead.margins.header);
+      drawBand(sheet, letterhead.footer, letterhead.margins.footer + bandHeight(letterhead.footer, width));
+    }
     const top = A4.height - MARGIN_TOP + 22;
     if (header) {
       const fitted = wrapText(header, regular, HEADER_SIZE, width - 60)[0] ?? "";

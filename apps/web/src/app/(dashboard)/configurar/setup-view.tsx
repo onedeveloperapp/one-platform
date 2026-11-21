@@ -8,6 +8,7 @@ import TestChatCard from "../settings/connections/components/test-chat-card";
 import NoticesCard from "../settings/mensagens/notices-card";
 import { teamErrorKey } from "../settings/team/team-types";
 import SetupCpf, { declareSetupCpf } from "./setup-cpf";
+import { type SetupBrand, type SetupLetterhead, useOfficeStep } from "./setup-office";
 import { useOperationStep } from "./setup-operation";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -91,6 +92,10 @@ export type SetupState =
       paperImports: { procuracao: PaperImport | null; contrato: PaperImport | null };
       /** Where the firm is, as the power of attorney says it (0217). */
       office: FirmOffice;
+      /** The firm's logo and colour (0258). */
+      brand: SetupBrand;
+      /** The firm's letterhead (0260). */
+      letterhead: SetupLetterhead;
       /** The firm said how it works and its areas (0256): ONE answers nobody new on the WhatsApp before it did. */
       operationAnswered: boolean;
       operation: FirmOperation;
@@ -301,6 +306,22 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
     };
   }, [paperWorking, router]);
 
+  // ---------- The office: its documents, its logo and colour, where it is (0258) ----------
+  // The firm's power of attorney, as the step of the papers reads it: sent from this step too, to the same panel.
+  const ownProcuracao = Boolean(state.papers?.procuracao.used && !state.papers.procuracao.used.platform);
+  const readingProcuracao = Boolean(
+    state.paperImports.procuracao && IMPORT_WORKING.includes(state.paperImports.procuracao.status),
+  );
+  const officeStep = useOfficeStep({
+    office: state.office,
+    brand: state.brand,
+    letterhead: state.letterhead,
+    paper: ownProcuracao ? "own" : readingProcuracao ? "working" : "none",
+    onSendPaper: lawyer || decides ? () => choosePaper("procuracao") : null,
+    blocked: blocked || locked,
+    onChanged: refresh,
+  });
+
   // ---------- How the firm works and its areas (0256) ----------
   const operationStep = useOperationStep({
     answered: state.operationAnswered,
@@ -321,6 +342,7 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
   // with none, the judge defines it.
   const missing: [boolean, SetupStepKey][] = [
     [(lawyer && !registered) || (decides && lawyer && !state.signs), "oab"],
+    [!state.brand.logoUrl, "escritorio"],
     [!state.operationAnswered, "operacao"],
     [state.worksAlone === null, "equipe"],
     [!state.whatsapp, "canal"],
@@ -497,7 +519,7 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
       onPrimary: saveOab,
       secondary:
         lawyer && !registered
-          ? { label: t("setup-not-now"), onClick: () => setStepIndex(SETUP_STEPS.indexOf("operacao")) }
+          ? { label: t("setup-not-now"), onClick: () => setStepIndex(SETUP_STEPS.indexOf("escritorio")) }
           : undefined,
       content: (
         <Box className="flex flex-col gap-4">
@@ -613,6 +635,12 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
           ) : null}
         </Box>
       ),
+    },
+    {
+      title: t("setup-office-title"),
+      hint: t("setup-office-hint"),
+      canAdvance: !blocked,
+      ...officeStep,
     },
     {
       title: t("setup-operation-title"),
@@ -831,27 +859,42 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
                     </Box>
                   ) : null}
                   {/* What the power of attorney says of the firm and its lawyers: the address and the e-mail the CPC
-                      asks of it (arts. 105 and 287), given here or in "Dados do escritório" (0217). */}
-                  {paper === "procuracao" ? (
-                    <Box className="flex flex-wrap items-center gap-2">
-                      <StateLine tone={officeAddressGiven(state.office) ? "done" : "attention"}>
-                        {t(
-                          officeAddressGiven(state.office)
-                            ? "setup-papers-office-given"
-                            : "setup-papers-office-missing",
-                        )}
-                      </StateLine>
-                      {!blocked ? (
-                        <Button variant="text" color="grey" size="small" onClick={() => setOfficeOpen(true)}>
-                          {t(
-                            officeAddressGiven(state.office)
-                              ? "setup-papers-office-change"
-                              : "setup-papers-office-open",
-                          )}
-                        </Button>
-                      ) : null}
-                    </Box>
-                  ) : null}
+                      asks of it (arts. 105 and 287), read by ONE from the firm's documents (0271) or given by hand. */}
+                  {paper === "procuracao"
+                    ? (() => {
+                        const given = officeAddressGiven(state.office);
+                        const read = state.office.read;
+                        const reading = !given && request !== null && IMPORT_WORKING.includes(request.status);
+                        const words = given
+                          ? read
+                            ? "setup-papers-office-read"
+                            : "setup-papers-office-given"
+                          : reading
+                            ? "setup-papers-office-reading"
+                            : read?.left
+                              ? "setup-papers-office-no-cep"
+                              : "setup-papers-office-missing";
+                        const button = given
+                          ? read
+                            ? "office-confirm"
+                            : "setup-papers-office-change"
+                          : reading
+                            ? null
+                            : read?.left
+                              ? "setup-papers-office-cep"
+                              : "setup-papers-office-by-hand";
+                        return (
+                          <Box className="flex flex-wrap items-center gap-2">
+                            <StateLine tone={given ? "done" : reading ? "waiting" : "attention"}>{t(words)}</StateLine>
+                            {!blocked && button ? (
+                              <Button variant="text" color="grey" size="small" onClick={() => setOfficeOpen(true)}>
+                                {t(button)}
+                              </Button>
+                            ) : null}
+                          </Box>
+                        );
+                      })()
+                    : null}
                   {request ? (
                     <PaperRequestLine
                       request={request}
@@ -1100,7 +1143,7 @@ function PaperRequestLine({
         : request.status === "refused"
           ? refusalWords(t, request.refusal, paper)
           : request.status === "failed"
-            ? t(importFailureKey(request.failure))
+            ? t("setup-papers-request-failed", { file: request.fileName, why: t(importFailureKey(request.failure)) })
             : t("setup-papers-request-working", { file: request.fileName });
   const action =
     request.status === "asking"

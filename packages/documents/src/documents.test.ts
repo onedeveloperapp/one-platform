@@ -31,6 +31,13 @@ test("a file is what its first bytes say, whatever it is called", () => {
   assert.equal(detectMime(bytesOf("RIFF", 0, 0, 0, 0, "WEBPVP8 ")), "image/webp");
   assert.equal(detectMime(bytesOf(0, 0, 0, 0x18, "ftypheic", 0, 0)), "image/heic");
   assert.equal(detectMime(bytesOf(0, 0, 0, 0x18, "ftypmif1", 0, 0)), "image/heif");
+  // A logo in SVG (0258), after a declaration and a comment too; a page of HTML is none.
+  assert.equal(detectMime(bytesOf('<svg xmlns="http://www.w3.org/2000/svg"></svg>')), "image/svg+xml");
+  assert.equal(
+    detectMime(bytesOf('<?xml version="1.0"?>\n<!-- logo -->\n<!DOCTYPE svg>\n<svg width="1">')),
+    "image/svg+xml",
+  );
+  assert.equal(detectMime(bytesOf("<html><svg></svg></html>")), null);
   // A page saved as `.pdf`, a program, nothing at all: none of them is kept.
   assert.equal(detectMime(bytesOf("<!doctype html><html>")), null);
   assert.equal(detectMime(bytesOf("MZ", 0x90, 0, 3, 0, 0, 0)), null);

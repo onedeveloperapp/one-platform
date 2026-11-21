@@ -36,8 +36,15 @@ export interface VerificationMark {
   verifyUrl: string;
 }
 
-/** Stamps the verification mark on every page of a PDF and returns the new bytes. */
-export async function stampVerification(pdfBytes: Uint8Array, mark: VerificationMark): Promise<Uint8Array> {
+/**
+ * Stamps the verification mark on every page of a PDF and returns the new bytes. `at` lifts the mark from the foot of
+ * the page, above the footer of the firm's letterhead (`pageLayout(...).stampAt` of `@flyee/documents/text-pdf`).
+ */
+export async function stampVerification(
+  pdfBytes: Uint8Array,
+  mark: VerificationMark,
+  options: { at?: number } = {},
+): Promise<Uint8Array> {
   const pdf = await PDFDocument.load(pdfBytes);
   const font = await pdf.embedFont(StandardFonts.Helvetica);
   const qr = await pdf.embedPng(
@@ -52,7 +59,7 @@ export async function stampVerification(pdfBytes: Uint8Array, mark: Verification
   const ink = rgb(0.25, 0.27, 0.32);
 
   for (const page of pdf.getPages()) {
-    const y = (STAMP_BAND - QR_SIZE) / 2;
+    const y = Math.max(0, options.at ?? 0) + (STAMP_BAND - QR_SIZE) / 2;
     page.drawImage(qr, { x: MARGIN, y, width: QR_SIZE, height: QR_SIZE });
     lines.forEach((line, index) => {
       page.drawText(line, {

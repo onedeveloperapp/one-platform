@@ -92,8 +92,25 @@ function startsAsSignedData(bytes: Uint8Array): boolean {
   return header > 0 && startsWith(bytes, SIGNED_DATA_OID, header);
 }
 
+/**
+ * True when the bytes are an SVG image: text whose first element, after an XML declaration, a doctype or comments,
+ * is `<svg`. Read from the start only, never parsed.
+ */
+function isSvg(bytes: Uint8Array): boolean {
+  let text = new TextDecoder("utf-8", { fatal: false }).decode(bytes.subarray(0, 4096)).replace(/^﻿/, "");
+  for (;;) {
+    text = text.trimStart();
+    const skip = /^<\?xml[\s\S]*?\?>|^<!--[\s\S]*?-->|^<!DOCTYPE[^>]*>/i.exec(text);
+    if (!skip) break;
+    text = text.slice(skip[0].length);
+  }
+  return /^<svg[\s>]/i.test(text);
+}
+
 export function detectMime(bytes: Uint8Array): string | null {
   if (startsAsPdf(bytes)) return "application/pdf";
+  // A logo the firm sends (0258): an SVG is text, told by its first element.
+  if (isSvg(bytes)) return "image/svg+xml";
   if (startsAsSignedData(bytes)) return "application/pkcs7-mime";
   if (isWordPackage(bytes)) return DOCX_MIME;
   if (startsWith(bytes, [0xff, 0xd8, 0xff])) return "image/jpeg";
