@@ -17,6 +17,8 @@ export type ScreenSystem = {
   key: string;
   name: string;
   court: string;
+  /** The court's system: `projudi`, `eproc`, `pje`, `esaj`. */
+  system: string;
   /** The state of the court, when the platform knows it. */
   uf: string | null;
   /** The automated ways the platform turned on at this system. */

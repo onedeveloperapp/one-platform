@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createHash, randomInt } from "node:crypto";
 
 import { getVault } from "@/lib/connections/vault";
+import { downloadUrl } from "@/lib/files/uploads";
 import { loginHint } from "@/lib/filing-ways/hint";
 import { getMemberContext } from "@/lib/member/context";
 import { connectionRefusal } from "@/lib/whatsapp/session";
@@ -153,7 +154,7 @@ export async function endExtensionLink(linkId: string): Promise<WayActionResult>
 export async function approveFilingBatch(
   system: string,
   packageIds: string[],
-): Promise<WayActionResult & { skipped?: { package: string; code: string }[] }> {
+): Promise<WayActionResult & { skipped?: { package: string; code: string }[]; learning?: boolean }> {
   if (!SYSTEM.test(system) || !Array.isArray(packageIds) || packageIds.length === 0 || packageIds.length > 50) {
     return { ok: false, code: "invalid_data" };
   }
@@ -170,7 +171,13 @@ export async function approveFilingBatch(
   const skipped = Array.isArray(answer.skipped) ? (answer.skipped as { package: string; code: string }[]) : [];
   revalidate();
   return answer.ok
-    ? { ok: true, code: String(answer.code), value: String(answer.batch_id ?? ""), skipped }
+    ? {
+        ok: true,
+        code: String(answer.code),
+        value: String(answer.batch_id ?? ""),
+        skipped,
+        learning: answer.learning === true,
+      }
     : { ok: false, code: String(answer.code ?? "failed"), skipped };
 }
 
@@ -220,4 +227,22 @@ export async function stopFilingBatch(batchId: string): Promise<WayActionResult>
   const answer = answerOf(data);
   revalidate();
   return answer.ok ? { ok: true, code: String(answer.code) } : { ok: false, code: String(answer.code ?? "failed") };
+}
+
+/**
+ * The screen of the court ONE kept when it stopped before the first filing in a system (0264, `summary_file_id`), as
+ * a short link: read with the person's own session, so another firm's is not found.
+ */
+export async function openBatchSummary(submissionId: string): Promise<WayActionResult> {
+  if (!UUID.test(submissionId)) return { ok: false, code: "invalid_data" };
+  const context = await getMemberContext();
+  if (!context?.firm) return { ok: false, code: "not_authorized" };
+  const { data, error } = await context.supabase
+    .from("filing_submissions")
+    .select("summary_file_id")
+    .eq("id", submissionId)
+    .maybeSingle();
+  if (error || !data?.summary_file_id) return { ok: false, code: "not_found" };
+  const link = await downloadUrl(context, data.summary_file_id as string);
+  return link.ok ? { ok: true, code: "link", value: link.url } : { ok: false, code: link.code };
 }

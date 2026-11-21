@@ -6,11 +6,19 @@ const TJSP: ScreenSystem = {
   key: "eproc-tjsp",
   name: "eproc do TJSP",
   court: "TJSP",
+  system: "eproc",
   uf: "SP",
   ways: ["browser", "extension"],
   ruleNote: null,
 };
-const TJGO: ScreenSystem = { ...TJSP, key: "projudi-tjgo", name: "Projudi do TJGO", court: "TJGO", uf: "GO" };
+const TJGO: ScreenSystem = {
+  ...TJSP,
+  key: "projudi-tjgo",
+  name: "Projudi do TJGO",
+  court: "TJGO",
+  system: "projudi",
+  uf: "GO",
+};
 const TJRJ: ScreenSystem = { ...TJSP, key: "eproc-tjrj", name: "eproc do TJRJ", court: "TJRJ", uf: "RJ", ways: [] };
 
 describe("the ways to file a lawyer may choose", () => {

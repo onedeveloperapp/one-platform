@@ -1,6 +1,7 @@
 import FilingQueueView, { type FilingQueueState } from "./filing-queue-view";
 
 import { loadFilingQueue } from "@/lib/cases/filing-facts";
+import { loadFilingBatches } from "@/lib/filing-ways/batches-read";
 import { isQueueView } from "@/lib/cases/filing-queue";
 import { getMemberContext } from "@/lib/member/context";
 import { pageScopeOf } from "@/lib/modules/offer";
@@ -25,9 +26,13 @@ async function loadQueue(modulo: string | undefined, ver: string | undefined): P
       context.profile.timezone,
       scope.current?.key ?? null,
     );
+    // What ONE files on the courts' screens (0264): the batches in course and what the person may hand ONE.
+    const batches = await loadFilingBatches(context, queue.rows);
     return {
       kind: "ready",
       firm: context.firm.name,
+      firmId: context.firm.id,
+      batches,
       rows: queue.rows,
       truncated: queue.truncated,
       cloudSigning: queue.cloudSigning,

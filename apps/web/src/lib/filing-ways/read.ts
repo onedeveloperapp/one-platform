@@ -25,7 +25,7 @@ export async function loadFilingWays(context: MemberContext): Promise<FilingWays
 
   const [systems, courts, firmWay, myWays, logins, links, registrations, decides, firmTerm, lawyerTerm] =
     await Promise.all([
-      context.supabase.from("court_screen_systems").select("key, court, name, ways, rule_note").order("court"),
+      context.supabase.from("court_screen_systems").select("key, court, system, name, ways, rule_note").order("court"),
       context.supabase.from("courts").select("acronym, uf"),
       context.supabase.from("firm_filing_ways").select("way").eq("org_id", firm.id).maybeSingle(),
       context.supabase
@@ -77,11 +77,19 @@ export async function loadFilingWays(context: MemberContext): Promise<FilingWays
   };
 
   const screenSystems: ScreenSystem[] = (
-    (systems.data ?? []) as { key: string; court: string; name: string; ways: string[]; rule_note: string | null }[]
+    (systems.data ?? []) as {
+      key: string;
+      court: string;
+      system: string;
+      name: string;
+      ways: string[];
+      rule_note: string | null;
+    }[]
   ).map((row) => ({
     key: row.key,
     name: row.name,
     court: row.court,
+    system: row.system,
     uf: ufOf.get(row.court) ?? null,
     ways: (row.ways ?? []).filter((way): way is "browser" | "extension" => way === "browser" || way === "extension"),
     ruleNote: row.rule_note,

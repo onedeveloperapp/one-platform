@@ -23,6 +23,7 @@ import NiUsers from "@/icons/nexture/ni-users";
 import { caseLabel } from "@/lib/cases/cases";
 import { PACKAGE_STATUS_KEY, QUEUE_SHOWN } from "@/lib/cases/filing";
 import type { QueuedFiling } from "@/lib/cases/filing-facts";
+import type { FilingBatchesState } from "@/lib/filing-ways/batches-read";
 import {
   isQueueSort,
   isQueueView,
@@ -38,10 +39,15 @@ import {
 import { type PageScope, scopeCrumbs } from "@/lib/modules/offer";
 import { countText } from "@/lib/numbers/compare";
 
+import FilingBatches from "./filing-batches";
+
 export type FilingQueueState =
   | {
       kind: "ready";
       firm: string;
+      firmId: string;
+      /** What ONE files on the courts' screens (0264); null when it could not be read. */
+      batches: FilingBatchesState | null;
       rows: QueuedFiling[];
       /** True when more packages wait than the screen reads at once. */
       truncated: boolean;
@@ -145,6 +151,13 @@ export default function FilingQueueView({ state }: { state: FilingQueueState }) 
       />
       {ready ? (
         <ModuleScope path="/protocolo" modules={ready.scope.modules} current={ready.scope.current?.key ?? null} />
+      ) : null}
+
+      {ready?.batches ? <FilingBatches state={ready.batches} firmId={ready.firmId} /> : null}
+      {ready && ready.lawyer && !ready.batches ? (
+        <Alert severity="error" className="neutral bg-background-paper/60!">
+          {t("filing-batches-read-error")}
+        </Alert>
       ) : null}
 
       {state.kind === "unavailable" ? (
