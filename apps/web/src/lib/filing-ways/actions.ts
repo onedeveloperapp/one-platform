@@ -5,6 +5,7 @@ import { createHash, randomInt } from "node:crypto";
 
 import { getVault } from "@/lib/connections/vault";
 import { downloadUrl } from "@/lib/files/uploads";
+import { LINK_CODE_LENGTH, LINK_CODE_LETTERS } from "@/lib/filing-ways/extension-protocol";
 import { loginHint } from "@/lib/filing-ways/hint";
 import { getMemberContext } from "@/lib/member/context";
 import { connectionRefusal } from "@/lib/whatsapp/session";
@@ -118,16 +119,16 @@ export async function endCourtLogin(connectionId: string): Promise<WayActionResu
   return answer.ok ? { ok: true, code: String(answer.code) } : { ok: false, code: String(answer.code ?? "failed") };
 }
 
-/** The letters of a link code: no 0, O, 1, I or L, which a person misreads. */
-const CODE_LETTERS = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
-
 /** The lawyer asks to link their extension: the code to type in it, valid ten minutes; its hash alone is kept. */
 export async function beginExtensionLink(): Promise<WayActionResult> {
   const context = await getMemberContext();
   if (!context?.firm) return { ok: false, code: "not_authorized" };
   const refusal = await connectionRefusal(context);
   if (refusal) return { ok: false, code: refusal };
-  const code = Array.from({ length: 7 }, () => CODE_LETTERS[randomInt(CODE_LETTERS.length)]).join("");
+  const code = Array.from(
+    { length: LINK_CODE_LENGTH },
+    () => LINK_CODE_LETTERS[randomInt(LINK_CODE_LETTERS.length)],
+  ).join("");
   const { data, error } = await context.supabase.rpc("begin_extension_link", {
     target_org: context.firm.id,
     target_code_hash: createHash("sha256").update(code, "utf8").digest("hex"),

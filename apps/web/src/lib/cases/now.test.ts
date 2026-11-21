@@ -229,6 +229,40 @@ describe("caseNow", () => {
     expect(filing({ status: "owed", attempts: 2, retryAfter: "2026-11-05T14:00:00Z" })?.outside).toBeUndefined();
   });
 
+  it("says a lawyer's batch on the court's screen is ONE's work, and its first filing held for the lawyer's word theirs", () => {
+    const now = (status: string) =>
+      caseNow(
+        base({
+          status: "drafting",
+          proceedings: [planned],
+          drafts: [{ id: "dr", proceedingId: "lw", status: "issued", work: null }],
+          filings: [
+            {
+              id: "fp",
+              proceedingId: "lw",
+              system: "eproc",
+              status: "ready",
+              blocker: null,
+              signature: { takesSigned: false, status: null },
+              // No channel of the court: the lawyer's extension files it on the court's screen (0264).
+              byOne: { channel: null, blocker: "no_channel", submission: { status, channel: "extension" } },
+            },
+          ],
+        }),
+      );
+    for (const status of ["owed", "claimed", "sending"]) {
+      expect(now(status).working.find((line) => line.id === "filing:fp")).toMatchObject({
+        owner: "one",
+        text: { key: "case-now-filing-one" },
+      });
+    }
+    expect(now("confirming").blocking.find((line) => line.id === "filing:fp")).toMatchObject({
+      owner: "firm",
+      actor: "lawyer",
+      text: { key: "case-now-filing-screen-confirm" },
+    });
+  });
+
   it("says the system the firm approves while ONE writes the piece, and the platform's own waits as the platform's", () => {
     const now = caseNow(
       base({

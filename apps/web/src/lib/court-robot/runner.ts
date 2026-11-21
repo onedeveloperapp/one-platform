@@ -60,8 +60,13 @@ export type ScreenPlanner = (input: PlanInput) => Promise<ScreenPlan | null>;
 /** The first button that may send to the court, while ONE learns the system: where it is and what it says. */
 export type SendPoint = { titulo: string; botao: string; target: Target; frames: MappedScreen[] };
 
-/** The lawyer's word before the first button that may send, while ONE learns the system. */
-export type Confirmation = "go" | "stop";
+/**
+ * The lawyer's word before the first button that may send, while ONE learns the system: go, stop, or `moved` when the
+ * lawyer acted on the court's screen themself while ONE waited (in their own browser, the extension sees the screen
+ * change): what they pressed may have sent the lawsuit, so the filing is marked as going, nothing is pressed for them,
+ * and only the court's summary or its receipt may follow.
+ */
+export type Confirmation = "go" | "stop" | "moved";
 
 export type RunInput = {
   driver: ScreenDriver;
@@ -71,6 +76,13 @@ export type RunInput = {
   file(position: number): Promise<DriverFile | null>;
   /** ONE still learns the system: the first button that may send waits for the lawyer's word. */
   learning: boolean;
+  /** The lawyer already confirmed this filing (in ONE, while it waited): nothing is asked again. */
+  confirmed?: boolean;
+  /**
+   * The database already marks this filing as going: a run taken up again after the lawyer acted on the screen. Only
+   * the court's summary or its receipt may follow, and nothing is marked again.
+   */
+  sent?: boolean;
   confirm(point: SendPoint): Promise<Confirmation>;
   map: LearnedStep[] | null;
   /** Before the first button that may send: the database marks the filing as going (0101's `sending`). */
@@ -131,9 +143,9 @@ export async function runFiling(input: RunInput): Promise<RunResult> {
   const maxScreens = input.maxScreens ?? 40;
   let aiScreens = 0;
   // Something that may have sent was pressed: from here only the court's summary and its receipt may follow.
-  let sent = false;
+  let sent = input.sent === true;
   // The lawyer said ONE may send this filing (asked once, and only while ONE learns the system).
-  let confirmed = !input.learning;
+  let confirmed = !input.learning || input.confirmed === true;
   let previous: ReturnType<typeof signatureOf> | null = null;
   let repeats = 0;
 
@@ -155,7 +167,9 @@ export async function runFiling(input: RunInput): Promise<RunResult> {
       aiScreens += 1;
       plan = await input.planner({
         sistema: input.system,
-        aprendendo: input.learning,
+        // Learning holds back the button that sends only until the lawyer confirmed this filing: after their word,
+        // the court's summary is confirmed by ONE, else it would wait there with nothing to press.
+        aprendendo: input.learning && !confirmed,
         fatos: input.facts.fatos,
         partes: input.facts.partes,
         arquivos: input.facts.arquivos,
@@ -190,6 +204,8 @@ export async function runFiling(input: RunInput): Promise<RunResult> {
 
     const fields = fieldsByTarget(frames);
     const doneHere: PlanAction[] = [];
+    // The lawyer acted on the screen while ONE waited for their word: this screen is theirs from there.
+    let moved = false;
     for (const action of actions) {
       if (action.envia) {
         if (!confirmed) {
@@ -201,17 +217,20 @@ export async function runFiling(input: RunInput): Promise<RunResult> {
             target,
             frames,
           });
-          if (word !== "go") {
+          if (word === "stop") {
             learned.push(learnedStep(frames, kind, doneHere, input.facts));
             return done({ kind: "not_confirmed" });
           }
           confirmed = true;
+          moved = word === "moved";
         }
         if (!sent) {
           const going = await input.beforeSend();
-          if (!going.ok) return done({ kind: "not_sent", code: going.code });
+          // What the lawyer pressed may have reached the court: it is never said as not sent.
+          if (!going.ok) return done(moved ? { kind: "unknown" } : { kind: "not_sent", code: going.code });
           sent = true;
         }
+        if (moved) break;
       }
       const result = await act(driver, action, input);
       if (result !== "ok") return done(sent ? { kind: "unknown" } : { kind: "stuck", why: result });
@@ -219,7 +238,7 @@ export async function runFiling(input: RunInput): Promise<RunResult> {
       if (action.envia) break;
     }
     learned.push(learnedStep(frames, kind, doneHere, input.facts));
-    if (plan.pergunta && !plan.pronto) return done({ kind: "question", question: plan.pergunta });
+    if (!moved && plan.pergunta && !plan.pronto) return done({ kind: "question", question: plan.pergunta });
     await driver.settle();
   }
   return done(sent ? { kind: "unknown" } : { kind: "stuck", why: "too_many_screens" });

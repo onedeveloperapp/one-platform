@@ -1,6 +1,7 @@
 "use client";
 
 import type { CaseFiling } from "../case-types";
+import Link from "next/link";
 import { useTranslations } from "next-intl";
 
 import { Box, Button } from "@mui/material";
@@ -15,9 +16,15 @@ import { caseErrorKey } from "@/lib/cases/cases";
  * after the court did not answer, filed, refused with the court's reason,
  * failed, or sent with no answer to read (it may be in the court already, so
  * a lawyer looks before it goes again). Where the firm keeps the filing to a
- * lawyer, the lawyer asks ONE here. Nothing is shown where ONE does not file
- * the package: the lawyer's own way stays as it was.
+ * lawyer, the lawyer asks ONE here. Where the court has no channel but ONE
+ * files on its screen (0264), a lawyer hands the package to ONE in a batch
+ * on /protocolo, and the card says where that batch stands: waiting, going,
+ * or held at the court's summary for the lawyer's word. Nothing is shown
+ * where ONE does not file the package: the lawyer's own way stays as it was.
  */
+
+/** Filed by a lawyer's batch on the court's screen (0264), by ONE's browser or the lawyer's extension. */
+const onScreen = (channel: string | undefined): boolean => channel === "browser" || channel === "extension";
 
 const time = (iso: string | null): string =>
   iso
@@ -29,8 +36,13 @@ const time = (iso: string | null): string =>
 /** Whether ONE files this package now (or is about to): the lawyer's own steps step back meanwhile. */
 export function oneFilesIt(filing: CaseFiling | null): boolean {
   const byOne = filing?.byOne;
-  if (!filing || !byOne?.channel || filing.status !== "ready") return false;
+  if (!filing || !byOne || filing.status !== "ready") return false;
   const sub = byOne.submission;
+  // A batch of a lawyer files it on the court's screen: their own steps step back while it is in course.
+  if (sub && onScreen(sub.channel)) {
+    return sub.status === "owed" || sub.status === "claimed" || sub.status === "confirming" || sub.status === "sending";
+  }
+  if (!byOne.channel) return false;
   if (sub) return sub.status === "owed" || sub.status === "claimed" || sub.status === "sending";
   return byOne.blocker === null || byOne.blocker === "not_signed";
 }
@@ -100,6 +112,22 @@ export default function FilingByOne({
     );
   }
 
+  // A lawyer's batch on the court's screen: where the batch is followed, and where the lawyer gives their word.
+  const toBatches = (
+    <Button variant="outlined" color="grey" size="small" href="/protocolo" LinkComponent={Link}>
+      {t("filing-one-see-protocol")}
+    </Button>
+  );
+  if (sub && onScreen(sub.channel) && (sub.status === "owed" || sub.status === "confirming")) {
+    return (
+      <StateLine tone={sub.status === "confirming" ? "attention" : "waiting"} action={toBatches}>
+        {sub.status === "confirming"
+          ? t("filing-one-screen-confirming", { system: where })
+          : t("filing-one-screen-owed", { system: where })}
+      </StateLine>
+    );
+  }
+
   if (sub && (sub.status === "owed" || sub.status === "claimed" || sub.status === "sending")) {
     return (
       <StateLine tone="waiting">
@@ -112,6 +140,14 @@ export default function FilingByOne({
     );
   }
 
+  // No channel of the court, and its screen is one ONE files on: a lawyer hands the package to ONE in a batch.
+  if (!sub && !byOne.channel && byOne.blocker === "no_channel" && byOne.screen && byOne.screen.ways.length > 0) {
+    return (
+      <StateLine tone="info" action={mayAct ? toBatches : undefined}>
+        {t("filing-one-screen-ready", { system: byOne.screen.name })}
+      </StateLine>
+    );
+  }
   if (!byOne.channel || byOne.blocker === "no_channel" || byOne.blocker === "court_codes_missing") {
     return <StateLine tone="info">{t("filing-one-no-channel", { system: where })}</StateLine>;
   }

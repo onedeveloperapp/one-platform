@@ -2,10 +2,10 @@
   "manifest_version": 3,
   "name": "ONE · Protocolo nos tribunais",
   "short_name": "ONE",
-  "version": "0.1.1",
-  "description": "Mapeia as telas de protocolo do eproc do TJSP, do Projudi do TJGO e do eproc do TJRJ enquanto o advogado trabalha com o próprio login. Guarda os nomes dos campos, nunca o que está escrito neles.",
+  "version": "0.2.0",
+  "description": "Protocola no eproc do TJSP e no Projudi do TJGO os lotes que o advogado aprovou no ONE, na sessão que ele abriu com o próprio login.",
   "minimum_chrome_version": "120",
-  "permissions": ["storage", "scripting"],
+  "permissions": ["storage", "scripting", "sidePanel"],
   "host_permissions": [
     "https://eproc1g.tjsp.jus.br/*",
     "https://projudi.tjgo.jus.br/*",
@@ -14,9 +14,9 @@
   "background": { "service_worker": "background.js" },
   "action": {
     "default_title": "ONE · Protocolo nos tribunais",
-    "default_popup": "popup.html",
     "default_icon": { "128": "icon-128.png" }
   },
+  "side_panel": { "default_path": "panel.html" },
   "icons": { "128": "icon-128.png" },
   "content_scripts": [
     {

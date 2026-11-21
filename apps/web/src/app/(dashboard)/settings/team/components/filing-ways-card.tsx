@@ -7,6 +7,7 @@ import { Alert, Box, Button, Grid, Typography } from "@mui/material";
 
 import {
   EMPTY_LAWYER_DRAFT,
+  ExtensionLinkBox,
   filingErrorKey,
   FIRM_WAY_WORDS,
   firmDraftOf,
@@ -21,7 +22,7 @@ import ConfirmActionDialog from "@/components/product/confirm-action-dialog";
 import SectionTitle from "@/components/product/section-title";
 import StateLine from "@/components/product/state-line";
 import StatusChip from "@/components/product/status-chip";
-import { beginExtensionLink, endCourtLogin, endExtensionLink } from "@/lib/filing-ways/actions";
+import { endCourtLogin } from "@/lib/filing-ways/actions";
 import {
   type CourtLogin,
   type FilingWaysData,
@@ -146,7 +147,6 @@ function SystemWay({ system, data, onChanged }: { system: ScreenSystem; data: Fi
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [said, setSaid] = useState<string | null>(null);
-  const [code, setCode] = useState<string | null>(null);
   const [removing, setRemoving] = useState(false);
 
   const way = wayProposed(draft.way ?? saved, system, data.firmWay);
@@ -176,67 +176,9 @@ function SystemWay({ system, data, onChanged }: { system: ScreenSystem; data: Fi
     }
   }
 
-  async function link() {
-    setError(null);
-    setBusy(true);
-    try {
-      const begun = await beginExtensionLink();
-      if (!begun.ok || !begun.value) return setError(t(filingErrorKey(begun.code)));
-      setCode(begun.value);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function unlink() {
-    if (!data.link) return;
-    setBusy(true);
-    try {
-      const ended = await endExtensionLink(data.link.id);
-      if (!ended.ok) return setError(t(filingErrorKey(ended.code)));
-      onChanged();
-    } finally {
-      setBusy(false);
-    }
-  }
-
   // The extension is linked once its way is saved: the code is one the extension types to reach this account.
   const extension =
-    saved === "extension" ? (
-      data.link ? (
-        <StateLine
-          tone="done"
-          action={
-            <Button size="small" variant="text" color="grey" onClick={() => void unlink()} disabled={busy}>
-              {t("filing-ways-extension-unlink")}
-            </Button>
-          }
-        >
-          {t("filing-ways-extension-linked", { label: data.link.label ?? t("filing-ways-extension-unnamed") })}
-        </StateLine>
-      ) : code ? (
-        <Box className="flex flex-col gap-2">
-          <Typography variant="body2">{t("filing-ways-extension-code")}</Typography>
-          <Typography
-            component="p"
-            className="bg-grey-50 font-display self-start rounded-lg px-4 py-2 text-2xl font-bold tracking-widest"
-          >
-            {code}
-          </Typography>
-        </Box>
-      ) : (
-        <StateLine
-          tone="attention"
-          action={
-            <Button size="small" variant="outlined" onClick={() => void link()} disabled={busy}>
-              {t("filing-ways-extension-link")}
-            </Button>
-          }
-        >
-          {t("filing-ways-extension-not-linked")}
-        </StateLine>
-      )
-    ) : null;
+    saved === "extension" ? <ExtensionLinkBox link={data.link} onChanged={onChanged} disabled={busy} /> : null;
 
   return (
     <Box className="flex flex-col gap-4">

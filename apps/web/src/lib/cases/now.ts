@@ -125,11 +125,14 @@ type Filing = {
   slow?: boolean;
   blocker: string | null;
   signature: { takesSigned: boolean; status: "due" | "waiting" | "signed" | "failed" | null };
-  /** ONE filing it itself (0101): through which channel, what keeps it from doing so, and what came of its sending. */
+  /**
+   * ONE filing it itself (0101): through which channel, what keeps it from doing so, and what came of its sending; a
+   * sending of `browser` or `extension` is a lawyer's batch on the court's screen (0264).
+   */
   byOne?: {
     channel: string | null;
     blocker: string | null;
-    submission: { status: string; attempts?: number; retryAfter?: string | null } | null;
+    submission: { status: string; channel?: string; attempts?: number; retryAfter?: string | null } | null;
   } | null;
 };
 type Deadline = { id: string; status: string; overdue: boolean; review: boolean };
@@ -926,9 +929,22 @@ export function caseNow(input: CaseNowInput): CaseNow {
           // answer, or takes it without a number, which a lawyer then takes up.
           const byOne = filing.byOne ?? null;
           const sent = byOne?.submission?.status ?? null;
+          // A lawyer's batch files it on the court's screen (0264): ONE's work too, once the lawyer handed it.
+          const onScreen = byOne?.submission?.channel === "browser" || byOne?.submission?.channel === "extension";
           const where =
             byOne?.channel === "test_court" ? { message: "filing-one-test-court" } : systemWord(filing.system);
-          if (sent === "refused" || sent === "failed" || sent === "unknown" || sent === "filed") {
+          if (onScreen && sent === "confirming") {
+            blocking.push(
+              item({
+                id: `filing:${filing.id}`,
+                owner: "firm",
+                actor: "lawyer",
+                tone: "attention",
+                text: { key: "case-now-filing-screen-confirm", values: { kind, system: where } },
+                section: "filing",
+              }),
+            );
+          } else if (sent === "refused" || sent === "failed" || sent === "unknown" || sent === "filed") {
             blocking.push(
               item({
                 id: `filing:${filing.id}`,
@@ -939,9 +955,9 @@ export function caseNow(input: CaseNowInput): CaseNow {
                 section: "filing",
               }),
             );
-          } else if (byOne?.channel && (sent !== null || byOne.blocker === null)) {
+          } else if ((byOne?.channel || onScreen) && (sent !== null || byOne?.blocker === null)) {
             // A sending the court did not take is tried again at a later time: ONE waits on the court then.
-            const retry = byOne.submission;
+            const retry = byOne?.submission ?? null;
             const outside =
               sent === "owed" &&
               (retry?.attempts ?? 0) > 0 &&

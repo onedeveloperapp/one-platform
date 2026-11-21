@@ -37,6 +37,9 @@ const PUBLIC_PREFIXES = [
   // The API of a travel agency, partner of a firm in the passenger module: each call carries the agency's key,
   // which the database checks (migration 0073).
   "/api/parceiros/",
+  // The lawyer's browser extension, which files on a court's screen: each call carries the token of the link the
+  // lawyer made in ONE, which the database checks (migrations 0263 and 0264).
+  "/api/extensao/",
   // An invitation to a firm is opened from an e-mail, before the person signs
   // in or even has an account: the page shows who invites and sends them on.
   "/convite/",

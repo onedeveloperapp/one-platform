@@ -5,6 +5,8 @@
 
 export type MessageSender = { tab?: { id?: number; url?: string }; frameId?: number };
 
+export type ChromeTab = { id?: number; url?: string; title?: string; active?: boolean; windowId?: number };
+
 export type ChromeApi = {
   runtime: {
     sendMessage(message: unknown): Promise<unknown>;
@@ -19,19 +21,26 @@ export type ChromeApi = {
       get(key: string): Promise<Record<string, unknown>>;
       set(items: Record<string, unknown>): Promise<void>;
     };
+    local: {
+      get(key: string): Promise<Record<string, unknown>>;
+      set(items: Record<string, unknown>): Promise<void>;
+      remove(key: string): Promise<void>;
+    };
   };
   tabs: {
-    query(filter: {
-      active: boolean;
-      currentWindow: boolean;
-    }): Promise<{ id?: number; url?: string; title?: string }[]>;
+    query(filter: { active?: boolean; currentWindow?: boolean; url?: string }): Promise<ChromeTab[]>;
+    get(tabId: number): Promise<ChromeTab>;
     sendMessage(tabId: number, message: unknown): Promise<unknown>;
   };
   scripting: {
-    executeScript(injection: {
-      target: { tabId: number; allFrames: boolean };
-      func: () => unknown;
+    executeScript<Args extends unknown[]>(injection: {
+      target: { tabId: number; allFrames?: boolean; frameIds?: number[] };
+      func: (...args: Args) => unknown;
+      args?: Args;
     }): Promise<{ frameId: number; result?: unknown }[]>;
+  };
+  sidePanel?: {
+    setPanelBehavior(behavior: { openPanelOnActionClick: boolean }): Promise<void>;
   };
 };
 

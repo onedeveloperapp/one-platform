@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ONE · Protocolo nos tribunais</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --text: #1d2433;
+        --muted: #5b6475;
+        --line: #d9dde5;
+        --accent: #2f5bd3;
+        --ground: #ffffff;
+        --tint: #eef2fb;
+        --attention: #f6efe0;
+        --attention-line: #d9b36a;
+        --risk: #b3261e;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --text: #e8ebf2;
+          --muted: #a5adbd;
+          --line: #353c4a;
+          --accent: #7c9cff;
+          --ground: #161a22;
+          --tint: #1e2533;
+          --attention: #2e2818;
+          --attention-line: #8a6d2f;
+          --risk: #f2b8b5;
+        }
+      }
+      body {
+        margin: 0;
+        font:
+          14px/1.45 system-ui,
+          sans-serif;
+        color: var(--text);
+        background: var(--ground);
+      }
+      main {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        padding: 16px;
+      }
+      section {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      h1 {
+        margin: 0;
+        font-size: 16px;
+      }
+      h2 {
+        margin: 0;
+        font-size: 14px;
+      }
+      p {
+        margin: 0;
+      }
+      .muted {
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .box {
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 10px 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .box.attention {
+        background: var(--attention);
+        border-color: var(--attention-line);
+      }
+      .box.tint {
+        background: var(--tint);
+      }
+      .risk {
+        color: var(--risk);
+      }
+      label {
+        font-size: 12px;
+        color: var(--muted);
+      }
+      input[type="text"] {
+        font: inherit;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        padding: 8px 10px;
+        border-radius: 8px;
+        border: 1px solid var(--line);
+        background: transparent;
+        color: var(--text);
+      }
+      button {
+        font: inherit;
+        padding: 8px 12px;
+        border-radius: 8px;
+        border: 1px solid var(--line);
+        background: transparent;
+        color: var(--text);
+        cursor: pointer;
+      }
+      button.primary {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: #fff;
+      }
+      button:disabled {
+        opacity: 0.5;
+        cursor: default;
+      }
+      .row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+      }
+      ul {
+        margin: 0;
+        padding-left: 18px;
+      }
+      details summary {
+        cursor: pointer;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      details[open] summary {
+        margin-bottom: 10px;
+      }
+      [hidden] {
+        display: none !important;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>ONE · Protocolo nos tribunais</h1>
+
+      <section id="view-loading">
+        <p class="muted">Carregando.</p>
+      </section>
+
+      <section id="view-link" hidden>
+        <h2>Ligar ao ONE</h2>
+        <p>
+          Em ONE, onde você escolheu protocolar pela extensão, toque em Ligar a extensão e digite aqui o código que
+          aparecer. Ele vale 10 minutos.
+        </p>
+        <label for="link-code">Código</label>
+        <input id="link-code" type="text" maxlength="9" autocomplete="off" spellcheck="false" />
+        <div class="row">
+          <button id="link-go" class="primary" type="button">Ligar</button>
+        </div>
+        <p id="link-said" role="status"></p>
+      </section>
+
+      <section id="view-home" hidden>
+        <p id="home-who"></p>
+        <div id="home-batches"></div>
+        <p id="home-said" role="status"></p>
+        <div class="row">
+          <button id="home-refresh" type="button">Atualizar</button>
+          <button id="home-unlink" type="button">Desligar</button>
+        </div>
+      </section>
+
+      <section id="view-run" hidden>
+        <h2 id="run-title"></h2>
+        <p id="run-now" role="status"></p>
+        <div id="run-word" class="box attention" hidden>
+          <p id="run-word-text"></p>
+          <p class="muted">Se preferir, aperte você mesmo o botão na tela do tribunal: o ONE segue dali.</p>
+          <div class="row">
+            <button id="run-word-go" class="primary" type="button">Protocolar esta ação</button>
+            <button id="run-word-stop" type="button">Parar o lote</button>
+          </div>
+        </div>
+        <div id="run-pause" class="box attention" hidden>
+          <p id="run-pause-text"></p>
+          <div class="row">
+            <button id="run-pause-go" class="primary" type="button">Continuar</button>
+            <button id="run-pause-stop" type="button">Parar o lote</button>
+          </div>
+        </div>
+        <ul id="run-log"></ul>
+        <div class="row">
+          <button id="run-stop" type="button">Parar o lote</button>
+        </div>
+        <p class="muted">Deixe este painel aberto até o fim do lote: fechado, o lote para.</p>
+      </section>
+
+      <section id="view-end" hidden>
+        <h2 id="end-title"></h2>
+        <p id="end-text"></p>
+        <div id="end-look" class="box attention" hidden>
+          <p id="end-look-text"></p>
+        </div>
+        <div class="row">
+          <button id="end-back" class="primary" type="button">Voltar</button>
+        </div>
+      </section>
+
+      <details id="diagnosis">
+        <summary>Mapear as telas do tribunal</summary>
+        <section>
+          <p id="diag-where" class="muted"></p>
+          <div class="row">
+            <button id="diag-map" type="button">Mapear esta tela</button>
+            <button id="diag-record" type="button">Gravar o caminho</button>
+          </div>
+          <p id="diag-said" role="status"></p>
+          <div class="box">
+            <p id="diag-counts"></p>
+          </div>
+          <div class="row">
+            <button id="diag-download" type="button">Baixar o mapa</button>
+            <button id="diag-clear" type="button">Apagar o mapa</button>
+          </div>
+          <p class="muted">
+            O mapa guarda os nomes dos campos, das listas e dos botões, nunca o que está escrito neles. Ele fica no seu
+            computador: o arquivo é baixado e só vai para o ONE se você enviar.
+          </p>
+        </section>
+      </details>
+    </main>
+    <script src="panel.js"></script>
+  </body>
+</html>

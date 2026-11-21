@@ -120,11 +120,19 @@ export async function loadFilingBatches(
   let unchosen: FilingBatchesState["unchosen"] = [];
   if (ways.lawyer && ready.length > 0) {
     const packageIds = ready.map((row) => row.id);
-    const [packages, existing] = await Promise.all([
+    const [packages, existing, cases] = await Promise.all([
       context.supabase.from("filing_packages").select("id, proceeding_id").in("id", packageIds),
       context.supabase.from("filing_submissions").select("package_id").in("package_id", packageIds),
+      // A test case is filed by the test court, never on a court's screen (0267).
+      context.supabase
+        .from("cases")
+        .select("id, is_test")
+        .in("id", [...new Set(ready.map((row) => row.caseId))]),
     ]);
-    if (packages.error || existing.error) return null;
+    if (packages.error || existing.error || cases.error) return null;
+    const testCases = new Set(
+      ((cases.data ?? []) as { id: string; is_test: boolean }[]).filter((row) => row.is_test).map((row) => row.id),
+    );
     const proceedingOf = new Map(
       ((packages.data ?? []) as { id: string; proceeding_id: string }[]).map((row) => [row.id, row.proceeding_id]),
     );
@@ -136,7 +144,7 @@ export async function loadFilingBatches(
     if (signs.error) return null;
     const candidates: BatchCandidate[] = ready.flatMap((row): BatchCandidate[] => {
       const proceedingId = proceedingOf.get(row.id);
-      return proceedingId
+      return proceedingId && !testCases.has(row.caseId)
         ? [
             {
               id: row.id,

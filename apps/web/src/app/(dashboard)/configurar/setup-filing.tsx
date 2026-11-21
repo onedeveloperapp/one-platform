@@ -7,6 +7,7 @@ import { Alert, Box, Typography } from "@mui/material";
 
 import {
   EMPTY_LAWYER_DRAFT,
+  ExtensionLinkBox,
   filingErrorKey,
   FIRM_WAY_WORDS,
   firmDraftOf,
@@ -22,7 +23,7 @@ import type { WizardStep } from "@/components/product/setup-wizard";
 import StateLine from "@/components/product/state-line";
 import StatusChip from "@/components/product/status-chip";
 import NiCheck from "@/icons/nexture/ni-check";
-import { type FilingWaysData, systemsIn, systemsToChoose, type Way } from "@/lib/filing-ways/ways";
+import { type FilingWaysData, type ScreenSystem, systemsIn, systemsToChoose, type Way } from "@/lib/filing-ways/ways";
 
 /**
  * The step "Como o escritório protocola" of the firm's setup and "Como você protocola" of each lawyer's (the owner's
@@ -63,6 +64,23 @@ export function useFilingStep(input: {
   const change = (key: string, draft: LawyerWayDraft) => {
     setDrafts((current) => ({ ...current, [key]: draft }));
     setError(null);
+  };
+
+  // Linking the extension in the step: its code is asked once the way is saved, the firm's first.
+  const prepareExtension = async (system: ScreenSystem): Promise<{ ok: true } | { ok: false; code: string }> => {
+    if (!filing || input.blocked) return { ok: false, code: "not_authorized" };
+    if (input.firmForm) {
+      const firm = await saveFirmChoice({ draft: firmDraft, saved: filing.firmWay, term: filing.terms.firm });
+      if (!firm.ok) return firm;
+    }
+    return saveLawyerChoice({
+      system,
+      firmWay,
+      saved: filing.myWays[system.key],
+      draft: draftOf(system.key),
+      login: filing.logins.find((row) => row.system === system.key) ?? null,
+      term: filing.terms.lawyer,
+    });
   };
 
   const onPrimary = async (): Promise<boolean> => {
@@ -172,9 +190,17 @@ export function useFilingStep(input: {
             />
           }
           extension={
-            <Typography variant="body2" className="text-text-secondary">
-              {t("setup-filing-extension")}
-            </Typography>
+            <Box className="flex flex-col gap-2">
+              <Typography variant="body2" className="text-text-secondary">
+                {t("setup-filing-extension")}
+              </Typography>
+              <ExtensionLinkBox
+                link={filing.link}
+                prepare={() => prepareExtension(system)}
+                onChanged={input.onSaved}
+                disabled={disabled}
+              />
+            </Box>
           }
           disabled={disabled}
         />

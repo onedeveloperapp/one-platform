@@ -246,6 +246,8 @@ describe("ONE filing on a court's screen", () => {
     expect(result.outcome).toEqual({ kind: "filed", number: "10001230720998260100" });
     expect(points).toHaveLength(1);
     expect(points[0]?.botao).toBe("Finalizar");
+    // The AI holds back the button that sends only until the lawyer's word: the summary after it is ONE's to confirm.
+    expect(seen.map((input) => input.aprendendo)).toEqual([true, true, false, false]);
     // The database is told the filing goes before the first press that may send, once.
     expect(going).toEqual(["#btnProxima,#btnConfirmarSel"]);
     expect(court.values.get("#txtValorCausa")).toBe("10.000,00");
@@ -371,6 +373,112 @@ describe("ONE filing on a court's screen", () => {
     });
     expect(result.outcome).toEqual({ kind: "stuck", why: "unknown_fact" });
     expect(court.values.size).toBe(0);
+  });
+
+  it("when the lawyer acts on the screen while ONE waits, the filing is marked as going once and nothing is pressed for them", async () => {
+    const court = new StandInCourt();
+    const going: number[] = [];
+    const result = await runFiling({
+      driver: court,
+      planner: scriptedPlanner([]),
+      system: "eproc do TJSP",
+      facts: FACTS,
+      file: async () => PDF,
+      learning: true,
+      confirm: async () => {
+        // The lawyer pressed "Finalizar" on the court's own screen: the summary is open.
+        court.screen = 2;
+        return "moved";
+      },
+      map: null,
+      beforeSend: async () => {
+        going.push(court.screen);
+        return { ok: true, code: "sending" };
+      },
+    });
+    expect(result.outcome).toEqual({ kind: "filed", number: "10001230720998260100" });
+    expect(going).toEqual([2]);
+    expect(court.clicks).not.toContain("#btnFinalizar");
+    expect(court.clicks).toContain("#btnConfirmar");
+  });
+
+  it("when the lawyer acted on the screen and the database refuses the filing, it is unknown, never not sent", async () => {
+    const court = new StandInCourt();
+    const result = await runFiling({
+      driver: court,
+      planner: scriptedPlanner([]),
+      system: "eproc do TJSP",
+      facts: FACTS,
+      file: async () => PDF,
+      learning: true,
+      confirm: async () => {
+        court.screen = 2;
+        return "moved";
+      },
+      map: null,
+      beforeSend: async () => ({ ok: false, code: "batch_not_running" }),
+    });
+    expect(result.outcome).toEqual({ kind: "unknown" });
+  });
+
+  it("a filing its lawyer already confirmed asks nothing again, and one already going is never marked twice", async () => {
+    const confirmedRun = await runFiling({
+      driver: new StandInCourt(),
+      planner: scriptedPlanner([]),
+      system: "eproc do TJSP",
+      facts: FACTS,
+      file: async () => PDF,
+      learning: true,
+      confirmed: true,
+      confirm: async () => {
+        throw new Error("a confirmed filing asks nothing");
+      },
+      map: null,
+      beforeSend: async () => ({ ok: true, code: "sending" }),
+    });
+    expect(confirmedRun.outcome).toEqual({ kind: "filed", number: "10001230720998260100" });
+
+    // Taken up again at the summary, already marked as going: it goes on with no new mark.
+    const atSummary = new StandInCourt();
+    atSummary.screen = 2;
+    let marks = 0;
+    const resumed = await runFiling({
+      driver: atSummary,
+      planner: scriptedPlanner([]),
+      system: "eproc do TJSP",
+      facts: FACTS,
+      file: async () => PDF,
+      learning: true,
+      confirmed: true,
+      sent: true,
+      confirm: async () => "go",
+      map: null,
+      beforeSend: async () => {
+        marks += 1;
+        return { ok: true, code: "sending" };
+      },
+    });
+    expect(resumed.outcome).toEqual({ kind: "filed", number: "10001230720998260100" });
+    expect(marks).toBe(0);
+
+    // Taken up again on a form, already marked as going: the lawsuit may be at the court, so it is unknown.
+    const onForm = new StandInCourt();
+    onForm.screen = 1;
+    const lost = await runFiling({
+      driver: onForm,
+      planner: scriptedPlanner([]),
+      system: "eproc do TJSP",
+      facts: FACTS,
+      file: async () => PDF,
+      learning: true,
+      confirmed: true,
+      sent: true,
+      confirm: async () => "go",
+      map: null,
+      beforeSend: async () => ({ ok: true, code: "sending" }),
+    });
+    expect(lost.outcome).toEqual({ kind: "unknown" });
+    expect(onForm.clicks).toEqual([]);
   });
 
   it("after something that may send was pressed, any screen but the summary or the receipt leaves the filing unknown", async () => {

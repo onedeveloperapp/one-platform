@@ -1,7 +1,8 @@
 /**
- * The extension's background: it keeps the map being made (the screens mapped and the path recorded) in the browser's
- * session storage, which ends with the browser, and hands it to the popup to be saved as a file. It talks to no
- * server: what leaves the lawyer's computer is the file the lawyer sends.
+ * The extension's background: the toolbar's button opens the panel beside the court's screen (where ONE files, version
+ * 0.2), and it keeps the map of the lawyer's diagnosis (the screens mapped and the path recorded, version 0.1) in the
+ * browser's session storage, which ends with the browser, to be saved as a file. It talks to no server: the panel
+ * makes the calls to ONE.
  */
 import { chromeApi, type MessageSender } from "./chrome";
 
@@ -19,6 +20,9 @@ type MapState = { recording: boolean; screens: Captured[]; steps: MappedStep[] }
 
 const ext = chromeApi();
 const EMPTY: MapState = { recording: false, screens: [], steps: [] };
+
+// The toolbar's button opens the panel, which stays beside the court's screen while ONE files.
+ext.sidePanel?.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => undefined);
 const SCREEN_LIMIT = 200;
 const STEP_LIMIT = 3000;
 

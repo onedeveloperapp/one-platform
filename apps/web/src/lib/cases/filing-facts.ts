@@ -64,12 +64,19 @@ export type FilingReceipt = { id: string; cnj: string; filedOn: string };
  */
 export type FilingByOne = {
   channel: "mni" | "test_court" | null;
+  /**
+   * The court's screen where ONE may file it instead (0263), with the ways the platform turned on there: then a lawyer
+   * hands it to ONE in a batch on /protocolo. Null where the court has no such system.
+   */
+  screen: { name: string; ways: string[] } | null;
   blocker: string | null;
   mode: "auto" | "sampled" | "approval";
   submission: {
     id: string;
-    status: "owed" | "claimed" | "sending" | "filed" | "refused" | "unknown" | "failed";
-    channel: "mni" | "test_court";
+    /** `confirming`: filed by a lawyer's batch up to the court's summary, waiting for the lawyer's word (0264). */
+    status: "owed" | "claimed" | "confirming" | "sending" | "filed" | "refused" | "unknown" | "failed";
+    /** Through the court's channel or the test court, or on the court's screen by a lawyer's batch (0264). */
+    channel: "mni" | "test_court" | "browser" | "extension";
     protocol: string | null;
     caseNumber: string | null;
     message: string | null;
@@ -81,7 +88,17 @@ export type FilingByOne = {
   } | null;
 };
 
-const SUBMISSION_STATUSES = ["owed", "claimed", "sending", "filed", "refused", "unknown", "failed"] as const;
+const SUBMISSION_STATUSES = [
+  "owed",
+  "claimed",
+  "confirming",
+  "sending",
+  "filed",
+  "refused",
+  "unknown",
+  "failed",
+] as const;
+const SUBMISSION_CHANNELS = ["mni", "test_court", "browser", "extension"] as const;
 
 /** One package's row of `case_filing_by_one`, read. */
 function filingByOneOf(row: Record<string, unknown>): FilingByOne {
@@ -92,6 +109,7 @@ function filingByOneOf(row: Record<string, unknown>): FilingByOne {
   const text = (value: unknown) => (typeof value === "string" && value !== "" ? value : null);
   return {
     channel: row.channel === "mni" || row.channel === "test_court" ? row.channel : null,
+    screen: null,
     blocker: text(row.blocker),
     mode: row.mode === "approval" || row.mode === "sampled" ? row.mode : "auto",
     submission:
@@ -99,7 +117,9 @@ function filingByOneOf(row: Record<string, unknown>): FilingByOne {
         ? {
             id: String(sub.id),
             status,
-            channel: sub.channel === "mni" ? "mni" : "test_court",
+            channel: (SUBMISSION_CHANNELS as readonly unknown[]).includes(sub.channel)
+              ? (sub.channel as (typeof SUBMISSION_CHANNELS)[number])
+              : "test_court",
             protocol: text(sub.protocol),
             caseNumber: text(sub.case_number),
             message: text(sub.message),
@@ -288,7 +308,7 @@ export async function loadCaseFilings(
   timeZone: string | null | undefined,
   viewerId: string | null = null,
 ): Promise<CaseFiling[]> {
-  const [packages, systems, lawyers, authorizations, cloudSigning] = await Promise.all([
+  const [packages, systems, lawyers, authorizations, cloudSigning, screens] = await Promise.all([
     supabase
       .from("filing_packages")
       .select(PACKAGE_COLUMNS)
@@ -312,6 +332,21 @@ export async function loadCaseFilings(
           .limit(1)
       : Promise.resolve({ data: [] as { id: string }[], error: null }),
     cloudSigningOffered(supabase),
+    // Where ONE may file on the court's screen (0263). A read that fails leaves the card as it was.
+    supabase
+      .from("court_screen_systems")
+      .select("court, system, name, ways")
+      .then(
+        ({ data, error }) =>
+          new Map(
+            error
+              ? []
+              : ((data ?? []) as { court: string; system: string; name: string; ways: string[] | null }[]).map(
+                  (row) => [`${row.court}/${row.system}`, { name: row.name, ways: row.ways ?? [] }] as const,
+                ),
+          ),
+        () => new Map<string, { name: string; ways: string[] }>(),
+      ),
   ]);
   if (packages.error || systems.error || lawyers.error || authorizations.error) {
     throw new Error("filing packages could not be read");
@@ -353,11 +388,14 @@ export async function loadCaseFilings(
       () => new Map<string, FilingByOne>(),
     ),
   ]);
-  return filings.map((filing) => ({
-    ...filing,
-    blocker: filing.status === "filed" ? filing.blocker : (blockers.get(filing.proceedingId) ?? null),
-    byOne: byOne.get(filing.id) ?? null,
-  }));
+  return filings.map((filing) => {
+    const one = byOne.get(filing.id) ?? null;
+    return {
+      ...filing,
+      blocker: filing.status === "filed" ? filing.blocker : (blockers.get(filing.proceedingId) ?? null),
+      byOne: one ? { ...one, screen: screens.get(`${filing.court}/${filing.system}`) ?? null } : null,
+    };
+  });
 }
 
 /** What keeps each lawsuit named from being filed now, by lawsuit. Throws when it could not be read. */

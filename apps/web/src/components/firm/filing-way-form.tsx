@@ -4,6 +4,7 @@ import { useTranslations } from "next-intl";
 import { useState } from "react";
 
 import {
+  Alert,
   Box,
   Button,
   Checkbox,
@@ -22,9 +23,16 @@ import {
 import StateLine from "@/components/product/state-line";
 import StatusChip from "@/components/product/status-chip";
 import NiExclamationSquare from "@/icons/nexture/ni-exclamation-square";
-import { giveCourtLogin, setFirmFilingWay, setLawyerFilingWay } from "@/lib/filing-ways/actions";
+import {
+  beginExtensionLink,
+  endExtensionLink,
+  giveCourtLogin,
+  setFirmFilingWay,
+  setLawyerFilingWay,
+} from "@/lib/filing-ways/actions";
 import {
   type CourtLogin,
+  type ExtensionLink,
   type FilingTerm,
   firmChoiceAsks,
   lawyerChoiceAsks,
@@ -396,8 +404,6 @@ export function LawyerWayFields({
         </Grid>
       ) : null}
 
-      {way === "extension" ? extension : null}
-
       {way === "hand" ? (
         <Typography variant="body2" className="text-text-secondary">
           {t("filing-ways-hand-note")}
@@ -420,6 +426,120 @@ export function LawyerWayFields({
           ) : null}
         </RiskBox>
       ) : null}
+
+      {/* After the acknowledgment it may need: linking saves the choice first. */}
+      {way === "extension" ? extension : null}
+    </Box>
+  );
+}
+
+/**
+ * The lawyer's extension and their account (0263), wherever the way is chosen: linked, with the way to unlink it; the
+ * code ONE shows to type in the extension's panel; or the button that asks for one. A code is asked only once the
+ * way is saved, so `prepare` saves the choice first where it is still a draft (a setup's step), and says whether it
+ * may go on. The lawyer's login, password and the court's code never pass through here.
+ */
+export function ExtensionLinkBox({
+  link,
+  prepare,
+  onChanged,
+  disabled = false,
+}: {
+  link: ExtensionLink | null;
+  prepare?: () => Promise<{ ok: true } | { ok: false; code: string }>;
+  onChanged: () => void;
+  disabled?: boolean;
+}) {
+  const t = useTranslations("product");
+  const [code, setCode] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function ask() {
+    setError(null);
+    setBusy(true);
+    try {
+      if (prepare) {
+        const ready = await prepare();
+        if (!ready.ok) return setError(t(filingErrorKey(ready.code)));
+      }
+      const begun = await beginExtensionLink();
+      if (!begun.ok || !begun.value) return setError(t(filingErrorKey(begun.code)));
+      setCode(begun.value);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function unlink() {
+    if (!link) return;
+    setError(null);
+    setBusy(true);
+    try {
+      const ended = await endExtensionLink(link.id);
+      if (!ended.ok) return setError(t(filingErrorKey(ended.code)));
+      setCode(null);
+      onChanged();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const failure = error ? (
+    <Alert severity="error" className="neutral bg-background-paper/60!" onClose={() => setError(null)}>
+      {error}
+    </Alert>
+  ) : null;
+
+  if (link) {
+    return (
+      <Box className="flex flex-col gap-1">
+        <StateLine
+          tone="done"
+          action={
+            <Button size="small" variant="text" color="grey" onClick={() => void unlink()} disabled={busy || disabled}>
+              {t("filing-ways-extension-unlink")}
+            </Button>
+          }
+        >
+          {t("filing-ways-extension-linked", { label: link.label ?? t("filing-ways-extension-unnamed") })}
+        </StateLine>
+        {failure}
+      </Box>
+    );
+  }
+  if (code) {
+    return (
+      <Box className="flex flex-col gap-2">
+        <Typography variant="body2">{t("filing-ways-extension-code")}</Typography>
+        <Box className="flex flex-row flex-wrap items-center gap-3">
+          <Typography
+            component="p"
+            className="bg-grey-50 font-display self-start rounded-lg px-4 py-2 text-2xl font-bold tracking-widest"
+          >
+            {code}
+          </Typography>
+          <Button size="small" variant="text" color="grey" onClick={onChanged} disabled={busy || disabled}>
+            {t("filing-ways-extension-typed")}
+          </Button>
+        </Box>
+        {failure}
+      </Box>
+    );
+  }
+  return (
+    <Box className="flex flex-col gap-1">
+      <StateLine
+        tone="attention"
+        action={
+          <Button size="small" variant="outlined" onClick={() => void ask()} disabled={busy || disabled}>
+            {t("filing-ways-extension-link")}
+          </Button>
+        }
+      >
+        {t("filing-ways-extension-not-linked")}
+      </StateLine>
+      {failure}
     </Box>
   );
 }
