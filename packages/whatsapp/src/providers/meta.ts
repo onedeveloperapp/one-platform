@@ -1,8 +1,10 @@
 import { failureCodeOf, fitsButtons, paramCountOf } from "@flyee/whatsapp/rules";
 import type {
   AccountTemplate,
+  BusinessProfile,
   MediaResult,
   OutboundMessage,
+  ProfileUpdated,
   SendError,
   SendResult,
   TemplateCreated,
@@ -263,6 +265,41 @@ export class MetaProvider implements WhatsAppProvider {
    * positional values, an example of each, and its footer. The vendor
    * answers with the template's id, its status and the category it decided.
    */
+  /**
+   * The number's business profile (the reference of `whatsapp_business_profile`, read on 2026-11-20): each field cut to
+   * the vendor's limit (about 139 characters, the address 256, the description 512, the e-mail 128, two websites), the
+   * firm's kind of business said as professional services.
+   */
+  async updateProfile(profile: BusinessProfile): Promise<ProfileUpdated> {
+    const cut = (value: string | undefined, most: number) => {
+      const text = (value ?? "").replace(/\s+/g, " ").trim();
+      return text ? text.slice(0, most) : undefined;
+    };
+    const websites = (profile.websites ?? []).filter((site) => /^https?:\/\/\S+$/.test(site)).slice(0, 2);
+    const fields = Object.fromEntries(
+      Object.entries({
+        about: cut(profile.about, 139),
+        address: cut(profile.address, 256),
+        description: cut(profile.description, 512),
+        email: cut(profile.email, 128),
+        websites: websites.length > 0 ? websites : undefined,
+      }).filter(([, value]) => value !== undefined),
+    );
+    const answer = await call(
+      this.config,
+      `${GRAPH}/${this.config.apiVersion}/${this.config.phoneNumberId}/whatsapp_business_profile`,
+      {
+        method: "POST",
+        headers: this.headers(),
+        body: JSON.stringify({ messaging_product: "whatsapp", vertical: "PROF_SERVICES", ...fields }),
+      },
+    );
+    if (!answer) return { ok: false, code: "unconfirmed" };
+    const body = (answer.body ?? null) as { success?: unknown } | null;
+    if (answer.status >= 200 && answer.status < 300 && body?.success === true) return { ok: true };
+    return { ok: false, code: failureCode(answer, "rejected") };
+  }
+
   async createTemplate(submission: TemplateSubmission): Promise<TemplateCreated> {
     const components: Record<string, unknown>[] = [
       {

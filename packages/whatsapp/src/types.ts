@@ -113,6 +113,23 @@ export interface TemplateSubmission {
  */
 export type TemplateCreated = { ok: true; id: string; status: string; category: string } | { ok: false; code: string };
 
+/**
+ * The business profile of a number, as the firm's brand and data write it (the plan "o escritório preparado antes do
+ * primeiro atendimento", phase 2): what a client sees of the firm in WhatsApp. Each provider takes what its vendor
+ * takes, within the vendor's limits; a field left out is left as it is.
+ */
+export type BusinessProfile = {
+  /** The line under the name (the vendor's "about"). */
+  about?: string;
+  description?: string;
+  address?: string;
+  email?: string;
+  websites?: string[];
+};
+
+/** What came of a profile sent: taken, or why not (`not_supported` where the vendor has no way to set it). */
+export type ProfileUpdated = { ok: true } | { ok: false; code: string };
+
 export interface FetchedMedia {
   bytes: Uint8Array;
   mime: string;
@@ -137,6 +154,8 @@ export interface WhatsAppProvider {
   listTemplates(): Promise<AccountTemplate[]>;
   /** Submits a template to the number's account for approval. Never throws: what the vendor answered is the answer. */
   createTemplate(submission: TemplateSubmission): Promise<TemplateCreated>;
+  /** Sets the number's business profile. Never throws: what the vendor answered is the answer. */
+  updateProfile(profile: BusinessProfile): Promise<ProfileUpdated>;
 }
 
 // ---------- What a webhook says ----------

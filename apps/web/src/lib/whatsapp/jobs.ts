@@ -2,6 +2,7 @@ import "server-only";
 
 import type { Sweep } from "@/lib/jobs/schedule";
 import { fetchPendingMedia } from "@/lib/whatsapp/media";
+import { syncWhatsAppProfiles } from "@/lib/whatsapp/profile-work";
 import { deliverOutbox } from "@/lib/whatsapp/send";
 
 /**
@@ -42,5 +43,11 @@ export const whatsappSweeps: Sweep[] = [
       }
       return { claimed: report.claimed, stored: report.stored, failed: report.failed, waiting: report.waiting };
     },
+  },
+  // The firm's business profile in its brand and data (0262), written again only when it changes.
+  {
+    key: "whatsapp-profile",
+    when: { every: 30 },
+    run: async (service) => syncWhatsAppProfiles(service),
   },
 ];

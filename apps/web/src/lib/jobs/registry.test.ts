@@ -92,6 +92,7 @@ describe("the platform's sweeps (2026-11-04)", () => {
         "weekly-digests",
         "whatsapp-media",
         "whatsapp-outbox",
+        "whatsapp-profile",
       ].sort(),
     );
   });

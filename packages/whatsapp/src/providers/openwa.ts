@@ -5,6 +5,7 @@ import type {
   InboundKind,
   MediaResult,
   OutboundMessage,
+  ProfileUpdated,
   SendResult,
   TemplateCreated,
   TemplateSubmission,
@@ -170,6 +171,11 @@ export class OpenWaProvider implements WhatsAppProvider {
 
   async listTemplates(): Promise<AccountTemplate[]> {
     return [];
+  }
+
+  /** The platform's OpenWA sets no business profile: the firm keeps the one of its phone's WhatsApp. */
+  async updateProfile(): Promise<ProfileUpdated> {
+    return { ok: false, code: "not_supported" };
   }
 
   async createTemplate(submission: TemplateSubmission): Promise<TemplateCreated> {

@@ -719,3 +719,47 @@ test("meta: a text's numbered choices go as buttons, or as a list when they do n
   assert.equal(list.type, "list");
   assert.equal(list.action.sections[0].rows.length, 3);
 });
+
+// ---------- The business profile (the firm's brand, phase 2 of the plan of 2026-11-20) ----------
+
+test("simulator: the business profile is taken as given and kept", async () => {
+  const provider = new SimulatorProvider();
+  assert.deepEqual(await provider.updateProfile({ about: "Souza Advogados", email: "contato@souza.invalid" }), {
+    ok: true,
+  });
+  assert.deepEqual(provider.profile, { about: "Souza Advogados", email: "contato@souza.invalid" });
+});
+
+test("meta: the profile goes to the number's address, cut to the vendor's limits, as professional services", async () => {
+  const { provider, calls } = meta([json({ success: true })]);
+  const result = await provider.updateProfile({
+    about: "Souza Advogados   ".repeat(20),
+    description: "Escritório de advocacia.",
+    address: "Rua das Flores, 100, Goiânia, GO",
+    email: "contato@souza.invalid",
+    websites: ["https://souza.invalid", "ftp://nada", "https://outro.invalid", "https://terceiro.invalid"],
+  });
+  assert.deepEqual(result, { ok: true });
+  assert.equal(calls[0].url, "https://graph.facebook.com/v25.0/phone-1/whatsapp_business_profile");
+  assert.equal(calls[0].method, "POST");
+  const body = calls[0].body as Record<string, unknown>;
+  assert.equal(body.messaging_product, "whatsapp");
+  assert.equal(body.vertical, "PROF_SERVICES");
+  assert.equal(String(body.about).length, 139);
+  assert.deepEqual(body.websites, ["https://souza.invalid", "https://outro.invalid"]);
+  assert.equal(body.description, "Escritório de advocacia.");
+});
+
+test("meta: a profile the vendor refused, or nobody can say was taken, is said so", async () => {
+  assert.deepEqual(
+    await meta([json(graphError(100, "Invalid parameter"), 400)]).provider.updateProfile({ about: "x" }),
+    {
+      ok: false,
+      code: "meta_100",
+    },
+  );
+  assert.deepEqual(await meta([new Error("socket hang up")]).provider.updateProfile({ about: "x" }), {
+    ok: false,
+    code: "unconfirmed",
+  });
+});

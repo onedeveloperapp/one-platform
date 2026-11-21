@@ -5,6 +5,7 @@ import { randomUUID } from "node:crypto";
 import type {
   AccountTemplate,
   MediaResult,
+  ProfileUpdated,
   SendResult,
   TemplateCreated,
   WhatsAppProvider,
@@ -44,5 +45,10 @@ export class TestChatProvider implements WhatsAppProvider {
 
   async createTemplate(): Promise<TemplateCreated> {
     return { ok: true, id: `test-template-${randomUUID()}`, status: "approved", category: "utility" };
+  }
+
+  /** The test chat shows no profile: taken, and nothing leaves ONE. */
+  async updateProfile(): Promise<ProfileUpdated> {
+    return { ok: true };
   }
 }

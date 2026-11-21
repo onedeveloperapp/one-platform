@@ -4,8 +4,10 @@ import { paramCountOf } from "@flyee/whatsapp/rules";
 import { signWebhook } from "@flyee/whatsapp/webhook";
 import type {
   AccountTemplate,
+  BusinessProfile,
   MediaResult,
   OutboundMessage,
+  ProfileUpdated,
   SendResult,
   TemplateCreated,
   TemplateSubmission,
@@ -60,6 +62,8 @@ export class SimulatorProvider implements WhatsAppProvider {
   readonly outbox: { providerMessageId: string; to: string; message: OutboundMessage }[] = [];
   /** The templates submitted through it, oldest first. */
   readonly created: AccountTemplate[] = [];
+  /** The business profile it was given last, as the vendor would keep it. */
+  profile: BusinessProfile | null = null;
   /**
    * The templates the platform already keeps of this simulated account besides the two it starts with (the
    * ones submitted through a simulator before): the simulator has no memory of its own between instances, so
@@ -86,6 +90,12 @@ export class SimulatorProvider implements WhatsAppProvider {
   /** A simulated person sends no real file: there is nothing to fetch, now or later. */
   async fetchMedia(): Promise<MediaResult> {
     return { kind: "gone" };
+  }
+
+  /** Taken as given: the simulated vendor keeps the last profile. */
+  async updateProfile(profile: BusinessProfile): Promise<ProfileUpdated> {
+    this.profile = { ...profile };
+    return { ok: true };
   }
 
   async listTemplates(): Promise<AccountTemplate[]> {
@@ -218,7 +228,10 @@ export function echoDelivery(
 }
 
 /** The firm disconnected the platform from its phone, or stopped using the phone. */
-export function disconnectionDelivery(number: SimulatedNumber, reason = "ACCOUNT_DISCONNECTED"): Record<string, unknown> {
+export function disconnectionDelivery(
+  number: SimulatedNumber,
+  reason = "ACCOUNT_DISCONNECTED",
+): Record<string, unknown> {
   return {
     object: "whatsapp_business_account",
     entry: [
@@ -241,7 +254,10 @@ export function disconnectionDelivery(number: SimulatedNumber, reason = "ACCOUNT
 }
 
 /** A delivery as it travels: the raw body and the signature header the webhook checks. */
-export function signedDelivery(payload: Record<string, unknown>, secret: string): { rawBody: string; signature: string } {
+export function signedDelivery(
+  payload: Record<string, unknown>,
+  secret: string,
+): { rawBody: string; signature: string } {
   const rawBody = JSON.stringify(payload);
   return { rawBody, signature: signWebhook(rawBody, secret) };
 }
