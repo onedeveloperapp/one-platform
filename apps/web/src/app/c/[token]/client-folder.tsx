@@ -52,6 +52,7 @@ import {
   isDocumentKind,
   PERSON_FIELD_KEY,
 } from "@/lib/cases/cases";
+import type { ClientBrand } from "@/lib/cases/client-brand";
 import {
   documentsStanding,
   extraDocuments,
@@ -126,9 +127,12 @@ export default function ClientFolder({
   view,
   tasks,
   today,
+  brand,
 }: {
   token: string;
   view: OpenView;
+  /** The firm's logo and colour (0261). */
+  brand?: ClientBrand;
   /** What the link asks the client to sign, to accept and to confirm, and what it tells them of their lawsuits. */
   tasks: ClientTasks;
   today: string;
@@ -403,6 +407,7 @@ export default function ClientFolder({
     <>
       <ClientHead
         firm={view.firm}
+        brand={brand}
         facts={facts}
         standing={standing}
         notice={editable && tasks.agency ? t("client-agency-confirm", { agency: tasks.agency }) : undefined}

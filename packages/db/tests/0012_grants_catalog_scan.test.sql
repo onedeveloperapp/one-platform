@@ -75,6 +75,8 @@ select is(
   -- the pax_link_* ones a passenger's, by the link of the agency's partnership (0070).
   array[
     'client_link_add_dependent', 'client_link_agency', 'client_link_answer_chronology', 'client_link_assign_upload',
+    -- The firm's logo and colour on the client's link (0261).
+    'client_link_brand',
     'client_link_civil_court', 'client_link_complete_statement',
     'client_link_course',
     'client_link_discard_upload',

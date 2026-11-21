@@ -1,5 +1,6 @@
+import { writeDocxOnLetterhead } from "@/lib/brand/letterhead-docx";
 import { savedFileName, saveFile } from "@/lib/files/save-file";
-import { DOCX_TYPE, textDocx } from "@/lib/library/docx";
+import { DOCX_TYPE, textBlocks, textDocx } from "@/lib/library/docx";
 
 /**
  * What "Baixar em Word" does when pressed: the text in hand, or read then,
@@ -11,9 +12,13 @@ export async function downloadWord(
   name: string,
   source: string | (() => Promise<string | null>),
   fallback: string,
+  /** The firm's own Word document on its letterhead (0260): the text is written into it; null writes a plain one. */
+  letterhead: (() => Promise<Uint8Array | null>) | null = null,
 ): Promise<boolean> {
   const body = typeof source === "string" ? source : await source();
   if (body === null || body.trim() === "") return false;
-  saveFile(textDocx(body), savedFileName(name, "docx", fallback), DOCX_TYPE);
+  const paper = letterhead ? await letterhead().catch(() => null) : null;
+  const written = paper ? writeDocxOnLetterhead(paper, textBlocks(body)) : null;
+  saveFile(written ?? textDocx(body), savedFileName(name, "docx", fallback), DOCX_TYPE);
   return true;
 }

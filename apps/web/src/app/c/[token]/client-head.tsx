@@ -7,6 +7,7 @@ import { Alert, Box, Card, CardContent, Typography } from "@mui/material";
 
 import FactGrid, { type Fact } from "@/components/product/fact-grid";
 import StateLine from "@/components/product/state-line";
+import type { ClientBrand } from "@/lib/cases/client-brand";
 import { CLIENT_PATH, type ClientPathStage, type ClientStanding } from "@/lib/cases/client-standing";
 import { cn } from "@/lib/utils";
 import { formatDayBr } from "@flyee/rules/person";
@@ -20,7 +21,7 @@ const PATH_KEY: Record<ClientPathStage, string> = {
 };
 
 /** The five points of the case, the ones passed in green, the one of now in the firm's colour. */
-function CasePath({ stage }: { stage: ClientPathStage }) {
+function CasePath({ stage, color }: { stage: ClientPathStage; color: string | null }) {
   const t = useTranslations("product");
   const now = CLIENT_PATH.indexOf(stage);
   const passed = t("client-path-done");
@@ -38,8 +39,9 @@ function CasePath({ stage }: { stage: ClientPathStage }) {
             aria-hidden
             className={cn(
               "h-1.5 rounded-full",
-              index < now ? "bg-success" : index === now ? "bg-primary" : "bg-grey-100",
+              index < now ? "bg-success" : index === now ? (color ? null : "bg-primary") : "bg-grey-100",
             )}
+            style={index === now && color ? { backgroundColor: color } : undefined}
           />
           <Typography
             variant="caption"
@@ -67,8 +69,11 @@ export default function ClientHead({
   facts,
   standing,
   notice,
+  brand,
 }: {
   firm: string;
+  /** The firm's logo and its colour where it reads on white (0261): what the client sees is the firm's. */
+  brand?: ClientBrand;
   facts: Fact[];
   standing: ClientStanding;
   /** What the page must say before anything else (the agency's data to confirm). */
@@ -99,6 +104,11 @@ export default function ClientHead({
     <Card component="header">
       <CardContent className="flex flex-col gap-4">
         <Box className="flex flex-col gap-0.5">
+          {brand?.logoUrl ? (
+            // A short link to the firm's logo, made for this visit: nothing to optimize of it.
+
+            <img src={brand.logoUrl} alt={firm} className="mb-2 max-h-12 max-w-[220px] self-start object-contain" />
+          ) : null}
           <Typography variant="body2" className="text-text-secondary font-semibold break-words">
             {firm}
           </Typography>
@@ -107,7 +117,7 @@ export default function ClientHead({
           </Typography>
         </Box>
         <FactGrid facts={facts} pairs />
-        <CasePath stage={standing.stage} />
+        <CasePath stage={standing.stage} color={brand?.color ?? null} />
         {line}
         {notice ? (
           <Alert severity="info" className="neutral bg-background-paper/60!">

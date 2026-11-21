@@ -6,6 +6,7 @@ import { useState } from "react";
 
 import { Button, type ButtonProps } from "@mui/material";
 
+import { firmLetterheadBytes } from "@/lib/brand/letterhead-download";
 import { downloadWord } from "@/lib/library/word-download";
 
 /**
@@ -29,6 +30,7 @@ export default function WordDownloadButton({
   ariaLabel,
   disabled = false,
   variant = "text",
+  letterhead = false,
 }: {
   /** The document's name: the file's, and what the button's accessible name says. */
   name: string;
@@ -40,6 +42,8 @@ export default function WordDownloadButton({
   ariaLabel?: string;
   disabled?: boolean;
   variant?: ButtonProps["variant"];
+  /** A text of the firm's: written into its own Word document on its letterhead, where it has one (0260). */
+  letterhead?: boolean;
 }) {
   const t = useTranslations("product");
   const { enqueueSnackbar } = useSnackbar();
@@ -48,7 +52,12 @@ export default function WordDownloadButton({
   const download = async () => {
     setBusy(true);
     try {
-      const handed = await downloadWord(name, text ?? read ?? "", t("word-download-fallback"));
+      const handed = await downloadWord(
+        name,
+        text ?? read ?? "",
+        t("word-download-fallback"),
+        letterhead ? firmLetterheadBytes : null,
+      );
       if (!handed) enqueueSnackbar(t("word-download-failed"), { variant: "error" });
     } catch {
       enqueueSnackbar(t("word-download-failed"), { variant: "error" });

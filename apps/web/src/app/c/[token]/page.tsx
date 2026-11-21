@@ -2,6 +2,7 @@ import ClientFolder from "./client-folder";
 import { Frame, openOrNotice } from "./client-frame";
 import type { Metadata } from "next";
 
+import { readClientBrand } from "@/lib/cases/client-brand";
 import { readClientTasks } from "@/lib/cases/client-link";
 import { sweepWhileUsed } from "@/lib/jobs/while-used";
 
@@ -44,7 +45,13 @@ export default async function ClientLinkPage({ params }: { params: Promise<{ tok
   sweepWhileUsed();
   return (
     <Frame>
-      <ClientFolder token={token} view={opened.view} tasks={await readClientTasks(token)} today={todayInBrazil()} />
+      <ClientFolder
+        token={token}
+        view={opened.view}
+        tasks={await readClientTasks(token)}
+        today={todayInBrazil()}
+        brand={await readClientBrand(token)}
+      />
     </Frame>
   );
 }

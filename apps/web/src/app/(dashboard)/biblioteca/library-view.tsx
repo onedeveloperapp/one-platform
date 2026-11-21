@@ -32,6 +32,7 @@ import NiPen from "@/icons/nexture/ni-pen";
 import NiShieldCheck from "@/icons/nexture/ni-shield-check";
 import NiUploadCloud from "@/icons/nexture/ni-upload-cloud";
 import NiUsers from "@/icons/nexture/ni-users";
+import { firmLetterheadBytes } from "@/lib/brand/letterhead-download";
 import type { ModelDocument } from "@/lib/cases/drafts";
 import { isModelDocument, isPieceDocument, libraryErrorKey, MODEL_DOCUMENTS } from "@/lib/cases/drafts";
 import { readDraftTemplate, removeDraftTemplate, retireLegalSource, saveLegalSource } from "@/lib/library/actions";
@@ -879,7 +880,7 @@ function TemplateRow({
       label: t("word-download"),
       icon: <NiDownloadCloud size="medium" />,
       // Anybody who reads the library takes a model in Word, the platform's too.
-      onClick: () => void downloadWord(template.name, word, t("word-download-fallback")),
+      onClick: () => void downloadWord(template.name, word, t("word-download-fallback"), firmLetterheadBytes),
     },
     ...(mayWrite && !template.platform
       ? [

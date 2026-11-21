@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { type LetterheadImage, readDocxLetterhead } from "@/lib/brand/letterhead-docx";
-import { firmLetterhead } from "@/lib/brand/letterhead-read";
+import { firmLetterhead, firmLetterheadDocx } from "@/lib/brand/letterhead-read";
 import { officeOfLetterhead } from "@/lib/brand/letterhead-text";
 import { supabaseFileStore } from "@/lib/files/store";
 import { downloadUrl, finishUpload, startUpload } from "@/lib/files/uploads";
@@ -286,4 +286,17 @@ export async function removeFirmLetterhead(): Promise<{ ok: true } | { ok: false
   if (error) return { ok: false, code: codeOf(error.message) };
   revalidatePath("/configurar");
   return { ok: true };
+}
+
+/**
+ * The firm's own Word document on its letterhead, confirmed (0260), as base64: a text of the library downloaded in
+ * Word is written into it, in the browser. Anybody of the firm; null where the firm has none.
+ */
+export async function letterheadDocxForDownload(): Promise<string | null> {
+  const context = await getMemberContext();
+  if (!context?.firm) return null;
+  const service = backend();
+  if (!service) return null;
+  const bytes = await firmLetterheadDocx(service, context.firm.id);
+  return bytes ? Buffer.from(bytes).toString("base64") : null;
 }

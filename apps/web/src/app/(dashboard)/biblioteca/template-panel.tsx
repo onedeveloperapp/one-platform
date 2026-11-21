@@ -450,6 +450,7 @@ export default function TemplatePanel({
               <WordDownloadButton
                 name={name.trim() || t("word-download-fallback")}
                 text={body ?? ""}
+                letterhead
                 disabled={locked || !(body ?? "").trim()}
               />
             </>

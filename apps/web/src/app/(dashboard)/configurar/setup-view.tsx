@@ -932,6 +932,7 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
                       {used ? (
                         <WordDownloadButton
                           name={used.name}
+                          letterhead
                           read={() => readDraftTemplate(used.id).then((read) => (read.ok ? read.body : null))}
                         />
                       ) : null}

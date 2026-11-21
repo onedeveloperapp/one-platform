@@ -526,15 +526,18 @@ const MARK = /\[\[[A-Z_]+\]\]/g;
  * back as a model of the firm.
  */
 export function textDocx(text: string): Uint8Array {
+  return writeDocx(textBlocks(text));
+}
+
+/** The blocks of a text of the library as `textDocx` writes them: also what the firm's own letterhead takes (0260). */
+export function textBlocks(text: string): DocxBlock[] {
   const blocks = draftBlocks(text);
   // The same blocks, in the same order: only the case of the marks differs, never a line or a blank one.
   const filled = draftBlocks(text.replace(MARK, (mark) => mark.toLowerCase()));
-  return writeDocx(
-    blocks.flatMap((block, index): DocxBlock[] => {
-      if (block.kind !== "heading" && block.kind !== "paragraph") return [];
-      const shape = filled[index];
-      if (shape?.kind === "heading") return [{ kind: "heading", text: block.text }];
-      return [{ kind: "paragraph", text: block.text, indent: shape?.kind === "paragraph" && shape.indent === true }];
-    }),
-  );
+  return blocks.flatMap((block, index): DocxBlock[] => {
+    if (block.kind !== "heading" && block.kind !== "paragraph") return [];
+    const shape = filled[index];
+    if (shape?.kind === "heading") return [{ kind: "heading", text: block.text }];
+    return [{ kind: "paragraph", text: block.text, indent: shape?.kind === "paragraph" && shape.indent === true }];
+  });
 }
