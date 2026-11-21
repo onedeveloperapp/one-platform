@@ -17,10 +17,12 @@ import {
   type ImportStatus,
   type ModelCheck,
   modelChecks,
+  papersSavedAt,
   paragraphsOf,
   proposalOf,
   questionsOf,
   refusalOf,
+  requestSettled,
 } from "@/lib/library/imports";
 import { unwritableCharacters } from "@flyee/documents/text-pdf";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -119,6 +121,8 @@ export type ImportRow = {
   paragraphs?: unknown;
   proposal?: unknown;
   exchanges?: unknown;
+  /** The marking took the firm's data of the document as the firm's own (0271). */
+  firm_read?: boolean | null;
   claimed_at?: string | null;
   requested_by?: string | null;
   created_at: string;
@@ -126,7 +130,7 @@ export type ImportRow = {
 
 /** What a request's dialog reads of it. */
 export const IMPORT_VIEW_COLUMNS =
-  "id, file_name, source, status, failure, expected_kind, questions, rounds, refusal, held_reason, saved_template_id, paragraphs, proposal, exchanges, claimed_at, requested_by, created_at";
+  "id, file_name, source, status, failure, expected_kind, questions, rounds, refusal, held_reason, saved_template_id, paragraphs, proposal, exchanges, firm_read, claimed_at, requested_by, created_at";
 
 const statusOf = (value: string): ImportStatus =>
   (IMPORT_STATUSES as readonly string[]).includes(value) ? (value as ImportStatus) : "failed";
@@ -165,7 +169,7 @@ export function importView(
       checks: [
         // The firm's own data, once it said they are its own, are no original case's (0093).
         ...modelChecks(body, proposal.people, proposal.documentKind, [
-          ...firmTextsOf(paragraphs, proposal, exchangesOf(row.exchanges)),
+          ...firmTextsOf(paragraphs, proposal, exchangesOf(row.exchanges), row.firm_read === true),
           ...recordTexts,
         ]),
         ...(unwritable.length > 0 ? [{ kind: "unwritable" as const, characters: unwritable }] : []),
@@ -203,6 +207,20 @@ export function owesWork(
   return now - new Date(row.claimed_at).getTime() > workingMinutes * 60_000;
 }
 
+/**
+ * When the firm last saved a model of each paper (`draft_templates`), for a request that failed or was refused before
+ * it to be said no more (`requestSettled`). A read that fails settles nothing: the requests are said as they are.
+ */
+async function readPapersSavedAt(supabase: SupabaseClient, firmId: string): Promise<ReturnType<typeof papersSavedAt>> {
+  const { data, error } = await supabase
+    .from("draft_templates")
+    .select("document_kind, updated_at")
+    .eq("org_id", firmId)
+    .in("document_kind", ["procuracao", "contrato", "declaracao_residencia", "declaracao_hipossuficiencia"]);
+  if (error) return {};
+  return papersSavedAt((data ?? []) as { document_kind: string | null; updated_at: string | null }[]);
+}
+
 const IMPORT_COLUMNS =
   "id, file_name, source, status, failure, expected_kind, refusal, claimed_at, requested_by, created_at";
 
@@ -216,15 +234,22 @@ export async function readLibraryImports(
   names: ReadonlyMap<string, string>,
   timeZone: string | null | undefined,
 ): Promise<LibraryImport[]> {
-  const { data, error } = await supabase
-    .from("template_imports")
-    .select(IMPORT_COLUMNS)
-    .eq("org_id", firmId)
-    .neq("status", "saved")
-    .order("created_at", { ascending: false })
-    .limit(50);
+  const [{ data, error }, savedAt] = await Promise.all([
+    supabase
+      .from("template_imports")
+      .select(IMPORT_COLUMNS)
+      .eq("org_id", firmId)
+      .neq("status", "saved")
+      .order("created_at", { ascending: false })
+      .limit(50),
+    readPapersSavedAt(supabase, firmId),
+  ]);
   if (error) throw new Error("the requests could not be read");
-  return ((data ?? []) as ImportRow[]).map((row) => {
+  const owed = ((data ?? []) as ImportRow[]).filter(
+    (row) =>
+      !requestSettled({ status: row.status, expected: row.expected_kind ?? null, sentAt: row.created_at }, savedAt),
+  );
+  return owed.map((row) => {
     const status = statusOf(row.status);
     return {
       id: row.id,
@@ -258,21 +283,28 @@ export async function readPaperImports(
   supabase: SupabaseClient,
   firmId: string,
 ): Promise<{ procuracao: PaperImport | null; contrato: PaperImport | null }> {
-  const { data, error } = await supabase
-    .from("template_imports")
-    .select("id, file_name, status, failure, expected_kind, refusal, created_at")
-    .eq("org_id", firmId)
-    .in("expected_kind", ["procuracao", "contrato"])
-    .order("created_at", { ascending: false })
-    .limit(20);
+  const [{ data, error }, savedAt] = await Promise.all([
+    supabase
+      .from("template_imports")
+      .select("id, file_name, status, failure, expected_kind, refusal, created_at")
+      .eq("org_id", firmId)
+      .in("expected_kind", ["procuracao", "contrato"])
+      .order("created_at", { ascending: false })
+      .limit(20),
+    readPapersSavedAt(supabase, firmId),
+  ]);
   if (error) return { procuracao: null, contrato: null };
   const rows = (data ?? []) as Pick<
     ImportRow,
-    "id" | "file_name" | "status" | "failure" | "expected_kind" | "refusal"
+    "id" | "file_name" | "status" | "failure" | "expected_kind" | "refusal" | "created_at"
   >[];
   const latest = (paper: "procuracao" | "contrato"): PaperImport | null => {
     const row = rows.find((item) => item.expected_kind === paper);
     if (!row || row.status === "saved") return null;
+    // A failure or a refusal the firm's model of the paper, saved after it, already answered: nothing is owed.
+    if (requestSettled({ status: row.status, expected: row.expected_kind ?? null, sentAt: row.created_at }, savedAt)) {
+      return null;
+    }
     const status = statusOf(row.status);
     return {
       id: row.id,

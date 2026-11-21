@@ -1,7 +1,14 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
 
-import { EMPTY_OFFICE, officeAddressGiven, officeOf, officePayload, officeProblem } from "@/lib/firm/office";
+import {
+  EMPTY_OFFICE,
+  officeAddressGiven,
+  officeOf,
+  officePayload,
+  officeProblem,
+  officeReadOf,
+} from "@/lib/firm/office";
 
 // Every address here is invented.
 
@@ -48,5 +55,48 @@ describe("where the firm is, as the power of attorney says it (0217)", () => {
       society_uf: "GO",
       society_number: "1234",
     });
+  });
+});
+
+describe("what ONE read of the firm from its documents (0271)", () => {
+  it("reads what was written and from where, and an address read without its CEP", () => {
+    expect(
+      officeOf({
+        office_read: { source: "procuracao", fields: ["address", "cnpj", "other"], ref: "x" },
+        office_lawyers: [
+          { name: "Bruno Prado", uf: "GO", number: "54321" },
+          { name: "", uf: "GO", number: "1" },
+          { name: "Sem Estado", uf: "go", number: "2" },
+        ],
+      }),
+    ).toMatchObject({
+      read: { source: "procuracao", fields: ["address", "cnpj"], left: null },
+      lawyers: [{ name: "Bruno Prado", uf: "GO", number: "54321" }],
+    });
+    expect(
+      officeReadOf({
+        source: "procuracao",
+        fields: [],
+        left: { street: "Rua do Comércio", city: "Anápolis", uf: "GO" },
+      }),
+    ).toEqual({
+      source: "procuracao",
+      fields: [],
+      left: { street: "Rua do Comércio", number: "", complement: "", district: "", city: "Anápolis", uf: "GO" },
+    });
+    expect(officeReadOf({ source: "procuracao", fields: [] })).toBeNull();
+    expect(officeReadOf(null)).toBeNull();
+  });
+
+  it("shows the firm's CNPJ, never a partner's CPF the billing profile may hold", () => {
+    expect(officeOf({ billing_cpf_cnpj: "11222333000181" }).cnpj).toBe("11222333000181");
+    expect(officeOf({ billing_cpf_cnpj: "52998224725" }).cnpj).toBe("");
+  });
+
+  it("sends the lawyers of the papers the firm keeps by state and number", () => {
+    expect(officePayload({ ...office, lawyers: [{ name: "Bruno Prado", uf: "GO", number: "54321" }] }).lawyers).toEqual(
+      [{ uf: "GO", number: "54321" }],
+    );
+    expect(officePayload(office).lawyers).toEqual([]);
   });
 });

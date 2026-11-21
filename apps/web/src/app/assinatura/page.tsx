@@ -67,7 +67,7 @@ export default async function AssinaturaPage({
   const { data: membership } = await supabase
     .from("memberships")
     .select(
-      "org_id, role, organizations(name, billing_cpf_cnpj, billing_postal_code, billing_address_number, billing_phone)",
+      "org_id, role, organizations(name, billing_cpf_cnpj, billing_postal_code, billing_address_number, billing_phone, office_postal_code, office_number)",
     )
     .eq("user_id", user.id)
     .order("created_at", { ascending: true })
@@ -288,8 +288,11 @@ export default async function AssinaturaPage({
         switchingFrom={!oneTime && currentSub && !subPlan?.is_free ? (subPlan?.name ?? null) : null}
         profile={{
           document: (org.billing_cpf_cnpj as string | null) ?? null,
-          postalCode: (org.billing_postal_code as string | null) ?? null,
-          addressNumber: (org.billing_address_number as string | null) ?? null,
+          // With no billing address yet, the office's (0217), as the firm gave it or ONE read it from its papers (0271).
+          postalCode: (org.billing_postal_code as string | null) ?? (org.office_postal_code as string | null) ?? null,
+          addressNumber:
+            (org.billing_address_number as string | null) ??
+            (org.billing_postal_code ? null : ((org.office_number as string | null) ?? null)),
           phone: (org.billing_phone as string | null) ?? null,
         }}
       />

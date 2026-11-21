@@ -148,16 +148,19 @@ export function proposalOf(value: unknown): ImportProposal | null {
 /**
  * The original texts of the paragraphs that hold the firm's own data, for the check of a model to tell the firm's
  * own CNPJ, registrations at the bar, address, telephone and e-mail from the original case's: only once the firm
- * answered a round of questions, where the marking asks whether they are its own in every case (what
- * `template_import_firm_texts` of the database answers from the same request).
+ * answered a round of questions, where the marking asks whether they are its own in every case, or once the marking
+ * took them as the firm's own by its record (0271) (what `template_import_to_work` of the database answers from the
+ * same request).
  */
 export function firmTextsOf(
   paragraphs: readonly string[],
   proposal: Pick<ImportProposal, "firmParagraphs"> | null,
   exchanges: readonly ImportExchange[],
+  /** The marking took the firm's data of the document as the firm's own (`firm_read`, 0271). */
+  firmRead = false,
 ): string[] {
   const answered = exchanges.some((round) => round.answers.some((answer) => answer.trim() !== ""));
-  if (!answered || !proposal) return [];
+  if ((!answered && !firmRead) || !proposal) return [];
   return [...new Set(proposal.firmParagraphs)]
     .filter((at) => at >= 1 && at <= paragraphs.length)
     .sort((a, b) => a - b)
@@ -423,7 +426,7 @@ const IDENTIFIER_PATTERNS: readonly [Identifier, RegExp, (match: string) => bool
 ];
 
 /** Each identifier a text writes, with its kind and as it is written. */
-function identifiersIn(text: string): { identifier: Identifier; match: string }[] {
+export function identifiersIn(text: string): { identifier: Identifier; match: string }[] {
   let left = text;
   const found: { identifier: Identifier; match: string }[] = [];
   for (const [identifier, pattern, keep] of IDENTIFIER_PATTERNS) {
@@ -546,6 +549,49 @@ const FAILURE_KEY: Record<ImportFailure, string> = {
 
 export const importFailureKey = (failure: string | null): string =>
   FAILURE_KEY[failure as ImportFailure] ?? FAILURE_KEY.gave_up;
+
+/** The documents a firm keeps one model of per use: a paper a client signs, or a declaration. */
+const ONE_PER_USE: readonly ModelDocument[] = [
+  "procuracao",
+  "contrato",
+  "declaracao_residencia",
+  "declaracao_hipossuficiencia",
+];
+
+/**
+ * Whether a request that failed or was refused is behind the firm already: it was sent as a paper of which the firm
+ * saved a model after it was sent (from a later document, or written by hand). Nothing is owed of it, and neither
+ * the setup nor the library says it any more. A saved request goes with what it saved (0067), so without this the
+ * setup fell back to an older failure of the same paper right after the firm's model was saved (2026-11-20).
+ */
+export function requestSettled(
+  request: { status: string; expected: string | null; sentAt: string | Date },
+  savedAt: Partial<Record<ModelDocument, number>>,
+): boolean {
+  if (request.status !== "failed" && request.status !== "refused") return false;
+  const paper = ONE_PER_USE.find((kind) => kind === request.expected);
+  const saved = paper ? savedAt[paper] : undefined;
+  const sent = momentOf(request.sentAt);
+  return saved !== undefined && Number.isFinite(sent) && saved >= sent;
+}
+
+/** A moment as the database hands it (an ISO text, or a Date where a driver makes one), to the millisecond. */
+const momentOf = (value: string | Date | null | undefined): number =>
+  value instanceof Date ? value.getTime() : typeof value === "string" ? new Date(value).getTime() : Number.NaN;
+
+/** The latest moment the firm saved a model of each paper, from its rows of `draft_templates`, in milliseconds. */
+export function papersSavedAt(
+  rows: readonly { document_kind: string | null; updated_at: string | Date | null }[],
+): Partial<Record<ModelDocument, number>> {
+  const latest: Partial<Record<ModelDocument, number>> = {};
+  for (const row of rows) {
+    const kind = ONE_PER_USE.find((paper) => paper === row.document_kind);
+    const at = momentOf(row.updated_at);
+    if (!kind || !Number.isFinite(at)) continue;
+    if (latest[kind] === undefined || at > (latest[kind] as number)) latest[kind] = at;
+  }
+  return latest;
+}
 
 /** What a refusal to send or to ask says: the codes of the upload and of the request. */
 const REFUSAL_KEY: Record<string, string> = {

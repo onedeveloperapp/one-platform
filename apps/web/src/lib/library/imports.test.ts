@@ -21,10 +21,12 @@ import {
   MISSING_CODES,
   MISSING_KEY,
   modelChecks,
+  papersSavedAt,
   proposalOf,
   questionsOf,
   refusalOf,
   REFUSED_KEY,
+  requestSettled,
   saveGate,
 } from "@/lib/library/imports";
 import product from "@flyee/content/messages/pt-BR.json";
@@ -478,5 +480,52 @@ describe("the screen's words", () => {
     expect(isOtherTextFormat("Contrato.odt")).toBe(true);
     expect(isOtherTextFormat("Inicial.docx")).toBe(false);
     expect(isOtherTextFormat("Inicial.pdf")).toBe(false);
+  });
+});
+
+describe("a request behind the firm already", () => {
+  const saved = papersSavedAt([
+    { document_kind: "procuracao", updated_at: "2026-11-20T19:15:08Z" },
+    { document_kind: "procuracao", updated_at: "2026-11-01T10:00:00Z" },
+    { document_kind: "piece", updated_at: "2026-11-20T19:20:00Z" },
+    { document_kind: "contrato", updated_at: null },
+  ]);
+
+  it("reads the latest save of each paper, and nothing of a petition", () => {
+    expect(saved).toEqual({ procuracao: Date.parse("2026-11-20T19:15:08Z") });
+  });
+
+  it("tells moments a millisecond apart, given as text or as a Date", () => {
+    const at = papersSavedAt([{ document_kind: "procuracao", updated_at: new Date("2026-11-20T19:15:08.100Z") }]);
+    expect(
+      requestSettled({ status: "refused", expected: "procuracao", sentAt: new Date("2026-11-20T19:15:08.101Z") }, at),
+    ).toBe(false);
+    expect(requestSettled({ status: "refused", expected: "procuracao", sentAt: "2026-11-20T19:15:08.099Z" }, at)).toBe(
+      true,
+    );
+  });
+
+  it("settles a failure or a refusal of a paper the firm saved a model of after it was sent", () => {
+    // What the setup showed on 2026-11-20: the power of attorney saved at 19:15, and the failure of 16:15 back on screen.
+    expect(requestSettled({ status: "failed", expected: "procuracao", sentAt: "2026-11-20T16:15:10Z" }, saved)).toBe(
+      true,
+    );
+    expect(requestSettled({ status: "refused", expected: "procuracao", sentAt: "2026-11-20T16:15:10Z" }, saved)).toBe(
+      true,
+    );
+  });
+
+  it("keeps what came after the save, what is still under way, a petition and a paper with no model", () => {
+    expect(requestSettled({ status: "failed", expected: "procuracao", sentAt: "2026-11-20T19:30:00Z" }, saved)).toBe(
+      false,
+    );
+    expect(requestSettled({ status: "asking", expected: "procuracao", sentAt: "2026-11-20T16:15:10Z" }, saved)).toBe(
+      false,
+    );
+    expect(requestSettled({ status: "failed", expected: "piece", sentAt: "2026-11-20T16:15:10Z" }, saved)).toBe(false);
+    expect(requestSettled({ status: "failed", expected: "contrato", sentAt: "2026-11-20T15:25:25Z" }, saved)).toBe(
+      false,
+    );
+    expect(requestSettled({ status: "failed", expected: null, sentAt: "2026-11-20T15:25:25Z" }, saved)).toBe(false);
   });
 });

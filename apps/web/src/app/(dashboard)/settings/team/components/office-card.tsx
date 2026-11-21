@@ -14,7 +14,7 @@ import { officeAddressGiven } from "@/lib/firm/office";
  * Where the firm is, for who manages the firm account (migration 0217): what the power of attorney ONE prepares says
  * of the firm and of its lawyers, the address, the e-mail and the registration of the society at the bar (CPC, art.
  * 105, §§ 2º and 3º, and art. 287). Until the address is given the power of attorney goes without it, and this card
- * says so.
+ * says so; what ONE read of it from the firm's documents (0271) waits here, said as read, until a person confirms it.
  */
 export default function OfficeCard({ data, onChanged }: { data: TeamData; onChanged: () => void }) {
   const t = useTranslations("product");
@@ -24,7 +24,9 @@ export default function OfficeCard({ data, onChanged }: { data: TeamData; onChan
       <CollapsibleCard
         id="team-office"
         title={t("office-title")}
-        summary={t(given ? "office-summary-given" : "office-summary-missing")}
+        summary={t(
+          data.office.read ? "office-summary-read" : given ? "office-summary-given" : "office-summary-missing",
+        )}
         description={t("office-body")}
         bodyClassName="gap-5"
       >

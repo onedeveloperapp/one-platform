@@ -39,7 +39,7 @@ const model = vi.hoisted(() => ({
   asked: [] as { task: string; text: string; attachments: ChatAttachment[] }[],
 }));
 
-/** An answer of the marking (its fourth version, 0244), the parts a scenario does not say filled in. */
+/** An answer of the marking (its fifth version, 0271), the parts a scenario does not say filled in. */
 const marking = (fields: Record<string, unknown>) => {
   const answer: Record<string, unknown> = {
     documento: "peca",
@@ -52,6 +52,13 @@ const marking = (fields: Record<string, unknown>) => {
     nome: "",
     trocas: [],
     paragrafos_do_escritorio: [],
+    dados_do_escritorio: {
+      sociedade: "",
+      cnpj: "",
+      registro_da_sociedade: "",
+      advogados: [],
+      endereco: { logradouro: "", numero: "", complemento: "", bairro: "", cidade: "", uf: "" },
+    },
     pessoas: [],
     observacoes: [],
     ...fields,
@@ -104,6 +111,51 @@ vi.mock("@flyee/ai/fake", async (original) => {
             ],
             paragrafos_do_escritorio: [1],
             pessoas: ["MARIA TESTE DE SOUZA"],
+          });
+        }
+        if (text.includes("Rua das Acácias")) {
+          // The firm's own paper names its society and its lawyer: what the record lacks is read, nothing asked (0271).
+          return marking({
+            documento: "procuracao",
+            o_que_e: "uma procuração",
+            nome: "Procuração ad judicia do escritório",
+            trocas: [
+              {
+                de: 2,
+                ate: 2,
+                motivo: "o cliente",
+                texto: "",
+                trechos: [
+                  { antes: "{{NOME COMPLETO}}", depois: "[[NOME]]" },
+                  { antes: "{{CPF}}", depois: "[[CPF]]" },
+                ],
+              },
+              {
+                de: 4,
+                ate: 4,
+                motivo: "a data",
+                texto: "",
+                trechos: [{ antes: "{{DIA}} de {{MÊS}} de {{ANO}}", depois: "[[DATA]]" }],
+              },
+            ],
+            paragrafos_do_escritorio: [3],
+            dados_do_escritorio: {
+              sociedade: "SOUZA ADVOGADOS",
+              cnpj: "11.222.333/0001-81",
+              registro_da_sociedade: "OAB/RJ 9.876",
+              advogados: [
+                { nome: "Ana Souza", oab: "OAB/RJ 246.810" },
+                { nome: "Bruno Lima", oab: "OAB/RJ 135.790" },
+              ],
+              endereco: {
+                logradouro: "Rua das Acácias",
+                numero: "200",
+                complemento: "Sala 3",
+                bairro: "Centro",
+                cidade: "Rio de Janeiro",
+                uf: "RJ",
+              },
+            },
           });
         }
         if (text.includes("{{NOME COMPLETO}}")) {
@@ -300,6 +352,14 @@ const REPLICA = [
   "MARIA TESTE DE SOUZA, já qualificada, vem apresentar RÉPLICA à contestação de AÉREA EXEMPLO S.A.",
   "A ré alega força maior, mas o cancelamento decorreu de problema técnico, fortuito interno, nos termos do art. 14 da Lei nº 8.078.",
   "Ana Souza\nOAB/RJ 246.810",
+];
+
+/** The firm's own power of attorney, its society, lawyers and office written out in full (0271). */
+const FIRM_PAPER = [
+  "PROCURAÇÃO AD JUDICIA",
+  "OUTORGANTE: {{NOME COMPLETO}}, CPF {{CPF}}.",
+  "OUTORGADOS: SOUZA ADVOGADOS, CNPJ 11.222.333/0001-81, registrada na OAB/RJ sob o nº 9.876, e os advogados Ana Souza, OAB/RJ 246.810, e Bruno Lima, OAB/RJ 135.790, com escritório na Rua das Acácias, 200, Sala 3, Centro, Rio de Janeiro/RJ, CEP 20010-000, telefone (21) 3333-4444, e-mail contato@souza-modelos.invalid.",
+  "Rio de Janeiro, {{DIA}} de {{MÊS}} de {{ANO}}.",
 ];
 
 const CONTRACT = [
@@ -655,6 +715,88 @@ describe.skipIf(!DB_URL)("the firm's own model made from a document it already u
     expect(record?.lawyers).toEqual([{ name: "Ana Souza", oab: "OAB/RJ 246810" }]);
     expect((await view(sent.importId, firmRecordTexts(record))).prepared?.checks).toEqual([]);
     expect((await view(sent.importId)).prepared?.checks.length).toBeGreaterThan(0);
+  });
+
+  it("fills the firm's record from its own power of attorney, asks nothing of it, and ONE saves the model (0271)", async () => {
+    const { importNext } = await import("@/lib/library/import-work");
+    const sent = await send("Procuracao ad judicia.docx", DOCX, wordFile(FIRM_PAPER), "procuracao");
+    expect(await importNext(backend() as never, sent.importId)).toBe("read");
+    // The society and Ana are in the record: the rest of what the paper writes of the firm is the firm's, nothing asked.
+    expect(await importNext(backend() as never, sent.importId)).toBe("saving");
+    const [firm] = await sql.unsafe(
+      `select office_postal_code, office_street, office_number, office_complement, office_district, office_city,
+              office_uf, office_email, billing_phone, billing_cpf_cnpj, oab_society_uf, oab_society_number,
+              office_lawyers, office_read
+       from public.organizations where id = '${FIRM}'`,
+    );
+    expect(firm).toMatchObject({
+      office_postal_code: "20010000",
+      office_street: "Rua das Acácias",
+      office_number: "200",
+      office_complement: "Sala 3",
+      office_district: "Centro",
+      office_city: "Rio de Janeiro",
+      office_uf: "RJ",
+      office_email: "contato@souza-modelos.invalid",
+      billing_phone: "2133334444",
+      // What a person gave stays as it was.
+      billing_cpf_cnpj: "11222333000181",
+      oab_society_uf: "RJ",
+      oab_society_number: "9876",
+      office_lawyers: [{ name: "Bruno Lima", uf: "RJ", number: "135790" }],
+    });
+    expect(firm?.office_read).toMatchObject({ source: "procuracao", ref: sent.importId });
+    // The CNPJ was read from the firm's form of an earlier scenario (0093), once the firm said its data are its own.
+    expect((firm?.office_read as { fields: string[] }).fields).toEqual(
+      expect.arrayContaining(["address", "email", "lawyers", "phone", "cnpj"]),
+    );
+    // The paper's data are the firm's record now, and the request hands them to the check: ONE saves the model.
+    expect(await importNext(backend() as never, sent.importId)).toBe("saved");
+    const [template] = await sql.unsafe(
+      `select t.body from public.draft_templates t
+       join public.template_imports i on i.saved_template_id = t.id where i.id = $1`,
+      [sent.importId],
+    );
+    expect(template?.body).toContain("Bruno Lima, OAB/RJ 135.790, com escritório na Rua das Acácias");
+    expect(template?.body).toContain("OUTORGANTE: [[NOME]], CPF [[CPF]].");
+
+    const { readFirmRecord } = await import("@/lib/library/firm-record");
+    const { firmRecordTexts } = await import("@/lib/library/imports");
+    const record = await readFirmRecord(asAna() as never, FIRM);
+    expect(record?.lawyers).toEqual([
+      { name: "Ana Souza", oab: "OAB/RJ 246810" },
+      { name: "Bruno Lima", oab: "OAB/RJ 135790" },
+    ]);
+    expect((await view(sent.importId, firmRecordTexts(record))).prepared?.checks).toEqual([]);
+
+    // Saving "Dados do escritório" confirms what ONE read.
+    expect(
+      (
+        await call(asAna(), "set_firm_office", {
+          target_org: FIRM,
+          payload: {
+            postal_code: "20010000",
+            street: "Rua das Acácias",
+            number: "200",
+            complement: "Sala 3",
+            district: "Centro",
+            city: "Rio de Janeiro",
+            uf: "RJ",
+            email: "contato@souza-modelos.invalid",
+            society_uf: "RJ",
+            society_number: "9876",
+            lawyers: [{ uf: "RJ", number: "135790" }],
+          },
+        })
+      ).code,
+    ).toBe("saved");
+    const [confirmed] = await sql.unsafe(
+      `select office_read, office_lawyers from public.organizations where id = '${FIRM}'`,
+    );
+    expect(confirmed).toMatchObject({
+      office_read: null,
+      office_lawyers: [{ name: "Bruno Lima", uf: "RJ", number: "135790" }],
+    });
   });
 
   it("refuses a document that is no model ONE uses, and another firm reads nothing of what ONE does", async () => {

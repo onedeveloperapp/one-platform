@@ -7,10 +7,13 @@ import { soonAi } from "@/lib/ai/health";
 import { isModelDocument, isPieceDocument } from "@/lib/cases/drafts";
 import { supabaseFileStore } from "@/lib/files/store";
 import { readDocx } from "@/lib/library/docx";
+import { firmPaperOf, firmPaperSource } from "@/lib/library/firm-paper";
 import { readFirmRecord } from "@/lib/library/firm-record";
 import {
   exchangesOf,
+  type FirmRecord,
   firmRecordTexts,
+  type ImportExchange,
   MARK_TASK,
   markingBriefing,
   paragraphsOf,
@@ -257,7 +260,48 @@ export async function workClaimedImport(service: SupabaseClient, held: ImportCla
     idempotencyKey: row.run_key,
     requestedBy: row.requested_by,
   });
+  // What the document writes of the firm goes into its record before the request is recorded (0271): the save that
+  // may follow checks the model against that record.
+  await fillFirmFromPaper(service, row, paragraphs, context, result);
   return settle(result, "ready", "answer_unusable");
+}
+
+/**
+ * What a document of the firm says of the firm, written in its record where it has nothing (0271): the marking's
+ * answer, checked here against the document's own words (`firmPaperOf`), goes to `fill_firm_office_from_paper`.
+ * A replayed run is read from its record. Never fails the request: the record is the firm's to complete by hand.
+ */
+async function fillFirmFromPaper(
+  service: SupabaseClient,
+  row: ToWork,
+  paragraphs: string[],
+  context: { exchanges: ImportExchange[]; firmRecord: FirmRecord | null },
+  result: RunResult,
+): Promise<void> {
+  try {
+    let output: unknown = null;
+    if (result.kind === "finished") output = result.output;
+    else if (result.kind === "replayed" && result.status === "succeeded") {
+      const { data } = await service.from("ai_runs").select("output").eq("id", result.runId).maybeSingle();
+      output = (data as { output?: unknown } | null)?.output ?? null;
+    }
+    const source = firmPaperSource((output as { documento?: unknown } | null)?.documento);
+    if (!source) return;
+    const answered = context.exchanges.some((round) => round.answers.some((answer) => answer.trim() !== ""));
+    const data = firmPaperOf(output, paragraphs, context.firmRecord, answered);
+    if (!data) return;
+    const { error } = await service.rpc("fill_firm_office_from_paper", {
+      target_org: row.org_id,
+      target_source: source,
+      target_ref: row.import_id,
+      target_data: data,
+    });
+    if (error) console.error("[library] the firm's data of a document could not be kept", { code: error.code });
+  } catch (error) {
+    console.error("[library] the firm's data of a document could not be read", {
+      name: error instanceof Error ? error.name : typeof error,
+    });
+  }
 }
 
 /** Claims the request that waits the longest (or the one named) and does the one work it is owed. */
