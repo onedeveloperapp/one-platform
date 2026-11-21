@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap;
-select plan(18);
+select plan(20);
 
 -- ============================================================
 -- The case of an area of the firm (0274). Firm A's family area has its script published: the routing reads it, the
@@ -172,6 +172,21 @@ select ok(
   not has_function_privilege('authenticated', 'public.record_area_intake(uuid, integer, jsonb)', 'execute')
   and not has_function_privilege('authenticated', 'public.one_open_area_case(uuid, integer, text, text, text)', 'execute'),
   'nobody but the backend keeps a triage or opens a case of an area'
+);
+
+-- ---------- The firm's account deleted ----------
+
+-- As the audited deletion of an account does it (0005): with no person's session. The case points at the published
+-- script it was opened under (no action): both go with the firm in the same statement.
+select set_config('request.jwt.claims', '', true);
+select lives_ok(
+  $$delete from public.organizations where id = 'b2740000-0000-4000-8000-00000000000a'$$,
+  'the firm''s account deleted takes its area cases and the script they were opened under'
+);
+select is(
+  (select count(*)::integer from public.cases where org_id = 'b2740000-0000-4000-8000-00000000000a')
+  + (select count(*)::integer from public.firm_area_scripts where org_id = 'b2740000-0000-4000-8000-00000000000a'),
+  0, 'and nothing of them is left'
 );
 
 select * from finish();

@@ -286,6 +286,9 @@ select is(
     -- A case's area (0256) is its firm's: both cascade from the firm in the same statement, and an area taken out is
     -- kept, never deleted.
     'cases.area_id',
+    -- The version of its area's script a case was opened under (0274) is its firm's: both cascade from the firm in
+    -- the same statement, and a published script is never deleted otherwise (it is withdrawn).
+    'cases.area_script_id',
     'cases.module',
     -- The version of its module a case was opened under (0212) is platform data, never deleted once published.
     'cases.module_version_id',
