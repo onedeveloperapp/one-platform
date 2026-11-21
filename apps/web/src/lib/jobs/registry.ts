@@ -22,6 +22,7 @@ import { fileCopySweeps } from "@/lib/files/copy-work";
 import { fileSweeps } from "@/lib/files/jobs";
 import { financeSweeps } from "@/lib/finance/jobs";
 import { moneySweeps } from "@/lib/finance/money-work";
+import { personalitySweeps } from "@/lib/firm/personality-work";
 import { weeklyDigestSweeps } from "@/lib/firm/weekly-digest-work";
 import { hearingBriefSweeps } from "@/lib/hearings/brief-work";
 import { hearingSweeps } from "@/lib/hearings/jobs";
@@ -75,6 +76,8 @@ export const SWEEPS: readonly Sweep[] = [
   ...amountSweeps,
   ...agendaSweeps,
   ...weeklyDigestSweeps,
+  // The firm's profile, written by ONE (0272).
+  ...personalitySweeps,
   ...moneySweeps,
   ...billingSweeps,
   ...usageSweeps,

@@ -55,6 +55,7 @@ describe("the platform's sweeps (2026-11-04)", () => {
         "finance-receipts",
         "finance-retention",
         "finance-series",
+        "firm-personality",
         "flight-alerts",
         "flight-checks",
         "flight-watch",

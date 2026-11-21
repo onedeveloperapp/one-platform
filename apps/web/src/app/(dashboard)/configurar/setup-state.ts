@@ -9,6 +9,7 @@ import { cloudSigningOffered } from "@/lib/cases/filing-facts";
 import { downloadUrl } from "@/lib/files/uploads";
 import { EMPTY_OFFICE, OFFICE_COLUMNS, officeOf } from "@/lib/firm/office";
 import { type KnownArea, type OperationArea, operationOf } from "@/lib/firm/operation";
+import { readFirmPersonality } from "@/lib/firm/personality-actions";
 import { isManager, OAB_STATES, type OabRegistration } from "@/lib/firm/roles";
 import type { SetupStepKey } from "@/lib/firm/setup-steps";
 import { loadSetupPapers } from "@/lib/library/facts";
@@ -58,6 +59,7 @@ export async function loadSetupState(
     firmAreas,
     operation,
     brandRow,
+    personality,
   ] = await Promise.all([
     context.supabase.from("oab_registrations").select("id, uf, number, kind").eq("user_id", context.userId),
     context.supabase.from("firm_signers").select("user_id").eq("org_id", firm.id),
@@ -100,6 +102,8 @@ export async function loadSetupState(
       .select("logo_file_id, color, color_from, logo_color, letterhead_kind, letterhead_confirmed_at")
       .eq("org_id", firm.id)
       .maybeSingle(),
+    // The firm's profile (0272): a read that fails shows the step as never written, and ONE writes it.
+    readFirmPersonality().catch(() => null),
   ]);
   if (registrations.error || signers.error || organization.error || !organization.data) return { kind: "error" };
   const operationAnswered = (organization.data as { operation_answered_at?: string | null }).operation_answered_at;
@@ -154,6 +158,7 @@ export async function loadSetupState(
     operationAnswered: typeof operationAnswered === "string",
     brand,
     letterhead,
+    personality,
     operation: operation.error ? operationOf(null) : operationOf(operation.data),
     areas: firmAreas.error
       ? []

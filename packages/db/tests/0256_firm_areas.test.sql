@@ -185,13 +185,16 @@ select throws_ok(
 -- ---------- Whether ONE attends ----------
 
 update public.organizations set attended_before_operation = true where id = 'b2560000-0000-4000-8000-00000000000b';
+-- A's profile approved (0272): with its operation said, ONE attends for it.
+insert into public.firm_personalities (org_id, version, profile, examples, status) values
+  ('b2560000-0000-4000-8000-00000000000a', 1, '{"tratamento": "voce", "tom": "proximo", "tamanho": "curtas"}', '[]', 'approved');
 select set_config('request.jwt.claims', '{"role":"service_role"}', true);
 set local role service_role;
 select is(
   (select array[(f ->> 'attends'), (f ->> 'declared'), jsonb_array_length(f -> 'areas')::text, f -> 'modules' ->> 0]
    from public.firm_attendance('b2560000-0000-4000-8000-00000000000a') f),
   array['true', 'true', '2', 'direito-do-passageiro'],
-  'ONE attends for A, which said its operation, with its areas and its module'
+  'ONE attends for A, which said its operation and approved its profile, with its areas and its module'
 );
 select is(
   (select array[(f ->> 'attends'), (f ->> 'declared')] from public.firm_attendance('b2560000-0000-4000-8000-00000000000b') f),

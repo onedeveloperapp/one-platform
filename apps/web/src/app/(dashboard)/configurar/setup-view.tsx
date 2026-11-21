@@ -10,6 +10,7 @@ import { teamErrorKey } from "../settings/team/team-types";
 import SetupCpf, { declareSetupCpf } from "./setup-cpf";
 import { type SetupBrand, type SetupLetterhead, useOfficeStep } from "./setup-office";
 import { useOperationStep } from "./setup-operation";
+import { usePersonalityStep } from "./setup-personality";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useEffect, useRef, useState } from "react";
@@ -49,6 +50,7 @@ import { setFirmSigner } from "@/lib/firm/autonomy-actions";
 import { type FirmOffice, officeAddressGiven } from "@/lib/firm/office";
 import type { FirmOperation, KnownArea, OperationArea } from "@/lib/firm/operation";
 import { personFlowKey } from "@/lib/firm/person-setup";
+import type { PersonalityState } from "@/lib/firm/personality-actions";
 import { FIRM_FUNCTIONS, type FirmFunction, formatOab, OAB_STATES, type OabRegistration } from "@/lib/firm/roles";
 import { SETUP_STEPS, setupOpening, type SetupStepKey } from "@/lib/firm/setup-steps";
 import { readDraftTemplate } from "@/lib/library/actions";
@@ -96,6 +98,8 @@ export type SetupState =
       brand: SetupBrand;
       /** The firm's letterhead (0260). */
       letterhead: SetupLetterhead;
+      /** The firm's profile (0272): ONE's draft, the approved one, and ONE's writing owed. */
+      personality: PersonalityState | null;
       /** The firm said how it works and its areas (0256): ONE answers nobody new on the WhatsApp before it did. */
       operationAnswered: boolean;
       operation: FirmOperation;
@@ -322,6 +326,14 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
     onChanged: refresh,
   });
 
+  // ---------- The firm's profile (0272) ----------
+  const personalityStep = usePersonalityStep({
+    initial: state.personality,
+    blocked: blocked || locked,
+    onApproved: refresh,
+  });
+  const approvedProfile = Boolean(state.personality?.approved);
+
   // ---------- How the firm works and its areas (0256) ----------
   const operationStep = useOperationStep({
     answered: state.operationAnswered,
@@ -345,6 +357,7 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
     [!state.brand.logoUrl, "escritorio"],
     [!state.operationAnswered, "operacao"],
     [state.worksAlone === null, "equipe"],
+    [!approvedProfile, "personalidade"],
     [!state.whatsapp, "canal"],
   ];
   const opening = setupOpening({
@@ -982,13 +995,18 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
       ),
     },
     {
+      title: t("setup-personality-title"),
+      hint: t("setup-personality-hint"),
+      ...personalityStep,
+    },
+    {
       title: t("setup-channel-title"),
       hint: t("setup-channel-hint"),
       canAdvance: !blocked,
       ...finishing,
       content: (
         <Box className="flex flex-col gap-6">
-          {!state.operationAnswered && !realNumber ? (
+          {(!state.operationAnswered || !approvedProfile) && !realNumber ? (
             <Alert severity="info" className="neutral bg-background-paper/60!">
               {t("setup-channel-before-operation")}
             </Alert>

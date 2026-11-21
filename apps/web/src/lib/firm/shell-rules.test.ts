@@ -593,6 +593,8 @@ describe("the firm's setup, from facts", () => {
       // How the firm works and its areas (0256): ONE answers nobody new before the firm said them.
       ["operation", "/configurar?passo=operacao"],
       ["team", "/configurar?passo=equipe"],
+      // The firm's profile, which ONE writes and the firm approves (0272).
+      ["personality", "/configurar?passo=personalidade"],
       ["channel", "/configurar?passo=canal"],
     ]);
     for (const step of buildOnboardingSteps()) expect(product[step.title], step.title).toBeTruthy();
@@ -623,12 +625,28 @@ describe("the firm's setup, from facts", () => {
   });
 
   it("marks a step done when the thing exists, and never by a click", () => {
-    const facts = { oab_signer: true, brand: true, operation: true, team: false, channel: true, first_case: false };
-    expect(buildOnboardingSteps(facts).map((step) => step.done)).toEqual([true, true, true, false, true]);
+    const facts = {
+      oab_signer: true,
+      brand: true,
+      operation: true,
+      team: false,
+      personality: true,
+      channel: true,
+      first_case: false,
+    };
+    expect(buildOnboardingSteps(facts).map((step) => step.done)).toEqual([true, true, true, false, true, true]);
     expect(isActivated(facts)).toBe(false);
     // A firm with no case yet is ready: the first case is ONE's to receive.
     expect(
-      isActivated({ oab_signer: true, brand: true, operation: true, team: true, channel: true, first_case: false }),
+      isActivated({
+        oab_signer: true,
+        brand: true,
+        operation: true,
+        team: true,
+        personality: true,
+        channel: true,
+        first_case: false,
+      }),
     ).toBe(true);
     // A firm that never said how it works is not ready (the pilot finds it on its home, with nothing blocked).
     expect(isActivated({ oab_signer: true, operation: false, team: true, channel: true, first_case: true })).toBe(
@@ -640,6 +658,7 @@ describe("the firm's setup, from facts", () => {
         oab_signer: true,
         brand: true,
         operation: true,
+        personality: true,
         claim_defaults: false,
         team: true,
         channel: true,
@@ -663,12 +682,19 @@ describe("the firm's setup, from facts", () => {
       oab_signer: true,
       brand: true,
       operation: true,
+      personality: true,
       team: false,
       works_alone: true,
       channel: true,
       first_case: true,
     };
-    expect(buildOnboardingSteps(alone).map((step) => step.key)).toEqual(["oab", "office", "operation", "channel"]);
+    expect(buildOnboardingSteps(alone).map((step) => step.key)).toEqual([
+      "oab",
+      "office",
+      "operation",
+      "personality",
+      "channel",
+    ]);
     expect(isActivated(alone)).toBe(true);
   });
 

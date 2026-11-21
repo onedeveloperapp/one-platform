@@ -117,6 +117,9 @@ describe.skipIf(!DB_URL)("any passenger on the firm's WhatsApp", () => {
       -- The firm said how it works and its areas (0256): ONE attends for it, Família among them.
       update public.organizations set operation_answered_at = now() where id = '${FIRM}';
       insert into public.firm_areas (org_id, law_area, name, source) values ('${FIRM}', 'familia', 'Família e sucessões', 'person');
+      -- And approved its profile (0272): ONE attends for it.
+      insert into public.firm_personalities (org_id, version, profile, examples, status) values
+        ('${FIRM}', 1, '{"tratamento": "voce", "tom": "proximo", "tamanho": "curtas"}', '[]', 'approved');
       insert into public.connections (id, org_id, provider, external_id, label, status, connected_by, connected_at) values
         ('${CONNECTION}', '${FIRM}', 'whatsapp', 'test-waba-entrada', 'Chat de teste', 'connected', '${ANA}', now());
     `);

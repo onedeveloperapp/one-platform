@@ -150,6 +150,7 @@ import {
 import { supabaseFileStore } from "@/lib/files/store";
 import { fillMessage } from "@/lib/firm/messages";
 import { firmMessageText } from "@/lib/firm/messages-read";
+import { type FirmProfile, profileForModel, profileOf } from "@/lib/firm/personality";
 import { soon } from "@/lib/jobs/soon";
 import { deliverOutbox } from "@/lib/whatsapp/send";
 import { createServiceClient } from "@flyee/auth/service";
@@ -1199,23 +1200,29 @@ async function answerDoubt(
     firmMessageText(service, context.orgId, "faq").catch(() => null),
   ]);
   const values = { nome: greeting(facts.nome) };
+  // The firm's profile (0272): how it speaks, and its words on fees and doubts where it wrote none of its own here.
+  const personality = await approvedPersonality(service, context.orgId);
   const run = await runFirmTask({
     orgId: context.orgId,
     task: DOUBT_TASK,
-    input: doubtInput({
-      firm: context.firm,
-      question,
-      facts,
-      airline: names?.airline ?? null,
-      standing: standingWords(facts, today()),
-      fees: fees ? fillMessage(fees, values) : null,
-      faq: faq ? fillMessage(faq, values) : null,
-      forecast,
-    }),
+    input: {
+      ...doubtInput({
+        firm: context.firm,
+        question,
+        facts,
+        airline: names?.airline ?? null,
+        standing: standingWords(facts, today()),
+        fees: fees ? fillMessage(fees, values) : personality?.profile.honorarios || null,
+        faq: faq ? fillMessage(faq, values) : personality?.profile.duvidas || null,
+        forecast,
+      }),
+      ...(personality ? { perfil: profileForModel(personality.profile) } : {}),
+    },
     subject: { type: "wa_conversation", id: held.conversationId },
     idempotencyKey: `doubt:${held.conversationId}:${held.claim}`,
   }).catch(() => null);
   if (!run || run.kind !== "finished") return null;
+  if (personality) await notePersonalityUse(service, run.runId, personality.id);
   return doubtAnswerOf(run.output);
 }
 
@@ -1249,6 +1256,30 @@ type Tell = (body: string) => Promise<boolean>;
  * intake took the turn; one that is not about a flight leaves it to ONE's usual answer. A read that fails never stops
  * the turn.
  */
+/** The firm's approved profile (0272), for ONE's words to follow; none where the firm approved none or it could not be read. */
+async function approvedPersonality(
+  service: SupabaseClient,
+  orgId: string,
+): Promise<{ id: string; profile: FirmProfile } | null> {
+  const { data, error } = await service
+    .from("firm_personalities")
+    .select("id, profile")
+    .eq("org_id", orgId)
+    .eq("status", "approved")
+    .maybeSingle();
+  if (error || !data) return null;
+  const profile = profileOf(data.profile);
+  return profile ? { id: String(data.id), profile } : null;
+}
+
+/** Which profile an answer of ONE's followed, kept beside its run (0272). */
+async function notePersonalityUse(service: SupabaseClient, runId: string, personalityId: string): Promise<void> {
+  await service.rpc("record_personality_use", { target_run: runId, target_personality: personalityId }).then(
+    () => undefined,
+    () => undefined,
+  );
+}
+
 /** The areas of law ONE knows (0256), as the routing hands them to the model; none when they could not be read. */
 async function lawAreasOf(service: SupabaseClient): Promise<LawAreaInfo[]> {
   const { data, error } = await service
@@ -1867,13 +1898,16 @@ async function takeTurn(service: SupabaseClient, held: Held, report: TurnReport)
     ) {
       // ONE took them in (0176), or the way of their subject (0257): asked, decided, called a person or set aside.
     } else if (words.length > 0) {
+      // The firm's profile (0272): ONE writes as the firm speaks, within the rules for everybody.
+      const personality = await approvedPersonality(service, context.orgId);
       const run = await runFirmTask({
         orgId: context.orgId,
         task: CONVERSATION_TASK,
-        input: modelInput(context),
+        input: { ...modelInput(context), ...(personality ? { perfil: profileForModel(personality.profile) } : {}) },
         subject: { type: "wa_conversation", id: held.conversationId },
         idempotencyKey: `${held.conversationId}:${held.claim}`,
       });
+      if (run.kind === "finished" && personality) await notePersonalityUse(service, run.runId, personality.id);
       if (run.kind !== "finished") {
         // A model that did not answer now: a person carries the conversation on rather than the passenger waiting.
         await say(service, held, await wordsOf(service, context.orgId, "called_person", calledMessage)).catch(
