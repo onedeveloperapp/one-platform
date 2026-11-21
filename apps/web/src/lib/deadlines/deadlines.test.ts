@@ -226,6 +226,7 @@ describe("the input of the rule from what the database hands over", () => {
           },
         ],
       },
+      justice: "estadual",
     });
   });
 

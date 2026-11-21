@@ -6,7 +6,7 @@ import { settleDeadlineCount } from "@/lib/deadlines/count-work";
 import { calendarOf, isDeadlineCounting, isDeadlineTrigger } from "@/lib/deadlines/deadlines";
 import { courtCalendar } from "@/lib/deadlines/facts";
 import { getMemberContext } from "@/lib/member/context";
-import { computeDeadline, type DeadlineResult } from "@flyee/rules/deadlines";
+import { computeDeadline, type DeadlineResult, justiceOfCourt } from "@flyee/rules/deadlines";
 import { readDay } from "@flyee/rules/person";
 
 /**
@@ -143,6 +143,7 @@ export async function previewDeadline(
       portalOn,
       place,
       calendar: calendarOf(rows.years, rows.days),
+      justice: justiceOfCourt(court),
     });
     if (!outcome.ok) return { ok: false, code: outcome.code };
     return { ok: true, result: outcome.result, court };

@@ -9,7 +9,7 @@ import type {
   DeadlineSkipReason,
   DeadlineTrigger,
 } from "@flyee/rules/deadlines";
-import { CALENDAR_DAY_KINDS, DEADLINE_COUNTINGS, DEADLINE_TRIGGERS } from "@flyee/rules/deadlines";
+import { CALENDAR_DAY_KINDS, DEADLINE_COUNTINGS, DEADLINE_TRIGGERS, justiceOfCourt } from "@flyee/rules/deadlines";
 
 /**
  * The pure rules of the firm's deadlines on the screens (migration 0034):
@@ -281,6 +281,10 @@ export function readCount(value: unknown): DeadlineResult | null {
   const moved = count.moved as Record<string, unknown> | null | undefined;
   return {
     rule: count.rule as DeadlineResult["rule"],
+    // The justice the count followed (prazo-v3); a count made before says none.
+    ...(count.justice === "estadual" || count.justice === "trabalho" || count.justice === "federal"
+      ? { justice: count.justice }
+      : {}),
     trigger: count.trigger,
     triggerDay: count.triggerDay,
     publishedOn: isDay(count.publishedOn) ? count.publishedOn : null,
@@ -382,6 +386,8 @@ export function countInput(read: DeadlineToCount): DeadlineInput | null {
       comarca: read.place?.comarca ?? null,
     },
     calendar: calendarOf(read.years ?? [], read.days_off ?? []),
+    // The justice of the lawsuit's court: a federal court's holidays are the law's (prazo-v3).
+    justice: justiceOfCourt(read.court),
   };
 }
 

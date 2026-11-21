@@ -8,7 +8,9 @@ import {
   type CourtCalendar,
   type DeadlineInput,
   type DeadlineResult,
+  federalJusticeHoliday,
   inYearEndSuspension,
+  justiceOfCourt,
   nationalHoliday,
 } from "./deadlines.ts";
 
@@ -104,7 +106,8 @@ test("an intimation in the court's own system that came first starts the term, s
 test("a publication is published on the next business day, and the term counts from the business day after", () => {
   // Made available on a Monday: published on Tuesday, counted from Wednesday, the court's day off skipped.
   const result = count({});
-  assert.equal(result.rule, "prazo-v2");
+  assert.equal(result.rule, "prazo-v3");
+  assert.equal(result.justice, "estadual");
   assert.equal(result.publishedOn, "2026-03-03");
   assert.equal(result.fromDay, "2026-03-03");
   assert.equal(result.startsOn, "2026-03-04");
@@ -433,4 +436,54 @@ test("an input the rule cannot count is refused, and a calendar that never lets 
 
 test("the same input gives the same deadline", () => {
   assert.deepEqual(count({ on: "2026-12-11" }), count({ on: "2026-12-11" }));
+});
+
+test("the justice of a court is read from its acronym", () => {
+  assert.equal(justiceOfCourt("TRT18"), "trabalho");
+  assert.equal(justiceOfCourt("TST"), "trabalho");
+  assert.equal(justiceOfCourt("trf1"), "federal");
+  assert.equal(justiceOfCourt("TRF6"), "federal");
+  assert.equal(justiceOfCourt("TJGO"), "estadual");
+  assert.equal(justiceOfCourt(null), "estadual");
+});
+
+test("the holidays of the Justiça Federal are the law's (Lei nº 5.010/1966, art. 62)", () => {
+  // Easter Sunday of 2026 is 5 April: Holy Week from Wednesday 1 April, Carnival on 16 and 17 February.
+  assert.equal(federalJusticeHoliday("2026-03-31"), null);
+  assert.equal(federalJusticeHoliday("2026-04-01"), "Semana Santa");
+  assert.equal(federalJusticeHoliday("2026-04-05"), "Semana Santa");
+  assert.equal(federalJusticeHoliday("2026-04-06"), null);
+  assert.equal(federalJusticeHoliday("2026-02-16"), "Carnaval");
+  assert.equal(federalJusticeHoliday("2026-02-17"), "Carnaval");
+  assert.equal(federalJusticeHoliday("2026-02-18"), null);
+  assert.equal(federalJusticeHoliday("2026-08-11"), "Dia da instalação dos cursos jurídicos");
+  assert.equal(federalJusticeHoliday("2026-12-08"), "Nossa Senhora da Conceição");
+  assert.equal(federalJusticeHoliday("2027-01-06"), "Recesso da Justiça Federal");
+  assert.equal(federalJusticeHoliday("2027-01-07"), null);
+  // Easter of 2027 is 28 March: Holy Week from Wednesday 24 March.
+  assert.equal(federalJusticeHoliday("2027-03-24"), "Semana Santa");
+  assert.equal(federalJusticeHoliday("2027-03-23"), null);
+});
+
+test("a term in a federal court passes Holy Week; one in a labour court counts as a state court's does", () => {
+  // Made available on Monday 30 March 2026 and published on Tuesday 31: five business days.
+  const base: Partial<DeadlineInput> = {
+    on: "2026-03-30",
+    days: 5,
+    calendar: { years: [], days: [] },
+    place: { proceedingKind: "juizado", system: "pje", comarca: null },
+  };
+  const state = count({ ...base, justice: "estadual" });
+  const labour = count({ ...base, justice: "trabalho" });
+  const federal = count({ ...base, justice: "federal" });
+  assert.equal(state.publishedOn, "2026-03-31");
+  // In a state court and a labour one, Good Friday is the court's own day, not the law's: 1, 2, 3, 6 and 7 April.
+  assert.equal(state.dueOn, "2026-04-07");
+  assert.equal(labour.dueOn, "2026-04-07");
+  assert.equal(labour.justice, "trabalho");
+  // In a federal court, Wednesday 1 to Sunday 5 April are holidays: 6 to 10 April.
+  assert.equal(federal.startsOn, "2026-04-06");
+  assert.equal(federal.dueOn, "2026-04-10");
+  assert.equal(federal.justice, "federal");
+  assert.ok(federal.skipped.some((skip) => skip.reason === "holiday" && skip.label === "Semana Santa"));
 });

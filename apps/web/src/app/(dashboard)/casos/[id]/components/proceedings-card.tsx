@@ -536,7 +536,10 @@ function ProceedingDialog({
               {select(
                 "court",
                 t("case-proceeding-court"),
-                state.courts.map((court) => ({ value: court.acronym, label: `${court.acronym} · ${court.uf}` })),
+                state.courts.map((court) => ({
+                  value: court.acronym,
+                  label: court.uf ? `${court.acronym} · ${court.uf}` : court.acronym,
+                })),
                 true,
               )}
             </Grid>

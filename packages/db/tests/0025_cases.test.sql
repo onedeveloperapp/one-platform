@@ -57,7 +57,7 @@ $$ select encode(sha256(convert_to(token, 'UTF8')), 'hex'); $$;
 -- ---------- What every firm reads ----------
 
 select ok(
-  (select count(*) = 27 from public.courts)
+  (select count(*) = 27 from public.courts where justice = 'estadual')
   and (select cnj_code = '09' and cnj_segment = '8' from public.courts where acronym = 'TJGO')
   and (select cnj_code = '26' from public.courts where acronym = 'TJSP')
   and (select count(*) > 3000 from public.airports)

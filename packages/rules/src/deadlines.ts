@@ -1,11 +1,17 @@
 import { readDay } from "@flyee/rules/person";
 
 /**
- * The deadline of a procedural act (rule `prazo-v2`): the day a term set in
+ * The deadline of a procedural act (rule `prazo-v3`): the day a term set in
  * days runs out, counted the way the Código de Processo Civil counts it
  * (Lei nº 13.105/2015) over the forensic calendar of the court the lawsuit
  * is in. The small-claims court counts the same way since Lei nº
- * 13.728/2018 (Lei nº 9.099/1995, art. 12-A: business days only).
+ * 13.728/2018 (Lei nº 9.099/1995, art. 12-A: business days only), and so do
+ * the labour courts (CLT, art. 775, as Lei nº 13.467/2017 wrote it: business
+ * days, the first day left out and the last one counted; art. 775-A: no term
+ * runs from 20 December to 20 January) and the federal small-claims courts
+ * (Lei nº 10.259/2001, art. 1º, which takes Lei nº 9.099/1995 in; art. 9º:
+ * no public entity has a term of its own there, and the rule never doubles
+ * a term anywhere: the term in days is the act's).
  *
  *   - Only business days count (CPC, art. 219), unless the term is in
  *     calendar days. A business day is one with forensic business: not a
@@ -35,7 +41,14 @@ import { readDay } from "@flyee/rules/person";
  * The calendar of each court (the days it had no business, the days it
  * suspended terms, the days of partial business, by comarca, kind of
  * lawsuit and system) is data the caller hands in, read from the court's
- * acts. The national holidays fixed by federal law are the rule's own.
+ * acts. The national holidays fixed by federal law are the rule's own, and,
+ * in the federal courts (a TRF, its sections and their small-claims courts),
+ * the holidays of the Justiça Federal (Lei nº 5.010/1966, art. 62): 20
+ * December to 6 January, Holy Week from Wednesday to Easter Sunday, the
+ * Monday and Tuesday of Carnival, 11 August, 1 and 2 November and 8
+ * December. A labour court's days off are its own calendar's, as a state
+ * court's are: the rule does not take them as law, so a calendar not on
+ * record gives the earlier day.
  *
  * The rule is conservative: where it cannot know, it takes the reading that
  * gives the earlier day, which never puts a deadline later than it is, and
@@ -55,8 +68,25 @@ import { readDay } from "@flyee/rules/person";
  * `prazo-v2` (2026-11-10) also takes the day the same act was intimated in the court's own system, when a person gave
  * it, and counts from the earlier of the two; `prazo-v1` knew only the DJEN's. A count keeps the version it was made by.
  */
-export const DEADLINE_RULE_VERSION = "prazo-v2";
-export type DeadlineRuleVersion = "prazo-v1" | typeof DEADLINE_RULE_VERSION;
+/**
+ * `prazo-v3` (2026-11-21) knows the justice the lawsuit is in: the holidays of the Justiça Federal in a federal court
+ * (Lei nº 5.010/1966, art. 62), and the count of the labour and the federal small-claims courts said as their law says
+ * it. A count keeps the version it was made by.
+ */
+export const DEADLINE_RULE_VERSION = "prazo-v3";
+export type DeadlineRuleVersion = "prazo-v1" | "prazo-v2" | typeof DEADLINE_RULE_VERSION;
+
+/** The justice a lawsuit runs in: a state court, a labour court or a federal one. */
+export const JUSTICES = ["estadual", "trabalho", "federal"] as const;
+export type Justice = (typeof JUSTICES)[number];
+
+/** The justice of a court by its acronym as the DJEN and ONE write it: TRT18 and TST are labour, TRF1 is federal. */
+export function justiceOfCourt(acronym: string | null | undefined): Justice {
+  const court = (acronym ?? "").trim().toUpperCase();
+  if (/^(TRT\d{1,2}|TST)$/.test(court)) return "trabalho";
+  if (/^(TRF\d|JF[A-Z]{2})$/.test(court)) return "federal";
+  return "estadual";
+}
 
 export const DEADLINE_COUNTINGS = ["business", "calendar"] as const;
 export type DeadlineCounting = (typeof DEADLINE_COUNTINGS)[number];
@@ -138,6 +168,8 @@ export interface DeadlineInput {
    * tenth day when unread), when a person said so; the term runs from it when it came first.
    */
   portalOn?: string | null;
+  /** The justice of the lawsuit's court (`justiceOfCourt`); a state court when not said. */
+  justice?: Justice;
 }
 
 /**
@@ -181,6 +213,8 @@ export type DeadlineAssumption =
 
 export interface DeadlineResult {
   rule: DeadlineRuleVersion;
+  /** The justice the count followed; absent in a count made before `prazo-v3`. */
+  justice?: Justice;
   trigger: DeadlineTrigger;
   /** The day the input named: the day a publication was made available, or the day given. */
   triggerDay: string;
@@ -233,6 +267,45 @@ export function nationalHoliday(day: string): string | null {
     (holiday) => holiday.month === read.month && holiday.day === read.day && read.year >= (holiday.since ?? 0),
   );
   return found?.name ?? null;
+}
+
+/** Easter Sunday of a year, by the Gregorian computus, as a day number. */
+function easterOf(year: number): number {
+  const a = year % 19;
+  const b = Math.floor(year / 100);
+  const c = year % 100;
+  const d = Math.floor(b / 4);
+  const e = b % 4;
+  const f = Math.floor((b + 8) / 25);
+  const g = Math.floor((b - f + 1) / 3);
+  const h = (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4);
+  const k = c % 4;
+  const l = (32 + 2 * e + 2 * i - h - k) % 7;
+  const m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const month = Math.floor((h + l - 7 * m + 114) / 31);
+  const day = ((h + l - 7 * m + 114) % 31) + 1;
+  return Date.UTC(year, month - 1, day) / MS_PER_DAY;
+}
+
+/**
+ * The name of a holiday of the Justiça Federal on a day (Lei nº 5.010/1966, art. 62), or null: 20 December to 6
+ * January, Holy Week from Wednesday to Easter Sunday, the Monday and Tuesday of Carnival, 11 August, 1 and 2 November
+ * and 8 December.
+ */
+export function federalJusticeHoliday(day: string): string | null {
+  const read = readDay(day);
+  if (!read) return null;
+  if ((read.month === 12 && read.day >= 20) || (read.month === 1 && read.day <= 6)) return "Recesso da Justiça Federal";
+  const number = Date.UTC(read.year, read.month - 1, read.day) / MS_PER_DAY;
+  const easter = easterOf(read.year);
+  if (number >= easter - 4 && number <= easter) return "Semana Santa";
+  if (number === easter - 48 || number === easter - 47) return "Carnaval";
+  if (read.month === 8 && read.day === 11) return "Dia da instalação dos cursos jurídicos";
+  if (read.month === 11 && read.day === 1) return "Todos os Santos";
+  if (read.month === 11 && read.day === 2) return "Finados";
+  if (read.month === 12 && read.day === 8) return "Nossa Senhora da Conceição";
+  return null;
 }
 
 /** True from 20 December to 20 January, both included: the procedural terms do not run (CPC, art. 220). */
@@ -329,6 +402,8 @@ export function computeDeadline(input: DeadlineInput): DeadlineOutcome {
   if (trigger === null || input.on < DEADLINE_FIRST_DAY || input.on > DEADLINE_LAST_DAY) return failed("invalid_day");
 
   const business = input.counting === "business";
+  const justice: Justice =
+    input.justice && (JUSTICES as readonly string[]).includes(input.justice) ? input.justice : "estadual";
   const place = {
     kind: input.place.proceedingKind || null,
     system: input.place.system || null,
@@ -362,7 +437,7 @@ export function computeDeadline(input: DeadlineInput): DeadlineOutcome {
       else if (entry.kind === "partial") partial ??= entry;
       else suspended ??= entry;
     }
-    const holiday = nationalHoliday(day);
+    const holiday = nationalHoliday(day) ?? (justice === "federal" ? federalJusticeHoliday(day) : null);
     const weekday = weekdayOf(number);
     const weekend = weekday === 0 || weekday === 6;
     const open = !weekend && holiday === null && closed === null;
@@ -509,6 +584,7 @@ export function computeDeadline(input: DeadlineInput): DeadlineOutcome {
     ok: true,
     result: {
       rule: DEADLINE_RULE_VERSION,
+      justice,
       trigger: input.trigger,
       triggerDay: input.on,
       publishedOn,

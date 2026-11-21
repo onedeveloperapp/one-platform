@@ -189,7 +189,8 @@ export type CaseConsent = { personId: string; title: string; version: number; ac
 
 export type TeamMember = { userId: string; name: string; firmFunction: FirmFunction };
 
-export type CourtOption = { acronym: string; name: string; uf: string };
+/** A court a lawsuit may be of; a regional labour or federal court is of no single state (0275): `uf` null. */
+export type CourtOption = { acronym: string; name: string; uf: string | null };
 
 /** The filing system a court uses for each kind of proceeding, as the platform knows it (migration 0021). */
 export type CourtSystem = {
