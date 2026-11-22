@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from "react";
 import { Autocomplete, Box, Button, Dialog, InputAdornment, TextField, Typography } from "@mui/material";
 
 import { useGlobalSearch } from "@/components/layout/search/use-global-search";
+import { useSetupShown } from "@/components/layout/setup-shown";
 import NiCross from "@/icons/nexture/ni-cross";
 import NiSearch from "@/icons/nexture/ni-search";
 import { STATUS_KEY } from "@/lib/cases/cases";
@@ -38,6 +39,7 @@ function SearchField({ autoFocus = false, onDone }: { autoFocus?: boolean; onDon
   const [text, setText] = useState("");
   const [open, setOpen] = useState(false);
   const found = useGlobalSearch(text);
+  const focused = () => typeof document !== "undefined" && document.activeElement === inputRef.current;
 
   // "/" or Ctrl+K from anywhere on the screen brings the person here.
   useEffect(() => {
@@ -59,9 +61,15 @@ function SearchField({ autoFocus = false, onDone }: { autoFocus?: boolean; onDon
       value={null}
       inputValue={text}
       open={open && text.trim() !== ""}
-      onOpen={() => setOpen(true)}
+      // The list opens for the person who is in the field, never for text the browser put there by itself.
+      onOpen={() => {
+        if (focused()) setOpen(true);
+      }}
       onClose={() => setOpen(false)}
       onInputChange={(_event, next, reason) => {
+        // A browser fills a field it takes for a login with the person's e-mail, with nobody in it: the field stays
+        // as it was, and the list never opens over the page (2026-11-21, over the panel of a setup's step).
+        if (reason === "input" && !focused()) return;
         if (reason !== "reset") setText(next);
       }}
       onChange={(_event, chosen) => {
@@ -144,6 +152,10 @@ function SearchField({ autoFocus = false, onDone }: { autoFocus?: boolean; onDon
             },
             htmlInput: {
               ...params.slotProps.htmlInput,
+              // A search, never a login: nothing the browser keeps is offered or filled in it.
+              type: "search",
+              name: "one-search",
+              autoComplete: "off",
               "aria-label": t("search-label"),
               "aria-keyshortcuts": "/ Control+K Meta+K",
             },
@@ -157,7 +169,8 @@ function SearchField({ autoFocus = false, onDone }: { autoFocus?: boolean; onDon
 /** The search at the top of every screen of the firm, on a wide screen: the field itself, in the header's middle. */
 export function GlobalSearchField() {
   const pathname = usePathname();
-  if (isSetupPath(pathname)) return null;
+  const setupShown = useSetupShown();
+  if (isSetupPath(pathname) || setupShown) return null;
   return (
     <Box className="hidden min-w-0 flex-1 justify-center px-4 md:flex">
       <Box className="w-full max-w-[32rem]">
@@ -172,7 +185,8 @@ export function GlobalSearchButton() {
   const t = useTranslations("dashboard");
   const pathname = usePathname();
   const [phoneOpen, setPhoneOpen] = useState(false);
-  if (isSetupPath(pathname)) return null;
+  const setupShown = useSetupShown();
+  if (isSetupPath(pathname) || setupShown) return null;
   return (
     <>
       <Button

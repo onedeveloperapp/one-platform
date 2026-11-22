@@ -20,6 +20,7 @@ import {
   Typography,
 } from "@mui/material";
 
+import { useMarkSetupShown } from "@/components/layout/setup-shown";
 import { PhoneField } from "@/components/product/fields";
 import PageHeader from "@/components/product/page-header";
 import SecondFactorPrompt from "@/components/product/second-factor-prompt";
@@ -86,6 +87,8 @@ const cleanNumber = (value: string) => value.replace(/[^0-9A-Za-z]/g, "");
  */
 export default function PersonSetupView({ state }: { state: PersonSetupState }) {
   const t = useTranslations("product");
+  // The header leaves out the search and "Adicionar" while a setup is on the screen, on /inicio too.
+  useMarkSetupShown();
   if (state.kind !== "ready") {
     return (
       <Box className="mx-auto flex w-full max-w-2xl flex-col gap-6">

@@ -1,5 +1,7 @@
 "use client";
 
+import type { ReactNode } from "react";
+
 import { Box, Button, CircularProgress, Dialog, DialogContent, Typography, useMediaQuery } from "@mui/material";
 
 import NiCheck from "@/icons/nexture/ni-check";
@@ -7,11 +9,10 @@ import NiClock from "@/icons/nexture/ni-clock";
 import NiSparkle from "@/icons/nexture/ni-sparkle";
 import { cn } from "@/lib/utils";
 
-const TITLE_ID = "at-work-notice-title";
-const TEXT_ID = "at-work-notice-text";
+const ID = "at-work-notice";
 
 /** A step of the work: what was done, what is under way, and what always follows. */
-export type AtWorkStep = { key: string; state: "done" | "doing" | "next"; label: string; detail: string };
+export type AtWorkStep = { key: string; state: "done" | "doing" | "next"; label: string; detail?: string };
 
 /**
  * The notice that holds a screen while the product works on the record it shows (the screen pattern after ADVBox,
@@ -26,7 +27,8 @@ export type AtWorkStep = { key: string; state: "done" | "doing" | "next"; label:
  * It holds only for the product's own work, which takes seconds or minutes, never for a wait on a person or an
  * outside party; the screen that mounts it decides that, and keeps it closed while the person is typing elsewhere.
  * Closest catalog entries: `OutcomeDialog`, which says what an act changed once it ended; and `ProgressNow`, a way
- * of several steps said in a card, which holds nothing.
+ * of several steps said in a card, which holds nothing. Its body is `AtWorkBody`, which a panel the person opened
+ * on that work draws in place (the model ONE makes from a document).
  */
 export default function AtWorkNotice({
   open,
@@ -71,106 +73,187 @@ export default function AtWorkNotice({
       fullWidth
       transitionDuration={reduceMotion ? 0 : undefined}
       slotProps={{
-        paper: { role: "alertdialog", "aria-labelledby": TITLE_ID, "aria-describedby": TEXT_ID, "aria-modal": true },
+        paper: {
+          role: "alertdialog",
+          "aria-labelledby": `${ID}-title`,
+          "aria-describedby": `${ID}-text`,
+          "aria-modal": true,
+        },
       }}
     >
-      <DialogContent className="flex flex-col gap-3.5 p-6! sm:p-7!">
-        <Box className="flex flex-row items-center gap-3.5">
-          <Box aria-hidden className="relative flex h-12 w-12 flex-none items-center justify-center">
+      <DialogContent className="p-6! sm:p-7!">
+        <AtWorkBody
+          id={ID}
+          long={long}
+          title={title}
+          text={text}
+          steps={steps}
+          footer={long ? null : footer}
+          actions={
+            long ? (
+              <>
+                {/* Once the screen may be given back, the way to take it is where the keyboard is. */}
+                <Button variant="contained" color="primary" onClick={onContinue} autoFocus>
+                  {continueLabel}
+                </Button>
+                <Button variant="text" color="grey" onClick={onWaitMore}>
+                  {waitLabel}
+                </Button>
+              </>
+            ) : null
+          }
+        />
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/**
+ * What the product is doing, drawn where the person is: the ring that turns while the work goes on (stopped, with a
+ * clock, when it waits: `long`), the title, one line of what happens, the steps with their marks, and a foot with
+ * when it started and what the person may do. `AtWorkNotice` holds a screen with it; a panel the person opened on
+ * the work (the model ONE makes from a document, in the library and in the setup's step of the papers) draws it in
+ * place, `compact`, where a still list of steps had left the person unsure anything was happening (2026-11-21).
+ */
+export function AtWorkBody({
+  id,
+  long,
+  title,
+  text,
+  steps,
+  footer,
+  actions,
+  compact = false,
+  headingAs = "h2",
+  className,
+}: {
+  /** The prefix of the title's and the text's ids (`<id>-title`, `<id>-text`). */
+  id: string;
+  long: boolean;
+  title: string;
+  text?: ReactNode;
+  steps: AtWorkStep[];
+  footer?: ReactNode;
+  /** What the person may do about the work, at its foot. */
+  actions?: ReactNode;
+  /** Inside a panel: the ring and the title smaller. */
+  compact?: boolean;
+  headingAs?: "h2" | "h3";
+  className?: string;
+}) {
+  const reduceMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
+  const ring = compact ? 40 : 48;
+
+  return (
+    <Box className={cn("flex flex-col gap-3.5", className)}>
+      <Box className="flex flex-row items-center gap-3.5">
+        <Box
+          aria-hidden
+          className="relative flex flex-none items-center justify-center"
+          style={{ width: ring, height: ring }}
+        >
+          <CircularProgress
+            variant="determinate"
+            value={100}
+            size={ring}
+            thickness={4}
+            className="text-grey-100 absolute inset-0"
+          />
+          {long ? (
             <CircularProgress
               variant="determinate"
-              value={100}
-              size={48}
+              value={25}
+              size={ring}
               thickness={4}
-              className="text-grey-100 absolute inset-0"
+              className="text-accent-4 absolute inset-0"
             />
-            {long ? (
-              <CircularProgress
-                variant="determinate"
-                value={25}
-                size={48}
-                thickness={4}
-                className="text-accent-4 absolute inset-0"
-              />
-            ) : (
-              <CircularProgress
-                variant={reduceMotion ? "determinate" : "indeterminate"}
-                value={25}
-                size={48}
-                thickness={4}
-                className="text-primary absolute inset-0"
-              />
-            )}
-            <span className={cn("relative flex", long ? "text-accent-4" : "text-primary")}>
-              {long ? <NiClock size="medium" /> : <NiSparkle size="medium" />}
-            </span>
-          </Box>
-          <Typography id={TITLE_ID} variant="h5" component="h2" className="mb-0">
-            {title}
-          </Typography>
+          ) : (
+            <CircularProgress
+              variant={reduceMotion ? "determinate" : "indeterminate"}
+              value={25}
+              size={ring}
+              thickness={4}
+              className="text-primary absolute inset-0"
+            />
+          )}
+          <span className={cn("relative flex", long ? "text-accent-4" : "text-primary")}>
+            {long ? <NiClock size={compact ? "small" : "medium"} /> : <NiSparkle size={compact ? "small" : "medium"} />}
+          </span>
         </Box>
-        <Typography id={TEXT_ID} variant="body2" className="text-text-secondary">
+        <Typography
+          id={`${id}-title`}
+          variant={compact ? "subtitle1" : "h5"}
+          component={headingAs}
+          className={cn("mb-0 min-w-0 break-words", compact && "font-semibold")}
+        >
+          {title}
+        </Typography>
+      </Box>
+      {text ? (
+        <Typography id={`${id}-text`} variant="body2" component="div" className="text-text-secondary">
           {text}
         </Typography>
+      ) : null}
 
-        {steps.length > 0 ? (
-          <Box
-            component="ul"
-            aria-live="polite"
-            className="border-grey-100 m-0 flex list-none flex-col border-t p-0 pt-1.5"
-          >
-            {steps.map((step) => (
-              <Box component="li" key={step.key} className="flex flex-row items-start gap-3 py-2">
-                <span
-                  aria-hidden
-                  className={cn(
-                    "flex h-7 w-7 flex-none items-center justify-center rounded-full",
-                    step.state === "done" && "bg-success/15 text-success",
-                    step.state === "doing" && "bg-accent-4-light/20 text-accent-4",
-                    step.state === "next" && "bg-grey-50",
-                  )}
+      {steps.length > 0 ? (
+        <Box
+          component="ul"
+          aria-live="polite"
+          className="border-grey-100 m-0 flex list-none flex-col border-t p-0 pt-1.5"
+        >
+          {steps.map((step) => (
+            <Box
+              component="li"
+              key={step.key}
+              aria-current={step.state === "doing" ? "step" : undefined}
+              className="flex flex-row items-start gap-3 py-2"
+            >
+              <span
+                aria-hidden
+                className={cn(
+                  "flex h-7 w-7 flex-none items-center justify-center rounded-full",
+                  step.state === "done" && "bg-success/15 text-success",
+                  step.state === "doing" && "bg-accent-4-light/20 text-accent-4",
+                  step.state === "next" && "bg-grey-50",
+                )}
+              >
+                {step.state === "done" ? (
+                  <NiCheck size="small" />
+                ) : step.state === "doing" ? (
+                  <NiClock size="small" />
+                ) : (
+                  <span className="bg-grey-200 h-2 w-2 rounded-full" />
+                )}
+              </span>
+              <Box className="flex min-w-0 flex-col pt-0.5">
+                <Typography
+                  variant="body2"
+                  component="span"
+                  className={cn("font-bold", step.state === "next" ? "text-text-secondary" : "text-text-primary")}
                 >
-                  {step.state === "done" ? (
-                    <NiCheck size="small" />
-                  ) : step.state === "doing" ? (
-                    <NiClock size="small" />
-                  ) : (
-                    <span className="bg-grey-200 h-2 w-2 rounded-full" />
-                  )}
-                </span>
-                <Box className="flex min-w-0 flex-col">
-                  <Typography
-                    variant="body2"
-                    component="span"
-                    className={cn("font-bold", step.state === "next" ? "text-text-secondary" : "text-text-primary")}
-                  >
-                    {step.label}
-                  </Typography>
+                  {step.label}
+                </Typography>
+                {step.detail ? (
                   <Typography variant="caption" component="span" className="text-text-secondary">
                     {step.detail}
                   </Typography>
-                </Box>
+                ) : null}
               </Box>
-            ))}
-          </Box>
-        ) : null}
+            </Box>
+          ))}
+        </Box>
+      ) : null}
 
-        {long ? (
-          <Box className="flex flex-row flex-wrap items-center gap-2.5 pt-1">
-            {/* Once the screen may be given back, the way to take it is where the keyboard is. */}
-            <Button variant="contained" color="primary" onClick={onContinue} autoFocus>
-              {continueLabel}
-            </Button>
-            <Button variant="text" color="grey" onClick={onWaitMore}>
-              {waitLabel}
-            </Button>
-          </Box>
-        ) : footer ? (
-          <Typography variant="caption" className="text-text-secondary">
-            {footer}
-          </Typography>
-        ) : null}
-      </DialogContent>
-    </Dialog>
+      {footer || actions ? (
+        <Box className="flex flex-row flex-wrap items-center gap-2.5 pt-1">
+          {footer ? (
+            <Typography variant="caption" component="div" className="text-text-secondary min-w-0 flex-1">
+              {footer}
+            </Typography>
+          ) : null}
+          {actions}
+        </Box>
+      ) : null}
+    </Box>
   );
 }

@@ -8,6 +8,7 @@ import { Box, Button, Divider, ListSubheader, Menu, MenuItem } from "@mui/materi
 
 import AddPanel, { type AddKind } from "@/components/layout/add/add-panel";
 import FinanceAddPanel, { type FinanceAddKind } from "@/components/layout/add/finance-add-panel";
+import { useSetupShown } from "@/components/layout/setup-shown";
 import { useViewer } from "@/components/layout/viewer-context";
 import NewPersonPanel from "@/components/people/new-person-panel";
 import { TILE_TONE, type TileTone } from "@/components/product/tile-tone";
@@ -114,6 +115,8 @@ export default function AddMenu() {
   // opens, takes the focus into its first field, and gives it back to the button when it closes.
   const [picked, setPicked] = useState<MenuKind | null>(null);
   const [adding, setAdding] = useState<MenuKind | null>(null);
+  // The firm's setup and the person's own open on /inicio too while nobody answered them.
+  const setupShown = useSetupShown();
 
   const peopleGroup: AddGroup = {
     key: "people",
@@ -142,7 +145,7 @@ export default function AddMenu() {
     .filter((group) => group.entries.length > 0);
   if (!viewer?.hasFirm || viewer.partner || viewer.owesSecondFactor || groups.length === 0) return null;
   // A setup leads nowhere else before it ends: nothing is added from the top there.
-  if (isSetupPath(pathname) && !adding) return null;
+  if ((isSetupPath(pathname) || setupShown) && !adding) return null;
 
   const open = (event: React.MouseEvent<HTMLElement>) => setAnchor(event.currentTarget);
   const common = {

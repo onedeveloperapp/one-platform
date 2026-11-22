@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Alert, Box, Button, Collapse, TextField, Typography } from "@mui/material";
 
+import { AtWorkBody, type AtWorkStep } from "@/components/product/at-work-notice";
 import InfoHint from "@/components/product/info-hint";
 import StateLine from "@/components/product/state-line";
 import NiChevronRightSmall from "@/icons/nexture/ni-chevron-right-small";
@@ -36,9 +37,13 @@ import {
   REFUSED_KEY,
 } from "@/lib/library/imports";
 
-/** How long the panel waits between two looks at what ONE does: often at first, then less, and for so long. */
+/**
+ * How long the panel waits between two looks at what ONE does: often at first, then less, then seldom, for as long
+ * as the panel is open. It stopped looking after ten minutes, and a panel left open then said "reading" for ever.
+ */
 const FIRST_LOOKS_MS = 3_000;
 const LATER_LOOKS_MS = 6_000;
+const SELDOM_LOOKS_MS = 20_000;
 const OFTEN_FOR_MS = 60_000;
 const WATCH_FOR_MS = 10 * 60_000;
 /** A moment as the panel says it: the day and the hour in Brasília. */
@@ -52,13 +57,45 @@ const sinceLabel = (at: string): string =>
   }).format(new Date(at));
 /** The longest answer, as the setting says it. */
 const MOST_ANSWER = 1000;
+/** The hour a request was sent, as the panel's foot says it: the hour alone today, the day too before. */
+const sentWords = (at: string): { today: boolean; words: string } => {
+  const when = new Date(at);
+  const day = (date: Date) =>
+    new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeZone: "America/Sao_Paulo" }).format(date);
+  const today = day(when) === day(new Date());
+  return {
+    today,
+    words: today
+      ? new Intl.DateTimeFormat("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" }).format(
+          when,
+        )
+      : sinceLabel(at),
+  };
+};
+/** Where what ONE prepares waits once the panel is closed, as the panel says it. */
+const MAY_CLOSE_KEY = { library: "library-import-may-close", setup: "library-import-may-close-setup" } as const;
+/** The steps of ONE's work on a document, in order: what the panel draws while it is sent and while ONE works. */
+const WORK_STEPS = [
+  "library-import-step-send",
+  "library-import-step-read",
+  "library-import-step-marking",
+  "library-import-step-ready",
+] as const;
 
 type Working = "reading" | "marking" | "saving";
 
 type Phase =
   | { kind: "idle" }
-  | { kind: "sending"; fileName: string }
-  | { kind: "waiting"; importId: string; fileName: string | null; work: Working; aiDownSince?: string | null }
+  | { kind: "sending"; fileName: string; sentAt: string }
+  | {
+      kind: "waiting";
+      importId: string;
+      fileName: string | null;
+      work: Working;
+      aiDownSince?: string | null;
+      /** When the request was made; null until the panel read it. */
+      sentAt?: string | null;
+    }
   | { kind: "asking"; importId: string; fileName: string; questions: ImportQuestion[]; round: number }
   | {
       kind: "ready";
@@ -130,6 +167,7 @@ export default function ImportPanel({
   expected = null,
   makeDefault = false,
   disabled,
+  waitsIn = "library",
   onBusy,
   onPrepared,
   onSavedByOne,
@@ -147,6 +185,8 @@ export default function ImportPanel({
   makeDefault?: boolean;
   /** The dialog is saving: nothing is sent meanwhile. */
   disabled: boolean;
+  /** Where what ONE prepares waits once the panel is closed: the library's "Esperam você", or the setup's step. */
+  waitsIn?: "library" | "setup";
   /** ONE is being sent the document or works on it: the dialog's own fields wait. */
   onBusy: (busy: boolean) => void;
   /** What ONE prepared for a person, for the dialog to fill itself with, the request it came from and the document's name. */
@@ -226,6 +266,7 @@ export default function ImportPanel({
         fileName: view.fileName,
         work: view.status === "saving" ? "saving" : view.status === "marking" ? "marking" : "reading",
         aiDownSince: view.aiDownSince,
+        sentAt: view.sentAt,
       });
     }
   }, []);
@@ -237,7 +278,8 @@ export default function ImportPanel({
         setPhase({ kind: "refused", code: "type_not_allowed" });
         return;
       }
-      setPhase({ kind: "sending", fileName: file.name });
+      const sentAt = new Date().toISOString();
+      setPhase({ kind: "sending", fileName: file.name, sentAt });
       try {
         const mime = declaredMime(file);
         const started = await startModelSource({ name: file.name, mime, bytes: file.size });
@@ -261,7 +303,7 @@ export default function ImportPanel({
           return;
         }
         setAnswers([]);
-        setPhase({ kind: "waiting", importId: asked.importId, fileName: file.name, work: "reading" });
+        setPhase({ kind: "waiting", importId: asked.importId, fileName: file.name, work: "reading", sentAt });
         callbacks.current.onRequested?.();
       } catch {
         setPhase({ kind: "refused", code: "failed" });
@@ -286,7 +328,7 @@ export default function ImportPanel({
     void send(initialFile);
   }, [initialFile, send]);
 
-  // While ONE works, the panel looks again by itself: often at first, then less, and for ten minutes.
+  // While ONE works, the panel looks again by itself: often at first, then less, then seldom while it is open.
   const waitingFor = phase.kind === "waiting" ? phase.importId : null;
   useEffect(() => {
     if (!waitingFor) return;
@@ -310,8 +352,11 @@ export default function ImportPanel({
         // A look that failed is followed by the next one.
       }
       const elapsed = Date.now() - started;
-      if (open && elapsed < WATCH_FOR_MS) {
-        timer = setTimeout(look, elapsed < OFTEN_FOR_MS ? FIRST_LOOKS_MS : LATER_LOOKS_MS);
+      if (open) {
+        timer = setTimeout(
+          look,
+          elapsed < OFTEN_FOR_MS ? FIRST_LOOKS_MS : elapsed < WATCH_FOR_MS ? LATER_LOOKS_MS : SELDOM_LOOKS_MS,
+        );
       }
     };
     void look();
@@ -356,6 +401,7 @@ export default function ImportPanel({
           importId: id,
           fileName: now.kind === "asking" ? now.fileName : null,
           work: "marking",
+          sentAt: null,
         }));
         return;
       }
@@ -421,66 +467,73 @@ export default function ImportPanel({
 
   if (phase.kind === "sending" || phase.kind === "waiting") {
     const name = phase.fileName ?? "";
+    // The panel opened on a request before its first look came back: what ONE did is being read, no step said yet.
+    const unread = phase.kind === "waiting" && phase.fileName === null;
     const titleKey =
       phase.kind === "sending"
         ? "library-import-sending"
-        : phase.fileName === null
+        : unread
           ? "library-import-loading"
           : phase.work === "saving"
             ? "library-import-saving-title"
             : phase.work === "marking"
               ? "library-import-marking-title"
               : "library-import-reading-title";
-    // Where ONE is: read the document, mark what changes in each case, leave it ready to check.
-    const at = phase.kind === "sending" || phase.work === "reading" ? 0 : phase.work === "marking" ? 1 : 2;
+    // Where the work is: the file sent, the document read, what changes in each case marked, the model left ready.
+    const at = phase.kind === "sending" ? 0 : phase.work === "reading" ? 1 : phase.work === "marking" ? 2 : 3;
+    const steps: AtWorkStep[] = unread
+      ? []
+      : WORK_STEPS.map((key, index) => ({
+          key,
+          label: t(key),
+          state: index < at ? "done" : index === at ? "doing" : "next",
+        }));
+    const aiDownSince = phase.kind === "waiting" ? (phase.aiDownSince ?? null) : null;
+    const sent = phase.sentAt ? sentWords(phase.sentAt) : null;
     return (
-      <Box component="section" aria-labelledby="library-import-progress" className="flex flex-col gap-3">
+      <Box component="section" aria-labelledby="library-import-progress-title" className="flex flex-col gap-3">
         {fileInput}
-        <Typography
-          id="library-import-progress"
-          variant="subtitle1"
-          component="h3"
-          className="mb-0 font-semibold"
-          role="status"
-        >
-          {t(titleKey, { file: name })}
-        </Typography>
-        <Box
-          component="ol"
-          aria-label={t("library-import-progress-label")}
-          className="m-0 flex list-none flex-col gap-2 p-0"
-        >
-          {(["library-import-step-read", "library-import-step-marking", "library-import-step-ready"] as const).map(
-            (key, index) => (
-              <Box component="li" key={key}>
-                <StateLine tone={index < at ? "done" : index === at ? "waiting" : "info"}>{t(key)}</StateLine>
-              </Box>
-            ),
-          )}
+        {/* What ONE is doing, said and drawn where the person is (2026-11-21): the ring turns while the work goes
+            on, each step says where it stands, and the panel looks again by itself. A still list of steps under a
+            sentence had left the owner unsure anything was happening. */}
+        <Box role="status" className="border-grey-100 rounded-2xl border p-5">
+          <AtWorkBody
+            id="library-import-progress"
+            compact
+            headingAs="h3"
+            long={Boolean(aiDownSince)}
+            title={t(titleKey, { file: name })}
+            text={
+              unread
+                ? undefined
+                : phase.kind === "sending"
+                  ? t("library-import-sending-body")
+                  : t(MAY_CLOSE_KEY[waitsIn])
+            }
+            steps={steps}
+            footer={
+              sent ? t(sent.today ? "library-import-sent-today" : "library-import-sent-at", { when: sent.words }) : null
+            }
+            actions={
+              phase.kind === "waiting" && !unread ? (
+                <Button
+                  variant="text"
+                  color="grey"
+                  size="small"
+                  disabled={leaving}
+                  onClick={() => void giveUp(phase.importId)}
+                  aria-label={t("library-import-give-up-label", { file: name })}
+                >
+                  {t("library-import-give-up")}
+                </Button>
+              ) : null
+            }
+          />
         </Box>
-        {phase.kind === "waiting" && phase.aiDownSince ? (
+        {aiDownSince ? (
           // The platform's AI is down (0255): the document waits with no try spent, and the platform was told.
           <StateLine tone="waiting" emphasis>
-            {t("library-import-ai-down", { since: sinceLabel(phase.aiDownSince) })}
-          </StateLine>
-        ) : null}
-        {phase.kind === "waiting" ? (
-          <StateLine
-            tone="info"
-            action={
-              <Button
-                variant="text"
-                color="grey"
-                size="small"
-                disabled={leaving}
-                onClick={() => void giveUp(phase.importId)}
-                aria-label={t("library-import-give-up-label", { file: name })}
-              >
-                {t("library-import-give-up")}
-              </Button>
-            }
-          >
-            {t("library-import-may-close")}
+            {t("library-import-ai-down", { since: sinceLabel(aiDownSince) })}
           </StateLine>
         ) : null}
       </Box>

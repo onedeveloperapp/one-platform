@@ -88,6 +88,8 @@ export type TemplateImportView = {
    * answers or the request waits for nothing of it.
    */
   aiDownSince: string | null;
+  /** When the firm sent the document: the panel's foot says it while ONE works. */
+  sentAt: string;
 };
 
 /** A request as the library lists it. */
@@ -193,6 +195,7 @@ export function importView(
     saved: status === "saved" ? saved : null,
     prepared,
     aiDownSince: null,
+    sentAt: row.created_at,
   };
 }
 

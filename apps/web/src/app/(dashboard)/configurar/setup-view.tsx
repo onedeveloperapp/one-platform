@@ -7,11 +7,11 @@ import SignatureAccountCard from "../settings/connections/components/signature-a
 import TestChatCard from "../settings/connections/components/test-chat-card";
 import NoticesCard from "../settings/mensagens/notices-card";
 import { teamErrorKey } from "../settings/team/team-types";
+import { useAreasStep } from "./setup-areas";
 import SetupCpf, { declareSetupCpf } from "./setup-cpf";
+import { useFilingStep } from "./setup-filing";
 import { type SetupBrand, type SetupLetterhead, useOfficeStep } from "./setup-office";
 import { useOperationStep } from "./setup-operation";
-import { useAreasStep } from "./setup-areas";
-import { useFilingStep } from "./setup-filing";
 import { usePersonalityStep } from "./setup-personality";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -36,24 +36,25 @@ import {
 } from "@mui/material";
 
 import OfficeForm from "@/components/firm/office-form";
+import { useMarkSetupShown } from "@/components/layout/setup-shown";
 import PageHeader from "@/components/product/page-header";
 import SecondFactorPrompt from "@/components/product/second-factor-prompt";
 import SetupWizard, { type WizardStep } from "@/components/product/setup-wizard";
 import SidePanel from "@/components/product/side-panel";
 import StateLine from "@/components/product/state-line";
-import StatusChip from "@/components/product/status-chip";
 import { useEmailReady } from "@/components/product/use-email-ready";
 import WordDownloadButton from "@/components/product/word-download-button";
+import NiLoader from "@/icons/nexture/ni-loader";
 import NiUploadCloud from "@/icons/nexture/ni-upload-cloud";
 import type { SecondFactorState } from "@/lib/ai/approvals";
+import type { AreaScriptsState } from "@/lib/areas/script-actions";
+import type { FilingWaysData } from "@/lib/filing-ways/ways";
 import { addOabRegistration, answerFirmSetup, inviteToFirm } from "@/lib/firm/actions";
 import { autonomyErrorKey } from "@/lib/firm/autonomy";
 import { setFirmSigner } from "@/lib/firm/autonomy-actions";
 import { type FirmOffice, officeAddressGiven } from "@/lib/firm/office";
 import type { FirmOperation, KnownArea, OperationArea } from "@/lib/firm/operation";
 import { personFlowKey } from "@/lib/firm/person-setup";
-import type { AreaScriptsState } from "@/lib/areas/script-actions";
-import type { FilingWaysData } from "@/lib/filing-ways/ways";
 import type { PersonalityState } from "@/lib/firm/personality-actions";
 import { FIRM_FUNCTIONS, type FirmFunction, formatOab, OAB_STATES, type OabRegistration } from "@/lib/firm/roles";
 import { SETUP_STEPS, setupOpening, type SetupStepKey } from "@/lib/firm/setup-steps";
@@ -61,7 +62,7 @@ import { readDraftTemplate } from "@/lib/library/actions";
 import type { LibraryTemplate, SetupPaper } from "@/lib/library/facts";
 import { watchModelImports } from "@/lib/library/import-actions";
 import type { PaperImport } from "@/lib/library/import-read";
-import { IMPORT_ACCEPT, IMPORT_STATUS_KEY, IMPORT_WORKING, importFailureKey } from "@/lib/library/imports";
+import { IMPORT_ACCEPT, IMPORT_WORKING, importFailureKey } from "@/lib/library/imports";
 import type { ConnectionsState } from "@/lib/whatsapp/connections";
 import { createClient } from "@flyee/auth/client";
 import { completeFlow } from "@flyee/onboarding";
@@ -188,6 +189,8 @@ const PAPER_WATCH_MS = 6_000;
 export default function SetupView({ state }: { state: SetupState }) {
   const t = useTranslations("product");
   const router = useRouter();
+  // The header leaves out the search and "Adicionar" while a setup is on the screen, on /inicio too.
+  useMarkSetupShown();
 
   if (state.kind !== "ready") {
     return (
@@ -1158,6 +1161,8 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
           importId={paperForm.importId ?? null}
           expected={paperForm.file || paperForm.importId ? paperForm.paper : null}
           makeDefault={Boolean(paperForm.file)}
+          // Closed while ONE works, the panel says that this step shows the model once it is ready.
+          waitsIn="setup"
           onImportRequested={refresh}
           onClose={() => {
             // What ONE did meanwhile is read again: the step says it.
@@ -1230,33 +1235,28 @@ function PaperRequestLine({
           : onSendAnother
             ? { label: t("setup-papers-send-again"), onClick: onSendAnother, primary: false }
             : null;
+  // One state, said once (2026-11-21): a chip naming the state beside a sentence saying it again read as two
+  // things. While ONE works, its mark turns, so the step shows something is happening while the panel is closed.
   return (
-    <Box className="flex flex-wrap items-center gap-2" role="status">
-      <StatusChip
-        tone={
-          request.status === "failed"
-            ? "danger"
-            : request.status === "ready"
-              ? "positive"
-              : working
-                ? "info"
-                : "attention"
+    <Box role="status">
+      <StateLine
+        tone={request.status === "failed" ? "failed" : working ? "waiting" : "attention"}
+        icon={working ? <NiLoader size="medium" className="animate-spin motion-reduce:animate-none" /> : undefined}
+        action={
+          action ? (
+            <Button
+              variant={action.primary ? "contained" : "text"}
+              color={action.primary ? "primary" : "grey"}
+              size="small"
+              onClick={action.onClick}
+            >
+              {action.label}
+            </Button>
+          ) : undefined
         }
-        label={t(IMPORT_STATUS_KEY[request.status])}
-      />
-      <Typography variant="body2" className="text-text-secondary min-w-0 flex-1 basis-60 break-words">
+      >
         {said}
-      </Typography>
-      {action ? (
-        <Button
-          variant={action.primary ? "contained" : "text"}
-          color={action.primary ? "primary" : "grey"}
-          size="small"
-          onClick={action.onClick}
-        >
-          {action.label}
-        </Button>
-      ) : null}
+      </StateLine>
     </Box>
   );
 }

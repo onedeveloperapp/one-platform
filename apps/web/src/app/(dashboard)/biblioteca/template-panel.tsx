@@ -145,6 +145,7 @@ export default function TemplatePanel({
   importLimits = null,
   expected = null,
   makeDefault = false,
+  waitsIn = "library",
   pieceKinds = [],
   onImportRequested,
   onClose,
@@ -169,6 +170,8 @@ export default function TemplatePanel({
   expected?: ModelDocument | null;
   /** The model ONE saves from it takes the place of the firm's default of it. */
   makeDefault?: boolean;
+  /** Where what ONE prepares waits once the panel is closed: the library's "Esperam você", or the setup's step. */
+  waitsIn?: "library" | "setup";
   /** The pieces of the process ONE writes (0189), for a model of one of them (0244). */
   pieceKinds?: readonly { slug: string; name: string }[];
   /** ONE was asked for a model of a document: the screen behind the dialog lists the request. */
@@ -441,8 +444,9 @@ export default function TemplatePanel({
               </Button>
             </>
           ) : null}
+          {/* While ONE works on a document, closing leaves the work going: the button says "Fechar", never "Cancelar". */}
           <Button variant="text" color="grey" disabled={pending} onClick={close}>
-            {t("library-cancel")}
+            {t(importBusy && !fieldsShown ? "library-close" : "library-cancel")}
           </Button>
           {fieldsShown ? (
             <>
@@ -468,15 +472,18 @@ export default function TemplatePanel({
             onBusy={setImportBusy}
             expected={expected}
             makeDefault={makeDefault}
+            waitsIn={waitsIn}
             onPrepared={prepared}
             onSavedByOne={savedByOne}
             onCleared={() => setImported(null)}
             onRequested={onImportRequested}
           />
         ) : null}
-        {!fieldsShown ? (
+        {/* Writing by hand is the way out of a document, offered only while ONE is not working on one: a disabled
+            button under the work in course read as a broken screen (2026-11-21); "Desistir" gives the way back. */}
+        {!fieldsShown && !importBusy ? (
           <Box>
-            <Button variant="text" color="grey" disabled={importBusy} onClick={() => setManual(true)}>
+            <Button variant="text" color="grey" onClick={() => setManual(true)}>
               {t("library-template-by-hand")}
             </Button>
           </Box>
