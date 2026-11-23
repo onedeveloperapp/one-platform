@@ -5,9 +5,9 @@ import {
   firmChoiceAsks,
   lawyerChoiceAsks,
   personFilingStep,
+  screenStanding,
   type ScreenSystem,
   systemsFor,
-  systemsIn,
   systemsToChoose,
   termPoints,
   wayInForce,
@@ -66,24 +66,33 @@ describe("the ways to file a lawyer may choose", () => {
     expect(wayProposed(undefined, TJRJ, "browser")).toBe("hand");
   });
 
-  it("names the systems of the courts of the lawyer's states, else every one ONE works on", () => {
-    expect(systemsFor([TJSP, TJGO, TJRJ], ["SP"]).map((system) => system.key)).toEqual(["eproc-tjsp"]);
-    expect(systemsFor([TJSP, TJGO, TJRJ], ["RJ"]).map((system) => system.key)).toEqual(["eproc-tjsp", "projudi-tjgo"]);
-    expect(systemsFor([TJSP, TJGO, TJRJ], []).map((system) => system.key)).toEqual(["eproc-tjsp", "projudi-tjgo"]);
-  });
-
-  it("names the systems of the courts of some states, none when they have none, and those a lawyer chooses at", () => {
-    expect(systemsIn([TJSP, TJGO, TJRJ], ["SP", "RJ"]).map((system) => system.key)).toEqual(["eproc-tjsp"]);
-    expect(systemsIn([TJSP, TJGO, TJRJ], ["MG"])).toEqual([]);
-    // A regional court has no state of its own (0275): it is never one of a state's.
-    expect(systemsIn([{ ...TJSP, key: "pje-trt2", uf: null }], ["SP"])).toEqual([]);
-    expect(systemsToChoose([TJSP, TJGO, TJRJ], ["SP", "GO"], "extension").map((system) => system.key)).toEqual([
+  it("asks a lawyer about the courts of their states, their lawsuits and their choices, else every one ONE works on", () => {
+    const keys = (systems: ScreenSystem[]) => systems.map((system) => system.key);
+    const data = { systems: [TJSP, TJGO, TJRJ], myWays: {}, lawsuitSystems: [] as string[] };
+    expect(keys(systemsFor(data, ["SP"]))).toEqual(["eproc-tjsp"]);
+    // The owner's test of 2026-11-23: registered in Rio de Janeiro, where ONE does not file on the screen yet.
+    expect(keys(systemsFor(data, ["RJ"]))).toEqual(["eproc-tjsp", "projudi-tjgo"]);
+    expect(keys(systemsFor(data, []))).toEqual(["eproc-tjsp", "projudi-tjgo"]);
+    // A lawsuit they sign went to the client's domicile in another state: that court is asked too.
+    expect(keys(systemsFor({ ...data, lawsuitSystems: ["eproc-tjsp"] }, ["GO"]))).toEqual([
       "eproc-tjsp",
       "projudi-tjgo",
     ]);
+    expect(keys(systemsFor({ ...data, lawsuitSystems: ["eproc-tjsp"] }, ["RJ"]))).toEqual(["eproc-tjsp"]);
+    // A court they already chose a way at stays where they change it.
+    expect(keys(systemsFor({ ...data, myWays: { "projudi-tjgo": "hand" as const } }, ["SP"]))).toEqual([
+      "eproc-tjsp",
+      "projudi-tjgo",
+    ]);
+    // A regional court has no state of its own (0275): it is never one of a state's.
+    expect(keys(systemsFor({ ...data, systems: [{ ...TJSP, key: "pje-trt2", uf: null }, TJGO] }, ["SP"]))).toEqual([
+      "pje-trt2",
+      "projudi-tjgo",
+    ]);
+    expect(keys(systemsToChoose(data, ["SP", "GO"], "extension"))).toEqual(["eproc-tjsp", "projudi-tjgo"]);
     // A firm that files by hand, or chose nothing yet, leaves its lawyers nothing to choose.
-    expect(systemsToChoose([TJSP, TJGO], ["SP"], "hand")).toEqual([]);
-    expect(systemsToChoose([TJSP, TJGO], ["SP"], null)).toEqual([]);
+    expect(systemsToChoose(data, ["SP"], "hand")).toEqual([]);
+    expect(systemsToChoose(data, ["SP"], null)).toEqual([]);
   });
 
   it("asks a lawyer's own setup how they file where they have a way to choose, or the firm's way first", () => {
@@ -93,14 +102,21 @@ describe("the ways to file a lawyer may choose", () => {
       myWays: {},
       decidesForFirm: false,
       lawyer: true,
+      lawsuitSystems: [] as string[],
     };
     expect(personFilingStep(data, ["SP"])).toEqual({ shown: true, owed: true });
     expect(personFilingStep({ ...data, myWays: { "eproc-tjsp": "hand" as const } }, ["SP"])).toEqual({
       shown: true,
       owed: false,
     });
-    // No court of ONE's in their states, or a firm that files by hand: nothing to ask.
-    expect(personFilingStep(data, ["RJ"])).toEqual({ shown: false, owed: false });
+    // No court of ONE's in their states: every court ONE files in is asked, the setup never left empty.
+    expect(personFilingStep(data, ["RJ"])).toEqual({ shown: true, owed: true });
+    // A court of a lawsuit they sign, in a state of no registration of theirs, is owed until they answer it.
+    expect(
+      personFilingStep({ ...data, lawsuitSystems: ["eproc-tjsp"], myWays: { "projudi-tjgo": "hand" as const } }, [
+        "GO",
+      ]),
+    ).toEqual({ shown: true, owed: true });
     expect(personFilingStep({ ...data, firmWay: "hand" as const }, ["SP"])).toEqual({ shown: false, owed: false });
     // A partner who decides for a firm that chose no way yet chooses it there, whatever their states.
     expect(personFilingStep({ ...data, firmWay: null, decidesForFirm: true }, ["RJ"])).toEqual({
@@ -108,6 +124,33 @@ describe("the ways to file a lawyer may choose", () => {
       owed: true,
     });
     expect(personFilingStep({ ...data, lawyer: false }, ["SP"])).toEqual({ shown: false, owed: false });
+  });
+
+  it("says whose turn it is for ONE to file a lawsuit on a court's screen", () => {
+    const facts = (
+      firmWay: "browser" | "extension" | "hand" | null,
+      ways: ("browser" | "extension" | "hand" | null)[],
+    ) => ({
+      key: "eproc-tjsp",
+      name: "eproc do TJSP",
+      ways: ["browser", "extension"],
+      firmWay,
+      lawyers: ways.map((way, index) => ({ userId: `u${index}`, way })),
+    });
+    // Who decides for the firm chooses first: no lawyer may choose an automated way before it.
+    expect(screenStanding(facts(null, [null]))).toEqual({ kind: "firm_unchosen" });
+    // The owner's test of 2026-11-23: the firm chose ONE's browser, its lawyer never chose a way there.
+    expect(screenStanding(facts("browser", [null]))).toEqual({ kind: "choose", lawyers: ["u0"] });
+    // A lawyer whose way is automated hands it to ONE in a batch, whoever else of the lawsuit files by hand.
+    expect(screenStanding(facts("browser", ["hand", "browser", null]))).toEqual({ kind: "batch", lawyers: ["u1"] });
+    // The firm lowered its way: a lawyer's choice beyond it no longer holds, and is asked again.
+    expect(screenStanding(facts("extension", ["browser"]))).toEqual({ kind: "choose", lawyers: ["u0"] });
+    // Filed by hand, as the firm or every lawyer of the lawsuit chose.
+    expect(screenStanding(facts("hand", [null]))).toEqual({ kind: "hand" });
+    expect(screenStanding(facts("browser", ["hand", "hand"]))).toEqual({ kind: "hand" });
+    // A screen ONE does not file on, or a lawsuit with no lawyer yet: nothing to say of it.
+    expect(screenStanding({ ...facts("browser", [null]), ways: [] })).toBeNull();
+    expect(screenStanding(facts("browser", []))).toBeNull();
   });
 
   it("asks the login and the acknowledgment where a lawyer's choice needs them", () => {

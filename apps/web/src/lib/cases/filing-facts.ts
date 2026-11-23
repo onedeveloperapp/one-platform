@@ -2,6 +2,7 @@ import "server-only";
 
 import { momentLabel } from "@/lib/ai/approvals";
 import { isPackageStatus, type PackageStatus, QUEUE_SHOWN } from "@/lib/cases/filing";
+import { isWay, type ScreenFilingFacts, type Way } from "@/lib/filing-ways/ways";
 import { pscAvailable } from "@/lib/psc/provider";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -65,10 +66,11 @@ export type FilingReceipt = { id: string; cnj: string; filedOn: string };
 export type FilingByOne = {
   channel: "mni" | "test_court" | null;
   /**
-   * The court's screen where ONE may file it instead (0263), with the ways the platform turned on there: then a lawyer
-   * hands it to ONE in a batch on /protocolo. Null where the court has no such system.
+   * The court's screen where ONE may file it instead (0263), with the ways the platform turned on there, the firm's
+   * way and how each lawyer of the lawsuit files there (`screenStanding` says whose turn it is): a lawyer hands it to
+   * ONE in a batch on /protocolo. Null where the court has no such system, or what it needs could not be read.
    */
-  screen: { name: string; ways: string[] } | null;
+  screen: ScreenFilingFacts | null;
   blocker: string | null;
   mode: "auto" | "sampled" | "approval";
   submission: {
@@ -332,21 +334,9 @@ export async function loadCaseFilings(
           .limit(1)
       : Promise.resolve({ data: [] as { id: string }[], error: null }),
     cloudSigningOffered(supabase),
-    // Where ONE may file on the court's screen (0263). A read that fails leaves the card as it was.
-    supabase
-      .from("court_screen_systems")
-      .select("court, system, name, ways")
-      .then(
-        ({ data, error }) =>
-          new Map(
-            error
-              ? []
-              : ((data ?? []) as { court: string; system: string; name: string; ways: string[] | null }[]).map(
-                  (row) => [`${row.court}/${row.system}`, { name: row.name, ways: row.ways ?? [] }] as const,
-                ),
-          ),
-        () => new Map<string, { name: string; ways: string[] }>(),
-      ),
+    // Where ONE may file on the court's screen (0263), the firm's way and how each lawyer of the case's lawsuits
+    // files there. A read that fails leaves the card as it was.
+    screenFilingOf(supabase, firmId, caseId, viewerId),
   ]);
   if (packages.error || systems.error || lawyers.error || authorizations.error) {
     throw new Error("filing packages could not be read");
@@ -393,9 +383,64 @@ export async function loadCaseFilings(
     return {
       ...filing,
       blocker: filing.status === "filed" ? filing.blocker : (blockers.get(filing.proceedingId) ?? null),
-      byOne: one ? { ...one, screen: screens.get(`${filing.court}/${filing.system}`) ?? null } : null,
+      byOne: one ? { ...one, screen: screens(filing) } : null,
     };
   });
+}
+
+type ScreenSystemRow = { key: string; court: string; system: string; name: string; ways: string[] | null };
+
+/**
+ * What a package of the case needs to go on its court's screen (0263, 0264), read under the person's session: the
+ * screen system of its court, the firm's way, and the way each lawyer of its lawsuit chose there (the team reads how
+ * each lawyer files: a case says it). A read that fails names no screen: the card is left as it was.
+ */
+async function screenFilingOf(
+  supabase: SupabaseClient,
+  firmId: string,
+  caseId: string,
+  viewerId: string | null,
+): Promise<(filing: { court: string; system: string; proceedingId: string }) => ScreenFilingFacts | null> {
+  const none = () => null;
+  try {
+    const [systems, firmWay, lawyerWays, lawyers] = await Promise.all([
+      supabase.from("court_screen_systems").select("key, court, system, name, ways"),
+      supabase.from("firm_filing_ways").select("way").eq("org_id", firmId).maybeSingle(),
+      supabase.from("lawyer_filing_ways").select("user_id, system_key, way").eq("org_id", firmId),
+      supabase
+        .from("proceeding_lawyers")
+        .select("proceeding_id, user_id, proceedings!inner(case_id)")
+        .eq("org_id", firmId)
+        .eq("proceedings.case_id", caseId),
+    ]);
+    if (systems.error || firmWay.error || lawyerWays.error || lawyers.error) return none;
+    const bySystem = new Map(
+      ((systems.data ?? []) as ScreenSystemRow[]).map((row) => [`${row.court}/${row.system}`, row] as const),
+    );
+    const wayOf = new Map(
+      ((lawyerWays.data ?? []) as { user_id: string; system_key: string; way: string }[]).flatMap((row) =>
+        isWay(row.way) ? [[`${row.user_id}/${row.system_key}`, row.way] as const] : [],
+      ),
+    );
+    const firm: Way | null = isWay(firmWay.data?.way) ? firmWay.data.way : null;
+    const signers = (lawyers.data ?? []) as { proceeding_id: string; user_id: string }[];
+    return (filing) => {
+      const row = bySystem.get(`${filing.court}/${filing.system}`);
+      if (!row) return null;
+      return {
+        key: row.key,
+        name: row.name,
+        ways: row.ways ?? [],
+        firmWay: firm,
+        lawyers: signers
+          .filter((signer) => signer.proceeding_id === filing.proceedingId)
+          .map((signer) => ({ userId: signer.user_id, way: wayOf.get(`${signer.user_id}/${row.key}`) ?? null })),
+        viewerId,
+      };
+    };
+  } catch {
+    return none;
+  }
 }
 
 /** What keeps each lawsuit named from being filed now, by lawsuit. Throws when it could not be read. */

@@ -1,6 +1,6 @@
 // @vitest-environment node
 import type { CaseFiling } from "../case-types";
-import { filedWithoutNumber, oneFilesIt } from "./filing-by-one";
+import { filedWithoutNumber, oneFilesIt } from "./filing-by-one-rules";
 import { describe, expect, it } from "vitest";
 
 // Only what the two rules read of a package.
@@ -48,7 +48,13 @@ describe("when the lawyer's own steps step back for ONE's filing (0101)", () => 
       channel: null,
       mode: "auto" as const,
       blocker: "no_channel",
-      screen: { name: "eproc do TJSP", ways: ["extension"] },
+      screen: {
+        key: "eproc-tjsp",
+        name: "eproc do TJSP",
+        ways: ["extension"],
+        firmWay: "extension" as const,
+        lawyers: [{ userId: "u", way: "extension" as const }],
+      },
     };
     for (const status of ["owed", "claimed", "confirming", "sending"] as const) {
       expect(oneFilesIt(filing("ready", { ...screen, submission: sub(status, "extension") }))).toBe(true);

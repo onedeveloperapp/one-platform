@@ -307,6 +307,63 @@ describe("caseNow", () => {
     });
   });
 
+  it("says what ONE waits for to file on the court's screen, the firm's way or a lawyer's or the batch, never ONE's work", () => {
+    const screen = (
+      firmWay: "browser" | "extension" | "hand" | null,
+      ways: ("browser" | "extension" | "hand" | null)[],
+    ) =>
+      caseNow(
+        base({
+          status: "drafting",
+          proceedings: [planned],
+          drafts: [{ id: "dr", proceedingId: "lw", status: "issued", work: null }],
+          filings: [
+            {
+              id: "fp",
+              proceedingId: "lw",
+              system: "eproc",
+              status: "ready",
+              blocker: null,
+              signature: { takesSigned: false, status: null },
+              byOne: {
+                channel: null,
+                blocker: "no_channel",
+                submission: null,
+                screen: {
+                  key: "eproc-tjsp",
+                  name: "eproc do TJSP",
+                  ways: ["browser", "extension"],
+                  firmWay,
+                  lawyers: ways.map((way, index) => ({ userId: `u${index}`, way })),
+                },
+              },
+            },
+          ],
+        }),
+      ).blocking.find((line) => line.id === "filing:fp");
+    const kind = { message: "case-proceeding-kind-juizado" };
+    expect(screen(null, [null])).toMatchObject({
+      owner: "firm",
+      actor: "partner",
+      text: { key: "case-now-filing-screen-firm", values: { kind, system: "eproc do TJSP" } },
+    });
+    // The owner's test of 2026-11-23: the firm chose ONE's browser, its lawyer never chose a way at the eproc of TJSP.
+    expect(screen("browser", [null])).toMatchObject({
+      owner: "firm",
+      actor: "lawyer",
+      text: { key: "case-now-filing-screen-choose", values: { kind, system: "eproc do TJSP" } },
+    });
+    expect(screen("browser", ["hand", "extension"])).toMatchObject({
+      owner: "firm",
+      actor: "lawyer",
+      text: { key: "case-now-filing-screen-batch" },
+    });
+    // Filed by hand, as the firm or every lawyer of the lawsuit chose: the steps of the court's system.
+    for (const line of [screen("hand", [null]), screen("browser", ["hand"])]) {
+      expect(line).toMatchObject({ owner: "firm", actor: "lawyer", text: { key: "case-now-filing-ready" } });
+    }
+  });
+
   it("says the system the firm approves while ONE writes the piece, and the platform's own waits as the platform's", () => {
     const now = caseNow(
       base({

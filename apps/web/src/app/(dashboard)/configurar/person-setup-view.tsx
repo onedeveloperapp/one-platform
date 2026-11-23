@@ -54,8 +54,6 @@ export type PersonSetupState =
       whatsapp: string | null;
       /** How they file on the courts' screens, the firm's way included (0263); null when it could not be read. */
       filing: FilingWaysData | null;
-      /** The states of the firm's lawyers' registrations, whose courts a partner choosing the firm's way sees. */
-      firmStates: string[];
       secondFactor: SecondFactorState;
       supportVisit: boolean;
       /** The step the address asked for (`?passo=`). */
@@ -121,8 +119,9 @@ function PersonSetupFlow({ state }: { state: Extract<PersonSetupState, { kind: "
   const [addedUf, setAddedUf] = useState<string | null>(null);
 
   // ---------- How they file on the courts' screens (0263) ----------
-  // The courts of their states, the one being registered included, where the firm's way offers them a way to choose;
-  // a partner who decides for a firm that chose none chooses the firm's first (the owner's three ways, 2026-11-20).
+  // The courts they are asked about (their states, the one being registered included, their lawsuits and their
+  // choices, else every one ONE works on: `systemsFor`) where the firm's way offers them a way to choose; a partner
+  // who decides for a firm that chose none chooses the firm's first (the owner's three ways, 2026-11-20).
   const savedStates = [...state.registrations.map((registration) => registration.uf), ...(addedUf ? [addedUf] : [])];
   const myStates = Array.from(new Set([...savedStates, ...(!registered && !addedUf && uf ? [uf] : [])]));
   const filingAsked = state.filing ? personFilingStep(state.filing, myStates) : { shown: false, owed: false };
@@ -130,7 +129,6 @@ function PersonSetupFlow({ state }: { state: Extract<PersonSetupState, { kind: "
   const filingStep = useFilingStep({
     filing: state.filing,
     firmForm,
-    firmStates: Array.from(new Set([...state.firmStates, ...myStates])),
     myStates,
     blocked,
     onSaved: () => undefined,

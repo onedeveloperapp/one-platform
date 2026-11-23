@@ -7,6 +7,8 @@ import { getVault } from "@/lib/connections/vault";
 import { downloadUrl } from "@/lib/files/uploads";
 import { LINK_CODE_LENGTH, LINK_CODE_LETTERS } from "@/lib/filing-ways/extension-protocol";
 import { loginHint } from "@/lib/filing-ways/hint";
+import { loadFilingWays } from "@/lib/filing-ways/read";
+import type { FilingWaysData } from "@/lib/filing-ways/ways";
 import { getMemberContext } from "@/lib/member/context";
 import { connectionRefusal } from "@/lib/whatsapp/session";
 
@@ -39,6 +41,16 @@ function revalidate(): void {
   revalidatePath("/configurar");
   revalidatePath("/settings/connections");
   revalidatePath("/protocolo");
+}
+
+/**
+ * The person's own ways to file, read when a choice is made where a lawsuit waits for it (the case's card of the
+ * filing): what the settings card reads, under the person's session. Null when it could not be read.
+ */
+export async function readMyFilingWays(): Promise<FilingWaysData | null> {
+  const context = await getMemberContext();
+  if (!context?.firm) return null;
+  return loadFilingWays(context).catch(() => null);
 }
 
 /** Who decides for the firm sets its way, with the firm's acknowledgment for an automated one. */

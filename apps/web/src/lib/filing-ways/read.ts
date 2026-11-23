@@ -15,8 +15,9 @@ import type { MemberContext } from "@/lib/member/context";
 /**
  * What a person's screens read of the ways to file (migrations 0263 and 0264), with the person's own session: the
  * systems ONE works on, the firm's way, the person's way at each system, their court logins (by their hint and where
- * they stand, never more), their extension's link, and the texts of the acknowledgments in force. Null when a read
- * failed: a screen says it could not read, never that nothing is set.
+ * they stand, never more), their extension's link, the texts of the acknowledgments in force, and the systems of the
+ * lawsuits they sign still to be filed. Null when a read failed: a screen says it could not read, never that nothing
+ * is set.
  */
 export async function loadFilingWays(context: MemberContext): Promise<FilingWaysData | null> {
   const firm = context.firm;
@@ -100,6 +101,32 @@ export async function loadFilingWays(context: MemberContext): Promise<FilingWays
     if (isWay(row.way)) mine[row.system_key] = row.way;
   }
 
+  // The systems ONE works on where the person signs a lawsuit still to be filed: one look per system, so a lawyer of
+  // thousands of lawsuits costs as little as one of a few. A look that fails names nothing.
+  const lawsuitSystems = lawyer
+    ? (
+        await Promise.all(
+          screenSystems
+            .filter((system) => system.ways.length > 0)
+            .map((system) =>
+              context.supabase
+                .from("proceeding_lawyers")
+                .select("proceeding_id, proceedings!inner(status, court, system)")
+                .eq("org_id", firm.id)
+                .eq("user_id", context.userId)
+                .eq("proceedings.status", "planned")
+                .eq("proceedings.court", system.court)
+                .eq("proceedings.system", system.system)
+                .limit(1)
+                .then(
+                  ({ data, error }) => (!error && (data ?? []).length > 0 ? [system.key] : []),
+                  () => [],
+                ),
+            ),
+        )
+      ).flat()
+    : [];
+
   const courtLogins: CourtLogin[] = (
     (logins.data ?? []) as {
       id: string;
@@ -136,5 +163,6 @@ export async function loadFilingWays(context: MemberContext): Promise<FilingWays
     decidesForFirm: decides.data === true,
     lawyer,
     myStates: Array.from(new Set(((registrations.data ?? []) as { uf: string }[]).map((row) => row.uf))),
+    lawsuitSystems,
   };
 }

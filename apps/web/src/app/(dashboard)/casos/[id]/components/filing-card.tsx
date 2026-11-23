@@ -3,7 +3,8 @@
 import type { CaseFiling, CaseProceeding, CaseState } from "../case-types";
 import { type CaseActionWords, sentence, useCaseAction } from "./case-action";
 import CourtSystem from "./court-system";
-import FilingByOne, { filedWithoutNumber, oneFilesIt } from "./filing-by-one";
+import FilingByOne from "./filing-by-one";
+import { filedWithoutNumber, oneFilesIt } from "./filing-by-one-rules";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
@@ -495,6 +496,9 @@ function Lawsuit({
   const signedFiles = signature?.takesSigned === true && signature.status === "signed";
   const nameOf = (id: string | null): string =>
     id ? (state.team.find((member) => member.userId === id)?.name ?? "") : "";
+  // Who decides for the firm: a partner, or who manages a firm with no partner (as the top of the case reads it).
+  const decidesForFirm =
+    state.partner || (state.managesFirm && !state.team.some((member) => member.firmFunction === "socio"));
   const systemName = filing ? t(SYSTEM_KEY[filing.system] ?? "case-system-outro") : "";
   // Who signs the lawsuit, as the database counts it: named on it, and a partner or a lawyer of the firm.
   const viewerSigns = signature?.viewerSigns === true && state.lawyer;
@@ -578,7 +582,10 @@ function Lawsuit({
           filing={filing}
           systemName={systemName}
           mayAct={writable && state.lawyer}
+          mayDecide={writable && decidesForFirm}
           busy={busy !== null}
+          nameOf={nameOf}
+          onChanged={onChanged}
           onRequest={() => void run("file", () => requestFilingByOne(state.case.id, filing.id), onStarted)}
           onRetry={(notInCourt) =>
             void run(

@@ -10,8 +10,9 @@ import type { FlowKey } from "@flyee/onboarding";
  * So each person leaves their own work ready: the second factor first, then their own WhatsApp, which everybody
  * gives (the owner, 2026-11-14: by it a person is linked to a hearing, gets its guide and reports it; the firm's main
  * number is the only one connected), then, for who signs at the bar (a partner or a lawyer), their registration, and
- * how they file at the courts of their states where the firm's way offers them more than by hand (the owner's three
- * ways, 2026-11-20: the firm's way marked, their court login and their own acknowledgment asked there). It
+ * how they file at the courts they are asked about (`systemsFor`: their states, their lawsuits, else every one ONE
+ * works on) where the firm's way offers them more than by hand (the owner's three ways, 2026-11-20: the firm's way
+ * marked, their court login and their own acknowledgment asked there). It
  * opens on the home while something is owed and the person never answered it, and while their WhatsApp is missing
  * whatever they answered; and at `/configurar` for anybody who does not manage the firm; who manages it answers the
  * rest in the firm's setup, whose finish answers this one too. Only the person's own state is kept

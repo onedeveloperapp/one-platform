@@ -22,22 +22,19 @@ export async function loadPersonSetupState(
 ): Promise<PersonSetupState> {
   const firm = context?.firm ?? null;
   if (!context || !firm) return { kind: "unavailable" };
-  const [registrations, assurance, cookieStore, declaredCpf, cloudSigning, profile, filing, firmRegistrations] =
-    await Promise.all([
-      context.supabase.from("oab_registrations").select("id, uf, number, kind").eq("user_id", context.userId),
-      context.supabase.auth.mfa.getAuthenticatorAssuranceLevel(),
-      cookies(),
-      // The CPF for the signature in the cloud (0041), asked where a provider can be used here; a read that fails asks
-      // nothing (the team's card asks it when a lawsuit needs it).
-      context.supabase.from("lawyer_cpfs").select("user_id").eq("user_id", context.userId).maybeSingle(),
-      cloudSigningOffered(context.supabase).catch(() => false),
-      // Their own WhatsApp (0187), which everybody gives (the owner, 2026-11-14).
-      context.supabase.from("profiles").select("whatsapp").eq("id", context.userId).maybeSingle(),
-      // How they file on the courts' screens (0263): a read that fails leaves the step out, holding nothing.
-      loadFilingWays(context).catch(() => null),
-      // The states of the firm's lawyers, whose courts a partner choosing the firm's way sees.
-      context.supabase.from("oab_registrations").select("uf"),
-    ]);
+  const [registrations, assurance, cookieStore, declaredCpf, cloudSigning, profile, filing] = await Promise.all([
+    context.supabase.from("oab_registrations").select("id, uf, number, kind").eq("user_id", context.userId),
+    context.supabase.auth.mfa.getAuthenticatorAssuranceLevel(),
+    cookies(),
+    // The CPF for the signature in the cloud (0041), asked where a provider can be used here; a read that fails asks
+    // nothing (the team's card asks it when a lawsuit needs it).
+    context.supabase.from("lawyer_cpfs").select("user_id").eq("user_id", context.userId).maybeSingle(),
+    cloudSigningOffered(context.supabase).catch(() => false),
+    // Their own WhatsApp (0187), which everybody gives (the owner, 2026-11-14).
+    context.supabase.from("profiles").select("whatsapp").eq("id", context.userId).maybeSingle(),
+    // How they file on the courts' screens (0263): a read that fails leaves the step out, holding nothing.
+    loadFilingWays(context).catch(() => null),
+  ]);
   if (registrations.error || profile.error) return { kind: "error" };
   const secondFactor: SecondFactorState =
     assurance.data?.currentLevel === "aal2" ? "ok" : assurance.data?.nextLevel === "aal2" ? "challenge" : "missing";
@@ -53,9 +50,6 @@ export async function loadPersonSetupState(
     asksCpf: cloudSigning && !declaredCpf.error && declaredCpf.data === null,
     whatsapp: (profile.data as { whatsapp?: string | null } | null)?.whatsapp ?? null,
     filing,
-    firmStates: firmRegistrations.error
-      ? []
-      : Array.from(new Set(((firmRegistrations.data ?? []) as { uf: string }[]).map((row) => row.uf))),
     secondFactor,
     supportVisit: cookieStore.has(IMPERSONATION_MARKER_COOKIE),
     step,

@@ -12,6 +12,7 @@ import {
 import { DATA_KINDS } from "@/lib/cases/read-fields";
 import type { CaseSection } from "@/lib/cases/sections";
 import { complaintOverdue } from "@/lib/cases/statements";
+import { type ScreenFilingFacts, type ScreenStanding, screenStanding } from "@/lib/filing-ways/ways";
 import type { PendingText } from "@/lib/firm/pending";
 import { momentIn } from "@/lib/hearings/hearings";
 
@@ -141,6 +142,8 @@ type Filing = {
     channel: string | null;
     blocker: string | null;
     submission: { status: string; channel?: string; attempts?: number; retryAfter?: string | null } | null;
+    /** The court's screen ONE files on where its court has no channel (0263), and how its lawyers file there. */
+    screen?: ScreenFilingFacts | null;
   } | null;
 };
 type Deadline = { id: string; status: string; overdue: boolean; review: boolean };
@@ -231,6 +234,16 @@ const dayWords = (day: string) =>
 const SYSTEMS = ["projudi", "eproc", "pje", "esaj", "outro"];
 /** A court's system in its own name ("PJe"), or as it is written when the screen has no word for it. */
 const systemWord = (system: string) => (SYSTEMS.includes(system) ? { message: `case-system-${system}` } : system);
+
+/**
+ * What ONE waits for to file a lawsuit on its court's screen (0263, 0264), as the line of the top says it and who of
+ * the firm does it: the firm's way, a lawyer's way at that system, or the batch a lawyer of the lawsuit approves.
+ */
+const SCREEN_LINE: Record<Exclude<ScreenStanding["kind"], "hand">, { key: string; actor: NowActor }> = {
+  firm_unchosen: { key: "case-now-filing-screen-firm", actor: "partner" },
+  choose: { key: "case-now-filing-screen-choose", actor: "lawyer" },
+  batch: { key: "case-now-filing-screen-batch", actor: "lawyer" },
+};
 
 /** What came of ONE's filing, where a lawyer takes it up (0101). */
 const FILING_SENT_KEY: Record<"refused" | "failed" | "unknown" | "filed", string> = {
@@ -1041,13 +1054,21 @@ export function caseNow(input: CaseNowInput): CaseNow {
               }),
             );
           } else {
+            // A court with no channel whose screen ONE files on: the line says what ONE waits for there, the same as
+            // the card (`screenStanding`); filed by hand, as the firm or every lawyer of it chose, the steps are said.
+            const screen = byOne && !byOne.channel && sent === null ? (byOne.screen ?? null) : null;
+            const standing = screen && byOne?.blocker === "no_channel" ? screenStanding(screen) : null;
+            const line = standing && standing.kind !== "hand" ? SCREEN_LINE[standing.kind] : null;
             blocking.push(
               item({
                 id: `filing:${filing.id}`,
                 owner: "firm",
-                actor: "lawyer",
+                actor: line?.actor ?? "lawyer",
                 tone: "attention",
-                text: { key: "case-now-filing-ready", values: { kind, system: systemWord(filing.system) } },
+                text:
+                  line && screen
+                    ? { key: line.key, values: { kind, system: screen.name } }
+                    : { key: "case-now-filing-ready", values: { kind, system: systemWord(filing.system) } },
                 section: "filing",
               }),
             );

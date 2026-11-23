@@ -1,8 +1,9 @@
 /**
  * The ways to file on a court's screen as the screens show them (the owner, 2026-11-20; migrations 0263 and 0264):
  * which ways a lawyer may choose at a system (those the platform turned on there, none more automated than the
- * firm's, and always by hand), where a court login stands, and which systems a lawyer files in (the courts of the
- * states of their registrations at the bar). Pure: the screens and the setups read it.
+ * firm's, and always by hand), where a court login stands, which systems a lawyer is asked about (`systemsFor`: the
+ * courts of their states, of the lawsuits they sign and of their choices, else every one ONE works on), and why ONE
+ * does or does not file a lawsuit on a court's screen (`screenStanding`). Pure: the screens and the setups read it.
  */
 
 export const WAYS = ["browser", "extension", "hand"] as const;
@@ -57,6 +58,11 @@ export type FilingWaysData = {
   lawyer: boolean;
   /** The states of the person's registrations at the bar. */
   myStates: string[];
+  /**
+   * The systems of the lawsuits the person signs that are still to be filed, by key: a lawsuit goes to the client's
+   * domicile, often a state the lawyer is not registered in (the five causes a year of the Estatuto, art. 10, § 2).
+   */
+  lawsuitSystems: string[];
 };
 
 /**
@@ -96,46 +102,100 @@ export function wayProposed(
   return offered[0] ?? "hand";
 }
 
-/** The systems a lawyer files in: those of the courts of the states they are registered in, else every one ONE works on. */
-export function systemsFor(systems: readonly ScreenSystem[], myStates: readonly string[]): ScreenSystem[] {
-  const working = systems.filter((system) => system.ways.length > 0);
-  const mine = working.filter((system) => system.uf !== null && myStates.includes(system.uf));
+/** The systems ONE files on the screen of: those where the platform turned an automated way on. */
+export const workingSystems = (systems: readonly ScreenSystem[]): ScreenSystem[] =>
+  systems.filter((system) => system.ways.length > 0);
+
+/**
+ * The systems a lawyer is asked how they file in, the same on every screen that asks it (the setups, the settings,
+ * the home's reminder), among those ONE works on: the courts of the states they are registered in, those of the
+ * lawsuits they sign still to be filed, and those they already chose a way at; none of these, every one ONE works
+ * on. The states alone missed the lawsuits: a lawyer registered in Rio de Janeiro, whose lawsuit went to the client's
+ * domicile in São Paulo, was asked nothing in their setup (the owner's test of 2026-11-23).
+ */
+export function systemsFor(
+  data: Pick<FilingWaysData, "systems" | "myWays" | "lawsuitSystems">,
+  states: readonly string[],
+): ScreenSystem[] {
+  const working = workingSystems(data.systems);
+  const mine = working.filter(
+    (system) =>
+      (system.uf !== null && states.includes(system.uf)) ||
+      data.lawsuitSystems.includes(system.key) ||
+      data.myWays[system.key] !== undefined,
+  );
   return mine.length > 0 ? mine : working;
 }
 
-/** The systems ONE files on the screen of in the courts of these states: none when the states have none. */
-export function systemsIn(systems: readonly ScreenSystem[], states: readonly string[]): ScreenSystem[] {
-  return systems.filter((system) => system.ways.length > 0 && system.uf !== null && states.includes(system.uf));
-}
-
 /**
- * The systems where a lawyer has a way to choose, under a firm's way: those of their states where ONE offers more
- * than by hand. None while the firm chose no automated way: a lawyer then has nothing to choose.
+ * The systems where a lawyer has a way to choose, under a firm's way: those they are asked about (`systemsFor`)
+ * where ONE offers more than by hand. None while the firm chose no automated way: a lawyer then has nothing to choose.
  */
 export function systemsToChoose(
-  systems: readonly ScreenSystem[],
+  data: Pick<FilingWaysData, "systems" | "myWays" | "lawsuitSystems">,
   states: readonly string[],
   firmWay: Way | null,
 ): ScreenSystem[] {
-  return systemsIn(systems, states).filter((system) => waysOffered(system, firmWay).length > 1);
+  return systemsFor(data, states).filter((system) => waysOffered(system, firmWay).length > 1);
 }
 
 /**
  * What a lawyer's own setup asks of the filing (the owner's three ways, 2026-11-20): its step is there when the
- * lawyer has a way to choose at a court of their states, or decides for a firm that chose none yet (the firm's way
- * comes first); and it is owed while the firm's way, or the lawyer's at one of those courts, was never chosen.
+ * lawyer has a way to choose at a court they are asked about, or decides for a firm that chose none yet (the firm's
+ * way comes first); and it is owed while the firm's way, or the lawyer's at one of those courts, was never chosen.
  */
 export function personFilingStep(
-  data: Pick<FilingWaysData, "systems" | "firmWay" | "myWays" | "decidesForFirm" | "lawyer">,
+  data: Pick<FilingWaysData, "systems" | "firmWay" | "myWays" | "decidesForFirm" | "lawyer" | "lawsuitSystems">,
   states: readonly string[],
 ): { shown: boolean; owed: boolean } {
   if (!data.lawyer) return { shown: false, owed: false };
   const firmForm = data.decidesForFirm && data.firmWay === null;
-  const mine = systemsToChoose(data.systems, states, data.firmWay);
+  const mine = systemsToChoose(data, states, data.firmWay);
   return {
     shown: firmForm || mine.length > 0,
     owed: firmForm || mine.some((system) => !data.myWays[system.key]),
   };
+}
+
+/**
+ * What a lawsuit's package needs to go on a court's screen (0263, 0264), as the case reads it: the system, the
+ * firm's way, and the way each lawyer of the lawsuit chose there (null: never chose).
+ */
+export type ScreenFilingFacts = {
+  key: string;
+  name: string;
+  ways: string[];
+  firmWay: Way | null;
+  lawyers: { userId: string; way: Way | null }[];
+  /** The person reading, so a screen tells their own turn from a colleague's. */
+  viewerId?: string | null;
+};
+
+/**
+ * Why ONE does or does not file a lawsuit on a court's screen, and whose turn it is: who decides for the firm never
+ * chose the firm's way; a lawyer of the lawsuit never chose theirs at this system (or chose one the firm's way no
+ * longer offers); a lawyer of it may hand it to ONE in a batch; or it is filed by hand, as the firm or every lawyer
+ * of it chose. Null where ONE does not file on this screen or the lawsuit has no lawyer yet.
+ */
+export type ScreenStanding =
+  | { kind: "firm_unchosen" }
+  | { kind: "choose"; lawyers: string[] }
+  | { kind: "batch"; lawyers: string[] }
+  | { kind: "hand" };
+
+export function screenStanding(facts: ScreenFilingFacts): ScreenStanding | null {
+  const system = {
+    ways: facts.ways.filter((way): way is Exclude<Way, "hand"> => way === "browser" || way === "extension"),
+  };
+  if (system.ways.length === 0 || facts.lawyers.length === 0) return null;
+  if (facts.firmWay === null) return { kind: "firm_unchosen" };
+  const offered = waysOffered(system, facts.firmWay);
+  if (offered.length < 2) return { kind: "hand" };
+  const automated = (way: Way | null) => way !== null && way !== "hand" && offered.includes(way);
+  const batch = facts.lawyers.filter((lawyer) => automated(lawyer.way)).map((lawyer) => lawyer.userId);
+  if (batch.length > 0) return { kind: "batch", lawyers: batch };
+  const choose = facts.lawyers.filter((lawyer) => lawyer.way !== "hand").map((lawyer) => lawyer.userId);
+  return choose.length > 0 ? { kind: "choose", lawyers: choose } : { kind: "hand" };
 }
 
 /**

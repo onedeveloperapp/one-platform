@@ -1,13 +1,17 @@
 "use client";
 
 import type { CaseFiling } from "../case-types";
+import { onScreen } from "./filing-by-one-rules";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
+import { useState } from "react";
 
 import { Box, Button } from "@mui/material";
 
+import FilingChoiceDialog from "@/components/firm/filing-choice-dialog";
 import StateLine from "@/components/product/state-line";
 import { caseErrorKey } from "@/lib/cases/cases";
+import { type ScreenFilingFacts, screenStanding } from "@/lib/filing-ways/ways";
 
 /**
  * What ONE does with the filing of a package itself (migration 0101): it
@@ -19,12 +23,13 @@ import { caseErrorKey } from "@/lib/cases/cases";
  * lawyer, the lawyer asks ONE here. Where the court has no channel but ONE
  * files on its screen (0264), a lawyer hands the package to ONE in a batch
  * on /protocolo, and the card says where that batch stands: waiting, going,
- * or held at the court's summary for the lawyer's word. Nothing is shown
- * where ONE does not file the package: the lawyer's own way stays as it was.
+ * or held at the court's summary for the lawyer's word; before any batch, it
+ * says whose turn it is for ONE to file it there (`screenStanding`): who
+ * decides for the firm choosing the firm's way, a lawyer of the lawsuit
+ * choosing theirs at that system (both in place, `FilingChoiceDialog`), or
+ * a lawyer handing it to ONE in a batch. Nothing is shown where ONE does not
+ * file the package: the lawyer's own way stays as it was.
  */
-
-/** Filed by a lawyer's batch on the court's screen (0264), by ONE's browser or the lawyer's extension. */
-const onScreen = (channel: string | undefined): boolean => channel === "browser" || channel === "extension";
 
 const time = (iso: string | null): string =>
   iso
@@ -33,40 +38,31 @@ const time = (iso: string | null): string =>
       )
     : "";
 
-/** Whether ONE files this package now (or is about to): the lawyer's own steps step back meanwhile. */
-export function oneFilesIt(filing: CaseFiling | null): boolean {
-  const byOne = filing?.byOne;
-  if (!filing || !byOne || filing.status !== "ready") return false;
-  const sub = byOne.submission;
-  // A batch of a lawyer files it on the court's screen: their own steps step back while it is in course.
-  if (sub && onScreen(sub.channel)) {
-    return sub.status === "owed" || sub.status === "claimed" || sub.status === "confirming" || sub.status === "sending";
-  }
-  if (!byOne.channel) return false;
-  if (sub) return sub.status === "owed" || sub.status === "claimed" || sub.status === "sending";
-  return byOne.blocker === null || byOne.blocker === "not_signed";
-}
-
-/** The court received the lawsuit from ONE, and gave no number a lawyer could take from it: the receipt goes by hand. */
-export const filedWithoutNumber = (filing: CaseFiling | null): boolean =>
-  filing?.status === "ready" && filing.byOne?.submission?.status === "filed";
-
 export default function FilingByOne({
   filing,
   systemName,
   mayAct,
+  mayDecide,
   busy,
+  nameOf,
   onRequest,
   onRetry,
+  onChanged,
 }: {
   filing: CaseFiling;
   /** The court's system, as the card names it. */
   systemName: string;
   /** A partner or a lawyer, writing (never a support visit). */
   mayAct: boolean;
+  /** Who decides for the firm, writing: the firm's way is theirs to choose. */
+  mayDecide: boolean;
   busy: boolean;
+  /** A person of the firm by their id, in words. */
+  nameOf: (id: string) => string;
   onRequest: () => void;
   onRetry: (notInCourt: boolean) => void;
+  /** A way to file chosen here: the case is read again. */
+  onChanged: () => void;
 }) {
   const t = useTranslations("product");
   const byOne = filing.byOne;
@@ -140,12 +136,19 @@ export default function FilingByOne({
     );
   }
 
-  // No channel of the court, and its screen is one ONE files on: a lawyer hands the package to ONE in a batch.
+  // No channel of the court, and its screen is one ONE files on: whose turn it is for ONE to file it there.
   if (!sub && !byOne.channel && byOne.blocker === "no_channel" && byOne.screen && byOne.screen.ways.length > 0) {
     return (
-      <StateLine tone="info" action={mayAct ? toBatches : undefined}>
-        {t("filing-one-screen-ready", { system: byOne.screen.name })}
-      </StateLine>
+      <ScreenLine
+        screen={byOne.screen}
+        signs={filing.signature.viewerSigns}
+        mayAct={mayAct}
+        mayDecide={mayDecide}
+        busy={busy}
+        nameOf={nameOf}
+        toBatches={toBatches}
+        onChanged={onChanged}
+      />
     );
   }
   if (!byOne.channel || byOne.blocker === "no_channel" || byOne.blocker === "court_codes_missing") {
@@ -178,4 +181,87 @@ export default function FilingByOne({
     return <StateLine tone="waiting">{t("filing-one-soon", { system: where })}</StateLine>;
   }
   return null;
+}
+
+/**
+ * Whose turn it is for ONE to file a package on its court's screen (the owner's test of 2026-11-23, where the card
+ * showed only the steps by hand): the choice that is missing, made in place by whom it belongs to (the firm's way by
+ * who decides for the firm, a lawyer's at that system by the lawyer), or the batch a lawyer of the lawsuit approves
+ * on /protocolo; a colleague reads whose it is. Filed by hand, as the firm or every lawyer of it chose: nothing.
+ */
+function ScreenLine({
+  screen,
+  signs,
+  mayAct,
+  mayDecide,
+  busy,
+  nameOf,
+  toBatches,
+  onChanged,
+}: {
+  screen: ScreenFilingFacts;
+  /** The person reading signs the lawsuit. */
+  signs: boolean;
+  mayAct: boolean;
+  mayDecide: boolean;
+  busy: boolean;
+  nameOf: (id: string) => string;
+  toBatches: React.ReactNode;
+  onChanged: () => void;
+}) {
+  const t = useTranslations("product");
+  const [choosing, setChoosing] = useState(false);
+  const standing = screenStanding(screen);
+  if (!standing || standing.kind === "hand") return null;
+
+  const system = screen.name;
+  const mine = (ids: string[]) => Boolean(screen.viewerId) && ids.includes(screen.viewerId ?? "");
+  // Any one of them may do it: "Ana", "Ana ou Caio".
+  const who = (ids: string[]) =>
+    new Intl.ListFormat("pt-BR", { type: "disjunction" }).format(ids.map(nameOf).filter((name) => name !== "")) ||
+    t("filing-one-screen-someone");
+  const chooseHere = (text: string) => (
+    <>
+      <StateLine
+        tone="attention"
+        action={
+          <Button variant="contained" size="small" disabled={busy} onClick={() => setChoosing(true)}>
+            {t("filing-one-screen-choose-action")}
+          </Button>
+        }
+      >
+        {text}
+      </StateLine>
+      {choosing ? (
+        <FilingChoiceDialog
+          systemKey={screen.key}
+          signs={signs}
+          onClose={() => setChoosing(false)}
+          onSaved={onChanged}
+        />
+      ) : null}
+    </>
+  );
+
+  if (standing.kind === "firm_unchosen") {
+    return mayDecide ? (
+      chooseHere(t("filing-one-screen-firm-mine", { system }))
+    ) : (
+      <StateLine tone="info">{t("filing-one-screen-firm", { system })}</StateLine>
+    );
+  }
+  if (standing.kind === "choose") {
+    return mayAct && mine(standing.lawyers) ? (
+      chooseHere(t("filing-one-screen-choose-mine", { system }))
+    ) : (
+      <StateLine tone="info">{t("filing-one-screen-choose", { system, who: who(standing.lawyers) })}</StateLine>
+    );
+  }
+  return mayAct && mine(standing.lawyers) ? (
+    <StateLine tone="attention" action={toBatches}>
+      {t("filing-one-screen-batch-mine", { system })}
+    </StateLine>
+  ) : (
+    <StateLine tone="info">{t("filing-one-screen-batch", { system, who: who(standing.lawyers) })}</StateLine>
+  );
 }

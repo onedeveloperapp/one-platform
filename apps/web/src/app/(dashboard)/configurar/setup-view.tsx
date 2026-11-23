@@ -116,8 +116,6 @@ export type SetupState =
       knownAreas: KnownArea[];
       /** How the firm and who answers file on the courts' screens (0263); null when it could not be read. */
       filing: FilingWaysData | null;
-      /** The states of the firm's lawyers' registrations, whose courts the step of the filing shows. */
-      firmStates: string[];
       /** The firm's connections as their own screen reads them: the signature account, the test chat, the number. */
       connections: ConnectionsState;
       /**
@@ -363,7 +361,6 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
   const filingStep = useFilingStep({
     filing: state.filing,
     firmForm: decides,
-    firmStates: Array.from(new Set([...state.firmStates, ...myStates])),
     myStates: lawyer ? myStates : [],
     blocked: blocked || locked,
     onSaved: refresh,

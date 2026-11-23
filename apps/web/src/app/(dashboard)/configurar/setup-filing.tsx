@@ -23,14 +23,21 @@ import type { WizardStep } from "@/components/product/setup-wizard";
 import StateLine from "@/components/product/state-line";
 import StatusChip from "@/components/product/status-chip";
 import NiCheck from "@/icons/nexture/ni-check";
-import { type FilingWaysData, type ScreenSystem, systemsIn, systemsToChoose, type Way } from "@/lib/filing-ways/ways";
+import {
+  type FilingWaysData,
+  type ScreenSystem,
+  systemsToChoose,
+  type Way,
+  workingSystems,
+} from "@/lib/filing-ways/ways";
 
 /**
  * The step "Como o escritório protocola" of the firm's setup and "Como você protocola" of each lawyer's (the owner's
  * three ways to file, 2026-11-20, and the canvas the owner approved: everything they need is asked in the onboarding,
  * never left to be found in the settings). Who decides for the firm chooses the firm's way, with the firm's
- * acknowledgment of an automated one, the courts of the firm's lawyers in sight; a lawyer chooses their own way at
- * each system of their states, the firm's marked, with their court login for ONE's browser and their own
+ * acknowledgment of an automated one, the courts ONE files in in sight (a lawsuit goes to the client's domicile, in
+ * any state); a lawyer chooses their own way at each system they are asked about (`systemsFor`: their states, their
+ * lawsuits, else every one ONE works on), the firm's marked, with their court login for ONE's browser and their own
  * acknowledgment. One "Continuar" saves it all, the firm's first: a lawyer's way is never beyond it.
  */
 export function useFilingStep(input: {
@@ -38,8 +45,6 @@ export function useFilingStep(input: {
   filing: FilingWaysData | null;
   /** The firm's own way is chosen here: by who decides for the firm, in a person's setup only while it has none. */
   firmForm: boolean;
-  /** The states of the firm's lawyers, whose courts the firm's choice is shown for. */
-  firmStates: readonly string[];
   /** The states of who answers, the registration given in the step before included: their own courts. */
   myStates: readonly string[];
   blocked: boolean;
@@ -54,8 +59,8 @@ export function useFilingStep(input: {
 
   // The firm's way the lawyer's choices are made under: the one being chosen on this screen, else the one saved.
   const firmWay: Way | null = input.firmForm ? firmDraft.way : (filing?.firmWay ?? null);
-  const mine = filing && filing.lawyer ? systemsToChoose(filing.systems, input.myStates, firmWay) : [];
-  const courts = filing ? systemsIn(filing.systems, input.firmStates) : [];
+  const mine = filing && filing.lawyer ? systemsToChoose(filing, input.myStates, firmWay) : [];
+  const courts = filing ? workingSystems(filing.systems) : [];
   const owed =
     filing !== null &&
     ((input.firmForm && filing.firmWay === null) || mine.some((system) => !filing.myWays[system.key]));
@@ -135,16 +140,9 @@ export function useFilingStep(input: {
                 {t("setup-filing-courts")}
               </Typography>
               {courts.map((system) => (
-                <StatusChip
-                  key={system.key}
-                  tone="positive"
-                  icon={<NiCheck size="small" />}
-                  label={t("setup-filing-court", { system: system.name, uf: system.uf ?? "" })}
-                />
+                <StatusChip key={system.key} tone="positive" icon={<NiCheck size="small" />} label={system.name} />
               ))}
             </Box>
-          ) : input.firmStates.length > 0 ? (
-            <StateLine tone="info">{t("setup-filing-no-court")}</StateLine>
           ) : null}
           <FirmWayFields
             draft={firmDraft}

@@ -64,7 +64,6 @@ export async function loadSetupState(
     personality,
     areaScripts,
     filing,
-    firmRegistrations,
   ] = await Promise.all([
     context.supabase.from("oab_registrations").select("id, uf, number, kind").eq("user_id", context.userId),
     context.supabase.from("firm_signers").select("user_id").eq("org_id", firm.id),
@@ -111,10 +110,8 @@ export async function loadSetupState(
     readFirmPersonality().catch(() => null),
     // The script of each area of the firm (0273): a read that fails shows the step as unreadable, never as empty.
     readAreaScripts().catch(() => null),
-    // How the firm files on the courts' screens (0263), and the states of its lawyers, whose courts the step shows:
-    // a read that fails says so in the step and holds nothing else.
+    // How the firm files on the courts' screens (0263): a read that fails says so in the step and holds nothing else.
     loadFilingWays(context).catch(() => null),
-    context.supabase.from("oab_registrations").select("uf"),
   ]);
   if (registrations.error || signers.error || organization.error || !organization.data) return { kind: "error" };
   const operationAnswered = (organization.data as { operation_answered_at?: string | null }).operation_answered_at;
@@ -179,9 +176,6 @@ export async function loadSetupState(
         ),
     knownAreas: knownAreas.error ? [] : ((knownAreas.data ?? []) as KnownArea[]),
     filing,
-    firmStates: firmRegistrations.error
-      ? []
-      : Array.from(new Set(((firmRegistrations.data ?? []) as { uf: string }[]).map((row) => row.uf))),
     connections,
     nextSetup: (() => {
       const next = nextModuleSetup(moduleSetups);

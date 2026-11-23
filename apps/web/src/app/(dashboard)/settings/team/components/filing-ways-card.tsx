@@ -44,7 +44,7 @@ import {
  */
 export default function FilingWaysCard({ data, onChanged }: { data: FilingWaysData; onChanged: () => void }) {
   const t = useTranslations("product");
-  const systems = systemsFor(data.systems, data.myStates);
+  const systems = systemsFor(data, data.myStates);
 
   return (
     <Grid size={12}>
