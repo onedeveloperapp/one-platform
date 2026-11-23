@@ -63,7 +63,9 @@ export function signInStop(outcome: SignInOutcome): string | null {
     case "code_refused":
       return "court_code_refused";
     case "no_code":
-      return outcome.why === "stopped" ? "by_person_code" : "court_code_missing";
+      // Stopped by a person while ONE waited (said to nobody), or by a new version of the service on the server.
+      if (outcome.why === "stopped") return "by_person_code";
+      return outcome.why === "interrupted" ? "interrupted" : "court_code_missing";
     case "asks_code":
       return "court_code_missing";
     case "failed":
