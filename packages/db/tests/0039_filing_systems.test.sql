@@ -59,8 +59,9 @@ select ok(
    from public.court_systems where system = 'eproc' and court in ('TJSP', 'TJSC'))
   and (select count(*) = 0 from public.court_systems where system = 'eproc' and court not in ('TJSP', 'TJSC') and max_file_bytes is not null)
   and (select bool_and(max_petition_bytes = 1500000) from public.court_systems where court = 'TJCE' and system = 'pje')
-  and (select bool_and(file_types = '{"petition": "Petição inicial (INIC)"}'::jsonb) from public.court_systems where system = 'eproc')
-  and (select bool_and(file_types = '{"petition": "Petição inicial"}'::jsonb) from public.court_systems where system = 'pje')
+  -- The state courts', whose manuals were read; the labour and the federal courts' rows (0275) name nothing yet.
+  and (select bool_and(file_types = '{"petition": "Petição inicial (INIC)"}'::jsonb) from public.court_systems where system = 'eproc' and court like 'TJ%')
+  and (select bool_and(file_types = '{"petition": "Petição inicial"}'::jsonb) from public.court_systems where system = 'pje' and court like 'TJ%')
   and (select bool_and(file_types = '{}'::jsonb and max_petition_bytes is null) from public.court_systems where system = 'projudi'),
   'the limits read in the courts'' manuals are rows nobody confirmed yet, and each system names the petition its own way'
 );

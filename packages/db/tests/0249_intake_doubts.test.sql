@@ -103,7 +103,9 @@ select ok(
   and (select 'atendimento.duvida' = any (version_tasks) from public.product_modules where key = 'direito-do-passageiro'),
   'the task that answers it is the passenger module''s, with what the law says of costs and no promise');
 select ok(
-  (select (v.manifest #>> '{prompts,atendimento.duvida}')::integer = 1
+  -- The versions in force, which a later migration may raise and publish again (0272).
+  (select (v.manifest #>> '{prompts,atendimento.duvida}')::integer
+              = (select w.version from public.prompt_versions w where w.task = 'atendimento.duvida' and w.is_active)
           and (v.manifest #>> '{prompts,atendimento.entrada}')::integer
               = (select w.version from public.prompt_versions w where w.task = 'atendimento.entrada' and w.is_active)
    from public.module_versions v
