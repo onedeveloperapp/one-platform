@@ -66,11 +66,22 @@ export type OpenWaPlatform = { baseUrl: string; apiKey: string; webhookSecret: s
  * screen then offers no such connection.
  */
 export function openWaPlatform(): OpenWaPlatform | null {
+  const sender = openWaSender();
+  const webhookSecret = (process.env.OPENWA_WEBHOOK_SECRET ?? "").trim();
+  if (!sender || webhookSecret.length < 16) return null;
+  return { ...sender, webhookSecret };
+}
+
+/**
+ * What sending through the platform's OpenWA needs: where the server reaches it and its key, never the secret of its
+ * deliveries, which only the webhook reads. The clock on ONE's server sends with this alone, so a message it writes
+ * is not lost to a secret it never uses (a test case's check of data failed so, `openwa_not_configured`, 2026-11-23).
+ */
+export function openWaSender(): Omit<OpenWaPlatform, "webhookSecret"> | null {
   const baseUrl = (process.env.OPENWA_URL ?? "").trim().replace(/\/+$/, "");
   const apiKey = (process.env.OPENWA_API_KEY ?? "").trim();
-  const webhookSecret = (process.env.OPENWA_WEBHOOK_SECRET ?? "").trim();
-  if (!/^https:\/\//.test(baseUrl) || !apiKey || webhookSecret.length < 16) return null;
-  return { baseUrl, apiKey, webhookSecret };
+  if (!/^https:\/\//.test(baseUrl) || !apiKey) return null;
+  return { baseUrl, apiKey };
 }
 
 /** The platform's app with its Embedded Signup configuration, or null while any of its four values is missing. */

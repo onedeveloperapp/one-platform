@@ -7,9 +7,11 @@ import {
   DATA_OPTIONS,
   dataSummary,
   FIELD_OPTIONS,
+  FIELD_QUESTION,
   MARITAL_OPTIONS,
   missingAsk,
   numberOf,
+  openDataAsk,
   type PersonData,
   personDataOf,
   readValue,
@@ -109,5 +111,22 @@ describe("the client checks their data in the chat (0232)", () => {
     });
     expect(missingAsk({ ...NIDIA, maritalStatus: "casado", profession: "Professora" })).toBeNull();
     expect(missingAsk({ ...NIDIA, minor: true })).toBeNull();
+  });
+
+  it("asks again a check left open, never the word that the signature comes (the owner's test of 2026-11-23)", () => {
+    // The summary failed to reach the client, who sent the last document: the next turn repeats it.
+    expect(openDataAsk({ ...NIDIA, step: "dados" })).toBe(dataSummary(NIDIA));
+    expect(openDataAsk({ ...NIDIA, step: "campo" })).toBe(FIELD_QUESTION);
+    expect(openDataAsk({ ...NIDIA, step: "valor", field: "cpf" })).toBe("Escreva o seu CPF.");
+    expect(openDataAsk({ ...NIDIA, step: "valor" })).toBe(dataSummary(NIDIA));
+    expect(openDataAsk({ ...NIDIA, step: "estado_civil" })).toBe(missingAsk(NIDIA)?.question);
+    expect(openDataAsk({ ...NIDIA, step: "profissao" })).toBe("Qual é a sua profissão?");
+    expect(openDataAsk({ ...NIDIA, step: "nacionalidade" })).toBe(
+      missingAsk({ ...NIDIA, nationality: null })?.question,
+    );
+    // Nothing open, already checked, or a child: nothing is asked again.
+    expect(openDataAsk(NIDIA)).toBeNull();
+    expect(openDataAsk({ ...NIDIA, step: "dados", checked: true })).toBeNull();
+    expect(openDataAsk({ ...NIDIA, step: "dados", minor: true })).toBeNull();
   });
 });

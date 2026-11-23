@@ -87,6 +87,7 @@ import {
   NATIONALITY_OPTIONS,
   NUMBER_QUESTION,
   numberOf,
+  openDataAsk,
   OTHER_NATIONALITY_QUESTION,
   type PersonData,
   personDataOf,
@@ -537,11 +538,13 @@ async function writePerson(
 
 /**
  * The check of data starts (0232) once nothing essential is owed, the identity and the proof of address were accepted,
- * and it was not done for this case: the summary of what ONE read, and the step it waits on. Null when not now.
+ * and it was not done for this case: the summary of what ONE read, and the step it waits on. A check already open is
+ * asked again (its message may never have reached the client, and the papers wait for its answer). Null when not now.
  */
 async function startDataCheck(service: SupabaseClient, held: Held): Promise<string | null> {
   const data = await personData(service, held);
-  if (!data || data.minor || !data.documentsIn || data.checked || data.step) return null;
+  if (!data || data.minor || !data.documentsIn || data.checked) return null;
+  if (data.step) return openDataAsk(data);
   if (!(await keepStep(service, held, { step: "dados" }))) return null;
   return dataSummary(data);
 }

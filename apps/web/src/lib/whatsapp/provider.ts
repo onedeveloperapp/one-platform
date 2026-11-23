@@ -1,7 +1,7 @@
 import "server-only";
 
 import { getVault } from "@/lib/connections/vault";
-import { isSimulatorOn, openWaPlatform, type WhatsAppSettings } from "@/lib/whatsapp/config";
+import { isSimulatorOn, openWaSender, type WhatsAppSettings } from "@/lib/whatsapp/config";
 import { TestChatProvider } from "@/lib/whatsapp/test-provider";
 import { MetaProvider } from "@flyee/whatsapp/providers/meta";
 import { OpenWaProvider } from "@flyee/whatsapp/providers/openwa";
@@ -51,7 +51,8 @@ export async function providerFor(
   }
   if (target.provider === "openwa") {
     // A number linked by WhatsApp Web (0221): the platform's OpenWA, with the platform's key, the number's session.
-    const platform = openWaPlatform();
+    // Sending needs no secret of the webhook: the clock on ONE's server sends with the address and the key alone.
+    const platform = openWaSender();
     if (!platform) return { ok: false, code: "openwa_not_configured" };
     return {
       ok: true,

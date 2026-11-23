@@ -192,6 +192,12 @@ export type CaseNowInput = {
 /** ONE's lines of work still to come, said on the case but never what holds it (the owner's test of 2026-11-13). */
 const TO_COME: ReadonlySet<string> = new Set(["account:after-signature"]);
 
+/**
+ * Whether a line of ONE's is work still to come (the account it asks after the signature): said on the case, but
+ * never who has it nor a reason to hold the screen, since it waits on the client (the owner's test of 2026-11-23).
+ */
+export const toCome = (line: Pick<NowItem, "id">): boolean => TO_COME.has(line.id);
+
 const KIND_KEY: Record<Lawsuit["kind"], string> = {
   juizado: "case-proceeding-kind-juizado",
   comum: "case-proceeding-kind-comum",
@@ -1198,7 +1204,7 @@ export function caseNow(input: CaseNowInput): CaseNow {
   working.sort((a, b) => (a.since ?? "9").localeCompare(b.since ?? "9"));
 
   // ONE's work to come (the account it asks after the signature) is said, and never what holds the case.
-  const onesNow = working.some((line) => !TO_COME.has(line.id));
+  const onesNow = working.some((line) => !toCome(line));
   const holder: NowHolder = ended
     ? "ended"
     : blocking.some((line) => line.owner === "firm")

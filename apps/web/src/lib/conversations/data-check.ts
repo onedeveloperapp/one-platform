@@ -220,20 +220,51 @@ export function numberOf(reply: string): { number: string; complement: string | 
   return { number, complement };
 }
 
+const NATIONALITY_QUESTION = `Qual é a sua nacionalidade?\n${optionsText(NATIONALITY_OPTIONS)}`;
+const MARITAL_QUESTION = `Qual é o seu estado civil?\n${optionsText(MARITAL_OPTIONS)}`;
+const PROFESSION_QUESTION = "Qual é a sua profissão?";
+
 /** What the papers still need of the client that no document gives, the next one to ask; null when none. */
 export function missingAsk(data: PersonData): { step: DataStep; question: string } | null {
   if (data.minor) return null;
-  if (!data.nationality) {
-    return { step: "nacionalidade", question: `Qual é a sua nacionalidade?\n${optionsText(NATIONALITY_OPTIONS)}` };
-  }
-  if (!data.maritalStatus) {
-    return { step: "estado_civil", question: `Qual é o seu estado civil?\n${optionsText(MARITAL_OPTIONS)}` };
-  }
-  if (!data.profession) return { step: "profissao", question: "Qual é a sua profissão?" };
+  if (!data.nationality) return { step: "nacionalidade", question: NATIONALITY_QUESTION };
+  if (!data.maritalStatus) return { step: "estado_civil", question: MARITAL_QUESTION };
+  if (!data.profession) return { step: "profissao", question: PROFESSION_QUESTION };
   return null;
 }
 
 export const OTHER_NATIONALITY_QUESTION = "Qual é a sua nacionalidade?";
+
+/**
+ * The question a check of data left open, asked again (the owner's test of 2026-11-23): a turn that finds the check
+ * waiting for an answer repeats its question, never the word that the link to sign comes, since the papers wait for
+ * that answer and its message may never have reached the client. Null when no check waits.
+ */
+export function openDataAsk(data: PersonData): string | null {
+  if (data.checked || data.minor) return null;
+  switch (data.step) {
+    case "dados":
+      return dataSummary(data);
+    case "campo":
+      return FIELD_QUESTION;
+    case "valor":
+      return data.field ? valueQuestion(data.field) : dataSummary(data);
+    case "cep":
+      return CEP_QUESTION;
+    case "numero":
+      return NUMBER_QUESTION;
+    case "nacionalidade":
+      return NATIONALITY_QUESTION;
+    case "nacionalidade_outra":
+      return OTHER_NATIONALITY_QUESTION;
+    case "estado_civil":
+      return MARITAL_QUESTION;
+    case "profissao":
+      return PROFESSION_QUESTION;
+    default:
+      return null;
+  }
+}
 
 /** What ONE says once the data is checked and complete. */
 export const dataDone = (fullName: string): string => `Obrigado, ${first(fullName)}. Os seus dados estão completos.`;

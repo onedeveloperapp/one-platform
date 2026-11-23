@@ -1,4 +1,4 @@
-import type { NowItem } from "@/lib/cases/now";
+import { type NowItem, toCome } from "@/lib/cases/now";
 
 /**
  * The notice that holds a screen while ONE works on its record (the screen pattern after ADVBox, approved by the
@@ -13,11 +13,14 @@ export const LONG_AFTER_MS = 120_000;
 
 /**
  * The work that holds the screen: what ONE is doing there now, never what it will look at soon (nothing is under
- * way yet), a work it already said is late (the top says so, and holding the screen for it helps nobody), nor a work
- * that waits on somebody outside ONE (a court tried again later).
+ * way yet), a work it already said is late (the top says so, and holding the screen for it helps nobody), a work
+ * that waits on somebody outside ONE (a court tried again later), nor a work still to come (the account ONE asks
+ * after the client signs, which held a test case's screen for minutes as if ONE were slow, 2026-11-23).
  */
 export function holdingWork(working: readonly NowItem[]): NowItem[] {
-  return working.filter((item) => item.owner === "one" && item.id !== "advance:due" && !item.slow && !item.outside);
+  return working.filter(
+    (item) => item.owner === "one" && item.id !== "advance:due" && !item.slow && !item.outside && !toCome(item),
+  );
 }
 
 /**
