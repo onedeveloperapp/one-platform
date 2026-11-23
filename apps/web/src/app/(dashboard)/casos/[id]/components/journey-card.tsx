@@ -623,6 +623,20 @@ export default function JourneyCard({
             </Box>
           ) : null}
 
+          {/* What ONE does after what waits now: never said as its work now (the owner's test of 2026-11-23). */}
+          {now.later.length > 0 ? (
+            <Box component="section" aria-labelledby="case-now-later" className="flex flex-col gap-2">
+              <Typography id="case-now-later" variant="subtitle2" component="h3" className="mb-0">
+                {t("case-now-title-later")}
+              </Typography>
+              {now.later.map((line) => (
+                <StateLine key={line.id} tone="info">
+                  {say(line)}
+                </StateLine>
+              ))}
+            </Box>
+          ) : null}
+
           <ActivityCards id="case-now-recent" title={t("case-now-title-recent")} items={recent} />
         </Box>
         {action ? (

@@ -60,6 +60,12 @@ export type NowHolder = "client" | "firm" | "one" | "platform" | "court" | "ende
 export type CaseNow = {
   /** What ONE is doing at this moment, the oldest first. */
   working: NowItem[];
+  /**
+   * What ONE does after what waits now (the account it asks once the client signs, the data it asks in the chat once
+   * the client answered what comes first): said under its own title, never as ONE's work now, never what holds the
+   * case nor a reason to hold the screen (the owner's test of 2026-11-23).
+   */
+  later: NowItem[];
   /** What holds the case: the firm's first (a failure before the rest), then the client's, ONE's and the platform's. */
   blocking: NowItem[];
   holder: NowHolder;
@@ -77,6 +83,8 @@ type Doc = {
   createdAt: string;
   processing: "pending" | "working" | "done" | "skipped" | "failed";
   check: { waiting: boolean; answer: { decisao?: string } | Record<string, unknown> } | null;
+  /** The envelope a paper the client sent back signed belongs to (gov.br): said by that envelope, once (0280). */
+  envelopeId?: string | null;
 };
 type Party = { partyId: string; role: "claimant" | "guardian"; person: { full_name: string; person_id: string } };
 type Lawsuit = {
@@ -168,6 +176,12 @@ export type CaseNowInput = {
    * until then it is ONE's work to come, never what holds the case (the owner's test of 2026-11-13).
    */
   accountAfterSignature?: boolean;
+  /**
+   * The passenger whose data ONE asks in the WhatsApp (the chat's check of data, 0232; `case_data_in_chat`, 0280):
+   * asked and waiting for the answer, to ask now, or to ask once the client answered what comes first. Null when ONE
+   * does not ask it there (no conversation ONE carries, the window closed), and the client completes it on the link.
+   */
+  dataInChat?: DataInChat | null;
   interview: Interview;
   /** What ONE waits for to carry the case on (0039), and since when. */
   waiting: string | null;
@@ -189,14 +203,21 @@ export type CaseNowInput = {
   statementsWorking: { id: string; spoken: boolean; since: string | null }[];
 };
 
-/** ONE's lines of work still to come, said on the case but never what holds it (the owner's test of 2026-11-13). */
-const TO_COME: ReadonlySet<string> = new Set(["account:after-signature"]);
+/** Where the data ONE asks the passenger in the chat stands (0280): asked, to ask now, or to ask later. */
+export type DataInChat = { personId: string; state: "asked" | "to_ask" | "later" };
 
-/**
- * Whether a line of ONE's is work still to come (the account it asks after the signature): said on the case, but
- * never who has it nor a reason to hold the screen, since it waits on the client (the owner's test of 2026-11-23).
- */
-export const toCome = (line: Pick<NowItem, "id">): boolean => TO_COME.has(line.id);
+const DATA_STATES: readonly DataInChat["state"][] = ["asked", "to_ask", "later"];
+
+/** The answer of `case_data_in_chat`, read; null when ONE does not ask it there or the answer is not one. */
+export function dataInChatOf(raw: unknown): DataInChat | null {
+  if (typeof raw !== "object" || raw === null) return null;
+  const row = raw as Record<string, unknown>;
+  const state = DATA_STATES.find((one) => one === row.state);
+  return typeof row.person_id === "string" && state ? { personId: row.person_id, state } : null;
+}
+
+/** What ONE asks of a person in the chat's check of data (0232): what the papers need and no document gives. */
+const CHAT_FIELDS: ReadonlySet<string> = new Set(["nationality", "marital_status", "profession"]);
 
 const KIND_KEY: Record<Lawsuit["kind"], string> = {
   juizado: "case-proceeding-kind-juizado",
@@ -316,6 +337,7 @@ const OWNER_ORDER: Record<WaitOwner, number> = { firm: 0, client: 1, one: 2, pla
 export function caseNow(input: CaseNowInput): CaseNow {
   const working: NowItem[] = [];
   const blocking: NowItem[] = [];
+  const later: NowItem[] = [];
   const ended = input.status === "closed" || input.status === "declined";
   const nameOf = (partyId: string | null) =>
     input.parties.find((party) => party.partyId === partyId)?.person.full_name ?? "";
@@ -332,8 +354,14 @@ export function caseNow(input: CaseNowInput): CaseNow {
       );
     }
 
-    // The documents: ONE checking, or waiting for the firm.
-    const received = input.documents.filter((document) => document.status === "received");
+    // The documents: ONE checking, or waiting for the firm. A paper the client sent back signed is said by its
+    // envelope below ("devolveu ... confira e confirme"), never a second time here (the owner's test of 2026-11-23).
+    const returned = new Set(
+      input.envelopes.filter((envelope) => envelope.status === "received").map((envelope) => envelope.id),
+    );
+    const received = input.documents.filter(
+      (document) => document.status === "received" && !(document.envelopeId && returned.has(document.envelopeId)),
+    );
     const checking = received.filter(
       (document) => document.processing === "pending" || document.processing === "working",
     );
@@ -421,13 +449,41 @@ export function caseNow(input: CaseNowInput): CaseNow {
           );
           continue;
         }
+        const fields = missing.fields.filter((field) => field in PERSON_FIELD_KEY);
+        // What ONE asks the passenger in the chat is ONE's until it asked, and the client's to answer there once it
+        // did; never "completes on the link" while nobody asked it (the owner's test of 2026-11-23).
+        const chat =
+          input.dataInChat?.personId === missing.personId &&
+          fields.length > 0 &&
+          fields.every((field) => CHAT_FIELDS.has(field))
+            ? input.dataInChat.state
+            : null;
+        if (chat === "to_ask" || chat === "later") {
+          (chat === "to_ask" ? working : later).push(
+            item({
+              id: `data:${missing.personId}`,
+              owner: "one",
+              tone: "waiting",
+              text: {
+                key: chat === "to_ask" ? "case-now-data-chat-ask" : "case-now-data-chat-later",
+                values: { name: missing.name },
+              },
+              fields,
+              section: "people",
+            }),
+          );
+          continue;
+        }
         blocking.push(
           item({
             id: `missing:fields:${missing.personId}`,
             owner: "client",
             tone: "waiting",
-            text: { key: "case-now-missing-fields", values: { name: missing.name } },
-            fields: missing.fields.filter((field) => field in PERSON_FIELD_KEY),
+            text: {
+              key: chat === "asked" ? "case-now-data-chat-answer" : "case-now-missing-fields",
+              values: { name: missing.name },
+            },
+            fields,
             section: "people",
           }),
         );
@@ -511,7 +567,7 @@ export function caseNow(input: CaseNowInput): CaseNow {
       case "missing":
         if (!accountHolds) break;
         if (input.accountAfterSignature) {
-          working.push(
+          later.push(
             item({
               id: "account:after-signature",
               owner: "one",
@@ -665,6 +721,8 @@ export function caseNow(input: CaseNowInput): CaseNow {
           }),
         );
       } else if (envelope.status === "received") {
+        // The paper by its own name: the contract is never said as the power of attorney.
+        const paper = input.documents.find((document) => document.id === envelope.documentId)?.kind ?? "";
         blocking.push(
           item({
             id: `envelope:${envelope.id}`,
@@ -673,7 +731,10 @@ export function caseNow(input: CaseNowInput): CaseNow {
             tone: "attention",
             text: {
               key: "case-now-envelope-received",
-              values: { names: envelope.signers.map((s) => s.name).join(", ") },
+              values: {
+                names: envelope.signers.map((s) => s.name).join(", "),
+                document: { message: documentWord(paper) },
+              },
             },
             section: "signatures",
           }),
@@ -1203,13 +1264,11 @@ export function caseNow(input: CaseNowInput): CaseNow {
   blocking.sort((a, b) => OWNER_ORDER[a.owner] - OWNER_ORDER[b.owner] || FIRM_FIRST[a.tone] - FIRM_FIRST[b.tone]);
   working.sort((a, b) => (a.since ?? "9").localeCompare(b.since ?? "9"));
 
-  // ONE's work to come (the account it asks after the signature) is said, and never what holds the case.
-  const onesNow = working.some((line) => !toCome(line));
   const holder: NowHolder = ended
     ? "ended"
     : blocking.some((line) => line.owner === "firm")
       ? "firm"
-      : onesNow
+      : working.length > 0
         ? "one"
         : blocking.some((line) => line.owner === "client")
           ? "client"
@@ -1232,7 +1291,7 @@ export function caseNow(input: CaseNowInput): CaseNow {
   }
   for (const line of working) mark(line, "working");
 
-  return { working, blocking, holder, sections };
+  return { working, later, blocking, holder, sections };
 }
 
 /** Who of the firm acts on a line, in words: what the top says beside a line that is the firm's. */

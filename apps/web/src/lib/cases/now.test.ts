@@ -1,4 +1,4 @@
-import { caseNow, type CaseNowInput, mayAct, recentByOne, sectionOfEvent } from "./now";
+import { caseNow, type CaseNowInput, dataInChatOf, mayAct, recentByOne, sectionOfEvent } from "./now";
 import { describe, expect, it } from "vitest";
 
 // Every person, case and fact here is invented.
@@ -109,12 +109,56 @@ describe("caseNow", () => {
     // holds the case (the owner's test of 2026-11-13).
     const before = caseNow(base({ account: "missing", accountAfterSignature: true }));
     expect(ids(before.blocking)).not.toContain("account:missing");
-    expect(ids(before.working)).toContain("account:after-signature");
+    // Said under what ONE does later, never as ONE's work now (the owner's test of 2026-11-23).
+    expect(ids(before.later)).toEqual(["account:after-signature"]);
+    expect(ids(before.working)).toEqual([]);
     expect(before.holder).toBe("one");
     // While the client still owes their data, the case is the client's, the account said as ONE's work to come.
     const owing = caseNow(base({ account: "missing", accountAfterSignature: true, missing: [{ type: "flight" }] }));
-    expect(ids(owing.working)).toContain("account:after-signature");
+    expect(ids(owing.later)).toContain("account:after-signature");
     expect(owing.holder).toBe("client");
+  });
+
+  it("says the data ONE asks in the chat as ONE's until it asked, then the client's to answer there (0280)", () => {
+    const owed = {
+      type: "fields" as const,
+      personId: "pe-a",
+      name: "Ana Teste",
+      fields: ["nationality", "marital_status", "profession"],
+    };
+    // Not asked yet: ONE's work now, never what holds the case nor "completes on the link".
+    const toAsk = caseNow(base({ missing: [owed], dataInChat: { personId: "pe-a", state: "to_ask" } }));
+    expect(ids(toAsk.working)).toEqual(["data:pe-a"]);
+    expect(toAsk.working[0]).toMatchObject({ owner: "one", text: { key: "case-now-data-chat-ask" } });
+    expect(toAsk.blocking).toEqual([]);
+    expect(toAsk.holder).toBe("one");
+    // Asked once the client answers what comes first: what ONE does later.
+    const later = caseNow(base({ missing: [owed], dataInChat: { personId: "pe-a", state: "later" } }));
+    expect(ids(later.later)).toEqual(["data:pe-a"]);
+    expect(later.working).toEqual([]);
+    // Asked: the client answers in the chat.
+    const asked = caseNow(base({ missing: [owed], dataInChat: { personId: "pe-a", state: "asked" } }));
+    expect(asked.blocking[0]).toMatchObject({
+      id: "missing:fields:pe-a",
+      owner: "client",
+      text: { key: "case-now-data-chat-answer" },
+    });
+    expect(asked.holder).toBe("client");
+    // With no chat, or a field the chat does not ask, the client completes it on the link.
+    // What the database answers, read; anything else is no chat.
+    expect(dataInChatOf({ person_id: "pe-a", state: "asked" })).toEqual({ personId: "pe-a", state: "asked" });
+    expect(dataInChatOf({ person_id: "pe-a", state: "outro" })).toBeNull();
+    expect(dataInChatOf(null)).toBeNull();
+    for (const input of [
+      base({ missing: [owed] }),
+      base({
+        missing: [{ ...owed, fields: ["cpf", "profession"] }],
+        dataInChat: { personId: "pe-a", state: "to_ask" },
+      }),
+      base({ missing: [owed], dataInChat: { personId: "pe-other", state: "to_ask" } }),
+    ]) {
+      expect(caseNow(input).blocking[0]).toMatchObject({ owner: "client", text: { key: "case-now-missing-fields" } });
+    }
   });
 
   it("says the piece waits for the client while ONE asks what it lacks, else for a lawyer (0099)", () => {
@@ -299,6 +343,39 @@ describe("caseNow", () => {
     expect(pending.blocking[0]).toMatchObject({ owner: "client", tone: "waiting" });
     expect(pending.holder).toBe("client");
     expect(ids(caseNow(base({ envelopes: [{ ...envelope, status: "opening" }] })).working)).toEqual(["envelope:e1"]);
+  });
+
+  it("says a paper sent back signed once, by its envelope and by its own name (the owner's test of 2026-11-23)", () => {
+    const doc = {
+      kind: "contract",
+      partyId: "pa",
+      createdAt: "2026-11-05T12:00:00Z",
+      processing: "skipped" as const,
+      check: null,
+    };
+    const now = caseNow(
+      base({
+        documents: [
+          { ...doc, id: "doc", status: "accepted" },
+          // What the client sent back signed for that envelope: said by the envelope, never also as a document.
+          { ...doc, id: "signed", status: "received", envelopeId: "e1" },
+        ],
+        envelopes: [
+          {
+            id: "e1",
+            documentId: "doc",
+            status: "received",
+            createdAt: "2026-11-05T12:00:00Z",
+            signers: [{ name: "Ana Teste", signedAt: null }],
+          },
+        ],
+      }),
+    );
+    expect(ids(now.blocking)).toEqual(["envelope:e1"]);
+    expect(now.blocking[0].text).toEqual({
+      key: "case-now-envelope-received",
+      values: { names: "Ana Teste", document: { message: "case-now-document-contract" } },
+    });
   });
 
   it("in court with no hearing set, says a publication that waits for triage may be the hearing", () => {

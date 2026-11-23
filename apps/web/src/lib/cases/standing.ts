@@ -52,6 +52,7 @@ export const REASONS: Record<Holder, readonly string[]> = {
     "one_due",
     "documents",
     "account",
+    "data",
     "link",
     "signature",
     "piece",

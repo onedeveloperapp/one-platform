@@ -71,6 +71,7 @@ export function caseFacts(ready: ReadyCase) {
       !ready.envelopes.some(
         (envelope) => envelope.signers.length > 0 && envelope.signers.every((signer) => Boolean(signer.signedAt)),
       ),
+    dataInChat: ready.dataInChat,
     interview,
     waiting: ready.advance?.waiting ?? null,
     waitingSince: ready.pulse?.advance.waitingSince ?? null,

@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 
 // Every case here is invented.
 
-const quiet: CaseNow = { working: [], blocking: [], holder: "one", sections: {} };
+const quiet: CaseNow = { working: [], later: [], blocking: [], holder: "one", sections: {} };
 
 const base = (overrides: Partial<CardStateInput> = {}): CardStateInput => ({
   status: "documents",

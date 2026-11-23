@@ -33,13 +33,12 @@ const work = (id: string, patch: Partial<NowItem> = {}): NowItem => ({
 const at = Date.parse("2026-11-07T14:31:00Z");
 
 describe("the work that holds the screen", () => {
-  it("is what ONE is doing now, never a look it will take soon, a late work, a wait on a court or work to come", () => {
+  it("is what ONE is doing now, never a look it will take soon, a late work or a wait on a court", () => {
     const held = holdingWork([
       work("advance:running"),
       work("advance:due", { text: { key: "case-now-one-looks-soon" } }),
       work("draft:1", { slow: true }),
       work("filing:1", { outside: true }),
-      work("account:after-signature", { text: { key: "case-now-account-after-signature" } }),
       work("documents:checking"),
     ]);
     expect(held.map((item) => item.id)).toEqual(["advance:running", "documents:checking"]);

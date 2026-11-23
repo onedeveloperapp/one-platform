@@ -18,7 +18,15 @@ import {
 } from "@/lib/cases/standing";
 
 const ROOT = path.resolve(__dirname, "../../../../..");
-const MIGRATION = fs.readFileSync(path.join(ROOT, "packages/db/migrations/0111_case_standing.sql"), "utf8");
+const MIGRATIONS = path.join(ROOT, "packages/db/migrations");
+/** The latest definition of `case_standing` (0111, redefined since: 0252, 0274, 0280), the one the database runs. */
+const MIGRATION = fs
+  .readdirSync(MIGRATIONS)
+  .filter((name) => name.endsWith(".sql"))
+  .sort()
+  .map((name) => fs.readFileSync(path.join(MIGRATIONS, name), "utf8"))
+  .filter((text) => text.includes("create or replace function public.case_standing("))
+  .at(-1) as string;
 const CATALOG = JSON.parse(fs.readFileSync(path.join(ROOT, "packages/content/messages/pt-BR.json"), "utf8")) as {
   product: Record<string, string>;
 };

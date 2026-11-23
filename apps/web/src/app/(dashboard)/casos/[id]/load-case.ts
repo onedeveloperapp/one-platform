@@ -42,6 +42,7 @@ import { freeJusticeOf } from "@/lib/cases/free-justice";
 import { cpfLookup } from "@/lib/cases/identity";
 import { courtPublicationsOf, stageMomentsOf } from "@/lib/cases/journey";
 import { judgmentPathsOf } from "@/lib/cases/judgment-paths";
+import { dataInChatOf } from "@/lib/cases/now";
 import { lawsuitFactsOf } from "@/lib/cases/outcomes";
 import { casePieceFactsOf } from "@/lib/cases/piece-facts";
 import { priorComplaintOf } from "@/lib/cases/prior-complaint";
@@ -472,6 +473,7 @@ export async function loadCase(id: string): Promise<CaseState> {
     unnamedSigners,
     signatureAhead,
     pulse,
+    dataInChat,
     autonomy,
     publicationRows,
   ] = await Promise.all([
@@ -523,6 +525,11 @@ export async function loadCase(id: string): Promise<CaseState> {
     // The mark of the case and whether ONE is at it (0096), for the screen to follow it while it is open. One that
     // could not be read leaves the screen as it was before (read again by the person), never the page.
     supabase.rpc("case_pulse", { target_case: id }).then(({ data, error }) => (error ? null : casePulseOf(data))),
+    // Where the data ONE asks the passenger in the chat stands (0280), for the top of the case to say whose it is.
+    // One that could not be read says it as before (the client completes it on the link), never the page.
+    supabase
+      .rpc("case_data_in_chat", { target_case: id })
+      .then(({ data, error }) => (error ? null : dataInChatOf(data))),
     // What the firm lets ONE decide alone, for the words of what ONE does next. Unreadable, ONE's default is said.
     supabase
       .rpc("firm_autonomy", { target_org: firm })
@@ -960,6 +967,7 @@ export async function loadCase(id: string): Promise<CaseState> {
         }
       : null,
     pulse,
+    dataInChat,
     autonomy: Object.fromEntries((autonomy ?? []).map((decision) => [decision.key, decision.mode])) as Partial<
       Record<AutonomyDecision, AutonomyMode>
     >,

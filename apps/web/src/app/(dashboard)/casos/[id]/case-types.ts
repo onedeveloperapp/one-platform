@@ -14,6 +14,7 @@ import type { FreeJusticeNeed } from "@/lib/cases/free-justice";
 import type { InterviewView } from "@/lib/cases/interview";
 import type { StageMoment } from "@/lib/cases/journey";
 import type { JudgmentPath } from "@/lib/cases/judgment-paths";
+import type { DataInChat } from "@/lib/cases/now";
 import type { LawsuitFact } from "@/lib/cases/outcomes";
 import type { CasePieceFacts } from "@/lib/cases/piece-facts";
 import type { PriorComplaint } from "@/lib/cases/prior-complaint";
@@ -365,6 +366,8 @@ export type CaseState =
       publicationRows: { rows: PublicationRow[]; more: boolean } | null;
       /** The mark of the case and whether ONE is at it (0096): what the screen follows while it is open; null unread. */
       pulse: CasePulse | null;
+      /** Where the data ONE asks the passenger in the chat stands (0280); null when it does not ask it there. */
+      dataInChat: DataInChat | null;
       /** How the firm lets ONE take each decision now; a decision not read is ONE's, the platform's default. */
       autonomy: Partial<Record<AutonomyDecision, AutonomyMode>>;
       /** When the case was read, for the screen to say how fresh it is. */
