@@ -20,6 +20,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 export type CaseDraft = {
   id: string;
   proceedingId: string;
+  /** The model it was written from, when it still exists. */
+  templateId: string | null;
   templateName: string;
   status: DraftStatus;
   /** What the backend still owes it. */
@@ -108,7 +110,18 @@ export type CaseDraft = {
 };
 
 /** A model of the firm a draft may be asked from. */
-export type TemplateChoice = { id: string; name: string; proceedingKind: "juizado" | "comum" | null };
+export type TemplateChoice = {
+  id: string;
+  name: string;
+  proceedingKind: "juizado" | "comum" | null;
+  /**
+   * What the model is: a petition that starts a lawsuit (`piece`), a piece of the process, or a paper the client signs
+   * (the contract, the power of attorney): only a petition's model writes a lawsuit's first piece (0244).
+   */
+  documentKind: string | null;
+  /** The firm's default model for its use. */
+  isDefault: boolean;
+};
 
 /** A dossier of the case, as issued. */
 export type CaseDossier = {
@@ -156,6 +169,7 @@ type DraftRow = {
   receipt_file_id: string | null;
   publication_id: string | null;
   proceeding_id: string;
+  template_id: string | null;
   template_name: string;
   status: string;
   work: string | null;
@@ -178,7 +192,7 @@ type DraftRow = {
 };
 
 const DRAFT_COLUMNS =
-  "id, piece_kind, recommendation, recommendation_reason, waits_for, decision, decision_reason, decided_by, decided_at, filing_status, filing_message, filed_at, filed_how, filed_protocol, receipt_file_id, publication_id, proceeding_id, template_name, status, work, run_id, version, checked_version, revision_note, revision_by, revision_at, revisions, alike, approved_at, approved_by, approved_auto, document_id, requested_by, requested_auto, requested_at, updated_at";
+  "id, piece_kind, recommendation, recommendation_reason, waits_for, decision, decision_reason, decided_by, decided_at, filing_status, filing_message, filed_at, filed_how, filed_protocol, receipt_file_id, publication_id, proceeding_id, template_id, template_name, status, work, run_id, version, checked_version, revision_note, revision_by, revision_at, revisions, alike, approved_at, approved_by, approved_auto, document_id, requested_by, requested_auto, requested_at, updated_at";
 
 /** How long a work may be owed before the screen says a job is late. */
 const SLOW_MINUTES = 8;
@@ -230,7 +244,7 @@ export async function loadCasePieces(
     // The firm's models and the platform's (0045): a piece may be asked from either.
     supabase
       .from("draft_templates")
-      .select("id, name, proceeding_kind")
+      .select("id, name, proceeding_kind, document_kind, is_default")
       .or(`org_id.eq.${firmId},org_id.is.null`)
       .order("name"),
     supabase
@@ -415,6 +429,7 @@ export async function loadCasePieces(
         {
           id: row.id,
           proceedingId: row.proceeding_id,
+          templateId: row.template_id ?? null,
           templateName: row.template_name,
           status: row.status,
           work:
@@ -500,16 +515,24 @@ export async function loadCasePieces(
         } satisfies CaseDraft,
       ];
     }),
-    templates: ((templates.data ?? []) as { id: string; name: string; proceeding_kind: string | null }[]).map(
-      (template) => ({
-        id: template.id,
-        name: template.name,
-        proceedingKind:
-          template.proceeding_kind === "juizado" || template.proceeding_kind === "comum"
-            ? template.proceeding_kind
-            : null,
-      }),
-    ),
+    templates: (
+      (templates.data ?? []) as {
+        id: string;
+        name: string;
+        proceeding_kind: string | null;
+        document_kind: string | null;
+        is_default: boolean | null;
+      }[]
+    ).map((template) => ({
+      id: template.id,
+      name: template.name,
+      proceedingKind:
+        template.proceeding_kind === "juizado" || template.proceeding_kind === "comum"
+          ? template.proceeding_kind
+          : null,
+      documentKind: template.document_kind ?? null,
+      isDefault: template.is_default === true,
+    })),
     alikeAttention: Number.isFinite(configured) && configured > 0 ? configured : ALIKE_ATTENTION,
     maxRevisionChars: Math.max(longest ?? MAX_REVISION_CHARS, MIN_REVISION_CHARS),
     dossiers: ((dossiers.data ?? []) as unknown as DossierRow[]).flatMap((row) => {

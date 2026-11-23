@@ -27,6 +27,7 @@ const isId = (value: unknown): value is string => typeof value === "string" && U
 
 /** What the database raises instead of answering, by the code the screen has words for. */
 const RAISED = [
+  "not_a_piece_template",
   "not_allowed_in_support_session",
   "second_factor_required",
   "case_not_found",

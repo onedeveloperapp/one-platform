@@ -5,6 +5,7 @@ import { judgeArrivedPhoto } from "@/lib/cases/document-quality-work";
 import { supabaseFileStore } from "@/lib/files/store";
 import { takeBackFile } from "@flyee/documents/files";
 import { measureFile } from "@flyee/documents/measure";
+import { pdfSignatures } from "@flyee/documents/pdf-signature";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 /**
@@ -31,9 +32,14 @@ type UploadToFinish = {
   fileId: string;
   storagePath: string;
   fileStatus: string;
+  /** The envelope a paper the client sends back signed at gov.br belongs to (0023, 0281); null for any other. */
+  envelopeId: string | null;
 };
 
 const failed = { ok: false as const, code: "failed" };
+
+/** A paper sent back for signing that carries no signature, said to the client in `case-error-paper-unsigned`. */
+export const NOT_SIGNED = "paper_unsigned";
 
 /** What the database says of an upload of this link, or why it hands nothing over. */
 async function uploadToFinish(
@@ -57,6 +63,7 @@ async function uploadToFinish(
       fileId: String(answer.file_id ?? ""),
       storagePath: String(answer.storage_path ?? ""),
       fileStatus: String(answer.file_status ?? ""),
+      envelopeId: typeof answer.envelope_id === "string" ? answer.envelope_id : null,
     };
   } catch {
     return failed;
@@ -103,6 +110,13 @@ export async function finishLinkUpload(
     // and the client is not told it never arrived.
     if (!bytes) return told ? failed : { ok: false, code: "not_uploaded" };
     const measure = await measureFile(bytes);
+    // A paper sent back signed at gov.br that carries no signature is refused at once, with why, and the client sends
+    // the signed file: a client sent the papers back exactly as ONE issued them, and the firm was asked to confirm
+    // them (the owner's test of 2026-11-23).
+    if (upload.envelopeId && pdfSignatures(bytes) === 0) {
+      const taken = await takeBackClientUpload(asClient, service, token, documentId).catch(() => null);
+      return taken?.ok ? { ok: false, code: NOT_SIGNED } : failed;
+    }
     for (let look = 0; ; look += 1) {
       const photo = await judgeArrivedPhoto(service, {
         documentId,

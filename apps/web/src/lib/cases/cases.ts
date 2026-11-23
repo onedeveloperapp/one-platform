@@ -868,6 +868,7 @@ const ERROR_KEYS: Record<string, string> = {
   invalid_decision: "case-error-failed",
   already_attached: "case-error-already-attached",
   not_uploaded: "case-error-not-uploaded",
+  paper_unsigned: "case-error-paper-unsigned",
   empty: "case-file-refused-empty",
   rejected: "case-file-refused-other",
   invalid_size: "case-error-file-size",

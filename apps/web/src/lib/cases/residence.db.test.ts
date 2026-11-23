@@ -51,28 +51,57 @@ async function carry(caseId: string) {
   return advanceCases(backend() as never, 1, caseId, followSoon);
 }
 
-/** Maria sends back, on her link, the PDF she signed at gov.br, and Ana confirms it signed. */
+/** The PDF as a signer gives it back: a revision that signs it (its value made up: only that one is there is read). */
+function signedPdf(original: Uint8Array): Uint8Array {
+  const base = Buffer.from(original).toString("latin1");
+  const value = "3082054306092A864886F70D010702A0";
+  const pad = (n: number) => String(n).padStart(10, "0");
+  const head = (range: string) =>
+    `${base}\n9999 0 obj\n<< /Type /Sig /Filter /Adobe.PPKLite /SubFilter /ETSI.CAdES.detached /ByteRange ${range} /Contents <`;
+  const tail = "> >>\nendobj\n%%EOF\n";
+  const width = head("[0 0000000000 0000000000 0000000000]").length;
+  const after = width + value.length + 1;
+  const total = after + tail.length - 1;
+  return new Uint8Array(
+    Buffer.from(`${head(`[0 ${pad(width - 1)} ${pad(after)} ${pad(total - after)}]`)}${value}${tail}`, "latin1"),
+  );
+}
+
+/**
+ * Maria sends back, on her link, the PDF she signed at gov.br, and Ana confirms it signed. The PDF as ONE issued it,
+ * with no signature, is refused with why first (the owner's test of 2026-11-23).
+ */
 async function signedByGovBr(envelope: string, bytes: Uint8Array): Promise<string> {
   const { finishLinkUpload } = await import("@/lib/cases/client-uploads");
-  const reserved = await ok(
-    await anon().rpc("client_link_reserve_signed", {
-      target_token: TOKEN,
-      target_envelope: envelope,
-      target_name: "assinado.pdf",
-      target_mime: "application/pdf",
-      target_bytes: bytes.length,
-    }),
-  );
-  bucket.set(String(reserved.storage_path), bytes);
-  const finished = await finishLinkUpload(anon() as never, backend() as never, TOKEN, String(reserved.document_id));
-  expect(finished.ok, JSON.stringify(finished)).toBe(true);
+  const send = async (file: Uint8Array) => {
+    const reserved = await ok(
+      await anon().rpc("client_link_reserve_signed", {
+        target_token: TOKEN,
+        target_envelope: envelope,
+        target_name: "assinado.pdf",
+        target_mime: "application/pdf",
+        target_bytes: file.length,
+      }),
+    );
+    bucket.set(String(reserved.storage_path), file);
+    const finished = await finishLinkUpload(anon() as never, backend() as never, TOKEN, String(reserved.document_id));
+    return { documentId: String(reserved.document_id), finished };
+  };
+  const unsigned = await send(bytes);
+  expect(unsigned.finished).toEqual({ ok: false, code: "paper_unsigned" });
+  const [kept] = await sql.unsafe(`select count(*)::integer as n from public.case_documents where id = $1`, [
+    unsigned.documentId,
+  ]);
+  expect(kept).toEqual({ n: 0 });
+  const signed = await send(signedPdf(bytes));
+  expect(signed.finished.ok, JSON.stringify(signed.finished)).toBe(true);
   await ok(
     await as(ANA).rpc("confirm_signature", {
       target_envelope: envelope,
-      target_document: String(reserved.document_id),
+      target_document: signed.documentId,
     }),
   );
-  return String(reserved.document_id);
+  return signed.documentId;
 }
 
 describe.skipIf(!DB_URL)("a bill in the mother's name, declared and signed", () => {

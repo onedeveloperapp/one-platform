@@ -33,6 +33,7 @@ import {
   revisionBriefing,
   sourceFromCitation,
   sourceOfRow,
+  startsLawsuit,
   unknownMarks,
 } from "@/lib/cases/drafts";
 import messages from "@flyee/content/messages/pt-BR.json";
@@ -767,5 +768,19 @@ describe("a plain text as the pages of a document", () => {
     expect(draftBlocks("\n\n  \n")).toEqual([]);
     // Numbers and signs alone are no heading.
     expect(draftBlocks("10.000,00")[0].kind).toBe("paragraph");
+  });
+});
+
+describe("the models a lawsuit's piece is written from", () => {
+  it("offers a petition's model of no kind or of the lawsuit's, never a paper the client signs (2026-11-23)", () => {
+    const model = (documentKind: string | null, proceedingKind: string | null) => ({ documentKind, proceedingKind });
+    expect(startsLawsuit(model("piece", null), "juizado")).toBe(true);
+    expect(startsLawsuit(model("piece", "juizado"), "juizado")).toBe(true);
+    expect(startsLawsuit(model("piece", "comum"), "juizado")).toBe(false);
+    // The firm's contract and power of attorney: the database refuses them for a piece (`not_a_piece_template`).
+    expect(startsLawsuit(model("contrato", null), "juizado")).toBe(false);
+    expect(startsLawsuit(model("procuracao", null), "comum")).toBe(false);
+    expect(startsLawsuit(model("peca_processo", null), "juizado")).toBe(false);
+    expect(startsLawsuit(model(null, null), "juizado")).toBe(false);
   });
 });

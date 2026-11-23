@@ -263,6 +263,16 @@ export const draftBlockerKey = (code: string): string => BLOCKER_KEY[code] ?? "d
 /** What keeps a draft from being approved is said as what is missing, never as something that went wrong. */
 export const isDraftBlocker = (code: string): boolean => Object.hasOwn(BLOCKER_KEY, code);
 
+/**
+ * Whether a model writes the first piece of a lawsuit of this kind: a petition's model (`piece`, 0244), of no kind or of
+ * this one. The firm's contract and power of attorney are papers the client signs, never a lawsuit's model.
+ */
+export const startsLawsuit = (
+  template: { documentKind: string | null; proceedingKind: string | null },
+  kind: "juizado" | "comum",
+): boolean =>
+  template.documentKind === "piece" && (template.proceedingKind === null || template.proceedingKind === kind);
+
 /** The answers of the database a screen of drafts has words for; anything else is "failed". */
 const ERROR_KEY: Record<string, string> = {
   ...BLOCKER_KEY,
@@ -270,6 +280,7 @@ const ERROR_KEY: Record<string, string> = {
   draft_not_found: "draft-error-not-found",
   already_filed: "draft-error-already-filed",
   template_not_found: "draft-error-template",
+  not_a_piece_template: "draft-error-not-piece",
   draft_being_issued: "draft-error-being-issued",
   draft_in_course: "draft-error-in-course",
   draft_changed: "draft-error-changed",

@@ -55,6 +55,7 @@ import {
   hasPersonMark,
   isDraftBlocker,
   personMarks,
+  startsLawsuit,
   unknownMarks,
 } from "@/lib/cases/drafts";
 import { opensOnArrival } from "@/lib/cases/sections";
@@ -239,7 +240,7 @@ export default function DraftsCard({
           title={t("drafts-filed-title")}
           description={t("drafts-filed-body")}
         />
-      ) : state.pieces.templates.length === 0 && drafts.length === 0 ? (
+      ) : !state.pieces.templates.some((template) => template.documentKind === "piece") && drafts.length === 0 ? (
         <EmptyState
           titleAs="h3"
           layout="row"
@@ -432,11 +433,15 @@ function Lawsuit({
         other.id !== draft?.id && other.version > 0 && (other.status === "cancelled" || other.status === "rejected"),
     )
     .slice(0, EARLIER_SHOWN);
-  const fits = state.pieces.templates.filter(
-    (template) => template.proceedingKind === null || template.proceedingKind === proceeding.kind,
-  );
-  // The model chosen follows the list: one removed meanwhile is never the one asked for.
-  const chosen = fits.some((template) => template.id === templateId) ? templateId : (fits[0]?.id ?? "");
+  // Only a petition's model writes the lawsuit's piece: the firm's contract and power of attorney are papers the client
+  // signs, and the database refuses them here (the owner's test of 2026-11-23: the list offered them first, by name).
+  const fits = state.pieces.templates.filter((template) => startsLawsuit(template, proceeding.kind));
+  // The model chosen follows the list: one removed meanwhile is never the one asked for. Untouched, it is the one the
+  // lawsuit's latest piece was written from, else the firm's default, else the first.
+  const latestTemplate = drafts.find((one) => one.proceedingId === proceeding.id && one.templateId)?.templateId;
+  const fallback =
+    fits.find((template) => template.id === latestTemplate) ?? fits.find((template) => template.isDefault) ?? fits[0];
+  const chosen = fits.some((template) => template.id === templateId) ? templateId : (fallback?.id ?? "");
   const caseId = state.case.id;
   const planned = proceeding.status === "planned";
   const lawyer = state.lawyer;
