@@ -145,6 +145,16 @@ export function followableDay(day: string, today: string): boolean {
   return days >= -1 && days <= 2;
 }
 
+/**
+ * A leg's scheduled departure as text that sorts in the order of time. The API answers a `timestamp` as ISO text; a
+ * database driver hands a `Date`, whose own text ("Thu Dec 03 2026 …") sorts by weekday and month name, which put a
+ * way back in December before its way out in November and made it the trip's first leg.
+ */
+export function departureOf(value: unknown): string {
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? "" : value.toISOString();
+  return typeof value === "string" ? value : "";
+}
+
 /** A leg as a tool finds the one it acts on: its position, the order it flies in and what its source said. */
 export type LegNow = {
   position: number;

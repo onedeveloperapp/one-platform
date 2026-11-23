@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   AGENCY_TEST_PHONE,
+  departureOf,
   IN_THE_AIR,
   isTestChatPhone,
   LAST_LEG,
@@ -70,6 +71,35 @@ describe("the tools that make a flight go as it should (0084)", () => {
     const landed = first.map((leg) => (leg.position === 1 ? { ...leg, arrived: true, status: "landed" } : leg));
     expect(legForTool(IN_THE_AIR, landed)).toBeNull();
     expect(legForTool(NEXT_TO_LEAVE, landed)).toBe(2);
+  });
+
+  it("take the last leg in the order of time, however the departure is read", () => {
+    // A way out in November and a way back in December: as ISO text, and as the `Date` a database driver hands.
+    const asText = [
+      {
+        position: 1,
+        departure: departureOf("2099-11-26T08:00:00"),
+        status: "cancelled",
+        departed: false,
+        arrived: false,
+      },
+      {
+        position: 2,
+        departure: departureOf("2099-12-03T18:00:00"),
+        status: "scheduled",
+        departed: false,
+        arrived: false,
+      },
+    ];
+    const asDates = [
+      { ...asText[1], departure: departureOf(new Date(2099, 11, 3, 18, 0)) },
+      { ...asText[0], departure: departureOf(new Date(2099, 10, 26, 8, 0)) },
+    ];
+    expect(legForTool(LAST_LEG, asText)).toBe(2);
+    expect(legForTool(LAST_LEG, asDates)).toBe(2);
+    expect(legForTool(NEXT_TO_LEAVE, asDates)).toBe(2);
+    expect(departureOf(null)).toBe("");
+    expect(departureOf(new Date(Number.NaN))).toBe("");
   });
 
   it("never move a cancelled leg, and say when there is nothing to move", () => {

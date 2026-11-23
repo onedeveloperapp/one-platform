@@ -10,6 +10,7 @@ import { sweepWhileUsed } from "@/lib/jobs/while-used";
 import { getMemberContext } from "@/lib/member/context";
 import { stagedPath } from "@/lib/test-chat/staging";
 import {
+  departureOf,
   firmToolOf,
   flightNumberOf,
   followableDay,
@@ -448,7 +449,7 @@ async function applyTool(
     if (legsError || !rows) return { ok: false, code: "failed" };
     const legsNow = rows.map((row) => ({
       position: Number(row.position),
-      departure: String(row.scheduled_departure_local ?? ""),
+      departure: departureOf(row.scheduled_departure_local),
       status: String(row.status ?? ""),
       departed: row.departed_local !== null,
       arrived: row.arrived_local !== null,
