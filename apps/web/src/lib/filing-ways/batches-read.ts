@@ -9,6 +9,9 @@ import {
   eligibleGroups,
   OPEN_BATCH_STATUSES,
   type OpenBatchStatus,
+  STOPPED_SHOWN_HOURS,
+  type StoppedBatch,
+  STOPS_ASKED,
   unchosenGroups,
 } from "@/lib/filing-ways/batches";
 import { loadFilingWays } from "@/lib/filing-ways/read";
@@ -19,12 +22,15 @@ export type FilingBatchesState = {
   /** The pulse the screen was drawn with (`readBatchesPulse`): the batches in course by state and last change. */
   pulse: string;
   batches: BatchView[];
+  /** The batches ONE's browser or a lawyer's extension stopped lately, each with why (a person's own stop is not said). */
+  stopped: StoppedBatch[];
   eligible: EligibleGroup[];
   /** The packages ready ONE could file for the person where they never chose a way, by system. */
   unchosen: { system: { key: string; name: string }; count: number }[];
 };
 
 const BATCHES_SHOWN = 20;
+const STOPPED_SHOWN = 5;
 
 /**
  * What /protocolo shows of the batches (migration 0264), with the person's own session: the firm's batches in course
@@ -40,7 +46,8 @@ export async function loadFilingBatches(
   const ways = await loadFilingWays(context);
   if (!ways) return null;
 
-  const [batches, team] = await Promise.all([
+  const since = new Date(Date.now() - STOPPED_SHOWN_HOURS * 3_600_000).toISOString();
+  const [batches, team, stoppedRows] = await Promise.all([
     context.supabase
       .from("filing_batches")
       .select("id, person_id, system_key, way, status, code_kind, updated_at")
@@ -49,8 +56,17 @@ export async function loadFilingBatches(
       .order("approved_at", { ascending: true })
       .limit(BATCHES_SHOWN),
     context.supabase.rpc("firm_team", { target_org: firm.id }),
+    context.supabase
+      .from("filing_batches")
+      .select("id, person_id, system_key, way, error, finished_at")
+      .eq("org_id", firm.id)
+      .eq("status", "stopped")
+      .gte("finished_at", since)
+      .not("error", "in", `(${STOPS_ASKED.join(",")})`)
+      .order("finished_at", { ascending: false })
+      .limit(STOPPED_SHOWN),
   ]);
-  if (batches.error || team.error) return null;
+  if (batches.error || team.error || stoppedRows.error) return null;
 
   const batchRows = (batches.data ?? []) as {
     id: string;
@@ -177,5 +193,29 @@ export async function loadFilingBatches(
     .sort((a, b) => (a.id < b.id ? -1 : 1))
     .map((row) => `${row.id}:${row.status}:${row.updated_at}`)
     .join("|");
-  return { viewerId: context.userId, pulse, batches: views, eligible, unchosen };
+  const stopped: StoppedBatch[] = (
+    (stoppedRows.data ?? []) as {
+      id: string;
+      person_id: string | null;
+      system_key: string;
+      way: string;
+      error: string | null;
+      finished_at: string | null;
+    }[]
+  ).flatMap((row): StoppedBatch[] =>
+    (row.way === "browser" || row.way === "extension") && row.error && row.finished_at
+      ? [
+          {
+            id: row.id,
+            systemName: systemName.get(row.system_key) ?? row.system_key,
+            way: row.way,
+            personId: row.person_id,
+            why: row.error,
+            finishedAt: row.finished_at,
+          },
+        ]
+      : [],
+  );
+
+  return { viewerId: context.userId, pulse, batches: views, stopped, eligible, unchosen };
 }

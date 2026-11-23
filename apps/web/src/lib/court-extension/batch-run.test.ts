@@ -460,4 +460,26 @@ describe("a batch filed by the lawyer's extension", () => {
     const plansOfSecond = one.calls.filter((call) => call.name === "plan" && call.args[0] === "s2");
     expect(plansOfSecond).toHaveLength(0);
   });
+  it("in ONE's own browser, a change of the screen is never the lawyer's word, and a word that never comes stops the batch", async () => {
+    const one = new StandInOne([filingOf("s1")]);
+    const tab = new StandInTab();
+    // The court's page moved by itself while ONE waited: nobody pressed anything.
+    const { panel } = panelOf({ word: "never", onWord: () => setTimeout(() => (tab.screen = 2), 0) });
+    const end = await runBatch({ ...base(one, tab, panel), watchScreen: false, wordMostMs: 4_500 });
+    expect(end).toEqual({ filed: 0, unknown: 0, stopped: "confirmation_timeout", lookFor: null });
+    expect(one.names()).not.toContain("sending");
+    expect(one.names()).not.toContain("confirm");
+    expect(one.calls.find((call) => call.name === "finish")?.args[2]).toBe("confirmation_timeout");
+  });
+
+  it("where nobody is at the screen, a pause ends the batch with the reason ONE's browser gives", async () => {
+    const one = new StandInOne([filingOf("s1", { learning: false })]);
+    const tab = new StandInTab();
+    tab.asksCode = true;
+    const panel: RunPanel = { ...panelOf({}).panel, pause: async () => ({ stop: "court_question" }) };
+    const end = await runBatch(base(one, tab, panel));
+    expect(end.stopped).toBe("court_question");
+    expect(one.calls.find((call) => call.name === "finish")?.args[2]).toBe("court_question");
+    expect(one.names()).not.toContain("sending");
+  });
 });

@@ -55,4 +55,4 @@ The hosts it may touch are only the systems it knows and ONE: `manifest.json` an
 - The receipt kept is the court's screen as read; the court's own receipt stays in its system.
 - A court's dialog (a box asking to confirm) waits for the lawyer to answer it on the screen.
 - A batch whose panel was closed in the middle is only stopped, then approved again.
-- Next: ONE's own browser on ONE's server (the first way), which runs the same filling over the same maps, checks a court login as the lawyer gives it, and makes a map trusted.
+- ONE's own browser on ONE's server (the first way, 2026-11-23, `apps/web/clock/navegador.ts`) runs the same filling over the same maps with the lawyer's court login, checks a login as the lawyer gives it, and makes a map trusted.

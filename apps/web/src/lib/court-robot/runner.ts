@@ -42,6 +42,16 @@ export interface ScreenDriver {
   upload(target: Target, file: DriverFile): Promise<boolean>;
   /** Waits until the page stops changing after an action. */
   settle(): Promise<void>;
+  /**
+   * Whether the court's session ended and its sign-in is on the screen (ONE's own browser, whose court sends it to a
+   * sign-in of another host the robot does not read): then the host signs in again. Absent where the AI says it.
+   */
+  signedOut?(): Promise<boolean>;
+  /**
+   * Told before each action whether it may send the lawsuit: ONE's own browser answers yes to the court's own question
+   * ("confirma?") only on a press that may send, which the lawyer's word or a trusted map allowed.
+   */
+  pressing?(sends: boolean): void;
 }
 
 export type PlanInput = {
@@ -106,6 +116,7 @@ export type RunResult = { outcome: RunOutcome; learned: LearnedStep[]; aiScreens
 const SAME_SCREEN_LIMIT = 3;
 
 async function act(driver: ScreenDriver, action: PlanAction, input: RunInput): Promise<string> {
+  driver.pressing?.(action.envia === true);
   if (action.fazer === "esperar") {
     await driver.settle();
     return "ok";
@@ -152,6 +163,8 @@ export async function runFiling(input: RunInput): Promise<RunResult> {
   const done = (outcome: RunOutcome): RunResult => ({ outcome, learned, aiScreens });
 
   for (let screen = 0; screen < maxScreens; screen += 1) {
+    // The court's session ended: after something that may have sent, what came of it is unknown.
+    if (driver.signedOut && (await driver.signedOut())) return done(sent ? { kind: "unknown" } : { kind: "login" });
     const frames = await driver.capture();
     const signature = signatureOf(frames);
     repeats = previous && sameScreen(previous, signature) ? repeats + 1 : 0;

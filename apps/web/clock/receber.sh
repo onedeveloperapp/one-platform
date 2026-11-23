@@ -43,6 +43,14 @@ fi
 docker run --rm --user node --env-file "$segredos" -e ONE_CLOCK_CHECK=1 -e NODE_ENV=production \
   -e VERCEL_ENV=production -e ONE_COMMIT="$commit" -v "$tmp:/app:ro" -w /app node:22-slim node relogio.mjs
 
+# ONE's own browser (navegador.mjs, since 2026-11-23) loads in its own image, with the server's keys, and starts and
+# closes its Chromium, before it takes the place of the running one. The image is pulled the first time.
+if [ -f "$tmp/navegador.mjs" ]; then
+  [ -f "$tmp/pagina.js" ] || { echo "receber: falta pagina.js no pacote" >&2; exit 4; }
+  ONE_COMMIT="$commit" docker compose -f "$tmp/compose.yml" run --rm --no-deps -T -e ONE_BROWSER_CHECK=1 navegador \
+    </dev/null
+fi
+
 versao="$base/versoes/$commit"
 rm -rf "$versao"
 mv "$tmp" "$versao"

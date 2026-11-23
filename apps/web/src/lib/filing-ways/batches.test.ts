@@ -1,6 +1,15 @@
 import { describe, expect, it } from "vitest";
 
-import { type BatchCandidate, batchCounts, batchTurn, eligibleGroups, unchosenGroups } from "@/lib/filing-ways/batches";
+import {
+  type BatchCandidate,
+  batchCounts,
+  batchTurn,
+  eligibleGroups,
+  stopFixedInWays,
+  stopReason,
+  STOPS_ASKED,
+  unchosenGroups,
+} from "@/lib/filing-ways/batches";
 import type { ScreenSystem } from "@/lib/filing-ways/ways";
 
 const TJSP: ScreenSystem = {
@@ -100,5 +109,17 @@ describe("the batches a lawyer hands ONE", () => {
         ],
       }),
     ).toEqual({ total: 3, filed: 1, unknown: 1, refused: 0, waiting: 1 });
+  });
+  it("says why ONE's browser or the extension stopped a batch, and where the lawyer puts it right", () => {
+    expect(stopReason("court_login_refused")).toBe("court_login_refused");
+    expect(stopReason("confirmation_timeout")).toBe("confirmation_timeout");
+    // A reason the screen does not know is said as a stop, never as its code.
+    expect(stopReason("too_many_screens")).toBe("other");
+    expect(stopFixedInWays("court_login_refused")).toBe(true);
+    expect(stopFixedInWays("court_captcha")).toBe(true);
+    expect(stopFixedInWays("court_question")).toBe(false);
+    // A person's own stop is never said back to them.
+    expect(STOPS_ASKED).toContain("by_person");
+    expect(STOPS_ASKED).toContain("by_lawyer");
   });
 });

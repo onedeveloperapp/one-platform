@@ -310,6 +310,15 @@ permite. A lista das varreduras, com o horário de cada uma, fica em
   `platform_settings`; com a marca mais velha que 15 minutos, o app volta a
   rodar as varreduras que servem a quem espera enquanto o ONE está em uso. Ver
   o relógio: `ssh one@187.53.106.93 'docker logs --tail 20 one-relogio-relogio-1'`.
+- **O navegador do ONE** (desde 2026-11-23) roda ao lado do relógio, no mesmo
+  pacote e no mesmo `compose.yml`: `apps/web/clock/navegador.ts`, empacotado
+  como `navegador.mjs` com o script das páginas (`pagina.js`), na imagem do
+  Playwright da versão do app (`mcr.microsoft.com/playwright:v1.58.2-noble`; o
+  `build.mjs` recusa outra). Protocola os lotes que os advogados aprovam para
+  ele e confere um login logo que é informado. O `receber.sh` o carrega com as
+  chaves do servidor e abre e fecha o Chromium antes de trocar a versão. Cada
+  minuto marca `court_browser_beat` em `platform_settings`. Ver o navegador:
+  `ssh one@187.53.106.93 'docker logs --tail 20 one-relogio-navegador-1'`.
 - **`apps/web/clock/receber.sh` muda à mão**: o deploy nunca o reescreve.
   Depois de mudar, copie para o servidor e dê `chmod 755`.
 

@@ -510,4 +510,64 @@ describe("ONE filing on a court's screen", () => {
     });
     expect(result.outcome).toEqual({ kind: "unknown" });
   });
+  it("where the court signed the session out, the host signs in again; after something that may send, it is unknown", async () => {
+    // ONE's own browser: the court sent it to its sign-in, a page of another host the robot does not read.
+    const court = new StandInCourt();
+    let out = true;
+    const signedOut = Object.assign(court, { signedOut: async () => out });
+    const planned: PlanInput[] = [];
+    const first = await runFiling({
+      driver: signedOut,
+      planner: scriptedPlanner(planned),
+      system: "eproc do TJSP",
+      facts: FACTS,
+      file: async () => PDF,
+      learning: false,
+      confirm: async () => "go",
+      map: null,
+      beforeSend: async () => ({ ok: true, code: "sending" }),
+    });
+    expect(first.outcome).toEqual({ kind: "login" });
+    expect(planned).toHaveLength(0);
+
+    out = false;
+    court.screen = 2;
+    let calls = 0;
+    const sent = await runFiling({
+      driver: Object.assign(court, {
+        signedOut: async () => {
+          calls += 1;
+          return calls > 1;
+        },
+      }),
+      planner: scriptedPlanner([]),
+      system: "eproc do TJSP",
+      facts: FACTS,
+      file: async () => PDF,
+      learning: false,
+      confirm: async () => "go",
+      map: null,
+      beforeSend: async () => ({ ok: true, code: "sending" }),
+    });
+    expect(sent.outcome).toEqual({ kind: "unknown" });
+  });
+
+  it("tells the driver which press may send, so the court's own question is answered yes only there", async () => {
+    const court = new StandInCourt();
+    const presses: boolean[] = [];
+    const result = await runFiling({
+      driver: Object.assign(court, { pressing: (sends: boolean) => presses.push(sends) }),
+      planner: scriptedPlanner([]),
+      system: "eproc do TJSP",
+      facts: FACTS,
+      file: async () => PDF,
+      learning: false,
+      confirm: async () => "go",
+      map: null,
+      beforeSend: async () => ({ ok: true, code: "sending" }),
+    });
+    expect(result.outcome.kind).toBe("filed");
+    // "Finalizar" may send (ONE's own rule: in another system it does) and so does the summary's confirmation.
+    expect(presses).toEqual([false, false, false, false, false, false, true, true]);
+  });
 });

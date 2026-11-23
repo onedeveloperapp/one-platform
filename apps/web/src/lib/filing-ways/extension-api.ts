@@ -2,16 +2,9 @@ import "server-only";
 
 import { createHash, randomBytes } from "node:crypto";
 
-import { filingFactsOf, type ToSend } from "@/lib/court-robot/facts";
 import { readMap } from "@/lib/court-robot/map";
-import { aiScreenPlanner } from "@/lib/court-robot/planner";
-import type { ScreenPlanner } from "@/lib/court-robot/runner";
-import { FIRM_FILES_BUCKET } from "@/lib/files/bucket";
-import { supabaseFileStore } from "@/lib/files/store";
 import {
   type ExtensionBatch,
-  type ExtensionFile,
-  type ExtensionFiling,
   type ExtensionSystem,
   linkCodeOf,
   readScreen,
@@ -21,11 +14,18 @@ import {
   REFUSAL_STATUS,
   TOKEN_PATTERN,
 } from "@/lib/filing-ways/extension-protocol";
-import { settleFirmNotices } from "@/lib/notices/work";
-import { takeBackFile } from "@flyee/documents/files";
-import { measureFile } from "@flyee/documents/measure";
-import { renderTextPdf, type TextBlock } from "@flyee/documents/text-pdf";
+import {
+  type FilingRow,
+  filingRowOf,
+  nextFiling,
+  planScreen,
+  recordFiling,
+  type ScreenFilingDeps,
+  systemOf,
+} from "@/lib/filing-ways/screen-filing";
 import type { SupabaseClient } from "@supabase/supabase-js";
+
+export { receiptBlocks } from "@/lib/filing-ways/screen-filing";
 
 /**
  * The backend's half of the lawyer's extension (`/api/extensao/v1/...`; the owner's second way to file, 2026-11-20):
@@ -50,23 +50,12 @@ export type ExtensionCall = {
   body: Record<string, unknown> | null;
 };
 
-export type ExtensionDeps = {
-  service: SupabaseClient;
-  /** The AI that reads a screen; the platform's executor unless a test stands in. */
-  planner?: (orgId: string, submissionId: string) => ScreenPlanner;
-  /** Tells the firm's clients what moved, after a lawsuit is filed. */
-  notify?: (orgId: string) => Promise<void>;
-  now?: () => Date;
-};
+export type ExtensionDeps = ScreenFilingDeps;
 
 export type ExtensionAnswer = { status: number; body: Record<string, unknown> };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const ERROR_CODE = /^[a-z][a-z0-9_]{1,59}$/;
-/** The AI reads at most this many screens of one filing: a browser that asks for more is stopped. */
-const AI_SCREENS_MOST = 60;
-/** How long the link to a file of the package lives: the extension fetches it at once. */
-const FILE_LINK_SECONDS = 15 * 60;
 
 const answered = (body: Record<string, unknown> = {}): ExtensionAnswer => ({
   status: 200,
@@ -91,43 +80,6 @@ export const mintToken = (): string => `onex_${randomBytes(32).toString("base64u
 const claimOf = (body: Record<string, unknown>): number | null =>
   typeof body.claim === "number" && Number.isInteger(body.claim) && body.claim > 0 ? body.claim : null;
 
-/** The day a moment falls on in Brasília (the court's day of a filing). */
-const brasiliaDay = (at: Date): string =>
-  new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(at);
-
-const brasiliaMoment = (at: Date): string =>
-  new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo", dateStyle: "short", timeStyle: "short" }).format(
-    at,
-  );
-
-/** A lawsuit's twenty digits as the CNJ writes them. */
-const cnjOf = (digits: string): string =>
-  `${digits.slice(0, 7)}-${digits.slice(7, 9)}.${digits.slice(9, 13)}.${digits.slice(13, 14)}.${digits.slice(14, 16)}.${digits.slice(16)}`;
-
-/**
- * The receipt of a lawsuit the extension filed, as a PDF of the firm: what the court's screen said when it took it,
- * read in the lawyer's browser, with the number ONE read there. The court's own receipt stays in its system.
- */
-export function receiptBlocks(input: { system: string; number: string | null; at: Date; text: string }): TextBlock[] {
-  const rows = [
-    { label: "Sistema", value: input.system },
-    { label: "Lido da tela do tribunal em", value: brasiliaMoment(input.at) },
-  ];
-  if (input.number) rows.splice(1, 0, { label: "Número do processo", value: cnjOf(input.number) });
-  const paragraphs = input.text
-    .split(/\n+/)
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .slice(0, 400);
-  return [
-    { kind: "title", text: "Recibo de protocolo" },
-    { kind: "fields", rows },
-    { kind: "space" },
-    { kind: "heading", text: "O que a tela do tribunal mostrou" },
-    ...paragraphs.map((text): TextBlock => ({ kind: "paragraph", text })),
-  ];
-}
-
 // ---------- Who calls, and what of theirs ----------
 
 type Linked = { linkId: string; orgId: string; userId: string };
@@ -140,16 +92,6 @@ type BatchRow = {
   way: string;
   status: string;
   claims: number;
-};
-
-type FilingRow = {
-  id: string;
-  org_id: string;
-  batch_id: string | null;
-  status: string;
-  claims: number;
-  learning: boolean;
-  confirmed_at: string | null;
 };
 
 async function linkOf(service: SupabaseClient, token: string): Promise<Linked | null> {
@@ -180,16 +122,10 @@ async function filingOf(
   linked: Linked,
   submissionId: string,
 ): Promise<{ filing: FilingRow; batch: BatchRow } | null> {
-  const { data, error } = await service
-    .from("filing_submissions")
-    .select("id, org_id, batch_id, status, claims, learning, confirmed_at")
-    .eq("id", submissionId)
-    .maybeSingle();
-  if (error) throw new Error("filing_submissions read failed");
-  const row = data as FilingRow | null;
+  const row = await filingRowOf(service, submissionId);
   if (!row || row.org_id !== linked.orgId || !row.batch_id) return null;
   const batch = await batchOf(service, linked, row.batch_id);
-  return batch ? { filing: { ...row, claims: Number(row.claims) }, batch } : null;
+  return batch ? { filing: row, batch } : null;
 }
 
 async function namesOf(
@@ -205,29 +141,6 @@ async function namesOf(
     lawyer: String((profile.data as { display_name?: string | null } | null)?.display_name ?? "").trim(),
     firm: String((firm.data as { name?: string | null } | null)?.name ?? "").trim(),
   };
-}
-
-async function systemOf(service: SupabaseClient, key: string): Promise<ExtensionSystem | null> {
-  const { data, error } = await service
-    .from("court_screen_systems")
-    .select("key, name, host")
-    .eq("key", key)
-    .maybeSingle();
-  if (error) throw new Error("court_screen_systems read failed");
-  return (data as ExtensionSystem | null) ?? null;
-}
-
-async function toSendOf(
-  service: SupabaseClient,
-  submissionId: string,
-  claim: number,
-): Promise<(ToSend & { case_seq?: number | null }) | null> {
-  const { data, error } = await service.rpc("filing_submission_to_send", {
-    target_submission: submissionId,
-    target_claim: claim,
-  });
-  if (error) throw new Error("filing_submission_to_send failed");
-  return (data as (ToSend & { case_seq?: number | null }) | null) ?? null;
 }
 
 // ---------- The calls ----------
@@ -339,41 +252,8 @@ async function next(deps: ExtensionDeps, linked: Linked, batchId: string, claim:
   const { service } = deps;
   const batch = await batchOf(service, linked, batchId);
   if (!batch) return refused("not_found");
-  const { data, error } = await service.rpc("next_batch_submission", { target_batch: batch.id, target_claim: claim });
-  if (error) return refused("unavailable");
-  const held = data as { submission_id?: string; claim?: number; learning?: boolean; confirmed?: boolean } | null;
-  if (!held?.submission_id || typeof held.claim !== "number") return answered({ filing: null });
-  const sent = await toSendOf(service, held.submission_id, Number(held.claim));
-  if (!sent) return refused("not_working");
-  const facts = filingFactsOf(sent);
-  const bucket = service.storage.from(FIRM_FILES_BUCKET);
-  const files: ExtensionFile[] = [];
-  for (const item of sent.items) {
-    const signed = item.signed_storage_path;
-    const link = await bucket.createSignedUrl(signed ?? item.storage_path, FILE_LINK_SECONDS);
-    if (link.error || !link.data?.signedUrl) return refused("unavailable");
-    files.push({
-      position: item.position,
-      // Where the court takes each file signed, the signed one goes, as the court names it.
-      name: signed ? `${item.name}.p7s` : item.name,
-      type: signed ? "application/pkcs7-signature" : "application/pdf",
-      url: link.data.signedUrl,
-    });
-  }
-  const filing: ExtensionFiling = {
-    id: held.submission_id,
-    claim: Number(held.claim),
-    learning: held.learning === true,
-    confirmed: held.confirmed === true,
-    caseSeq: typeof sent.case_seq === "number" ? sent.case_seq : sent.case_seq ? Number(sent.case_seq) : null,
-    client:
-      String(sent.claimants[0]?.name ?? "")
-        .trim()
-        .split(/\s+/)[0] ?? "",
-    facts,
-    files,
-  };
-  return answered({ filing });
+  const next = await nextFiling(service, batch.id, claim);
+  return next.ok ? answered({ filing: next.filing }) : refused(next.code);
 }
 
 /** The AI reads a screen of the filing that ONE does not know: the structure the extension sent, the facts by name. */
@@ -383,40 +263,15 @@ async function plan(
   submissionId: string,
   body: Record<string, unknown>,
 ): Promise<ExtensionAnswer> {
-  const { service } = deps;
   const claim = claimOf(body);
-  const found = await filingOf(service, linked, submissionId);
+  const found = await filingOf(deps.service, linked, submissionId);
   if (!found) return refused("not_found");
   if (claim === null || found.filing.claims !== claim || found.filing.status !== "claimed")
     return refused("not_working");
   const frames = readScreen(body.screen);
   if (!frames) return refused("invalid_screen");
-  const runs = await service
-    .from("ai_runs")
-    .select("id", { count: "exact", head: true })
-    .eq("org_id", linked.orgId)
-    .eq("subject_type", "filing_submission")
-    .eq("subject_id", submissionId);
-  if (runs.error) return refused("unavailable");
-  if ((runs.count ?? 0) >= AI_SCREENS_MOST) return refused("too_many_screens");
-  const [sent, system] = await Promise.all([
-    toSendOf(service, submissionId, claim),
-    systemOf(service, found.batch.system_key),
-  ]);
-  if (!sent || !system) return refused("not_working");
-  const facts = filingFactsOf(sent);
-  const planner = (deps.planner ?? aiScreenPlanner)(linked.orgId, submissionId);
-  const reading = await planner({
-    sistema: system.name,
-    // The button that sends is held back for the lawyer's word only until they gave it.
-    aprendendo: found.filing.learning && found.filing.confirmed_at === null,
-    fatos: facts.fatos,
-    partes: facts.partes,
-    arquivos: facts.arquivos,
-    tela: frames,
-    feito: [],
-  });
-  return answered({ plan: reading });
+  const reading = await planScreen(deps, { filing: found.filing, claim, systemKey: found.batch.system_key, frames });
+  return reading.ok ? answered({ plan: reading.plan }) : refused(reading.code);
 }
 
 /** The answer of a function of the database that says `{ ok, code }`, as the extension reads it. */
@@ -522,70 +377,26 @@ async function result(
   submissionId: string,
   body: Record<string, unknown>,
 ): Promise<ExtensionAnswer> {
-  const { service } = deps;
   const claim = claimOf(body);
-  const found = await filingOf(service, linked, submissionId);
+  const found = await filingOf(deps.service, linked, submissionId);
   if (!found) return refused("not_found");
   if (claim === null || found.filing.claims !== claim || found.filing.status !== "sending")
     return refused("not_working");
   const outcome = body.outcome === "filed" ? "filed" : body.outcome === "unknown" ? "unknown" : null;
   if (!outcome) return refused("invalid_body");
-  const message = typeof body.message === "string" ? body.message.trim().slice(0, 1000) || null : null;
-  const number = receiptDigits(body.number);
-  const now = (deps.now ?? (() => new Date()))();
-
-  let receipt: { id: string; path: string } | null = null;
-  const words = outcome === "filed" ? receiptText(body.receipt) : null;
-  if (words) {
-    const system = await systemOf(service, found.batch.system_key);
-    const store = supabaseFileStore(service);
-    try {
-      const pdf = await renderTextPdf({
-        blocks: receiptBlocks({ system: system?.name ?? found.batch.system_key, number, at: now, text: words }),
-        title: "Recibo de protocolo",
-        author: system?.name ?? "",
-        producer: "ONE",
-      });
-      const reserved = await store.reserve({
-        orgId: linked.orgId,
-        purpose: "filing_receipt",
-        name: `recibo-protocolo-${number ?? "acao"}.pdf`,
-        mime: "application/pdf",
-        bytes: pdf.byteLength,
-      });
-      if (reserved.ok) {
-        await store.put(reserved.storagePath, pdf, "application/pdf");
-        const kept = await store.confirm(reserved.fileId, await measureFile(pdf));
-        if (kept.ok) receipt = { id: reserved.fileId, path: reserved.storagePath };
-        else await takeBackFile(store, reserved.fileId, reserved.storagePath);
-      }
-    } catch {
-      // A receipt that could not be kept never keeps the filing from being recorded.
-      receipt = null;
-    }
-  }
-
-  const { data, error } = await service.rpc("record_filing_submission", {
-    target_submission: submissionId,
-    target_claim: claim,
-    target_outcome: outcome,
-    target_protocol: null,
-    target_case_number: outcome === "filed" ? number : null,
-    target_message: message,
-    target_receipt_file: receipt?.id ?? null,
-    target_filed_on: outcome === "filed" ? brasiliaDay(now) : null,
+  const recorded = await recordFiling(deps, {
+    orgId: linked.orgId,
+    submissionId,
+    claim,
+    systemKey: found.batch.system_key,
+    outcome,
+    number: receiptDigits(body.number),
+    message: typeof body.message === "string" ? body.message.trim().slice(0, 1000) || null : null,
+    // The receipt is the court's screen as the extension read it in the lawyer's browser.
+    text: outcome === "filed" ? receiptText(body.receipt) : null,
+    pdf: null,
   });
-  if (error) {
-    if (receipt) await takeBackFile(supabaseFileStore(service), receipt.id, receipt.path).catch(() => undefined);
-    return refused("unavailable");
-  }
-  const code = String(((data ?? {}) as { code?: string }).code ?? "failed");
-  if (receipt && code !== "filed" && code !== "filed_unnumbered") {
-    await takeBackFile(supabaseFileStore(service), receipt.id, receipt.path).catch(() => undefined);
-  }
-  // The client is told the lawsuit was filed, as when ONE files through the court's channel.
-  if (code === "filed" || code === "filed_unnumbered") await (deps.notify ?? settleFirmNotices)(linked.orgId);
-  return answered({ code });
+  return recorded.ok ? answered({ code: recorded.code }) : refused(recorded.code);
 }
 
 async function touch(deps: ExtensionDeps, linked: Linked, batchId: string, claim: number): Promise<ExtensionAnswer> {

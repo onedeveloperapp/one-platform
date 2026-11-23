@@ -148,3 +148,48 @@ export function batchTurn(batch: Pick<BatchView, "status" | "way" | "personId">,
 /** The filing of a batch held at the court's screen for its lawyer's word, with what the screen showed, if kept. */
 export const heldSubmission = (batch: Pick<BatchView, "submissions">): BatchSubmission | null =>
   batch.submissions.find((row) => row.status === "confirming") ?? null;
+
+/** A batch its runner stopped lately, with why: said on /protocolo for a day, the packages that never went back to approve. */
+export type StoppedBatch = {
+  id: string;
+  systemName: string;
+  way: Exclude<Way, "hand">;
+  personId: string | null;
+  why: string;
+  finishedAt: string;
+};
+
+/** How long /protocolo says why a batch stopped. */
+export const STOPPED_SHOWN_HOURS = 24;
+
+/** Stops a person of the firm asked (in ONE or in the extension's panel): they know why, and nothing is said. */
+export const STOPS_ASKED = ["by_person", "by_lawyer", "by_person_code"] as const;
+
+/** The reasons ONE's browser and the extension stop a batch with, each said in its own words. */
+const STOP_REASONS = new Set([
+  "court_login_refused",
+  "court_login_blocked",
+  "court_captcha",
+  "court_code_refused",
+  "court_code_missing",
+  "court_sign_in_failed",
+  "no_court_login",
+  "court_question",
+  "court_error",
+  "stopped_stuck",
+  "confirmation_timeout",
+  "not_confirmed",
+  "unknown_outcome",
+  "stopped_after_sending",
+  "interrupted",
+  "browser_failed",
+]);
+
+/** Why a batch stopped, as the screen names its words (`filing-batches-why-*`); a reason it does not know is "other". */
+export function stopReason(why: string): string {
+  return STOP_REASONS.has(why) ? why : "other";
+}
+
+/** A stop the lawyer puts right in their court login or their way to file, on "Atuação profissional". */
+export const stopFixedInWays = (why: string): boolean =>
+  ["court_login_refused", "court_login_blocked", "no_court_login", "court_captcha"].includes(why);

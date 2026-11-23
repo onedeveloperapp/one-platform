@@ -42,6 +42,9 @@ import {
   type BatchView,
   type EligibleGroup,
   heldSubmission,
+  stopFixedInWays,
+  type StoppedBatch,
+  stopReason,
 } from "@/lib/filing-ways/batches";
 import type { FilingBatchesState } from "@/lib/filing-ways/batches-read";
 import { readBatchesPulse } from "@/lib/filing-ways/pulse-read";
@@ -98,7 +101,14 @@ export default function FilingBatches({ state, firmId }: { state: FilingBatchesS
     onChange: () => router.refresh(),
   });
 
-  if (state.batches.length === 0 && state.eligible.length === 0 && state.unchosen.length === 0) return null;
+  if (
+    state.batches.length === 0 &&
+    state.stopped.length === 0 &&
+    state.eligible.length === 0 &&
+    state.unchosen.length === 0
+  ) {
+    return null;
+  }
 
   return (
     <CollapsibleCard
@@ -141,10 +151,33 @@ export default function FilingBatches({ state, firmId }: { state: FilingBatchesS
         <BatchLine key={batch.id} batch={batch} viewerId={state.viewerId} onChanged={() => router.refresh()} />
       ))}
 
+      {/* Why ONE's browser or a lawyer's extension stopped a batch lately; what never went is back above to approve. */}
+      {state.stopped.map((batch) => (
+        <StoppedLine key={batch.id} batch={batch} mine={batch.personId === state.viewerId} />
+      ))}
+
       {approving ? (
         <ApproveDialog group={approving} onClose={() => setApproving(null)} onApproved={() => router.refresh()} />
       ) : null}
     </CollapsibleCard>
+  );
+}
+
+function StoppedLine({ batch, mine }: { batch: StoppedBatch; mine: boolean }) {
+  const t = useTranslations("product");
+  return (
+    <StateLine
+      tone={mine ? "attention" : "info"}
+      action={
+        mine && stopFixedInWays(batch.why) ? (
+          <Button size="small" variant="outlined" href="/settings/atuacao#team-filing-ways">
+            {t("filing-batches-why-fix")}
+          </Button>
+        ) : undefined
+      }
+    >
+      {t("filing-batches-stopped", { system: batch.systemName, why: t(`filing-batches-why-${stopReason(batch.why)}`) })}
+    </StateLine>
   );
 }
 

@@ -51,7 +51,12 @@ export type RunPanel = {
     word: Promise<"go" | "stop">;
     close(): void;
   };
-  pause(pause: Pause): Promise<"continue" | "stop">;
+  /**
+   * The lawyer ends the pause: go on, or stop. ONE's own browser, where no lawyer is at the screen, answers by itself:
+   * it signs in again or asks the court's code through ONE, and stops with why (`{ stop }`) where only a person could
+   * go on.
+   */
+  pause(pause: Pause): Promise<"continue" | "stop" | { stop: string }>;
 };
 
 export type BatchRunInput = {
@@ -66,6 +71,13 @@ export type BatchRunInput = {
   wait(ms: number): Promise<void>;
   /** Runs `work` every `ms` until the returned function is called: the claim of the batch kept fresh. */
   every(ms: number, work: () => void): () => void;
+  /**
+   * Whether a change of the court's screen while ONE waits for the lawyer's word is their own press (the extension,
+   * on the lawyer's screen). ONE's own browser has no lawyer at its screen: a change there is never their word.
+   */
+  watchScreen?: boolean;
+  /** How long ONE waits for the lawyer's word before it stops the batch; no limit where the lawyer is at the screen. */
+  wordMostMs?: number;
 };
 
 /** How a batch's run ended: how many filed, how many unknown, and why it stopped, when it stopped. */
@@ -99,16 +111,21 @@ export async function runBatch(input: BatchRunInput): Promise<BatchRunEnd> {
   };
 
   /** The lawyer's word, the screen moving under their hand, or ONE telling it was confirmed or stopped there. */
-  async function awaitWord(filing: ExtensionFiling, point: SendPoint): Promise<Confirmation | "confirmed"> {
+  async function awaitWord(filing: ExtensionFiling, point: SendPoint): Promise<Confirmation | "confirmed" | "timeout"> {
     const asked = input.panel.askWord({ filing, titulo: point.titulo, botao: point.botao });
     const before = signatureOf(point.frames);
+    const watchScreen = input.watchScreen !== false;
+    const mostTicks = input.wordMostMs ? Math.ceil(input.wordMostMs / SCREEN_EVERY_MS) : null;
     let settled = false;
-    const watch = async (): Promise<Confirmation | "confirmed"> => {
+    const watch = async (): Promise<Confirmation | "confirmed" | "timeout"> => {
       for (let tick = 1; !settled; tick += 1) {
         await input.wait(SCREEN_EVERY_MS);
         if (settled) break;
-        const frames = await input.driver.capture().catch(() => null);
-        if (frames && frames.length > 0 && !sameScreen(before, signatureOf(frames))) return "moved";
+        if (mostTicks !== null && tick > mostTicks) return "timeout";
+        if (watchScreen) {
+          const frames = await input.driver.capture().catch(() => null);
+          if (frames && frames.length > 0 && !sameScreen(before, signatureOf(frames))) return "moved";
+        }
         if (tick % STATE_EVERY_TICKS === 0) {
           const state = await api.state(filing.id);
           if (state.ok) {
@@ -134,12 +151,18 @@ export async function runBatch(input: BatchRunInput): Promise<BatchRunEnd> {
     let confirmed = filing.confirmed;
     // The database marks this filing as going: from then on, it may be at the court.
     let marked = false;
+    // ONE waited for the lawyer's word for as long as it waits, and no word came.
+    let timedOut = false;
 
     const confirm = async (point: SendPoint): Promise<Confirmation> => {
       const held = await api.hold(filing.id, filing.claim);
       if (!held.ok) return "stop";
       input.panel.tell({ kind: "waiting_word", filing });
       const word = await awaitWord(filing, point);
+      if (word === "timeout") {
+        timedOut = true;
+        return "stop";
+      }
       if (word === "stop") return "stop";
       if (word === "confirmed") {
         confirmed = true;
@@ -218,7 +241,7 @@ export async function runBatch(input: BatchRunInput): Promise<BatchRunEnd> {
       }
       if (outcome.kind === "not_confirmed") {
         await keepPath();
-        return { kind: "stop", why: "not_confirmed", unknown: false };
+        return { kind: "stop", why: timedOut ? "confirmation_timeout" : "not_confirmed", unknown: false };
       }
       if (outcome.kind === "not_sent") return { kind: "stop", why: outcome.code, unknown: false };
 
@@ -236,7 +259,7 @@ export async function runBatch(input: BatchRunInput): Promise<BatchRunEnd> {
         });
         return { kind: "stop", why: "stopped_after_sending", unknown: true };
       }
-      return { kind: "stop", why: "by_lawyer", unknown: false };
+      return { kind: "stop", why: typeof word === "object" ? word.stop : "by_lawyer", unknown: false };
     }
   }
 
