@@ -219,8 +219,11 @@ export function dataInChatOf(raw: unknown): DataInChat | null {
   return typeof row.person_id === "string" && state ? { personId: row.person_id, state } : null;
 }
 
-/** What ONE asks of a person in the chat's check of data (0232): what the papers need and no document gives. */
-const CHAT_FIELDS: ReadonlySet<string> = new Set(["nationality", "marital_status", "profession"]);
+/**
+ * What ONE asks of a person in the chat's check of data (0232): what the papers need and no document gives, and the
+ * e-mail and the mobile where the case's court asks them (0283; the mobile is the WhatsApp the passenger writes from).
+ */
+const CHAT_FIELDS: ReadonlySet<string> = new Set(["nationality", "marital_status", "profession", "email", "phone"]);
 
 const KIND_KEY: Record<Lawsuit["kind"], string> = {
   juizado: "case-proceeding-kind-juizado",

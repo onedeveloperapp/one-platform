@@ -201,8 +201,14 @@
     {
       "name": "FactGrid",
       "from": "@/components/product/fact-grid",
-      "props": "facts[{key, label, value?, read? (the product read it from a document: its mark beside the value), owed? (a StatusChip in the place of a missing value, saying who answers it), wide? (two columns where there are three), hint? (how the value came to be, what ONE read or decided it from and that it may err, behind an InfoHint beside the name)}], className?, pairs? (short facts two by two even on a phone, four across where there is room, a wide fact a row: a case's head)",
-      "use": "The facts of a record each under its name, in a grid that reads its own width: one column in a narrow card, two, then three (the owner, 2026-11-12: a run of values joined by a dot left the reader guessing which was the CPF and which the phone). What the product read carries its mark; what is missing stands in its place saying who answers it; an empty fact with nothing owed is not drawn. The case's people, lawsuits, their course in court and the filing packages. For counts, MetricBars or CountList; for where one thing stands, StateLine."
+      "props": "facts[{key, label, value?, read? (the product read it from a document: its mark beside the value), owed? (a StatusChip in the place of a missing value, saying who answers it), wide? (two columns where there are three), hint? (how the value came to be, what ONE read or decided it from and that it may err, behind an InfoHint beside the name), copy? (what a CopyButton beside the value writes, as the field it goes to takes it: a CPF's digits), note? (a word under the value: whose it is when it is not the record's own)}], className?, pairs? (short facts two by two even on a phone, four across where there is room, a wide fact a row: a case's head)",
+      "use": "The facts of a record each under its name, in a grid that reads its own width: one column in a narrow card, two, then three (the owner, 2026-11-12: a run of values joined by a dot left the reader guessing which was the CPF and which the phone). What the product read carries its mark; what is missing stands in its place saying who answers it; an empty fact with nothing owed is not drawn. The case's people, lawsuits, their course in court and the filing packages. For counts, MetricBars or CountList; for where one thing stands, StateLine. With `copy`, each value carries a CopyButton, for a person who types it into another system by hand (the guide of a filing by hand, 2026-11-23)."
+    },
+    {
+      "name": "CopyButton",
+      "from": "@/components/product/copy-button",
+      "props": "text (what goes to the clipboard), label (what is copied, for its name: 'Copiar CPF'), className?",
+      "use": "Copies one value, as the field it goes to takes it, and says it did: the mark turns into a check for two seconds and a screen reader hears 'Copiado'. Beside a value a person types into another system by hand (the court's screen, in the guide of a filing by hand). Through FactGrid's `copy` in a grid of facts; alone beside a single value. A whole line or a link to share is a button of words, never this."
     },
     {
       "name": "CollapsibleCard",

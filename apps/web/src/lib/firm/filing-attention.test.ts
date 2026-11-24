@@ -8,6 +8,7 @@ import {
   momentWords,
   ownSignatureNeed,
   readFilingAttention,
+  waitingFilingItems,
 } from "@/lib/firm/filing-attention";
 import { type PendingItem, sayPending } from "@/lib/firm/pending";
 import messages from "@flyee/content/messages/pt-BR.json";
@@ -45,6 +46,8 @@ const ATTENTION: FilingAttention = {
     { submissionId: "s-2", caseId: CASE_B, seq: 9, status: "unknown", since: null },
   ],
   filingsTotal: 4,
+  waiting: [],
+  waitingTotal: 0,
 };
 
 const translate = createTranslator({ locale: "pt-BR", messages, namespace: "product" });
@@ -86,6 +89,9 @@ describe("what ONE's filing waits on a person for, as the database says it", () 
       { submissionId: "s-1", caseId: CASE_A, seq: 7, status: "filed", since: "2026-11-05T10:00:00Z" },
     ]);
     expect(read?.filingsTotal).toBe(1);
+    // An answer from before 0269 has no waiting packages.
+    expect(read?.waiting).toEqual([]);
+    expect(read?.waitingTotal).toBe(0);
     expect(readFilingAttention(null)).toBeNull();
     expect(readFilingAttention([])).toBeNull();
     expect(readFilingAttention({ signatures: [] })).toBeNull();
@@ -207,15 +213,71 @@ describe("the lines of the center", () => {
         since: null,
       })),
       filingsTotal: 6,
+      waiting: [
+        {
+          packageId: "p-1",
+          caseId: CASE_A,
+          seq: 7,
+          court: "TJSP",
+          system: "eproc",
+          systemName: "eproc do TJSP",
+          since: "2026-11-02T13:00:00Z",
+          lawyers: [ANA],
+        },
+        {
+          packageId: "p-2",
+          caseId: CASE_B,
+          seq: null,
+          court: "TJGO",
+          system: "projudi",
+          systemName: null,
+          since: "2026-11-01T13:00:00Z",
+          lawyers: [CAIO],
+        },
+      ],
+      waitingTotal: 3,
     };
     const items = filingAttentionItems(every, lawyer(ANA, { firmFunction: "socio" }), NOW);
-    expect(items).toHaveLength(6 + 4 + 1);
+    expect(items).toHaveLength(6 + 4 + 1 + 2 + 1);
     for (const item of items) {
       const words = said(item);
       expect(sayPending(t, item.tag)).not.toContain("pending-");
       expect(words.label).not.toMatch(/[{}]|pending-|—|–|!/);
       if (words.detail) expect(words.detail).not.toMatch(/[{}]|pending-|—|–|!/);
     }
+  });
+
+  it("says a package that waits to be filed to its lawyers, and the team's to who runs the firm (0269)", () => {
+    const attention: FilingAttention = {
+      ...ATTENTION,
+      waiting: [
+        {
+          packageId: "p-1",
+          caseId: CASE_A,
+          seq: 7,
+          court: "TJSP",
+          system: "eproc",
+          systemName: "eproc do TJSP",
+          since: "2026-11-02T13:00:00Z",
+          lawyers: [ANA],
+        },
+      ],
+      waitingTotal: 2,
+    };
+    const mine = waitingFilingItems(attention, lawyer(ANA));
+    expect(mine.map((item) => item.id)).toEqual(["filing-waits:p-1"]);
+    expect(said(mine[0])).toEqual({
+      label: "Uma ação espera o seu protocolo desde 02/11",
+      detail: "Caso nº 7 · eproc do TJSP: a ficha e os passos estão no caso",
+    });
+    expect(mine[0].href).toBe(`/casos/${CASE_A}#case-filing`);
+    // A colleague who signs none of it reads nothing of it; a partner reads the team's, and what is past the list.
+    expect(waitingFilingItems(attention, lawyer(CAIO))).toEqual([]);
+    const team = waitingFilingItems(attention, lawyer(CAIO, { firmFunction: "socio" }));
+    expect(team.map((item) => said(item).label)).toEqual([
+      "Uma ação espera o protocolo desde 02/11",
+      "Mais uma ação espera o protocolo",
+    ]);
   });
 
   it("finds the person's own need for the team's card", () => {

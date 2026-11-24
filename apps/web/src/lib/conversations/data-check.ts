@@ -4,7 +4,7 @@ import { isValidCpf, onlyDigits } from "@flyee/fields";
 /**
  * The client checks their data in the chat (migration 0232, the chat's script of 2026-11-12): what ONE read in their
  * identity and proof of address, in one message, to confirm or correct; then, one at a time, what the papers need and
- * no document gives. Pure: the database says what the record has (`conversation_person`) and keeps where the
+ * no document gives, and the e-mail where the case's court asks it (0283). Pure: the database says what the record has (`conversation_person`) and keeps where the
  * conversation stands (`wa_conversations.chat_step`); these rules write the messages and read the answers.
  */
 
@@ -17,7 +17,8 @@ export type DataStep =
   | "nacionalidade"
   | "nacionalidade_outra"
   | "estado_civil"
-  | "profissao";
+  | "profissao"
+  | "email";
 
 const STEPS: readonly DataStep[] = [
   "dados",
@@ -29,6 +30,7 @@ const STEPS: readonly DataStep[] = [
   "nacionalidade_outra",
   "estado_civil",
   "profissao",
+  "email",
 ];
 
 export type CorrectableField = "full_name" | "cpf" | "birth_date";
@@ -43,6 +45,10 @@ export type PersonData = {
   nationality: string | null;
   maritalStatus: string | null;
   profession: string | null;
+  email: string | null;
+  phone: string | null;
+  /** The case's court asks each claimant's e-mail and mobile (0283): the check asks the e-mail after the profession. */
+  asksContact: boolean;
   postalCode: string | null;
   street: string | null;
   addressNumber: string | null;
@@ -75,6 +81,9 @@ export function personDataOf(raw: unknown): PersonData | null {
     nationality: text(row.nationality),
     maritalStatus: text(row.marital_status),
     profession: text(row.profession),
+    email: text(row.email),
+    phone: text(row.phone),
+    asksContact: row.asks_contact === true,
     postalCode: text(row.postal_code),
     street: text(row.street),
     addressNumber: text(row.address_number),
@@ -223,14 +232,37 @@ export function numberOf(reply: string): { number: string; complement: string | 
 const NATIONALITY_QUESTION = `Qual é a sua nacionalidade?\n${optionsText(NATIONALITY_OPTIONS)}`;
 const MARITAL_QUESTION = `Qual é o seu estado civil?\n${optionsText(MARITAL_OPTIONS)}`;
 const PROFESSION_QUESTION = "Qual é a sua profissão?";
+export const EMAIL_QUESTION = "Qual é o seu e-mail? O tribunal pede o e-mail de cada pessoa da ação.";
+export const EMAIL_AGAIN = "Não entendi o e-mail. Escreva como nome@exemplo.com, ou responda NÃO TENHO.";
 
-/** What the papers still need of the client that no document gives, the next one to ask; null when none. */
-export function missingAsk(data: PersonData): { step: DataStep; question: string } | null {
+/**
+ * What the papers still need of the client that no document gives, the next one to ask; null when none. The e-mail
+ * is asked only where the case's court asks it (0283), and not again once the client said they have none (`skip`).
+ */
+export function missingAsk(
+  data: PersonData,
+  skip: { email?: boolean } = {},
+): { step: DataStep; question: string } | null {
   if (data.minor) return null;
   if (!data.nationality) return { step: "nacionalidade", question: NATIONALITY_QUESTION };
   if (!data.maritalStatus) return { step: "estado_civil", question: MARITAL_QUESTION };
   if (!data.profession) return { step: "profissao", question: PROFESSION_QUESTION };
+  if (data.asksContact && !data.email && !skip.email) return { step: "email", question: EMAIL_QUESTION };
   return null;
+}
+
+/** The e-mail a reply gives, as the record keeps it; or that the client has none; or why it does not serve. */
+export function readEmail(reply: string): { ok: true; value: string } | { ok: false; none: boolean; why: string } {
+  const said = reply.trim().toLowerCase();
+  const plain = said.normalize("NFD").replace(/\p{Diacritic}/gu, "");
+  if (/^(nao|n|nenhum|sem e-?mail|nao tenho( e-?mail)?|nao possuo( e-?mail)?)[.]?$/.test(plain)) {
+    return { ok: false, none: true, why: "" };
+  }
+  // The address within what was written ("é ana@exemplo.com"), as the record's own check takes it (0022).
+  const found = /[^@\s<>(),;:"]+@[^@\s<>(),;:"]+[.][^@\s<>(),;:".]+/.exec(said)?.[0] ?? "";
+  return found.length > 0 && found.length <= 254 && /^[^@\s]+@[^@\s]+[.][^@\s]+$/.test(found)
+    ? { ok: true, value: found }
+    : { ok: false, none: false, why: EMAIL_AGAIN };
 }
 
 export const OTHER_NATIONALITY_QUESTION = "Qual é a sua nacionalidade?";
@@ -261,6 +293,8 @@ export function openDataAsk(data: PersonData): string | null {
       return MARITAL_QUESTION;
     case "profissao":
       return PROFESSION_QUESTION;
+    case "email":
+      return EMAIL_QUESTION;
     default:
       return null;
   }

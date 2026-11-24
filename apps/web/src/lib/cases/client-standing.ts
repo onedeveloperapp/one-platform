@@ -140,6 +140,8 @@ export function clientStanding(view: OpenView, tasks: ClientTasks, today: string
         today,
         // A case of an area of the firm has no trip (0274).
         trip: !view.case.area,
+        // Where the case's court asks each claimant's e-mail and mobile, they are data the link asks (0283).
+        contact: view.case.asks_contact === true,
       })
     : [];
   const fieldsOwed = editable ? missing.filter((item) => item.type === "fields").length : 0;

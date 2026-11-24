@@ -5,6 +5,7 @@ import { type CaseActionWords, sentence, useCaseAction } from "./case-action";
 import CourtSystem from "./court-system";
 import FilingByOne from "./filing-by-one";
 import { filedWithoutNumber, oneFilesIt } from "./filing-by-one-rules";
+import FilingGuide from "./filing-guide";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
@@ -764,7 +765,9 @@ function Lawsuit({
             ))}
           </Box>
 
-          {oneFiles || unnumbered ? null : (
+          {oneFiles || unnumbered ? null : filing.sheet ? (
+            <FilingGuide sheet={filing.sheet} files={stepsFiles} today={state.today} />
+          ) : (
             <Box className="flex flex-col gap-1">
               <Typography variant="body2" className="text-text-secondary">
                 {t("filing-steps-title")}

@@ -7,6 +7,7 @@ import { areaScriptSweeps } from "@/lib/areas/script-work";
 import { backupSweeps } from "@/lib/backup-jobs";
 import { billingSweeps } from "@/lib/billing-jobs";
 import { usageSweeps } from "@/lib/billing-usage-work";
+import { filingWaitsSweeps } from "@/lib/cases/filing-waits-work";
 import { caseSweeps } from "@/lib/cases/jobs";
 import { pieceSweeps } from "@/lib/cases/pieces-work";
 import { chatwootSweeps } from "@/lib/chatwoot/jobs";
@@ -53,6 +54,7 @@ export const SWEEPS: readonly Sweep[] = [
   ...referralSweeps,
   ...leadFollowupSweeps,
   ...caseSweeps,
+  ...filingWaitsSweeps,
   ...pieceSweeps,
   ...marketSweeps,
   ...noticeSweeps,

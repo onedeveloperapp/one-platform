@@ -46,6 +46,7 @@ import {
 } from "@/lib/cases/actions";
 import {
   caseErrorKey,
+  caseHolder,
   MARITAL_KEY,
   MARITAL_STATUSES,
   type MaritalStatus,
@@ -141,13 +142,21 @@ export default function PeopleCard({
   const nameOfParty = (partyId: string | null) =>
     state.parties.find((party) => party.partyId === partyId)?.person.full_name ?? "";
   const minor = (person: CasePerson) => isMinorOn(person.birth_date, state.today) === true;
-  // What is still missing of a person: a child has a shorter form, and an adult's contact is never required.
+  // What is still missing of a person: a child has a shorter form, and an adult's contact is required only where the
+  // case's court asks it (0283), of the holder and of an adult claimant, as the top of the case reads it.
+  const holderId = caseHolder(state.parties, state.today)?.person.person_id ?? null;
+  const asksContact = (person: CasePerson) =>
+    state.asksContact &&
+    (person.person_id === holderId ||
+      state.parties.some((party) => party.person.person_id === person.person_id && party.role === "claimant"));
   const leftOf = (person: CasePerson) =>
     missingFields(
       person,
       minor(person)
         ? MINOR_FORM
-        : ADULT_FORM.filter((field) => field !== "complement" && field !== "email" && field !== "phone"),
+        : ADULT_FORM.filter(
+            (field) => field !== "complement" && (asksContact(person) || (field !== "email" && field !== "phone")),
+          ),
     );
   const incomplete = members.filter((member) => leftOf(member.person).length > 0).length;
   // What ONE read waits for a look of the firm.

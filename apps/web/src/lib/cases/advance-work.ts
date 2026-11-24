@@ -138,6 +138,8 @@ type LawsuitFacts = {
   account: AccountState | null;
   /** The rule's word on whether the problem qualifies (0147), kept as ONE read it now. */
   qualification: { outcome: string; released: boolean } | null;
+  /** The case's court asks each claimant's e-mail and mobile (0283): an adult's are data the case lacks. */
+  contact: boolean;
 };
 
 /**
@@ -183,6 +185,9 @@ async function loadLawsuitFacts(service: SupabaseClient, caseId: string): Promis
   // The client's account, as the database reads it (0090): the piece asked right after the lawsuits is written from it.
   const told = await service.rpc("case_account_state", { target_case: caseId });
   if (told.error) throw new Error("account unreadable");
+  // Whether its court asks each claimant's e-mail and mobile (0283), as the case screen reads it.
+  const contact = await service.rpc("case_asks_contact", { target_case: caseId });
+  if (contact.error) throw new Error("contact rule unreadable");
   const [parties, documents, segments, settings, wages, courts, systems, version] = await Promise.all([
     service
       .from("case_parties")
@@ -285,6 +290,7 @@ async function loadLawsuitFacts(service: SupabaseClient, caseId: string): Promis
     unconfirmedHandoff,
     account: accountStateOf(told.data),
     qualification,
+    contact: contact.data === true,
   };
 }
 
@@ -310,6 +316,7 @@ const missingOf = (facts: LawsuitFacts, day: string) =>
     required: facts.required,
     today: day,
     trip: !facts.ofArea,
+    contact: facts.contact,
   });
 
 /**

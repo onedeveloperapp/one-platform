@@ -2,6 +2,7 @@ import "server-only";
 
 import { momentLabel } from "@/lib/ai/approvals";
 import { isPackageStatus, type PackageStatus, QUEUE_SHOWN } from "@/lib/cases/filing";
+import { type FilingSheetData, filingSheetOf } from "@/lib/cases/filing-sheet";
 import { isWay, type ScreenFilingFacts, type Way } from "@/lib/filing-ways/ways";
 import { pscAvailable } from "@/lib/psc/provider";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -168,6 +169,12 @@ export type CaseFiling = {
   signature: FilingSignature;
   /** ONE filing it itself (0101); null when it could not be read. */
   byOne: FilingByOne | null;
+  /**
+   * What the court's screen asks of a package ready to file, for the guide of who files it by hand (0269,
+   * `filing_package_sheet`); null for a package not ready, or when it could not be read (the card then says the steps
+   * as before).
+   */
+  sheet: FilingSheetData | null;
 };
 
 type Embedded<T> = T | T[] | null;
@@ -254,6 +261,7 @@ function toFiling(row: PackageRow, timeZone: string | null | undefined, context:
     slow: row.status === "requested" && Date.now() - new Date(row.requested_at).getTime() > SLOW_MINUTES * 60_000,
     blocker: null,
     byOne: null,
+    sheet: null,
     signature: {
       takesSigned: context.takesSigned,
       cloudSigning: context.cloudSigning,
@@ -361,7 +369,7 @@ export async function loadCaseFilings(
       }) ?? []
     );
   });
-  const [blockers, byOne] = await Promise.all([
+  const [blockers, byOne, sheets] = await Promise.all([
     blockersOf(
       supabase,
       firmId,
@@ -377,6 +385,11 @@ export async function loadCaseFilings(
         ),
       () => new Map<string, FilingByOne>(),
     ),
+    // What the court's screen asks of each package ready to file (0269): a read that fails leaves the steps as before.
+    sheetsOf(
+      supabase,
+      filings.filter((filing) => filing.status === "ready").map((filing) => filing.id),
+    ),
   ]);
   return filings.map((filing) => {
     const one = byOne.get(filing.id) ?? null;
@@ -384,8 +397,26 @@ export async function loadCaseFilings(
       ...filing,
       blocker: filing.status === "filed" ? filing.blocker : (blockers.get(filing.proceedingId) ?? null),
       byOne: one ? { ...one, screen: screens(filing) } : null,
+      sheet: sheets.get(filing.id) ?? null,
     };
   });
+}
+
+/** The sheet of each package ready to file (0269), by package; one that could not be read is left out. */
+async function sheetsOf(supabase: SupabaseClient, packageIds: string[]): Promise<Map<string, FilingSheetData>> {
+  const read = await Promise.all(
+    packageIds.map((id) =>
+      supabase.rpc("filing_package_sheet", { target_package: id }).then(
+        ({ data, error }) => (error ? null : filingSheetOf(data)),
+        () => null,
+      ),
+    ),
+  );
+  return new Map(
+    read.flatMap((sheet, index) =>
+      sheet && sheet.packageId === packageIds[index] ? [[sheet.packageId, sheet] as const] : [],
+    ),
+  );
 }
 
 type ScreenSystemRow = { key: string; court: string; system: string; name: string; ways: string[] | null };

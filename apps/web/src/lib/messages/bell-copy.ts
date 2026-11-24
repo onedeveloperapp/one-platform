@@ -133,6 +133,15 @@ const ptBR = {
   }),
 
   /**
+   * A package ready to file that nobody filed for days (migration 0269), to a lawyer of its lawsuit. `what` names the
+   * lawsuit ("A ação do caso 12"), `system` the court's system, and `since` the day it became ready, already formatted.
+   */
+  filingWaits: (what: string, system: string, since: string): BellText => ({
+    title: "Ação pronta para protocolar",
+    body: `${what} espera o protocolo no ${system} desde ${since}. O pacote, a ficha com cada dado e os passos estão no caso.`,
+  }),
+
+  /**
    * The platform's operators only (migration 0255): a provider of the AI refuses the platform's account (its key, its
    * credit). `since` is already formatted for the reader.
    */

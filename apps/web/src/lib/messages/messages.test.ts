@@ -32,6 +32,7 @@ const notices = (copy: BellCopy): Record<keyof BellCopy, BellText> => ({
   paxUnagreedDeparture: copy.paxUnagreedDeparture("Lara Teste", "06/11/2026 08:30"),
   publicationTriaged: copy.publicationTriaged("uma audiência", "do caso nº 12"),
   publicationAckLate: copy.publicationAckLate("um prazo", "", 4),
+  filingWaits: copy.filingWaits("A ação do caso nº 12", "eproc do TJSP", "sexta-feira, 20 de novembro"),
   aiDown: copy.aiDown("Anthropic", "6 de novembro de 2026, 10:12"),
   aiUp: copy.aiUp("Anthropic", "20 de novembro de 2026, 13:44"),
   supportAccess: copy.supportAccess("Ana", "pagamento duplicado", 30),

@@ -1,3 +1,4 @@
+import { systemWords } from "@/lib/cases/filing-waits";
 import type { PendingItem } from "@/lib/firm/pending";
 
 /**
@@ -37,7 +38,29 @@ export type FilingNeed = {
   since: string | null;
 };
 
-export type FilingAttention = { signatures: SignatureNeed[]; filings: FilingNeed[]; filingsTotal: number };
+/**
+ * A package ready to file that nobody files, the setting's days after it was built (0269): of a lawsuit whose
+ * lawyers are named, since when, and at which court's system.
+ */
+export type WaitingFiling = {
+  packageId: string;
+  caseId: string;
+  seq: number | null;
+  court: string;
+  system: string;
+  systemName: string | null;
+  since: string;
+  lawyers: string[];
+};
+
+export type FilingAttention = {
+  signatures: SignatureNeed[];
+  filings: FilingNeed[];
+  filingsTotal: number;
+  /** The packages that wait for somebody to file them (0269), the oldest first, and how many in all. */
+  waiting: WaitingFiling[];
+  waitingTotal: number;
+};
 
 /** Who reads it: their own id, their function, whether they run the firm, and whether the platform signs in the cloud. */
 export type FilingViewer = {
@@ -97,6 +120,28 @@ export function readFilingAttention(raw: unknown): FilingAttention | null {
       ];
     }),
     filingsTotal: whole(answer.filings_total, 0),
+    // Read where the database gives it (0269); an older answer has none.
+    waiting: rows(answer.waiting).flatMap((row) => {
+      const packageId = text(row.package_id);
+      const caseId = text(row.case_id);
+      const since = text(row.since);
+      if (!packageId || !caseId || !since) return [];
+      return [
+        {
+          packageId,
+          caseId,
+          seq: typeof row.seq === "number" ? row.seq : null,
+          court: text(row.court) ?? "",
+          system: text(row.system) ?? "",
+          systemName: text(row.system_name),
+          since,
+          lawyers: Array.isArray(row.lawyers)
+            ? row.lawyers.filter((id): id is string => typeof id === "string" && id !== "")
+            : [],
+        },
+      ];
+    }),
+    waitingTotal: whole(answer.waiting_total, 0),
   };
 }
 
@@ -219,7 +264,58 @@ export function filingAttentionItems(
       });
     }
   }
+  one.push(...waitingFilingItems(attention, viewer));
   return one;
+}
+
+/** A day as the center says it, on the person's clock: "20/11". */
+function dayWords(iso: string, timeZone: string | null | undefined): string {
+  const at = new Date(iso);
+  if (Number.isNaN(at.getTime())) return "";
+  return new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit", timeZone: zoneOf(timeZone) }).format(at);
+}
+
+/**
+ * The packages that wait for somebody to file them (0269): each lawyer of the lawsuit reads it as theirs, and a partner,
+ * or who manages the firm, reads the team's too; the line leads to the case's filing card, which says what to do
+ * there (the guide by hand, a choice of a way, a batch to approve). Past the list, one line counts the rest.
+ */
+export function waitingFilingItems(attention: FilingAttention, viewer: FilingViewer): PendingItem[] {
+  const seesTeam = viewer.firmFunction === "socio" || viewer.managesFirm;
+  const items: PendingItem[] = [];
+  for (const need of attention.waiting) {
+    const own = need.lawyers.includes(viewer.userId);
+    // A lawyer who signs none of it reads nothing of it: it is not theirs to file.
+    if (!own && !seesTeam) continue;
+    items.push({
+      id: `filing-waits:${need.packageId}`,
+      href: `/casos/${need.caseId}#case-filing`,
+      tag: { key: "pending-tag-filing" },
+      label: {
+        key: own ? "pending-filing-waits-mine" : "pending-filing-waits",
+        values: { since: dayWords(need.since, viewer.timeZone ?? null) },
+      },
+      detail: {
+        key: need.seq !== null ? "pending-filing-waits-detail" : "pending-filing-waits-detail-plain",
+        values: {
+          seq: need.seq ?? 0,
+          system: systemWords(need),
+        },
+      },
+      count: 1,
+    });
+  }
+  const unlisted = attention.waitingTotal - attention.waiting.length;
+  if (seesTeam && unlisted > 0) {
+    items.push({
+      id: "filing-waits:more",
+      href: "/protocolo",
+      tag: { key: "pending-tag-filing" },
+      label: { key: "pending-filing-waits-more", values: { count: unlisted } },
+      count: unlisted,
+    });
+  }
+  return items;
 }
 
 /** The person's own need, for the team's card of the signature in the cloud; null when nothing waits on them. */

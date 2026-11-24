@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 
 import { Box, Tooltip, Typography } from "@mui/material";
 
+import CopyButton from "@/components/product/copy-button";
 import InfoHint from "@/components/product/info-hint";
 import NiSparkle from "@/icons/nexture/ni-sparkle";
 import { cn } from "@/lib/utils";
@@ -23,6 +24,10 @@ export type Fact = {
   wide?: boolean;
   /** How the value came to be (what ONE read or decided it from, that it may err), behind the "i" beside the name. */
   hint?: string;
+  /** What a copy button beside the value writes, as the field it goes to takes it (a CPF's digits). */
+  copy?: string;
+  /** A word under the value: whose it is when it is not the record's own ("de quem representa"). */
+  note?: string;
 };
 
 /**
@@ -88,9 +93,17 @@ export default function FactGrid({
                       </span>
                     </Tooltip>
                   ) : null}
+                  {fact.copy && fact.value ? (
+                    <CopyButton text={fact.copy} label={fact.label} className="-my-1.5 flex-none" />
+                  ) : null}
                 </>
               )}
             </Typography>
+            {fact.note && fact.value ? (
+              <Typography variant="caption" component="span" className="text-text-secondary leading-4">
+                {fact.note}
+              </Typography>
+            ) : null}
           </Box>
         ))}
       </Box>

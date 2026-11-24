@@ -368,6 +368,8 @@ export type CaseState =
       pulse: CasePulse | null;
       /** Where the data ONE asks the passenger in the chat stands (0280); null when it does not ask it there. */
       dataInChat: DataInChat | null;
+      /** The case's court asks each claimant's e-mail and mobile (0283, `case_asks_contact`): data the case lacks. */
+      asksContact: boolean;
       /** How the firm lets ONE take each decision now; a decision not read is ONE's, the platform's default. */
       autonomy: Partial<Record<AutonomyDecision, AutonomyMode>>;
       /** When the case was read, for the screen to say how fresh it is. */

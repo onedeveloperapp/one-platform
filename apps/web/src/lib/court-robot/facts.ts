@@ -69,7 +69,7 @@ export type FilingFacts = {
 };
 
 /** The subject of each problem, by the words the courts' tables use for it. */
-const SUBJECT: Record<string, string> = {
+export const SUBJECT_OF_INCIDENT: Record<string, string> = {
   delay: "Atraso de voo (transporte aéreo)",
   cancellation: "Cancelamento de voo (transporte aéreo)",
   overbooking: "Overbooking, preterição de embarque (transporte aéreo)",
@@ -77,7 +77,8 @@ const SUBJECT: Record<string, string> = {
   baggage_damaged: "Dano à bagagem (transporte aéreo)",
 };
 
-const KIND: Record<string, { classe: string; codigo: string; rito: string }> = {
+/** The class of each kind of lawsuit, with its code in the CNJ's table, and its rite. */
+export const CLASS_OF_KIND: Record<string, { classe: string; codigo: string; rito: string }> = {
   juizado: { classe: "Procedimento do Juizado Especial Cível", codigo: "436", rito: "Juizado Especial" },
   comum: { classe: "Procedimento Comum Cível", codigo: "7", rito: "Comum" },
 };
@@ -121,14 +122,19 @@ export function filingFactsOf(sent: ToSend): FilingFacts {
     fatos.push(personal ? { chave, descricao } : { chave, descricao, valor: clean });
   };
 
-  const kind = KIND[sent.kind] ?? null;
+  const kind = CLASS_OF_KIND[sent.kind] ?? null;
   said("processo.classe", "Classe processual", kind?.classe, false);
   said("processo.classe_codigo", "Código da classe na tabela do CNJ", kind?.codigo, false);
   said("processo.rito", "Rito", kind?.rito, false);
   said("processo.estado", "Estado do tribunal", sent.court_state, false);
   said("processo.comarca", "Comarca, cidade ou localidade onde a ação entra", sent.comarca, false);
   said("processo.unidade", "Unidade judiciária, quando o caso já a tem", sent.unit, false);
-  said("processo.assunto_principal", "Assunto principal", sent.incident ? SUBJECT[sent.incident] : null, false);
+  said(
+    "processo.assunto_principal",
+    "Assunto principal",
+    sent.incident ? SUBJECT_OF_INCIDENT[sent.incident] : null,
+    false,
+  );
   said(
     "processo.assunto_complementar",
     "Assunto complementar (código 7779 na tabela do CNJ)",

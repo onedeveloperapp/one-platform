@@ -34,6 +34,7 @@ export function caseFacts(ready: ReadyCase) {
     trip: !ready.case.area,
     required: ready.required,
     today: ready.today,
+    contact: ready.asksContact,
   });
   const interview = ready.interview
     ? (() => {

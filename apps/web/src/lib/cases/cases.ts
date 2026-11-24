@@ -490,6 +490,12 @@ export const ADULT_FIELDS = [
   "uf",
 ] as const satisfies readonly (keyof PersonData)[];
 
+/**
+ * What a court's screen asks of each claimant where the case's court asks it (0283, `case_asks_contact`): their e-mail
+ * and their mobile (the eproc of TJSP refuses a claimant without them). A minor's are who answers for them.
+ */
+export const CONTACT_FIELDS = ["email", "phone"] as const satisfies readonly (keyof PersonData)[];
+
 /** What is asked of a minor who flew: who they are. */
 export const MINOR_FIELDS = ["full_name", "cpf", "birth_date"] as const satisfies readonly (keyof PersonData)[];
 
@@ -665,8 +671,11 @@ export function missingItems(input: {
   today: string;
   /** Whether the case needs a leg of a trip: a case of the passenger module does, one of an area of the firm not. */
   trip?: boolean;
+  /** Whether the case's court asks each claimant's e-mail and mobile (0283): an adult's are then data the case lacks. */
+  contact?: boolean;
 }): Missing[] {
   const missing: Missing[] = [];
+  const adult: readonly (keyof PersonData)[] = input.contact ? [...ADULT_FIELDS, ...CONTACT_FIELDS] : ADULT_FIELDS;
   const isMinor = (person: PersonData) => isMinorOn(person.birth_date, input.today) === true;
 
   for (const need of documentNeeds(input)) {
@@ -683,7 +692,7 @@ export function missingItems(input: {
 
   const people = [input.holder, ...input.claimants.filter((person) => person.person_id !== input.holder.person_id)];
   for (const person of people) {
-    const fields = missingFields(person, isMinor(person) ? MINOR_FIELDS : ADULT_FIELDS);
+    const fields = missingFields(person, isMinor(person) ? MINOR_FIELDS : adult);
     if (fields.length > 0) missing.push({ type: "fields", personId: person.person_id, name: person.full_name, fields });
   }
 
@@ -723,6 +732,8 @@ export function caseMissing(input: {
   today: string;
   /** Whether the case needs a leg of a trip: a case of the passenger module does, one of an area of the firm not. */
   trip?: boolean;
+  /** Whether the case's court asks each claimant's e-mail and mobile (0283). */
+  contact?: boolean;
 }): Missing[] {
   const holder = caseHolder(input.parties, input.today);
   if (!holder) return [];
@@ -737,6 +748,7 @@ export function caseMissing(input: {
     required: input.required,
     today: input.today,
     trip: input.trip,
+    contact: input.contact,
   });
 }
 

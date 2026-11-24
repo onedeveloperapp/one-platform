@@ -474,6 +474,7 @@ export async function loadCase(id: string): Promise<CaseState> {
     signatureAhead,
     pulse,
     dataInChat,
+    asksContact,
     autonomy,
     publicationRows,
   ] = await Promise.all([
@@ -530,6 +531,9 @@ export async function loadCase(id: string): Promise<CaseState> {
     supabase
       .rpc("case_data_in_chat", { target_case: id })
       .then(({ data, error }) => (error ? null : dataInChatOf(data))),
+    // Whether the case's court asks each claimant's e-mail and mobile (0283), which the case then lacks until given.
+    // One that could not be read asks nothing more than before.
+    supabase.rpc("case_asks_contact_of", { target_case: id }).then(({ data, error }) => !error && data === true),
     // What the firm lets ONE decide alone, for the words of what ONE does next. Unreadable, ONE's default is said.
     supabase
       .rpc("firm_autonomy", { target_org: firm })
@@ -968,6 +972,7 @@ export async function loadCase(id: string): Promise<CaseState> {
       : null,
     pulse,
     dataInChat,
+    asksContact,
     autonomy: Object.fromEntries((autonomy ?? []).map((decision) => [decision.key, decision.mode])) as Partial<
       Record<AutonomyDecision, AutonomyMode>
     >,

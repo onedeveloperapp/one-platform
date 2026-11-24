@@ -6,6 +6,8 @@ import {
   choose,
   DATA_OPTIONS,
   dataSummary,
+  EMAIL_AGAIN,
+  EMAIL_QUESTION,
   FIELD_OPTIONS,
   FIELD_QUESTION,
   MARITAL_OPTIONS,
@@ -14,6 +16,7 @@ import {
   openDataAsk,
   type PersonData,
   personDataOf,
+  readEmail,
   readValue,
 } from "@/lib/conversations/data-check";
 
@@ -29,6 +32,9 @@ const NIDIA: PersonData = {
   nationality: "brasileira",
   maritalStatus: null,
   profession: null,
+  email: null,
+  phone: "5562999990000",
+  asksContact: false,
   postalCode: "74000000",
   street: "Rua Exemplo",
   addressNumber: "100",
@@ -111,6 +117,25 @@ describe("the client checks their data in the chat (0232)", () => {
     });
     expect(missingAsk({ ...NIDIA, maritalStatus: "casado", profession: "Professora" })).toBeNull();
     expect(missingAsk({ ...NIDIA, minor: true })).toBeNull();
+  });
+
+  it("asks the e-mail last, only where the case's court asks it, and lets a client with none go on (0283)", () => {
+    const complete = { ...NIDIA, maritalStatus: "casado", profession: "Professora" };
+    expect(missingAsk({ ...complete, asksContact: true })).toEqual({ step: "email", question: EMAIL_QUESTION });
+    expect(missingAsk({ ...complete, asksContact: true }, { email: true })).toBeNull();
+    expect(missingAsk({ ...complete, asksContact: true, email: "nidia@exemplo.com" })).toBeNull();
+    // Before the papers' data, as always.
+    expect(missingAsk({ ...NIDIA, asksContact: true })?.step).toBe("estado_civil");
+    expect(openDataAsk({ ...complete, asksContact: true, step: "email" })).toBe(EMAIL_QUESTION);
+    expect(readEmail("Nidia@Exemplo.com ")).toEqual({ ok: true, value: "nidia@exemplo.com" });
+    expect(readEmail("é nidia.teste@exemplo.com.br")).toEqual({ ok: true, value: "nidia.teste@exemplo.com.br" });
+    expect(readEmail("Não tenho")).toMatchObject({ ok: false, none: true });
+    expect(readEmail("nao tenho email")).toMatchObject({ ok: false, none: true });
+    expect(readEmail("nidia arroba exemplo")).toEqual({ ok: false, none: false, why: EMAIL_AGAIN });
+    expect(personDataOf({ case_id: "c-1", person_id: "p-1", email: "a@b.co", asks_contact: true })).toMatchObject({
+      email: "a@b.co",
+      asksContact: true,
+    });
   });
 
   it("asks again a check left open, never the word that the signature comes (the owner's test of 2026-11-23)", () => {

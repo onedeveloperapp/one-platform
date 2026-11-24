@@ -217,6 +217,7 @@ export default function ClientFolder({
       documents={view.documents}
       today={today}
       editable={editable}
+      contact={view.case.asks_contact === true}
       onSaved={refresh}
     />
   );
@@ -490,6 +491,7 @@ function People({
   documents,
   today,
   editable,
+  contact,
   onSaved,
 }: {
   token: string;
@@ -497,6 +499,8 @@ function People({
   documents: OpenView["documents"];
   today: string;
   editable: boolean;
+  /** The case's court asks each claimant's e-mail and mobile (0283): an adult's are then owed like the rest. */
+  contact: boolean;
   onSaved: () => void;
 }) {
   const t = useTranslations("product");
@@ -679,8 +683,10 @@ function People({
     <ClientSection id="client-people" title={t("client-people-title")} hint={t("client-people-body")}>
       {people.map((person) => {
         const minor = isMinorOn(person.birth_date, today) === true;
+        // The e-mail and the mobile are owed only where the court asks them, of the holder and an adult claimant (0283).
+        const asksContact = contact && !minor && (person.is_holder || person.roles.includes("claimant"));
         const left = formOf(person)
-          .filter((field) => field !== "complement" && field !== "email" && field !== "phone")
+          .filter((field) => field !== "complement" && (asksContact || (field !== "email" && field !== "phone")))
           .filter((field) => !String(person[field] ?? "").trim());
         const read = readItems(readFieldsOf(person.read_fields));
         const reading = left.length > 0 && beingRead(person.party_ids ?? [person.party_id], documents);

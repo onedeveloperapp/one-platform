@@ -71,6 +71,8 @@ export type ClientLinkView =
         flight_date: string | null;
         airline: { iata: string; name: string } | null;
         editable: boolean;
+        /** The case's court asks each claimant's e-mail and mobile (0283): the link asks them as data the case lacks. */
+        asks_contact?: boolean;
         /** A case of an area of the firm (0274): its area and its kind of case, never a flight. */
         area?: string | null;
         case_type?: string | null;

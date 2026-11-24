@@ -170,6 +170,22 @@ describe("what a case still needs", () => {
     ]);
   });
 
+  it("asks an adult's e-mail and mobile only where the case's court asks them, never a minor's (0283)", () => {
+    const input = {
+      holder: person({ phone: "5562999990000" }),
+      claimants: [person({ phone: "5562999990000" }), child],
+      documents: [],
+      segments: 1,
+      required: [],
+      today: "2026-10-09",
+    };
+    expect(missingItems(input)).toEqual([{ type: "fields", personId: "p-2", name: "Joao Teste", fields: ["cpf"] }]);
+    expect(missingItems({ ...input, contact: true })).toEqual([
+      { type: "fields", personId: "p-1", name: "Maria Teste", fields: ["email"] },
+      { type: "fields", personId: "p-2", name: "Joao Teste", fields: ["cpf"] },
+    ]);
+  });
+
   it("takes the boarding pass for the ticket, and counts a refused document as missing", () => {
     const missing = missingItems({
       holder,

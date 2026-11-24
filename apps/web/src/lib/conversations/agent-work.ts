@@ -91,6 +91,7 @@ import {
   OTHER_NATIONALITY_QUESTION,
   type PersonData,
   personDataOf,
+  readEmail,
   readValue,
   valueQuestion,
 } from "@/lib/conversations/data-check";
@@ -549,14 +550,18 @@ async function startDataCheck(service: SupabaseClient, held: Held): Promise<stri
   return dataSummary(data);
 }
 
-/** The next question of the data still missing, or the end of the check with what comes after it. */
+/**
+ * The next question of the data still missing, or the end of the check with what comes after it. `skip` leaves out
+ * the e-mail the client said they do not have (0283): the case then lacks it, for the firm or the link to give.
+ */
 async function nextDataStep(
   service: SupabaseClient,
   held: Held,
   context: TurnContext,
   data: PersonData,
+  skip: { email?: boolean } = {},
 ): Promise<string> {
-  const missing = missingAsk(data);
+  const missing = missingAsk(data, skip);
   if (missing) {
     await keepStep(service, held, { step: missing.step });
     return missing.question;
@@ -678,6 +683,13 @@ async function takeDataCheck(
     case "profissao": {
       const said = reply.trim().replace(/\s+/g, " ").slice(0, 120);
       return said.length >= 2 ? proceed({ profession: said }) : tell("Qual é a sua profissão?");
+    }
+    case "email": {
+      // Where the case's court asks it (0283): the address, or the client has none and the check goes on without it.
+      const read = readEmail(reply);
+      if (read.ok) return proceed({ email: read.value });
+      if (read.none) return tell(await nextDataStep(service, held, context, data, { email: true }));
+      return tell(read.why);
     }
   }
 }
