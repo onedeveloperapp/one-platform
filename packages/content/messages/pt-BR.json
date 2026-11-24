@@ -10385,7 +10385,17 @@
     "notice-kind-filing-waits": "Ação pronta para protocolar, para quem assina",
     "notice-kind-filing-waits-when": "Quando um pacote pronto fica dias sem protocolo, aos advogados da ação, no WhatsApp do perfil de cada um, em dias úteis. Diz que o pacote, a ficha e os passos estão no caso.",
     "notice-kind-filing-batch-waits": "Protocolo do ONE à espera do advogado",
-    "notice-kind-filing-batch-waits-when": "Quando o navegador do ONE para à espera do advogado do lote: o tribunal pediu o código, o primeiro protocolo num sistema espera a confirmação, ou o lote parou. No WhatsApp do perfil dele, na hora; o código nunca vai por ali."
+    "notice-kind-filing-batch-waits-when": "Quando o navegador do ONE para à espera do advogado do lote: o tribunal pediu o código, o primeiro protocolo num sistema espera a confirmação, ou o lote parou. No WhatsApp do perfil dele, na hora; o código nunca vai por ali.",
+    "filing-ways-extension-install-title": "Instalar a extensão no Chrome",
+    "filing-ways-extension-install-note": "A extensão ainda não está na Chrome Web Store. Por isso ela é instalada pelo modo do desenvolvedor do Chrome, uma vez em cada computador.",
+    "filing-ways-extension-install-download": "Baixar a extensão",
+    "filing-ways-extension-install-step-1": "Baixe o arquivo e descompacte numa pasta que você não vai apagar. Ele traz a pasta one-extensao.",
+    "filing-ways-extension-install-step-2": "Cole este endereço na barra do Chrome:",
+    "filing-ways-extension-install-address": "o endereço das extensões do Chrome",
+    "filing-ways-extension-install-step-3": "Ligue o Modo do desenvolvedor, clique em Carregar sem compactação e escolha a pasta one-extensao.",
+    "filing-ways-extension-install-step-4": "Fixe o ONE na barra do Chrome e abra o painel dele. Depois clique em Ligar a extensão, aqui, e digite o código no painel, em Ligar ao ONE.",
+    "filing-one-screen-change": "Trocar a forma",
+    "filing-one-screen-hand-mine": "Você protocola à mão no {system}: a ficha com cada passo está abaixo."
   },
   "auth": {
     "continue": "Continuar",

@@ -11,7 +11,7 @@ import { Box, Button } from "@mui/material";
 import FilingChoiceDialog from "@/components/firm/filing-choice-dialog";
 import StateLine from "@/components/product/state-line";
 import { caseErrorKey } from "@/lib/cases/cases";
-import { type ScreenFilingFacts, screenStanding } from "@/lib/filing-ways/ways";
+import { type ScreenFilingFacts, screenStanding, waysOffered } from "@/lib/filing-ways/ways";
 
 /**
  * What ONE does with the filing of a package itself (migration 0101): it
@@ -187,7 +187,9 @@ export default function FilingByOne({
  * Whose turn it is for ONE to file a package on its court's screen (the owner's test of 2026-11-23, where the card
  * showed only the steps by hand): the choice that is missing, made in place by whom it belongs to (the firm's way by
  * who decides for the firm, a lawyer's at that system by the lawyer), or the batch a lawyer of the lawsuit approves
- * on /protocolo; a colleague reads whose it is. Filed by hand, as the firm or every lawyer of it chose: nothing.
+ * on /protocolo; a colleague reads whose it is. A lawyer who chose may change their way here before anything goes
+ * (the owner, 2026-11-24, "Trocar a forma"): beside the batch to approve, or, filing by hand where ONE could file it,
+ * on a line that says so. Filed by hand as the firm chose: nothing.
  */
 function ScreenLine({
   screen,
@@ -212,9 +214,34 @@ function ScreenLine({
   const t = useTranslations("product");
   const [choosing, setChoosing] = useState(false);
   const standing = screenStanding(screen);
-  if (!standing || standing.kind === "hand") return null;
+  if (!standing) return null;
 
   const system = screen.name;
+  // The ways the firm's way leaves the lawyers at this system: by hand alone leaves nothing to change.
+  const offered = waysOffered(
+    { ways: screen.ways.filter((way): way is "browser" | "extension" => way === "browser" || way === "extension") },
+    screen.firmWay,
+  );
+  const dialog = choosing ? (
+    <FilingChoiceDialog systemKey={screen.key} signs={signs} onClose={() => setChoosing(false)} onSaved={onChanged} />
+  ) : null;
+  const changeButton = (
+    <Button variant="text" color="grey" size="small" disabled={busy} onClick={() => setChoosing(true)}>
+      {t("filing-one-screen-change")}
+    </Button>
+  );
+  const viewerWay = screen.lawyers.find((lawyer) => lawyer.userId === screen.viewerId)?.way ?? null;
+  if (standing.kind === "hand") {
+    // The lawyer chose to file by hand where ONE could file it: they may change it before filing.
+    return mayAct && viewerWay === "hand" && offered.length > 1 ? (
+      <>
+        <StateLine tone="info" action={changeButton}>
+          {t("filing-one-screen-hand-mine", { system })}
+        </StateLine>
+        {dialog}
+      </>
+    ) : null;
+  }
   const mine = (ids: string[]) => Boolean(screen.viewerId) && ids.includes(screen.viewerId ?? "");
   // Any one of them may do it: "Ana", "Ana ou Caio".
   const who = (ids: string[]) =>
@@ -232,14 +259,7 @@ function ScreenLine({
       >
         {text}
       </StateLine>
-      {choosing ? (
-        <FilingChoiceDialog
-          systemKey={screen.key}
-          signs={signs}
-          onClose={() => setChoosing(false)}
-          onSaved={onChanged}
-        />
-      ) : null}
+      {dialog}
     </>
   );
 
@@ -258,9 +278,20 @@ function ScreenLine({
     );
   }
   return mayAct && mine(standing.lawyers) ? (
-    <StateLine tone="attention" action={toBatches}>
-      {t("filing-one-screen-batch-mine", { system })}
-    </StateLine>
+    <>
+      <StateLine
+        tone="attention"
+        action={
+          <Box className="flex flex-wrap items-center gap-1">
+            {changeButton}
+            {toBatches}
+          </Box>
+        }
+      >
+        {t("filing-one-screen-batch-mine", { system })}
+      </StateLine>
+      {dialog}
+    </>
   ) : (
     <StateLine tone="info">{t("filing-one-screen-batch", { system, who: who(standing.lawyers) })}</StateLine>
   );

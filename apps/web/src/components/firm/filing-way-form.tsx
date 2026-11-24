@@ -20,6 +20,8 @@ import {
   Typography,
 } from "@mui/material";
 
+import CopyButton from "@/components/product/copy-button";
+import InfoHint from "@/components/product/info-hint";
 import StateLine from "@/components/product/state-line";
 import StatusChip from "@/components/product/status-chip";
 import NiExclamationSquare from "@/icons/nexture/ni-exclamation-square";
@@ -528,7 +530,8 @@ export function ExtensionLinkBox({
     );
   }
   return (
-    <Box className="flex flex-col gap-1">
+    <Box className="flex flex-col gap-3">
+      <ExtensionInstall />
       <StateLine
         tone="attention"
         action={
@@ -540,6 +543,55 @@ export function ExtensionLinkBox({
         {t("filing-ways-extension-not-linked")}
       </StateLine>
       {failure}
+    </Box>
+  );
+}
+
+/** Where ONE serves the extension's zip, packed by each deploy (`extension/package.mjs`), to who is signed in. */
+export const EXTENSION_DOWNLOAD = "/extensao/one-extensao.zip";
+
+/**
+ * How a lawyer gets the extension before linking it (2026-11-24: a lawyer chose the extension and nothing was ever
+ * installed, since ONE offered no way to get it): the zip ONE serves, and the three steps of loading it in Chrome,
+ * the address of its extensions page copied in one click (a page cannot open it). Until the extension is in the
+ * Chrome Web Store, it loads in the developer mode.
+ */
+function ExtensionInstall() {
+  const t = useTranslations("product");
+  const address = "chrome://extensions";
+  return (
+    <Box className="flex flex-col gap-2">
+      <Box className="flex flex-wrap items-center justify-between gap-2">
+        <Box className="flex items-center gap-1">
+          <Typography variant="body2" component="h4" className="font-semibold">
+            {t("filing-ways-extension-install-title")}
+          </Typography>
+          <InfoHint label={t("filing-ways-extension-install-note")} />
+        </Box>
+        <Button size="small" variant="contained" href={EXTENSION_DOWNLOAD} download="one-extensao.zip">
+          {t("filing-ways-extension-install-download")}
+        </Button>
+      </Box>
+      <Box component="ol" className="m-0 flex list-decimal flex-col gap-1 pl-5">
+        <Typography component="li" variant="body2">
+          {t("filing-ways-extension-install-step-1")}
+        </Typography>
+        <Typography component="li" variant="body2">
+          {t("filing-ways-extension-install-step-2")}
+          <Box component="span" className="ml-1 inline-flex items-center gap-0.5 align-middle">
+            <Box component="code" className="bg-grey-50 rounded px-1.5 py-0.5 text-sm">
+              {address}
+            </Box>
+            <CopyButton text={address} label={t("filing-ways-extension-install-address")} />
+          </Box>
+        </Typography>
+        <Typography component="li" variant="body2">
+          {t("filing-ways-extension-install-step-3")}
+        </Typography>
+        <Typography component="li" variant="body2">
+          {t("filing-ways-extension-install-step-4")}
+        </Typography>
+      </Box>
     </Box>
   );
 }

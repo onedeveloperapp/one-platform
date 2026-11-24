@@ -18,6 +18,7 @@ import {
   Typography,
 } from "@mui/material";
 
+import FilingChoiceDialog from "@/components/firm/filing-choice-dialog";
 import CollapsibleCard from "@/components/product/collapsible-card";
 import ConfirmActionDialog from "@/components/product/confirm-action-dialog";
 import OutcomeDialog, { type OutcomeLine } from "@/components/product/outcome-dialog";
@@ -93,6 +94,8 @@ export default function FilingBatches({ state, firmId }: { state: FilingBatchesS
   const t = useTranslations("product");
   const router = useRouter();
   const [approving, setApproving] = useState<EligibleGroup | null>(null);
+  // The system whose way the lawyer chooses or changes here, in place (the owner, 2026-11-24).
+  const [choosing, setChoosing] = useState<string | null>(null);
 
   useLiveRead({
     stamp: state.pulse,
@@ -123,9 +126,14 @@ export default function FilingBatches({ state, firmId }: { state: FilingBatchesS
           key={group.system.key}
           tone="attention"
           action={
-            <Button size="small" variant="contained" onClick={() => setApproving(group)}>
-              {t("filing-batches-file")}
-            </Button>
+            <Box className="flex flex-wrap items-center gap-1">
+              <Button size="small" variant="text" color="grey" onClick={() => setChoosing(group.system.key)}>
+                {t("filing-one-screen-change")}
+              </Button>
+              <Button size="small" variant="contained" onClick={() => setApproving(group)}>
+                {t("filing-batches-file")}
+              </Button>
+            </Box>
           }
         >
           {t("filing-batches-ready", { count: group.packages.length, system: group.system.name })}
@@ -138,7 +146,7 @@ export default function FilingBatches({ state, firmId }: { state: FilingBatchesS
           key={`choose-${group.system.key}`}
           tone="info"
           action={
-            <Button size="small" variant="outlined" href="/settings/atuacao#team-filing-ways">
+            <Button size="small" variant="outlined" onClick={() => setChoosing(group.system.key)}>
               {t("filing-batches-choose")}
             </Button>
           }
@@ -158,6 +166,14 @@ export default function FilingBatches({ state, firmId }: { state: FilingBatchesS
 
       {approving ? (
         <ApproveDialog group={approving} onClose={() => setApproving(null)} onApproved={() => router.refresh()} />
+      ) : null}
+      {choosing ? (
+        <FilingChoiceDialog
+          systemKey={choosing}
+          signs
+          onClose={() => setChoosing(null)}
+          onSaved={() => router.refresh()}
+        />
       ) : null}
     </CollapsibleCard>
   );

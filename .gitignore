@@ -76,3 +76,5 @@ next-env.d.ts
 apps/web/clock/dist/
 # The lawyer's browser extension (apps/web/extension/build.mjs), built by hand and zipped to send.
 apps/web/extension/dist/
+# The extension's zip, packed by the app's build (apps/web/extension/package.mjs).
+/apps/web/public/extensao/
