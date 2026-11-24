@@ -86,6 +86,8 @@ export type PublicationRow = {
    * to (`lawyers`), or, with none of the firm, of anybody who triages.
    */
   ackOwed: boolean;
+  /** Read from the lawsuit's history in the DJEN by its number (0286), not made available to the firm's lawyers. */
+  fromHistory?: boolean;
   /** Who said they are aware of ONE's triage (or triaged it after ONE), and when. */
   ackedBy: string | null;
   ackedLabel: string | null;
@@ -272,6 +274,7 @@ type Row = {
   reviewed_at: string | null;
   hearing_settled_at: string | null;
   ack_owed: boolean | null;
+  from_history?: boolean | null;
   acked_by: string | null;
   acked_at: string | null;
 };
@@ -430,6 +433,7 @@ async function toRows(
     reviewedBy: row.reviewed_by ? names.get(row.reviewed_by) || null : null,
     reviewedLabel: row.reviewed_at ? momentLabel(row.reviewed_at, timeZone) : null,
     ackOwed: Boolean(row.ack_owed),
+    fromHistory: row.from_history === true,
     ackedBy: row.acked_by ? names.get(row.acked_by) || null : null,
     ackedLabel: row.acked_at ? momentLabel(row.acked_at, timeZone) : null,
     triageState: row.category === null ? (triageStates.get(row.id) ?? null) : null,

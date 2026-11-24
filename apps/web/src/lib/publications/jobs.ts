@@ -4,6 +4,7 @@ import { djenClient } from "@/lib/courts/djen";
 import type { Sweep } from "@/lib/jobs/schedule";
 import { tellPublicationAcks } from "@/lib/publications/ack-notices";
 import { captureNext, prepareDjenCaptures } from "@/lib/publications/capture";
+import { readHistoryNext } from "@/lib/publications/history-work";
 import { TRIAGE_TASK } from "@/lib/publications/publications";
 import { READING_TASK } from "@/lib/publications/reading";
 import { readingReadyKinds, readNext, settlePublicationReadings } from "@/lib/publications/reading-work";
@@ -18,6 +19,8 @@ import { queuePublicationTriage, triageNext, triageReady } from "@/lib/publicati
  * operator sees it (`admin_djen_health`).
  */
 const CAPTURES_PER_ROUND = 20;
+
+const HISTORIES_PER_ROUND = 5;
 
 /**
  * How many publications one round of the shadow triage classifies. Past what
@@ -64,6 +67,30 @@ export const publicationSweeps: Sweep[] = [
       }
       // What arrived is triaged by ONE right after, not at the next beat (0104).
       if (Object.keys(outcomes).length > 0) await queuePublicationTriage();
+      return outcomes;
+    },
+  },
+  /**
+   * The history of each lawsuit filed before its case was in ONE (migration 0286), read from the DJEN by its number
+   * once: what is owed is read one at a time and only by the clock, as the reading by registration is (the public API
+   * counts calls per address); right after the lawyer's receipt it is read at once (`queueProceedingHistory`). When the
+   * DJEN limits the calls the round stops, and the next one goes on. Where the reading is off (`DJEN_CAPTURE`),
+   * nothing is claimed.
+   */
+  {
+    key: "djen-history",
+    when: { every: 5 },
+    run: async (service, until) => {
+      if (!djenClient()) return { off: true };
+      const outcomes: Record<string, number> = {};
+      for (let turn = 0; turn < HISTORIES_PER_ROUND && Date.now() < until; turn += 1) {
+        const client = djenClient();
+        const outcome = client ? await readHistoryNext(service, client) : "none";
+        if (outcome === "none") break;
+        outcomes[outcome] = (outcomes[outcome] ?? 0) + 1;
+        if (outcome === "retry") break;
+      }
+      if ((outcomes.done ?? 0) > 0) await queuePublicationTriage();
       return outcomes;
     },
   },

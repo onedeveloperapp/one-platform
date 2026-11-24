@@ -1,5 +1,6 @@
 import { hostOfLink, isEmptyText, kindOfCommunication, systemOfHost } from "@flyee/courts/djen-systems";
 import { oabNumberKey, oabStateKey } from "@flyee/courts/oab";
+import { DjenInvalidQueryError } from "@flyee/courts/providers/djen";
 import type {
   CourtMovement,
   CourtProceeding,
@@ -40,7 +41,7 @@ export class FakeDjenClient implements DjenClient {
   private readonly stored = new Map<string, Stored>();
 
   /** How many times it was asked, so a test of the capture can prove it paces and does not repeat. */
-  readonly calls = { listByOab: 0, probe: 0 };
+  readonly calls = { listByOab: 0, listByProcess: 0, probe: 0 };
 
   /** What the next looks of the watch meet instead of an answer (an outage), while it is set. */
   probeError: Error | null = null;
@@ -72,6 +73,16 @@ export class FakeDjenClient implements DjenClient {
           (!input.until || communication.availableOn <= input.until) &&
           lawyers.some((lawyer) => sameLawyer(lawyer, input)),
       )
+      .map(({ communication }) => ({ ...communication }))
+      .sort((a, b) => a.availableOn.localeCompare(b.availableOn) || a.hash.localeCompare(b.hash));
+  }
+
+  async listByProcess(input: { cnj: string }): Promise<DjenCommunication[]> {
+    this.calls.listByProcess += 1;
+    const cnj = input.cnj.replace(/\D/g, "");
+    if (!/^\d{20}$/.test(cnj)) throw new DjenInvalidQueryError("number");
+    return [...this.stored.values()]
+      .filter(({ communication }) => communication.cnj === cnj)
       .map(({ communication }) => ({ ...communication }))
       .sort((a, b) => a.availableOn.localeCompare(b.availableOn) || a.hash.localeCompare(b.hash));
   }

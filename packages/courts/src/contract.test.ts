@@ -247,6 +247,25 @@ function djenContract(name: string, make: (published: FakeDjenEntry[]) => DjenCl
       }
     });
 
+    it("lists every communication of one lawsuit by its number, whoever it was addressed to, oldest first", async () => {
+      const client = make(PUBLISHED);
+      const expected = ["hash0001abcdefghijklmnopqrstuv", "hash0003abcdefghijklmnopqrstuv", "hash0004abcdefghijklmnopqrstuv"];
+      // However the number is written: its digits, or the mask a person or a receipt gives it.
+      for (const cnj of ["50012347920998090051", "5001234-79.2099.8.09.0051"]) {
+        const history = await client.listByProcess({ cnj });
+        assert.deepEqual(history.map((communication) => communication.hash), expected, cnj);
+        // The court's taking one back is said here too.
+        assert.deepEqual(history.map((communication) => communication.active), [true, true, false]);
+      }
+    });
+
+    it("answers a lawsuit with nothing published with an empty list, and refuses what is not a number", async () => {
+      const client = make(PUBLISHED);
+      assert.deepEqual(await client.listByProcess({ cnj: "50099998820998090051" }), []);
+      await assert.rejects(client.listByProcess({ cnj: "123" }), DjenInvalidQueryError);
+      await assert.rejects(client.listByProcess({ cnj: "" }), DjenInvalidQueryError);
+    });
+
     it("gives the address of a communication's certificate, by its hash", () => {
       const address = make(PUBLISHED).certificateUrl("hash0001abcdefghijklmnopqrstuv");
       assert.ok(URL.canParse(address));
@@ -299,14 +318,17 @@ function djenStandIn(
     // The API holds a communication once: a hash published twice is the same.
     const unique = [...new Map(published.map((entry) => [entry.hash, entry])).values()];
     const court = url.searchParams.get("siglaTribunal");
+    // A search by a lawsuit's number asks no days, and answers its whole history (checked on 2026-11-24).
+    const lawsuit = url.searchParams.get("numeroProcesso");
     const matching = unique
-      .filter(
-        (entry) =>
-          entry.availableOn >= from &&
-          entry.availableOn <= until &&
-          (court
-            ? entry.court === court
-            : entry.lawyers.some((lawyer) => lawyer.number === number && (!uf || lawyer.uf === uf))),
+      .filter((entry) =>
+        lawsuit !== null
+          ? entry.cnj === lawsuit.replace(/\D/g, "")
+          : entry.availableOn >= from &&
+            entry.availableOn <= until &&
+            (court
+              ? entry.court === court
+              : entry.lawyers.some((lawyer) => lawyer.number === number && (!uf || lawyer.uf === uf))),
       )
       // Newest first, as a gazette lists: the client is the one that orders.
       .sort((a, b) => b.availableOn.localeCompare(a.availableOn));
@@ -358,7 +380,8 @@ describe("the fake DJEN", () => {
     const client = new FakeDjenClient(PUBLISHED);
     await client.listByOab({ ...ANA, since: "2026-10-01" });
     await client.listByOab({ ...ANA, since: "2026-10-01" });
-    assert.deepEqual(client.calls, { listByOab: 2, probe: 0 });
+    await client.listByProcess({ cnj: "50012347920998090051" });
+    assert.deepEqual(client.calls, { listByOab: 2, listByProcess: 1, probe: 0 });
   });
 });
 
@@ -408,6 +431,32 @@ describe("the DJEN through its public API", () => {
     );
     // Oldest first, whatever order the API answered in.
     assert.ok(listed.every((item, index) => index === 0 || listed[index - 1].availableOn <= item.availableOn));
+  });
+
+  it("asks for a lawsuit by its digits alone, with no days, a page of 100 at a time, and keeps only what is of it", async () => {
+    const server = djenStandIn(PUBLISHED);
+    const client = new DjenHttpClient({ fetch: server.fetcher, today: () => "2026-10-09", sleep: async () => undefined });
+    await client.listByProcess({ cnj: "5001234-79.2099.8.09.0051" });
+    assert.equal(server.calls.length, 1);
+    const asked = server.calls[0].url.searchParams;
+    assert.equal(asked.get("numeroProcesso"), "50012347920998090051");
+    assert.equal(asked.get("pagina"), "1");
+    assert.equal(asked.get("itensPorPagina"), "100");
+    for (const name of ["numeroOab", "ufOab", "dataDisponibilizacaoInicio", "dataDisponibilizacaoFim", "siglaTribunal"]) {
+      assert.equal(asked.get(name), null, name);
+    }
+    // An answer that holds a communication of another number keeps it out.
+    const loose = djenStandIn([...PUBLISHED, { ...PUBLISHED[2], hash: "hash0099abcdefghijklmnopqrstuv", cnj: "50012347920998090051" }]);
+    const fetcher = (async (input: string | URL | Request) => {
+      const response = await loose.fetcher(input);
+      const body = (await response.json()) as { items: { numero_processo: string; hash: string }[] };
+      for (const item of body.items) if (item.hash === "hash0099abcdefghijklmnopqrstuv") item.numero_processo = "10009874520998260100";
+      return new Response(JSON.stringify(body), { status: 200, headers: response.headers });
+    }) as typeof fetch;
+    const strict = new DjenHttpClient({ fetch: fetcher, today: () => "2026-10-09", sleep: async () => undefined });
+    const kept = await strict.listByProcess({ cnj: "50012347920998090051" });
+    assert.ok(!kept.some((communication) => communication.hash === "hash0099abcdefghijklmnopqrstuv"));
+    assert.equal(kept.length, 3);
   });
 
   it("keeps only what names the very registration, even when the API answers by the number alone", async () => {

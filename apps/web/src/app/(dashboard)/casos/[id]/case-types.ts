@@ -36,6 +36,7 @@ import type { CourtZones } from "@/lib/hearings/hearings";
 import type { CaseNotices } from "@/lib/notices/facts";
 import type { PublicationActionView } from "@/lib/publications/actions-read";
 import type { PublicationRow } from "@/lib/publications/facts";
+import type { HistoryRead } from "@/lib/publications/history";
 import type { SignatureAccount, SignatureMethod } from "@/lib/signatures/methods";
 import type { FlightChecks } from "@/modules/direito-do-passageiro/flights/facts";
 
@@ -364,6 +365,10 @@ export type CaseState =
        * are more than shown; null when they could not be read, which the card says.
        */
       publicationRows: { rows: PublicationRow[]; more: boolean } | null;
+      /** Where ONE's reading of the history of each lawsuit filed before the case was in ONE stands (0286). */
+      histories: HistoryRead[];
+      /** This environment reads the DJEN (`DJEN_CAPTURE`): where it does not, nothing of it is read. */
+      djenReading?: boolean;
       /** The mark of the case and whether ONE is at it (0096): what the screen follows while it is open; null unread. */
       pulse: CasePulse | null;
       /** Where the data ONE asks the passenger in the chat stands (0280); null when it does not ask it there. */

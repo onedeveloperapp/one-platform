@@ -168,6 +168,9 @@ export const DOCUMENT_STATUS_KEY: Record<DocumentStatus, string> = {
 export function eventKeyOf(event: { kind: string; data?: unknown }): string | null {
   const data = event.data && typeof event.data === "object" ? (event.data as Record<string, unknown>) : null;
   if (event.kind === "interview_started" && data?.piece === true) return "case-event-interview-started-piece";
+  // A lawsuit filed before its case was in ONE (0286).
+  if (event.kind === "filing_receipt_attached" && data?.before_one === true)
+    return "case-event-filing-receipt-before-one";
   return EVENT_KEY[event.kind] ?? null;
 }
 
@@ -271,6 +274,8 @@ export const EVENT_KEY: Record<string, string> = {
   filing_package_signed: "case-event-filing-signed",
   filing_package_signature_failed: "case-event-filing-signature-failed",
   publication_captured: "case-event-publication-captured",
+  proceeding_history_read: "case-event-proceeding-history-read",
+  proceeding_history_asked: "case-event-proceeding-history-asked",
   publication_triaged: "case-event-publication-triaged",
   publication_judged: "case-event-publication-judged",
   publication_cancelled: "case-event-publication-cancelled",
@@ -805,6 +810,9 @@ const ERROR_KEYS: Record<string, string> = {
   chronology_not_ready: "case-error-chronology-not-ready",
   note_required: "case-error-note-required",
   invalid_date: "case-error-complaint-date",
+  filed_on_future: "case-error-filed-on-future",
+  filed_before_case: "case-error-filed-before-case",
+  filed_before_trip: "case-error-filed-before-trip",
   document_already_decided: "case-error-document-decided",
   forum_not_linked_to_flight: "case-error-forum-link",
   forum_not_domicile: "case-error-forum-domicile",

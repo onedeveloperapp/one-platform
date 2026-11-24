@@ -14,7 +14,11 @@ import type { DjenClient, DjenCommunication, DjenProbe, OabRegistration } from "
  *       &dataDisponibilizacaoFim=yyyy-mm-dd&pagina=1&itensPorPagina=100
  *
  * answers `{ status: "success", message, count, items: [...] }` with no
- * login. What the check found, and the code below depends on:
+ * login. The same address asked `?numeroProcesso=<20 digits>&pagina=1&itensPorPagina=100`,
+ * with no days, answers every communication of one lawsuit, its whole history (checked on
+ * 2026-11-24 on a lawsuit of the day's public listing of TJSP: the digits and the mask both
+ * answered the same six, and a number nobody has answered an empty listing). What the check
+ * found, and the code below depends on:
  *
  * - `count` is NOT a total to end a listing by. It came as the total for one
  *   search, as the size of the page for another and as 10,000 for a third.
@@ -99,9 +103,12 @@ export class DjenWindowTooLargeError extends Error {
   }
 }
 
-/** What was asked is nothing the DJEN can be asked: a registration that is not one, or a day that is not a day. */
+/**
+ * What was asked is nothing the DJEN can be asked: a registration that is not one, a day that is not a day, or a
+ * lawsuit's number that is not twenty digits.
+ */
 export class DjenInvalidQueryError extends Error {
-  constructor(what: "registration" | "days") {
+  constructor(what: "registration" | "days" | "number") {
     super(`djen_invalid_${what}`);
     this.name = "DjenInvalidQueryError";
   }
@@ -217,9 +224,34 @@ export class DjenHttpClient implements DjenClient {
     // Nothing is made available on a day that has not come.
     const until = input.until !== undefined && input.until < today ? input.until : today;
     if (input.since > until) return [];
+    return this.list(
+      { numeroOab: number, ufOab: uf, dataDisponibilizacaoInicio: input.since, dataDisponibilizacaoFim: until },
+      // Only what names this very registration: a number alone exists in every state, and with
+      // another letter it is another lawyer.
+      (item) =>
+        (item.destinatarioadvogados ?? []).some(
+          (lawyer) =>
+            oabNumberKey(lawyer?.advogado?.numero_oab) === number && oabStateKey(lawyer?.advogado?.uf_oab) === uf,
+        ),
+    );
+  }
+
+  async listByProcess(input: { cnj: string }): Promise<DjenCommunication[]> {
+    const cnj = digits(input.cnj);
+    // Refused, never answered with nothing: a listing with nothing in it is a lawsuit with nothing published.
+    if (!/^\d{20}$/.test(cnj)) throw new DjenInvalidQueryError("number");
+    // Only what is of this very lawsuit: the search is by its number, and nothing else is kept if the API ever
+    // answered more.
+    return this.list({ numeroProcesso: cnj }, (item) => digits(item.numero_processo) === cnj);
+  }
+
+  /**
+   * One listing of `GET /api/v1/comunicacao` by what is asked, every page of it, kept to what `keep` says is of
+   * what was asked: whole, or an error (the rules above).
+   */
+  private async list(asked: Record<string, string>, keep: (item: Item) => boolean): Promise<DjenCommunication[]> {
     const ceiling = this.maxPages * PAGE_SIZE;
     const started = this.now();
-
     const found = new Map<string, DjenCommunication>();
     /** What came with no hash: nothing to tell two of them apart by, so each is kept. */
     const unkeyed: DjenCommunication[] = [];
@@ -241,14 +273,7 @@ export class DjenHttpClient implements DjenClient {
 
     let whole = false;
     for (let page = 1; page <= this.maxPages; page += 1) {
-      const query = new URLSearchParams({
-        numeroOab: number,
-        ufOab: uf,
-        dataDisponibilizacaoInicio: input.since,
-        dataDisponibilizacaoFim: until,
-        pagina: String(page),
-        itensPorPagina: String(PAGE_SIZE),
-      });
+      const query = new URLSearchParams({ ...asked, pagina: String(page), itensPorPagina: String(PAGE_SIZE) });
       let response: Response;
       for (;;) {
         // A listing has the time of one turn, its waits included.
@@ -280,13 +305,7 @@ export class DjenHttpClient implements DjenClient {
       if (Number.isInteger(limit) && limit > 0) window = limit;
 
       for (const item of items) {
-        // Only what names this very registration: a number alone exists in every state, and with
-        // another letter it is another lawyer.
-        const addressed = (item.destinatarioadvogados ?? []).some(
-          (lawyer) =>
-            oabNumberKey(lawyer?.advogado?.numero_oab) === number && oabStateKey(lawyer?.advogado?.uf_oab) === uf,
-        );
-        if (!addressed) {
+        if (!keep(item)) {
           dropped += 1;
           continue;
         }

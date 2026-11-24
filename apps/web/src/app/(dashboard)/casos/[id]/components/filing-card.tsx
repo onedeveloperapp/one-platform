@@ -52,6 +52,7 @@ import {
 } from "@/lib/cases/filing-actions";
 import { dropUnsaved, sendForReading } from "@/lib/cases/prefill-browser";
 import { opensOnArrival } from "@/lib/cases/sections";
+import { todayInBrasilia } from "@/lib/deadlines/deadlines";
 import { signatureErrorKey, signatureErrorSaid } from "@/lib/psc/signature";
 import { filingKindOf } from "@flyee/courts/filing";
 import { formatCnj, isValidCnj } from "@flyee/rules/cnj";
@@ -289,6 +290,11 @@ function Lawsuit({
   const [receipt, setReceipt] = useState<{ fileId: string | null; name: string } | null>(null);
   const [receiptSlot, setReceiptSlot] = useState<SlotState>({ kind: "empty" });
   const [receiptRead, setReceiptRead] = useState<ReceiptReading | null>(null);
+  // A receipt of a day before the case was in ONE: the lawsuit was filed before (a closed lawsuit or one going on that
+  // the firm brings to ONE), which the lawyer confirms before it is attached (0286).
+  const openedOn = todayInBrasilia(new Date(state.case.createdAt));
+  const filedBeforeOne = /^\d{4}-\d{2}-\d{2}$/.test(filedOn) && filedOn < openedOn;
+  const [confirmingPast, setConfirmingPast] = useState(false);
 
   // What a court's system asks of each file, beyond its name: the type the lawyer picks there, and in a
   // system that asks for one, its description (0036).
@@ -429,7 +435,7 @@ function Lawsuit({
     setReceiptSlot({ kind: "read", tone: read.matches && read.cnj ? "positive" : "attention", sentence });
   };
 
-  const attach = () =>
+  const attach = (beforeOne: boolean) =>
     run(
       "receipt",
       async () => {
@@ -440,6 +446,7 @@ function Lawsuit({
           fileId: receipt.fileId,
           cnj,
           filedOn,
+          beforeOne,
         });
       },
       () => {
@@ -854,6 +861,11 @@ function Lawsuit({
                       {t("filing-receipt-read-court", { read: receiptRead.court, court: proceeding.court })}
                     </Alert>
                   )}
+                  {filedBeforeOne ? (
+                    <StateLine tone="info">
+                      {t("filing-receipt-before-one", { day: formatDayBr(openedOn) ?? openedOn })}
+                    </StateLine>
+                  ) : null}
                   <Typography variant="body2" className="text-text-secondary">
                     {t("filing-receipt-read-check")}
                   </Typography>
@@ -864,7 +876,7 @@ function Lawsuit({
                       disabled={busy !== null || !cnjOk || !filedOn}
                       loading={busy === "receipt"}
                       loadingPosition="start"
-                      onClick={() => void attach()}
+                      onClick={() => (filedBeforeOne ? setConfirmingPast(true) : void attach(false))}
                     >
                       {busy === "receipt" ? sentence(words.receipt.doing) : t("filing-receipt-attach")}
                     </Button>
@@ -973,6 +985,26 @@ function Lawsuit({
             {busy === "cancel" ? sentence(words.cancel.doing) : t("filing-cancel")}
           </Button>
         </Box>
+      ) : null}
+      {confirmingPast && filing ? (
+        <ConfirmActionDialog
+          title={t("filing-receipt-before-one-title")}
+          consequences={[
+            t("filing-receipt-before-one-day", { day: formatDayBr(filedOn) ?? filedOn }),
+            t("filing-receipt-before-one-history"),
+            t("filing-receipt-before-one-past"),
+            t("filing-receipt-before-one-ahead"),
+          ]}
+          requireReason={false}
+          confirmLabel={t("filing-receipt-before-one-confirm")}
+          cancelLabel={t("cases-cancel")}
+          busyLabel={t("cases-working")}
+          onConfirm={async () => {
+            await attach(true);
+            return null;
+          }}
+          onClose={() => setConfirmingPast(false)}
+        />
       ) : null}
       {cancelling && filing ? (
         <ConfirmActionDialog

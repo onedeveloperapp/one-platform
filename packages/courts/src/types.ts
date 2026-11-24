@@ -84,6 +84,12 @@ export interface DjenClient {
    */
   listByOab(input: OabRegistration & { since: string; until?: string }): Promise<DjenCommunication[]>;
   /**
+   * Every communication of one lawsuit, by its number (20 digits, with or without the mask), whoever it was
+   * addressed to and whenever it was made available, oldest first: the history of a lawsuit the firm brings to ONE
+   * already in court. Whole or an error, paced and refused as `listByOab` is; a number that is not one is refused.
+   */
+  listByProcess(input: { cnj: string }): Promise<DjenCommunication[]>;
+  /**
    * The public address of the certificate of a communication, as the DJEN
    * itself issues it, by the hash. (The public API has no reading of one
    * communication by its hash: what it gives by the hash is its certificate.)

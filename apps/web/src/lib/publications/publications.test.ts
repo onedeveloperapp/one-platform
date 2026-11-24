@@ -43,6 +43,8 @@ const MIGRATION = fs.readFileSync(path.join(ROOT, "packages/db/migrations/0028_p
 const SAMPLED = fs.readFileSync(path.join(ROOT, "packages/db/migrations/0035_triage_sampled.sql"), "utf8");
 /** ONE's triage and the lawyer's awareness (0104): the columns of the awareness, and the instructions in force. */
 const BY_ONE = fs.readFileSync(path.join(ROOT, "packages/db/migrations/0104_one_triages_publications.sql"), "utf8");
+/** The mark of a publication read from its lawsuit's history (0286). */
+const HISTORY = fs.readFileSync(path.join(ROOT, "packages/db/migrations/0286_lawsuits_from_the_past.sql"), "utf8");
 const SCREEN = path.join(ROOT, "apps/web/src/app/(dashboard)/publicacoes");
 const product = messages.product as Record<string, string>;
 const char = (code: number) => String.fromCodePoint(code);
@@ -82,7 +84,13 @@ describe("what a publication is", () => {
       [...text.matchAll(/grant select \(([^)]+)\) on table public\.publications to authenticated/g)].flatMap((match) =>
         match[1].split(",").map((column) => column.trim()),
       );
-    const granted = [...grantsOf(MIGRATION), ...grantsOf(SAMPLED), ...grantsOf(HEARINGS), ...grantsOf(BY_ONE)];
+    const granted = [
+      ...grantsOf(MIGRATION),
+      ...grantsOf(SAMPLED),
+      ...grantsOf(HEARINGS),
+      ...grantsOf(BY_ONE),
+      ...grantsOf(HISTORY),
+    ];
     expect(granted.length).toBeGreaterThan(20);
     for (const column of PUBLICATION_LIST_COLUMNS) expect(granted, column).toContain(column);
     // What the AI said stays the platform's: a member reads only that a triage was the AI's, never its word in the shadow.

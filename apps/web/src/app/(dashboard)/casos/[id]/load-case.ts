@@ -56,6 +56,7 @@ import { loadStatementFacts } from "@/lib/cases/statement-facts";
 import { CHRONOLOGY_TASK, TRANSCRIPTION_TASK } from "@/lib/cases/statements";
 import { lawsuitAmountsOf } from "@/lib/courts/amount";
 import { loadCourseFacts } from "@/lib/courts/course-facts";
+import { isDjenCaptureOn } from "@/lib/courts/djen";
 import { sessionsOf } from "@/lib/courts/sessions";
 import { caseDeadlines, deadlineActs } from "@/lib/deadlines/facts";
 import { type AutonomyDecision, type AutonomyMode, firmAutonomyOf } from "@/lib/firm/autonomy";
@@ -66,6 +67,7 @@ import { isCaseKindOf } from "@/lib/modules/registry";
 import { caseNotices } from "@/lib/notices/facts";
 import { publicationActionsOf } from "@/lib/publications/actions-read";
 import { loadCasePublications } from "@/lib/publications/facts";
+import { historyReadsOf } from "@/lib/publications/history";
 import { signatureAccountOf } from "@/lib/signatures/methods";
 import { loadFlightChecks } from "@/modules/direito-do-passageiro/flights/facts";
 import { weatherProvider } from "@/modules/direito-do-passageiro/flights/weather";
@@ -477,6 +479,7 @@ export async function loadCase(id: string): Promise<CaseState> {
     asksContact,
     autonomy,
     publicationRows,
+    histories,
   ] = await Promise.all([
     caseDeadlines(supabase, firm, id, context.profile.timezone).catch(() => undefined),
     deadlineActs(supabase).catch(() => undefined),
@@ -541,6 +544,14 @@ export async function loadCase(id: string): Promise<CaseState> {
     // Every publication of the case's lawsuits, as its card shows them, ONE's triage and the awareness owed (0104).
     // One that could not be read leaves the card saying so, never the page.
     loadCasePublications(supabase, firm, id, context.profile.timezone).catch(() => null),
+    // Where ONE's reading of the history of each lawsuit filed before the case was in ONE stands (0286). One that could
+    // not be read says nothing of it, never the page.
+    supabase
+      .from("proceeding_history_reads")
+      .select("proceeding_id, status, kept")
+      .eq("case_id", id)
+      .eq("org_id", firm)
+      .then(({ data, error }) => (error ? [] : historyReadsOf(data ?? []))),
   ]);
   if (
     !deadlines ||
@@ -818,6 +829,9 @@ export async function loadCase(id: string): Promise<CaseState> {
       };
     }),
     publicationRows,
+    histories,
+    // Whether this environment reads the DJEN at all: where it does not, a history owed says it waits for that.
+    djenReading: isDjenCaptureOn(),
     events: (
       (events.data ?? []) as {
         id: string;

@@ -112,6 +112,7 @@ export const PUBLICATION_LIST_COLUMNS = [
   "ack_owed",
   "acked_by",
   "acked_at",
+  "from_history",
 ] as const;
 
 /** The answers of the database a screen of publications has words for; anything else is "failed". */
@@ -129,6 +130,8 @@ const ERROR_KEY: Record<string, string> = {
   no_registrations: "publication-error-no-registrations",
   capture_off: "publication-error-capture-off",
   invalid_search: "publication-error-search",
+  not_a_lawyer: "publication-error-history-lawyer",
+  not_filed: "publication-error-history-not-filed",
 };
 export const publicationErrorKey = (code: string): string => ERROR_KEY[code] ?? "publication-error-failed";
 

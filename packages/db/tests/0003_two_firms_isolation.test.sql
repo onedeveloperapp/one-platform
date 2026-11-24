@@ -235,6 +235,10 @@ insert into public.filing_batch_codes (batch_id, org_id, key_version, iv, cipher
 insert into public.filing_batch_notices (org_id, batch_id, kind, subject, user_id, status, reason) values
   ('b1000000-0000-4000-8000-00000000000a', 'f2640000-0000-4000-8000-00000000000a', 'stopped', 'f2640000-0000-4000-8000-00000000000a', 'a1000000-0000-4000-8000-000000000001', 'skipped', 'no_phone'),
   ('b1000000-0000-4000-8000-00000000000b', 'f2640000-0000-4000-8000-00000000000b', 'stopped', 'f2640000-0000-4000-8000-00000000000b', 'a1000000-0000-4000-8000-000000000004', 'skipped', 'no_phone');
+-- The history of a lawsuit filed before its case was in ONE, owed to the DJEN's reading (0286).
+insert into public.proceeding_history_reads (org_id, proceeding_id, case_id) values
+  ('b1000000-0000-4000-8000-00000000000a', 'a5000000-0000-4000-8000-00000000000a', 'a3000000-0000-4000-8000-00000000000a'),
+  ('b1000000-0000-4000-8000-00000000000b', 'a5000000-0000-4000-8000-00000000000b', 'a3000000-0000-4000-8000-00000000000b');
 insert into public.court_login_uses (org_id, person_id, batch_id, system_key) values
   ('b1000000-0000-4000-8000-00000000000a', 'a1000000-0000-4000-8000-000000000001', 'f2640000-0000-4000-8000-00000000000a', 'eproc-tjsp'),
   ('b1000000-0000-4000-8000-00000000000b', 'a1000000-0000-4000-8000-000000000004', 'f2640000-0000-4000-8000-00000000000b', 'eproc-tjsp');
@@ -789,7 +793,7 @@ select is(
     'issued_documents', 'judgment_paths', 'judgment_sessions', 'lawsuit_amounts', 'lawsuit_facts', 'lawyer_filing_ways', 'lawyer_signature_uses', 'legal_sources', 'marketing_segments', 'memberships',
     'money_releases', 'money_shares', 'money_statements', 'movements', 'notice_optins', 'notice_stops', 'onboarding_state', 'partner_invitations', 'partner_links', 'passenger_welcomes', 'pax_firm_clauses',
     'people', 'person_data_requests',
-    'piece_fact_checks', 'proceeding_lawyers', 'proceeding_parties', 'proceeding_tracking', 'proceedings', 'publication_actions', 'publication_readings', 'publications', 'record_versions',
+    'piece_fact_checks', 'proceeding_history_reads', 'proceeding_lawyers', 'proceeding_parties', 'proceeding_tracking', 'proceedings', 'publication_actions', 'publication_readings', 'publications', 'record_versions',
     'residence_declarations', 'signature_envelopes',
     'subscriptions', 'support_authorizations', 'template_imports', 'test_chats', 'tracked_legs', 'tracked_trip_documents', 'tracked_trips', 'trip_day_messages', 'usage_alerts', 'usage_ledger',
     'wa_contacts',
@@ -963,7 +967,7 @@ select is(
     'filing_batch_notices', 'filing_batches', 'filing_package_items', 'filing_packages',
     'filing_receipts', 'filing_submissions', 'filing_waits_reminders', 'finance_access', 'firm_area_script_requests', 'firm_area_scripts', 'firm_areas', 'firm_autonomy', 'firm_brands', 'firm_calendars', 'firm_claim_defaults', 'firm_filing_ways', 'firm_marketing_terms', 'firm_message_texts', 'firm_modules', 'firm_notice_kinds', 'firm_operations', 'firm_personalities', 'firm_personality_requests', 'firm_personality_uses', 'firm_settlement_floors', 'firm_signers', 'flight_alerts', 'flight_checks', 'flight_segments', 'free_justice_answers', 'hearing_briefs', 'hearing_contacts', 'hearing_reports', 'hearing_staff_messages', 'hearings', 'import_batches',
     'import_rows', 'invoices', 'issued_documents', 'judgment_paths', 'judgment_sessions', 'lawsuit_amounts', 'lawsuit_facts', 'lawyer_filing_ways', 'lawyer_signature_uses', 'legal_sources',
-    'memberships', 'movements', 'notice_optins', 'notice_stops', 'partner_links', 'passenger_welcomes', 'pax_firm_clauses', 'people', 'piece_fact_checks', 'proceeding_lawyers', 'proceeding_parties', 'proceeding_tracking', 'proceedings',
+    'memberships', 'movements', 'notice_optins', 'notice_stops', 'partner_links', 'passenger_welcomes', 'pax_firm_clauses', 'people', 'piece_fact_checks', 'proceeding_history_reads', 'proceeding_lawyers', 'proceeding_parties', 'proceeding_tracking', 'proceedings',
     'publication_actions', 'publication_readings', 'publications',
     'residence_declarations', 'signature_envelopes',
     'subscriptions', 'support_authorizations', 'template_imports', 'test_chats', 'tracked_legs', 'tracked_trip_documents', 'tracked_trips', 'trip_day_messages', 'usage_alerts', 'usage_ledger',
@@ -1009,7 +1013,7 @@ select is(
     'issued_documents', 'judgment_paths', 'judgment_sessions', 'lawsuit_amounts', 'lawsuit_facts', 'lawyer_filing_ways', 'lawyer_signature_uses', 'legal_sources', 'marketing_segments', 'memberships',
     'money_releases', 'money_shares', 'money_statements', 'movements', 'notice_optins', 'notice_stops', 'onboarding_state', 'partner_invitations', 'partner_links', 'passenger_welcomes', 'pax_firm_clauses',
     'people', 'person_data_requests',
-    'piece_fact_checks', 'proceeding_lawyers', 'proceeding_parties', 'proceeding_tracking', 'proceedings', 'publication_actions', 'publication_readings', 'publications', 'record_versions',
+    'piece_fact_checks', 'proceeding_history_reads', 'proceeding_lawyers', 'proceeding_parties', 'proceeding_tracking', 'proceedings', 'publication_actions', 'publication_readings', 'publications', 'record_versions',
     'residence_declarations', 'signature_envelopes',
     'subscriptions', 'support_authorizations', 'template_imports', 'test_chats', 'tracked_legs', 'tracked_trip_documents', 'tracked_trips', 'trip_day_messages', 'usage_alerts', 'usage_ledger',
     'wa_contacts',

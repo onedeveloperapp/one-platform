@@ -11,19 +11,32 @@ import { Alert, Button, Typography } from "@mui/material";
 import CollapsibleCard from "@/components/product/collapsible-card";
 import EmptyState from "@/components/product/empty-state";
 import ItemRows, { type ItemRow } from "@/components/product/item-rows";
+import StateLine, { type StateTone } from "@/components/product/state-line";
 import PublicationCard, { CATEGORY_LOOK } from "@/components/publications/publication-card";
 import IllustrationEmail from "@/icons/illustrations/illustration-email";
 import NiDocumentCross from "@/icons/nexture/ni-document-cross";
 import NiInbox from "@/icons/nexture/ni-inbox";
 import { SECTION_ANCHOR } from "@/lib/cases/now";
 import { opensOnArrival } from "@/lib/cases/sections";
-import { acknowledgePublication } from "@/lib/publications/actions";
+import { todayInBrasilia } from "@/lib/deadlines/deadlines";
+import { acknowledgePublication, askProceedingHistory } from "@/lib/publications/actions";
 import type { PublicationRow } from "@/lib/publications/facts";
+import { type HistoryLine, historyLines } from "@/lib/publications/history";
 import type { Said } from "@/lib/publications/list-state";
 import { CATEGORY_KEY, publicationErrorKey } from "@/lib/publications/publications";
 import { orderPublications, type PublicationLine, publicationLine, shortDay } from "@/lib/publications/rows";
+import { formatCnj } from "@flyee/rules/cnj";
 
 type Ready = Extract<CaseState, { kind: "ready" }>;
+
+/** How each state of a lawsuit's history is said (0286): its words and its tone. */
+const HISTORY_LOOK: Record<HistoryLine["kind"], { key: string; tone: StateTone; action: string | null }> = {
+  ask: { key: "case-history-ask", tone: "info", action: "case-history-read" },
+  due: { key: "case-history-due", tone: "waiting", action: null },
+  done: { key: "case-history-done", tone: "done", action: null },
+  failed: { key: "case-history-failed", tone: "attention", action: "case-history-again" },
+};
+const HISTORY_OFF = { key: "case-history-off", tone: "info" as StateTone, action: null };
 
 /** The words of the button that opens a line whose one thing is inside it. */
 const OPENER_KEY: Record<string, string> = {
@@ -67,6 +80,8 @@ export default function PublicationsCard({
   const read = state.publicationRows;
   const rows = read?.rows ?? [];
   const filed = state.proceedings.some((proceeding) => proceeding.status === "filed");
+  // The history of each lawsuit filed before the case was in ONE, read from the DJEN by its number (0286).
+  const histories = historyLines(state.proceedings, state.histories, todayInBrasilia(new Date(state.case.createdAt)));
   if (!filed && read && rows.length === 0) return null;
 
   const mayTriage = writable && state.worksDeadlines;
@@ -97,6 +112,24 @@ export default function PublicationsCard({
       setAcked((current) => ({ ...current, [row.id]: true }));
       return true;
     });
+
+  const historyWords = {
+    doing: t("case-action-history-doing"),
+    done: t("case-action-history-done"),
+    failed: t("case-action-history-failed"),
+  };
+  const askHistory = (proceedingId: string) =>
+    action.run(`history-${proceedingId}`, historyWords, async () => {
+      setProblem(null);
+      const result = await askProceedingHistory(state.case.id, proceedingId);
+      if (!result.ok) {
+        setProblem(t(publicationErrorKey(result.code)));
+        return false;
+      }
+      onChanged();
+      return true;
+    });
+  const mayAsk = writable && state.lawyer;
 
   const asLine = ({ row, line }: { row: PublicationRow; line: PublicationLine }): ItemRow => {
     const category = said[row.id]?.category ?? row.category;
@@ -195,6 +228,32 @@ export default function PublicationsCard({
           {problem}
         </Alert>
       ) : null}
+      {histories.map((history) => {
+        // Where this environment does not read the DJEN, a history owed waits for that, and says so.
+        const look = history.kind === "due" && state.djenReading === false ? HISTORY_OFF : HISTORY_LOOK[history.kind];
+        return (
+          <StateLine
+            key={history.proceedingId}
+            tone={look.tone}
+            action={
+              mayAsk && look.action ? (
+                <Button
+                  variant={look.tone === "attention" ? "contained" : "outlined"}
+                  size="small"
+                  disabled={action.busy}
+                  loading={action.pending(`history-${history.proceedingId}`)}
+                  loadingPosition="start"
+                  onClick={() => void askHistory(history.proceedingId)}
+                >
+                  {action.pending(`history-${history.proceedingId}`) ? sentence(historyWords.doing) : t(look.action)}
+                </Button>
+              ) : undefined
+            }
+          >
+            {t(look.key, { cnj: formatCnj(history.cnj) ?? history.cnj, count: history.kept })}
+          </StateLine>
+        );
+      })}
       {!read ? (
         <Alert severity="error" className="neutral bg-background-paper/60!">
           {t("case-publications-error")}

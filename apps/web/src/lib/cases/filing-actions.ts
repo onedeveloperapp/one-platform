@@ -9,6 +9,7 @@ import { queuePackageSignature } from "@/lib/cases/package-signature-work";
 import { discardUpload, downloadUrl, finishUpload } from "@/lib/files/uploads";
 import { getMemberContext } from "@/lib/member/context";
 import { settleFirmNotices } from "@/lib/notices/work";
+import { queueProceedingHistory } from "@/lib/publications/history-work";
 import { isSupportVisit } from "@/lib/whatsapp/session";
 
 /**
@@ -145,6 +146,9 @@ export async function requestPackageSignature(caseId: string, packageId: string)
  * A lawyer attaches the receipt the court's system gave (a file they just
  * uploaded with `startCaseUpload`), with the case number and the day: the
  * backend measures the file, and the database marks the lawsuit as filed.
+ * A day before the case was in ONE goes only with the lawyer's word that the
+ * lawsuit was filed before (`beforeOne`, 0286): then ONE reads its history
+ * from the DJEN right after the answer.
  */
 export async function attachFilingReceipt(input: {
   caseId: string;
@@ -152,7 +156,8 @@ export async function attachFilingReceipt(input: {
   fileId: string;
   cnj: string;
   filedOn: string;
-}): Promise<FilingResult> {
+  beforeOne?: boolean;
+}): Promise<FilingResult<{ history: boolean }>> {
   const context = await getMemberContext();
   if (!context?.firm || !isId(input?.caseId) || !isId(input?.packageId)) return { ok: false, code: "not_found" };
   if (!isId(input.fileId)) return { ok: false, code: "file_not_found", field: "file" };
@@ -167,12 +172,15 @@ export async function attachFilingReceipt(input: {
     target_file: input.fileId,
     target_cnj: cnj,
     target_filed_on: input.filedOn,
+    target_before_one: input.beforeOne === true,
   });
-  const result = fold(data, error, () => ({}));
+  const result = fold(data, error, (answer) => ({ history: answer.history === true }));
   if (result.ok) {
     refresh(input.caseId);
     // The client is told the lawsuit was filed: a test case's at once, a real case's after its minutes (0103).
     await settleFirmNotices(context.firm.id);
+    // A lawsuit filed before its case was in ONE: what the DJEN has of it is read right after the answer.
+    if (result.history) queueProceedingHistory();
   }
   // A receipt this request has just measured and that found no place is taken back.
   else if (finished.measured && !(await isSupportVisit())) await discardUpload(context, input.fileId);

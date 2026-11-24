@@ -633,8 +633,9 @@ select ok(
   and pg_temp.got('receipt_used_file', 'code') = 'file_not_found'
   and pg_temp.got('receipt_bad_cnj', 'code') = 'invalid_cnj'
   and pg_temp.got('receipt_other_court', 'code') = 'cnj_of_another_court'
-  and pg_temp.got('receipt_future', 'code') = 'invalid_date'
-  and pg_temp.got('receipt_before_case', 'code') = 'invalid_date'
+  -- A day still to come, and one before the case without the lawyer's word that it was filed before (0286).
+  and pg_temp.got('receipt_future', 'code') = 'filed_on_future'
+  and pg_temp.got('receipt_before_case', 'code') = 'filed_before_case'
   and pg_temp.got('receipt_not_ready', 'code') = 'package_not_ready'
   and pg_temp.got('receipt_moved', 'code') = 'package_outdated'
   and pg_temp.got('receipt_refused_doc', 'code') = 'package_outdated'

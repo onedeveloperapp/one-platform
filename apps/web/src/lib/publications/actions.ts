@@ -14,6 +14,7 @@ import {
   publicationProgress,
   type PublicationRow,
 } from "@/lib/publications/facts";
+import { queueProceedingHistory } from "@/lib/publications/history-work";
 import { isPublicationCategory, plainText, PUBLICATIONS_SHOWN, searchedCnj } from "@/lib/publications/publications";
 import { type ReadingKind, readingKindOf } from "@/lib/publications/reading-words";
 import { queuePublicationReading, readingReadyKinds } from "@/lib/publications/reading-work";
@@ -279,6 +280,23 @@ export async function acknowledgePublication(
   if (result.ok) {
     refresh();
     if (isId(caseId)) revalidatePath(`/casos/${caseId}`);
+  }
+  return result;
+}
+
+/**
+ * A lawyer of the firm has ONE read the history of a lawsuit from the DJEN (migration 0286): one filed before its case
+ * was in ONE and never read, or one whose reading failed. It is read right after the answer; one read stays as it is.
+ */
+export async function askProceedingHistory(caseId: string, proceedingId: string): Promise<PublicationResult> {
+  const context = await getMemberContext();
+  if (!context?.firm) return { ok: false, code: "failed" };
+  if (!isId(caseId) || !isId(proceedingId)) return { ok: false, code: "not_found" };
+  const { data, error } = await context.supabase.rpc("ask_proceeding_history", { target_proceeding: proceedingId });
+  const result = fold(data, error);
+  if (result.ok) {
+    revalidatePath(`/casos/${caseId}`);
+    if (result.code === "queued") queueProceedingHistory();
   }
   return result;
 }

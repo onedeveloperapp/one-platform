@@ -164,6 +164,7 @@ function recordingDjen(entries: FakeDjenEntry[], fail?: (asked: Asked, call: num
       if (failure) throw failure;
       return fake.listByOab(input);
     },
+    listByProcess: (input) => fake.listByProcess(input),
     certificateUrl: (hash) => fake.certificateUrl(hash),
     probe: (input) => fake.probe(input),
   };

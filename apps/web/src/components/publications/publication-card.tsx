@@ -432,6 +432,11 @@ export default function PublicationCard({
               },
               { key: "class", label: t("publication-fact-class"), value: row.className },
               { key: "to", label: t("publication-fact-to"), value: row.lawyers.join(", ") },
+              {
+                key: "origin",
+                label: t("publication-fact-origin"),
+                value: row.fromHistory ? t("publication-origin-history") : null,
+              },
             ]}
           />
           {inline ? <QuickActions label={t("publication-more-actions")} actions={more} /> : null}
