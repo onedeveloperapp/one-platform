@@ -9,16 +9,20 @@ import { useRef, useState } from "react";
 
 import { Alert, Box, Button, MenuItem, TextField, Typography } from "@mui/material";
 
+import ChronologyTimeline from "@/components/product/chronology-timeline";
 import CollapsibleCard, { type CardAsk } from "@/components/product/collapsible-card";
 import EmptyState from "@/components/product/empty-state";
+import InfoHint from "@/components/product/info-hint";
+import QuickActions, { type QuickAction } from "@/components/product/quick-actions";
 import SecondFactorPrompt from "@/components/product/second-factor-prompt";
 import SectionTitle from "@/components/product/section-title";
-import StateLine from "@/components/product/state-line";
-import StatusChip, { type StatusTone } from "@/components/product/status-chip";
+import StateLine, { type StateTone } from "@/components/product/state-line";
 import IllustrationSupport from "@/icons/illustrations/illustration-support";
+import NiLoader from "@/icons/nexture/ni-loader";
 import { mayDecide } from "@/lib/ai/approvals";
 import { ACCOUNT_TOPIC_SHORT_KEY } from "@/lib/cases/account";
 import { openCaseFile } from "@/lib/cases/actions";
+import { chronologyTimeline } from "@/lib/cases/chronology";
 import { opensOnArrival } from "@/lib/cases/sections";
 import {
   addCaseStatement,
@@ -45,17 +49,22 @@ import { isMinorOn } from "@flyee/rules/person";
 
 type Ready = Extract<CaseState, { kind: "ready" }>;
 
-const STAGE_TONE: Record<StatementStage, StatusTone> = {
-  uploading: "neutral",
-  transcribing: "info",
-  transcript_waits: "attention",
-  not_transcribed: "attention",
-  proposing: "info",
-  not_proposed: "attention",
-  waiting_firm: "attention",
-  waiting_client: "info",
-  confirmed: "positive",
-  contested: "attention",
+/**
+ * Where an account stands, as one line under its name (the owner's canvas of 2026-11-24): the card's head says the
+ * case's state, and an account's own chip beside it read as a second state ("Relato pronto" over "Aguarda o
+ * cliente"). The line says what happens now and whose turn it is, its mark turning while ONE works.
+ */
+const STAGE_LINE: Record<StatementStage, { tone: StateTone; key: string; working?: boolean }> = {
+  uploading: { tone: "waiting", key: "case-statement-line-uploading", working: true },
+  transcribing: { tone: "waiting", key: "case-statement-line-transcribing", working: true },
+  transcript_waits: { tone: "attention", key: "case-statement-line-transcript-waits" },
+  not_transcribed: { tone: "attention", key: "case-statement-not-transcribed-help" },
+  proposing: { tone: "waiting", key: "case-statement-line-proposing", working: true },
+  not_proposed: { tone: "attention", key: "case-statement-not-proposed-help" },
+  waiting_firm: { tone: "attention", key: "case-statement-line-waiting-firm" },
+  waiting_client: { tone: "waiting", key: "case-statement-line-waiting-client" },
+  confirmed: { tone: "done", key: "case-statement-line-confirmed" },
+  contested: { tone: "waiting", key: "case-statement-line-contested", working: true },
 };
 
 const SOURCE_KEY: Record<CaseStatement["source"], string> = {
@@ -104,6 +113,8 @@ export default function StatementsCard({
   const [removing, setRemoving] = useState<string | null>(null);
   // The statement whose missing answers a lawyer is about to go on without (0094).
   const [closing, setClosing] = useState<string | null>(null);
+  // Another account registered by hand, once the card has some: the form opens from the card's foot (2026-11-24).
+  const [adding, setAdding] = useState(false);
   const input = useRef<HTMLInputElement>(null);
 
   const nameOf = (partyId: string | null) =>
@@ -132,7 +143,10 @@ export default function StatementsCard({
     run(
       "text",
       () => addCaseStatement({ caseId: state.case.id, partyId: party || null, text }),
-      () => setText(""),
+      () => {
+        setText("");
+        setAdding(false);
+      },
     );
 
   const sendAudio = (file: File) =>
@@ -147,7 +161,13 @@ export default function StatementsCard({
         contentType: mime,
       });
       if (!uploaded) return { ok: false, code: "not_uploaded" };
-      return finishStatementUpload({ caseId: state.case.id, partyId: party || null, fileId: started.fileId });
+      const finished = await finishStatementUpload({
+        caseId: state.case.id,
+        partyId: party || null,
+        fileId: started.fileId,
+      });
+      if (finished.ok) setAdding(false);
+      return finished;
     });
 
   const listen = async (fileId: string) => {
@@ -184,52 +204,49 @@ export default function StatementsCard({
     // ONE waits for the answers only before the lawsuits: once they exist the answers hold nothing, and go to the
     // piece when they come (ONE writes it again by itself while no lawyer touched it, 0097).
     const gapsHold = gapsOpen && state.proceedings.length === 0;
-    return (
-      <Box key={statement.id} className="border-grey-100 flex flex-col gap-2 rounded-2xl border p-4">
-        <Box className="flex flex-wrap items-start justify-between gap-2">
-          <Box className="flex min-w-0 flex-col">
-            <Typography variant="body1" className="font-semibold">
-              {nameOf(statement.partyId) ?? t("case-statement-unnamed")}
-            </Typography>
-            <Typography variant="body2" className="text-text-secondary">
-              {[
-                statement.spoken ? t("case-statement-spoken") : t("case-statement-written"),
-                t(SOURCE_KEY[statement.source]),
-                statement.receivedLabel,
-              ].join(" · ")}
-            </Typography>
-          </Box>
-          <StatusChip tone={STAGE_TONE[stage]} label={t(STAGE_KEY[stage])} />
-        </Box>
-
-        {stage === "not_transcribed" ? (
-          <Typography variant="body2" className="text-text-secondary">
-            {statement.workError === "audio_too_large"
-              ? t("case-statement-too-large-help")
-              : t("case-statement-not-transcribed-help")}
-          </Typography>
-        ) : null}
-        {stage === "not_proposed" ? (
-          <Typography variant="body2" className="text-text-secondary">
-            {t("case-statement-not-proposed-help")}
-          </Typography>
-        ) : null}
-
-        {lines.length > 0 ? (
-          <Box className="flex flex-col gap-1">
-            <Typography variant="body2" className="text-text-secondary">
-              {t("case-statement-chronology")}
-            </Typography>
-            <Box component="ol" className="m-0 flex list-decimal flex-col gap-1 pl-5">
-              {lines.map((line, index) => (
-                <Typography component="li" variant="body1" key={`${index}-${line.slice(0, 24)}`}>
-                  {line}
-                </Typography>
-              ))}
-            </Box>
-          </Box>
-        ) : null}
-
+    const line = STAGE_LINE[stage];
+    const lineKey =
+      stage === "not_transcribed" && statement.workError === "audio_too_large"
+        ? "case-statement-too-large-help"
+        : line.key;
+    // What is done once in a while goes in the account's "⋯": hearing the audio (unless writing what it says is the
+    // thing owed), asking the chronology again while the client has it, removing the account.
+    const extra: QuickAction[] = [
+      ...(statement.audioFileId && stage !== "not_transcribed"
+        ? [
+            {
+              key: "listen",
+              label: t("case-statement-listen"),
+              onClick: () => void listen(statement.audioFileId as string),
+              disabled: busy !== null,
+            },
+          ]
+        : []),
+      ...(writable && stage === "waiting_client"
+        ? [
+            {
+              key: "again",
+              label: t("case-statement-take-back"),
+              onClick: () => void run(statement.id, () => requestStatementChronology(state.case.id, statement.id)),
+              disabled: busy !== null,
+            },
+          ]
+        : []),
+      ...(writable && stage !== "confirmed"
+        ? [
+            {
+              key: "remove",
+              label: t("case-statement-remove"),
+              onClick: () => setRemoving(statement.id),
+              disabled: busy !== null,
+            },
+          ]
+        : []),
+    ];
+    // What the order of the facts says the account lacks: an owed line before the facts while ONE waits for it, a
+    // note after them once it does not.
+    const gapsBlock = (
+      <>
         {statement.missingTopics.length > 0 && statement.chronology ? (
           // What the order of the facts says the account lacks, and what the client is asked on their link (0090)
           // and in the conversation (0092). While they are asked, ONE waits for the answers before the lawsuits; a
@@ -250,16 +267,24 @@ export default function StatementsCard({
               ) : undefined
             }
           >
-            {t("case-statement-gaps", {
-              topics: list.format(statement.missingTopics.map((topic) => t(ACCOUNT_TOPIC_SHORT_KEY[topic]))),
-            })}{" "}
-            {!gapsOpen
-              ? t("case-statement-gaps-done")
-              : statement.askedInChat
-                ? t("case-statement-gaps-asked-chat", { count: statement.questions.length })
-                : t("case-statement-gaps-asked", { count: statement.questions.length })}
-            {gapsOpen ? " " : null}
-            {gapsHold ? t("case-statement-gaps-wait") : gapsOpen ? t("case-statement-gaps-piece") : null}
+            {/* What is missing in sight; who was asked and what ONE waits for, behind the "i" (2026-11-24). */}
+            <Box component="span" className="inline-flex flex-wrap items-center gap-1">
+              {t("case-statement-gaps", {
+                topics: list.format(statement.missingTopics.map((topic) => t(ACCOUNT_TOPIC_SHORT_KEY[topic]))),
+              })}
+              <InfoHint
+                label={[
+                  !gapsOpen
+                    ? t("case-statement-gaps-done")
+                    : statement.askedInChat
+                      ? t("case-statement-gaps-asked-chat", { count: statement.questions.length })
+                      : t("case-statement-gaps-asked", { count: statement.questions.length }),
+                  gapsHold ? t("case-statement-gaps-wait") : gapsOpen ? t("case-statement-gaps-piece") : "",
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
+              />
+            </Box>
           </StateLine>
         ) : statement.gapsClosed.length > 0 ? (
           <StateLine tone="done">
@@ -292,6 +317,65 @@ export default function StatementsCard({
             </Button>
           </Box>
         ) : null}
+      </>
+    );
+    return (
+      <Box
+        key={statement.id}
+        component="section"
+        aria-label={nameOf(statement.partyId) ?? t("case-statement-unnamed")}
+        className="border-grey-100 flex flex-col gap-3 border-t pt-4 first:border-t-0 first:pt-0"
+      >
+        <Box className="flex flex-wrap items-start gap-2">
+          <Box className="flex min-w-0 flex-1 flex-col">
+            <Typography variant="body1" component="h3" className="mb-0 font-semibold">
+              {nameOf(statement.partyId) ?? t("case-statement-unnamed")}
+            </Typography>
+            <Typography variant="body2" className="text-text-secondary">
+              {[
+                statement.spoken ? t("case-statement-spoken") : t("case-statement-written"),
+                t(SOURCE_KEY[statement.source]),
+                statement.receivedLabel,
+              ].join(" · ")}
+            </Typography>
+          </Box>
+          {statement.transcript ? (
+            <Button
+              variant="outlined"
+              color="grey"
+              size="small"
+              aria-expanded={expanded}
+              onClick={() => setOpen(expanded ? null : statement.id)}
+            >
+              {expanded ? t("case-statement-hide") : t("case-statement-read")}
+            </Button>
+          ) : null}
+          <QuickActions label={t("case-statement-more")} actions={extra} />
+        </Box>
+
+        <Box role="status">
+          <StateLine
+            tone={line.tone}
+            icon={
+              line.working ? <NiLoader size="medium" className="animate-spin motion-reduce:animate-none" /> : undefined
+            }
+          >
+            {t(lineKey)}
+          </StateLine>
+        </Box>
+
+        {/* What the client still owes, with its way forward, before the facts; what was only said, after them. */}
+        {gapsHold ? gapsBlock : null}
+
+        {lines.length > 0 ? (
+          <ChronologyTimeline
+            days={chronologyTimeline(lines)}
+            label={t("case-statement-chronology")}
+            recordLabel={t("case-statement-record-anac")}
+          />
+        ) : null}
+
+        {gapsHold ? null : gapsBlock}
         {statement.clientAdded ? (
           <Alert severity="info" className="neutral bg-background-paper/60!">
             {t("case-statement-client-added", { answers: statement.clientAdded })}
@@ -313,13 +397,12 @@ export default function StatementsCard({
             <Typography variant="body2" className="text-text-secondary">
               {t("case-statement-previous")}
             </Typography>
-            <Box component="ol" className="text-text-secondary m-0 flex list-decimal flex-col gap-1 pl-5">
-              {previous.map((line, index) => (
-                <Typography component="li" variant="body2" key={`${index}-${line.slice(0, 24)}`}>
-                  {line}
-                </Typography>
-              ))}
-            </Box>
+            <ChronologyTimeline
+              days={chronologyTimeline(previous)}
+              label={t("case-statement-previous")}
+              recordLabel={t("case-statement-record-anac")}
+              muted
+            />
           </Box>
         ) : null}
 
@@ -406,19 +489,9 @@ export default function StatementsCard({
             </Button>
           </Box>
         ) : (
-          <Box className="flex flex-wrap gap-2 pt-1">
-            {statement.transcript ? (
-              <Button
-                variant="outlined"
-                color="grey"
-                size="small"
-                aria-expanded={expanded}
-                onClick={() => setOpen(expanded ? null : statement.id)}
-              >
-                {expanded ? t("case-statement-hide") : t("case-statement-read")}
-              </Button>
-            ) : null}
-            {statement.audioFileId ? (
+          // Only what the account asks now (2026-11-24): what is done once in a while sits in its "⋯".
+          <Box className="flex flex-wrap gap-2 empty:hidden">
+            {statement.audioFileId && stage === "not_transcribed" ? (
               <Button
                 variant="outlined"
                 color="grey"
@@ -475,30 +548,17 @@ export default function StatementsCard({
                 </Button>
               </>
             ) : null}
-            {writable && mayAskAgain ? (
+            {writable && mayAskAgain && stage !== "waiting_client" ? (
+              // Asking the chronology again is what a failed, refused or contested one asks; taking it back from the
+              // client is in the "⋯".
               <Button
-                variant="text"
+                variant="outlined"
                 color="grey"
                 size="small"
                 disabled={busy !== null}
                 onClick={() => void run(statement.id, () => requestStatementChronology(state.case.id, statement.id))}
               >
-                {busy === statement.id
-                  ? t("cases-working")
-                  : stage === "waiting_client"
-                    ? t("case-statement-take-back")
-                    : t("case-statement-propose-again")}
-              </Button>
-            ) : null}
-            {writable && stage !== "confirmed" ? (
-              <Button
-                variant="text"
-                color="grey"
-                size="small"
-                disabled={busy !== null}
-                onClick={() => setRemoving(statement.id)}
-              >
-                {t("case-statement-remove")}
+                {busy === statement.id ? t("cases-working") : t("case-statement-propose-again")}
               </Button>
             ) : null}
           </Box>
@@ -563,6 +623,11 @@ export default function StatementsCard({
       }
       ask={waitChip}
       description={t("case-statements-body")}
+      add={
+        writable && tellers.length > 0 && state.statements.length > 0 && !adding
+          ? { label: t("case-statements-add-more"), onClick: () => setAdding(true), disabled: busy !== null }
+          : null
+      }
       defaultOpen={opensOnArrival(
         state.case.status,
         "statements",
@@ -588,7 +653,7 @@ export default function StatementsCard({
           description={t("case-statements-empty-body")}
         />
       ) : (
-        <Box className="flex flex-col gap-2">{state.statements.map(row)}</Box>
+        <Box className="flex flex-col gap-4">{state.statements.map(row)}</Box>
       )}
 
       {writable && state.audios.length > 0 && (
@@ -633,7 +698,8 @@ export default function StatementsCard({
         </Box>
       )}
 
-      {writable && tellers.length > 0 && (
+      {/* With no account yet, registering one is the card's first act, in sight; another opens from the foot. */}
+      {writable && tellers.length > 0 && (state.statements.length === 0 || adding) && (
         <Box className="border-grey-100 flex flex-col gap-3 rounded-2xl border p-4">
           <Typography variant="body1" className="font-semibold">
             {t("case-statements-add")}
@@ -700,6 +766,17 @@ export default function StatementsCard({
             >
               {busy === "audio" ? t("client-documents-sending") : t("case-statements-upload-audio")}
             </Button>
+            {adding ? (
+              <Button
+                variant="text"
+                color="grey"
+                size="small"
+                disabled={busy !== null}
+                onClick={() => setAdding(false)}
+              >
+                {t("cases-cancel")}
+              </Button>
+            ) : null}
           </Box>
         </Box>
       )}

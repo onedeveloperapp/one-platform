@@ -5,12 +5,23 @@ import { type CaseActionWords, sentence, useCaseAction } from "./case-action";
 import CourtSystem from "./court-system";
 import FilingByOne from "./filing-by-one";
 import { filedWithoutNumber, oneFilesIt } from "./filing-by-one-rules";
-import FilingGuide from "./filing-guide";
+import FilingGuide, { FilingSheetMissing, lacksWords, type SheetLack } from "./filing-guide";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 
-import { Alert, Box, Button, Checkbox, FormControlLabel, Grid, MenuItem, TextField, Typography } from "@mui/material";
+import {
+  Alert,
+  Box,
+  Button,
+  Checkbox,
+  FormControlLabel,
+  Grid,
+  MenuItem,
+  TextField,
+  Tooltip,
+  Typography,
+} from "@mui/material";
 
 import DocumentSlot, { type SlotState } from "@/components/cases/document-slot";
 import CollapsibleCard from "@/components/product/collapsible-card";
@@ -18,11 +29,16 @@ import ConfirmActionDialog from "@/components/product/confirm-action-dialog";
 import EmptyState from "@/components/product/empty-state";
 import FactGrid, { type Fact } from "@/components/product/fact-grid";
 import InfoHint from "@/components/product/info-hint";
-import StateLine from "@/components/product/state-line";
+import QuickActions, { type QuickAction } from "@/components/product/quick-actions";
+import SectionTitle from "@/components/product/section-title";
+import StateLine, { type StateTone } from "@/components/product/state-line";
 import StatusChip, { type StatusTone } from "@/components/product/status-chip";
 import { TILE_TONE } from "@/components/product/tile-tone";
 import IllustrationDocumentation from "@/icons/illustrations/illustration-documentation";
 import NiDocumentCheck from "@/icons/nexture/ni-document-check";
+import NiDownloadCloud from "@/icons/nexture/ni-download-cloud";
+import NiLoader from "@/icons/nexture/ni-loader";
+import { openCaseFile } from "@/lib/cases/actions";
 import { caseErrorKey, DOCUMENT_KIND_KEY, isDocumentKind } from "@/lib/cases/cases";
 import { prefillErrorKey, type ReceiptReading, receiptReadingOf } from "@/lib/cases/document-prefill";
 import {
@@ -50,6 +66,7 @@ import {
   requestPackageSignature,
   retryFilingByOne,
 } from "@/lib/cases/filing-actions";
+import { filingGuideOf, missingRows } from "@/lib/cases/filing-sheet";
 import { dropUnsaved, sendForReading } from "@/lib/cases/prefill-browser";
 import { opensOnArrival } from "@/lib/cases/sections";
 import { todayInBrasilia } from "@/lib/deadlines/deadlines";
@@ -81,6 +98,36 @@ const STATUS_TONE: Record<PackageStatus, StatusTone> = {
   cancelled: "neutral",
 };
 
+/** What keeps a ready package from being filed now, as the card's head and each lawsuit say it. */
+type PackageHold = {
+  /** Something a person of the firm puts right (the package built again, what its case lacks): the card asks it. */
+  firm: boolean;
+  /** The contacts the court's screen asks and the case lacks, by whose they are (0283). */
+  lacks: SheetLack[];
+};
+
+/**
+ * Whether a ready package waits for something before a lawyer files it, and what (the owner's canvas of 2026-11-24,
+ * "Cartões do caso, antes e depois": a package something holds says "Com impedimento", never "Pronto para
+ * protocolar"): built for the lawsuit as it was, held by its case (`filing_blocker`, which also keeps the court's
+ * system to approve), its files still to be signed in the cloud, or a contact the court's screen asks and the case
+ * lacks (`missingRows` of the guide, while somebody files on that screen). Null when nothing holds it, or it is not a
+ * ready package of a lawsuit still to be filed. The card's head and each lawsuit read this one rule.
+ */
+function holdOf(state: Ready, proceeding: CaseProceeding, filing: CaseFiling | null): PackageHold | null {
+  if (!filing || filing.status !== "ready" || proceeding.status !== "planned") return null;
+  const outdated = filingOutdated(filing, proceeding, state.documents);
+  const blocked = filing.blocker !== null;
+  const signing =
+    filing.signature.takesSigned && filing.signature.status !== null && filing.signature.status !== "signed";
+  const lacks =
+    filing.sheet && !(oneFilesIt(filing) && !outdated && !blocked) && !filedWithoutNumber(filing)
+      ? missingRows(filingGuideOf(filing.sheet, { files: "court", today: state.today }))
+      : [];
+  if (!outdated && !blocked && !signing && lacks.length === 0) return null;
+  return { firm: outdated || blocked || lacks.length > 0, lacks };
+}
+
 /**
  * The filing of each lawsuit of the case. Somebody comes here when the case
  * is ready to go to court: to get the package built (the petition and the
@@ -106,16 +153,16 @@ export default function FilingCard({
   // once (`onChanged`), and makes the screen ask often for a while.
   const restartPolling = onChanged;
 
-  // The package each lawsuit has now, and whether one is ready to be filed or could not be built.
-  const packages = lawsuits.map((proceeding) => ({ proceeding, filing: currentFiling(state.filings, proceeding) }));
-  // Ready for the lawyer only once nothing of ONE's is left on it: a package ONE still signs, or whose signature
+  // The package each lawsuit has now, what holds it, and whether one is ready to be filed or could not be built.
+  const packages = lawsuits.map((proceeding) => {
+    const filing = currentFiling(state.filings, proceeding);
+    return { proceeding, filing, hold: holdOf(state, proceeding, filing) };
+  });
+  // Ready for the lawyer only once nothing is left on it (`holdOf`): a package ONE still signs, or whose signature
   // waits or failed, is not yet to be filed (the top of the case says what it waits for).
-  const readyToFile = packages.some(
-    ({ filing }) =>
-      filing?.status === "ready" &&
-      !filing.blocker &&
-      !(filing.signature.takesSigned && filing.signature.status !== null && filing.signature.status !== "signed"),
-  );
+  const readyToFile = packages.some(({ filing, hold }) => filing?.status === "ready" && hold === null);
+  // A package something of the firm's holds asks the firm, with what in its lawsuit; ONE signing it asks nobody.
+  const heldByFirm = packages.some(({ hold }) => hold?.firm === true);
   const notBuilt = packages.some(({ filing }) => filing?.status === "failed");
   // A lawsuit of the person's whose files ONE will sign in the cloud waits on their authorization before its package
   // exists (0102): the card opens for them, and says it on that lawsuit.
@@ -136,10 +183,17 @@ export default function FilingCard({
         lawsuits.length === 0
           ? t("filing-empty-title")
           : packages
-              .map(
-                ({ proceeding, filing }) =>
-                  `${t(KIND_KEY[proceeding.kind])}: ${filing ? t(PACKAGE_STATUS_KEY[filing.status]) : noPackage}`,
-              )
+              .map(({ proceeding, filing, hold }) => {
+                // What holds it, in its words where the court's screen asks what the case lacks.
+                const standing = hold
+                  ? hold.lacks.length > 0
+                    ? t("filing-summary-lacks", { items: lacksWords(t, hold.lacks) })
+                    : t("filing-status-held")
+                  : filing
+                    ? t(PACKAGE_STATUS_KEY[filing.status])
+                    : noPackage;
+                return `${t(KIND_KEY[proceeding.kind])}: ${standing}`;
+              })
               .join(" · ")
       }
       ask={
@@ -147,15 +201,17 @@ export default function FilingCard({
           ? { tone: "failed", label: t("filing-status-failed") }
           : readyToFile
             ? { tone: "firm", label: t("filing-status-ready") }
-            : authorizeAhead
-              ? { tone: "firm", label: t("filing-chip-authorize") }
-              : null
+            : heldByFirm
+              ? { tone: "firm", label: t("filing-status-held") }
+              : authorizeAhead
+                ? { tone: "firm", label: t("filing-chip-authorize") }
+                : null
       }
       description={t("filing-body")}
       defaultOpen={opensOnArrival(
         state.case.status,
         "filing",
-        readyToFile || notBuilt || authorizeAhead,
+        readyToFile || heldByFirm || notBuilt || authorizeAhead,
         lawsuits.length === 0,
       )}
     >
@@ -540,16 +596,91 @@ function Lawsuit({
       : null;
   const aheadMine = ahead !== null && ahead.viewerSigns && state.lawyer;
 
+  // What holds the package now (`holdOf`, the card's head reads it too): its state says "Com impedimento".
+  const hold = holdOf(state, proceeding, filing);
+  // The guide (or the steps) is for who files on the court's screen: not while ONE files it, nor once the court took it.
+  const guideShows = filing?.status === "ready" && showPackage && !oneFiles && !unnumbered;
+  // The petition ONE approved alone, to read before filing: its PDF, or the PDF the backend made of it.
+  const petitionDocument = filing
+    ? (state.documents.find((document) => document.id === filing.petitionDocumentId) ?? null)
+    : null;
+  const petitionFile = petitionDocument
+    ? petitionDocument.pdf
+      ? petitionDocument.fileId
+      : petitionDocument.normalizedFileId
+    : null;
+  // Building again answers a package out of date, not built or taking long, on its line; otherwise it is rare, in the
+  // "⋯" with cancelling (the owner's canvas of 2026-11-24).
+  const packageActs =
+    writable &&
+    filing !== null &&
+    showPackage &&
+    (filing.status === "ready" || filing.status === "failed" || filing.slow);
+  const againInLine =
+    canBuild && (outdated || filing?.status === "failed" || (filing?.status === "requested" && filing.slow));
+  const more: QuickAction[] = packageActs
+    ? [
+        ...(canBuild && !againInLine
+          ? [{ key: "again", label: t("filing-build-again"), onClick: () => setAgain(true), disabled: busy !== null }]
+          : []),
+        {
+          key: "cancel",
+          label: busy === "cancel" ? sentence(words.cancel.doing) : t("filing-cancel"),
+          onClick: () => setCancelling(true),
+          disabled: busy !== null,
+        },
+      ]
+    : [];
+  const againButton = canBuild ? (
+    <Button variant="outlined" color="grey" size="small" disabled={busy !== null} onClick={() => setAgain(true)}>
+      {t("filing-build-again")}
+    </Button>
+  ) : undefined;
+  // One state on the head: a ready package something holds is never said ready.
+  const chip: { tone: StatusTone; label: string } | null =
+    status === "ready" && hold
+      ? { tone: "attention", label: t("filing-status-held") }
+      : status
+        ? { tone: STATUS_TONE[status], label: t(PACKAGE_STATUS_KEY[status]) }
+        : null;
+  // The limits the files were cut under, behind the "i" of the package.
+  const limits = filing
+    ? [
+        filing.limitBytes
+          ? t("filing-package-limit", { limit: sizeLabel(filing.limitBytes) })
+          : t("filing-package-no-limit"),
+        filing.petitionLimitBytes
+          ? t("filing-package-petition-limit", { size: sizeLabel(filing.petitionLimitBytes) })
+          : null,
+        (filing.limitBytes || filing.petitionLimitBytes) && !filing.limitConfirmed
+          ? t("filing-package-limit-unconfirmed")
+          : null,
+      ]
+        .filter(Boolean)
+        .join(" ")
+    : "";
+  // A file of the package by what it is ("Procuração"), its name and what the court's system asks of it under it.
+  const itemTitle = (documentId: string | null, part: number, parts: number): string | null => {
+    const document = state.documents.find((candidate) => candidate.id === documentId);
+    if (!document || !isDocumentKind(document.kind)) return null;
+    const kind = t(DOCUMENT_KIND_KEY[document.kind]);
+    return parts > 1 ? `${kind} (${part}/${parts})` : kind;
+  };
+  const turning = <NiLoader size="medium" className="animate-spin motion-reduce:animate-none" />;
+
   return (
-    <Box className="border-grey-100 flex flex-col gap-3 rounded-2xl border p-4">
-      <Box className="flex flex-wrap items-start justify-between gap-2">
-        <Typography variant="body1" className="min-w-0 font-semibold">
+    // One lawsuit after another, a line between them, never a box inside the card (the owner's canvas of 2026-11-24).
+    <Box className="border-grey-100 flex flex-col gap-4 border-t pt-5 first:border-t-0 first:pt-0">
+      {/* The head: the lawsuit, one state, and what is rare in its "⋯". */}
+      <Box className="flex flex-wrap items-center gap-2">
+        <Typography variant="body1" className="min-w-0 flex-1 font-semibold">
           {where}
         </Typography>
-        {status ? <StatusChip tone={STATUS_TONE[status]} label={t(PACKAGE_STATUS_KEY[status])} /> : null}
+        {chip ? <StatusChip tone={chip.tone} label={chip.label} /> : null}
+        <QuickActions label={t("filing-more", { lawsuit: where })} actions={more} />
       </Box>
-      <FactGrid facts={whereFacts} />
 
+      {/* What holds it or asks a person, first: one line each, with its answer beside it. */}
       {problem && problemFor !== "sign" && problemFor !== "receipt" && (
         <Alert
           severity="error"
@@ -568,33 +699,35 @@ function Lawsuit({
       )}
 
       {proceeding.status === "filed" && !filing?.receipt ? (
-        <Typography variant="body2" className="text-text-secondary">
+        <StateLine tone="done">
           {t("filing-filed-by-hand", {
             cnj: formatCnj(proceeding.cnj) ?? proceeding.cnj ?? "",
             day: formatDayBr(proceeding.filedAt) ?? "",
           })}
-        </Typography>
+        </StateLine>
       ) : null}
 
       {filing?.receipt ? (
-        <Box className="flex flex-wrap items-center justify-between gap-2">
-          <Typography variant="body1">
-            {t("filing-filed-line", {
-              cnj: formatCnj(filing.receipt.cnj) ?? filing.receipt.cnj,
-              day: formatDayBr(filing.receipt.filedOn) ?? "",
-            })}
-          </Typography>
-          <Button
-            variant="outlined"
-            color="grey"
-            size="small"
-            component="span"
-            disabled={opening !== null}
-            onClick={() => void open("open-receipt", () => openFilingReceipt(filing.receipt?.id as string))}
-          >
-            {t("filing-receipt-open")}
-          </Button>
-        </Box>
+        <StateLine
+          tone="done"
+          action={
+            <Button
+              variant="outlined"
+              color="grey"
+              size="small"
+              component="span"
+              disabled={opening !== null}
+              onClick={() => void open("open-receipt", () => openFilingReceipt(filing.receipt?.id as string))}
+            >
+              {t("filing-receipt-open")}
+            </Button>
+          }
+        >
+          {t("filing-filed-line", {
+            cnj: formatCnj(filing.receipt.cnj) ?? filing.receipt.cnj,
+            day: formatDayBr(filing.receipt.filedOn) ?? "",
+          })}
+        </StateLine>
       ) : null}
 
       {filing?.byOne && showPackage && !(held && filing.status === "ready") ? (
@@ -624,9 +757,16 @@ function Lawsuit({
       ) : null}
 
       {proceeding.status === "planned" && (!proceeding.court || !proceeding.system) ? (
-        <Typography variant="body2" className="text-text-secondary">
+        <StateLine
+          tone="attention"
+          action={
+            <Button variant="outlined" color="grey" size="small" href="#case-proceedings">
+              {t("case-plan-see")}
+            </Button>
+          }
+        >
           {t("filing-needs-forum")}
-        </Typography>
+        </StateLine>
       ) : null}
 
       {ahead ? (
@@ -653,12 +793,51 @@ function Lawsuit({
       ) : null}
 
       {outdated && showPackage ? (
-        <Alert severity="warning" className="neutral bg-background-paper/60!">
+        <StateLine tone="attention" action={againButton}>
           {t("filing-outdated")}
-        </Alert>
+        </StateLine>
+      ) : null}
+      {blocked && showPackage && filing?.blocker ? (
+        <StateLine tone="attention">{t("filing-blocked", { reason: t(caseErrorKey(filing.blocker)) })}</StateLine>
+      ) : null}
+      {filing?.status === "ready" && showPackage && signature?.takesSigned ? (
+        <SignatureBlock
+          signature={signature}
+          systemName={systemName}
+          nameOf={nameOf}
+          viewerSigns={viewerSigns}
+          viewerSigned={viewerSigned}
+          held={held}
+          writable={writable}
+          busy={busy}
+          caseId={state.case.id}
+          problem={problemFor === "sign" ? problem : null}
+          onCloseProblem={() => setProblem(null)}
+          onAsk={() => void run("sign", () => requestPackageSignature(state.case.id, filing.id), onStarted)}
+          onAskOver={askOver}
+        />
+      ) : null}
+      {guideShows && filing?.sheet ? (
+        <FilingSheetMissing sheet={filing.sheet} files={stepsFiles} today={state.today} />
       ) : null}
       {petitionByOne && showPackage && filing?.status !== "filed" ? (
-        <Alert severity="info" className="neutral bg-background-paper/60!">
+        <StateLine
+          tone="attention"
+          action={
+            petitionFile ? (
+              <Button
+                variant="outlined"
+                color="grey"
+                size="small"
+                component="span"
+                disabled={opening !== null}
+                onClick={() => void open("petition", () => openCaseFile(petitionFile))}
+              >
+                {t("filing-petition-read")}
+              </Button>
+            ) : undefined
+          }
+        >
           {signedFiles
             ? viewerSigned
               ? t("filing-petition-by-one-signed-mine")
@@ -668,22 +847,27 @@ function Lawsuit({
             : signature?.takesSigned && signature.cloudSigning
               ? t("filing-petition-by-one-to-sign")
               : t("filing-petition-by-one")}
-        </Alert>
-      ) : null}
-      {blocked && showPackage && filing?.blocker ? (
-        <Alert severity="warning" className="neutral bg-background-paper/60!">
-          {t("filing-blocked", { reason: t(caseErrorKey(filing.blocker)) })}
-        </Alert>
+        </StateLine>
       ) : null}
 
       {filing?.status === "requested" && showPackage ? (
-        <Typography variant="body2" className="text-text-secondary" role="status">
-          {filing.slow ? t("filing-building-slow") : t("filing-building")}
-        </Typography>
+        <Box role="status">
+          <StateLine
+            tone="waiting"
+            icon={filing.slow ? undefined : turning}
+            action={filing.slow && writable ? againButton : undefined}
+          >
+            {filing.slow ? t("filing-building-slow") : t("filing-building")}
+          </StateLine>
+        </Box>
       ) : null}
 
       {filing?.status === "failed" && showPackage ? (
-        <Alert severity="warning" className="neutral bg-background-paper/60!">
+        <Alert
+          severity="warning"
+          className="neutral bg-background-paper/60!"
+          action={writable && againButton ? againButton : undefined}
+        >
           <Typography variant="body2" component="p" className="mb-1 font-semibold">
             {t(filingErrorKey(filing.error))}
           </Typography>
@@ -702,95 +886,151 @@ function Lawsuit({
         </Alert>
       ) : null}
 
+      {writable && proceeding.status === "planned" && petitions.length === 0 ? (
+        <StateLine tone="info">
+          <Box component="span" className="inline-flex flex-wrap items-center gap-1">
+            {t("filing-needs-petition")}
+            <InfoHint label={t("filing-needs-petition-outside")} />
+          </Box>
+        </StateLine>
+      ) : null}
+
+      {/* Its facts, under their names. */}
+      <FactGrid facts={whereFacts} />
+
       {filing?.status === "ready" && showPackage ? (
         <>
-          <Typography variant="body2" className="text-text-secondary">
-            {filing.limitBytes
-              ? t("filing-ready-limit", { count: filing.items.length, limit: sizeLabel(filing.limitBytes) })
-              : t("filing-ready-no-limit", { count: filing.items.length })}
-          </Typography>
-          {filing.petitionLimitBytes ? (
-            <Typography variant="body2" className="text-text-secondary">
-              {t("filing-petition-limit", { size: sizeLabel(filing.petitionLimitBytes) })}
-            </Typography>
-          ) : null}
-          {(filing.limitBytes || filing.petitionLimitBytes) && !filing.limitConfirmed ? (
-            <StateLine tone="info">{t("filing-limit-unconfirmed")}</StateLine>
-          ) : null}
-          {signature?.takesSigned ? (
-            <SignatureBlock
-              signature={signature}
-              systemName={systemName}
-              nameOf={nameOf}
-              viewerSigns={viewerSigns}
-              viewerSigned={viewerSigned}
-              held={held}
-              writable={writable}
-              busy={busy}
-              caseId={state.case.id}
-              problem={problemFor === "sign" ? problem : null}
-              onCloseProblem={() => setProblem(null)}
-              onAsk={() => void run("sign", () => requestPackageSignature(state.case.id, filing.id), onStarted)}
-              onAskOver={askOver}
-            />
-          ) : null}
-          <Box component="ol" className="m-0 flex list-none flex-col gap-2 p-0">
-            {filing.items.map((item) => (
-              <Box component="li" key={item.id} className="flex flex-wrap items-center gap-2">
-                <Box className="flex min-w-0 flex-1 basis-full flex-col sm:basis-0">
-                  <Typography variant="body1" className="break-all">
-                    {item.name}
-                  </Typography>
-                  {fileHints(item.documentId, item.part, item.parts).map((hint) => (
-                    <Typography key={hint} variant="body2" className="text-text-secondary">
-                      {hint}
-                    </Typography>
-                  ))}
-                </Box>
-                <Typography variant="body2" className="text-text-secondary flex-none">
-                  {[sizeLabel(item.bytes), item.pages ? t("filing-item-pages", { count: item.pages }) : null]
+          {/* The package: its files in the order of the filing, each one click away. */}
+          {filing.items.length === 0 ? null : (
+            <Box
+              component="section"
+              aria-labelledby={`filing-package-${proceeding.id}`}
+              className="flex flex-col gap-2"
+            >
+              <SectionTitle
+                id={`filing-package-${proceeding.id}`}
+                title={t("filing-package-title", { count: filing.items.length })}
+                description={limits || undefined}
+                as="h3"
+                variant="subtitle2"
+              />
+              <Box
+                component="ol"
+                aria-labelledby={`filing-package-${proceeding.id}`}
+                className="border-grey-100 m-0 flex list-none flex-col overflow-hidden rounded-xl border p-0"
+              >
+                {filing.items.map((item, index) => {
+                  const title = itemTitle(item.documentId, item.part, item.parts);
+                  // The type to pick in the court's list is said only where it is not the name above it already.
+                  const samePick = title ? t("filing-file-type-pick", { label: title }) : null;
+                  const detail = [
+                    title ? item.name : null,
+                    ...fileHints(item.documentId, item.part, item.parts).filter((hint) => hint !== samePick),
+                  ]
                     .filter(Boolean)
-                    .join(" · ")}
-                </Typography>
-                {ownSignedFiles && item.signed ? (
-                  <Button
-                    variant="outlined"
-                    color="grey"
-                    size="small"
-                    component="span"
-                    disabled={opening !== null}
-                    aria-label={t("filing-item-download-signed-aria", { name: item.name })}
-                    onClick={() => void open(`${item.id}-p7s`, () => openFilingFile(item.id, true))}
-                  >
-                    {t("filing-item-download-signed")}
-                  </Button>
-                ) : null}
-                <Button
-                  variant={ownSignedFiles && item.signed ? "text" : "outlined"}
-                  color="grey"
-                  size="small"
-                  component="span"
-                  disabled={opening !== null}
-                  aria-label={
-                    ownSignedFiles && item.signed
-                      ? t("filing-item-download-pdf-aria", { name: item.name })
-                      : t("filing-item-download-aria", { name: item.name })
-                  }
-                  onClick={() => void open(item.id, () => openFilingFile(item.id))}
-                >
-                  {ownSignedFiles && item.signed ? t("filing-item-download-pdf") : t("filing-item-download")}
-                </Button>
+                    .join(" · ");
+                  const size = [
+                    sizeLabel(item.bytes),
+                    item.pages ? t("filing-item-pages", { count: item.pages }) : null,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ");
+                  const signedHere = ownSignedFiles && item.signed;
+                  return (
+                    <Box
+                      component="li"
+                      key={item.id}
+                      className="border-grey-100 flex items-center gap-3 border-t px-3 py-2.5 first:border-t-0"
+                    >
+                      <Typography
+                        component="span"
+                        variant="body2"
+                        aria-hidden
+                        className="text-text-secondary w-5 flex-none text-right font-semibold tabular-nums"
+                      >
+                        {index + 1}
+                      </Typography>
+                      <Box className="flex min-w-0 flex-1 flex-col">
+                        <Typography variant="body1" className={title ? undefined : "break-all"}>
+                          {title ?? item.name}
+                        </Typography>
+                        {detail ? (
+                          <Typography variant="body2" className="text-text-secondary break-words">
+                            {detail}
+                          </Typography>
+                        ) : null}
+                        <Typography variant="body2" className="text-text-secondary sm:hidden">
+                          {size}
+                        </Typography>
+                      </Box>
+                      <Typography variant="body2" className="text-text-secondary hidden flex-none sm:block">
+                        {size}
+                      </Typography>
+                      {signedHere ? (
+                        <Box className="flex flex-none flex-wrap items-center justify-end gap-1">
+                          <Button
+                            variant="outlined"
+                            color="grey"
+                            size="small"
+                            component="span"
+                            disabled={opening !== null}
+                            aria-label={t("filing-item-download-signed-aria", { name: item.name })}
+                            onClick={() => void open(`${item.id}-p7s`, () => openFilingFile(item.id, true))}
+                          >
+                            {t("filing-item-download-signed")}
+                          </Button>
+                          <Button
+                            variant="text"
+                            color="grey"
+                            size="small"
+                            component="span"
+                            disabled={opening !== null}
+                            aria-label={t("filing-item-download-pdf-aria", { name: item.name })}
+                            onClick={() => void open(item.id, () => openFilingFile(item.id))}
+                          >
+                            {t("filing-item-download-pdf")}
+                          </Button>
+                        </Box>
+                      ) : (
+                        <Tooltip title={t("filing-item-download-aria", { name: item.name })}>
+                          <span className="flex-none">
+                            <Button
+                              variant="text"
+                              color="grey"
+                              size="small"
+                              component="span"
+                              className="icon-only hover:bg-grey-25"
+                              disabled={opening !== null}
+                              aria-label={t("filing-item-download-aria", { name: item.name })}
+                              startIcon={<NiDownloadCloud size="medium" />}
+                              onClick={() => void open(item.id, () => openFilingFile(item.id))}
+                            />
+                          </span>
+                        </Tooltip>
+                      )}
+                    </Box>
+                  );
+                })}
               </Box>
-            ))}
-          </Box>
+            </Box>
+          )}
 
-          {oneFiles || unnumbered ? null : filing.sheet ? (
-            <FilingGuide sheet={filing.sheet} files={stepsFiles} today={state.today} />
+          {!guideShows ? null : filing.sheet ? (
+            <FilingGuide
+              sheet={filing.sheet}
+              files={stepsFiles}
+              today={state.today}
+              missingAbove
+              receiptBelow={!outdated && !blocked}
+            />
           ) : (
-            <Box className="flex flex-col gap-1">
-              <Typography variant="body2" className="text-text-secondary">
-                {t("filing-steps-title")}
-              </Typography>
+            <Box component="section" aria-labelledby={`filing-steps-${proceeding.id}`} className="flex flex-col gap-2">
+              <SectionTitle
+                id={`filing-steps-${proceeding.id}`}
+                title={t("filing-steps-title")}
+                as="h3"
+                variant="subtitle2"
+              />
               <Box component="ol" className="m-0 flex list-decimal flex-col gap-1 pl-5">
                 {filingStepsOf(filing.system, stepsFiles).map((step) => (
                   <Typography component="li" variant="body1" key={step}>
@@ -801,14 +1041,20 @@ function Lawsuit({
             </Box>
           )}
 
+          {/* The foot: once filed, the receipt, which marks the lawsuit as filed. */}
           {outdated || blocked || oneFiles ? null : writable && state.lawyer ? (
-            <Box className="border-grey-100 flex flex-col gap-3 rounded-2xl border p-4">
-              <Typography variant="body1" className="font-semibold">
-                {t("filing-receipt-title")}
-              </Typography>
-              <Typography variant="body2" className="text-text-secondary">
-                {t("filing-receipt-read-intro")}
-              </Typography>
+            <Box
+              component="section"
+              aria-labelledby={`filing-receipt-title-${proceeding.id}`}
+              className="border-grey-100 flex flex-col gap-3 border-t pt-4"
+            >
+              <SectionTitle
+                id={`filing-receipt-title-${proceeding.id}`}
+                title={t("filing-receipt-title")}
+                description={t("filing-receipt-read-intro")}
+                as="h3"
+                variant="subtitle2"
+              />
               <Box component="ul" className="m-0 flex list-none flex-col gap-3 p-0">
                 <DocumentSlot
                   id={`filing-receipt-${proceeding.id}`}
@@ -817,7 +1063,8 @@ function Lawsuit({
                   hint={t("filing-receipt-slot-hint")}
                   state={receiptSlot}
                   fileName={receipt?.name}
-                  primary
+                  // The card's one filled button only once nothing holds the package.
+                  primary={hold === null}
                   disabled={busy !== null}
                   labels={{
                     send: t("prefill-send"),
@@ -908,20 +1155,11 @@ function Lawsuit({
               )}
             </Box>
           ) : (
-            <Typography variant="body2" className="text-text-secondary">
-              {t("filing-receipt-lawyer")}
-            </Typography>
+            <Box className="border-grey-100 border-t pt-4">
+              <StateLine tone="info">{t("filing-receipt-lawyer")}</StateLine>
+            </Box>
           )}
         </>
-      ) : null}
-
-      {writable && proceeding.status === "planned" && petitions.length === 0 ? (
-        <Box className="flex items-center gap-1">
-          <Typography variant="body2" className="text-text-secondary">
-            {t("filing-needs-petition")}
-          </Typography>
-          <InfoHint label={t("filing-needs-petition-outside")} className="self-center" />
-        </Box>
       ) : null}
 
       {formOpen ? (
@@ -991,24 +1229,6 @@ function Lawsuit({
         </Box>
       ) : null}
 
-      {writable && filing && showPackage && (filing.status === "ready" || filing.status === "failed" || filing.slow) ? (
-        <Box className="flex flex-row flex-wrap gap-2">
-          {canBuild ? (
-            <Button
-              variant="outlined"
-              color="grey"
-              size="small"
-              disabled={busy !== null}
-              onClick={() => setAgain(true)}
-            >
-              {t("filing-build-again")}
-            </Button>
-          ) : null}
-          <Button variant="text" color="grey" size="small" disabled={busy !== null} onClick={() => setCancelling(true)}>
-            {busy === "cancel" ? sentence(words.cancel.doing) : t("filing-cancel")}
-          </Button>
-        </Box>
-      ) : null}
       {confirmingPast && filing ? (
         <ConfirmActionDialog
           title={t("filing-receipt-before-one-title")}
@@ -1165,24 +1385,69 @@ function SignatureBlock({
               ? t("filing-signed-again-hint")
               : null;
 
+  // Where the signature stands, in the colour of whose turn it is (the owner's canvas of 2026-11-24: a line of what
+  // holds the package, with its buttons beside it, never a box of its own inside the lawsuit).
+  const tone: StateTone =
+    held || (!signature.cloudSigning && !signed)
+      ? "info"
+      : signed
+        ? "done"
+        : status === "failed"
+          ? "failed"
+          : status === "due"
+            ? "waiting"
+            : mayAsk || mayAuthorize
+              ? "attention"
+              : status === "waiting"
+                ? "waiting"
+                : "info";
+  const unconfirmed =
+    signed && viewerSigned && writable && !held && !signature.formatConfirmed
+      ? t("filing-signed-unconfirmed", { system: systemName })
+      : null;
+  const under = [detail, unconfirmed].filter(Boolean).join(" ");
+
   return (
-    <Box className="border-grey-100 flex flex-col gap-2 rounded-2xl border p-4">
-      <Box className="flex flex-wrap items-center justify-between gap-2">
-        <Typography variant="body1" className="min-w-0 flex-1 basis-full sm:basis-0" role="status">
-          {line}
-        </Typography>
-        {signed && !held ? <StatusChip tone="positive" label={t("filing-signature-chip")} /> : null}
+    <>
+      <Box role="status">
+        <StateLine
+          tone={tone}
+          icon={
+            status === "due" && !held ? (
+              <NiLoader size="medium" className="animate-spin motion-reduce:animate-none" />
+            ) : undefined
+          }
+          action={
+            mayAsk || mayAuthorize ? (
+              <Box className="flex flex-wrap items-center gap-1">
+                {mayAuthorize ? (
+                  <Button variant="text" color="grey" size="small" href={authorizeHref} LinkComponent={Link}>
+                    {t("filing-signature-authorize")}
+                  </Button>
+                ) : null}
+                {mayAsk ? (
+                  <Button
+                    variant="outlined"
+                    color="grey"
+                    size="small"
+                    disabled={busy !== null}
+                    onClick={() => (takesFrom ? setConfirming(true) : onAsk())}
+                  >
+                    {busy === "sign"
+                      ? t("filing-signature-requesting")
+                      : signed
+                        ? t("filing-signature-request-again")
+                        : t("filing-signature-request")}
+                  </Button>
+                ) : null}
+              </Box>
+            ) : undefined
+          }
+        >
+          <span className="block">{line}</span>
+          {under ? <span className="text-text-secondary mt-0.5 block">{under}</span> : null}
+        </StateLine>
       </Box>
-      {detail ? (
-        <Typography variant="body2" className="text-text-secondary">
-          {detail}
-        </Typography>
-      ) : null}
-      {signed && viewerSigned && writable && !held && !signature.formatConfirmed ? (
-        <Typography variant="body2" className="text-text-secondary">
-          {t("filing-signed-unconfirmed", { system: systemName })}
-        </Typography>
-      ) : null}
       {problem ? (
         <Alert
           severity="error"
@@ -1202,30 +1467,6 @@ function SignatureBlock({
         >
           {t(caseErrorKey(problem))}
         </Alert>
-      ) : null}
-      {mayAsk || mayAuthorize ? (
-        <Box className="flex flex-wrap items-center gap-2">
-          {mayAsk ? (
-            <Button
-              variant="outlined"
-              color="grey"
-              size="small"
-              disabled={busy !== null}
-              onClick={() => (takesFrom ? setConfirming(true) : onAsk())}
-            >
-              {busy === "sign"
-                ? t("filing-signature-requesting")
-                : signed
-                  ? t("filing-signature-request-again")
-                  : t("filing-signature-request")}
-            </Button>
-          ) : null}
-          {mayAuthorize ? (
-            <Button variant="text" color="grey" size="small" href={authorizeHref} LinkComponent={Link}>
-              {t("filing-signature-authorize")}
-            </Button>
-          ) : null}
-        </Box>
       ) : null}
       {confirming && takesFrom ? (
         <ConfirmActionDialog
@@ -1250,6 +1491,6 @@ function SignatureBlock({
           onClose={() => setConfirming(false)}
         />
       ) : null}
-    </Box>
+    </>
   );
 }

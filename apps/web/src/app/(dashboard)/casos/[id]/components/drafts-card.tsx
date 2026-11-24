@@ -23,11 +23,16 @@ import CollapsibleCard from "@/components/product/collapsible-card";
 import ConfirmActionDialog from "@/components/product/confirm-action-dialog";
 import DialogHeader from "@/components/product/dialog-header";
 import EmptyState from "@/components/product/empty-state";
+import QuickActions, { type QuickAction } from "@/components/product/quick-actions";
 import SectionTitle from "@/components/product/section-title";
+import SidePanel from "@/components/product/side-panel";
+import StateLine, { type StateTone } from "@/components/product/state-line";
 import StatusChip, { type StatusTone } from "@/components/product/status-chip";
 import UsageMeter from "@/components/product/usage-meter";
 import IllustrationConfigure from "@/icons/illustrations/illustration-configure";
 import IllustrationDocumentation from "@/icons/illustrations/illustration-documentation";
+import NiChevronDownSmall from "@/icons/nexture/ni-chevron-down-small";
+import NiLoader from "@/icons/nexture/ni-loader";
 import { caseLabel } from "@/lib/cases/cases";
 import {
   approveCaseDraft,
@@ -62,6 +67,9 @@ import { opensOnArrival } from "@/lib/cases/sections";
 import { type ChangeBlock, textChanges } from "@/lib/cases/text-changes";
 
 type Ready = Extract<CaseState, { kind: "ready" }>;
+
+/** The toggle of the earlier texts says what it does: shows them, or hides them once open. */
+const EARLIER_TOGGLE_KEY = { closed: "draft-earlier-toggle", open: "draft-earlier-hide" } as const;
 
 const KIND_KEY: Record<CaseProceeding["kind"], string> = {
   juizado: "case-proceeding-kind-juizado",
@@ -252,7 +260,11 @@ export default function DraftsCard({
         />
       ) : (
         lawsuits.map((proceeding) => (
-          <Box key={proceeding.id} className="flex flex-col gap-2">
+          // One lawsuit after another, a line between them: the wrapper is what follows its sibling.
+          <Box
+            key={proceeding.id}
+            className="border-grey-100 flex flex-col gap-2 border-t pt-4 first:border-t-0 first:pt-0"
+          >
             <Lawsuit
               state={state}
               proceeding={proceeding}
@@ -418,6 +430,9 @@ function Lawsuit({
   const [approvingOn, setApprovingOn] = useState<{ id: string; version: number } | null>(null);
   const [note, setNote] = useState("");
   const [templateId, setTemplateId] = useState("");
+  // The panel of another piece for this lawsuit, and the earlier texts shown under it.
+  const [another, setAnother] = useState(false);
+  const [showEarlier, setShowEarlier] = useState(false);
 
   const draft = draftToShow(drafts);
   const rejecting = draft !== null && rejectingOn?.id === draft.id;
@@ -477,7 +492,11 @@ function Lawsuit({
   };
 
   const ask = (mode: "ai" | "blank") =>
-    void run(mode, () => requestCaseDraft({ caseId, proceedingId: proceeding.id, templateId: chosen, mode }));
+    void run(
+      mode,
+      () => requestCaseDraft({ caseId, proceedingId: proceeding.id, templateId: chosen, mode }),
+      () => setAnother(false),
+    );
   const stopRejecting = () => {
     setRejectingOn(null);
     setNote("");
@@ -525,14 +544,85 @@ function Lawsuit({
   const hasText = draft !== null && draft.version > 0;
 
   const headingId = `lawsuit-${proceeding.id}`;
+  // What is done once in a while sits in the piece's "⋯" (the owner's canvas of 2026-11-24): writing another piece
+  // (a panel over the card) and discarding this one. The earlier texts open from the foot.
+  const anotherOwed = mayAsk && draft !== null;
+  const more: QuickAction[] = [
+    ...(anotherOwed
+      ? [{ key: "another", label: t("draft-another-title"), onClick: () => setAnother(true), disabled: pending }]
+      : []),
+    ...(mayDiscard && draft
+      ? [{ key: "discard", label: t("draft-cancel"), onClick: () => setDiscardingId(draft.id), disabled: pending }]
+      : []),
+  ];
+  const turning = <NiLoader size="medium" className="animate-spin motion-reduce:animate-none" />;
+  /** One line of where the piece stands, its mark turning while ONE works. */
+  const line = (tone: StateTone, text: string, working = false) => (
+    <Box role={working || tone === "waiting" ? "status" : undefined}>
+      <StateLine tone={tone} icon={working ? turning : undefined}>
+        {text}
+      </StateLine>
+    </Box>
+  );
+
+  const modelChoice =
+    fits.length === 0 ? (
+      <StateLine
+        tone="attention"
+        action={
+          <Button variant="text" color="grey" size="small" href="/biblioteca" LinkComponent={Link}>
+            {t("drafts-no-template-action")}
+          </Button>
+        }
+      >
+        {t("draft-no-template-for-kind")}
+      </StateLine>
+    ) : (
+      <TextField
+        select
+        size="small"
+        label={t("draft-template-label")}
+        value={chosen}
+        onChange={(event) => setTemplateId(event.target.value)}
+        disabled={pending}
+        fullWidth
+      >
+        {fits.map((template) => (
+          <MenuItem key={template.id} value={template.id}>
+            {template.name}
+          </MenuItem>
+        ))}
+      </TextField>
+    );
+  const askButtons = (primary: boolean) =>
+    fits.length === 0 ? null : (
+      <>
+        <Button
+          variant={primary ? "contained" : "outlined"}
+          color={primary ? "primary" : "grey"}
+          disabled={pending || !chosen}
+          loading={doing("ai")}
+          loadingPosition="start"
+          onClick={() => ask("ai")}
+        >
+          {doing("ai") ? sentence(words.ai.doing) : t("draft-ask-ai")}
+        </Button>
+        <Button
+          variant="text"
+          color="grey"
+          disabled={pending || !chosen}
+          loading={doing("blank")}
+          loadingPosition="start"
+          onClick={() => ask("blank")}
+        >
+          {doing("blank") ? sentence(words.blank.doing) : t("draft-ask-blank")}
+        </Button>
+      </>
+    );
 
   return (
     // A case often has two lawsuits with the same buttons: each is a region named by its lawsuit.
-    <Box
-      component="section"
-      aria-labelledby={headingId}
-      className="border-grey-100 flex flex-col gap-3 border-t pt-4 first:border-t-0 first:pt-0"
-    >
+    <Box component="section" aria-labelledby={headingId} className="flex flex-col gap-3">
       <Box className="flex flex-wrap items-center gap-3">
         <Typography id={headingId} variant="subtitle2" component="h3" className="mb-0 min-w-0 flex-1">
           {title}
@@ -543,119 +633,89 @@ function Lawsuit({
             label={t(statusLabelKey(draft))}
           />
         ) : null}
+        <QuickActions label={t("draft-more", { lawsuit: title })} actions={more} />
       </Box>
 
-      {!planned ? (
-        <Typography variant="body2" className="text-text-secondary">
-          {t("draft-filed-note")}
-        </Typography>
-      ) : null}
+      {/* Where the piece stands, one line each in its state's colour (2026-11-24): what is done in green, what ONE
+          does turning, what asks the firm in its colour. */}
+      {!planned ? line("info", t("draft-filed-note")) : null}
 
-      {draft && status === "generating" ? (
-        <Typography variant="body2" className="text-text-secondary" role="status">
-          {t(draft.slow ? "draft-slow" : "draft-generating-body")}
-        </Typography>
-      ) : null}
+      {draft && status === "generating"
+        ? line(
+            draft.slow ? "attention" : "waiting",
+            t(draft.slow ? "draft-slow" : "draft-generating-body"),
+            !draft.slow,
+          )
+        : null}
 
       {draft && status === "proposed" ? (
-        <Box className="flex flex-col gap-3">
-          {oneRedo ? (
-            <Typography variant="body2" className="text-text-primary" role="status">
-              {t(ONE_REDO_LINE_KEY[oneRedo])}
-            </Typography>
-          ) : null}
-          <Typography variant="body2" className="text-text-secondary">
-            {[
+        <Box className="flex flex-col gap-2">
+          {oneRedo ? line("waiting", t(ONE_REDO_LINE_KEY[oneRedo]), true) : null}
+          {line(
+            oneRedo ? "info" : "attention",
+            [
               t("draft-proposed-summary", { version: draft.version, template: draft.templateName }),
               draft.requestedAuto
                 ? t("draft-requested-by-one", { when: draft.requestedLabel })
                 : draft.requestedBy
                   ? t("draft-requested-by", { name: draft.requestedBy, when: draft.requestedLabel })
                   : t("draft-requested-at", { when: draft.requestedLabel }),
-            ].join(" · ")}
-          </Typography>
+            ].join(" · "),
+          )}
           {!draft.checked ? (
-            <Typography variant="body2" className="text-text-secondary" role="status">
-              {t(late ? "draft-check-late" : "draft-checking")}
-            </Typography>
+            line(late ? "attention" : "waiting", t(late ? "draft-check-late" : "draft-checking"), !late)
           ) : draft.sources.length === 0 ? (
-            <Typography variant="body2" className="text-text-secondary">
-              {t("draft-sources-none")}
-            </Typography>
+            line("info", t("draft-sources-none"))
           ) : (
             <SourcesMeter sources={draft.sources} />
           )}
-          {revision ? (
-            <Typography
-              variant="body2"
-              className={revision.failed ? "text-text-primary" : "text-text-secondary"}
-              role={revision.failed ? undefined : "status"}
-            >
-              {revision.failed
-                ? t("draft-revision-failed")
-                : t(draft.slow ? "draft-revising-slow" : "draft-revising", {
+          {revision
+            ? revision.failed
+              ? line("failed", t("draft-revision-failed"))
+              : line(
+                  draft.slow ? "attention" : "waiting",
+                  t(draft.slow ? "draft-revising-slow" : "draft-revising", {
                     name: revision.by ?? t("draft-somebody"),
-                  })}
-            </Typography>
-          ) : draft.latest?.restored ? (
-            <Typography variant="body2" className="text-text-secondary">
-              {t("draft-latest-restored", { version: draft.latest.basedOn ?? draft.version })}
-            </Typography>
-          ) : draft.latest?.author === "ai" && draft.latest.note ? (
-            <Typography variant="body2" className="text-text-secondary">
-              {t("draft-latest-rewritten", { name: draft.latest.askedBy ?? t("draft-somebody") })}
-            </Typography>
-          ) : null}
-          {draft.aiWaits && !revision ? (
-            <Typography variant="body2" className="text-text-secondary">
-              {t(!rewritten ? "draft-ai-waits" : answerIsText ? "draft-ai-waits-rewritten" : "draft-ai-waits-edited")}
-            </Typography>
-          ) : null}
-          {writable && !lawyer ? (
-            <Typography variant="body2" className="text-text-secondary">
-              {t("draft-readonly-function")}
-            </Typography>
-          ) : null}
+                  }),
+                  !draft.slow,
+                )
+            : draft.latest?.restored
+              ? line("info", t("draft-latest-restored", { version: draft.latest.basedOn ?? draft.version }))
+              : draft.latest?.author === "ai" && draft.latest.note
+                ? line("info", t("draft-latest-rewritten", { name: draft.latest.askedBy ?? t("draft-somebody") }))
+                : null}
+          {draft.aiWaits && !revision
+            ? line(
+                "info",
+                t(!rewritten ? "draft-ai-waits" : answerIsText ? "draft-ai-waits-rewritten" : "draft-ai-waits-edited"),
+              )
+            : null}
+          {writable && !lawyer ? line("info", t("draft-readonly-function")) : null}
         </Box>
       ) : null}
 
       {draft && status === "approved" ? (
-        <Typography variant="body2" className="text-text-secondary" role="status">
-          {[
-            draft.approvedAuto && draft.approvedLabel
-              ? t("draft-approved-auto", { when: draft.approvedLabel })
-              : draft.approvedBy && draft.approvedLabel
-                ? t("draft-approved-by", { name: draft.approvedBy, when: draft.approvedLabel })
-                : draft.approvedLabel
-                  ? t("draft-approved-at", { when: draft.approvedLabel })
-                  : null,
-            t(late ? "draft-issue-late" : "draft-issuing"),
-          ]
-            .filter(Boolean)
-            .join(" ")}
-        </Typography>
+        <Box className="flex flex-col gap-2">
+          {draft.approvedLabel
+            ? line(
+                "done",
+                draft.approvedAuto
+                  ? t("draft-approved-auto", { when: draft.approvedLabel })
+                  : draft.approvedBy
+                    ? t("draft-approved-by", { name: draft.approvedBy, when: draft.approvedLabel })
+                    : t("draft-approved-at", { when: draft.approvedLabel }),
+              )
+            : null}
+          {line(late ? "attention" : "waiting", t(late ? "draft-issue-late" : "draft-issuing"), !late)}
+        </Box>
       ) : null}
 
-      {status === "issued" ? (
-        <Typography variant="body2" className="text-text-secondary">
-          {t("draft-issued-body")}
-        </Typography>
-      ) : null}
-      {status === "failed" ? (
-        <Typography variant="body2" className="text-text-primary">
-          {t("draft-failed-body")}
-        </Typography>
-      ) : null}
-      {status === "rejected" ? (
-        <Typography variant="body2" className="text-text-secondary">
-          {t("draft-rejected-body")}
-        </Typography>
-      ) : null}
-      {draft && status === "cancelled" ? (
-        <Typography variant="body2" className="text-text-secondary">
-          {t(hasText ? "draft-cancelled-body" : "draft-cancelled-empty", { when: draft.updatedLabel })}
-        </Typography>
-      ) : null}
+      {status === "issued" ? line("done", t("draft-issued-body")) : null}
+      {status === "failed" ? line("failed", t("draft-failed-body")) : null}
+      {status === "rejected" ? line("info", t("draft-rejected-body")) : null}
+      {draft && status === "cancelled"
+        ? line("info", t(hasText ? "draft-cancelled-body" : "draft-cancelled-empty", { when: draft.updatedLabel }))
+        : null}
 
       {alreadyWorking ? (
         <Alert
@@ -819,15 +879,26 @@ function Lawsuit({
               {t("draft-read")}
             </Button>
           ) : null}
-          {mayDiscard ? (
-            <Button variant="text" color="grey" disabled={pending} onClick={() => setDiscardingId(draft.id)}>
-              {t("draft-cancel")}
+          {earlier.length > 0 ? (
+            <Button
+              variant="text"
+              color="grey"
+              aria-expanded={showEarlier}
+              endIcon={
+                <NiChevronDownSmall
+                  size="small"
+                  className={showEarlier ? "rotate-180 transition-transform" : "transition-transform"}
+                />
+              }
+              onClick={() => setShowEarlier(!showEarlier)}
+            >
+              {t(showEarlier ? EARLIER_TOGGLE_KEY.open : EARLIER_TOGGLE_KEY.closed, { count: earlier.length })}
             </Button>
           ) : null}
         </Box>
       ) : null}
 
-      {earlier.length > 0 ? (
+      {earlier.length > 0 && showEarlier ? (
         <Box className="flex flex-col gap-1">
           <Typography variant="body2" className="text-text-secondary">
             {t("draft-earlier-title")}
@@ -850,62 +921,30 @@ function Lawsuit({
         </Box>
       ) : null}
 
-      {mayAsk ? (
+      {mayAsk && !draft ? (
+        // No piece yet: asking for it is what the lawsuit owes, in the card.
         <Box className="flex flex-col gap-2">
-          {draft ? (
-            <Typography variant="body2" className="text-text-secondary">
-              {t("draft-ask-another")}
-            </Typography>
-          ) : null}
-          {fits.length === 0 ? (
-            <Box className="flex flex-wrap items-center gap-2">
-              <Typography variant="body2" className="text-text-secondary">
-                {t("draft-no-template-for-kind")}
-              </Typography>
-              <Button variant="text" color="grey" size="small" href="/biblioteca" LinkComponent={Link}>
-                {t("drafts-no-template-action")}
-              </Button>
-            </Box>
-          ) : (
-            <Box className="flex flex-wrap items-center gap-2">
-              <TextField
-                select
-                size="small"
-                label={t("draft-template-label")}
-                value={chosen}
-                onChange={(event) => setTemplateId(event.target.value)}
-                disabled={pending}
-                className="min-w-56"
-              >
-                {fits.map((template) => (
-                  <MenuItem key={template.id} value={template.id}>
-                    {template.name}
-                  </MenuItem>
-                ))}
-              </TextField>
-              <Button
-                variant={draft ? "outlined" : "contained"}
-                color={draft ? "grey" : "primary"}
-                disabled={pending || !chosen}
-                loading={doing("ai")}
-                loadingPosition="start"
-                onClick={() => ask("ai")}
-              >
-                {doing("ai") ? sentence(words.ai.doing) : t("draft-ask-ai")}
-              </Button>
-              <Button
-                variant="text"
-                color="grey"
-                disabled={pending || !chosen}
-                loading={doing("blank")}
-                loadingPosition="start"
-                onClick={() => ask("blank")}
-              >
-                {doing("blank") ? sentence(words.blank.doing) : t("draft-ask-blank")}
-              </Button>
-            </Box>
-          )}
+          {line("info", t("draft-none-line"))}
+          <Box className="sm:max-w-md">{modelChoice}</Box>
+          <Box className="flex flex-wrap items-center gap-2">{askButtons(true)}</Box>
         </Box>
+      ) : null}
+
+      {another && anotherOwed ? (
+        // Another piece for a lawsuit that has one is the exception: a panel over the card, from its "⋯".
+        <SidePanel
+          onClose={() => setAnother(false)}
+          closeLabel={t("draft-close")}
+          title={t("draft-another-title")}
+          description={title}
+          busy={doing("ai") || doing("blank")}
+          actions={askButtons(true)}
+        >
+          <Box className="flex flex-col gap-3">
+            <Problem code={errorCode} onClose={() => setErrorCode(null)} />
+            {modelChoice}
+          </Box>
+        </SidePanel>
       ) : null}
 
       {approving && draft && approvingOn ? (

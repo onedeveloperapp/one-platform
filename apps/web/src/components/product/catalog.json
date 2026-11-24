@@ -103,6 +103,12 @@
       "use": "The answer to a setup's question as chips: what is chosen filled in the primary with its check, the rest outlined; one of many (yes or no, a band) or several of many (areas, channels). A choice, never a save: the step's own button saves it. Never radio buttons beside their labels in a row, nor the theme's toggle buttons, which read as plain words."
     },
     {
+      "name": "ChronologyTimeline",
+      "from": "@/components/product/chronology-timeline",
+      "props": "days: ChronologyDay[] (chronologyTimeline(lines) of lib/cases/chronology: { day, events: { time, marked, text, record }[] }[]), recordLabel (the mark of a fact from the official record), label (what the timeline is, for assistive technology), muted? (a chronology that no longer holds)",
+      "use": "A chronology of facts as a timeline (the owner, 2026-11-24, on the account of the case): the day as a pill heading, the moment in its own column (opening the fact in a narrow card), a point on the line for each fact that says its moment and a smaller one in the same place for a fact that does not, a fact from the official record marked, an amount of money in bold. Use it where the order of the facts IS the meaning and each fact is a line of text; the few steps of a way are ProgressSteps, and what ONE did recently the case trail. Built on @mui/lab Timeline (the Timeline de atividade template, packaged)."
+    },
+    {
       "name": "StatusChip",
       "from": "@/components/product/status-chip",
       "props": "label, tone? (neutral | primary | positive | attention | info | danger), icon? (a mark before the words, as the spinner of work under way, said by the words too), className?",
@@ -326,7 +332,7 @@
     {
       "name": "Timeline de atividade",
       "props": "@mui/lab Timeline + TimelineDot variant=outlined + subtitle2/body2 + relative time",
-      "use": "'What happened recently' when the order IS the meaning. Recover the shape from the recent-records card in `git show \"ab2e84d:apps/web/src/app/(dashboard)/inicio/page.tsx\"`."
+      "use": "'What happened recently' when the order IS the meaning. Recover the shape from the recent-records card in `git show \"ab2e84d:apps/web/src/app/(dashboard)/inicio/page.tsx\"`. A chronology of facts by day and moment is packaged: ChronologyTimeline."
     }
   ],
   "traps": [

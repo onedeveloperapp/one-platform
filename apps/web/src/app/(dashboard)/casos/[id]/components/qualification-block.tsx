@@ -3,10 +3,11 @@
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 
-import { Box, Button, Typography } from "@mui/material";
+import { Box, Button } from "@mui/material";
 
 import ConfirmActionDialog from "@/components/product/confirm-action-dialog";
-import SectionTitle from "@/components/product/section-title";
+import type { Fact } from "@/components/product/fact-grid";
+import InfoHint from "@/components/product/info-hint";
 import StateLine, { type StateTone } from "@/components/product/state-line";
 import type { CaseQualification } from "@/lib/cases/qualification";
 import { MISSING_KEY, OUTCOME_KEY, REASON_KEY } from "@/lib/cases/qualification";
@@ -19,11 +20,45 @@ const TONE: Record<CaseQualification["outcome"], StateTone> = {
   review: "attention",
 };
 
+type Words = ReturnType<typeof useTranslations>;
+
+/** The rule's word on the problem: the outcome with its reasons, or what it still needs to decide. */
+function qualificationSaid(t: Words, qualification: CaseQualification): string {
+  const reasons = qualification.reasons.map((reason) => t(REASON_KEY[reason])).join(" ");
+  const missing = qualification.missing
+    .map((item) => (MISSING_KEY[item] ? t(MISSING_KEY[item]) : null))
+    .filter(Boolean)
+    .join(", ");
+  // A rule that could not decide yet says what it needs, never a reason it has not reached.
+  const pending = qualification.outcome === "pending";
+  const needs = pending && missing ? t("qualification-needs", { missing }) : "";
+  return [t(OUTCOME_KEY[qualification.outcome]), pending ? needs : reasons].filter(Boolean).join(" ");
+}
+
+/** The problem qualifies, or a lawyer went on with it: settled, a fact of the card, never a line that asks. */
+export const qualificationSettled = (qualification: CaseQualification | null | undefined): boolean =>
+  Boolean(qualification && (qualification.released || qualification.outcome === "qualifies"));
+
 /**
- * Whether the case's problem qualifies (migration 0147): the rule's word, said
- * as ONE's that may err, with its reasons; what it still needs to decide; and,
- * for a partner or a lawyer, going on with a case it did not qualify (or left
- * to a person), with the reason. Nothing shows before ONE ran the rule.
+ * The settled qualification as a fact of the card (the owner's canvas of 2026-11-24): the rule's word, or the
+ * lawyer's who went on, with ONE's reading behind the "i".
+ */
+export function qualificationFact(t: Words, qualification: CaseQualification): Fact {
+  const said = qualificationSaid(t, qualification);
+  return {
+    key: "qualification",
+    label: t("qualification-title"),
+    value: qualification.released ? t("qualification-released", { reason: qualification.released.reason }) : said,
+    hint: qualification.released ? `${said} ${t("qualification-hint")}` : t("qualification-hint"),
+  };
+}
+
+/**
+ * Whether the case's problem qualifies (migration 0147), while it is still open: what the rule needs to decide, or
+ * its word that the problem does not qualify (or is left to a person), as one line of what the card asks, with what
+ * holds behind the "i" and, for a partner or a lawyer, going on with the case anyway, with the reason. Once it
+ * qualifies or a lawyer went on, it is a fact of the card (`qualificationFact`). Nothing shows before ONE ran the
+ * rule.
  */
 export default function QualificationBlock({
   caseId,
@@ -39,46 +74,35 @@ export default function QualificationBlock({
 }) {
   const t = useTranslations("product");
   const [asking, setAsking] = useState(false);
-  if (!qualification) return null;
+  if (!qualification || qualificationSettled(qualification)) return null;
 
-  const reasons = qualification.reasons.map((reason) => t(REASON_KEY[reason])).join(" ");
-  const missing = qualification.missing
-    .map((item) => (MISSING_KEY[item] ? t(MISSING_KEY[item]) : null))
-    .filter(Boolean)
-    .join(", ");
   const holds = qualification.outcome === "not_qualified" || qualification.outcome === "review";
-  // A rule that could not decide yet says what it needs, never a reason it has not reached.
-  const pending = qualification.outcome === "pending";
-  const needs = pending && missing ? t("qualification-needs", { missing }) : "";
-  const said = [t(OUTCOME_KEY[qualification.outcome]), pending ? needs : reasons].filter(Boolean).join(" ");
   const next = qualification.outcome === "review" ? t("qualification-review-next") : t("qualification-holds");
+  // What the rule still needs comes from the legs of the trip: the line leads to the card where they are completed.
+  const needsTrip =
+    qualification.outcome === "pending" && qualification.missing.some((item) => Boolean(MISSING_KEY[item]));
 
   return (
-    <Box className="flex flex-col gap-2">
-      <SectionTitle
-        id="case-qualification-title"
-        as="h3"
-        variant="subtitle2"
-        title={t("qualification-title")}
-        description={t("qualification-hint")}
-      />
-      <StateLine tone={qualification.released ? "done" : TONE[qualification.outcome]}>{said}</StateLine>
-      {qualification.released ? (
-        <Typography variant="body2" className="text-text-secondary">
-          {t("qualification-released", { reason: qualification.released.reason })}
-        </Typography>
-      ) : holds ? (
-        <Typography variant="body2" className="text-text-secondary">
-          {next}
-        </Typography>
-      ) : null}
-      {holds && !qualification.released && mayRelease ? (
-        <Box>
-          <Button variant="outlined" size="small" onClick={() => setAsking(true)}>
-            {t("qualification-release")}
-          </Button>
+    <>
+      <StateLine
+        tone={TONE[qualification.outcome]}
+        action={
+          needsTrip ? (
+            <Button variant="outlined" color="grey" size="small" href="#case-trip">
+              {t("qualification-needs-action")}
+            </Button>
+          ) : holds && mayRelease ? (
+            <Button variant="outlined" size="small" onClick={() => setAsking(true)}>
+              {t("qualification-release")}
+            </Button>
+          ) : undefined
+        }
+      >
+        <Box component="span" className="inline-flex flex-wrap items-center gap-1">
+          {qualificationSaid(t, qualification)}
+          <InfoHint label={holds ? `${next} ${t("qualification-hint")}` : t("qualification-hint")} />
         </Box>
-      ) : null}
+      </StateLine>
       {asking ? (
         <ConfirmActionDialog
           title={t("qualification-release-title")}
@@ -108,6 +132,6 @@ export default function QualificationBlock({
           }}
         />
       ) : null}
-    </Box>
+    </>
   );
 }

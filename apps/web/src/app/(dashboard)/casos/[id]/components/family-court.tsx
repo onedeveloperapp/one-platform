@@ -140,21 +140,44 @@ export function FamilyPlanBox({
       }
     });
 
+  // Splitting the family, or bringing it together again, is the answer of its line, beside it (the owner's canvas of
+  // 2026-11-24: one place for a line's button).
+  const familyButton =
+    lawyerHere && (canSplit || canJoin) ? (
+      canSplit ? (
+        <Button variant="outlined" color="grey" size="small" disabled={action.busy} onClick={() => setSplitting(true)}>
+          {t("case-family-split-action")}
+        </Button>
+      ) : (
+        <Button
+          variant="outlined"
+          color="grey"
+          size="small"
+          disabled={action.busy}
+          loading={action.pending("family-together")}
+          loadingPosition="start"
+          onClick={() => void together()}
+        >
+          {action.pending("family-together") ? sentence(togetherWords.doing) : t("case-family-together-action")}
+        </Button>
+      )
+    ) : undefined;
+
   return (
     <Box className="flex flex-col gap-2">
       {mismatch ? (
-        <Alert severity="warning" className="neutral bg-background-paper/60!">
+        <Alert severity="warning" className="neutral bg-background-paper/60!" action={familyButton}>
           {t("case-family-mismatch")}
         </Alert>
       ) : family === "together" ? (
-        <Box className="flex items-center gap-1">
-          <Typography variant="body2" className="text-text-secondary">
+        <StateLine tone="info" action={familyButton}>
+          <Box component="span" className="inline-flex flex-wrap items-center gap-1">
             {t("case-family-together")}
-          </Typography>
-          <InfoHint label={t("case-family-together-why")} className="self-center" />
-        </Box>
+            <InfoHint label={t("case-family-together-why")} />
+          </Box>
+        </StateLine>
       ) : (
-        <Alert severity="warning" className="neutral bg-background-paper/60!">
+        <Alert severity="warning" className="neutral bg-background-paper/60!" action={familyButton}>
           <Box className="flex flex-col gap-2">
             <Typography variant="body2">
               {chooser
@@ -171,33 +194,7 @@ export function FamilyPlanBox({
           {t(familyErrorKey(problem))}
         </Alert>
       )}
-      {lawyerHere && (canSplit || canJoin) ? (
-        <Box>
-          {canSplit ? (
-            <Button
-              variant="outlined"
-              color="grey"
-              size="small"
-              disabled={action.busy}
-              onClick={() => setSplitting(true)}
-            >
-              {t("case-family-split-action")}
-            </Button>
-          ) : (
-            <Button
-              variant="outlined"
-              color="grey"
-              size="small"
-              disabled={action.busy}
-              loading={action.pending("family-together")}
-              loadingPosition="start"
-              onClick={() => void together()}
-            >
-              {action.pending("family-together") ? sentence(togetherWords.doing) : t("case-family-together-action")}
-            </Button>
-          )}
-        </Box>
-      ) : lawyerHere ? (
+      {lawyerHere && !(canSplit || canJoin) ? (
         <Typography variant="body2" className="text-text-secondary">
           {t("case-family-planned")}
         </Typography>
