@@ -5326,6 +5326,7 @@
     "filing-receipt-before-one-past": "O que já passou fica registrado como passado: prazos e audiências sem alerta, e nada é dito ao cliente.",
     "filing-receipt-before-one-ahead": "O que ainda vem, num processo em andamento, segue como qualquer prazo ou audiência.",
     "filing-receipt-before-one-confirm": "Confirmar e anexar",
+    "filing-receipt-busy": "Outra ação do caso está em andamento. Espere ela terminar e tente de novo.",
     "filing-receipt-cnj": "Número do processo",
     "filing-receipt-cnj-help": "Os vinte dígitos que o tribunal deu.",
     "filing-receipt-day": "Protocolado em",

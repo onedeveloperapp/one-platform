@@ -327,14 +327,24 @@ function Lawsuit({
       .join(" · ");
   };
 
-  const run = async (key: ActionKey, work: () => Promise<{ ok: boolean; code: string }>, after?: () => void) => {
+  /**
+   * Runs one action of the lawsuit, and answers what came of it: done, refused with the server's code, or not run at
+   * all (`code` null: another action of the case was under way), so a dialog that started it can say so in place.
+   */
+  const run = async (
+    key: ActionKey,
+    work: () => Promise<{ ok: boolean; code: string }>,
+    after?: () => void,
+  ): Promise<{ ok: boolean; code: string | null }> => {
     const stale = { now: false };
-    await action.run(keyOf(key), words[key], async () => {
+    let code: string | null = null;
+    const ok = await action.run(keyOf(key), words[key], async () => {
       setProblem(null);
       setProblemFor(key);
       try {
         const result = await work();
         if (!result.ok) {
+          code = result.code;
           setProblem(result.code);
           stale.now = key === "sign" && SIGNATURE_STALE.has(result.code);
           return false;
@@ -343,11 +353,13 @@ function Lawsuit({
         return true;
       } catch {
         // A request that failed on the way (the network, the server): the button comes back.
+        code = "unavailable";
         setProblem("unavailable");
         return false;
       }
     });
     if (stale.now) onChanged();
+    return { ok, code };
   };
 
   /** The signature asked over a colleague's, from the confirmation: an error in words, or null. */
@@ -538,7 +550,7 @@ function Lawsuit({
       </Box>
       <FactGrid facts={whereFacts} />
 
-      {problem && problemFor !== "sign" && (
+      {problem && problemFor !== "sign" && problemFor !== "receipt" && (
         <Alert
           severity="error"
           className="neutral bg-background-paper/60!"
@@ -869,6 +881,17 @@ function Lawsuit({
                   <Typography variant="body2" className="text-text-secondary">
                     {t("filing-receipt-read-check")}
                   </Typography>
+                  {/* What came of attaching it, where the person acted: the top of the lawsuit is out of sight here. */}
+                  {problem && problemFor === "receipt" ? (
+                    <Alert
+                      severity="error"
+                      className="neutral bg-background-paper/60!"
+                      role="alert"
+                      onClose={() => setProblem(null)}
+                    >
+                      {t(caseErrorKey(problem))}
+                    </Alert>
+                  ) : null}
                   <Box>
                     <Button
                       variant="contained"
@@ -1000,8 +1023,11 @@ function Lawsuit({
           cancelLabel={t("cases-cancel")}
           busyLabel={t("cases-working")}
           onConfirm={async () => {
-            await attach(true);
-            return null;
+            const done = await attach(true);
+            if (done.ok) return null;
+            // Not attached: the dialog stays, saying why (refused by the database, or another action of the case
+            // under way), instead of closing on a card that did not change.
+            return done.code ? t(caseErrorKey(done.code)) : t("filing-receipt-busy");
           }}
           onClose={() => setConfirmingPast(false)}
         />
