@@ -13,6 +13,7 @@ import type {
 import type { OneAnswer, OneApi } from "@/lib/court-extension/one-api";
 import { readMap } from "@/lib/court-robot/map";
 import { supabaseFileStore } from "@/lib/files/store";
+import { tellBatchStop, tellBatchStopped } from "@/lib/filing-ways/batch-notices-work";
 import { readScreen, readSteps, receiptDigits, receiptText } from "@/lib/filing-ways/extension-protocol";
 import {
   filingRowOf,
@@ -36,7 +37,9 @@ import type { SupabaseClient } from "@supabase/supabase-js";
  * AI's reading of a screen, its result and receipt) is the same code the extension's calls run
  * (`lib/filing-ways/screen-filing.ts`); here the screen held for the lawyer's word is kept as a picture, the receipt
  * is the court's screen printed, and a map ONE followed to a filing its lawyer confirmed and the court took becomes
- * trusted (only ONE's own browser makes one trusted). Only ids, codes and counts leave this file.
+ * trusted (only ONE's own browser makes one trusted). Each stop that waits for the lawyer (the court's code, the first
+ * filing held for their word, a batch stopped for a reason not a person's own) is told to them the moment it happens,
+ * on the bell and on their WhatsApp (0284, `tellBatchStop`). Only ids, codes and counts leave this file.
  */
 
 export const COURT_BROWSER_BEAT_KEY = "court_browser_beat";
@@ -132,6 +135,13 @@ async function keepScreen(
     return null;
   }
 }
+
+/** What a notice of a batch's stop names of it. */
+const stopOf = (batch: ClaimedBatch) => ({
+  batchId: batch.batchId,
+  personId: batch.personId,
+  systemName: batch.system.name,
+});
 
 export function serverBackend(
   service: SupabaseClient,
@@ -231,7 +241,19 @@ export function serverBackend(
         target_claim: batch.claim,
         target_kind: kind,
       });
-      return !error && (data as { ok?: boolean } | null)?.ok === true;
+      const asked = !error && (data as { ok?: boolean } | null)?.ok === true;
+      // The lawyer is told at once: the court's screen waits for the code a few minutes. Never waited for.
+      if (asked) {
+        void tellBatchStop(service, {
+          batchId: batch.batchId,
+          personId: batch.personId,
+          systemName: batch.system.name,
+          kind: "code",
+          subject: new Date().toISOString(),
+          codeKind: kind,
+        });
+      }
+      return asked;
     },
 
     async takeCode(batch): Promise<TakenCode> {
@@ -260,11 +282,12 @@ export function serverBackend(
     },
 
     async finish(batch, why) {
-      await service.rpc("finish_filing_batch", {
+      const { data, error } = await service.rpc("finish_filing_batch", {
         target_batch: batch.batchId,
         target_claim: batch.claim,
         target_error: why,
       });
+      if (!error && (data as { ok?: boolean } | null)?.ok === true) await tellBatchStopped(service, stopOf(batch), why);
     },
 
     api(batch, started, hooks: PageHooks): OneApi {
@@ -300,7 +323,9 @@ export function serverBackend(
             target_claim: claim,
             target_error: why,
           });
-          return codeAnswer(data, error);
+          const answer = codeAnswer(data, error);
+          if (answer.ok && batchId === batch.batchId) await tellBatchStopped(service, stopOf(batch), why);
+          return answer;
         },
 
         async plan(filingId, claim, screen) {
@@ -324,6 +349,16 @@ export function serverBackend(
           const answer = codeAnswer(data, error);
           if (!answer.ok && file) {
             await takeBackFile(supabaseFileStore(service), file.id, file.path).catch(() => undefined);
+          }
+          // The lawyer is told at once that ONE waits for their word on the court's screen it kept.
+          if (answer.ok) {
+            void tellBatchStop(service, {
+              batchId: batch.batchId,
+              personId: batch.personId,
+              systemName: batch.system.name,
+              kind: "confirm",
+              subject: filingId,
+            });
           }
           return answer;
         },

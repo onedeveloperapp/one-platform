@@ -7,6 +7,7 @@ import type { BrowserBackend, ClaimedBatch, LoginCheck } from "@/lib/court-brows
 import { type BatchRunEnd, type Pause, runBatch } from "@/lib/court-extension/batch-run";
 import type { OneApi } from "@/lib/court-extension/one-api";
 import type { DriverFile } from "@/lib/court-robot/runner";
+import { CODE_WAIT_MINUTES } from "@/lib/filing-ways/batch-notices";
 
 /**
  * ONE's own browser on ONE's server (the owner's first way to file, 2026-11-20, root `CLAUDE.md`, "Three ways to
@@ -42,7 +43,8 @@ export type WorkerDeps = {
   idleMs?: number;
 };
 
-const CODE_MOST_MS = 5 * 60_000;
+// The wait the lawyer's notice says (0284).
+const CODE_MOST_MS = CODE_WAIT_MINUTES * 60_000;
 const WORD_MOST_MS = 30 * 60_000;
 const IDLE_MS = 10_000;
 const BEAT_MS = 60_000;

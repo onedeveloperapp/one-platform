@@ -142,6 +142,29 @@ const ptBR = {
   }),
 
   /**
+   * ONE's browser signs in at a court for a batch the lawyer approved and the court asked the code of their app or
+   * their e-mail (migration 0284). `minutes` is how long ONE waits for it.
+   */
+  filingBatchCode: (system: string, byEmail: boolean, minutes: number): BellText => ({
+    title: "O tribunal pediu o seu código",
+    body: `O ONE está entrando no ${system} para protocolar o seu lote, e o tribunal ${
+      byEmail ? "mandou um código ao seu e-mail" : "pediu o código do seu aplicativo"
+    }. Digite o código em Protocolo nos próximos ${minutes} minutos.`,
+  }),
+
+  /** ONE's browser holds the first filing at a system it still learns, before anything that may send it (0284). */
+  filingBatchConfirm: (system: string): BellText => ({
+    title: "O ONE espera a sua confirmação",
+    body: `O ONE preencheu a primeira ação no ${system} e parou antes de enviar. Confira a tela do tribunal em Protocolo e confirme para protocolar.`,
+  }),
+
+  /** ONE's browser stopped a batch for a reason not a person's own (0284). */
+  filingBatchStopped: (system: string): BellText => ({
+    title: "O protocolo do lote parou",
+    body: `O ONE parou o lote do ${system}. Em Protocolo, veja o motivo e o que fazer; o que não foi enviado volta para a fila de prontos.`,
+  }),
+
+  /**
    * The platform's operators only (migration 0255): a provider of the AI refuses the platform's account (its key, its
    * credit). `since` is already formatted for the reader.
    */

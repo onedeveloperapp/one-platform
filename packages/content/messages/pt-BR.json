@@ -10383,7 +10383,9 @@
     "pending-filing-waits-detail-plain": "{system}: a ficha e os passos estão no caso",
     "pending-filing-waits-more": "{count, plural, one {Mais uma ação espera o protocolo} other {Mais # ações esperam o protocolo}}",
     "notice-kind-filing-waits": "Ação pronta para protocolar, para quem assina",
-    "notice-kind-filing-waits-when": "Quando um pacote pronto fica dias sem protocolo, aos advogados da ação, no WhatsApp do perfil de cada um, em dias úteis. Diz que o pacote, a ficha e os passos estão no caso."
+    "notice-kind-filing-waits-when": "Quando um pacote pronto fica dias sem protocolo, aos advogados da ação, no WhatsApp do perfil de cada um, em dias úteis. Diz que o pacote, a ficha e os passos estão no caso.",
+    "notice-kind-filing-batch-waits": "Protocolo do ONE à espera do advogado",
+    "notice-kind-filing-batch-waits-when": "Quando o navegador do ONE para à espera do advogado do lote: o tribunal pediu o código, o primeiro protocolo num sistema espera a confirmação, ou o lote parou. No WhatsApp do perfil dele, na hora; o código nunca vai por ali."
   },
   "auth": {
     "continue": "Continuar",
