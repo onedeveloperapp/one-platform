@@ -53,7 +53,20 @@ export type DjenCommunication = {
   active: boolean;
   /** The reason the court gave for cancelling it, when the DJEN gives one. */
   cancelReason: string | null;
+  /**
+   * The parties it is addressed to, through their lawyers (`destinatarios`), each with its side of the lawsuit as
+   * the DJEN gives it: who a firm's client is in a lawsuit it has no case of yet (migration 0287).
+   */
+  parties: DjenParty[];
+  /** The lawyers it is addressed to (`destinatarioadvogados`), by their registration at the bar. */
+  lawyers: OabRegistration[];
 };
+
+/**
+ * A party a communication is addressed to, as the DJEN names it: `active` is the side that sues ("A"), `passive` the
+ * side sued ("P"), null when the DJEN does not say.
+ */
+export type DjenParty = { name: string; side: "active" | "passive" | null };
 
 /**
  * What one look at the public API saw of a court on a day (the platform's watch over the DJEN): whether it answered,

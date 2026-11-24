@@ -1,6 +1,6 @@
 import { oabNumberKey, oabStateKey } from "@flyee/courts/oab";
 import { hostOfLink, isEmptyText, kindOfCommunication, systemOfHost } from "@flyee/courts/djen-systems";
-import type { DjenClient, DjenCommunication, DjenProbe, OabRegistration } from "@flyee/courts/types";
+import type { DjenClient, DjenCommunication, DjenParty, DjenProbe, OabRegistration } from "@flyee/courts/types";
 
 /**
  * The DJEN (Diário de Justiça Eletrônico Nacional, CNJ Resolution 455/2022)
@@ -50,6 +50,11 @@ import type { DjenClient, DjenCommunication, DjenProbe, OabRegistration } from "
  *   again as it was, it would meet the same wall for ever.
  * - A text may be a whole HTML document (the courts on eproc publish one),
  *   or plain text with the named characters of an editor.
+ * - Each item names the parties it is addressed to (`destinatarios`, each
+ *   `{ nome, polo, comunicacao_id }`, `polo` "A" or "P") and their lawyers
+ *   (`destinatarioadvogados`): checked on 2026-11-24 on twenty items of a
+ *   day's public listing of TJGO, by the shape and the sides only, each with
+ *   one party of one side.
  *
  * A listing is whole or it is an error: a publication left unread is a
  * deadline nobody saw. So what cannot be asked (a registration or a day that
@@ -140,6 +145,7 @@ const PAGE_SIZE = 100;
 const CALLS_A_WINDOW = 20;
 
 type Lawyer = { advogado?: { numero_oab?: unknown; uf_oab?: unknown } | null };
+type Recipient = { nome?: unknown; polo?: unknown };
 type Item = {
   hash?: unknown;
   siglaTribunal?: unknown;
@@ -156,6 +162,7 @@ type Item = {
   motivo_cancelamento?: unknown;
   data_cancelamento?: unknown;
   destinatarioadvogados?: Lawyer[] | null;
+  destinatarios?: Recipient[] | null;
 };
 type Page = { status?: unknown; count?: unknown; items?: Item[] | null };
 
@@ -178,6 +185,38 @@ function cancelled(item: Item): boolean {
   if (flag === false || flag === 0) return true;
   if (typeof flag === "string" && /^(?:false|0|n|n[ãa]o|inativo)$/i.test(flag.trim())) return true;
   return text(item.data_cancelamento).trim() !== "" || text(item.motivo_cancelamento).trim() !== "";
+}
+
+/**
+ * The parties a communication is addressed to, as the DJEN names them: a name with something in it, its side when the
+ * DJEN says "A" or "P", each party once; twenty at most, more than any lawsuit of ONE's has.
+ */
+function partiesOf(recipients: Recipient[] | null | undefined): DjenParty[] {
+  const parties: DjenParty[] = [];
+  const seen = new Set<string>();
+  for (const recipient of Array.isArray(recipients) ? recipients : []) {
+    const name = text(recipient?.nome).replace(/\s+/g, " ").trim().slice(0, 200);
+    if (!/\p{L}/u.test(name)) continue;
+    const pole = text(recipient?.polo).trim().toUpperCase();
+    const side = pole === "A" ? "active" : pole === "P" ? "passive" : null;
+    const key = `${side ?? ""}:${name.toUpperCase()}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    parties.push({ name, side });
+    if (parties.length >= 20) break;
+  }
+  return parties;
+}
+
+/** The lawyers a communication is addressed to, by a registration that is one (a state and a number), each once. */
+function lawyersOf(lawyers: Lawyer[] | null | undefined): OabRegistration[] {
+  const found = new Map<string, OabRegistration>();
+  for (const lawyer of Array.isArray(lawyers) ? lawyers : []) {
+    const uf = oabStateKey(lawyer?.advogado?.uf_oab);
+    const number = oabNumberKey(lawyer?.advogado?.numero_oab);
+    if (/^[A-Z]{2}$/.test(uf) && /^\d{1,9}[A-Z]{0,2}$/.test(number)) found.set(`${uf}${number}`, { uf, number });
+  }
+  return [...found.values()];
 }
 
 export class DjenHttpClient implements DjenClient {
@@ -325,6 +364,8 @@ export class DjenHttpClient implements DjenClient {
           className: text(item.nomeClasse).trim() || null,
           active: !inactive,
           cancelReason: inactive ? text(item.motivo_cancelamento).trim() || null : null,
+          parties: partiesOf(item.destinatarios),
+          lawyers: lawyersOf(item.destinatarioadvogados),
         };
         if (hash) found.set(hash, communication);
         else unkeyed.push(communication);

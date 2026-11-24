@@ -44,6 +44,7 @@ describe("the platform's sweeps (2026-11-04)", () => {
         "court-tracking",
         "deadline-counts",
         "djen-capture",
+        "djen-cases",
         "djen-history",
         "djen-watch",
         "document-reuse",
@@ -106,6 +107,7 @@ describe("the platform's sweeps (2026-11-04)", () => {
     // One lane at the DJEN and at the tribunal, a month of ANAC's record downloaded once, and the upkeep.
     for (const key of [
       "djen-capture",
+      "djen-cases",
       "djen-history",
       "djen-watch",
       "court-tracking",

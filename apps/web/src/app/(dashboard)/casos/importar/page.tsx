@@ -16,7 +16,7 @@ const ACTIONABLE_READ = 500;
 const ENDED_SHOWN = 5;
 
 const BATCH_COLUMNS =
-  "id, file_name, source_system, status, rows_count, counts, file_counts, created_at, committed_at, reverted_at";
+  "id, kind, file_name, source_system, status, rows_count, counts, file_counts, created_at, committed_at, reverted_at";
 
 /**
  * /casos/importar: a firm brings the lawsuits it already has in court from
@@ -59,6 +59,7 @@ async function loadImport(): Promise<ImportState> {
 
   type BatchRow = {
     id: string;
+    kind: string;
     file_name: string | null;
     source_system: string | null;
     status: string;
@@ -101,6 +102,7 @@ async function loadImport(): Promise<ImportState> {
         id: batch.id,
         fileName: batch.file_name,
         source: batch.source_system,
+        byOne: batch.kind === "djen",
         status: batch.status,
         rows: batch.rows_count,
         decided: batch.status === "staged" ? (decidedOf.get(batch.id) ?? 0) : null,

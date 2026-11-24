@@ -20,6 +20,7 @@ import { personFlowKey, personSetupOwed, personSetupShown, signsAtTheBar } from 
 import { readPublicationAcks } from "@/lib/firm/publication-acks";
 import { isManager } from "@/lib/firm/roles";
 import { readFirmToday, todayViewerOf } from "@/lib/firm/today";
+import { portfolioLines, portfolioStateOf } from "@/lib/import/djen-cases";
 import { getMemberContext } from "@/lib/member/context";
 import { readModuleSetups } from "@/lib/modules/module-setups-read";
 import { readModuleOffer } from "@/lib/modules/offer-read";
@@ -109,6 +110,7 @@ async function loadHome(): Promise<
     outcomes,
     djen,
     ownWhatsapp,
+    portfolio,
   ] = await Promise.all([
     context.supabase.rpc("firm_today", { target_org: firm.id }),
     context.supabase.rpc("firm_pending", { target_org: firm.id }),
@@ -170,6 +172,10 @@ async function loadHome(): Promise<
       .then(({ data, error }) => (error ? null : readDjenOutage(data))),
     // The person's own WhatsApp, required (the owner, 2026-11-14).
     context.supabase.from("profiles").select("whatsapp").eq("id", context.userId).maybeSingle(),
+    // The firm's portfolio (0287): what it brings, what ONE opened from the DJEN; unread, the card hides.
+    context.supabase
+      .rpc("firm_portfolio", { target_org: firm.id })
+      .then(({ data, error }) => (error ? null : portfolioStateOf(data))),
   ]);
   if (manager && facts && !isSetupAnswered(facts)) return { kind: "setup", setup: await loadSetupState(context) };
   // Read failures owe nothing: a registration that could not be read is never said to be missing.
@@ -260,6 +266,7 @@ async function loadHome(): Promise<
     progress: stock ? { stock, ended: recent ? recent.counts.ended : null, recent: recent ? recent.rows : [] } : null,
     pulse,
     oneWork: oneWork ? monthTotals(oneWork, brasiliaMonth()) : null,
+    portfolio: portfolioLines(portfolio),
   };
 }
 

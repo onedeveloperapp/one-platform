@@ -18,15 +18,21 @@ import type {
 
 /**
  * A communication as a test publishes it: with the lawyers it is addressed
- * to. What the court does not always give (its unit, the class of the case)
- * may be left out, and a communication is active unless the test says the
- * court cancelled it.
+ * to. What the court does not always give (its unit, the class of the case,
+ * the parties it names) may be left out, and a communication is active unless
+ * the test says the court cancelled it.
  */
-type Optional = "unit" | "className" | "active" | "documentType" | "cancelReason";
-export type FakeDjenEntry = Omit<DjenCommunication, Optional> &
-  Partial<Pick<DjenCommunication, Optional>> & { lawyers: OabRegistration[] };
+type Optional = "unit" | "className" | "active" | "documentType" | "cancelReason" | "parties";
+export type FakeDjenEntry = Omit<DjenCommunication, Optional> & Partial<Pick<DjenCommunication, Optional>>;
 
 type Stored = { communication: DjenCommunication; lawyers: OabRegistration[] };
+
+/** A communication as a listing hands it: a copy, so what a caller changes never reaches what was published. */
+const copyOf = (communication: DjenCommunication): DjenCommunication => ({
+  ...communication,
+  parties: communication.parties.map((party) => ({ ...party })),
+  lawyers: communication.lawyers.map((lawyer) => ({ ...lawyer })),
+});
 
 /** The same registration: the same state and the same number, letter included ("12345" is not "12345A"). */
 const sameLawyer = (a: OabRegistration, b: OabRegistration) =>
@@ -52,7 +58,7 @@ export class FakeDjenClient implements DjenClient {
 
   /** Publishes a communication, as the court would. A hash published twice is the same communication. */
   publish(entry: FakeDjenEntry): void {
-    const { lawyers, ...published } = entry;
+    const { lawyers, parties, ...published } = entry;
     const communication: DjenCommunication = {
       unit: null,
       className: null,
@@ -60,6 +66,9 @@ export class FakeDjenClient implements DjenClient {
       active: true,
       cancelReason: null,
       ...published,
+      parties: (parties ?? []).map((party) => ({ ...party })),
+      // As the API names them: the state and the number as the bar's keys write them.
+      lawyers: lawyers.map((lawyer) => ({ uf: oabStateKey(lawyer.uf), number: oabNumberKey(lawyer.number) })),
     };
     this.stored.set(entry.hash, { communication, lawyers: lawyers.map((lawyer) => ({ ...lawyer })) });
   }
@@ -73,7 +82,7 @@ export class FakeDjenClient implements DjenClient {
           (!input.until || communication.availableOn <= input.until) &&
           lawyers.some((lawyer) => sameLawyer(lawyer, input)),
       )
-      .map(({ communication }) => ({ ...communication }))
+      .map(({ communication }) => copyOf(communication))
       .sort((a, b) => a.availableOn.localeCompare(b.availableOn) || a.hash.localeCompare(b.hash));
   }
 
@@ -83,7 +92,7 @@ export class FakeDjenClient implements DjenClient {
     if (!/^\d{20}$/.test(cnj)) throw new DjenInvalidQueryError("number");
     return [...this.stored.values()]
       .filter(({ communication }) => communication.cnj === cnj)
-      .map(({ communication }) => ({ ...communication }))
+      .map(({ communication }) => copyOf(communication))
       .sort((a, b) => a.availableOn.localeCompare(b.availableOn) || a.hash.localeCompare(b.hash));
   }
 

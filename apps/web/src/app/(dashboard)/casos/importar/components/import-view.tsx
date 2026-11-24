@@ -1041,7 +1041,7 @@ function ImportWizard({ state }: { state: Ready }) {
                   <Box className="flex flex-wrap items-start justify-between gap-2">
                     <Box className="flex min-w-0 flex-col">
                       <Typography variant="body1" className="font-semibold">
-                        {batch.fileName ?? t("import-history-unnamed")}
+                        {batch.fileName ?? (batch.byOne ? t("import-history-by-one") : t("import-history-unnamed"))}
                       </Typography>
                       <Typography variant="body2" className="text-text-secondary">
                         {[batch.source, batch.whenLabel].filter(Boolean).join(" · ")}

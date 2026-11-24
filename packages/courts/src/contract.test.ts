@@ -30,6 +30,7 @@ const PUBLISHED: FakeDjenEntry[] = [
     link: "https://projudi.tjgo.jus.br/BuscaProcesso?PaginaAtual=-1",
     unit: "2º Juizado Especial Cível de Goiânia",
     className: "Procedimento do Juizado Especial Cível",
+    parties: [{ name: "Pessoa Inventada da Silva", side: "active" }],
     lawyers: [ANA],
   },
   {
@@ -40,6 +41,10 @@ const PUBLISHED: FakeDjenEntry[] = [
     kind: "Citação",
     text: "Cite-se a parte ré.",
     link: null,
+    parties: [
+      { name: "Pessoa Inventada da Silva", side: "active" },
+      { name: "COMPANHIA AEREA DE TESTE SA", side: "passive" },
+    ],
     lawyers: [ANA, BRUNO],
   },
   {
@@ -259,6 +264,24 @@ function djenContract(name: string, make: (published: FakeDjenEntry[]) => DjenCl
       }
     });
 
+    it("names the parties each communication is addressed to, with their side, and the lawyers it goes through", async () => {
+      const client = make(PUBLISHED);
+      const history = await client.listByProcess({ cnj: "50012347920998090051" });
+      const byHash = new Map(history.map((communication) => [communication.hash, communication]));
+      // The summons goes to both sides through both lawyers; the notice of the hearing to the side that sues alone.
+      assert.deepEqual(byHash.get("hash0001abcdefghijklmnopqrstuv")?.parties, [
+        { name: "Pessoa Inventada da Silva", side: "active" },
+        { name: "COMPANHIA AEREA DE TESTE SA", side: "passive" },
+      ]);
+      assert.deepEqual(byHash.get("hash0001abcdefghijklmnopqrstuv")?.lawyers, [ANA, BRUNO]);
+      assert.deepEqual(byHash.get("hash0003abcdefghijklmnopqrstuv")?.parties, [
+        { name: "Pessoa Inventada da Silva", side: "active" },
+      ]);
+      assert.deepEqual(byHash.get("hash0003abcdefghijklmnopqrstuv")?.lawyers, [ANA]);
+      // One that names nobody names nobody: never a party made up.
+      assert.deepEqual(byHash.get("hash0004abcdefghijklmnopqrstuv")?.parties, []);
+    });
+
     it("answers a lawsuit with nothing published with an empty list, and refuses what is not a number", async () => {
       const client = make(PUBLISHED);
       assert.deepEqual(await client.listByProcess({ cnj: "50099998820998090051" }), []);
@@ -351,7 +374,12 @@ function djenStandIn(
       nomeClasse: entry.className ?? null,
       ativo: entry.active ?? true,
       status: "P",
-      destinatarios: [{ nome: "PARTE INVENTADA", polo: "A" }],
+      // In the API's own shape (read on 2026-11-24): the name, the side as "A" or "P", and the communication's id.
+      destinatarios: (entry.parties ?? []).map((party) => ({
+        nome: party.name,
+        polo: party.side === "active" ? "A" : party.side === "passive" ? "P" : null,
+        comunicacao_id: 1000 + index,
+      })),
       destinatarioadvogados: entry.lawyers.map((lawyer, at) => ({
         id: at + 1,
         advogado: { id: at + 1, nome: "ADVOGADO INVENTADO", numero_oab: lawyer.number, uf_oab: lawyer.uf },
@@ -740,6 +768,13 @@ describe("the DJEN through its public API", () => {
               texto: "Texto.",
               link: "javascript:alert(1)",
               destinatarioadvogados: [{ advogado: { numero_oab: "012345", uf_oab: "go" } }],
+              // A party with no name is nobody; a side the DJEN does not give is none; the same party twice is one.
+              destinatarios: [
+                { nome: "  ", polo: "A" },
+                { nome: "Pessoa  Inventada", polo: "a" },
+                { nome: "Pessoa Inventada", polo: "A" },
+                { nome: "Terceira Inventada", polo: "X" },
+              ],
             },
           ],
         }),
@@ -769,6 +804,12 @@ describe("the DJEN through its public API", () => {
       className: null,
       active: true,
       cancelReason: null,
+      parties: [
+        { name: "Pessoa Inventada", side: "active" },
+        { name: "Terceira Inventada", side: null },
+      ],
+      // The registration as the bar's keys write it: no zeros in front, the state in capitals.
+      lawyers: [ANA],
     });
   });
 

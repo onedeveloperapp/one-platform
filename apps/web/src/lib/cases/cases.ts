@@ -301,6 +301,7 @@ export const EVENT_KEY: Record<string, string> = {
   flight_looked_up: "case-event-flight-looked-up",
   court_moved: "case-event-court-moved",
   imported: "case-event-imported",
+  opened_from_djen: "case-event-opened-from-djen",
   dossier_issued: "case-event-dossier-issued",
   deadline_proposed: "case-event-deadline-proposed",
   deadline_updated: "case-event-deadline-updated",

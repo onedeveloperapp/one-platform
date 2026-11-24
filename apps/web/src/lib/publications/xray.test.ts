@@ -16,6 +16,8 @@ const communication = (overrides: Partial<DjenCommunication>): DjenCommunication
   className: "Procedimento do Juizado Especial Cível",
   active: true,
   cancelReason: null,
+  parties: [],
+  lawyers: [],
   ...overrides,
 });
 

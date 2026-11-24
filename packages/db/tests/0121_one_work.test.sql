@@ -98,6 +98,7 @@ insert into public.case_events (org_id, case_id, at, kind, actor_type, data) val
   ('b1210000-0000-4000-8000-00000000000a', 'c1210000-0000-4000-8000-000000000001', '2026-10-15 15:00+00', 'created', 'system', '{"from": "conversation"}'),
   ('b1210000-0000-4000-8000-00000000000a', 'c1210000-0000-4000-8000-000000000001', '2026-10-31 23:30-03', 'created', 'system', '{"from": "conversation"}'),
   ('b1210000-0000-4000-8000-00000000000a', 'c1210000-0000-4000-8000-000000000001', '2026-11-01 00:30-03', 'created', 'system', '{"from": "conversation"}'),
+  ('b1210000-0000-4000-8000-00000000000a', 'c1210000-0000-4000-8000-000000000001', '2026-10-16 15:00+00', 'opened_from_djen', 'system', '{}'),
   ('b1210000-0000-4000-8000-00000000000b', 'c1210000-0000-4000-8000-000000000003', '2026-10-15 15:00+00', 'created', 'system', '{"from": "conversation"}'),
   -- A case a person opened is no work of ONE's.
   ('b1210000-0000-4000-8000-00000000000a', 'c1210000-0000-4000-8000-000000000001', '2026-10-15 15:00+00', 'created', 'person', '{}');
@@ -375,7 +376,7 @@ $$;
 select set_eq(
   $$ select * from pg_temp.october('caio') $$,
   $$ values
-    ('caso_aberto_conversa', 2, 0, 0), ('resposta_conversa', 1, 1, 1), ('link_cliente', 1, 0, 0),
+    ('caso_aberto_conversa', 2, 0, 0), ('caso_aberto_djen', 1, 0, 0), ('resposta_conversa', 1, 1, 1), ('link_cliente', 1, 0, 0),
     ('arquivo_conversa', 1, 0, 0), ('resposta_entrevista', 1, 0, 0), ('documento_conferido', 1, 1, 0),
     ('dados_lidos', 1, 0, 0), ('foto_pdf', 1, 0, 0), ('audio_transcrito', 1, 0, 0), ('ordem_dos_fatos', 1, 1, 0),
     ('acoes_criadas', 1, 0, 1), ('sistema_tribunal', 0, 1, 0), ('voo_conferido', 1, 0, 0), ('clima_lido', 1, 0, 0),

@@ -7,6 +7,8 @@ export type ImportBatchView = {
   id: string;
   fileName: string | null;
   source: string | null;
+  /** The cases ONE opened from the lawsuits the DJEN shows, a batch a day (0287): ONE's, never a person's file. */
+  byOne: boolean;
   status: "staged" | "committed" | "reverted";
   /** The lines it received. */
   rows: number;

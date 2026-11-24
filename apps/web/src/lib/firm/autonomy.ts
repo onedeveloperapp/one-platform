@@ -11,6 +11,7 @@ import { caseKindLabelKey } from "@/lib/modules/registry";
 export const AUTONOMY_DECISIONS = [
   "reply_client",
   "open_case_from_chat",
+  "open_case_from_djen",
   "send_client_link",
   "send_signature_papers",
   "document_check",
@@ -90,6 +91,7 @@ export function firmAutonomyOf(raw: unknown): FirmAutonomy[] | null {
 export const DECISION_KEY: Record<AutonomyDecision, { title: string; body: string }> = {
   reply_client: { title: "autonomy-reply-client", body: "autonomy-reply-client-body" },
   open_case_from_chat: { title: "autonomy-open-case-from-chat", body: "autonomy-open-case-from-chat-body" },
+  open_case_from_djen: { title: "autonomy-open-case-from-djen", body: "autonomy-open-case-from-djen-body" },
   send_client_link: { title: "autonomy-send-client-link", body: "autonomy-send-client-link-body" },
   send_signature_papers: { title: "autonomy-send-signature-papers", body: "autonomy-send-signature-papers-body" },
   document_check: { title: "autonomy-document-check", body: "autonomy-document-check-body" },
@@ -122,7 +124,7 @@ export const AUTONOMY_STAGES: readonly { key: string; title: string; decisions: 
   {
     key: "atendimento",
     title: "autonomy-stage-service",
-    decisions: ["reply_client", "open_case_from_chat", "send_client_link"],
+    decisions: ["reply_client", "open_case_from_chat", "open_case_from_djen", "send_client_link"],
   },
   {
     key: "documentos",

@@ -1,5 +1,6 @@
 "use client";
 
+import PortfolioCard from "./portfolio-card";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -47,6 +48,7 @@ import type { WaitingDecisions } from "@/lib/ai/decisions";
 import { readHomePulse } from "@/lib/cases/pulse-read";
 import { homeTiles, type PendingGroup, sayPending, withDecisions } from "@/lib/firm/pending";
 import { type FirmToday, somethingForMe, type TodayNeed, todayNeeds } from "@/lib/firm/today";
+import type { PortfolioLines } from "@/lib/import/djen-cases";
 import type { ModuleOffer } from "@/lib/modules/offer";
 import type { ActivationFacts } from "@/lib/onboarding";
 import { type OneWorkTotals, saysOneWork } from "@/lib/one-work/work";
@@ -98,6 +100,11 @@ export type HomeState =
       progress: CasesProgress | null;
       /** What ONE did for the firm this month (0120, 0121), for its line; null when it could not be read. */
       oneWork: OneWorkTotals | null;
+      /**
+       * The firm's portfolio (0287): the step of bringing it while the firm said it used a system before, ONE's cases
+       * from the DJEN and the CPF only the firm gives; null with nothing to say, or when it could not be read.
+       */
+      portfolio: PortfolioLines | null;
       /** The mark of what the home shows (0096, `firm_pulse`): what it follows while open; null when unreadable. */
       pulse: string | null;
       /** The decisions that wait, each placed where it is decided; null when unread (then counted as before). */
@@ -402,7 +409,7 @@ export default function HomeView({ state }: { state: HomeState }) {
   const attentionShown = Boolean(ready?.attention) && attentionTotal > 0;
   const oneWorkShown = Boolean(ready?.oneWork && saysOneWork(ready.oneWork));
   const main = attentionShown || nothingWaits;
-  const side = tiles.length > 0 || oneWorkShown;
+  const side = tiles.length > 0 || oneWorkShown || Boolean(ready?.portfolio);
   // The setup's list already asks the registration at the bar while its step is open: the reminder waits for it.
   const setupAsksRegistration = Boolean(
     ready?.setup &&
@@ -582,6 +589,8 @@ export default function HomeView({ state }: { state: HomeState }) {
 
               {side ? (
                 <Box className="flex min-w-0 flex-col gap-6">
+                  {/* The firm's portfolio: what it brings, and ONE's cases from the DJEN (0287). */}
+                  {ready.portfolio ? <PortfolioCard lines={ready.portfolio} /> : null}
                   {tiles.length > 0 ? (
                     <CountList
                       id="today-needs"

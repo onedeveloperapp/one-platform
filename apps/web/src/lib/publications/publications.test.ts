@@ -465,6 +465,8 @@ describe("a reading of many days", () => {
       className: null,
       active: false,
       cancelReason: "Publicada em <b>duplicidade</b>.",
+      parties: [],
+      lawyers: [],
     });
     expect(item).toMatchObject({
       available_on: "2026-10-08",
@@ -495,6 +497,8 @@ describe("a reading of many days", () => {
         className: null,
         active: true,
         cancelReason: null,
+        parties: [],
+        lawyers: [],
       });
     expect(chunkItems([])).toEqual([[]]);
     expect(chunkItems([item("a", 10), item("b", 10), item("c", 10)], 2).map((chunk) => chunk.length)).toEqual([2, 1]);

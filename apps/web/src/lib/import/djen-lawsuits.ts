@@ -14,7 +14,16 @@ export type DjenLawsuit = {
   lastOn: string | null;
   publications: number;
   airlineName: string | null;
+  /**
+   * What ONE does of it (0287): `opening` while ONE reads it to open its case, the reason it left it otherwise, null
+   * when ONE never read it (its texts name no airline, or the firm keeps the decision with a person).
+   */
+  one: string | null;
 };
+
+/** The lawsuits the firm completes by its spreadsheet: every one ONE is not opening by itself. */
+export const lawsuitsToComplete = (lawsuits: readonly DjenLawsuit[]): DjenLawsuit[] =>
+  lawsuits.filter((lawsuit) => lawsuit.one !== "opening");
 
 const day = (value: unknown): string | null =>
   typeof value === "string" && /^\d{4}-\d{2}-\d{2}/.test(value) ? value.slice(0, 10) : null;
@@ -37,6 +46,7 @@ export function readDjenLawsuits(raw: unknown): { total: number; lawsuits: DjenL
         lastOn: day(line.last_on),
         publications: Number(line.publications) || 0,
         airlineName: typeof line.airline_name === "string" ? line.airline_name : null,
+        one: typeof line.one === "string" && /^[a-z][a-z0-9_]{1,59}$/.test(line.one) ? line.one : null,
       },
     ];
   });

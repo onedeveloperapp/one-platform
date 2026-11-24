@@ -235,6 +235,10 @@ insert into public.filing_batch_codes (batch_id, org_id, key_version, iv, cipher
 insert into public.filing_batch_notices (org_id, batch_id, kind, subject, user_id, status, reason) values
   ('b1000000-0000-4000-8000-00000000000a', 'f2640000-0000-4000-8000-00000000000a', 'stopped', 'f2640000-0000-4000-8000-00000000000a', 'a1000000-0000-4000-8000-000000000001', 'skipped', 'no_phone'),
   ('b1000000-0000-4000-8000-00000000000b', 'f2640000-0000-4000-8000-00000000000b', 'stopped', 'f2640000-0000-4000-8000-00000000000b', 'a1000000-0000-4000-8000-000000000004', 'skipped', 'no_phone');
+-- A lawsuit of the DJEN ONE reads to open its case (0287).
+insert into public.djen_case_reads (org_id, cnj) values
+  ('b1000000-0000-4000-8000-00000000000a', '28710091020998090051'),
+  ('b1000000-0000-4000-8000-00000000000b', '28710091020998090051');
 -- The history of a lawsuit filed before its case was in ONE, owed to the DJEN's reading (0286).
 insert into public.proceeding_history_reads (org_id, proceeding_id, case_id) values
   ('b1000000-0000-4000-8000-00000000000a', 'a5000000-0000-4000-8000-00000000000a', 'a3000000-0000-4000-8000-00000000000a'),
@@ -786,7 +790,7 @@ select is(
     'case_papers', 'case_parties', 'case_statements', 'case_tasks',
     'case_weather', 'cases', 'certificate_inventory', 'chatwoot_room_members', 'chatwoot_rooms', 'civil_court_answers', 'client_consents', 'client_links', 'client_notices', 'client_payment_accounts', 'closing_goals', 'connections',
     'consent_acceptances', 'court_login_uses',
-    'deadlines', 'djen_captures', 'dossiers', 'draft_templates', 'entitlement_grants', 'extension_links', 'fee_terms', 'files', 'filing_batch_notices', 'filing_batches', 'filing_package_items', 'filing_packages',
+    'deadlines', 'djen_captures', 'djen_case_reads', 'dossiers', 'draft_templates', 'entitlement_grants', 'extension_links', 'fee_terms', 'files', 'filing_batch_notices', 'filing_batches', 'filing_package_items', 'filing_packages',
     'filing_receipts', 'filing_submissions', 'filing_waits_reminders', 'finance_access', 'finance_accountants', 'finance_accounts', 'finance_bill_payments', 'finance_bills', 'finance_budgets', 'finance_categories', 'finance_closings', 'finance_cost_centers', 'finance_entries', 'finance_imports', 'finance_invoices', 'finance_package_sends', 'finance_receipts', 'finance_rules', 'finance_series',
     'finance_statement_lines', 'finance_statements', 'firm_area_script_requests', 'firm_area_scripts', 'firm_areas', 'firm_autonomy', 'firm_brands', 'firm_calendars',
     'firm_claim_defaults', 'firm_filing_ways', 'firm_invitations', 'firm_marketing_terms', 'firm_message_texts', 'firm_modules', 'firm_notice_kinds', 'firm_one_work_cost', 'firm_one_work_minutes', 'firm_operations', 'firm_personalities', 'firm_personality_requests', 'firm_personality_uses', 'firm_settlement_floors', 'firm_signers', 'flight_alerts', 'flight_checks', 'flight_segments', 'free_justice_answers', 'hearing_briefs', 'hearing_contacts', 'hearing_reports', 'hearing_staff_messages', 'hearings', 'import_batches', 'import_rows', 'invoices',
@@ -963,7 +967,7 @@ select is(
     'case_drafts', 'case_events', 'case_forecasts', 'case_interview_answers', 'case_interviews', 'case_papers', 'case_parties', 'case_statements', 'case_tasks',
     'case_weather', 'cases', 'certificate_inventory', 'civil_court_answers', 'client_consents',
     'client_links', 'client_notices', 'closing_goals',
-    'consent_acceptances', 'deadlines', 'djen_captures', 'dossiers', 'draft_templates', 'entitlement_grants', 'files',
+    'consent_acceptances', 'deadlines', 'djen_captures', 'djen_case_reads', 'dossiers', 'draft_templates', 'entitlement_grants', 'files',
     'filing_batch_notices', 'filing_batches', 'filing_package_items', 'filing_packages',
     'filing_receipts', 'filing_submissions', 'filing_waits_reminders', 'finance_access', 'firm_area_script_requests', 'firm_area_scripts', 'firm_areas', 'firm_autonomy', 'firm_brands', 'firm_calendars', 'firm_claim_defaults', 'firm_filing_ways', 'firm_marketing_terms', 'firm_message_texts', 'firm_modules', 'firm_notice_kinds', 'firm_operations', 'firm_personalities', 'firm_personality_requests', 'firm_personality_uses', 'firm_settlement_floors', 'firm_signers', 'flight_alerts', 'flight_checks', 'flight_segments', 'free_justice_answers', 'hearing_briefs', 'hearing_contacts', 'hearing_reports', 'hearing_staff_messages', 'hearings', 'import_batches',
     'import_rows', 'invoices', 'issued_documents', 'judgment_paths', 'judgment_sessions', 'lawsuit_amounts', 'lawsuit_facts', 'lawyer_filing_ways', 'lawyer_signature_uses', 'legal_sources',
@@ -1006,7 +1010,7 @@ select is(
     'case_papers', 'case_parties', 'case_statements', 'case_tasks',
     'case_weather', 'cases', 'certificate_inventory', 'chatwoot_room_members', 'chatwoot_rooms', 'civil_court_answers', 'client_consents', 'client_links', 'client_notices', 'client_payment_accounts', 'closing_goals', 'connections',
     'consent_acceptances', 'court_login_uses',
-    'deadlines', 'djen_captures', 'dossiers', 'draft_templates', 'entitlement_grants', 'extension_links', 'fee_terms', 'files', 'filing_batch_notices', 'filing_batches', 'filing_package_items', 'filing_packages',
+    'deadlines', 'djen_captures', 'djen_case_reads', 'dossiers', 'draft_templates', 'entitlement_grants', 'extension_links', 'fee_terms', 'files', 'filing_batch_notices', 'filing_batches', 'filing_package_items', 'filing_packages',
     'filing_receipts', 'filing_submissions', 'filing_waits_reminders', 'finance_access', 'finance_accountants', 'finance_accounts', 'finance_bill_payments', 'finance_bills', 'finance_budgets', 'finance_categories', 'finance_closings', 'finance_cost_centers', 'finance_entries', 'finance_imports', 'finance_invoices', 'finance_package_sends', 'finance_receipts', 'finance_rules', 'finance_series',
     'finance_statement_lines', 'finance_statements', 'firm_area_script_requests', 'firm_area_scripts', 'firm_areas', 'firm_autonomy', 'firm_brands', 'firm_calendars',
     'firm_claim_defaults', 'firm_filing_ways', 'firm_invitations', 'firm_marketing_terms', 'firm_message_texts', 'firm_modules', 'firm_notice_kinds', 'firm_one_work_cost', 'firm_one_work_minutes', 'firm_operations', 'firm_personalities', 'firm_personality_requests', 'firm_personality_uses', 'firm_settlement_floors', 'firm_signers', 'flight_alerts', 'flight_checks', 'flight_segments', 'free_justice_answers', 'hearing_briefs', 'hearing_contacts', 'hearing_reports', 'hearing_staff_messages', 'hearings', 'import_batches', 'import_rows', 'invoices',

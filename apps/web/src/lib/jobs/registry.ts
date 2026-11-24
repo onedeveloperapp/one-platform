@@ -28,6 +28,7 @@ import { personalitySweeps } from "@/lib/firm/personality-work";
 import { weeklyDigestSweeps } from "@/lib/firm/weekly-digest-work";
 import { hearingBriefSweeps } from "@/lib/hearings/brief-work";
 import { hearingSweeps } from "@/lib/hearings/jobs";
+import { djenCaseSweeps } from "@/lib/import/djen-cases-work";
 import { importSweeps } from "@/lib/import/jobs";
 import type { Sweep } from "@/lib/jobs/schedule";
 import { marketSweeps } from "@/lib/jurimetrics/capture";
@@ -74,6 +75,7 @@ export const SWEEPS: readonly Sweep[] = [
   ...fileCopySweeps,
   ...connectionSweeps,
   ...importSweeps,
+  ...djenCaseSweeps,
   ...financeSweeps,
   ...outcomeSweeps,
   ...amountSweeps,

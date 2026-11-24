@@ -1,4 +1,4 @@
-import { cnjMasked, djenLawsuitsSheet, readDjenLawsuits } from "./djen-lawsuits";
+import { cnjMasked, djenLawsuitsSheet, lawsuitsToComplete, readDjenLawsuits } from "./djen-lawsuits";
 import { guessColumnMapping } from "./mapping";
 import { describe, expect, it } from "vitest";
 
@@ -27,6 +27,23 @@ describe("the lawsuits the DJEN already shows (0208)", () => {
     expect(read?.lawsuits).toHaveLength(1);
     expect(read?.lawsuits[0]).toMatchObject({ cnj: "10003012720998090100", publications: 2, lastOn: "2026-11-05" });
     expect(readDjenLawsuits({ ok: false, code: "not_allowed" })).toBeNull();
+  });
+
+  it("leaves out of the spreadsheet what ONE is opening by itself, and keeps what it left (0287)", () => {
+    const read = readDjenLawsuits({
+      ok: true,
+      total: 3,
+      lawsuits: [
+        { cnj: "28710012820998090051", court: "TJGO", publications: 1, one: "opening" },
+        { cnj: "28710021320998090051", court: "TJGO", publications: 1, one: "firm_on_defense" },
+        { cnj: "28710039520998090051", court: "TJGO", publications: 1, one: "Não é um código" },
+      ],
+    });
+    expect(read?.lawsuits.map((lawsuit) => lawsuit.one)).toEqual(["opening", "firm_on_defense", null]);
+    expect(lawsuitsToComplete(read?.lawsuits ?? []).map((lawsuit) => lawsuit.cnj)).toEqual([
+      "28710021320998090051",
+      "28710039520998090051",
+    ]);
   });
 
   it("writes the number as the court writes it", () => {
