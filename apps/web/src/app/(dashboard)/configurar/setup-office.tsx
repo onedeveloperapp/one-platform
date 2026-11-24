@@ -3,14 +3,17 @@
 import { useTranslations } from "next-intl";
 import { useRef, useState } from "react";
 
-import { Box, Button, Typography } from "@mui/material";
+import { Box, Button } from "@mui/material";
 
-import OfficeForm from "@/components/firm/office-form";
+import OfficeForm, { useOfficeDraft } from "@/components/firm/office-form";
+import ItemRows, { type ItemRow } from "@/components/product/item-rows";
 import SectionTitle from "@/components/product/section-title";
 import type { WizardStep } from "@/components/product/setup-wizard";
 import SidePanel from "@/components/product/side-panel";
 import StateLine from "@/components/product/state-line";
 import NiDocumentFull from "@/icons/nexture/ni-document-full";
+import NiLoader from "@/icons/nexture/ni-loader";
+import NiPalette from "@/icons/nexture/ni-palette";
 import NiUploadCloud from "@/icons/nexture/ni-upload-cloud";
 import {
   confirmFirmLetterhead,
@@ -47,28 +50,27 @@ const LETTERHEAD_ERRORS: Record<string, string> = {
   not_docx: "setup-office-letterhead-error-unreadable",
 };
 
-/** Where the firm's own power of attorney stands, as the step of the papers reads it. */
-export type OfficePaper = "own" | "working" | "none";
-
 /**
- * The setup's step "O escritório" (the plan "o escritório preparado antes do primeiro atendimento", phase 2): it
- * starts from the documents the firm already uses (its power of attorney, which ONE makes the firm's model of and
- * reads the firm's data from), then its logo, which ONE keeps and reads the main colour of by a rule, the person
- * confirming the colour or choosing another, then where the firm is: shown as ONE read it or as given, and typed by
- * hand only as the exception (the owner, 2026-11-20). What a client sees takes the brand; the logged area keeps ONE's
- * own palette.
+ * The setup's step "O escritório" (the plan "o escritório preparado antes do primeiro atendimento", phase 2, and the
+ * owner's canvas of 2026-11-24, which brought the papers a client signs into it): the documents the firm already uses,
+ * one line each with where it stands and its one button (the letterhead, the power of attorney and the fee contract,
+ * whose lines the flow draws since it owns their panel, and the logo with its colour, which ONE reads by a rule), then
+ * the firm's data, as ONE read them from those documents or typed by hand as the exception. Nothing in the step is
+ * saved by a button of its own: sending a document acts at once and says so in its line, and "Continuar" saves the
+ * data (a "Salvar" over "Continuar" left the address behind whenever the person went on). What a client sees takes
+ * the brand; the logged area keeps ONE's own palette.
  */
 export function useOfficeStep(input: {
   office: FirmOffice;
   brand: SetupBrand;
   letterhead: SetupLetterhead;
-  /** The firm's power of attorney: its own model, one ONE is reading, or none yet. */
-  paper: OfficePaper;
-  /** Sends the firm's power of attorney: the same panel as the step of the papers, over this step. */
-  onSendPaper: (() => void) | null;
+  /** The lines of the power of attorney and the fee contract, drawn by the flow. */
+  paperRows: ItemRow[];
+  /** ONE is reading one of the firm's papers: the data say ONE fills them from it. */
+  readingPaper: boolean;
   blocked: boolean;
   onChanged: () => void;
-}): Pick<WizardStep, "content"> {
+}): Pick<WizardStep, "content" | "onPrimary" | "onLeave" | "done"> {
   const t = useTranslations("product");
   const chooser = useRef<HTMLInputElement>(null);
   const [working, setWorking] = useState(false);
@@ -77,6 +79,8 @@ export function useOfficeStep(input: {
   const [color, setColor] = useState(input.brand.color);
   const [colorFrom, setColorFrom] = useState(input.brand.colorFrom);
   const [savingColor, setSavingColor] = useState(false);
+  // What is typed in the firm's data lives here, with the flow: going back and forth keeps it.
+  const draft = useOfficeDraft(input.office, input.onChanged);
 
   const errorOf = (code: string): string =>
     code === "type_not_allowed"
@@ -226,185 +230,212 @@ export function useOfficeStep(input: {
   };
 
   const off = input.blocked || working;
-  // Typing where the firm is, is the exception: the form shows once something of it is known, or when asked for.
+  // The mark of a line ONE is reading: it turns while the work goes on.
+  const turning = <NiLoader size="medium" className="animate-spin motion-reduce:animate-none" />;
+
+  // ---------- The lines of the documents ----------
+  const letterheadRow: ItemRow = {
+    key: "timbrado",
+    icon: <NiDocumentFull size="medium" />,
+    tone: "primary",
+    title: t("setup-office-letterhead-name"),
+    ...(letterheadError
+      ? {
+          state: { tone: "failed" as const, text: letterheadError },
+          action: (
+            <Button variant="outlined" size="small" onClick={() => letterheadChooser.current?.click()} disabled={off}>
+              {t("setup-office-send-another")}
+            </Button>
+          ),
+        }
+      : readingLetterhead
+        ? { state: { tone: "waiting" as const, text: t("setup-office-letterhead-reading"), icon: turning } }
+        : letterhead.kind && letterhead.confirmed
+          ? {
+              detail: t("setup-office-letterhead-in-use"),
+              state: { tone: "done" as const, text: t("setup-office-row-in-use") },
+              action: (
+                <Button
+                  variant="text"
+                  color="grey"
+                  size="small"
+                  onClick={() => letterheadChooser.current?.click()}
+                  disabled={off}
+                >
+                  {t("setup-office-replace")}
+                </Button>
+              ),
+            }
+          : letterhead.kind
+            ? {
+                state: { tone: "attention" as const, text: t("setup-office-letterhead-check") },
+                action: (
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    onClick={() => void showSample()}
+                    disabled={off || sampleBusy}
+                  >
+                    {t("setup-office-letterhead-see")}
+                  </Button>
+                ),
+              }
+            : {
+                detail: t("setup-office-letterhead-what"),
+                state: { tone: "attention" as const, text: t("setup-office-row-missing") },
+                action: (
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    startIcon={<NiUploadCloud size="small" />}
+                    onClick={() => letterheadChooser.current?.click()}
+                    disabled={off}
+                  >
+                    {t("setup-office-send")}
+                  </Button>
+                ),
+              }),
+  };
+
+  const colorPicker = (label: string, initial: string) => (
+    <Button component="label" variant="text" color="grey" size="small" disabled={off || savingColor}>
+      {label}
+      <input type="color" hidden value={initial} onChange={(event) => pick(event.target.value)} aria-label={label} />
+    </Button>
+  );
+
+  const logoRow: ItemRow = {
+    key: "logomarca",
+    icon: logoUrl ? (
+      // A signed link of a moment, to ONE's PNG: no optimization to ask of it.
+      <img src={logoUrl} alt="" className="max-h-7 max-w-7 object-contain" />
+    ) : (
+      <NiPalette size="medium" />
+    ),
+    tone: "primary",
+    title: t("setup-office-logo-title"),
+    ...(error
+      ? {
+          state: { tone: "failed" as const, text: error },
+          action: (
+            <Button variant="outlined" size="small" onClick={() => chooser.current?.click()} disabled={off}>
+              {t("setup-office-send-another")}
+            </Button>
+          ),
+        }
+      : working
+        ? { state: { tone: "waiting" as const, text: t("setup-office-logo-reading"), icon: turning } }
+        : logoUrl && color
+          ? {
+              detail:
+                colorFrom === "person" ? t("setup-office-color-chosen-short") : t("setup-office-color-read-short"),
+              state: {
+                tone: "done" as const,
+                text: (
+                  <Box component="span" className="inline-flex items-center gap-2">
+                    <Box
+                      component="span"
+                      aria-hidden
+                      className="border-divider inline-block size-4 rounded border"
+                      style={{ backgroundColor: color }}
+                    />
+                    {t("setup-office-color-short", { color: color.toUpperCase() })}
+                  </Box>
+                ),
+              },
+              action: colorPicker(t("setup-office-color-change"), color),
+              content: () => (
+                <Box className="flex flex-col gap-2">
+                  {!drawsOnLight(color) ? (
+                    <StateLine tone="attention">{t("setup-office-color-light")}</StateLine>
+                  ) : null}
+                  <Box className="flex flex-wrap gap-2">
+                    <Button
+                      variant="text"
+                      color="grey"
+                      size="small"
+                      startIcon={<NiUploadCloud size="small" />}
+                      onClick={() => chooser.current?.click()}
+                      disabled={off}
+                    >
+                      {t("setup-office-logo-replace")}
+                    </Button>
+                    {colorFrom === "person" && input.brand.logoColor ? (
+                      <Button
+                        variant="text"
+                        color="grey"
+                        size="small"
+                        onClick={() => void chooseColor(null)}
+                        disabled={off || savingColor}
+                      >
+                        {t("setup-office-color-back")}
+                      </Button>
+                    ) : null}
+                  </Box>
+                </Box>
+              ),
+              openLabel: t("setup-office-logo-more"),
+            }
+          : logoUrl
+            ? {
+                state: { tone: "info" as const, text: t("setup-office-color-none") },
+                action: colorPicker(t("setup-office-color-choose"), "#1a4d8f"),
+              }
+            : {
+                detail: t("setup-office-logo-what"),
+                state: { tone: "attention" as const, text: t("setup-office-row-missing") },
+                action: (
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    startIcon={<NiUploadCloud size="small" />}
+                    onClick={() => chooser.current?.click()}
+                    disabled={off}
+                  >
+                    {t("setup-office-send")}
+                  </Button>
+                ),
+              }),
+  };
+
+  // Typing where the firm is, is the exception: the fields show once something of it is known, or when asked for.
   const [byHand, setByHand] = useState(false);
   const formShown =
     byHand || input.office.read !== null || officeAddressGiven(input.office) || input.office.email.trim() !== "";
 
   const content = (
     <Box className="flex flex-col gap-6">
-      <Box component="section" className="flex flex-col gap-3" aria-labelledby="setup-office-documents">
-        <SectionTitle
-          id="setup-office-documents"
-          title={t("setup-office-documents-title")}
-          description={t("setup-office-documents-info")}
-          as="h3"
-          variant="subtitle1"
-        />
-        <input
-          ref={letterheadChooser}
-          type="file"
-          hidden
-          accept=".docx,.pdf,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-          onChange={(event) => {
-            const file = event.target.files?.[0];
-            event.target.value = "";
-            if (file) void sendLetterhead(file);
-          }}
-        />
-        {readingLetterhead ? (
-          <StateLine tone="waiting">{t("setup-office-letterhead-reading")}</StateLine>
-        ) : letterhead.kind && letterhead.confirmed ? (
-          <StateLine
-            tone="done"
-            action={
-              <Button variant="text" size="small" onClick={() => letterheadChooser.current?.click()} disabled={off}>
-                {t("setup-office-letterhead-replace")}
-              </Button>
-            }
-          >
-            {t("setup-office-letterhead-in-use")}
-          </StateLine>
-        ) : letterhead.kind ? (
-          <StateLine
-            tone="attention"
-            action={
-              <Button variant="outlined" size="small" onClick={() => void showSample()} disabled={off || sampleBusy}>
-                {t("setup-office-letterhead-see")}
-              </Button>
-            }
-          >
-            {t("setup-office-letterhead-check")}
-          </StateLine>
-        ) : (
-          <StateLine
-            tone="attention"
-            action={
-              <Button
-                variant="outlined"
-                size="small"
-                startIcon={<NiUploadCloud size="medium" />}
-                onClick={() => letterheadChooser.current?.click()}
-                disabled={off}
-              >
-                {t("setup-office-letterhead-send")}
-              </Button>
-            }
-          >
-            {t("setup-office-letterhead-missing")}
-          </StateLine>
-        )}
-        {letterheadError ? <StateLine tone="failed">{letterheadError}</StateLine> : null}
-        {input.paper === "own" ? (
-          <StateLine tone="done">{t("setup-office-paper-own")}</StateLine>
-        ) : input.paper === "working" ? (
-          <StateLine tone="waiting">{t("setup-office-paper-working")}</StateLine>
-        ) : input.onSendPaper ? (
-          <StateLine
-            tone="attention"
-            action={
-              <Button variant="outlined" size="small" onClick={input.onSendPaper} disabled={input.blocked}>
-                {t("setup-office-paper-send")}
-              </Button>
-            }
-          >
-            {t("setup-office-paper-missing")}
-          </StateLine>
-        ) : null}
-      </Box>
-
-      <Box component="section" className="flex flex-col gap-3" aria-labelledby="setup-office-logo">
-        <SectionTitle
-          id="setup-office-logo"
-          title={t("setup-office-logo-title")}
-          description={t("setup-office-logo-info")}
-          as="h3"
-          variant="subtitle1"
-        />
-        <input
-          ref={chooser}
-          type="file"
-          hidden
-          accept={LOGO_MIMES.join(",")}
-          onChange={(event) => {
-            const file = event.target.files?.[0];
-            event.target.value = "";
-            if (file) void send(file);
-          }}
-        />
-        {logoUrl ? (
-          <Box className="border-divider bg-background-paper flex items-center justify-center rounded-xl border p-4">
-            {/* A signed link of a moment, to ONE's PNG: no optimization to ask of it. */}
-            {}
-            <img src={logoUrl} alt={t("setup-office-logo-alt")} className="max-h-24 max-w-full object-contain" />
-          </Box>
-        ) : null}
-        {working ? <StateLine tone="waiting">{t("setup-office-logo-reading")}</StateLine> : null}
-        <Box>
-          <Button
-            variant={logoUrl ? "text" : "outlined"}
-            startIcon={<NiUploadCloud size="medium" />}
-            onClick={() => chooser.current?.click()}
-            disabled={off}
-          >
-            {logoUrl ? t("setup-office-logo-replace") : t("setup-office-logo-send")}
-          </Button>
-        </Box>
-
-        {color ? (
-          <Box className="flex flex-col gap-2">
-            <Box className="flex flex-wrap items-center gap-3">
-              <Box
-                aria-hidden
-                className="border-divider h-8 w-8 shrink-0 rounded-lg border"
-                style={{ backgroundColor: color }}
-              />
-              <Typography variant="subtitle2" component="span">
-                {t("setup-office-color", { color: color.toUpperCase() })}
-              </Typography>
-              <Button component="label" size="small" variant="text" disabled={off || savingColor}>
-                {t("setup-office-color-change")}
-                <input
-                  type="color"
-                  hidden
-                  value={color}
-                  onChange={(event) => pick(event.target.value)}
-                  aria-label={t("setup-office-color-change")}
-                />
-              </Button>
-              {colorFrom === "person" && input.brand.logoColor ? (
-                <Button
-                  size="small"
-                  variant="text"
-                  disabled={off || savingColor}
-                  onClick={() => void chooseColor(null)}
-                >
-                  {t("setup-office-color-back")}
-                </Button>
-              ) : null}
-            </Box>
-            <StateLine tone="info">
-              {colorFrom === "person" ? t("setup-office-color-chosen") : t("setup-office-color-read")}
-            </StateLine>
-            {!drawsOnLight(color) ? <StateLine tone="attention">{t("setup-office-color-light")}</StateLine> : null}
-          </Box>
-        ) : logoUrl ? (
-          <StateLine tone="info">
-            {t("setup-office-color-none")}{" "}
-            <Button component="label" size="small" variant="text" disabled={off || savingColor}>
-              {t("setup-office-color-choose")}
-              <input
-                type="color"
-                hidden
-                defaultValue="#1a4d8f"
-                onChange={(event) => pick(event.target.value)}
-                aria-label={t("setup-office-color-choose")}
-              />
-            </Button>
-          </StateLine>
-        ) : null}
-        {error ? <StateLine tone="failed">{error}</StateLine> : null}
-      </Box>
+      <input
+        ref={letterheadChooser}
+        type="file"
+        hidden
+        accept=".docx,.pdf,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          event.target.value = "";
+          if (file) void sendLetterhead(file);
+        }}
+      />
+      <input
+        ref={chooser}
+        type="file"
+        hidden
+        accept={LOGO_MIMES.join(",")}
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          event.target.value = "";
+          if (file) void send(file);
+        }}
+      />
+      <ItemRows
+        sections={[
+          {
+            key: "documentos",
+            title: t("setup-office-documents-title"),
+            rows: [letterheadRow, ...input.paperRows, logoRow],
+          },
+        ]}
+      />
 
       <Box component="section" className="flex flex-col gap-3" aria-labelledby="setup-office-data">
         <SectionTitle
@@ -415,17 +446,18 @@ export function useOfficeStep(input: {
           variant="subtitle1"
         />
         {formShown ? (
-          <OfficeForm office={input.office} disabled={input.blocked} onSaved={input.onChanged} />
+          // What ONE read is said over the fields by the form itself; "Continuar" saves or confirms it.
+          <OfficeForm office={input.office} disabled={input.blocked} onSaved={input.onChanged} draft={draft} embedded />
         ) : (
           <StateLine
             tone="info"
             action={
-              <Button variant="text" size="small" onClick={() => setByHand(true)} disabled={input.blocked}>
+              <Button variant="text" color="grey" size="small" onClick={() => setByHand(true)} disabled={input.blocked}>
                 {t("setup-office-data-by-hand")}
               </Button>
             }
           >
-            {input.paper === "none" ? t("setup-office-data-from-paper") : t("setup-office-data-reading")}
+            {input.readingPaper ? t("setup-office-data-reading") : t("setup-office-data-from-paper")}
           </StateLine>
         )}
       </Box>
@@ -468,6 +500,9 @@ export function useOfficeStep(input: {
     </SidePanel>
   ) : null;
 
+  // "Continuar" saves what is typed in the data, or confirms what ONE read; with nothing there, it just goes on.
+  const save = async (): Promise<boolean> => (input.blocked ? true : draft.save());
+
   return {
     content: (
       <>
@@ -475,5 +510,8 @@ export function useOfficeStep(input: {
         {panel}
       </>
     ),
+    onPrimary: save,
+    onLeave: save,
+    done: Boolean(logoUrl),
   };
 }

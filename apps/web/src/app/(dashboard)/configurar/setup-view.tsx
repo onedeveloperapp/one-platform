@@ -1,6 +1,5 @@
 "use client";
 
-import { refusalWords } from "../biblioteca/import-panel";
 import TemplatePanel from "../biblioteca/template-panel";
 import ConnectCard from "../settings/connections/components/connect-card";
 import SignatureAccountCard from "../settings/connections/components/signature-account-card";
@@ -11,7 +10,8 @@ import { useAreasStep } from "./setup-areas";
 import SetupCpf, { declareSetupCpf } from "./setup-cpf";
 import { useFilingStep } from "./setup-filing";
 import { type SetupBrand, type SetupLetterhead, useOfficeStep } from "./setup-office";
-import { useOperationStep } from "./setup-operation";
+import { SetupQuestion, useOperationStep, YesNo } from "./setup-operation";
+import { type Paper, usePaperRows } from "./setup-papers";
 import { usePersonalityStep } from "./setup-personality";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -35,34 +35,31 @@ import {
   Typography,
 } from "@mui/material";
 
-import OfficeForm from "@/components/firm/office-form";
 import { useMarkSetupShown } from "@/components/layout/setup-shown";
+import CopyButton from "@/components/product/copy-button";
+import InfoHint from "@/components/product/info-hint";
 import PageHeader from "@/components/product/page-header";
 import SecondFactorPrompt from "@/components/product/second-factor-prompt";
+import SectionTitle from "@/components/product/section-title";
 import SetupWizard, { type WizardStep } from "@/components/product/setup-wizard";
-import SidePanel from "@/components/product/side-panel";
 import StateLine from "@/components/product/state-line";
 import { useEmailReady } from "@/components/product/use-email-ready";
-import WordDownloadButton from "@/components/product/word-download-button";
-import NiLoader from "@/icons/nexture/ni-loader";
-import NiUploadCloud from "@/icons/nexture/ni-upload-cloud";
 import type { SecondFactorState } from "@/lib/ai/approvals";
 import type { AreaScriptsState } from "@/lib/areas/script-actions";
 import type { FilingWaysData } from "@/lib/filing-ways/ways";
 import { addOabRegistration, answerFirmSetup, inviteToFirm } from "@/lib/firm/actions";
 import { autonomyErrorKey } from "@/lib/firm/autonomy";
 import { setFirmSigner } from "@/lib/firm/autonomy-actions";
-import { type FirmOffice, officeAddressGiven } from "@/lib/firm/office";
+import type { FirmOffice } from "@/lib/firm/office";
 import type { FirmOperation, KnownArea, OperationArea } from "@/lib/firm/operation";
 import { personFlowKey } from "@/lib/firm/person-setup";
 import type { PersonalityState } from "@/lib/firm/personality-actions";
 import { FIRM_FUNCTIONS, type FirmFunction, formatOab, OAB_STATES, type OabRegistration } from "@/lib/firm/roles";
 import { SETUP_STEPS, setupOpening, type SetupStepKey } from "@/lib/firm/setup-steps";
-import { readDraftTemplate } from "@/lib/library/actions";
 import type { LibraryTemplate, SetupPaper } from "@/lib/library/facts";
 import { watchModelImports } from "@/lib/library/import-actions";
 import type { PaperImport } from "@/lib/library/import-read";
-import { IMPORT_ACCEPT, IMPORT_WORKING, importFailureKey } from "@/lib/library/imports";
+import { IMPORT_ACCEPT, IMPORT_WORKING } from "@/lib/library/imports";
 import type { ConnectionsState } from "@/lib/whatsapp/connections";
 import { createClient } from "@flyee/auth/client";
 import { completeFlow } from "@flyee/onboarding";
@@ -132,57 +129,35 @@ const NUMBER_PATTERN = /^[0-9]{1,7}[A-Za-z]?$/;
 const cleanNumber = (value: string) => value.replace(/[^0-9A-Za-z]/g, "");
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-type Paper = "procuracao" | "contrato";
-
-/**
- * The words of each paper a client signs: its name, what ONE sends of it, how the firm sends the one it already
- * uses, and how a person writes the firm's.
- */
-const PAPER_WORDS: Record<Paper, { title: string; firm: string; one: string; send: string; make: string }> = {
-  procuracao: {
-    title: "setup-papers-procuracao",
-    firm: "setup-papers-procuracao-firm",
-    one: "setup-papers-procuracao-one",
-    send: "setup-papers-send-procuracao",
-    make: "setup-papers-procuracao-make",
-  },
-  contrato: {
-    title: "setup-papers-contrato",
-    firm: "setup-papers-contrato-firm",
-    one: "setup-papers-contrato-none",
-    send: "setup-papers-send-contrato",
-    make: "setup-papers-contrato-make",
-  },
-};
-
 /** How often the step looks again while ONE works on a document the firm sent. */
 const PAPER_WATCH_MS = 6_000;
 
+/** The two answers of the team's step, each with what it means behind its "i". */
+const TEAM_WORDS = {
+  alone: { label: "setup-team-alone", help: "setup-team-alone-help" },
+  team: { label: "setup-team-with", help: "setup-team-with-help" },
+} as const;
+
+/** What an invitation made in the step says: sent by e-mail, or its link to copy. */
+const INVITE_DONE_KEY = { email: "setup-team-invite-done-email", link: "setup-team-invite-done-link" } as const;
+
 /**
- * What a firm sets up for ONE to work for it, one decision per screen: the
- * second factor first, since every step after it writes what the database asks
- * the factor for (a setup that met it half way stopped the owner at the
- * signer's switch, 2026-11-03: what a later step cannot do without is its own
- * step before it, and the flow does not go past it until it is done; the rule
- * is in apps/web/CLAUDE.md), then who
- * answers and whether they sign what ONE prepares, whether it works alone,
- * the papers its clients sign and the channel to them. This is the core,
- * what every firm needs whatever it contracted: what one module needs (the
- * passenger module's Valor da Causa Pedido, the words of its agencies'
- * clause, its partner agency) is that module's own setup, in its colour,
- * which the core's finish opens for each module the firm contracted and
- * never answered, before the home (the owner, 2026-11-03; migration 0081,
- * `firmSetup` of the module's definition). Nothing on it leads away from the
- * setup: the modules the firm contracted are said on the home, never here,
- * where a link to them took the owner out of a setup half done (2026-10-30;
- * the rule is in apps/web/CLAUDE.md). Each step does its own work where it
- * is: the second factor is set up in its step, the
- * models are written in a dialog over it, the signature account, the test
- * chat and the number are connected in it, so nobody leaves the setup for a
- * screen they would not come back from. Each step saves what it asks before
- * the next one opens, so leaving half way keeps what was answered; "Fazer
- * depois" sets the setup aside, and the list on the home leads back to the
- * step something is still missing in.
+ * What a firm sets up for ONE to work for it, one decision per screen, in the order of the owner's canvas of
+ * 2026-11-24 ("Configuração do escritório, antes e depois"): the second factor first, since every step after it writes
+ * what the database asks the factor for (a setup that met it half way stopped the owner at the signer's switch,
+ * 2026-11-03), then who answers at the bar, the firm's documents with the data ONE reads from them, how it works, its
+ * team, how it files on the courts' screens, how it speaks to its clients and the script of each area, and the
+ * channel, where the client also signs. This is the core, what every firm needs whatever it contracted: what one
+ * module needs is that module's own setup, in its colour, which the core's finish opens for each module the firm
+ * contracted and never answered, before the home (0081). Nothing on it leads away from the setup (2026-10-30): every
+ * step does its work where it is, and what opens opens over it.
+ *
+ * One rule of buttons in every step (the owner, 2026-11-24, after a "Salvar" beside "Continuar" let the person go on
+ * without saving): "Continuar" saves everything the step holds and goes on, or stays and says what is missing beside
+ * the field; nothing inside a step is called "Salvar", and only the button that goes on is filled; what acts at once
+ * (sending a document, connecting, inviting) is outlined and says what came of it in its own line; going back, or to
+ * a step of the list, loses nothing typed; and "Continuar depois" saves what is complete before going home, where the
+ * list leads back to the step something is still missing in.
  */
 export default function SetupView({ state }: { state: SetupState }) {
   const t = useTranslations("product");
@@ -231,8 +206,8 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
   const refresh = () => router.refresh();
 
   const lawyer = state.firmFunction === "socio" || state.firmFunction === "advogado";
-  // Who signs and the Valor da Causa Pedido are a partner's to say, or, in a firm with no partner, who manages it
-  // (0078): a firm founded by a lawyer alone is never left with nobody to answer them.
+  // Who signs is a partner's to say, or, in a firm with no partner, who manages it (0078): a firm founded by a lawyer
+  // alone is never left with nobody to answer it.
   const decides = state.decidesForFirm;
   const registered = state.registrations.length > 0;
   const blocked = state.supportVisit;
@@ -240,11 +215,9 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
   // ---------- The second factor ----------
   // Confirmed here, before the page reads the session again: every step goes on from the same moment.
   const [confirmedHere, setConfirmedHere] = useState(false);
-  // Where the firm is opens over the step of the papers (0217): nothing leads away from the setup.
-  const [officeOpen, setOfficeOpen] = useState(false);
   const factor: SecondFactorState = confirmedHere ? "ok" : state.secondFactor;
-  // What the database asks the factor for (who signs, the claims, an invitation, a connection) is past its step,
-  // so nothing here waits for it; the guard stays for a session that lost it.
+  // What the database asks the factor for (who signs, an invitation, a connection) is past its step, so nothing here
+  // waits for it; the guard stays for a session that lost it.
   const locked = factor !== "ok";
   const choosesSigner = decides && !locked;
 
@@ -261,8 +234,8 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
   const [cpf, setCpf] = useState("");
   const [cpfError, setCpfError] = useState<string | null>(null);
   const oabReady = !lawyer || registered || (Boolean(uf) && numberOk);
-  // The state of the registration given in this step, before the page reads it again: the step of the filing after
-  // it shows the courts of that state at once.
+  // The state of the registration given in this step, before the page reads it again: the step of the filing shows
+  // the courts of that state at once.
   const [addedUf, setAddedUf] = useState<string | null>(null);
 
   // ---------- Alone or with a team ----------
@@ -271,14 +244,12 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
   const [email, setEmail] = useState("");
   const [inviteFunction, setInviteFunction] = useState<FirmFunction>("advogado");
   const [inviting, setInviting] = useState(false);
-  const [invited, setInvited] = useState<{ email: string; link: string | null; chosen: boolean; copied: boolean }[]>(
-    [],
-  );
-  // The invitation is offered as a link always, and by e-mail where ONE can send one.
+  const [invited, setInvited] = useState<{ email: string; link: string | null; byEmail: boolean }[]>([]);
+  // The invitation goes by e-mail where ONE can send one, and its link is there to copy either way.
   const emailOk = useEmailReady();
   const [inviteError, setInviteError] = useState<string | null>(null);
 
-  // ---------- The papers a client signs ----------
+  // ---------- The papers a client signs, in the step of the office ----------
   const [paperForm, setPaperForm] = useState<{
     paper: Paper;
     template: LibraryTemplate | null;
@@ -324,29 +295,48 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
     };
   }, [paperWorking, router]);
 
+  /** A paper's model opens over the step: the firm's own to change, else the platform's to start from, else new. */
+  const openPaper = (paper: Paper, choice: SetupPaper) => {
+    const own = choice.used && !choice.used.platform ? choice.used : null;
+    setPaperForm({ paper, template: own, copyOf: own ? null : choice.platform });
+  };
+
+  const paperRows = usePaperRows({
+    papers: state.papers,
+    imports: state.paperImports,
+    writes: lawyer,
+    blocked: blocked || locked,
+    onSend: choosePaper,
+    onFollow: (paper, requestId) => setPaperForm({ paper, template: null, copyOf: null, importId: requestId }),
+    onOpenModel: openPaper,
+    onRetry: refresh,
+  });
+
   // ---------- The office: its documents, its logo and colour, where it is (0258) ----------
-  // The firm's power of attorney, as the step of the papers reads it: sent from this step too, to the same panel.
-  const ownProcuracao = Boolean(state.papers?.procuracao.used && !state.papers.procuracao.used.platform);
-  const readingProcuracao = Boolean(
-    state.paperImports.procuracao && IMPORT_WORKING.includes(state.paperImports.procuracao.status),
-  );
   const officeStep = useOfficeStep({
     office: state.office,
     brand: state.brand,
     letterhead: state.letterhead,
-    paper: ownProcuracao ? "own" : readingProcuracao ? "working" : "none",
-    onSendPaper: lawyer || decides ? () => choosePaper("procuracao") : null,
+    paperRows,
+    readingPaper: (["procuracao", "contrato"] as const).some((paper) => {
+      const request = state.paperImports[paper];
+      return request !== null && IMPORT_WORKING.includes(request.status);
+    }),
     blocked: blocked || locked,
     onChanged: refresh,
   });
 
-  // ---------- The firm's profile (0272) ----------
-  const personalityStep = usePersonalityStep({
-    initial: state.personality,
+  // ---------- How the firm works and its areas (0256) ----------
+  const operationStep = useOperationStep({
+    answered: state.operationAnswered,
+    operation: state.operation,
+    areas: state.areas,
+    knownAreas: state.knownAreas,
+    registrationStates: state.registrations.map((registration) => registration.uf),
     blocked: blocked || locked,
-    onApproved: refresh,
   });
-  const approvedProfile = Boolean(state.personality?.approved);
+  // A firm that said ONE prepares no filing package is asked nothing of how it files.
+  const onePrepares = operationStep.works.one_filing !== false;
 
   // ---------- How the firm files on the courts' screens (0263) ----------
   // Who decides for the firm chooses the firm's way; who answers and signs, their own way at each court of their
@@ -366,34 +356,31 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
     onSaved: refresh,
   });
 
-  // ---------- The script of each area of the firm (0273) ----------
+  // ---------- The firm's profile (0272) and the script of each area (0273) ----------
+  const personalityStep = usePersonalityStep({
+    initial: state.personality,
+    blocked: blocked || locked,
+    onApproved: refresh,
+  });
+  const approvedProfile = Boolean(state.personality?.approved);
   const areasStep = useAreasStep({ initial: state.areaScripts, blocked: blocked || locked });
   const scriptsPending = Boolean(state.areaScripts?.areas.some((area) => !area.inForce));
 
-  // ---------- How the firm works and its areas (0256) ----------
-  const operationStep = useOperationStep({
-    answered: state.operationAnswered,
-    operation: state.operation,
-    areas: state.areas,
-    knownAreas: state.knownAreas,
-    registrationStates: state.registrations.map((registration) => registration.uf),
-    blocked: blocked || locked,
-  });
-
   // ---------- The end ----------
+  // The account of signatures, an option of the channel's step, opened when asked.
+  const [signOpen, setSignOpen] = useState(false);
   const [finishError, setFinishError] = useState<string | null>(null);
   const [leaving, setLeaving] = useState(false);
 
   // A flow left half way opens where something is missing; one answered before opens at its first step past the
   // factor, and the list on the home opens the step it names. Whatever was asked, a session without the factor
-  // opens on it, and once confirmed goes on to where it was going. The Valor da Causa Pedido is never missing:
-  // with none, the judge defines it.
+  // opens on it, and once confirmed goes on to where it was going.
   const missing: [boolean, SetupStepKey][] = [
     [(lawyer && !registered) || (decides && lawyer && !state.signs), "oab"],
-    [filingStep.owed, "protocolo"],
     [!state.brand.logoUrl, "escritorio"],
     [!state.operationAnswered, "operacao"],
     [state.worksAlone === null, "equipe"],
+    [onePrepares && filingStep.owed, "protocolo"],
     [!approvedProfile, "personalidade"],
     [scriptsPending, "areas"],
     [!state.whatsapp, "canal"],
@@ -405,6 +392,7 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
     firstMissing: missing.find(([open]) => open)?.[1] ?? null,
   });
   const [stepIndex, setStepIndex] = useState(SETUP_STEPS.indexOf(opening.open));
+  const goTo = (step: SetupStepKey) => setStepIndex(SETUP_STEPS.indexOf(step));
 
   const onFactor = () => {
     setConfirmedHere(true);
@@ -445,49 +433,52 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
     return true;
   };
 
+  /** Invites who is typed: by e-mail where ONE can send one, the link there to copy either way. */
+  const invite = async (): Promise<boolean> => {
+    setInviteError(null);
+    const address = email.trim().toLowerCase();
+    if (!EMAIL_PATTERN.test(address)) {
+      setInviteError(t("setup-team-invite-email-invalid"));
+      return false;
+    }
+    setInviting(true);
+    const byEmail = emailOk === true;
+    const result = await inviteToFirm({
+      email: address,
+      role: "member",
+      firmFunction: inviteFunction,
+      deliver: byEmail ? "email" : "link",
+    });
+    setInviting(false);
+    if (!result.ok) {
+      setInviteError(t(teamErrorKey(result.code)));
+      return false;
+    }
+    setInvited((current) => [
+      ...current,
+      { email: address, link: result.link ?? null, byEmail: byEmail && !result.link },
+    ]);
+    setEmail("");
+    return true;
+  };
+
+  /** The team's step: who is typed is invited, the answer kept, and whether the firm has a controladoria with it. */
   const saveTeam = async (): Promise<boolean> => {
     setTeamError(null);
     if (worksAlone === null) return false;
+    if (worksAlone === false && email.trim() && !(await invite())) return false;
     const answered = await answerFirmSetup({ worksAlone });
     if (!answered.ok) {
       setTeamError(t(teamErrorKey(answered.code)));
       return false;
     }
-    return true;
+    return operationStep.saveWorks();
   };
 
-  /** Invites by e-mail, or makes the link and copies it for the manager to send by their own channel. */
-  const invite = async (way: "email" | "link") => {
-    setInviteError(null);
-    const address = email.trim().toLowerCase();
-    if (!EMAIL_PATTERN.test(address)) {
-      setInviteError(t("setup-team-invite-email-invalid"));
-      return;
-    }
-    setInviting(true);
-    const chosen = way === "link" || !emailOk;
-    const result = await inviteToFirm({
-      email: address,
-      role: "member",
-      firmFunction: inviteFunction,
-      deliver: chosen ? "link" : "email",
-    });
-    setInviting(false);
-    if (!result.ok) {
-      setInviteError(t(teamErrorKey(result.code)));
-      return;
-    }
-    let copied = false;
-    if (chosen && result.link) {
-      try {
-        await navigator.clipboard.writeText(result.link);
-        copied = true;
-      } catch {
-        copied = false;
-      }
-    }
-    setInvited((current) => [...current, { email: address, link: result.link ?? null, chosen, copied }]);
-    setEmail("");
+  /** The filing's step: whether ONE prepares the packages, then how the firm and who answers file. */
+  const saveFiling = async (): Promise<boolean> => {
+    if (!(await operationStep.saveWorks())) return false;
+    return onePrepares ? filingStep.onPrimary() : true;
   };
 
   /** The setup is answered, or set aside: the firm goes on to its home. */
@@ -506,12 +497,6 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
     router.push(destination);
     router.refresh();
     return true;
-  };
-
-  /** A paper's model opens over the step: the firm's own to change, else the platform's to start from, else new. */
-  const openPaper = (paper: Paper, choice: SetupPaper) => {
-    const own = choice.used && !choice.used.platform ? choice.used : null;
-    setPaperForm({ paper, template: own, copyOf: own ? null : choice.platform });
   };
 
   const papers = state.papers;
@@ -534,19 +519,21 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
   // The channel finishes the core: the setup of each module the firm contracted follows it, in the module's colour
   // (0081), else the home.
   const next = state.nextSetup;
-  const finishing = {
-    primaryLabel: next ? t("setup-finish-next", { module: next.name }) : t("setup-finish"),
-    onPrimary: () => finish(next?.href ?? "/inicio"),
-    busy: leaving,
-  };
   const finishProblem = finishError ? (
     <Alert severity="error" className="neutral bg-background-paper/60!" role="alert">
       {finishError}
     </Alert>
   ) : null;
 
+  const notNow = (step: SetupStepKey): WizardStep["secondary"] => ({
+    label: t("setup-not-now"),
+    onClick: () => goTo(step),
+  });
+
   const steps: WizardStep[] = [
     {
+      label: t("setup-step-label-security"),
+      done: factor === "ok",
       title: t("setup-factor-title"),
       // An account with a factor only confirms it in this session; one with none sets it up, and is told why.
       hint: factor === "challenge" ? t("setup-factor-challenge") : t("setup-factor-hint"),
@@ -557,34 +544,30 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
       hidePrimary: factor !== "ok" && !blocked,
       content:
         factor === "ok" ? (
-          <Alert severity="success" className="neutral bg-background-paper/60!">
-            {t("setup-factor-done")}
-          </Alert>
+          <StateLine tone="done">{t("setup-factor-done")}</StateLine>
         ) : blocked ? null : (
           <SecondFactorPrompt state={factor} onConfirmed={onFactor} />
         ),
     },
     {
+      label: t("setup-step-label-oab"),
+      done: !lawyer || (registered && (!decides || state.signs)),
       title: t("setup-oab-title"),
       hint: lawyer ? t("setup-oab-hint") : undefined,
       canAdvance: oabReady && !blocked,
       onPrimary: saveOab,
-      secondary:
-        lawyer && !registered
-          ? { label: t("setup-not-now"), onClick: () => setStepIndex(SETUP_STEPS.indexOf("protocolo")) }
-          : undefined,
+      onLeave: async () => (oabReady ? saveOab() : true),
+      secondary: lawyer && !registered ? notNow("escritorio") : undefined,
       content: (
         <Box className="flex flex-col gap-4">
           {!lawyer ? (
-            <Alert severity="info" className="neutral bg-background-paper/60!">
-              {t("setup-oab-not-lawyer")}
-            </Alert>
+            <StateLine tone="info">{t("setup-oab-not-lawyer")}</StateLine>
           ) : registered ? (
             <Box component="ul" className="m-0 flex list-none flex-col gap-1 p-0">
               {state.registrations.map((registration) => (
-                <Typography key={registration.id} component="li" variant="subtitle2">
-                  {t("setup-oab-registered", { oab: formatOab(registration) })}
-                </Typography>
+                <Box component="li" key={registration.id}>
+                  <StateLine tone="done">{t("setup-oab-registered", { oab: formatOab(registration) })}</StateLine>
+                </Box>
               ))}
             </Box>
           ) : (
@@ -646,7 +629,7 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
           )}
 
           {lawyer && decides ? (
-            <Box className="flex flex-col gap-1">
+            <Box className="flex flex-row items-center gap-1">
               <FormControlLabel
                 control={
                   <Switch
@@ -656,15 +639,12 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
                   />
                 }
                 label={t("setup-oab-signs")}
+                className="m-0"
               />
-              <Typography variant="body2" className="text-text-secondary">
-                {t("setup-oab-signs-help")}
-              </Typography>
+              <InfoHint label={t("setup-oab-signs-help")} />
             </Box>
           ) : lawyer ? (
-            <Typography variant="body2" className="text-text-secondary">
-              {t("setup-oab-not-partner")}
-            </Typography>
+            <StateLine tone="info">{t("setup-oab-not-partner")}</StateLine>
           ) : null}
 
           {asksCpf ? (
@@ -689,160 +669,142 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
       ),
     },
     {
-      title: t("setup-filing-title"),
-      hint: t("setup-filing-hint"),
-      content: filingStep.content,
-      canAdvance: filingStep.canAdvance,
-      onPrimary: filingStep.onPrimary,
-      // Set aside on purpose: the list on the home leads back to it.
-      secondary:
-        filingStep.owed && !blocked
-          ? { label: t("setup-not-now"), onClick: () => setStepIndex(SETUP_STEPS.indexOf("escritorio")) }
-          : undefined,
-    },
-    {
+      label: t("setup-step-label-office"),
       title: t("setup-office-title"),
       hint: t("setup-office-hint"),
       canAdvance: !blocked,
       ...officeStep,
     },
     {
+      label: t("setup-step-label-operation"),
       title: t("setup-operation-title"),
       hint: t("setup-operation-hint"),
       ...operationStep,
     },
     {
+      label: t("setup-step-label-team"),
+      done: state.worksAlone !== null,
       title: t("setup-team-title"),
       hint: t("setup-team-hint"),
-      canAdvance: worksAlone !== null && !blocked,
+      canAdvance: worksAlone !== null && !blocked && !inviting,
       onPrimary: saveTeam,
+      onLeave: async () => (worksAlone === null ? true : saveTeam()),
       content: (
-        <Box className="flex flex-col gap-4">
+        <Box className="flex flex-col gap-5">
           <FormControl component="fieldset">
             <FormLabel component="legend" id="setup-team-choice" className="sr-only">
               {t("setup-team-title")}
             </FormLabel>
             <RadioGroup
               aria-labelledby="setup-team-choice"
-              className="gap-3"
+              className="grid grid-cols-1 gap-2 sm:grid-cols-2"
               value={worksAlone === null ? "" : worksAlone ? "alone" : "team"}
               onChange={(event) => setWorksAlone(event.target.value === "alone")}
             >
-              <FormControlLabel
-                value="alone"
-                disabled={blocked}
-                control={<Radio />}
-                label={
-                  <Box className="flex flex-col">
-                    <Typography variant="subtitle2">{t("setup-team-alone")}</Typography>
-                    <Typography variant="body2" className="text-text-secondary">
-                      {t("setup-team-alone-help")}
-                    </Typography>
-                  </Box>
-                }
-              />
-              <FormControlLabel
-                value="team"
-                disabled={blocked}
-                control={<Radio />}
-                label={
-                  <Box className="flex flex-col">
-                    <Typography variant="subtitle2">{t("setup-team-with")}</Typography>
-                    <Typography variant="body2" className="text-text-secondary">
-                      {t("setup-team-with-help")}
-                    </Typography>
-                  </Box>
-                }
-              />
+              {(["alone", "team"] as const).map((option) => (
+                <FormControlLabel
+                  key={option}
+                  value={option}
+                  disabled={blocked}
+                  control={<Radio />}
+                  className="border-grey-100 m-0 rounded-lg border py-2 pe-3"
+                  label={
+                    <Box className="flex flex-row items-center gap-1">
+                      <Typography variant="subtitle2" component="span">
+                        {t(TEAM_WORDS[option].label)}
+                      </Typography>
+                      <InfoHint label={t(TEAM_WORDS[option].help)} />
+                    </Box>
+                  }
+                />
+              ))}
             </RadioGroup>
           </FormControl>
 
           {worksAlone === false ? (
-            <Box className="flex flex-col gap-3">
-              <Typography variant="subtitle2" component="h3">
-                {t("setup-team-invite-title")}
-              </Typography>
-              <Grid container spacing={3}>
-                <Grid size={{ xs: 12, sm: 7 }}>
-                  <FormControl fullWidth className="outlined" variant="standard" error={Boolean(inviteError)}>
-                    <FormLabel component="label" htmlFor="setup-invite-email">
-                      {t("setup-team-invite-email")}
-                    </FormLabel>
-                    <Input
-                      id="setup-invite-email"
-                      type="email"
-                      value={email}
-                      autoComplete="off"
-                      onChange={(event) => setEmail(event.target.value)}
-                      disabled={blocked || locked || inviting}
-                      aria-describedby="setup-invite-email-help"
-                    />
-                    <FormHelperText id="setup-invite-email-help">
-                      {inviteError ?? t("setup-team-invite-help")}
-                    </FormHelperText>
-                  </FormControl>
-                </Grid>
-                <Grid size={{ xs: 12, sm: 5 }}>
-                  <FormControl fullWidth className="outlined" variant="standard">
-                    <FormLabel component="label" htmlFor="setup-invite-function" id="setup-invite-function-label">
-                      {t("setup-team-invite-function")}
-                    </FormLabel>
-                    <Select
-                      id="setup-invite-function-select"
-                      labelId="setup-invite-function-label"
-                      inputProps={{ id: "setup-invite-function" }}
-                      value={inviteFunction}
-                      onChange={(event) => setInviteFunction(event.target.value as FirmFunction)}
-                      disabled={blocked || locked || inviting}
-                    >
-                      {FIRM_FUNCTIONS.map((role) => (
-                        <MenuItem key={role} value={role}>
-                          {t(`team-function-${role}`)}
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-                </Grid>
-              </Grid>
-              <Box className="flex flex-wrap gap-2">
-                <Button
-                  variant="outlined"
-                  color="grey"
-                  onClick={() => void invite("link")}
-                  disabled={blocked || locked || inviting}
-                >
-                  {inviting ? t("saving") : t("setup-team-invite-copy-link")}
-                </Button>
-                {emailOk ? (
-                  <Button
-                    variant="outlined"
-                    color="grey"
-                    onClick={() => void invite("email")}
+            <Box component="section" aria-labelledby="setup-team-invite" className="flex flex-col gap-3">
+              <SectionTitle
+                id="setup-team-invite"
+                title={t("setup-team-invite-title")}
+                description={t("setup-team-invite-help")}
+                as="h3"
+                variant="subtitle1"
+              />
+              <Box className="flex flex-col gap-3 sm:flex-row sm:items-end">
+                <FormControl fullWidth className="outlined" variant="standard" error={Boolean(inviteError)}>
+                  <FormLabel component="label" htmlFor="setup-invite-email">
+                    {t("setup-team-invite-email")}
+                  </FormLabel>
+                  <Input
+                    id="setup-invite-email"
+                    type="email"
+                    value={email}
+                    autoComplete="off"
+                    onChange={(event) => {
+                      setEmail(event.target.value);
+                      setInviteError(null);
+                    }}
+                    disabled={blocked || locked || inviting}
+                    aria-describedby={inviteError ? "setup-invite-email-error" : undefined}
+                  />
+                  {inviteError ? <FormHelperText id="setup-invite-email-error">{inviteError}</FormHelperText> : null}
+                </FormControl>
+                <FormControl className="outlined w-full sm:w-48 sm:flex-none" variant="standard">
+                  <FormLabel component="label" htmlFor="setup-invite-function" id="setup-invite-function-label">
+                    {t("setup-team-invite-function")}
+                  </FormLabel>
+                  <Select
+                    id="setup-invite-function-select"
+                    labelId="setup-invite-function-label"
+                    inputProps={{ id: "setup-invite-function" }}
+                    value={inviteFunction}
+                    onChange={(event) => setInviteFunction(event.target.value as FirmFunction)}
                     disabled={blocked || locked || inviting}
                   >
-                    {t("setup-team-invite-send")}
-                  </Button>
-                ) : null}
+                    {FIRM_FUNCTIONS.map((role) => (
+                      <MenuItem key={role} value={role}>
+                        {t(`team-function-${role}`)}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+                <Button
+                  variant="outlined"
+                  onClick={() => void invite()}
+                  disabled={blocked || locked || inviting || !email.trim()}
+                  className="sm:flex-none"
+                >
+                  {inviting ? t("saving") : t("setup-team-invite")}
+                </Button>
               </Box>
-              {emailOk === false ? (
-                <Typography variant="body2" className="text-text-secondary">
-                  {t("setup-team-invite-email-off")}
-                </Typography>
-              ) : null}
-              {invited.map((entry) => (
-                <Alert key={entry.email} severity="success" className="neutral bg-background-paper/60!" role="status">
-                  {entry.chosen && entry.link
-                    ? t(entry.copied ? "setup-team-invite-link-copied" : "setup-team-invite-link-made", {
-                        email: entry.email,
-                        link: entry.link,
-                      })
-                    : entry.link
-                      ? t("setup-team-invite-link", { email: entry.email, link: entry.link })
-                      : t("setup-team-invite-sent", { email: entry.email })}
-                </Alert>
-              ))}
+              {invited.map((entry) => {
+                const doneKey = INVITE_DONE_KEY[entry.byEmail ? "email" : "link"];
+                return (
+                  <Box role="status" key={entry.email}>
+                    <StateLine
+                      tone="done"
+                      action={
+                        entry.link ? (
+                          <CopyButton text={entry.link} label={t("setup-team-invite-link-label")} />
+                        ) : undefined
+                      }
+                    >
+                      {t(doneKey, { email: entry.email })}
+                    </StateLine>
+                  </Box>
+                );
+              })}
             </Box>
           ) : null}
+
+          <SetupQuestion id="setup-team-controladoria" text={t("setup-operation-work-controladoria")}>
+            <YesNo
+              label={t("setup-operation-work-controladoria")}
+              value={operationStep.works.controladoria}
+              onChange={(value) => operationStep.setWork("controladoria", value)}
+              disabled={blocked}
+            />
+          </SetupQuestion>
 
           {teamError ? (
             <Alert severity="error" className="neutral bg-background-paper/60!" role="alert">
@@ -853,277 +815,162 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
       ),
     },
     {
-      title: t("setup-papers-title"),
-      hint: t("setup-papers-hint"),
-      canAdvance: !blocked,
+      label: t("setup-step-label-filing"),
+      done: !onePrepares || !filingStep.owed,
+      title: t("setup-filing-title"),
+      hint: t("setup-filing-hint"),
       content: (
-        <Box className="flex flex-col gap-6">
-          {papers === null ? (
-            <Alert
-              severity="error"
-              className="neutral bg-background-paper/60!"
-              action={
-                <Button color="inherit" size="small" onClick={refresh}>
-                  {t("today-retry")}
-                </Button>
-              }
-            >
-              {t("setup-papers-load-error")}
-            </Alert>
-          ) : (
-            (["procuracao", "contrato"] as const).map((paper) => {
-              const choice = papers[paper];
-              const used = choice.used;
-              const own = used && !used.platform ? used : null;
-              const words = PAPER_WORDS[paper];
-              // A paper of the firm is changed; the platform's power of attorney is a start; a contract is new.
-              const can = lawyer && !blocked && (own !== null || choice.platform !== null || paper === "contrato");
-              // The document the firm already uses is the first way: ONE checks it and makes the firm's model of it.
-              const sends = lawyer && !blocked;
-              const request = state.paperImports[paper];
-              return (
-                <Box
-                  key={paper}
-                  component="section"
-                  aria-labelledby={`setup-papers-${paper}`}
-                  className="flex flex-col gap-2"
-                >
-                  <Typography id={`setup-papers-${paper}`} variant="subtitle2" component="h3" className="mb-0">
-                    {t(words.title)}
-                  </Typography>
-                  <Typography variant="body2" className="text-text-secondary">
-                    {own ? t(words.firm, { name: own.name }) : t(words.one)}
-                  </Typography>
-                  {own?.preparedByOne ? (
-                    <Typography variant="body2" className="text-text-secondary">
-                      {t("setup-papers-prepared-by-one")}
-                    </Typography>
-                  ) : null}
-                  {/* What the power of attorney ONE sends grants of the special powers (CPC, art. 105), read from its
-                      words: what the client's money and free justice will need later. */}
-                  {choice.powers ? (
-                    <Box className="flex flex-col gap-1">
-                      <StateLine tone={choice.powers.discharge ? "done" : "attention"}>
-                        {t(
-                          choice.powers.discharge
-                            ? "setup-papers-power-discharge"
-                            : "setup-papers-power-discharge-missing",
-                        )}
-                      </StateLine>
-                      <StateLine tone={choice.powers.hardship ? "done" : "attention"}>
-                        {t(
-                          choice.powers.hardship
-                            ? "setup-papers-power-hardship"
-                            : "setup-papers-power-hardship-missing",
-                        )}
-                      </StateLine>
-                      <Typography variant="caption" className="text-text-secondary">
-                        {t("setup-papers-powers-read")}
-                      </Typography>
-                    </Box>
-                  ) : null}
-                  {/* What the power of attorney says of the firm and its lawyers: the address and the e-mail the CPC
-                      asks of it (arts. 105 and 287), read by ONE from the firm's documents (0271) or given by hand. */}
-                  {paper === "procuracao"
-                    ? (() => {
-                        const given = officeAddressGiven(state.office);
-                        const read = state.office.read;
-                        const reading = !given && request !== null && IMPORT_WORKING.includes(request.status);
-                        const words = given
-                          ? read
-                            ? "setup-papers-office-read"
-                            : "setup-papers-office-given"
-                          : reading
-                            ? "setup-papers-office-reading"
-                            : read?.left
-                              ? "setup-papers-office-no-cep"
-                              : "setup-papers-office-missing";
-                        const button = given
-                          ? read
-                            ? "office-confirm"
-                            : "setup-papers-office-change"
-                          : reading
-                            ? null
-                            : read?.left
-                              ? "setup-papers-office-cep"
-                              : "setup-papers-office-by-hand";
-                        return (
-                          <Box className="flex flex-wrap items-center gap-2">
-                            <StateLine tone={given ? "done" : reading ? "waiting" : "attention"}>{t(words)}</StateLine>
-                            {!blocked && button ? (
-                              <Button variant="text" color="grey" size="small" onClick={() => setOfficeOpen(true)}>
-                                {t(button)}
-                              </Button>
-                            ) : null}
-                          </Box>
-                        );
-                      })()
-                    : null}
-                  {request ? (
-                    <PaperRequestLine
-                      request={request}
-                      paper={paper}
-                      onOpen={() => setPaperForm({ paper, template: null, copyOf: null, importId: request.id })}
-                      onSendAnother={sends ? () => choosePaper(paper) : null}
-                    />
-                  ) : null}
-                  {sends || can || used ? (
-                    <Box className="flex flex-wrap gap-2">
-                      {/* One document at a time: while ONE works on one or asks, and after a refusal, its line
-                          offers what comes next; one that waits for a person may still be replaced by another. */}
-                      {sends &&
-                      (!request ||
-                        (request.status !== "asking" &&
-                          request.status !== "refused" &&
-                          request.status !== "failed" &&
-                          !IMPORT_WORKING.includes(request.status))) ? (
-                        <Button
-                          variant="outlined"
-                          color="grey"
-                          size="small"
-                          startIcon={<NiUploadCloud size="small" />}
-                          onClick={() => choosePaper(paper)}
-                        >
-                          {t(words.send)}
-                        </Button>
-                      ) : null}
-                      {can ? (
-                        <Button variant="text" color="grey" size="small" onClick={() => openPaper(paper, choice)}>
-                          {own ? t("setup-papers-open") : t(words.make)}
-                        </Button>
-                      ) : null}
-                      {/* The paper ONE sends, the firm's or the platform's, taken in Word by whoever sets the firm up. */}
-                      {used ? (
-                        <WordDownloadButton
-                          name={used.name}
-                          letterhead
-                          read={() => readDraftTemplate(used.id).then((read) => (read.ok ? read.body : null))}
-                        />
-                      ) : null}
-                    </Box>
-                  ) : null}
-                </Box>
-              );
-            })
-          )}
-          {!lawyer ? (
-            <Alert severity="info" className="neutral bg-background-paper/60!">
-              {t("setup-papers-not-lawyer")}
-            </Alert>
-          ) : null}
-          <input
-            ref={paperInput}
-            type="file"
-            hidden
-            accept={IMPORT_ACCEPT}
-            onChange={(event) => {
-              const file = event.target.files?.[0];
-              event.target.value = "";
-              if (file) setPaperForm({ paper: choosingPaper.current, template: null, copyOf: null, file });
-            }}
-          />
-
-          <Box component="section" aria-labelledby="setup-papers-sign" className="flex flex-col gap-2">
-            <Typography id="setup-papers-sign" variant="subtitle2" component="h3" className="mb-0">
-              {t("setup-papers-sign-title")}
-            </Typography>
-            <Typography variant="body2" className="text-text-secondary">
-              {t("setup-papers-sign-govbr")}
-            </Typography>
+        <Box className="flex flex-col gap-5">
+          <Box className="bg-grey-25 rounded-xl px-4 py-3">
+            <SetupQuestion id="setup-filing-one-prepares" text={t("setup-operation-work-one_filing")}>
+              <YesNo
+                label={t("setup-operation-work-one_filing")}
+                value={operationStep.works.one_filing}
+                onChange={(value) => operationStep.setWork("one_filing", value)}
+                disabled={blocked}
+              />
+            </SetupQuestion>
           </Box>
-          {connections ? (
-            <SignatureAccountCard
-              embedded
-              account={connections.signature}
-              blocked={blocked || locked}
-              vault={connections.environment.vault}
-              onChanged={refresh}
-            />
-          ) : (
-            connectionsError
-          )}
+          {onePrepares ? filingStep.content : <StateLine tone="info">{t("setup-filing-without-one")}</StateLine>}
         </Box>
       ),
+      canAdvance: filingStep.canAdvance,
+      onPrimary: saveFiling,
+      onLeave: saveFiling,
+      // Set aside on purpose: the list on the home leads back to it.
+      secondary: onePrepares && filingStep.owed && !blocked ? notNow("personalidade") : undefined,
     },
     {
+      label: t("setup-step-label-personality"),
       title: t("setup-personality-title"),
       hint: t("setup-personality-hint"),
       ...personalityStep,
+      secondary: personalityStep.skippable && !blocked ? notNow("areas") : undefined,
     },
     {
+      label: t("setup-step-label-areas"),
       title: t("setup-areas-title"),
       hint: t("setup-areas-hint"),
       ...areasStep,
+      secondary: areasStep.skippable && !blocked ? notNow("canal") : undefined,
     },
     {
+      label: t("setup-step-label-channel"),
+      done: Boolean(realNumber),
       title: t("setup-channel-title"),
       hint: t("setup-channel-hint"),
       canAdvance: !blocked,
-      ...finishing,
+      primaryLabel: next ? t("setup-finish-next", { module: next.name }) : t("setup-finish"),
+      onPrimary: () => finish(next?.href ?? "/inicio"),
+      busy: leaving,
       content: (
         <Box className="flex flex-col gap-6">
-          {(!state.operationAnswered || !approvedProfile) && !realNumber ? (
-            <Alert severity="info" className="neutral bg-background-paper/60!">
-              {t("setup-channel-before-operation")}
-            </Alert>
-          ) : null}
-          {!connections ? (
-            connectionsError
-          ) : (
-            <>
-              {realNumber ? (
-                <>
-                  <Alert severity="success" className="neutral bg-background-paper/60!">
-                    {t("setup-channel-whatsapp-done")}
-                  </Alert>
-                  <NoticesCard embedded notices={connections.notices} blocked={blocked || locked} onChanged={refresh} />
-                </>
-              ) : (
-                <>
-                  {connections.testChat?.state.on ? (
-                    // The test chat is offered no longer (2026-11-11): one already on stays, to be turned off.
-                    <TestChatCard
-                      embedded
-                      state={connections.testChat.state}
-                      url={connections.testChat.url}
-                      sinceLabel={connections.testChat.sinceLabel}
-                      blocked={blocked || locked}
-                      onChanged={refresh}
-                    />
-                  ) : null}
-                  <ConnectCard
+          <Box component="section" aria-labelledby="setup-channel-whatsapp" className="flex flex-col gap-3">
+            <SectionTitle
+              id="setup-channel-whatsapp"
+              title={t("setup-channel-whatsapp-title")}
+              description={t("setup-channel-whatsapp-info")}
+              as="h3"
+              variant="subtitle1"
+            />
+            {(!state.operationAnswered || !approvedProfile) && !realNumber ? (
+              <StateLine tone="info">{t("setup-channel-before-operation")}</StateLine>
+            ) : null}
+            {!connections ? (
+              connectionsError
+            ) : realNumber ? (
+              <>
+                <StateLine tone="done">{t("setup-channel-whatsapp-done")}</StateLine>
+                <NoticesCard embedded notices={connections.notices} blocked={blocked || locked} onChanged={refresh} />
+              </>
+            ) : (
+              <>
+                {connections.testChat?.state.on ? (
+                  // The test chat is offered no longer (2026-11-11): one already on stays, to be turned off.
+                  <TestChatCard
                     embedded
-                    firmName={connections.firm.name}
-                    again={connections.numbers.some((item) => item.provider !== "test")}
-                    pending={connections.pending}
-                    environment={connections.environment}
+                    state={connections.testChat.state}
+                    url={connections.testChat.url}
+                    sinceLabel={connections.testChat.sinceLabel}
                     blocked={blocked || locked}
-                    onConnected={refresh}
-                    openWaPending={connections.openWaPending}
+                    onChanged={refresh}
                   />
-                </>
-              )}
-            </>
-          )}
-          {next ? (
-            <Typography variant="body2" className="text-text-secondary">
-              {t("setup-next-module", { module: next.name })}
-            </Typography>
-          ) : null}
+                ) : null}
+                <ConnectCard
+                  embedded
+                  firmName={connections.firm.name}
+                  again={connections.numbers.some((item) => item.provider !== "test")}
+                  pending={connections.pending}
+                  environment={connections.environment}
+                  blocked={blocked || locked}
+                  onConnected={refresh}
+                  openWaPending={connections.openWaPending}
+                />
+              </>
+            )}
+          </Box>
+
+          <Box component="section" aria-labelledby="setup-channel-sign" className="flex flex-col gap-3">
+            <SectionTitle
+              id="setup-channel-sign"
+              title={t("setup-papers-sign-title")}
+              description={t("setup-channel-sign-info")}
+              as="h3"
+              variant="subtitle1"
+            />
+            <StateLine tone="done">{t("setup-channel-sign-govbr")}</StateLine>
+            {!connections ? (
+              connectionsError
+            ) : connections.signature || signOpen ? (
+              <SignatureAccountCard
+                embedded
+                account={connections.signature}
+                blocked={blocked || locked}
+                vault={connections.environment.vault}
+                onChanged={refresh}
+              />
+            ) : (
+              // The account of signatures is the firm's option: its form opens when asked, never in the way.
+              <StateLine
+                tone="info"
+                action={
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    onClick={() => setSignOpen(true)}
+                    disabled={blocked || locked}
+                  >
+                    {t("setup-channel-sign-connect")}
+                  </Button>
+                }
+              >
+                {t("setup-channel-sign-account")}
+              </StateLine>
+            )}
+          </Box>
+
+          {next ? <StateLine tone="info">{t("setup-next-module", { module: next.name })}</StateLine> : null}
           {finishProblem}
         </Box>
       ),
     },
   ];
 
+  // "Continuar depois": what the step holds and is complete is saved first, then the firm goes home.
+  const later = async () => {
+    const step = steps[stepIndex];
+    if (step?.onLeave) await Promise.resolve(step.onLeave()).catch(() => false);
+    await finish("/inicio");
+  };
+
   return (
-    <Box className="mx-auto flex w-full max-w-2xl flex-col gap-6">
+    <Box className="mx-auto flex w-full max-w-4xl flex-col gap-6">
       <PageHeader
         title={t("setup-page-title")}
         description={t("setup-page-description")}
         crumbs={[{ label: t("settings-home"), href: "/inicio" }, { label: t("setup-crumb") }]}
         action={
-          <Button variant="text" color="grey" disabled={leaving || blocked} onClick={() => void finish("/inicio")}>
+          <Button variant="text" color="grey" disabled={leaving || blocked} onClick={() => void later()}>
             {t("setup-later")}
           </Button>
         }
@@ -1139,6 +986,17 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
         onIndexChange={setStepIndex}
         onComplete={() => undefined}
         completeLabel={t("setup-finish")}
+      />
+      <input
+        ref={paperInput}
+        type="file"
+        hidden
+        accept={IMPORT_ACCEPT}
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          event.target.value = "";
+          if (file) setPaperForm({ paper: choosingPaper.current, template: null, copyOf: null, file });
+        }}
       />
       {paperForm ? (
         <TemplatePanel
@@ -1172,88 +1030,6 @@ function SetupFlow({ state }: { state: Extract<SetupState, { kind: "ready" }> })
           }}
         />
       ) : null}
-      {officeOpen ? (
-        <SidePanel
-          onClose={() => setOfficeOpen(false)}
-          closeLabel={t("office-close")}
-          title={t("office-title")}
-          description={t("office-panel-subtitle")}
-        >
-          <OfficeForm
-            office={state.office}
-            disabled={blocked}
-            onSaved={() => {
-              setOfficeOpen(false);
-              refresh();
-            }}
-          />
-        </SidePanel>
-      ) : null}
-    </Box>
-  );
-}
-
-/**
- * What ONE does with the document the firm sent as a paper (0079), said in
- * the step with the one thing to do next: follow it while ONE works, answer
- * what ONE asks, check what waits for a person, or send another document
- * after a refusal. Everything opens over the step: nothing leads away.
- */
-function PaperRequestLine({
-  request,
-  paper,
-  onOpen,
-  onSendAnother,
-}: {
-  request: PaperImport;
-  paper: Paper;
-  onOpen: () => void;
-  onSendAnother: (() => void) | null;
-}) {
-  const t = useTranslations("product");
-  const working = IMPORT_WORKING.includes(request.status);
-  const said =
-    request.status === "asking"
-      ? t("setup-papers-request-asking", { file: request.fileName })
-      : request.status === "ready"
-        ? t("setup-papers-request-ready", { file: request.fileName })
-        : request.status === "refused"
-          ? refusalWords(t, request.refusal, paper)
-          : request.status === "failed"
-            ? t("setup-papers-request-failed", { file: request.fileName, why: t(importFailureKey(request.failure)) })
-            : t("setup-papers-request-working", { file: request.fileName });
-  const action =
-    request.status === "asking"
-      ? { label: t("setup-papers-answer"), onClick: onOpen, primary: true }
-      : request.status === "ready"
-        ? { label: t("setup-papers-review"), onClick: onOpen, primary: true }
-        : working
-          ? { label: t("setup-papers-follow"), onClick: onOpen, primary: false }
-          : onSendAnother
-            ? { label: t("setup-papers-send-again"), onClick: onSendAnother, primary: false }
-            : null;
-  // One state, said once (2026-11-21): a chip naming the state beside a sentence saying it again read as two
-  // things. While ONE works, its mark turns, so the step shows something is happening while the panel is closed.
-  return (
-    <Box role="status">
-      <StateLine
-        tone={request.status === "failed" ? "failed" : working ? "waiting" : "attention"}
-        icon={working ? <NiLoader size="medium" className="animate-spin motion-reduce:animate-none" /> : undefined}
-        action={
-          action ? (
-            <Button
-              variant={action.primary ? "contained" : "text"}
-              color={action.primary ? "primary" : "grey"}
-              size="small"
-              onClick={action.onClick}
-            >
-              {action.label}
-            </Button>
-          ) : undefined
-        }
-      >
-        {said}
-      </StateLine>
     </Box>
   );
 }

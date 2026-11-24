@@ -230,6 +230,7 @@ function PersonSetupFlow({ state }: { state: Extract<PersonSetupState, { kind: "
   ) : null;
 
   const factorStep: WizardStep = {
+    label: t("setup-step-label-security"),
     title: t("setup-factor-title"),
     hint: factor === "challenge" ? t("setup-factor-challenge") : t("person-setup-factor-hint"),
     canAdvance: factorOk && !blocked,
@@ -250,6 +251,7 @@ function PersonSetupFlow({ state }: { state: Extract<PersonSetupState, { kind: "
   // Who does not sign at the bar ends on their WhatsApp.
   const whatsappLast = keys[keys.length - 1] === "whatsapp";
   const whatsappStep: WizardStep = {
+    label: t("person-setup-step-label-whatsapp"),
     title: t("person-setup-whatsapp-title"),
     hint: t("person-setup-whatsapp-hint"),
     canAdvance: phoneOk && !blocked && !leaving,
@@ -295,6 +297,7 @@ function PersonSetupFlow({ state }: { state: Extract<PersonSetupState, { kind: "
     else void finish();
   };
   const oabStep: WizardStep = {
+    label: t("setup-step-label-oab"),
     title: t("person-setup-oab-title"),
     hint: t("person-setup-oab-hint"),
     canAdvance: oabReady && !blocked && !leaving,
@@ -399,6 +402,7 @@ function PersonSetupFlow({ state }: { state: Extract<PersonSetupState, { kind: "
   };
 
   const filingWizardStep: WizardStep = {
+    label: t("setup-step-label-filing"),
     title: firmForm ? t("setup-filing-title") : t("person-setup-filing-title"),
     hint: firmForm ? t("person-setup-filing-firm-hint") : t("person-setup-filing-hint"),
     canAdvance: filingStep.canAdvance && !leaving,
@@ -419,7 +423,7 @@ function PersonSetupFlow({ state }: { state: Extract<PersonSetupState, { kind: "
   );
 
   return (
-    <Box className="mx-auto flex w-full max-w-2xl flex-col gap-6">
+    <Box className="mx-auto flex w-full max-w-4xl flex-col gap-6">
       <PageHeader
         title={t("person-setup-title")}
         description={t("person-setup-description", { firm: state.firmName })}

@@ -10,6 +10,7 @@ import MessageBubble from "@/components/product/message-bubble";
 import SectionTitle from "@/components/product/section-title";
 import type { WizardStep } from "@/components/product/setup-wizard";
 import StateLine from "@/components/product/state-line";
+import NiLoader from "@/icons/nexture/ni-loader";
 import type { FirmProfile } from "@/lib/firm/personality";
 import {
   approveFirmPersonality,
@@ -31,7 +32,9 @@ export function usePersonalityStep(input: {
   initial: PersonalityState | null;
   blocked: boolean;
   onApproved: () => void;
-}): Pick<WizardStep, "content" | "canAdvance" | "onPrimary" | "primaryLabel"> {
+}): Pick<WizardStep, "content" | "canAdvance" | "onPrimary" | "primaryLabel" | "busy" | "done"> & {
+  skippable: boolean;
+} {
   const t = useTranslations("product");
   const [state, setState] = useState<PersonalityState | null>(input.initial);
   const [error, setError] = useState<string | null>(null);
@@ -90,7 +93,16 @@ export function usePersonalityStep(input: {
     setState((current) => (current ? { ...current, writing: { status: "waiting", failure: null } } : current));
   };
 
+  // A change typed is what the person asks: the step's button sends it to ONE and the step stays, the ring turning,
+  // until the new text arrives to be approved. Approving the old text with a change typed would lose the change
+  // (the owner's canvas of 2026-11-24).
+  const asking = changing && (change.trim() !== "" || site.trim() !== "");
+
   const onPrimary = async (): Promise<boolean> => {
+    if (asking) {
+      await ask();
+      return false;
+    }
     const draft = state?.draft;
     if (!draft) return true;
     setError(null);
@@ -132,7 +144,14 @@ export function usePersonalityStep(input: {
   const content = (
     <Box className="flex flex-col gap-5">
       {writing ? (
-        <StateLine tone="waiting">{t("setup-personality-writing")}</StateLine>
+        <Box role="status">
+          <StateLine
+            tone="waiting"
+            icon={<NiLoader size="medium" className="animate-spin motion-reduce:animate-none" />}
+          >
+            {t("setup-personality-writing")}
+          </StateLine>
+        </Box>
       ) : state?.writing?.status === "failed" && !shown ? (
         <StateLine
           tone="failed"
@@ -237,22 +256,24 @@ export function usePersonalityStep(input: {
                 slotProps={{ htmlInput: { maxLength: 300, inputMode: "url" } }}
               />
             ) : null}
-            <Box className="flex flex-wrap gap-2">
+            <Box>
               <Button
-                variant="outlined"
-                onClick={() => void ask()}
-                disabled={input.blocked || busy || (!change.trim() && !site.trim())}
+                variant="text"
+                color="grey"
+                onClick={() => {
+                  setChanging(false);
+                  setChange("");
+                  setSite("");
+                }}
+                disabled={busy}
               >
-                {t("setup-personality-rewrite")}
-              </Button>
-              <Button variant="text" onClick={() => setChanging(false)} disabled={busy}>
-                {t("setup-personality-cancel")}
+                {t("setup-personality-drop-change")}
               </Button>
             </Box>
           </Box>
         ) : (
           <Box>
-            <Button variant="text" onClick={() => setChanging(true)} disabled={input.blocked}>
+            <Button variant="text" color="grey" onClick={() => setChanging(true)} disabled={input.blocked}>
               {t("setup-personality-ask-change")}
             </Button>
           </Box>
@@ -265,8 +286,16 @@ export function usePersonalityStep(input: {
 
   return {
     content,
-    canAdvance: !input.blocked,
+    canAdvance: !input.blocked && !busy,
     onPrimary,
-    primaryLabel: state?.draft ? t("setup-personality-approve") : undefined,
+    primaryLabel: asking
+      ? t("setup-personality-ask-one")
+      : state?.draft && !writing
+        ? t("setup-personality-approve")
+        : undefined,
+    busy,
+    done: Boolean(state?.approved) && !state?.draft,
+    // What is still the firm's to approve may wait: the list on the home leads back to it.
+    skippable: Boolean(state?.draft) || Boolean(writing),
   };
 }

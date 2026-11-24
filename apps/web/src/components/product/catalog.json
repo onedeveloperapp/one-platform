@@ -97,6 +97,12 @@
       "use": "What a title, a number or a chip is, behind an \"i\" a person opens when they want (a bare Tooltip on a non-focusable Box disappears on touch and for keyboards; this is a real button). 200 characters at most. PageHeader, CardTitle, CollapsibleCard and SectionTitle draw it themselves from their `description`. Never for what must be read before acting (a consequence, a legal note, that ONE may err): that stays in sight."
     },
     {
+      "name": "ChoiceChips",
+      "from": "@/components/product/choice-chips",
+      "props": "options: { value, label, fixed? }[], selected: value[], onToggle(value), single? (one of many: a radio group), label? | labelledBy?, disabled?, className?",
+      "use": "The answer to a setup's question as chips: what is chosen filled in the primary with its check, the rest outlined; one of many (yes or no, a band) or several of many (areas, channels). A choice, never a save: the step's own button saves it. Never radio buttons beside their labels in a row, nor the theme's toggle buttons, which read as plain words."
+    },
+    {
       "name": "StatusChip",
       "from": "@/components/product/status-chip",
       "props": "label, tone? (neutral | primary | positive | attention | info | danger), icon? (a mark before the words, as the spinner of work under way, said by the words too), className?",
@@ -243,8 +249,8 @@
     {
       "name": "OnboardingChecklist / ActivationProgress / SetupWizard",
       "from": "@/components/product/*",
-      "props": "see each file",
-      "use": "Steps to first value, completion drive, and progressive disclosure for long setups. Never points, badges, leaderboards or streaks."
+      "props": "see each file; SetupWizard steps: { title, label? (its name in the list), done?, hint?, content, onPrimary? (saves the step: true goes on), onLeave? (what forward by the list or setting aside saves), primaryLabel?, secondary?, busy?, canAdvance?, hidePrimary?, noBack? }",
+      "use": "Steps to first value, completion drive, and progressive disclosure for long setups. Never points, badges, leaderboards or streaks. SetupWizard: when every step has a `label` the steps are listed by name beside the card (the next one named over it on a phone); its primary saves the whole step and goes on, so nothing inside a step is called Salvar and only that button is filled; going forward by the list runs `onLeave` first, going back loses nothing kept by the flow."
     },
     {
       "name": "StepCelebrationDialog",
@@ -291,7 +297,7 @@
     {
       "name": "ItemRows",
       "from": "@/components/product/item-rows",
-      "props": "sections: { key, title, rows: ItemRow[], ask? (what asks the person: tinted, opened first on arrival), shown? (lines in sight before \"Mostrar mais\") }[]; arrival? (the addresses that bring a person to the list: there, the first line that asks opens). ItemRow: { key, icon, tone (TileTone), tint? (a tile of its own: a thing cancelled), title, detail?, state? { tone: StateTone, text }, action? (its one button, done in place), opener? (words of a button that opens the line, in place of action), content? () => ReactNode (what opens in the line), openLabel? }",
+      "props": "sections: { key, title, rows: ItemRow[], ask? (what asks the person: tinted, opened first on arrival), shown? (lines in sight before \"Mostrar mais\") }[]; arrival? (the addresses that bring a person to the list: there, the first line that asks opens). ItemRow: { key, icon, tone (TileTone), tint? (a tile of its own: a thing cancelled), title, detail?, state? { tone: StateTone, text, icon? (a mark that turns while the product works on it) }, action? (its one button, done in place), opener? (words of a button that opens the line, in place of action), content? () => ReactNode (what opens in the line), openLabel? }",
       "use": "A card's list of many things as one line each (the owner, 2026-11-10): what asks the person first, in a section of its own, each line saying what is missing in its state's colour and holding its one button; what the product is doing as lines that wait; what is settled below, the newest first, a few in sight and the rest one click away. A line opens in place on everything it holds, one at a time; what opened once stays mounted, so a note typed or a panel opened in it lives on. Use it where a card lists things that pile up and some ask for action (publications, documents, notices, papers to sign); a card of one or two things, or of things that never ask, keeps its own layout."
     },
     {

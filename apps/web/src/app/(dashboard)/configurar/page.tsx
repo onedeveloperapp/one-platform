@@ -7,7 +7,7 @@ import { getTranslations } from "next-intl/server";
 
 import { isPersonSetupStep } from "@/lib/firm/person-setup";
 import { isManager } from "@/lib/firm/roles";
-import { isSetupStep } from "@/lib/firm/setup-steps";
+import { setupStepOf } from "@/lib/firm/setup-steps";
 import { getMemberContext } from "@/lib/member/context";
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -40,6 +40,6 @@ export default async function SetupPage({
     const step = isPersonSetupStep(query.passo) ? query.passo : null;
     return <PersonSetupView state={await loadPersonSetupState(context, step)} />;
   }
-  const step = isSetupStep(query.passo) ? query.passo : null;
+  const step = setupStepOf(query.passo);
   return <SetupView state={await loadSetupState(context, step)} />;
 }

@@ -124,6 +124,9 @@ describe("the ways to file a lawyer may choose", () => {
       owed: true,
     });
     expect(personFilingStep({ ...data, lawyer: false }, ["SP"])).toEqual({ shown: false, owed: false });
+    // A firm that said ONE prepares no filing package asks none of its lawyers how they file (0285).
+    expect(personFilingStep({ ...data, onePrepares: false }, ["SP"])).toEqual({ shown: false, owed: false });
+    expect(personFilingStep({ ...data, onePrepares: true }, ["SP"])).toEqual({ shown: true, owed: true });
   });
 
   it("says whose turn it is for ONE to file a lawsuit on a court's screen", () => {
@@ -191,6 +194,8 @@ describe("the ways to file a lawyer may choose", () => {
     expect(firmChoiceAsks({ way: "browser", saved: "browser" })).toEqual({ aware: false, save: false });
     expect(firmChoiceAsks({ way: "hand", saved: null })).toEqual({ aware: false, save: true });
     expect(firmChoiceAsks({ way: "extension", saved: "hand" })).toEqual({ aware: true, save: true });
+    // Nothing is marked before the firm chooses (2026-11-24): nothing to save, nothing to acknowledge.
+    expect(firmChoiceAsks({ way: null, saved: null })).toEqual({ aware: false, save: false });
   });
 
   it("lists the points of an acknowledgment's text", () => {

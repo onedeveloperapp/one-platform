@@ -325,7 +325,11 @@ export default function SignatureAccountCard({
           )}
 
           <Box className="flex flex-wrap gap-2">
-            <Button variant="contained" disabled={busy || blocked || !vault || !ready} onClick={() => void connect()}>
+            <Button
+              variant={embedded ? "outlined" : "contained"}
+              disabled={busy || blocked || !vault || !ready}
+              onClick={() => void connect()}
+            >
               {busy ? t("cases-working") : t("connections-signature-connect")}
             </Button>
             {/* An account with a problem may be cut, to connect the other provider or start again. */}

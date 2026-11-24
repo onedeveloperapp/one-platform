@@ -12,21 +12,20 @@ import {
   Chip,
   FormControl,
   FormControlLabel,
-  FormGroup,
   FormHelperText,
   FormLabel,
   Input,
   MenuItem,
-  Radio,
-  RadioGroup,
   Select,
   TextField,
   Typography,
 } from "@mui/material";
 
+import ChoiceChips from "@/components/product/choice-chips";
 import SectionTitle from "@/components/product/section-title";
 import type { WizardStep } from "@/components/product/setup-wizard";
 import StateLine from "@/components/product/state-line";
+import NiCheck from "@/icons/nexture/ni-check";
 import {
   areaName,
   areaNameOk,
@@ -35,9 +34,9 @@ import {
   type KnownArea,
   MONTHLY_BANDS,
   OPERATION_CHANNELS,
-  OPERATION_WORKS,
   type OperationArea,
   type OperationChannel,
+  type OperationWork,
   PREVIOUS_SYSTEMS,
 } from "@/lib/firm/operation";
 import { type AreaProposalResult, proposeFirmAreas, saveFirmOperation } from "@/lib/firm/operation-actions";
@@ -47,10 +46,59 @@ import { OAB_STATES } from "@/lib/firm/roles";
 const IMPORTED = new Set(["astrea", "advbox", "projuris", "planilha"]);
 
 /**
- * The setup's step "A operação" (migration 0256, the owner, 2026-11-20): the areas the firm works in, which ONE
- * proposes from the firm's lawsuits and the person confirms, takes out or adds to; where and how it works; and who does
- * each work. The areas decide the way a new contact on the WhatsApp goes, and ONE answers nobody new before they are
- * said. The step is placed by the setup's flow, which owns the wizard.
+ * A yes or no of the setup, as two buttons side by side: a choice, never a save (the owner's canvas of 2026-11-24,
+ * where radio buttons ran into the label before them: "Sim◯ Não").
+ */
+export function YesNo({
+  label,
+  value,
+  onChange,
+  disabled,
+}: {
+  label: string;
+  value: boolean | null;
+  onChange: (value: boolean) => void;
+  disabled?: boolean;
+}) {
+  const t = useTranslations("product");
+  return (
+    <ChoiceChips
+      single
+      label={label}
+      options={[
+        { value: "sim", label: t("setup-operation-yes") },
+        { value: "nao", label: t("setup-operation-no") },
+      ]}
+      selected={value === null ? [] : [value ? "sim" : "nao"]}
+      onToggle={(next) => onChange(next === "sim")}
+      disabled={disabled}
+    />
+  );
+}
+
+/** A question of the setup with its answer beside it on a wide screen, under it on a narrow one. */
+export function SetupQuestion({ id, text, children }: { id: string; text: ReactNode; children: ReactNode }) {
+  return (
+    <Box className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
+      <Typography id={id} variant="body2" component="span" className="text-text-primary">
+        {text}
+      </Typography>
+      <Box className="flex-none">{children}</Box>
+    </Box>
+  );
+}
+
+/**
+ * The setup's step "Como o escritório trabalha" (migration 0256, the owner, 2026-11-20, and the canvas of
+ * 2026-11-24): the areas the firm works in, which ONE proposes from the firm's lawsuits and the person confirms, takes
+ * out or adds to; where and when it works; how its clients arrive and how many; and whether ONE keeps its books. The
+ * areas decide the way a new contact on the WhatsApp goes, and ONE answers nobody new before they are said.
+ *
+ * The answers live here, with the flow, and two of them are asked in later steps where they belong: whether ONE
+ * prepares the filing packages (the step of the filing) and whether the firm has a controladoria (the team's step).
+ * Whether it takes clients from agencies is the channel "Por uma agência ou um parceiro", never asked twice. Every
+ * save sends the whole answer, as `save_firm_operation` takes it; a later step saves its answer only once this one was
+ * answered, so ONE's proposal of the areas is never kept as the firm's without the person seeing it.
  */
 export function useOperationStep(input: {
   answered: boolean;
@@ -60,7 +108,12 @@ export function useOperationStep(input: {
   /** The states of the registrations at the bar of who answers: ONE's proposal of where the firm works. */
   registrationStates: string[];
   blocked: boolean;
-}): Pick<WizardStep, "content" | "canAdvance" | "onPrimary"> {
+}): Pick<WizardStep, "content" | "canAdvance" | "onPrimary" | "onLeave" | "done"> & {
+  works: FirmOperation["works"];
+  setWork: (work: OperationWork, value: boolean) => void;
+  /** Saves the answers of a later step with the rest, once the step was answered; true when nothing was owed. */
+  saveWorks: () => Promise<boolean>;
+} {
   const t = useTranslations("product");
 
   // ---------- The areas ----------
@@ -79,6 +132,8 @@ export function useOperationStep(input: {
   const [ownError, setOwnError] = useState<string | null>(null);
   const [touched, setTouched] = useState(false);
   const [proposal, setProposal] = useState<AreaProposalResult | null>(null);
+  // Answered before, or saved in this visit: a later step may then save its own answer with the rest.
+  const [answered, setAnswered] = useState(input.answered);
 
   // ONE reads the firm's lawsuits once the step opens, and marks what weighs, unless the person already chose.
   useEffect(() => {
@@ -115,22 +170,25 @@ export function useOperationStep(input: {
     });
   };
 
-  const addOwn = () => {
-    const name = areaName(ownDraft);
+  /** The area typed in "Outra área", taken as it is: by its button, by Enter, or by "Continuar". */
+  const takeOwn = (): { chosen: Set<string>; own: string[] } | null => {
+    const typed = ownDraft.trim();
+    if (!typed) return { chosen, own };
+    const name = areaName(typed);
     if (!areaNameOk(name)) {
       setOwnError(t("setup-operation-error-invalid_area_name"));
-      return;
+      return null;
     }
     // A name that is an area ONE knows is that area.
     const known = input.knownAreas.find((area) => area.name.toLowerCase() === name.toLowerCase());
-    if (known) {
-      setChosen((current) => new Set([...current, known.key]));
-    } else if (!own.some((item) => item.toLowerCase() === name.toLowerCase())) {
-      setOwn((current) => [...current, name]);
-    }
+    const nextChosen = known ? new Set([...chosen, known.key]) : chosen;
+    const nextOwn = known || own.some((item) => item.toLowerCase() === name.toLowerCase()) ? own : [...own, name];
+    setChosen(nextChosen);
+    setOwn(nextOwn);
     setTouched(true);
     setOwnDraft("");
     setOwnError(null);
+    return { chosen: nextChosen, own: nextOwn };
   };
 
   // ---------- How it works ----------
@@ -141,29 +199,38 @@ export function useOperationStep(input: {
   );
   const set = <K extends keyof FirmOperation>(key: K, value: FirmOperation[K]) =>
     setOperation((current) => ({ ...current, [key]: value }));
+  const setWork = (work: OperationWork, value: boolean) =>
+    setOperation((current) => ({ ...current, works: { ...current.works, [work]: value } }));
   const hoursRight = hoursOk(operation);
 
   const [error, setError] = useState<string | null>(null);
-  const areasCount = chosen.size + own.length;
+  const areasCount = chosen.size + own.length + (ownDraft.trim() ? 1 : 0);
 
-  const onPrimary = async (): Promise<boolean> => {
+  const areasOf = (picked: Set<string>, named: string[]): OperationArea[] => [
+    ...[...picked].map((key) => ({
+      lawArea: key,
+      name: input.knownAreas.find((area) => area.key === key)?.name ?? key,
+      source: (proposedKeys.has(key) && !input.areas.some((area) => area.lawArea === key)
+        ? "xray"
+        : "person") as OperationArea["source"],
+    })),
+    ...named.map((name) => ({ lawArea: null, name, source: "person" as const })),
+  ];
+
+  const save = async (picked: Set<string>, named: string[]): Promise<boolean> => {
     setError(null);
-    if (areasCount === 0) {
+    if (picked.size + named.length === 0) {
       setError(t("setup-operation-error-no_areas"));
       return false;
     }
-    const areas: OperationArea[] = [
-      ...[...chosen].map((key) => ({
-        lawArea: key,
-        name: input.knownAreas.find((area) => area.key === key)?.name ?? key,
-        source: (proposedKeys.has(key) && !input.areas.some((area) => area.lawArea === key)
-          ? "xray"
-          : "person") as OperationArea["source"],
-      })),
-      ...own.map((name) => ({ lawArea: null, name, source: "person" as const })),
-    ];
-    const saved = await saveFirmOperation({ operation, areas }).catch(() => ({ ok: false as const, code: "failed" }));
-    if (saved.ok) return true;
+    const saved = await saveFirmOperation({ operation, areas: areasOf(picked, named) }).catch(() => ({
+      ok: false as const,
+      code: "failed",
+    }));
+    if (saved.ok) {
+      setAnswered(true);
+      return true;
+    }
     const code = saved.code;
     setError(
       code === "areas_limit"
@@ -177,25 +244,32 @@ export function useOperationStep(input: {
     return false;
   };
 
+  const onPrimary = async (): Promise<boolean> => {
+    const taken = takeOwn();
+    if (!taken) return false;
+    return save(taken.chosen, taken.own);
+  };
+
+  const saveWorks = async (): Promise<boolean> =>
+    answered && !input.blocked && chosen.size + own.length > 0 && hoursRight ? save(chosen, own) : true;
+
   // ---------- What the step shows ----------
   const reading: ReactNode =
     proposal === null ? (
       <StateLine tone="waiting">{t("setup-operation-reading")}</StateLine>
     ) : proposal.ok && proposal.source !== "none" && proposal.lawsuits > 0 ? (
-      <Typography variant="body2" className="text-text-secondary">
+      <StateLine tone="info">
         {proposal.source === "djen"
           ? t("setup-operation-read-djen", { count: proposal.lawsuits })
           : t("setup-operation-read-publications", { count: proposal.lawsuits })}
-      </Typography>
+      </StateLine>
     ) : (
-      <Typography variant="body2" className="text-text-secondary">
-        {t("setup-operation-read-none")}
-      </Typography>
+      <StateLine tone="info">{t("setup-operation-read-none")}</StateLine>
     );
 
   const question = (id: string, text: string, field: ReactNode, help?: ReactNode) => (
-    <FormControl component="fieldset" className="flex flex-col gap-1" variant="standard">
-      <FormLabel component="legend" id={id} className="text-text-primary mb-1 text-sm font-medium">
+    <FormControl component="fieldset" className="flex flex-col gap-2" variant="standard">
+      <FormLabel component="legend" id={id} className="text-text-primary mb-1 text-sm font-semibold">
         {text}
       </FormLabel>
       {field}
@@ -214,79 +288,70 @@ export function useOperationStep(input: {
           variant="subtitle1"
         />
         {reading}
-        <FormGroup className="grid grid-cols-1 gap-x-4 gap-y-1 sm:grid-cols-2">
-          {input.knownAreas.map((area) => {
-            const fixed = moduleAreas.has(area.key);
-            const lawsuits = lawsuitsOf(area.key);
-            return (
-              <FormControlLabel
-                key={area.key}
-                className="m-0 items-start py-1"
-                control={
-                  <Checkbox
-                    checked={fixed || chosen.has(area.key)}
-                    onChange={() => toggle(area.key)}
-                    disabled={fixed || input.blocked}
-                    className="pt-0.5"
-                  />
-                }
-                label={
-                  <Box className="flex min-w-0 flex-col">
-                    <Typography variant="subtitle2" component="span">
-                      {area.name}
-                    </Typography>
-                    <Typography variant="caption" component="span" className="text-text-secondary">
-                      {fixed
-                        ? t("setup-operation-module")
-                        : lawsuits > 0
-                          ? t("setup-operation-lawsuits", { count: lawsuits })
-                          : area.covers}
-                    </Typography>
-                  </Box>
-                }
-              />
-            );
-          })}
-        </FormGroup>
-        {own.length > 0 ? (
-          <Box className="flex flex-wrap gap-2">
-            {own.map((name) => (
-              <Chip
-                key={name}
-                label={name}
-                onDelete={
-                  input.blocked
-                    ? undefined
-                    : () => {
-                        setTouched(true);
-                        setOwn((current) => current.filter((item) => item !== name));
-                      }
-                }
-                aria-label={name}
-              />
-            ))}
-          </Box>
-        ) : null}
-        <Box className="flex flex-col gap-2 sm:flex-row sm:items-start">
+        <Box className="flex flex-wrap gap-2">
+          <ChoiceChips
+            labelledBy="setup-operation-areas"
+            options={input.knownAreas.map((area) => {
+              const fixed = moduleAreas.has(area.key);
+              const lawsuits = lawsuitsOf(area.key);
+              const note = fixed
+                ? t("setup-operation-module")
+                : lawsuits > 0
+                  ? t("setup-operation-lawsuits", { count: lawsuits })
+                  : null;
+              return { value: area.key, label: note ? `${area.name} · ${note}` : area.name, fixed };
+            })}
+            selected={[...chosen]}
+            onToggle={toggle}
+            disabled={input.blocked}
+          />
+          {own.map((name) => (
+            <Chip
+              key={`own-${name}`}
+              label={name}
+              icon={<NiCheck size="small" />}
+              color="primary"
+              className="font-semibold"
+              onDelete={
+                input.blocked
+                  ? undefined
+                  : () => {
+                      setTouched(true);
+                      setOwn((current) => current.filter((item) => item !== name));
+                    }
+              }
+            />
+          ))}
+        </Box>
+        <Box className="flex flex-row items-start gap-2">
           <TextField
             id="setup-operation-own"
             label={t("setup-operation-own-label")}
             value={ownDraft}
-            onChange={(event) => setOwnDraft(event.target.value)}
+            onChange={(event) => {
+              setOwnDraft(event.target.value);
+              setOwnError(null);
+            }}
             onKeyDown={(event) => {
               if (event.key === "Enter") {
                 event.preventDefault();
-                addOwn();
+                takeOwn();
               }
             }}
             error={Boolean(ownError)}
             helperText={ownError ?? t("setup-operation-own-help")}
             disabled={input.blocked}
-            variant="standard"
-            className="outlined flex-1"
+            size="small"
+            className="flex-1"
             slotProps={{ htmlInput: { maxLength: 80 } }}
           />
-          <Button variant="outlined" onClick={addOwn} disabled={input.blocked || !ownDraft.trim()} className="sm:mt-4">
+          <Button
+            variant="text"
+            color="grey"
+            onClick={() => takeOwn()}
+            disabled={input.blocked || !ownDraft.trim()}
+            className="mt-0.5"
+          >
             {t("setup-operation-own-add")}
           </Button>
         </Box>
@@ -303,56 +368,23 @@ export function useOperationStep(input: {
             value={operation.states}
             onChange={(_event, value) => set("states", value)}
             disabled={input.blocked}
-            // The question is the legend of the field's fieldset, which names the field.
             id="setup-operation-states"
-            renderInput={(params) => <TextField {...params} variant="standard" />}
+            openText={t("setup-operation-states-open")}
+            closeText={t("setup-operation-states-close")}
+            clearText={t("setup-operation-states-clear")}
+            noOptionsText={t("setup-operation-states-none")}
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                size="small"
+                slotProps={{
+                  ...params.slotProps,
+                  htmlInput: { ...params.slotProps.htmlInput, "aria-labelledby": "setup-operation-states-label" },
+                }}
+              />
+            )}
           />,
           input.registrationStates.length > 0 ? t("setup-operation-states-help") : undefined,
-        )}
-        {question(
-          "setup-operation-channels-label",
-          t("setup-operation-channels"),
-          <FormGroup className="grid grid-cols-1 sm:grid-cols-2">
-            {OPERATION_CHANNELS.map((channel) => (
-              <FormControlLabel
-                key={channel}
-                control={
-                  <Checkbox
-                    checked={operation.channels.includes(channel)}
-                    onChange={(event) =>
-                      set(
-                        "channels",
-                        (event.target.checked
-                          ? [...operation.channels, channel]
-                          : operation.channels.filter((item) => item !== channel)) as OperationChannel[],
-                      )
-                    }
-                    disabled={input.blocked}
-                  />
-                }
-                label={t(`setup-operation-channel-${channel}`)}
-              />
-            ))}
-          </FormGroup>,
-        )}
-        {question(
-          "setup-operation-monthly-label",
-          t("setup-operation-monthly"),
-          <RadioGroup
-            row
-            aria-labelledby="setup-operation-monthly-label"
-            value={operation.monthlyCases ?? ""}
-            onChange={(event) => set("monthlyCases", event.target.value as FirmOperation["monthlyCases"])}
-          >
-            {MONTHLY_BANDS.map((band) => (
-              <FormControlLabel
-                key={band}
-                value={band}
-                control={<Radio disabled={input.blocked} />}
-                label={t(`setup-operation-monthly-${band}`)}
-              />
-            ))}
-          </RadioGroup>,
         )}
         {question(
           "setup-operation-hours-label",
@@ -399,12 +431,72 @@ export function useOperationStep(input: {
             </Box>
           ),
         )}
+      </Box>
+
+      <Box component="section" className="flex flex-col gap-4" aria-labelledby="setup-operation-clients">
+        <SectionTitle
+          id="setup-operation-clients"
+          title={t("setup-operation-clients-title")}
+          as="h3"
+          variant="subtitle1"
+        />
+        {question(
+          "setup-operation-channels-label",
+          t("setup-operation-channels"),
+          <ChoiceChips
+            labelledBy="setup-operation-channels-label"
+            options={OPERATION_CHANNELS.map((channel) => ({
+              value: channel,
+              label: t(`setup-operation-channel-${channel}`),
+            }))}
+            selected={operation.channels}
+            onToggle={(channel) =>
+              set(
+                "channels",
+                (operation.channels.includes(channel)
+                  ? operation.channels.filter((item) => item !== channel)
+                  : [...operation.channels, channel]) as OperationChannel[],
+              )
+            }
+            disabled={input.blocked}
+          />,
+        )}
+        {question(
+          "setup-operation-monthly-label",
+          t("setup-operation-monthly"),
+          <ChoiceChips
+            single
+            labelledBy="setup-operation-monthly-label"
+            options={MONTHLY_BANDS.map((band) => ({ value: band, label: t(`setup-operation-monthly-${band}`) }))}
+            selected={operation.monthlyCases ? [operation.monthlyCases] : []}
+            onToggle={(band) => set("monthlyCases", band)}
+            disabled={input.blocked}
+          />,
+        )}
+      </Box>
+
+      <Box component="section" className="flex flex-col gap-4" aria-labelledby="setup-operation-works">
+        <SectionTitle
+          id="setup-operation-works"
+          title={t("setup-operation-works-title")}
+          description={t("setup-operation-works-info")}
+          as="h3"
+          variant="subtitle1"
+        />
+        <SetupQuestion id="setup-operation-work-one_finance-label" text={t("setup-operation-work-one_finance")}>
+          <YesNo
+            label={t("setup-operation-work-one_finance")}
+            value={operation.works.one_finance}
+            onChange={(value) => setWork("one_finance", value)}
+            disabled={input.blocked}
+          />
+        </SetupQuestion>
         {question(
           "setup-operation-system-label",
           t("setup-operation-system"),
           <Select
-            variant="standard"
-            className="outlined max-w-xs"
+            size="small"
+            className="max-w-xs"
             value={operation.previousSystem ?? ""}
             displayEmpty
             onChange={(event) => set("previousSystem", (event.target.value || null) as FirmOperation["previousSystem"])}
@@ -426,39 +518,6 @@ export function useOperationStep(input: {
         )}
       </Box>
 
-      <Box component="section" className="flex flex-col gap-4" aria-labelledby="setup-operation-works">
-        <SectionTitle
-          id="setup-operation-works"
-          title={t("setup-operation-works-title")}
-          description={t("setup-operation-works-info")}
-          as="h3"
-          variant="subtitle1"
-        />
-        {OPERATION_WORKS.map((work) =>
-          question(
-            `setup-operation-work-${work}-label`,
-            t(`setup-operation-work-${work}`),
-            <RadioGroup
-              row
-              aria-labelledby={`setup-operation-work-${work}-label`}
-              value={operation.works[work] === null ? "" : operation.works[work] ? "sim" : "nao"}
-              onChange={(event) => set("works", { ...operation.works, [work]: event.target.value === "sim" })}
-            >
-              <FormControlLabel
-                value="sim"
-                control={<Radio disabled={input.blocked} />}
-                label={t("setup-operation-yes")}
-              />
-              <FormControlLabel
-                value="nao"
-                control={<Radio disabled={input.blocked} />}
-                label={t("setup-operation-no")}
-              />
-            </RadioGroup>,
-          ),
-        )}
-      </Box>
-
       {error ? (
         <Alert severity="error" className="neutral bg-background-paper/60!" role="alert">
           {error}
@@ -467,5 +526,14 @@ export function useOperationStep(input: {
     </Box>
   );
 
-  return { content, canAdvance: areasCount > 0 && hoursRight && !input.blocked, onPrimary };
+  return {
+    content,
+    canAdvance: areasCount > 0 && hoursRight && !input.blocked,
+    onPrimary,
+    onLeave: onPrimary,
+    done: answered,
+    works: operation.works,
+    setWork,
+    saveWorks,
+  };
 }

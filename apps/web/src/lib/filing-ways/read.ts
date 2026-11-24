@@ -24,7 +24,7 @@ export async function loadFilingWays(context: MemberContext): Promise<FilingWays
   if (!firm) return null;
   const lawyer = firm.firmFunction === "socio" || firm.firmFunction === "advogado";
 
-  const [systems, courts, firmWay, myWays, logins, links, registrations, decides, firmTerm, lawyerTerm] =
+  const [systems, courts, firmWay, myWays, logins, links, registrations, decides, firmTerm, lawyerTerm, operation] =
     await Promise.all([
       context.supabase.from("court_screen_systems").select("key, court, system, name, ways, rule_note").order("court"),
       context.supabase.from("courts").select("acronym, uf"),
@@ -54,6 +54,8 @@ export async function loadFilingWays(context: MemberContext): Promise<FilingWays
       context.supabase.rpc("decides_for_firm", { target_org: firm.id }),
       context.supabase.rpc("filing_term_in_force", { target_slug: "protocolo-escritorio" }),
       context.supabase.rpc("filing_term_in_force", { target_slug: "protocolo-advogado" }),
+      // Whether ONE prepares the firm's filing packages at all (0256): a read that fails asks as if it did.
+      context.supabase.from("firm_operations").select("one_filing").eq("org_id", firm.id).maybeSingle(),
     ]);
   if (
     systems.error ||
@@ -164,5 +166,8 @@ export async function loadFilingWays(context: MemberContext): Promise<FilingWays
     lawyer,
     myStates: Array.from(new Set(((registrations.data ?? []) as { uf: string }[]).map((row) => row.uf))),
     lawsuitSystems,
+    onePrepares: operation.error
+      ? true
+      : (operation.data as { one_filing?: boolean | null } | null)?.one_filing !== false,
   };
 }

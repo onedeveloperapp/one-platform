@@ -88,6 +88,9 @@ export function operationPayload(operation: FirmOperation): Record<string, unkno
     saturdays: operation.saturdays,
     previous_system: operation.previousSystem,
     ...operation.works,
+    // Whether the firm takes clients from agencies or partners is the channel that says so: never asked twice (the
+    // owner's canvas of 2026-11-24).
+    partners: operation.channels.includes("agencia"),
   };
 }
 

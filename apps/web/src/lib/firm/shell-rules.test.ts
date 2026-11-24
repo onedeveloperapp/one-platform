@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { canAccess, type MenuViewer, visibleItems } from "@/lib/firm/menu";
-import { isSetupStep, SETUP_STEPS, setupOpening } from "@/lib/firm/setup-steps";
+import { isSetupStep, SETUP_STEPS, setupOpening, setupStepOf } from "@/lib/firm/setup-steps";
 import { type FirmToday, readFirmToday, somethingForMe, todayNeeds } from "@/lib/firm/today";
 import {
   buildOnboardingSteps,
@@ -588,13 +588,14 @@ describe("the firm's setup, from facts", () => {
     // not one: a module brings it and ONE opens it (the owner, 2026-11-03).
     expect(buildOnboardingSteps().map((step) => [step.key, step.href])).toEqual([
       ["oab", "/configurar?passo=oab"],
-      // How the firm files on the courts' screens, right after the bar (the owner's three ways, 2026-11-20).
-      ["filing", "/configurar?passo=protocolo"],
-      // The firm's logo and colour (0258).
+      // The firm's documents and logo (0258), with the papers its clients sign (the owner, 2026-11-24).
       ["office", "/configurar?passo=escritorio"],
       // How the firm works and its areas (0256): ONE answers nobody new before the firm said them.
       ["operation", "/configurar?passo=operacao"],
       ["team", "/configurar?passo=equipe"],
+      // How the firm files on the courts' screens (the owner's three ways, 2026-11-20), after its states, areas and
+      // team are said (the owner, 2026-11-24).
+      ["filing", "/configurar?passo=protocolo"],
       // The firm's profile, which ONE writes and the firm approves (0272).
       ["personality", "/configurar?passo=personalidade"],
       // The script of each area of the firm that no module serves, which ONE writes and the firm publishes (0273).
@@ -640,12 +641,13 @@ describe("the firm's setup, from facts", () => {
       channel: true,
       first_case: false,
     };
+    // oab, office, operation, team, filing, personality, areas, channel.
     expect(buildOnboardingSteps(facts).map((step) => step.done)).toEqual([
       true,
       true,
       true,
-      true,
       false,
+      true,
       true,
       true,
       true,
@@ -725,14 +727,40 @@ describe("the firm's setup, from facts", () => {
     };
     expect(buildOnboardingSteps(alone).map((step) => step.key)).toEqual([
       "oab",
-      "filing",
       "office",
       "operation",
+      "filing",
       "personality",
       "areas",
       "channel",
     ]);
     expect(isActivated(alone)).toBe(true);
+  });
+
+  it("asks no filing way of a firm that said ONE prepares no filing package (0285)", () => {
+    const facts = {
+      oab_signer: true,
+      filing_way: false,
+      files_without_one: true,
+      brand: true,
+      operation: true,
+      team: true,
+      personality: true,
+      area_scripts: true,
+      channel: true,
+      first_case: true,
+    };
+    expect(buildOnboardingSteps(facts).map((step) => step.key)).not.toContain("filing");
+    expect(isActivated(facts)).toBe(true);
+  });
+
+  it("opens a step that was merged into another where its things are now", () => {
+    // The papers a client signs joined the office's step (the owner, 2026-11-24): a link kept from before still works.
+    expect(setupStepOf("papeis")).toBe("escritorio");
+    expect(setupStepOf("protocolo")).toBe("protocolo");
+    expect(setupStepOf("nada")).toBeNull();
+    expect(setupStepOf(undefined)).toBeNull();
+    expect(SETUP_STEPS).not.toContain("papeis");
   });
 
   it("knows whether the first questions were answered", () => {

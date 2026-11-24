@@ -22,7 +22,8 @@ export type ItemRow = {
   /** One quiet line under the title: when, from where, whose. */
   detail?: ReactNode;
   /** Where it stands, in its state's colour and words, on the right. */
-  state?: { tone: StateTone; text: ReactNode };
+  /** `icon` takes the place of the tone's own: a mark that turns while the product works on the thing. */
+  state?: { tone: StateTone; text: ReactNode; icon?: ReactNode };
   /** The one thing the line asks for, done in place (a button). */
   action?: ReactNode;
   /** The line's one thing is in what opens: a button of these words opens it ("Triar"), in place of `action`. */
@@ -181,7 +182,9 @@ export default function ItemRows({
                           <Box className="relative z-[1] flex flex-col gap-2 pl-12 sm:flex-row sm:items-center sm:gap-3 sm:pl-0">
                             {row.state ? (
                               <Box className="min-w-0 sm:max-w-80">
-                                <StateLine tone={row.state.tone}>{row.state.text}</StateLine>
+                                <StateLine tone={row.state.tone} icon={row.state.icon}>
+                                  {row.state.text}
+                                </StateLine>
                               </Box>
                             ) : null}
                             {row.opener && row.content && !isOpen ? (

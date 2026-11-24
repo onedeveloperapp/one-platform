@@ -45,11 +45,18 @@ export type ActivationFacts = Record<string, boolean>;
  */
 const STEP_DEFINITIONS: (Omit<OnboardingStep, "done"> & { fact: string; hiddenWhen?: string })[] = [
   { key: "oab", title: "setup-step-oab", href: setupHref("oab"), fact: "oab_signer" },
-  // How the firm files on the courts' screens (0263): the firm's way, chosen with its acknowledgment.
-  { key: "filing", title: "setup-step-filing", href: setupHref("protocolo"), fact: "filing_way" },
   { key: "office", title: "setup-step-office", href: setupHref("escritorio"), fact: "brand" },
   { key: "operation", title: "setup-step-operation", href: setupHref("operacao"), fact: "operation" },
   { key: "team", title: "setup-step-team", href: setupHref("equipe"), fact: "team", hiddenWhen: "works_alone" },
+  // How the firm files on the courts' screens (0263): the firm's way, chosen with its acknowledgment, after the team
+  // (the owner, 2026-11-24); a firm that said ONE prepares no filing package is asked nothing of it.
+  {
+    key: "filing",
+    title: "setup-step-filing",
+    href: setupHref("protocolo"),
+    fact: "filing_way",
+    hiddenWhen: "files_without_one",
+  },
   { key: "personality", title: "setup-step-personality", href: setupHref("personalidade"), fact: "personality" },
   { key: "areas", title: "setup-step-areas", href: setupHref("areas"), fact: "area_scripts" },
   { key: "channel", title: "setup-step-channel", href: setupHref("canal"), fact: "channel" },

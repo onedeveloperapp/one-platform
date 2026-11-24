@@ -12,6 +12,20 @@ import { cn } from "@/lib/utils";
 
 export type WizardStep = {
   title: string;
+  /**
+   * The step's short name in the list of steps ("O escritório"). When every step has one, the list is drawn beside
+   * the card on a wide screen and the next step is named over it on a narrow one: the person sees the whole path and
+   * where they are, never only "Passo 6 de 10" (the owner, 2026-11-24).
+   */
+  label?: string;
+  /** What the step asks is in place: the list marks it with a check. */
+  done?: boolean;
+  /**
+   * What the step saves when the person leaves it forward without its primary (a later step chosen in the list, or
+   * the setup set aside): what is typed and complete. A decision the primary names ("Aprovar e continuar") is never
+   * taken here. Resolve false to stay, the step saying why. Absent: nothing to save, the step just closes.
+   */
+  onLeave?: () => Promise<boolean> | boolean;
   /** Optional one-line reassurance under the title (progressive disclosure). */
   hint?: string;
   content: React.ReactNode;
@@ -142,11 +156,35 @@ export default function SetupWizard({
     else setIndex(index + 1);
   };
 
-  return (
-    <Card className={cn("mx-auto w-full max-w-2xl", className)}>
+  // A step chosen in the list: back is a move, what was typed stays in the flow; forward first saves what the step
+  // holds, as "Continuar" would, so leaving by the list never loses it (the owner, 2026-11-24).
+  const go = async (next: number) => {
+    if (running || next === index) return;
+    if (next > index) {
+      if (!canAdvance) return;
+      if (step.onLeave) {
+        setActing(true);
+        let proceed = false;
+        try {
+          proceed = await step.onLeave();
+        } finally {
+          setActing(false);
+        }
+        if (!proceed) return;
+      }
+    }
+    setIndex(next);
+  };
+
+  const named = steps.every((item) => Boolean(item.label));
+  const following = steps[index + 1];
+
+  const card = (
+    <Card className={cn("w-full", named ? "min-w-0" : "mx-auto max-w-2xl", !named && className)}>
       <CardContent className="flex flex-col gap-6">
-        {/* Progress rail — the whole path is visible; the reader sees the end. */}
-        <Box className="flex flex-row items-center gap-2">
+        {/* Progress rail — the whole path is visible; the reader sees the end. Beside a list of the steps, only on
+            a narrow screen, where the list is not drawn. */}
+        <Box className={cn("flex flex-row items-center gap-2", named && "lg:hidden")} aria-hidden={named || undefined}>
           {steps.map((_, i) => (
             <span
               key={i}
@@ -160,7 +198,16 @@ export default function SetupWizard({
 
         <Box className="flex flex-col gap-1">
           <Typography variant="body2" className="text-text-secondary">
-            {t("wizardStep", { current: index + 1, total: steps.length })}
+            {named && following?.label ? (
+              <>
+                <span className="lg:hidden">
+                  {t("wizard-step-next", { current: index + 1, total: steps.length, next: following.label })}
+                </span>
+                <span className="hidden lg:inline">{t("wizardStep", { current: index + 1, total: steps.length })}</span>
+              </>
+            ) : (
+              t("wizardStep", { current: index + 1, total: steps.length })
+            )}
           </Typography>
           <Typography variant="h4" component="h2" className="text-text-primary">
             {step.title}
@@ -219,5 +266,55 @@ export default function SetupWizard({
         </Box>
       </CardContent>
     </Card>
+  );
+
+  if (!named) return card;
+
+  return (
+    <Box className={cn("grid w-full grid-cols-1 items-start gap-6 lg:grid-cols-[12.5rem_minmax(0,1fr)]", className)}>
+      <Box component="nav" aria-label={t("wizard-steps-label")} className="hidden lg:block">
+        <Box component="ol" className="m-0 flex list-none flex-col gap-1 p-0">
+          {steps.map((item, i) => {
+            const current = i === index;
+            const reachable = i < index || (i > index && canAdvance);
+            return (
+              <Box component="li" key={i}>
+                <Box
+                  component="button"
+                  type="button"
+                  aria-current={current ? "step" : undefined}
+                  disabled={current || running || !reachable}
+                  onClick={() => void go(i)}
+                  className={cn(
+                    "flex w-full items-center gap-2.5 rounded-xl border-0 bg-transparent px-2.5 py-2 text-left text-sm transition-colors",
+                    current
+                      ? "bg-background-paper text-text-primary font-semibold shadow-sm"
+                      : "text-text-secondary enabled:hover:bg-grey-50 enabled:cursor-pointer",
+                    (item.done || i < index) && !current && "text-text-primary",
+                  )}
+                >
+                  <span
+                    aria-hidden
+                    className={cn(
+                      "flex size-6 flex-none items-center justify-center rounded-full border text-xs font-bold",
+                      current
+                        ? cn(RAIL[tone].done, "border-transparent text-white")
+                        : item.done
+                          ? "bg-success/15 text-success-dark border-transparent"
+                          : "border-grey-200 bg-background-paper text-text-secondary",
+                    )}
+                  >
+                    {item.done && !current ? <NiCheck size="small" /> : i + 1}
+                  </span>
+                  <span className="min-w-0 flex-1">{item.label}</span>
+                  {item.done && !current ? <span className="sr-only">{t("wizard-step-done")}</span> : null}
+                </Box>
+              </Box>
+            );
+          })}
+        </Box>
+      </Box>
+      {card}
+    </Box>
   );
 }

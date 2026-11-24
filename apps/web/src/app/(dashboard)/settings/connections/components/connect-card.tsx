@@ -383,7 +383,11 @@ export default function ConnectCard({
         label={t("connections-openwa-accept")}
       />
       <Box className="flex flex-row flex-wrap gap-2">
-        <Button variant="contained" onClick={() => void startOpenWa()} disabled={busy || blocked || !openWaAccepted}>
+        <Button
+          variant={embedded ? "outlined" : "contained"}
+          onClick={() => void startOpenWa()}
+          disabled={busy || blocked || !openWaAccepted}
+        >
           {busy ? t("connections-working") : t("connections-openwa-start")}
         </Button>
         <Button variant="text" color="grey" onClick={() => setOpenWaOpen(false)} disabled={busy}>
@@ -464,7 +468,7 @@ export default function ConnectCard({
       <Box className="flex flex-row flex-wrap gap-2">
         <Button
           type="submit"
-          variant="contained"
+          variant={embedded ? "outlined" : "contained"}
           onClick={() => void connectToken()}
           disabled={busy || blocked || !tokenReady}
         >
@@ -536,7 +540,7 @@ export default function ConnectCard({
           </Grid>
           <Grid size={12} className="flex flex-row flex-wrap gap-2">
             <Button
-              variant="contained"
+              variant={embedded ? "outlined" : "contained"}
               onClick={() => void register(waiting.connectionId)}
               disabled={busy || blocked || registrationCode.length !== 6}
             >
@@ -562,11 +566,15 @@ export default function ConnectCard({
           <Box className="flex flex-row flex-wrap gap-2 empty:hidden">
             {environment.signup ? (
               sdk ? (
-                <Button variant="contained" onClick={openSignup} disabled={busy || blocked}>
+                <Button variant={embedded ? "outlined" : "contained"} onClick={openSignup} disabled={busy || blocked}>
                   {busy ? t("connections-working") : t("connections-signup-open")}
                 </Button>
               ) : (
-                <Button variant="contained" onClick={() => void prepare()} disabled={busy || blocked}>
+                <Button
+                  variant={embedded ? "outlined" : "contained"}
+                  onClick={() => void prepare()}
+                  disabled={busy || blocked}
+                >
                   {busy ? t("connections-working") : t("connections-signup-prepare")}
                 </Button>
               )

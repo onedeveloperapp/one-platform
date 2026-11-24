@@ -1,7 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { useState } from "react";
+import { type Dispatch, type SetStateAction, useState } from "react";
 
 import { Box, Button, Grid, IconButton, MenuItem, TextField, Typography } from "@mui/material";
 
@@ -11,7 +11,7 @@ import NiCross from "@/icons/nexture/ni-cross";
 import { UFS } from "@/lib/cases/cases";
 import { saveFirmOffice } from "@/lib/firm/actions";
 import { type FirmOffice, officeProblem, type OfficeReadField } from "@/lib/firm/office";
-import { formatCnpj } from "@flyee/fields";
+import { formatCnpj, onlyDigits } from "@flyee/fields";
 
 /** Where ONE read the firm's data, as the line over the form says it (0271). */
 const READ_FROM_KEY: Record<string, string> = {
@@ -47,6 +47,69 @@ const PROBLEM_KEY = {
   email: "office-error-email",
 } as const;
 
+/** A field as it is compared with what is kept: the CEP's mask is not a change. */
+const sameField = (key: keyof FirmOffice, a: FirmOffice, b: FirmOffice): boolean =>
+  key === "postalCode" ? onlyDigits(a.postalCode) === onlyDigits(b.postalCode) : a[key] === b[key];
+
+/** What is typed in the form, and its save: kept by whoever draws the form, so leaving it loses nothing. */
+export type OfficeDraft = {
+  values: FirmOffice;
+  setValues: Dispatch<SetStateAction<FirmOffice>>;
+  set: (field: keyof FirmOffice, value: string) => void;
+  busy: boolean;
+  status: "saved" | "failed" | "not_authorized" | null;
+  problem: ReturnType<typeof officeProblem>;
+  /** Something differs from what is kept. */
+  changed: boolean;
+  /** A save was asked and refused for what is typed: the problem is said even before anything changed. */
+  tried: boolean;
+  /** Saves what changed, or confirms what ONE read as it is; true when there was nothing to save. */
+  save: () => Promise<boolean>;
+};
+
+export function useOfficeDraft(office: FirmOffice, onSaved: () => void): OfficeDraft {
+  const [values, setValues] = useState<FirmOffice>(() => opening(office));
+  const [busy, setBusy] = useState(false);
+  const [tried, setTried] = useState(false);
+  const [status, setStatus] = useState<OfficeDraft["status"]>(null);
+  const problem = officeProblem(values);
+  const changed = (Object.keys(values) as (keyof FirmOffice)[]).some((key) => !sameField(key, values, office));
+
+  const set = (field: keyof FirmOffice, value: string) => {
+    setValues((current) => ({ ...current, [field]: value }));
+    setStatus(null);
+  };
+
+  const save = async (): Promise<boolean> => {
+    if (busy) return false;
+    if (problem) {
+      setTried(true);
+      return false;
+    }
+    if (!changed && !office.read) return true;
+    setBusy(true);
+    setStatus(null);
+    try {
+      const result = await saveFirmOffice(values);
+      if (result.ok) {
+        setStatus("saved");
+        setTried(false);
+        onSaved();
+        return true;
+      }
+      setStatus(result.code === "not_authorized" ? "not_authorized" : "failed");
+      return false;
+    } catch {
+      setStatus("failed");
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return { values, setValues, set, busy, status, problem, changed, tried, save };
+}
+
 /**
  * Where the firm is, as the power of attorney says it (migration 0217): the address, with the CEP filling the street,
  * the district, the city and the state; the professional e-mail; and the registration at the bar of a society of
@@ -54,27 +117,32 @@ const PROBLEM_KEY = {
  * setup. What ONE read of the firm from one of its documents (0271) is said over the form and beside each field it
  * filled, until a person saves, which confirms it; an address read without its CEP opens filled and asks the CEP;
  * the lawyers the firm's papers name who are not of the team are listed, and may be left out.
+ *
+ * In the setup (`embedded`, with the step's `draft`) the form has no button of its own: the step's "Continuar" saves
+ * it, and leaving the step keeps what was typed (the owner, 2026-11-24: a "Salvar" over "Continuar" left the address
+ * behind whenever the person went on).
  */
 export default function OfficeForm({
   office,
   disabled,
   onSaved,
+  draft: given,
+  embedded = false,
 }: {
   office: FirmOffice;
   disabled?: boolean;
   onSaved: () => void;
+  draft?: OfficeDraft;
+  embedded?: boolean;
 }) {
   const t = useTranslations("product");
-  const [values, setValues] = useState<FirmOffice>(() => opening(office));
-  const [busy, setBusy] = useState(false);
-  const [status, setStatus] = useState<"saved" | "failed" | "not_authorized" | null>(null);
-  const problem = officeProblem(values);
-  const changed = (Object.keys(values) as (keyof FirmOffice)[]).some((key) => values[key] !== office[key]);
+  const own = useOfficeDraft(office, onSaved);
+  const { values, setValues, set, busy, status, problem, changed, tried, save } = given ?? own;
   const off = disabled || busy;
   const read = office.read;
   // A field ONE filled says so until a person changes it; saving confirms it.
   const readMark = (field: OfficeReadField, keys: (keyof FirmOffice)[]) =>
-    read?.fields.includes(field) && keys.every((key) => values[key] === office[key])
+    read?.fields.includes(field) && keys.every((key) => sameField(key, values, office))
       ? t("fact-read-by-one")
       : undefined;
   const readWords = read
@@ -84,28 +152,6 @@ export default function OfficeForm({
     : "";
   const leftWithoutCep =
     Boolean(read?.left) && !office.street.trim() && values.postalCode.replace(/\D/g, "").length !== 8;
-
-  const set = (field: keyof FirmOffice, value: string) => {
-    setValues((current) => ({ ...current, [field]: value }));
-    setStatus(null);
-  };
-
-  const save = async () => {
-    if (problem || (!changed && !office.read) || off) return;
-    setBusy(true);
-    setStatus(null);
-    try {
-      const result = await saveFirmOffice(values);
-      if (result.ok) {
-        setStatus("saved");
-        onSaved();
-      } else setStatus(result.code === "not_authorized" ? "not_authorized" : "failed");
-    } catch {
-      setStatus("failed");
-    } finally {
-      setBusy(false);
-    }
-  };
 
   return (
     <Box className="flex flex-col gap-4">
@@ -307,7 +353,6 @@ export default function OfficeForm({
                           (kept) => kept.uf !== lawyer.uf || kept.number !== lawyer.number,
                         ),
                       }));
-                      setStatus(null);
                     }}
                   >
                     <NiCross size="small" />
@@ -323,21 +368,25 @@ export default function OfficeForm({
         </Box>
       ) : null}
 
-      {problem && changed && !leftWithoutCep ? <StateLine tone="attention">{t(PROBLEM_KEY[problem])}</StateLine> : null}
-      {status === "saved" ? <StateLine tone="done">{t("office-saved")}</StateLine> : null}
+      {problem && (changed || tried) && !leftWithoutCep ? (
+        <StateLine tone="attention">{t(PROBLEM_KEY[problem])}</StateLine>
+      ) : null}
+      {status === "saved" && !embedded ? <StateLine tone="done">{t("office-saved")}</StateLine> : null}
       {status === "failed" ? <StateLine tone="failed">{t("office-error-failed")}</StateLine> : null}
       {status === "not_authorized" ? <StateLine tone="failed">{t("team-error-not-authorized")}</StateLine> : null}
 
-      <Box>
-        {/* What ONE read is confirmed by saving it as it is. */}
-        <Button
-          variant="contained"
-          onClick={() => void save()}
-          disabled={off || (!changed && !read) || problem !== null}
-        >
-          {busy ? t("team-working") : !changed && read ? t("office-confirm") : t("office-save")}
-        </Button>
-      </Box>
+      {embedded ? null : (
+        <Box>
+          {/* What ONE read is confirmed by saving it as it is. */}
+          <Button
+            variant="contained"
+            onClick={() => void save()}
+            disabled={off || (!changed && !read) || problem !== null}
+          >
+            {busy ? t("team-working") : !changed && read ? t("office-confirm") : t("office-save")}
+          </Button>
+        </Box>
+      )}
     </Box>
   );
 }

@@ -206,6 +206,7 @@ function PassengerSetupFlow({ state }: { state: Extract<PassengerSetupState, { k
 
   const steps: Record<PassengerSetupStep, WizardStep> = {
     seguranca: {
+      label: t("setup-step-label-security"),
       title: t("setup-factor-title"),
       hint: factor === "challenge" ? t("setup-factor-challenge") : t("module-setup-factor-hint"),
       canAdvance: factorOk && !blocked,
@@ -225,6 +226,7 @@ function PassengerSetupFlow({ state }: { state: Extract<PassengerSetupState, { k
       ),
     },
     valores: {
+      label: t("pax-setup-step-label-claims"),
       title: t("setup-claims-title"),
       hint: t("setup-claims-hint"),
       canAdvance: !blocked,
@@ -271,6 +273,7 @@ function PassengerSetupFlow({ state }: { state: Extract<PassengerSetupState, { k
       ),
     },
     clausula: {
+      label: t("pax-setup-step-label-clause"),
       title: t("pax-setup-clause-title"),
       hint: t("pax-setup-clause-hint"),
       canAdvance: !blocked && (!clauseEditable || change.kind !== "invalid"),
@@ -293,6 +296,7 @@ function PassengerSetupFlow({ state }: { state: Extract<PassengerSetupState, { k
       ),
     },
     agencia: {
+      label: t("pax-setup-step-label-agency"),
       title: t("setup-agency-title"),
       hint: t("setup-agency-hint"),
       canAdvance: !blocked && !leaving,
@@ -395,7 +399,7 @@ function PassengerSetupFlow({ state }: { state: Extract<PassengerSetupState, { k
   };
 
   return (
-    <Box className="mx-auto flex w-full max-w-2xl flex-col gap-6">
+    <Box className="mx-auto flex w-full max-w-4xl flex-col gap-6">
       {/* The module's colour on its icon and its count: the setup is told apart from the core and from another
           module's at a glance. */}
       <Box className="flex flex-row items-center gap-3">

@@ -14,6 +14,7 @@ import {
   DialogTitle,
   FormControlLabel,
   Grid,
+  MenuItem,
   Radio,
   RadioGroup,
   TextField,
@@ -88,7 +89,8 @@ const ERROR_KEYS = new Set([
 export const filingErrorKey = (code: string): string =>
   ERROR_KEYS.has(code) ? `filing-ways-error-${code}` : "filing-ways-error";
 
-export type FirmWayDraft = { way: Way; aware: boolean };
+/** The firm's way being chosen: none marked until the firm chooses (the owner's canvas of 2026-11-24). */
+export type FirmWayDraft = { way: Way | null; aware: boolean };
 
 /**
  * A lawyer's choice at a system being made: `way` null follows what is marked (their own saved choice, else the
@@ -96,7 +98,9 @@ export type FirmWayDraft = { way: Way; aware: boolean };
  */
 export type LawyerWayDraft = { way: Way | null; user: string; password: string; aware: boolean; changing: boolean };
 
-export const firmDraftOf = (saved: Way | null): FirmWayDraft => ({ way: saved ?? "browser", aware: false });
+// A firm that never chose has nothing marked: marking ONE's browser before the choice opened a login, a password and
+// two risks the firm had not asked for (2026-11-24).
+export const firmDraftOf = (saved: Way | null): FirmWayDraft => ({ way: saved, aware: false });
 export const EMPTY_LAWYER_DRAFT: LawyerWayDraft = { way: null, user: "", password: "", aware: false, changing: false };
 
 type Saved = { ok: true } | { ok: false; code: string };
@@ -107,10 +111,12 @@ export async function saveFirmChoice(input: {
   saved: Way | null;
   term: FilingTerm | null;
 }): Promise<Saved> {
-  const asks = firmChoiceAsks({ way: input.draft.way, saved: input.saved });
+  const way = input.draft.way;
+  if (way === null) return input.saved ? { ok: true } : { ok: false, code: "way_not_chosen" };
+  const asks = firmChoiceAsks({ way, saved: input.saved });
   if (!asks.save) return { ok: true };
   if (asks.aware && !input.draft.aware) return { ok: false, code: "term_not_accepted" };
-  const set = await setFirmFilingWay(input.draft.way, input.draft.way === "hand" ? null : (input.term?.id ?? null));
+  const set = await setFirmFilingWay(way, way === "hand" ? null : (input.term?.id ?? null));
   return set.ok ? { ok: true } : { ok: false, code: set.code };
 }
 
@@ -232,7 +238,7 @@ export function FirmWayFields({
     <Box className="flex flex-col gap-4">
       <RadioGroup
         aria-label={t("filing-ways-firm-title")}
-        value={draft.way}
+        value={draft.way ?? ""}
         onChange={(event) => onChange({ way: event.target.value as Way, aware: false })}
         className="flex flex-col gap-2"
       >
@@ -379,9 +385,10 @@ export function LawyerWayFields({
       {asks.login ? (
         <Grid container spacing={3}>
           <Grid size={{ xs: 12, sm: 6 }}>
+            {/* The outlined field keeps its label in sight: a standard one drew an empty box with no name. */}
             <TextField
               fullWidth
-              variant="standard"
+              size="small"
               label={t("filing-ways-login")}
               helperText={t("filing-ways-login-help")}
               value={draft.user}
@@ -393,7 +400,7 @@ export function LawyerWayFields({
           <Grid size={{ xs: 12, sm: 6 }}>
             <TextField
               fullWidth
-              variant="standard"
+              size="small"
               type="password"
               label={t("filing-ways-password")}
               helperText={t("filing-ways-password-help")}
@@ -431,6 +438,174 @@ export function LawyerWayFields({
 
       {/* After the acknowledgment it may need: linking saves the choice first. */}
       {way === "extension" ? extension : null}
+    </Box>
+  );
+}
+
+/**
+ * A lawyer's own way at each system, one line per court (the owner's canvas of 2026-11-24, where three courts drew
+ * the three ways three times over, 620 words): the way in a list with the firm's marked, the court login only on the
+ * line where ONE files with it, one acknowledgment for every court of ONE's browser and one for every court of the
+ * extension, naming them, and the extension's link once, while some line chose it. The same drafts and saves as
+ * `LawyerWayFields`, which the settings and the case keep.
+ */
+export function LawyerWayRows({
+  systems,
+  firmWay,
+  saved,
+  drafts,
+  logins,
+  term,
+  onChange,
+  extension,
+  disabled,
+}: {
+  systems: ScreenSystem[];
+  firmWay: Way | null;
+  saved: Record<string, Way>;
+  drafts: Record<string, LawyerWayDraft>;
+  logins: CourtLogin[];
+  term: FilingTerm | null;
+  onChange: (key: string, draft: LawyerWayDraft) => void;
+  /** What linking the extension asks on this screen, shown once while a line chose it. */
+  extension?: React.ReactNode;
+  disabled?: boolean;
+}) {
+  const t = useTranslations("product");
+  const draftOf = (key: string) => drafts[key] ?? EMPTY_LAWYER_DRAFT;
+  const rows = systems.map((system) => {
+    const draft = draftOf(system.key);
+    const login = logins.find((row) => row.system === system.key) ?? null;
+    const way = wayProposed(draft.way ?? saved[system.key], system, firmWay);
+    const asks = lawyerChoiceAsks({ way, saved: saved[system.key], login, changing: draft.changing });
+    return { system, draft, login, way, asks };
+  });
+  const names = (list: typeof rows) =>
+    new Intl.ListFormat("pt-BR", { style: "long", type: "conjunction" }).format(list.map((row) => row.system.name));
+  const acknowledged = (way: "browser" | "extension") => rows.filter((row) => row.way === way && row.asks.aware);
+  const browserAsks = acknowledged("browser");
+  const extensionAsks = acknowledged("extension");
+  const setAware = (list: typeof rows, aware: boolean) => {
+    for (const row of list) onChange(row.system.key, { ...row.draft, aware });
+  };
+
+  return (
+    <Box className="flex flex-col gap-4">
+      <Box component="ul" className="border-grey-100 m-0 flex list-none flex-col rounded-xl border p-0">
+        {rows.map(({ system, draft, login, way, asks }) => {
+          const offered = waysOffered(system, firmWay);
+          const set = (change: Partial<LawyerWayDraft>) => onChange(system.key, { ...draft, ...change });
+          const loginKey = LOGIN_STATE_KEY[login?.state === "verified" ? "verified" : "unchecked"];
+          return (
+            <Box
+              component="li"
+              key={system.key}
+              className="border-grey-100 flex flex-col gap-3 border-t px-4 py-3 first:border-t-0 sm:flex-row sm:items-start"
+            >
+              <Typography variant="subtitle2" component="h4" className="mb-0 sm:w-40 sm:flex-none sm:pt-2">
+                {system.name}
+              </Typography>
+              <Box className="flex min-w-0 flex-1 flex-col gap-3">
+                <TextField
+                  select
+                  size="small"
+                  fullWidth
+                  label={t("filing-ways-row-way")}
+                  value={way}
+                  onChange={(event) => set({ way: event.target.value as Way, aware: false })}
+                  disabled={disabled || offered.length < 2}
+                >
+                  {offered.map((option) => (
+                    <MenuItem key={option} value={option}>
+                      {option === firmWay
+                        ? t("filing-ways-row-firm", { way: t(WAY_WORDS[option].label) })
+                        : t(WAY_WORDS[option].label)}
+                    </MenuItem>
+                  ))}
+                </TextField>
+                {way === "browser" && login && !asks.login ? (
+                  <StateLine
+                    tone={login.state === "verified" ? "done" : "waiting"}
+                    action={
+                      <Button
+                        size="small"
+                        variant="text"
+                        color="grey"
+                        onClick={() => set({ changing: true })}
+                        disabled={disabled}
+                      >
+                        {t("filing-ways-change-password")}
+                      </Button>
+                    }
+                  >
+                    {t(loginKey, { hint: login.hint ?? "" })}
+                  </StateLine>
+                ) : null}
+                {way === "browser" && login && (login.state === "refused" || login.state === "blocked") ? (
+                  <StateLine tone="failed">{t(`filing-ways-login-${login.state}`)}</StateLine>
+                ) : null}
+                {asks.login ? (
+                  <Box className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    {/* What each field is goes in its name, once: the box of the risk says where the password stays. */}
+                    <TextField
+                      size="small"
+                      label={t("filing-ways-login-cpf")}
+                      value={draft.user}
+                      onChange={(event) => set({ user: event.target.value })}
+                      autoComplete="off"
+                      disabled={disabled}
+                    />
+                    <TextField
+                      size="small"
+                      type="password"
+                      label={t("filing-ways-password")}
+                      value={draft.password}
+                      onChange={(event) => set({ password: event.target.value })}
+                      autoComplete="new-password"
+                      disabled={disabled}
+                    />
+                  </Box>
+                ) : null}
+              </Box>
+            </Box>
+          );
+        })}
+      </Box>
+
+      {browserAsks.length > 0 ? (
+        <RiskBox
+          aware={browserAsks.every((row) => row.draft.aware)}
+          awareLabel={t("filing-ways-aware-browser-many", { systems: names(browserAsks) })}
+          onAware={(aware) => setAware(browserAsks, aware)}
+          term={term}
+          disabled={disabled}
+        >
+          <Typography variant="body2">{t("filing-ways-risk-browser-many", { systems: names(browserAsks) })}</Typography>
+          {browserAsks
+            .filter((row) => row.system.ruleNote)
+            .map((row) => (
+              <Typography key={row.system.key} variant="body2" className="text-text-secondary">
+                {row.system.ruleNote}
+              </Typography>
+            ))}
+        </RiskBox>
+      ) : null}
+
+      {extensionAsks.length > 0 ? (
+        <RiskBox
+          aware={extensionAsks.every((row) => row.draft.aware)}
+          awareLabel={t("filing-ways-aware-extension")}
+          onAware={(aware) => setAware(extensionAsks, aware)}
+          term={term}
+          disabled={disabled}
+        >
+          <Typography variant="body2">
+            {t("filing-ways-risk-extension-many", { systems: names(extensionAsks) })}
+          </Typography>
+        </RiskBox>
+      ) : null}
+
+      {rows.some((row) => row.way === "extension") ? extension : null}
     </Box>
   );
 }
@@ -568,7 +743,7 @@ function ExtensionInstall() {
           </Typography>
           <InfoHint label={t("filing-ways-extension-install-note")} />
         </Box>
-        <Button size="small" variant="contained" href={EXTENSION_DOWNLOAD} download="one-extensao.zip">
+        <Button size="small" variant="outlined" href={EXTENSION_DOWNLOAD} download="one-extensao.zip">
           {t("filing-ways-extension-install-download")}
         </Button>
       </Box>

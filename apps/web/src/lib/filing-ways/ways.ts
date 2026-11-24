@@ -63,6 +63,11 @@ export type FilingWaysData = {
    * domicile, often a state the lawyer is not registered in (the five causes a year of the Estatuto, art. 10, § 2).
    */
   lawsuitSystems: string[];
+  /**
+   * Whether ONE prepares the firm's filing packages at all, as the firm said in its setup (0256, `one_filing`): a firm
+   * that said no is asked nothing of how it files, nor is any lawyer of it. Absent: it does.
+   */
+  onePrepares?: boolean;
 };
 
 /**
@@ -145,10 +150,13 @@ export function systemsToChoose(
  * way comes first); and it is owed while the firm's way, or the lawyer's at one of those courts, was never chosen.
  */
 export function personFilingStep(
-  data: Pick<FilingWaysData, "systems" | "firmWay" | "myWays" | "decidesForFirm" | "lawyer" | "lawsuitSystems">,
+  data: Pick<
+    FilingWaysData,
+    "systems" | "firmWay" | "myWays" | "decidesForFirm" | "lawyer" | "lawsuitSystems" | "onePrepares"
+  >,
   states: readonly string[],
 ): { shown: boolean; owed: boolean } {
-  if (!data.lawyer) return { shown: false, owed: false };
+  if (!data.lawyer || data.onePrepares === false) return { shown: false, owed: false };
   const firmForm = data.decidesForFirm && data.firmWay === null;
   const mine = systemsToChoose(data, states, data.firmWay);
   return {
@@ -218,7 +226,9 @@ export function lawyerChoiceAsks(input: {
 }
 
 /** What the firm's choice asks before it is saved: the firm's acknowledgment for an automated way being chosen. */
-export function firmChoiceAsks(input: { way: Way; saved: Way | null }): { aware: boolean; save: boolean } {
+export function firmChoiceAsks(input: { way: Way | null; saved: Way | null }): { aware: boolean; save: boolean } {
+  // Nothing chosen yet (the setup marks no way before the firm chooses one): nothing to save, nothing to acknowledge.
+  if (input.way === null) return { aware: false, save: false };
   const save = input.way !== input.saved;
   return { aware: save && input.way !== "hand", save };
 }

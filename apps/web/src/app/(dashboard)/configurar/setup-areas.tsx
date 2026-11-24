@@ -5,7 +5,7 @@ import { AreaScriptExamples, AreaScriptReview } from "./area-script-review";
 import { useTranslations } from "next-intl";
 import { useEffect, useRef, useState } from "react";
 
-import { Box, Button, TextField, Typography } from "@mui/material";
+import { Box, Button, FormControlLabel, Switch, TextField, Typography } from "@mui/material";
 
 import CollapsibleCard from "@/components/product/collapsible-card";
 import ConfirmActionDialog from "@/components/product/confirm-action-dialog";
@@ -30,6 +30,13 @@ import { mimeOf, uploadToSignedUrl } from "@/lib/files/browser-upload";
 
 /** How often the step looks again while ONE writes. */
 const WATCH_MS = 5000;
+
+/** What a refused publication says, by its code; any other says it failed, naming the area. */
+const PUBLISH_ERROR_KEY: Record<string, string> = {
+  second_factor_required: "setup-operation-error-second_factor",
+  copy_rules: "area-script-error-copy_rules",
+  promise: "area-script-error-promise",
+};
 const MOST_DOCUMENTS = 3;
 const DOCUMENT_ACCEPT =
   ".pdf,.docx,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain";
@@ -42,10 +49,12 @@ const DOCUMENT_ACCEPT =
  * conversations of example written from it, and publishes it. An area with no script published yet goes on to a
  * person of the firm, with what the client needs (0257): the step never holds the setup.
  */
-export function useAreasStep(input: {
-  initial: AreaScriptsState | null;
-  blocked: boolean;
-}): Pick<WizardStep, "content" | "canAdvance"> {
+export function useAreasStep(input: { initial: AreaScriptsState | null; blocked: boolean }): Pick<
+  WizardStep,
+  "content" | "canAdvance" | "onPrimary" | "busy" | "primaryLabel" | "done"
+> & {
+  skippable: boolean;
+} {
   const t = useTranslations("product");
   const [state, setState] = useState<AreaScriptsState | null>(input.initial);
   const asked = useRef(new Set<string>());
@@ -90,6 +99,37 @@ export function useAreasStep(input: {
 
   const pending = state?.areas.filter((area) => !area.inForce) ?? [];
 
+  // ---------- What the step's button publishes ----------
+  // Each draft ONE finished is published by the step's button unless the person turned its switch off: the button
+  // says how many ("Publicar 1 roteiro e continuar"), and nothing inside the step publishes by itself.
+  const [off, setOff] = useState<Set<string>>(() => new Set());
+  const [publishing, setPublishing] = useState(false);
+  const [publishError, setPublishError] = useState<string | null>(null);
+  const drafts = (state?.areas ?? []).filter(
+    (area) => area.draft && !(area.writing && area.writing.status !== "failed"),
+  );
+  const chosen = drafts.filter((area) => !off.has(area.draft!.id));
+
+  const onPrimary = async (): Promise<boolean> => {
+    if (chosen.length === 0 || input.blocked) return true;
+    setPublishError(null);
+    setPublishing(true);
+    try {
+      for (const area of chosen) {
+        const done = await publishAreaScript(area.draft!.id).catch(() => ({ ok: false as const, code: "failed" }));
+        if (!done.ok) {
+          setPublishError(t(PUBLISH_ERROR_KEY[done.code] ?? "setup-areas-publish-failed", { area: area.name }));
+          await reread();
+          return false;
+        }
+      }
+      await reread();
+      return true;
+    } finally {
+      setPublishing(false);
+    }
+  };
+
   const content = !state ? (
     <StateLine tone="failed">{t("setup-areas-unreadable")}</StateLine>
   ) : (
@@ -97,7 +137,23 @@ export function useAreasStep(input: {
       {state.areas.length === 0 ? (
         <StateLine tone="done">{t("setup-areas-none")}</StateLine>
       ) : (
-        state.areas.map((area) => <AreaCard key={area.areaId} area={area} blocked={input.blocked} onChanged={reread} />)
+        state.areas.map((area) => (
+          <AreaCard
+            key={area.areaId}
+            area={area}
+            blocked={input.blocked}
+            onChanged={reread}
+            publish={area.draft ? !off.has(area.draft.id) : null}
+            onPublish={(value) =>
+              setOff((current) => {
+                const next = new Set(current);
+                if (value) next.delete(area.draft!.id);
+                else next.add(area.draft!.id);
+                return next;
+              })
+            }
+          />
+        ))
       )}
       {state.moduleAreas.length > 0 ? (
         <StateLine tone="info">{t("setup-areas-modules", { list: state.moduleAreas.join(" · ") })}</StateLine>
@@ -105,10 +161,23 @@ export function useAreasStep(input: {
       {pending.length > 0 ? (
         <StateLine tone="info">{t("setup-areas-pending", { count: pending.length })}</StateLine>
       ) : null}
+      {publishError ? (
+        <Box role="alert">
+          <StateLine tone="failed">{publishError}</StateLine>
+        </Box>
+      ) : null}
     </Box>
   );
 
-  return { content, canAdvance: !input.blocked };
+  return {
+    content,
+    canAdvance: !input.blocked,
+    onPrimary,
+    busy: publishing,
+    primaryLabel: chosen.length > 0 ? t("setup-areas-publish-continue", { count: chosen.length }) : undefined,
+    done: Boolean(state) && pending.length === 0,
+    skippable: chosen.length > 0,
+  };
 }
 
 /** One area of the firm: where its script stands, and what the person does with it. */
@@ -116,10 +185,15 @@ function AreaCard({
   area,
   blocked,
   onChanged,
+  publish,
+  onPublish,
 }: {
   area: AreaScriptCard;
   blocked: boolean;
   onChanged: () => Promise<void>;
+  /** Whether the step's button publishes this area's draft; null with no draft to publish. */
+  publish: boolean | null;
+  onPublish: (value: boolean) => void;
 }) {
   const t = useTranslations("product");
   const [editing, setEditing] = useState<{ id: string; script: AreaScript } | null>(null);
@@ -349,32 +423,33 @@ function AreaCard({
               </Box>
             </Box>
           ) : (
-            <Box className="flex flex-wrap gap-2">
-              {area.draft ? (
-                examples ? (
-                  <Button
-                    variant="contained"
-                    onClick={() => void act(() => publishAreaScript(area.draft!.id))}
-                    disabled={blocked || busy}
-                  >
-                    {t("setup-areas-publish")}
-                  </Button>
-                ) : (
-                  <Button variant="contained" onClick={() => setExamples(true)} disabled={blocked || busy}>
-                    {t("setup-areas-see-examples")}
-                  </Button>
-                )
-              ) : !examples ? (
-                <Button variant="text" onClick={() => setExamples(true)} disabled={busy}>
-                  {t("setup-areas-see-examples")}
+            // Nothing here publishes: the switch says whether the step's button publishes this script (the owner's
+            // canvas of 2026-11-24, where "Publicar" inside the step and "Continuar" below it left drafts behind).
+            <Box className="flex flex-wrap items-center justify-between gap-2">
+              <Box className="flex flex-wrap gap-1">
+                <Button variant="text" color="grey" onClick={() => setExamples(!examples)} disabled={busy}>
+                  {t(examples ? "setup-areas-hide-examples" : "setup-areas-see-examples")}
                 </Button>
+                <Button variant="text" color="grey" onClick={() => void correct()} disabled={blocked || busy}>
+                  {t("setup-areas-correct")}
+                </Button>
+                <Button variant="text" color="grey" onClick={() => setChanging(true)} disabled={blocked || busy}>
+                  {t("setup-areas-ask-change")}
+                </Button>
+              </Box>
+              {area.draft && publish !== null ? (
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={publish}
+                      onChange={(event) => onPublish(event.target.checked)}
+                      disabled={blocked || busy}
+                    />
+                  }
+                  label={t("setup-areas-publish-this")}
+                  className="m-0"
+                />
               ) : null}
-              <Button variant="outlined" onClick={() => void correct()} disabled={blocked || busy}>
-                {t("setup-areas-correct")}
-              </Button>
-              <Button variant="text" onClick={() => setChanging(true)} disabled={blocked || busy}>
-                {t("setup-areas-ask-change")}
-              </Button>
             </Box>
           )
         ) : null}
