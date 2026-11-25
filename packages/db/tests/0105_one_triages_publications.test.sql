@@ -109,7 +109,7 @@ select ok(
   and not has_column_privilege('authenticated', 'public.publications', 'ack_owed', 'UPDATE')
   and has_function_privilege('authenticated', 'public.acknowledge_publication(uuid)', 'EXECUTE')
   and has_function_privilege('authenticated', 'public.firm_publication_acks(uuid)', 'EXECUTE')
-  and not has_function_privilege('authenticated', 'public.publication_acks_owed(integer)', 'EXECUTE')
+  and not has_function_privilege('authenticated', 'public.publication_acks_owed(integer, uuid)', 'EXECUTE')
   and not has_function_privilege('authenticated', 'public.publication_ack_lawyers(uuid, uuid[])', 'EXECUTE'),
   'ONE triages by default, its instructions ask how sure it is, and the awareness is written only through the functions'
 );
@@ -179,10 +179,12 @@ insert into res values ('bell', (select jsonb_agg(row_to_json(o)::jsonb order by
 reset role;
 select ok(
   (select jsonb_array_length(payload) = 2
-          and payload -> 0 ->> 'publication_id' = pg_temp.pub('a1')::text and payload -> 0 ->> 'late' = 'true'
-          and payload -> 0 -> 'recipients' = '["a1050000-0000-4000-8000-000000000002"]'::jsonb
-          and payload -> 1 ->> 'publication_id' = pg_temp.pub('a4')::text and payload -> 1 ->> 'late' = 'false'
-          and payload -> 1 -> 'recipients' = '["a1050000-0000-4000-8000-000000000001", "a1050000-0000-4000-8000-000000000002", "a1050000-0000-4000-8000-000000000003"]'::jsonb
+          -- Late: owed its notice and the day's reminder (what is still owed is read as 0295 redefined it).
+          and payload -> 0 ->> 'publication_id' = pg_temp.pub('a1')::text
+          and payload -> 0 -> 'to_tell' = '["a1050000-0000-4000-8000-000000000002"]'::jsonb
+          and payload -> 0 -> 'to_remind' = '["a1050000-0000-4000-8000-000000000002"]'::jsonb
+          and payload -> 1 ->> 'publication_id' = pg_temp.pub('a4')::text and payload -> 1 -> 'to_remind' = '[]'::jsonb
+          and payload -> 1 -> 'to_tell' = '["a1050000-0000-4000-8000-000000000001", "a1050000-0000-4000-8000-000000000002", "a1050000-0000-4000-8000-000000000003"]'::jsonb
    from res where name = 'bell'),
   'past the setting''s hours it is late; one addressed to nobody of the firm is told to who triages'
 );
