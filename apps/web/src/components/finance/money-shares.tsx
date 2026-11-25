@@ -53,9 +53,12 @@ const DECISION_KEY = {
 export default function MoneyShares({
   caseId,
   onLoaded,
+  onChanged,
 }: {
   caseId: string | null;
   onLoaded?: (shares: MoneyShare[]) => void;
+  /** A part was written (a transfer, a statement asked, a hold decided): the screen around reads itself again now. */
+  onChanged?: () => void;
 }) {
   const t = useTranslations("product");
   const [shares, setShares] = useState<MoneyShare[] | null | "error">(null);
@@ -82,6 +85,7 @@ export default function MoneyShares({
     const result = await work();
     if (!result.ok) setProblem(t(errorKey(result.code)));
     await load();
+    if (result.ok) onChanged?.();
     return result;
   };
 
@@ -273,6 +277,7 @@ export default function MoneyShares({
             if (result.ok) {
               setDeciding(null);
               await load();
+              onChanged?.();
             }
             return result;
           }}

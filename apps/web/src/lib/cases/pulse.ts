@@ -36,16 +36,28 @@ export function firmPulseOf(raw: unknown): string | null {
  * to a minute or two), and longer otherwise, since a client or ONE's clock may still change it; never while the tab
  * is hidden (asked again as soon as it is in front of the person).
  */
-export const PULSE_BUSY_MS = 4_000;
 export const PULSE_IDLE_MS = 20_000;
-/** After the person's own action, the screen reads as if ONE were at work for this long. */
+/**
+ * Right after the person's own action (the audit of the case's sync, 2026-11-25): what ONE starts from it begins
+ * within a second, and four seconds of a still screen after "saved" read as nothing happening, then as a notice out
+ * of nowhere. The pulse is one light question to the database (about ten milliseconds for the fullest case), asked by
+ * the browser, so half a minute of it costs nothing that matters.
+ */
+export const PULSE_HOT_MS = 1_500;
+export const PULSE_HOT_FOR_MS = 30_000;
+/** While ONE is at work on what the screen shows: its notice opens and closes with the work, never seconds after. */
+export const PULSE_BUSY_MS = 2_000;
+/** After the hot half minute, the screen still reads as if ONE might act for this long after the person's action. */
+export const PULSE_WARM_MS = 4_000;
 export const PULSE_AFTER_ACTION_MS = 120_000;
 /** A pulse that could not be read is asked again only after this long. */
 export const PULSE_FAILED_MS = 60_000;
 
 export function pulseDelay(input: { busy: boolean; actedAt: number | null; now: number; failed: boolean }): number {
   if (input.failed) return PULSE_FAILED_MS;
+  const sinceAction = input.actedAt === null ? null : input.now - input.actedAt;
+  if (sinceAction !== null && sinceAction < PULSE_HOT_FOR_MS) return PULSE_HOT_MS;
   if (input.busy) return PULSE_BUSY_MS;
-  if (input.actedAt !== null && input.now - input.actedAt < PULSE_AFTER_ACTION_MS) return PULSE_BUSY_MS;
+  if (sinceAction !== null && sinceAction < PULSE_AFTER_ACTION_MS) return PULSE_WARM_MS;
   return PULSE_IDLE_MS;
 }

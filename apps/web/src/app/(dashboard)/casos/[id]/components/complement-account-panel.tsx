@@ -33,7 +33,19 @@ type Field = { key: string; label: string; group: string | null };
  * (`complete_case_statement`, 0297) and ONE orders it again with everything. A field left empty stays asked of the
  * client.
  */
-export default function ComplementAccountPanel({ state, onClose }: { state: Ready; onClose: () => void }) {
+export default function ComplementAccountPanel({
+  state,
+  onClose,
+  onChanged,
+}: {
+  state: Ready;
+  onClose: () => void;
+  /**
+   * The answers were saved: the screen says so in the account's card and brings itself up to them, its other actions
+   * waiting meanwhile (the case's `onChanged`). Without it, the panel asks the screen's reading itself.
+   */
+  onChanged?: (saved?: boolean) => void;
+}) {
   const t = useTranslations("product");
   const router = useRouter();
   const [fields] = useState<Field[]>(() => {
@@ -83,7 +95,8 @@ export default function ComplementAccountPanel({ state, onClose }: { state: Read
         const result = await completeStatement(state.case.id, statementId, complementText(pairs));
         if (!result.ok) return setProblem(result.code);
       }
-      router.refresh();
+      if (onChanged) onChanged();
+      else router.refresh();
       onClose();
     } catch {
       setProblem("unavailable");

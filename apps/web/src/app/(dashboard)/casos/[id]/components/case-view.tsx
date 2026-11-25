@@ -18,7 +18,7 @@ import FilingCard from "./filing-card";
 import { ForecastSummary } from "./forecast-card";
 import HearingsCard from "./hearings-card";
 import IntermediatePiecesCard from "./intermediate-pieces-card";
-import JourneyCard from "./journey-card";
+import JourneyCard, { markTrail } from "./journey-card";
 import MoneyCard from "./money-card";
 import NoticesCard from "./notices-card";
 import OutcomeCard from "./outcome-card";
@@ -51,7 +51,7 @@ import QuickActions from "@/components/product/quick-actions";
 import StateLine from "@/components/product/state-line";
 import StatusChip from "@/components/product/status-chip";
 import { useFresh } from "@/components/product/use-fresh";
-import { useLiveRead } from "@/components/product/use-live-read";
+import { type LiveRead, useLiveRead } from "@/components/product/use-live-read";
 import NiAnnouncement from "@/icons/nexture/ni-announcement";
 import NiBell from "@/icons/nexture/ni-bell";
 import NiBriefcase from "@/icons/nexture/ni-briefcase";
@@ -71,6 +71,7 @@ import NiScale from "@/icons/nexture/ni-scale";
 import NiSendRight from "@/icons/nexture/ni-send-right";
 import NiTimeline from "@/icons/nexture/ni-timeline";
 import NiUsers from "@/icons/nexture/ni-users";
+import { lookAtCaseNow } from "@/lib/cases/advance-actions";
 import { CASE_TABS, type CaseTab, SECTION_TAB, tabMarks } from "@/lib/cases/case-tabs";
 import { caseHolder, caseLabel, groupOf, STATUS_KEY } from "@/lib/cases/cases";
 import { SECTION_ANCHOR } from "@/lib/cases/now";
@@ -79,6 +80,10 @@ import { CASE_SECTIONS, type CaseSection } from "@/lib/cases/sections";
 import { sayPending } from "@/lib/firm/pending";
 import { caseKindLabelKey } from "@/lib/modules/registry";
 import { setPublicationJudgment } from "@/lib/publications/actions";
+
+/** How long after the top says ONE owes the case a look the screen asks for it, and how often at most. */
+const LOOK_AFTER_MS = 1_500;
+const LOOKS_A_MINUTE = 5;
 
 /** The head of each card: what it is, as an icon of its family's tint. */
 const LOOKS: Record<CaseSection, CardLook> = {
@@ -150,7 +155,13 @@ export default function CaseView({ state: read }: { state: CaseState }) {
 
   // One action at a time (the owner's canvas, 2026-11-10): what the person does locks the case's other controls
   // until the screen shows what came of it; a change made outside is read again saying so, with nothing locked.
-  const actedRef = useRef<() => void>(() => {});
+  // The screen's own pulse, reached by the actions before it exists: until then nothing is known of the database,
+  // and an action reads the screen again as it always did.
+  const liveRef = useRef<Pick<LiveRead, "acted" | "latest" | "shows">>({
+    acted: () => {},
+    latest: async () => null,
+    shows: () => false,
+  });
   // The case's trail as the screen reads it: an action that changes it brings the person to it.
   const trail = useMemo(
     () =>
@@ -166,26 +177,96 @@ export default function CaseView({ state: read }: { state: CaseState }) {
         : "",
     [facts],
   );
-  const actions = useCaseActions({ acted: useCallback(() => actedRef.current(), []), trail });
+  const actions = useCaseActions({
+    acted: useCallback(() => liveRef.current.acted(), []),
+    latest: useCallback(() => liveRef.current.latest(), []),
+    shows: useCallback((mark: string) => liveRef.current.shows(mark), []),
+    // Each reading the server hands the screen is a new object: the actions count them to know their own arrived.
+    drawing: read,
+    trail,
+  });
 
+  const caseId = ready?.case.id ?? null;
   const live = useLiveRead({
     stamp: ready?.pulse?.stamp ?? null,
     read: useCallback(async () => {
-      if (!ready) return null;
-      const answer = await readCasePulse(ready.case.id);
+      if (!caseId) return null;
+      const answer = await readCasePulse(caseId);
       return answer.ok ? answer.pulse.stamp : null;
-    }, [ready]),
+    }, [caseId]),
     // ONE at work there now (a work already late is still followed, at the slower pace).
     busy: facts?.now.working.some((line) => !line.slow) ?? false,
     onChange: actions.follow,
   });
-  // After a person's write the pulse is asked often for a while, since ONE goes on from it.
+  // After a person's write the pulse is asked often for a while, since ONE goes on from it; and the action asks it
+  // at once, to read the screen again only when the database is past what the action's own answer drew.
   useEffect(() => {
-    actedRef.current = live.acted;
-  }, [live.acted]);
+    liveRef.current = { acted: live.acted, latest: live.latest, shows: live.shows };
+  }, [live.acted, live.latest, live.shows]);
 
-  // A write a card made on its own: the screen reads again, the case's controls waiting until it shows.
-  const refresh = actions.reload;
+  // A write a card made on its own (a dialog saved): the card says "Alteração salva" at once, and the screen brings
+  // itself up to it, the case's controls waiting until it shows. Each card reports under its own id; one that reads
+  // the case again after a refusal says so (`onChanged(false)`), and nothing is said as saved.
+  const reload = actions.reload;
+  const changed = useMemo(() => {
+    const made = new Map<string, (saved?: boolean) => void>();
+    return (anchor: string) => {
+      const known = made.get(anchor);
+      if (known) return known;
+      const report = (saved?: boolean) => reload(anchor, saved !== false);
+      made.set(anchor, report);
+      return report;
+    };
+  }, [reload]);
+  // A write of the top itself (whether a decision is the judgment, the stage changed by hand): no card to say it in.
+  const refresh = useCallback(() => reload(null, true), [reload]);
+
+  // ONE or the client moved the case along its way while the person looks at it: the trail marks itself for a
+  // moment, and the screen stays where the person is. A step that changed with nothing said of it read as a screen
+  // that had been wrong until then. What the person's own action moved is said, and gone to, by the action itself;
+  // the lines under the steps mark themselves ("Novo").
+  const wayKey = facts
+    ? JSON.stringify([
+        facts.journey.current,
+        facts.journey.ended,
+        facts.journey.steps.map((step) => `${step.id}:${step.state}`),
+        facts.now.holder,
+      ])
+    : "";
+  const wayShown = useRef(wayKey);
+  const acting = actions.running !== null;
+  useEffect(() => {
+    if (wayShown.current === wayKey) return;
+    const arrived = wayShown.current === "";
+    wayShown.current = wayKey;
+    if (!arrived && !acting) markTrail();
+  }, [wayKey, acting]);
+
+  // A look ONE owes the case never waits for the clock while somebody is on it. The top says "o ONE olha de novo em
+  // instantes" as soon as the database wakes the case, and the look itself was left to the clock's next round, up to
+  // five minutes later, whenever the action that woke it scheduled nothing. Asked once for each state of the case, a
+  // moment after it shows (an action that does schedule the look has had it claimed by then), a few times a minute at
+  // most, never in a support visit; the screen then asks its pulse often, to show ONE at it.
+  const lookDue = facts?.now.working.some((line) => line.id === "advance:due") ?? false;
+  const shownStamp = ready?.pulse?.stamp ?? null;
+  const visiting = ready?.supportVisit ?? true;
+  const lookAsked = useRef<{ stamp: string | null; at: number[] }>({ stamp: null, at: [] });
+  const liveActed = live.acted;
+  useEffect(() => {
+    if (!lookDue || !caseId || !shownStamp || visiting || lookAsked.current.stamp === shownStamp) return;
+    const timer = window.setTimeout(() => {
+      const now = Date.now();
+      const recent = lookAsked.current.at.filter((at) => now - at < 60_000);
+      if (recent.length >= LOOKS_A_MINUTE) return;
+      lookAsked.current = { stamp: shownStamp, at: [...recent, now] };
+      void lookAtCaseNow(caseId)
+        .then((answer) => {
+          if (answer.ok) liveActed();
+        })
+        .catch(() => undefined);
+    }, LOOK_AFTER_MS);
+    return () => window.clearTimeout(timer);
+  }, [lookDue, caseId, shownStamp, visiting, liveActed]);
 
   // What the top knows of each card, by its id: something there waits for the firm or failed, or for the client,
   // and what ONE does there now.
@@ -224,7 +305,7 @@ export default function CaseView({ state: read }: { state: CaseState }) {
   const notes = useMemo(() => {
     const out: Record<string, ReactNode> = {};
     if (note) {
-      out[SECTION_ANCHOR[note.section]] = (
+      out[note.anchor] = (
         <Box role="status">
           <StateLine tone="done" emphasis status={t("case-action-done-at", { time: clockOf(note.at) })}>
             {note.text}
@@ -241,7 +322,7 @@ export default function CaseView({ state: read }: { state: CaseState }) {
     3000,
   );
   const flash = useMemo(() => {
-    const acted = note ? SECTION_ANCHOR[note.section] : null;
+    const acted = note ? note.anchor : null;
     return new Set([...fresh].filter((id) => id !== acted));
   }, [fresh, note]);
 
@@ -326,56 +407,56 @@ export default function CaseView({ state: read }: { state: CaseState }) {
   const panels: Record<CaseTab, ReactNode> = {
     cliente: (
       <>
-        <PeopleCard state={state} writable={writable} onChanged={refresh} />
+        <PeopleCard state={state} writable={writable} onChanged={changed("case-people")} />
         {ofArea ? (
-          <AreaCard state={state} writable={writable} onChanged={refresh} />
+          <AreaCard state={state} writable={writable} onChanged={changed("case-area")} />
         ) : (
-          <TripCard state={state} writable={writable} onChanged={refresh} />
+          <TripCard state={state} writable={writable} onChanged={changed("case-trip")} />
         )}
-        <StatementsCard state={state} writable={writable} onChanged={refresh} />
+        <StatementsCard state={state} writable={writable} onChanged={changed("case-statements")} />
         <ClientLinkCard
           state={state}
           holderPersonId={holderParty?.person.person_id ?? null}
           writable={writable}
-          onChanged={refresh}
+          onChanged={changed("case-link")}
         />
-        <NoticesCard state={state} writable={writable} onChanged={refresh} />
+        <NoticesCard state={state} writable={writable} onChanged={changed("case-notices")} />
       </>
     ),
     documentos: (
       <>
-        <DocumentsCard state={state} writable={writable} onChanged={refresh} />
-        <SignaturesCard state={state} writable={writable} onChanged={refresh} />
-        <DossierCard state={state} writable={writable} onChanged={refresh} />
+        <DocumentsCard state={state} writable={writable} onChanged={changed("case-documents")} />
+        <SignaturesCard state={state} writable={writable} onChanged={changed("case-signatures")} />
+        <DossierCard state={state} writable={writable} onChanged={changed("case-dossier")} />
       </>
     ),
     acao: (
       <>
-        {ofArea ? null : <RulesCard state={state} writable={writable} onChanged={refresh} />}
-        {ofArea ? null : <ComplaintCard state={state} writable={writable} onChanged={refresh} />}
-        <ProceedingsCard state={state} writable={writable} onChanged={refresh} />
-        <DraftsCard state={state} writable={writable} onChanged={refresh} />
-        <FilingCard state={state} writable={writable} onChanged={refresh} />
+        {ofArea ? null : <RulesCard state={state} writable={writable} onChanged={changed("case-rules")} />}
+        {ofArea ? null : <ComplaintCard state={state} writable={writable} onChanged={changed("case-complaints")} />}
+        <ProceedingsCard state={state} writable={writable} onChanged={changed("case-proceedings")} />
+        <DraftsCard state={state} writable={writable} onChanged={changed("case-drafts")} />
+        <FilingCard state={state} writable={writable} onChanged={changed("case-filing")} />
       </>
     ),
     processo: (
       <>
-        <PublicationsCard state={state} writable={writable} onChanged={refresh} />
-        <DeadlinesCard state={state} writable={writable} onChanged={refresh} />
-        <HearingsCard state={state} writable={writable} onChanged={refresh} />
-        <IntermediatePiecesCard state={state} writable={writable} onChanged={refresh} />
-        <OutcomeCard state={state} writable={writable} onChanged={refresh} />
+        <PublicationsCard state={state} writable={writable} onChanged={changed("case-publications")} />
+        <DeadlinesCard state={state} writable={writable} onChanged={changed("case-deadlines")} />
+        <HearingsCard state={state} writable={writable} onChanged={changed("case-hearings")} />
+        <IntermediatePiecesCard state={state} writable={writable} onChanged={changed("case-pieces")} />
+        <OutcomeCard state={state} writable={writable} onChanged={changed("case-outcome")} />
       </>
     ),
     dinheiro: (
       <>
-        <MoneyCard state={state} />
-        <FeesCard state={state} writable={writable} onChanged={refresh} />
+        <MoneyCard state={state} onChanged={changed("case-money")} />
+        <FeesCard state={state} writable={writable} onChanged={changed("case-fees")} />
       </>
     ),
     historico: (
       <>
-        {ofArea ? null : <SummaryCard state={state} writable={writable} onChanged={refresh} />}
+        {ofArea ? null : <SummaryCard state={state} writable={writable} onChanged={changed("case-summary")} />}
         <TimelineCard state={state} />
       </>
     ),
@@ -417,7 +498,8 @@ export default function CaseView({ state: read }: { state: CaseState }) {
           severity="warning"
           className="neutral bg-background-paper/60!"
           action={
-            <Button color="inherit" size="small" onClick={() => router.refresh()}>
+            // Read again as any change made outside is: the top says "Atualizando o caso" while it comes.
+            <Button color="inherit" size="small" onClick={() => void actions.follow()}>
               {t("cases-retry")}
             </Button>
           }
@@ -447,12 +529,13 @@ export default function CaseView({ state: read }: { state: CaseState }) {
           action={actions.running}
           syncing={actions.syncing}
           onJudgment={onJudgment}
+          onAccount={changed("case-statements")}
           aside={ofArea ? null : <ForecastSummary proceedings={state.proceedings} airlines={state.airlines} />}
         />
 
         {/* While ONE works on the case, its actions wait: the notice says what ONE is doing, and the screen comes back
           by itself, read again, when it ends (the screen pattern after ADVBox). */}
-        <CaseAtWork caseId={state.case.id} working={facts.now.working} events={state.events} />
+        <CaseAtWork caseId={state.case.id} working={facts.now.working} events={state.events} last={actions.last} />
 
         {/* The cards in six tabs, in the order of the case's way; each tab says what waits in it. */}
         <CaseTabsBar tab={tab} marks={marksOfTabs} flashed={flashedTabs} onPick={pick} />

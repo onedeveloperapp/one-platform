@@ -26,11 +26,11 @@ const work = (id: string, patch: Partial<NowItem> = {}): NowItem => ({
   ...patch,
 });
 
-function Screen({ working }: { working: NowItem[] }) {
+function Screen({ working, last = null }: { working: NowItem[]; last?: { text: string; at: number } | null }) {
   return (
     <NextIntlClientProvider locale="pt-BR" messages={messages} timeZone="America/Sao_Paulo">
       <input aria-label="Outro campo" />
-      <CaseAtWork caseId="case-1" working={working} events={[]} />
+      <CaseAtWork caseId="case-1" working={working} events={[]} last={last} />
     </NextIntlClientProvider>
   );
 }
@@ -116,5 +116,22 @@ describe("CaseAtWork", () => {
     field.blur();
     tick(1000);
     expect(notice()).toBeTruthy();
+  });
+
+  it("says first what the person just did, when ONE's work came of it", () => {
+    render(
+      <Screen working={[work("draft:1")]} last={{ text: "Peça pedida. O ONE escreve o texto.", at: NOW - 3_000 }} />,
+    );
+    tick(1000);
+    expect(notice()).toBeTruthy();
+    expect(screen.getByText("Peça pedida. O ONE escreve o texto.")).toBeTruthy();
+    expect(screen.getByText("Você, às 14:31")).toBeTruthy();
+  });
+
+  it("says nothing of what the person did long before the work began", () => {
+    render(<Screen working={[work("draft:1")]} last={{ text: "Alteração salva.", at: NOW - 5 * 60_000 }} />);
+    tick(1000);
+    expect(notice()).toBeTruthy();
+    expect(screen.queryByText("Alteração salva.")).toBeNull();
   });
 });

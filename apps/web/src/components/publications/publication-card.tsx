@@ -122,6 +122,7 @@ export default function PublicationCard({
   onSaid,
   onSeen,
   onAcknowledged,
+  onWritten,
   inline = false,
   oneReading,
 }: {
@@ -140,6 +141,12 @@ export default function PublicationCard({
   onSeen: () => void;
   /** The person said they are aware of ONE's triage (0104): what the list or the case does with it. */
   onAcknowledged?: () => void;
+  /**
+   * Something else was written from the card (a hearing scheduled, a deadline proposed, whether a decision is the
+   * judgment): the screen around it reads itself again now. On a case, these changed its top and its other cards
+   * only when the screen's own pulse came round, up to twenty seconds later (the audit of the case's sync).
+   */
+  onWritten?: () => void;
   /**
    * Drawn inside a line of its case's list (`ItemRows`): the line says what it is and where it stands, and gives the
    * awareness of ONE's triage, so the card leaves out its head, the way to the case and that awareness.
@@ -271,6 +278,7 @@ export default function PublicationCard({
         }
         setJudgment({ value, source: "person" });
         setJudgmentAsked(false);
+        onWritten?.();
       } catch {
         setError(t("publication-error-failed"));
       }
@@ -819,6 +827,7 @@ export default function PublicationCard({
           onSaved={() => {
             setScheduling(false);
             setScheduled(true);
+            onWritten?.();
           }}
         />
       ) : null}
@@ -841,6 +850,7 @@ export default function PublicationCard({
                 ? t("deadline-proposed-notice", { day: formatDayBr(saved.dueOn) ?? saved.dueOn })
                 : t("deadline-proposed-notice-counting"),
             );
+            onWritten?.();
           }}
         />
       ) : null}

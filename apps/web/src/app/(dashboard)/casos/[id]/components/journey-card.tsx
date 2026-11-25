@@ -17,6 +17,7 @@ import type { TileTone } from "@/components/product/tile-tone";
 import { useFresh } from "@/components/product/use-fresh";
 import type { LiveRead } from "@/components/product/use-live-read";
 import NiCalendar from "@/icons/nexture/ni-calendar";
+import NiCheck from "@/icons/nexture/ni-check";
 import NiClock from "@/icons/nexture/ni-clock";
 import NiDocumentFull from "@/icons/nexture/ni-document-full";
 import NiFlag from "@/icons/nexture/ni-flag";
@@ -147,6 +148,8 @@ export function goToSection(section: CaseSection) {
 
 /** The address of the case's trail, "Andamento do caso", on the screen. */
 export const TRAIL_ID = "andamento-do-caso";
+/** The title of the trail, beside which the screen says what it is doing (an action, a reading, "saved"). */
+export const TRAIL_TITLE_ID = "case-journey-title";
 /** Said to the trail when a person's action moved it: it marks itself for a moment. */
 const TRAIL_MOVED = "one:case-trail-moved";
 /** How long the trail stays marked once a person's action moved it. */
@@ -170,6 +173,15 @@ export function showTrail(): boolean {
 }
 
 /**
+ * ONE or the client moved the case while the person looks at it (the audit of the case's sync, 2026-11-25): the trail
+ * marks itself for a moment, and the screen stays where the person is. A step that changed with nothing said of it
+ * read as a screen that had been wrong until then.
+ */
+export function markTrail(): void {
+  window.dispatchEvent(new Event(TRAIL_MOVED));
+}
+
+/**
  * Where the case stands, at its top (the owner, 2026-11-03; its audit, 2026-11-05): the steps of its way, who the
  * case is with now, and under it what ONE is doing at this moment (each with since when and the card it is in),
  * what holds the case and whose turn each thing is (the firm's with who of it acts and the way to it for who may,
@@ -189,6 +201,7 @@ export default function JourneyCard({
   action,
   syncing,
   onJudgment,
+  onAccount,
   aside,
 }: {
   state: Ready;
@@ -201,6 +214,8 @@ export default function JourneyCard({
   syncing: boolean;
   /** The person says whether a decision the court published is the judgment. */
   onJudgment: (publicationId: string, judgment: boolean) => Promise<void>;
+  /** The firm complemented the client's account from the top: the account's card says it saved, and the screen follows. */
+  onAccount?: (saved?: boolean) => void;
   /** What sits at the side of the top, over what ONE did a moment ago: the case's forecast. */
   aside?: ReactNode;
 }) {
@@ -475,7 +490,7 @@ export default function JourneyCard({
     <Card
       component="section"
       id={TRAIL_ID}
-      aria-labelledby="case-journey-title"
+      aria-labelledby={TRAIL_TITLE_ID}
       aria-busy={reading}
       className={cn(
         "relative scroll-mt-24 transition-shadow duration-500 motion-reduce:transition-none",
@@ -485,12 +500,20 @@ export default function JourneyCard({
       {reading ? <LinearProgress aria-hidden className="absolute inset-x-0 top-0 h-[3px]" /> : null}
       <CardContent className="flex flex-col gap-4">
         <Box className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
-          <Typography id="case-journey-title" variant="h5" component="h2" className="mb-0">
+          <Typography id={TRAIL_TITLE_ID} variant="h5" component="h2" className="mb-0">
             {t("journey-title")}
           </Typography>
           {/* What the screen is doing: the person's action, a reading of the case, or when it last knew it was current. */}
           <Box className="flex flex-wrap items-center gap-2" role="status">
-            {action ? (
+            {action?.saved ? (
+              // The write is kept: the screen only brings itself up to it (the audit of the case's sync, 2026-11-25).
+              // A card's own save says "Salvo"; an action of a card, which may be a consultation, says "Feito".
+              <StatusChip
+                tone="positive"
+                icon={<NiCheck size="small" />}
+                label={action.key === "reload" ? t("case-action-saved") : t("case-action-done-updating")}
+              />
+            ) : action ? (
               <StatusChip
                 tone="primary"
                 icon={<NiLoader size="small" className="animate-spin motion-reduce:animate-none" />}
@@ -521,12 +544,13 @@ export default function JourneyCard({
           </Box>
         </Box>
 
-        {/* While the screen reads the case again, what may change is dimmed: it changes at the same moment as the
-            cards, never after them. */}
+        {/* While the person's action runs, what may change is dimmed: it changes at the same moment as the cards,
+            never after them. A reading for what ONE or the client changed dims nothing: with the screen asking every
+            second or two while ONE works, the top blinked at each of its steps. */}
         <Box
           className={cn(
             "flex flex-col gap-4 transition-opacity duration-200 motion-reduce:transition-none",
-            reading && "opacity-45",
+            action !== null && "opacity-45",
           )}
         >
           {/* From a tablet on, the steps across; on a phone, who has the case first and the steps one tap away. */}
@@ -726,7 +750,9 @@ export default function JourneyCard({
           </Typography>
         ) : null}
       </CardContent>
-      {complementing ? <ComplementAccountPanel state={state} onClose={() => setComplementing(false)} /> : null}
+      {complementing ? (
+        <ComplementAccountPanel state={state} onClose={() => setComplementing(false)} onChanged={onAccount} />
+      ) : null}
     </Card>
   );
 }

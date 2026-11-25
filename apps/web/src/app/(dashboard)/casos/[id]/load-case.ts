@@ -194,6 +194,16 @@ export async function loadCase(id: string): Promise<CaseState> {
   const { supabase } = context;
   const firm = context.firm.id;
 
+  // The mark of the case and whether ONE is at it (0096), for the screen to follow it while it is open. Read BEFORE
+  // everything else, so the mark is never newer than what the screen shows: read with the last of the rows, a change
+  // ONE made between the first reads and that one came with the newer mark over the older rows, and the screen then
+  // took itself for current while it still showed ONE at work, its notice open over a work already done (the audit
+  // of the case's sync, 2026-11-25). A mark older than the rows only costs one more reading. One that could not be
+  // read leaves the screen as it was before (read again by the person), never the page.
+  const pulse = await supabase
+    .rpc("case_pulse", { target_case: id })
+    .then(({ data, error: unread }) => (unread ? null : casePulseOf(data)));
+
   const { data: row, error } = await supabase
     .from("cases")
     .select(
@@ -411,14 +421,16 @@ export async function loadCase(id: string): Promise<CaseState> {
   const names = new Map(
     teamRows.map((member) => [member.user_id, member.display_name?.trim() || member.email?.split("@")[0] || ""]),
   );
+  // What follows needs only what was read above, so it is asked for together and awaited below, each where it was
+  // read before: these five reads waited one for the other, and every drawing of the case (each action, each change
+  // ONE or the client makes while it is open) paid them in a row (the audit of the case's sync, 2026-11-25).
   // The pieces and the dossiers name who asked and who approved. A read that failed is an error of the page.
-  const pieces = await loadCasePieces(supabase, firm, id, names, context.profile.timezone).catch(() => undefined);
-  if (!pieces) return { kind: "error" };
+  const piecesRead = loadCasePieces(supabase, firm, id, names, context.profile.timezone).catch(() => undefined);
   // The order of the facts (and a transcription) ONE proposed that waits for a person, decided on the card of what
   // happened, never in a list elsewhere (the owner, 2026-11-05); and whether this session may decide it now. One that
   // could not be read leaves the card saying what it waits for, as before, never the page.
   const statementIds = told.statements.map((statement) => statement.id);
-  const [statementApprovals, assurance] = await Promise.all([
+  const approvalsRead = Promise.all([
     statementIds.length === 0
       ? Promise.resolve([])
       : supabase
@@ -444,43 +456,20 @@ export async function loadCase(id: string): Promise<CaseState> {
           ),
     supabase.auth.mfa.getAuthenticatorAssuranceLevel(),
   ]);
-  // `nextLevel` is aal2 exactly when the account has a verified factor; `currentLevel` when this session confirmed it.
-  const secondFactor: SecondFactorState =
-    assurance.data?.currentLevel === "aal2" ? "ok" : assurance.data?.nextLevel === "aal2" ? "challenge" : "missing";
   // What the official record and FlightAware said of each leg. A read that failed is an error of the page too.
-  const flights = await loadFlightChecks(
+  const flightsRead = loadFlightChecks(
     supabase,
     firm,
     id,
     (segments.data ?? []) as CaseSegment[],
     context.profile.timezone,
   ).catch(() => undefined);
-  if (!flights) return { kind: "error" };
   // The course of each lawsuit as the court shows it. A read that failed is an error of the page too.
-  const course = await loadCourseFacts(supabase, firm, id, context.profile.timezone).catch(() => undefined);
-  if (!course) return { kind: "error" };
+  const courseRead = loadCourseFacts(supabase, firm, id, context.profile.timezone).catch(() => undefined);
+  // A case of an area of the firm (0274): its area, its kind of case and what its script says of it.
+  const areaRead = row.area_script_id ? loadCaseArea(supabase, firm, row) : Promise.resolve(null);
   // The case's deadlines, and the acts of the list for a new one. A read that failed is an error of the page too.
-  const [
-    deadlines,
-    acts,
-    hearings,
-    people,
-    zones,
-    notices,
-    civilCourt,
-    advanced,
-    linksOwed,
-    stages,
-    published,
-    unnamedSigners,
-    signatureAhead,
-    pulse,
-    dataInChat,
-    asksContact,
-    autonomy,
-    publicationRows,
-    histories,
-  ] = await Promise.all([
+  const laterRead = Promise.all([
     caseDeadlines(supabase, firm, id, context.profile.timezone).catch(() => undefined),
     deadlineActs(supabase).catch(() => undefined),
     caseHearings(supabase, firm, id, context.profile.timezone).catch(() => undefined),
@@ -526,9 +515,6 @@ export async function loadCase(id: string): Promise<CaseState> {
       supabase.rpc("case_signature_ahead", { target_case: id }),
       cloudSigningOffered(supabase).catch(() => false),
     ]).then(([{ data, error }, offered]) => (error || !offered ? [] : signatureAheadOf(data))),
-    // The mark of the case and whether ONE is at it (0096), for the screen to follow it while it is open. One that
-    // could not be read leaves the screen as it was before (read again by the person), never the page.
-    supabase.rpc("case_pulse", { target_case: id }).then(({ data, error }) => (error ? null : casePulseOf(data))),
     // Where the data ONE asks the passenger in the chat stands (0280), for the top of the case to say whose it is.
     // One that could not be read says it as before (the client completes it on the link), never the page.
     supabase
@@ -553,6 +539,39 @@ export async function loadCase(id: string): Promise<CaseState> {
       .eq("org_id", firm)
       .then(({ data, error }) => (error ? [] : historyReadsOf(data ?? []))),
   ]);
+  // A page that ends early on one of them leaves the others to finish with nobody waiting: their failure is theirs.
+  for (const read of [approvalsRead, areaRead, laterRead] as Promise<unknown>[]) read.catch(() => undefined);
+
+  const pieces = await piecesRead;
+  if (!pieces) return { kind: "error" };
+  const [statementApprovals, assurance] = await approvalsRead;
+  // `nextLevel` is aal2 exactly when the account has a verified factor; `currentLevel` when this session confirmed it.
+  const secondFactor: SecondFactorState =
+    assurance.data?.currentLevel === "aal2" ? "ok" : assurance.data?.nextLevel === "aal2" ? "challenge" : "missing";
+  const flights = await flightsRead;
+  if (!flights) return { kind: "error" };
+  const course = await courseRead;
+  if (!course) return { kind: "error" };
+  const [
+    deadlines,
+    acts,
+    hearings,
+    people,
+    zones,
+    notices,
+    civilCourt,
+    advanced,
+    linksOwed,
+    stages,
+    published,
+    unnamedSigners,
+    signatureAhead,
+    dataInChat,
+    asksContact,
+    autonomy,
+    publicationRows,
+    histories,
+  ] = await laterRead;
   if (
     !deadlines ||
     !acts ||
@@ -611,8 +630,7 @@ export async function loadCase(id: string): Promise<CaseState> {
     ];
   });
 
-  // A case of an area of the firm (0274): its area, its kind of case and what its script says of it.
-  const area = row.area_script_id ? await loadCaseArea(supabase, firm, row) : null;
+  const area = await areaRead;
 
   // 0177: the essentials of this case's kind of problem; of a case of an area, of its kind of case (0274).
   const required = row.area_script_id

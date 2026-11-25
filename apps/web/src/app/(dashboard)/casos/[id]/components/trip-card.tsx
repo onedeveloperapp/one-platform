@@ -73,7 +73,7 @@ export default function TripCard({
 }: {
   state: Ready;
   writable: boolean;
-  onChanged: () => void;
+  onChanged: (saved?: boolean) => void;
 }) {
   const t = useTranslations("product");
   const [editing, setEditing] = useState<CaseSegment | "new" | null>(null);
@@ -363,7 +363,7 @@ function LegCheck({
   checks: LegChecks;
   lookupAvailable: boolean;
   writable: boolean;
-  onChanged: () => void;
+  onChanged: (saved?: boolean) => void;
 }) {
   const t = useTranslations("product");
   const [busy, setBusy] = useState<"recheck" | "lookup" | "apply" | null>(null);
@@ -378,7 +378,7 @@ function LegCheck({
     try {
       const result = await work();
       if (!result.ok) setProblem(result.code);
-      onChanged();
+      onChanged(result.ok);
     } catch {
       setProblem("failed");
     } finally {

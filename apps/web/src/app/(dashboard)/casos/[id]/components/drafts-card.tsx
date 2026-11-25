@@ -170,7 +170,7 @@ export default function DraftsCard({
 }: {
   state: Ready;
   writable: boolean;
-  onChanged: () => void;
+  onChanged: (saved?: boolean) => void;
 }) {
   const t = useTranslations("product");
   // The draft open in the editor, by its id: it stays open whatever the page reads meanwhile.
@@ -369,7 +369,7 @@ function Lawsuit({
   /** Every draft this lawsuit ever had, the latest first. */
   drafts: CaseDraft[];
   writable: boolean;
-  onChanged: () => void;
+  onChanged: (saved?: boolean) => void;
   onEdit: (draftId: string) => void;
   onRead: (draft: CaseDraft) => void;
 }) {
@@ -463,6 +463,8 @@ function Lawsuit({
 
   const keyOf = (key: string) => `${proceeding.id}:${key}`;
   const doing = (key: keyof typeof words) => action.pending(keyOf(key));
+  /** What a button of this lawsuit says: its verb while written, "Feito" once the write answered, its own name otherwise. */
+  const said = (key: keyof typeof words, idle: string) => action.label(keyOf(key), sentence(words[key].doing), idle);
   const run = async (
     key: keyof typeof words,
     work: () => Promise<{ ok: boolean; code: string }>,
@@ -488,7 +490,7 @@ function Lawsuit({
       }
     });
     // What refused it may be what somebody else just did: the draft is read again.
-    if (refused.now) onChanged();
+    if (refused.now) onChanged(false);
   };
 
   const ask = (mode: "ai" | "blank") =>
@@ -605,7 +607,7 @@ function Lawsuit({
           loadingPosition="start"
           onClick={() => ask("ai")}
         >
-          {doing("ai") ? sentence(words.ai.doing) : t("draft-ask-ai")}
+          {said("ai", t("draft-ask-ai"))}
         </Button>
         <Button
           variant="text"
@@ -615,7 +617,7 @@ function Lawsuit({
           loadingPosition="start"
           onClick={() => ask("blank")}
         >
-          {doing("blank") ? sentence(words.blank.doing) : t("draft-ask-blank")}
+          {said("blank", t("draft-ask-blank"))}
         </Button>
       </>
     );
@@ -786,9 +788,7 @@ function Lawsuit({
                 )
               }
             >
-              {doing("reject")
-                ? sentence(words.reject.doing)
-                : t(rewritten ? "draft-reject-revision-confirm" : "draft-reject-confirm")}
+              {said("reject", t(rewritten ? "draft-reject-revision-confirm" : "draft-reject-confirm"))}
             </Button>
             <Button variant="text" color="grey" disabled={pending} onClick={stopRejecting}>
               {t("draft-keep")}
@@ -836,11 +836,7 @@ function Lawsuit({
               loadingPosition="start"
               onClick={() => void run("resume", () => resumeCaseDraft({ caseId, draftId: draft.id }))}
             >
-              {doing("resume")
-                ? sentence(words.resume.doing)
-                : revision
-                  ? t("draft-revision-retry")
-                  : t("draft-resume")}
+              {said("resume", revision ? t("draft-revision-retry") : t("draft-resume"))}
             </Button>
           ) : null}
           {revision && writable && lawyer ? (
@@ -853,7 +849,7 @@ function Lawsuit({
               loadingPosition="start"
               onClick={() => void run("withdraw", () => withdrawDraftRevision({ caseId, draftId: draft.id }))}
             >
-              {doing("withdraw") ? sentence(words.withdraw.doing) : t("draft-revision-withdraw")}
+              {said("withdraw", t("draft-revision-withdraw"))}
             </Button>
           ) : null}
           {status === "approved" && late && writable && lawyer ? (
@@ -866,7 +862,7 @@ function Lawsuit({
               loadingPosition="start"
               onClick={() => void run("reopen", () => reopenCaseDraft({ caseId, draftId: draft.id }))}
             >
-              {doing("reopen") ? sentence(words.reopen.doing) : t("draft-reopen")}
+              {said("reopen", t("draft-reopen"))}
             </Button>
           ) : null}
           {hasText && (status === "approved" || status === "issued") ? (
@@ -977,7 +973,7 @@ function Lawsuit({
                 return false;
               }
             });
-            if (outcome.refused) onChanged();
+            if (outcome.refused) onChanged(false);
             return outcome.message;
           }}
           onClose={() => setApprovingOn(null)}
@@ -1013,7 +1009,7 @@ function Lawsuit({
                 return false;
               }
             });
-            if (outcome.refused) onChanged();
+            if (outcome.refused) onChanged(false);
             return outcome.message;
           }}
           onClose={() => setDiscardingId(null)}
@@ -1060,7 +1056,7 @@ export function DraftDialog({
   title: string;
   writable: boolean;
   onClose: () => void;
-  onChanged: () => void;
+  onChanged: (saved?: boolean) => void;
 }) {
   const t = useTranslations("product");
   const [pending, startTransition] = useTransition();
@@ -1189,7 +1185,7 @@ export function DraftDialog({
 
   const refused = (code: string) => {
     setErrorCode(code);
-    onChanged();
+    onChanged(false);
   };
 
   const save = () =>

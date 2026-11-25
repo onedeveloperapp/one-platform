@@ -4,6 +4,27 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { pulseDelay } from "@/lib/cases/pulse";
 
+/**
+ * Said on the window when a screen that follows the database shows something new (the person's own write, ONE, a
+ * client): whatever else on the page follows the same firm, such as the bell, asks again at once and never a minute
+ * later (the audit of the case's sync, 2026-11-25).
+ */
+export const SCREEN_CHANGED = "one:screen-changed";
+
+/** How long a pulse is waited for before it counts as one that could not be read. */
+const PULSE_ANSWER_MS = 8_000;
+
+/**
+ * The pulse's answer, or null when it failed or never came: a question left hanging (a network that went quiet) would
+ * otherwise stop the screen from ever asking again, with nothing said.
+ */
+function answered(asked: Promise<string | null>): Promise<string | null> {
+  return Promise.race([
+    asked.catch(() => null),
+    new Promise<null>((resolve) => window.setTimeout(() => resolve(null), PULSE_ANSWER_MS)),
+  ]);
+}
+
 /** What a screen kept alive says of itself: when it last knew it shows what the database has, and whether it can tell. */
 export type LiveRead = {
   /** The screen follows the database by itself (its pulse can be read). */
@@ -16,6 +37,14 @@ export type LiveRead = {
   acted: () => void;
   /** Ask now, as the person's "Atualizar" does. */
   checkNow: () => void;
+  /**
+   * The mark the database has now, asked at once; null when it could not be read. With `shows`, a screen that just
+   * wrote something knows whether what it shows is already what the database has, and reads itself again only when
+   * it is not (the audit of the case's sync, 2026-11-25).
+   */
+  latest: () => Promise<string | null>;
+  /** Whether the screen was drawn with this mark. */
+  shows: (stamp: string) => boolean;
 };
 
 /**
@@ -40,7 +69,13 @@ export function useLiveRead({
   read: () => Promise<string | null>;
   /** ONE is at work on what the screen shows: ask often. */
   busy: boolean;
-  onChange: () => void;
+  /**
+   * Reads the screen again. When it answers a promise, the pulse is not asked again until it settles: a mark that
+   * moved on while the screen was being read is asked for right after, never as a second reading on top of the first.
+   * A promise that answers `false` read nothing (the screen was busy bringing itself up some other way): the change
+   * is then asked for again at the next pulse, never set aside as already asked.
+   */
+  onChange: () => void | Promise<void | boolean>;
 }): LiveRead {
   const shown = useRef(stamp);
   const asked = useRef<{ stamp: string; at: number } | null>(null);
@@ -55,9 +90,11 @@ export function useLiveRead({
 
   // A new drawing of the screen carries the mark it was drawn with.
   useEffect(() => {
+    const changed = shown.current !== stamp;
     shown.current = stamp;
     asked.current = null;
     if (stamp) setCheckedAt(Date.now());
+    if (changed && stamp) window.dispatchEvent(new Event(SCREEN_CHANGED));
   }, [stamp]);
   useEffect(() => {
     busyRef.current = busy;
@@ -67,7 +104,7 @@ export function useLiveRead({
     if (reading.current || !shown.current) return;
     reading.current = true;
     try {
-      const latest = await read().catch(() => null);
+      const latest = await answered(read());
       if (latest === null) {
         failedRef.current = true;
         setFailed(true);
@@ -83,7 +120,7 @@ export function useLiveRead({
       const now = Date.now();
       if (asked.current?.stamp === latest && now - asked.current.at < 15_000) return;
       asked.current = { stamp: latest, at: now };
-      onChange();
+      if ((await onChange()) === false) asked.current = null;
     } finally {
       reading.current = false;
     }
@@ -128,5 +165,12 @@ export function useLiveRead({
     void check();
   }, [check]);
 
-  return { live: stamp !== null, checkedAt, failed, acted, checkNow };
+  const latest = useCallback(() => answered(read()), [read]);
+  const shows = useCallback((mark: string) => {
+    if (shown.current !== mark) return false;
+    setCheckedAt(Date.now());
+    return true;
+  }, []);
+
+  return { live: stamp !== null, checkedAt, failed, acted, checkNow, latest, shows };
 }

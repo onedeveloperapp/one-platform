@@ -87,6 +87,14 @@ async function loadHome(): Promise<
   const viewer = todayViewerOf(firm);
   const flowKey = onboardingFlowKey(context.userId, firm.id);
 
+  // The mark of what the home shows (0096), for it to follow the firm while open: read BEFORE the rest, so it is
+  // never newer than what the home shows (a mark read beside the rows could come after a change the rows missed, and
+  // the home would then take itself for current; the audit of the case's sync, 2026-11-25). Unreadable, the home is
+  // read again by the person, as before.
+  const pulse = await context.supabase
+    .rpc("firm_pulse", { target_org: firm.id })
+    .then(({ data, error }) => (error ? null : firmPulseOf(data)));
+
   const [
     today,
     pending,
@@ -100,7 +108,6 @@ async function loadHome(): Promise<
     moduleSetups,
     stock,
     recent,
-    pulse,
     decisions,
     filing,
     cloudSigning,
@@ -139,11 +146,6 @@ async function loadHome(): Promise<
       page: 0,
       pageSize: RECENT_CASES,
     }).catch(() => null),
-    // The mark of what the home shows (0096), for it to follow the firm while open; unreadable, it is read again by
-    // the person, as before.
-    context.supabase
-      .rpc("firm_pulse", { target_org: firm.id })
-      .then(({ data, error }) => (error ? null : firmPulseOf(data))),
     // Each decision that waits for this person, placed where it is decided (its case, its conversation); unread,
     // the home counts them as before.
     readWaitingDecisions(context.supabase, firm.id, firm.firmFunction).catch(() => null),

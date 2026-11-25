@@ -312,9 +312,7 @@ export default function SignaturesCard({
               loadingPosition="start"
               onClick={() => void simulate(envelope)}
             >
-              {action.pending(`simulate-${envelope.id}`)
-                ? sentence(words.simulate.doing)
-                : t("case-signature-simulate")}
+              {action.label(`simulate-${envelope.id}`, sentence(words.simulate.doing), t("case-signature-simulate"))}
             </Button>
           )}
           {writable && isAccountMethod(envelope.method) && envelope.status === "pending" && (
@@ -326,7 +324,7 @@ export default function SignaturesCard({
               loadingPosition="start"
               onClick={() => void refresh(envelope)}
             >
-              {action.pending(`refresh-${envelope.id}`) ? sentence(words.refresh.doing) : t("case-signature-refresh")}
+              {action.label(`refresh-${envelope.id}`, sentence(words.refresh.doing), t("case-signature-refresh"))}
             </Button>
           )}
           {writable &&

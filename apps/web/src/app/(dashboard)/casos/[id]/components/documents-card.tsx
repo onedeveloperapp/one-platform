@@ -330,7 +330,7 @@ export default function DocumentsCard({
               loadingPosition="start"
               onClick={() => void accept(document)}
             >
-              {action.pending(`accept-${document.id}`) ? sentence(words.accept.doing) : t("case-document-accept")}
+              {action.label(`accept-${document.id}`, sentence(words.accept.doing), t("case-document-accept"))}
             </Button>
             <Button
               variant="text"
@@ -601,7 +601,7 @@ export default function DocumentsCard({
               loadingPosition="start"
               onClick={() => input.current?.click()}
             >
-              {action.pending("upload") ? t("client-documents-sending") : t("client-documents-choose")}
+              {action.label("upload", t("client-documents-sending"), t("client-documents-choose"))}
             </Button>
             <Button variant="text" color="grey" size="small" disabled={action.busy} onClick={() => setAdding(false)}>
               {t("cases-cancel")}

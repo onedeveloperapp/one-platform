@@ -57,7 +57,7 @@ export default function DossierCard({
 }: {
   state: Ready;
   writable: boolean;
-  onChanged: () => void;
+  onChanged: (saved?: boolean) => void;
 }) {
   const t = useTranslations("product");
   // What the card is doing right now ("generate", or the id of the dossier being opened): each button says
@@ -83,7 +83,7 @@ export default function DossierCard({
     try {
       const result = await requestCaseDossier(state.case.id);
       if (!result.ok) setErrorCode(result.code);
-      onChanged();
+      onChanged(result.ok);
     } catch {
       setErrorCode("failed");
     } finally {

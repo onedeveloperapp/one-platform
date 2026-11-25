@@ -168,7 +168,7 @@ export default function PublicationsCard({
             loadingPosition="start"
             onClick={() => void acknowledge(row)}
           >
-            {action.pending(`ack-${row.id}`) ? sentence(ackWords.doing) : t("publication-ack")}
+            {action.label(`ack-${row.id}`, sentence(ackWords.doing), t("publication-ack"))}
           </Button>
         ) : undefined,
       opener: line.action === "open" && mayTriage && opener ? t(opener) : undefined,
@@ -201,6 +201,7 @@ export default function PublicationsCard({
             setAcked((current) => ({ ...current, [row.id]: true }));
             onChanged();
           }}
+          onWritten={() => onChanged()}
         />
       ),
     };
@@ -245,7 +246,7 @@ export default function PublicationsCard({
                   loadingPosition="start"
                   onClick={() => void askHistory(history.proceedingId)}
                 >
-                  {action.pending(`history-${history.proceedingId}`) ? sentence(historyWords.doing) : t(look.action)}
+                  {action.label(`history-${history.proceedingId}`, sentence(historyWords.doing), t(look.action))}
                 </Button>
               ) : undefined
             }

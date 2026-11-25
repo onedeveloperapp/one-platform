@@ -28,6 +28,8 @@ const OWN = "at-work-notice";
 
 /** How many of the steps ONE finished while the notice was open it shows above what it is doing. */
 const DONE_SHOWN = 3;
+/** ONE's work came of what the person did when the notice opens within this long of it. */
+const YOURS_WITHIN_MS = 60_000;
 
 const clock = (at: number) =>
   new Intl.DateTimeFormat("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" }).format(
@@ -66,15 +68,22 @@ function busyElsewhere(): boolean {
  * ONE is taking longer than usual and gives the screen back on request; that choice, and when each work was first
  * seen, are kept in this tab, so the notice opens again only for another work, and a stalled work is said as long
  * at once on the next visit.
+ *
+ * When ONE's work came of what the person just did (`last`, the audit of the case's sync, 2026-11-25), the notice says
+ * that first, as done, with "Você" and the time: it opens over the card that had just said "saved", and a notice
+ * that says only what ONE does left the person wondering whether their own act was kept.
  */
 export default function CaseAtWork({
   caseId,
   working,
   events,
+  last = null,
 }: {
   caseId: string;
   working: NowItem[];
   events: CaseEvent[];
+  /** What the person did last that was saved, and when. */
+  last?: { text: string; at: number } | null;
 }) {
   const t = useTranslations("product");
   const items = useMemo(() => holdingWork(working), [working]);
@@ -142,6 +151,18 @@ export default function CaseAtWork({
       const elapsed = elapsedText(ms);
       return t(elapsed.key, elapsed.values);
     };
+    // What the person just did, when the notice opened right after it.
+    const mine: AtWorkStep[] =
+      last && openedAt - last.at < YOURS_WITHIN_MS && last.at - openedAt < 2_000
+        ? [
+            {
+              key: `mine:${last.at}`,
+              state: "done",
+              label: last.text,
+              detail: t("one-at-work-yours", { time: clock(last.at) }),
+            },
+          ]
+        : [];
     // What ONE recorded while the notice was open, the oldest first.
     const done: AtWorkStep[] = events
       .filter(
@@ -171,8 +192,8 @@ export default function CaseAtWork({
     const next: AtWorkStep[] = [...new Set(items.map(nextStepOf).filter((key): key is string => key !== null))].map(
       (key) => ({ key: `next:${key}`, state: "next", label: t(key), detail: t("one-at-work-next") }),
     );
-    return [...done, ...doing, ...next];
-  }, [open, openedAt, events, items, now, memory, long, t]);
+    return [...mine, ...done, ...doing, ...next];
+  }, [open, openedAt, last, events, items, now, memory, long, t]);
 
   const started = items.length > 0 ? Math.min(...items.map((item) => startOf(item, memory, now))) : null;
 

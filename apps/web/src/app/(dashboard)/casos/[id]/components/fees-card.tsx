@@ -65,7 +65,7 @@ export default function FeesCard({
 }: {
   state: Ready;
   writable: boolean;
-  onChanged: () => void;
+  onChanged: (saved?: boolean) => void;
 }) {
   const t = useTranslations("product");
   const say = (key: string, values?: Record<string, string | number>) => t(key, values);
@@ -100,7 +100,7 @@ export default function FeesCard({
     try {
       const result = await saveCaseFees(state.case.id, "terms");
       if (!result.ok) setProblem(t(errorKey(result.code)));
-      onChanged();
+      onChanged(result.ok);
     } finally {
       setBusy(false);
     }

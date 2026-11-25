@@ -158,7 +158,7 @@ export function FamilyPlanBox({
           loadingPosition="start"
           onClick={() => void together()}
         >
-          {action.pending("family-together") ? sentence(togetherWords.doing) : t("case-family-together-action")}
+          {action.label("family-together", sentence(togetherWords.doing), t("case-family-together-action"))}
         </Button>
       )
     ) : undefined;

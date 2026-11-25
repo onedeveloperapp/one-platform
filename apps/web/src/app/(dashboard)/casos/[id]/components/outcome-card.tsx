@@ -193,7 +193,7 @@ export default function OutcomeCard({
 }: {
   state: Ready;
   writable: boolean;
-  onChanged: () => void;
+  onChanged: (saved?: boolean) => void;
 }) {
   const t = useTranslations("product");
   const lawsuits = state.proceedings.filter((lawsuit) => lawsuit.cnj && lawsuit.status !== "planned");
@@ -221,7 +221,7 @@ export default function OutcomeCard({
     setProblem(null);
     const result = await actOnLawsuitFact(state.case.id, fact.id, action);
     if (!result.ok) setProblem(t(errorKey(result.code)));
-    onChanged();
+    onChanged(result.ok);
   };
 
   return (
@@ -252,7 +252,7 @@ export default function OutcomeCard({
                   onClick={async () => {
                     const result = await acknowledgeCaseClosure(state.case.id);
                     if (!result.ok) setProblem(t(errorKey(result.code)));
-                    onChanged();
+                    onChanged(result.ok);
                   }}
                 >
                   {t("outcome-ack")}
@@ -264,7 +264,7 @@ export default function OutcomeCard({
                   onClick={async () => {
                     const result = await setCaseStatus(state.case.id, "filed");
                     if (!result.ok) setProblem(t("outcome-error-failed"));
-                    onChanged();
+                    onChanged(result.ok);
                   }}
                 >
                   {t("outcome-reopen")}

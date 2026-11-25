@@ -115,7 +115,7 @@ export default function PeopleCard({
 }: {
   state: Ready;
   writable: boolean;
-  onChanged: () => void;
+  onChanged: (saved?: boolean) => void;
 }) {
   const t = useTranslations("product");
   const [editing, setEditing] = useState<Member | "new" | null>(null);
@@ -220,7 +220,7 @@ export default function PeopleCard({
       return true;
     });
     // Taken out of one role and refused the other: what was done shows all the same.
-    if (!ok && removed.any) onChanged();
+    if (!ok && removed.any) onChanged(false);
   };
 
   const removingDialog = removing ? (
@@ -410,7 +410,7 @@ export default function PeopleCard({
                   loadingPosition="start"
                   onClick={() => void check(member)}
                 >
-                  {action.pending(`cpf-${person.person_id}`) ? sentence(words.check.doing) : t("case-cpf-check")}
+                  {action.label(`cpf-${person.person_id}`, sentence(words.check.doing), t("case-cpf-check"))}
                 </Button>
               ) : null}
               {writable ? (

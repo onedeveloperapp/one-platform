@@ -47,6 +47,8 @@ const live: LiveRead = {
   failed: false,
   acted: () => {},
   checkNow: () => {},
+  latest: async () => null,
+  shows: () => false,
 };
 
 const input = (overrides: Partial<CaseNowInput>): CaseNowInput => ({
@@ -200,7 +202,9 @@ describe("JourneyCard", () => {
     );
 
   it("says the person's action under way, and its ways wait until the screen shows what came of it", () => {
-    draw(waiting(), undefined, { action: { key: "plan", section: "rules", doing: "criando os processos" } });
+    draw(waiting(), undefined, {
+      action: { key: "plan", section: "rules", doing: "criando os processos", saved: false },
+    });
     expect(screen.getByText("Uma ação em andamento: criando os processos")).toBeTruthy();
     expect(screen.getByText("O andamento se atualiza assim que a ação terminar.")).toBeTruthy();
     expect((screen.getByRole("button", { name: "Resolver" }) as HTMLButtonElement).disabled).toBe(true);

@@ -36,7 +36,7 @@ export default function CourtCourse({
   view: CourseView | undefined;
   facts: CourseFacts;
   writable: boolean;
-  onChanged: () => void;
+  onChanged: (saved?: boolean) => void;
 }) {
   const t = useTranslations("product");
   const [busy, setBusy] = useState<"read" | "seen" | null>(null);
@@ -53,7 +53,7 @@ export default function CourtCourse({
           ? await requestProceedingRead(caseId, proceedingId)
           : await acknowledgeMovements(caseId, proceedingId);
       if (!result.ok) setProblem(result.code);
-      onChanged();
+      onChanged(result.ok);
     } catch {
       setProblem("failed");
     } finally {

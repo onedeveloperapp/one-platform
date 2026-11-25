@@ -1,4 +1,5 @@
 import type { CaseState } from "../case-types";
+import type { RunningAction } from "./case-action";
 import JourneyCard from "./journey-card";
 import { NextIntlClientProvider } from "next-intl";
 import type { ReactNode } from "react";
@@ -38,6 +39,8 @@ const live: LiveRead = {
   failed: false,
   acted: () => {},
   checkNow: () => {},
+  latest: async () => null,
+  shows: () => false,
 };
 
 const line = (id: string, owner: NowItem["owner"], key: string, values: Record<string, string | number>): NowItem => ({
@@ -67,7 +70,7 @@ const address = line("doc-address", "client", "case-now-missing-document", {
 });
 const flight = line("flight", "client", "case-now-missing-flight", {});
 
-function draw(lines: NowItem[], aside: ReactNode = null) {
+function draw(lines: NowItem[], aside: ReactNode = null, action: RunningAction | null = null) {
   const journey = caseJourney({
     status: "filed",
     createdAt: "2026-11-01T12:00:00Z",
@@ -82,7 +85,7 @@ function draw(lines: NowItem[], aside: ReactNode = null) {
         journey={journey}
         now={now(lines)}
         live={live}
-        action={null}
+        action={action}
         syncing={false}
         onJudgment={async () => {}}
         aside={aside}
@@ -115,5 +118,14 @@ describe("the top of the case in one card", () => {
   it("puts the forecast at the side of the top", () => {
     draw([firm], <p>Previsão ao lado</p>);
     expect(screen.getByText("Previsão ao lado")).toBeTruthy();
+  });
+
+  it("says the act is done while the screen brings itself up to it, and that a card's own save was saved", () => {
+    draw([firm], null, { key: "upload", section: "documents", doing: "enviando o documento", saved: true });
+    expect(screen.getByText("Feito. Atualizando a tela")).toBeTruthy();
+    expect(screen.queryByText(/Uma ação em andamento/)).toBeNull();
+    cleanup();
+    draw([firm], null, { key: "reload", section: null, doing: "atualizando o caso", saved: true });
+    expect(screen.getByText("Salvo. Atualizando a tela")).toBeTruthy();
   });
 });

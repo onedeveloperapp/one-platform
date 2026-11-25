@@ -303,8 +303,8 @@
     {
       "name": "useLiveRead",
       "from": "@/components/product/use-live-read",
-      "props": "{ stamp (the mark of what the screen shows, read with it; null when unreadable), read() (the latest mark), busy (the product works there now), onChange (the router's refresh) } -> { live, checkedAt, failed, acted(), checkNow() }",
-      "use": "Keeps a screen in step with the database while it is open: asks a light pulse every few seconds while the product works there or right after the person acted (call acted() from every write), less often otherwise, never on a hidden tab, and reads the screen again only when the mark changed. Say checkedAt as when the screen last knew it was current. One per screen, never an interval per card."
+      "props": "{ stamp (the mark of what the screen shows, read with it; null when unreadable), read() (the latest mark), busy (the product works there now), onChange (the router's refresh; a promise it returns is awaited before the next question) } -> { live, checkedAt, failed, acted(), checkNow(), latest() (the mark the database has now), shows(stamp) }; SCREEN_CHANGED (the window event a followed screen sends when it shows something new)",
+      "use": "Keeps a screen in step with the database while it is open: asks a light pulse every second and a half for half a minute after the person acted (call acted() from every write), every two seconds while the product works there, less often otherwise, never on a hidden tab, and reads the screen again only when the mark changed, never twice at once. Say checkedAt as when the screen last knew it was current. One per screen, never an interval per card. The mark is read BEFORE the rows the screen shows (a mark newer than its rows makes a stale screen take itself for current) and covers every table the screen reads. A screen that just wrote asks latest() and shows() to read itself again only when the write's own answer did not bring it. Whatever else follows the same account on the page (a bell) listens to SCREEN_CHANGED."
     },
     {
       "name": "ItemRows",

@@ -504,7 +504,7 @@ export default function RulesCard({
               void run("plan", () => createPlannedProceedings(state.case.id, rules.family.choice), words.plan)
             }
           >
-            {action.pending("plan") ? sentence(words.plan.doing) : t("case-plan-create")}
+            {action.label("plan", sentence(words.plan.doing), t("case-plan-create"))}
           </Button>
         </Box>
       ) : null}
@@ -525,7 +525,7 @@ export default function RulesCard({
                 loadingPosition="start"
                 onClick={saveClaims}
               >
-                {action.pending("claims") ? sentence(words.claim.doing) : t("case-claims-panel-save")}
+                {action.label("claims", sentence(words.claim.doing), t("case-claims-panel-save"))}
               </Button>
               <Button variant="text" color="grey" onClick={closePanel} disabled={action.pending("claims")}>
                 {t("cases-cancel")}
@@ -592,7 +592,7 @@ export default function RulesCard({
                   loading={action.pending("suspension")}
                   loadingPosition="start"
                 >
-                  {action.pending("suspension") ? sentence(words.suspension.doing) : t("case-suspension-save")}
+                  {action.label("suspension", sentence(words.suspension.doing), t("case-suspension-save"))}
                 </Button>
                 <Button variant="text" color="grey" onClick={closePanel} disabled={action.pending("suspension")}>
                   {t("cases-cancel")}
@@ -667,7 +667,7 @@ export default function RulesCard({
                       loadingPosition="start"
                       onClick={() => void run("weather", () => readCaseWeather(state.case.id), words.weather)}
                     >
-                      {action.pending("weather") ? sentence(words.weather.doing) : t("case-suspension-weather-read")}
+                      {action.label("weather", sentence(words.weather.doing), t("case-suspension-weather-read"))}
                     </Button>
                   </Box>
                 ) : (

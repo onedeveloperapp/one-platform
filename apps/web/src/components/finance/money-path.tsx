@@ -27,7 +27,16 @@ const ERROR_KEY: Record<string, string> = {
  * client directly where the firm or the case chose it and the court accepts it. Of the firm (the books'
  * configuration) or of one case (its money card), read where it is shown and changed in place by who may.
  */
-export default function MoneyPath({ caseId, writes }: { caseId: string | null; writes: boolean }) {
+export default function MoneyPath({
+  caseId,
+  writes,
+  onChanged,
+}: {
+  caseId: string | null;
+  writes: boolean;
+  /** The way was saved: the screen around the card reads itself again now, never when its pulse comes round. */
+  onChanged?: () => void;
+}) {
   const t = useTranslations("product");
   const [firm, setFirm] = useState<Path | null>(null);
   const [ofCase, setOfCase] = useState<CaseMoneyPath | null>(null);
@@ -59,6 +68,7 @@ export default function MoneyPath({ caseId, writes }: { caseId: string | null; w
     }
     if (caseId) setOfCase(await readCaseMoneyPath(caseId).catch(() => ofCase));
     else setFirm(chosen ?? "firm");
+    onChanged?.();
   };
 
   if (caseId) {

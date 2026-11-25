@@ -24,6 +24,7 @@ import {
   Typography,
 } from "@mui/material";
 
+import { SCREEN_CHANGED } from "@/components/product/use-live-read";
 import NiBell from "@/icons/nexture/ni-bell";
 import NiBellInactive from "@/icons/nexture/ni-bell-inactive";
 import NiMoney from "@/icons/nexture/ni-money";
@@ -64,6 +65,9 @@ function timeAgo(iso: string, locale: string) {
   if (days < 30) return format.format(-days, "day");
   return new Date(iso).toLocaleDateString(locale);
 }
+
+/** How often, at most, the bell answers a screen that says it changed. */
+const SCREEN_SIGNAL_EVERY_MS = 3_000;
 
 /**
  * Header bell backed by the notifications table (migration 0012). Rows are
@@ -109,20 +113,34 @@ export default function Notifications() {
     refresh();
   }, [refresh]);
 
-  // The bell is how the practitioner learns, AT THE COMPUTER, that a capture
-  // finished processing — the mobile push lands on the phone, but the row is
-  // also written to `notifications`. Refresh when the tab regains focus (she
-  // came back from the phone) and on a slow interval, so the badge updates
-  // without a page reload. Work only runs while the tab is visible.
+  // The bell follows the person with no reload: when the tab is in front of them again, on a slow interval, and at
+  // once when a screen that follows the database shows something new (`SCREEN_CHANGED`: what the person just did on
+  // a case, or what ONE did there, may have written or settled a notice; a minute of an old bell beside a screen that
+  // just changed read as a product out of step). Work only runs while the tab is visible, and the screen's signal is
+  // answered once every few seconds at most.
   useEffect(() => {
     const refreshIfVisible = () => {
       if (document.visibilityState === "visible") refresh();
     };
+    let last = 0;
+    let waiting: number | null = null;
+    const onScreenChanged = () => {
+      const wait = Math.max(0, last + SCREEN_SIGNAL_EVERY_MS - Date.now());
+      if (waiting !== null) return;
+      waiting = window.setTimeout(() => {
+        waiting = null;
+        last = Date.now();
+        refreshIfVisible();
+      }, wait);
+    };
     document.addEventListener("visibilitychange", refreshIfVisible);
+    window.addEventListener(SCREEN_CHANGED, onScreenChanged);
     const interval = window.setInterval(refreshIfVisible, 60_000);
     return () => {
       document.removeEventListener("visibilitychange", refreshIfVisible);
+      window.removeEventListener(SCREEN_CHANGED, onScreenChanged);
       window.clearInterval(interval);
+      if (waiting !== null) window.clearTimeout(waiting);
     };
   }, [refresh]);
 

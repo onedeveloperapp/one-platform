@@ -144,7 +144,7 @@ export default function FilingCard({
 }: {
   state: Ready;
   writable: boolean;
-  onChanged: () => void;
+  onChanged: (saved?: boolean) => void;
 }) {
   const t = useTranslations("product");
   const lawsuits = state.proceedings.filter((proceeding) => proceeding.status !== "closed");
@@ -273,7 +273,7 @@ function Lawsuit({
   proceeding: CaseProceeding;
   filing: CaseFiling | null;
   writable: boolean;
-  onChanged: () => void;
+  onChanged: (saved?: boolean) => void;
   /** A package asked for or a signature asked: the card asks again by itself for a while. */
   onStarted: () => void;
 }) {
@@ -335,6 +335,8 @@ function Lawsuit({
   // The action of this lawsuit under way, by its name; any other action of the case keeps these controls waiting too.
   const runningKey = (Object.keys(words) as ActionKey[]).find((key) => action.pending(keyOf(key))) ?? null;
   const busy: string | null = runningKey ?? (action.busy ? "elsewhere" : null);
+  /** What a button of this lawsuit says: its verb while written, "Feito" once the write answered, its own name otherwise. */
+  const said = (key: ActionKey, doing: string, idle: string) => action.label(keyOf(key), doing, idle);
   const [problem, setProblem] = useState<string | null>(null);
   // Which action a problem answers: one of the signature is said beside it.
   const [problemFor, setProblemFor] = useState<string | null>(null);
@@ -414,7 +416,7 @@ function Lawsuit({
         return false;
       }
     });
-    if (stale.now) onChanged();
+    if (stale.now) onChanged(false);
     return { ok, code };
   };
 
@@ -424,7 +426,7 @@ function Lawsuit({
     try {
       const result = await requestPackageSignature(state.case.id, filing.id);
       if (!result.ok) {
-        if (SIGNATURE_STALE.has(result.code)) onChanged();
+        if (SIGNATURE_STALE.has(result.code)) onChanged(false);
         return t(caseErrorKey(result.code));
       }
       onStarted();
@@ -625,7 +627,7 @@ function Lawsuit({
           : []),
         {
           key: "cancel",
-          label: busy === "cancel" ? sentence(words.cancel.doing) : t("filing-cancel"),
+          label: said("cancel", sentence(words.cancel.doing), t("filing-cancel")),
           onClick: () => setCancelling(true),
           disabled: busy !== null,
         },
@@ -1151,7 +1153,7 @@ function Lawsuit({
                         loadingPosition="start"
                         onClick={() => (filedBeforeOne ? setConfirmingPast(true) : void attach(false))}
                       >
-                        {busy === "receipt" ? sentence(words.receipt.doing) : t("filing-receipt-attach")}
+                        {said("receipt", sentence(words.receipt.doing), t("filing-receipt-attach"))}
                       </Button>
                     }
                   >
@@ -1224,7 +1226,7 @@ function Lawsuit({
               loadingPosition="start"
               onClick={() => void ask()}
             >
-              {busy === "ask" ? sentence(words.ask.doing) : t("filing-build")}
+              {said("ask", sentence(words.ask.doing), t("filing-build"))}
             </Button>
             {again ? (
               <Button variant="text" color="grey" size="small" disabled={busy !== null} onClick={() => setAgain(false)}>

@@ -14,7 +14,7 @@ type Ready = Extract<CaseState, { kind: "ready" }>;
  * what the firm kept and why, what is passed on and by when, what is held. Shown once a release of the case is
  * received; ONE never pays.
  */
-export default function MoneyCard({ state }: { state: Ready }) {
+export default function MoneyCard({ state, onChanged }: { state: Ready; onChanged?: (saved?: boolean) => void }) {
   const t = useTranslations("product");
   const reads = state.financeLevel === "view" || state.financeLevel === "operate" || state.financeLevel === "configure";
   const received = (state.outcomes ?? []).some((fact) => fact.kind === "alvara" && fact.receivedOn !== null);
@@ -38,8 +38,8 @@ export default function MoneyCard({ state }: { state: Ready }) {
       description={t("money-case-description")}
       defaultOpen
     >
-      <MoneyPath caseId={state.case.id} writes={writes} />
-      {received ? <MoneyShares caseId={state.case.id} /> : null}
+      <MoneyPath caseId={state.case.id} writes={writes} onChanged={onChanged} />
+      {received ? <MoneyShares caseId={state.case.id} onChanged={onChanged} /> : null}
     </CollapsibleCard>
   );
 }
