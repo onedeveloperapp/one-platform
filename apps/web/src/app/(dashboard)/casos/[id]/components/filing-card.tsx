@@ -1125,9 +1125,6 @@ function Lawsuit({
                       {t("filing-receipt-before-one", { day: formatDayBr(openedOn) ?? openedOn })}
                     </StateLine>
                   ) : null}
-                  <Typography variant="body2" className="text-text-secondary">
-                    {t("filing-receipt-read-check")}
-                  </Typography>
                   {/* What came of attaching it, where the person acted: the top of the lawsuit is out of sight here. */}
                   {problem && problemFor === "receipt" ? (
                     <Alert
@@ -1139,18 +1136,27 @@ function Lawsuit({
                       {t(caseErrorKey(problem))}
                     </Alert>
                   ) : null}
-                  <Box>
-                    <Button
-                      variant="contained"
-                      size="small"
-                      disabled={busy !== null || !cnjOk || !filedOn}
-                      loading={busy === "receipt"}
-                      loadingPosition="start"
-                      onClick={() => (filedBeforeOne ? setConfirmingPast(true) : void attach(false))}
-                    >
-                      {busy === "receipt" ? sentence(words.receipt.doing) : t("filing-receipt-attach")}
-                    </Button>
-                  </Box>
+                  {/* A receipt read is not attached yet: what is still owed is the lawyer's word on the number and the
+                      day, said in the attention colour with its one button. The owner sent the test case's receipt four
+                      times and stopped at "Lido", taking the receipt as attached (2026-11-24). */}
+                  <StateLine
+                    tone="attention"
+                    emphasis
+                    action={
+                      <Button
+                        variant="contained"
+                        size="small"
+                        disabled={busy !== null || !cnjOk || !filedOn}
+                        loading={busy === "receipt"}
+                        loadingPosition="start"
+                        onClick={() => (filedBeforeOne ? setConfirmingPast(true) : void attach(false))}
+                      >
+                        {busy === "receipt" ? sentence(words.receipt.doing) : t("filing-receipt-attach")}
+                      </Button>
+                    }
+                  >
+                    {t("filing-receipt-read-check")}
+                  </StateLine>
                 </>
               )}
             </Box>

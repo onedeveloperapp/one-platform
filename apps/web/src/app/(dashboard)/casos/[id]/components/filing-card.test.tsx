@@ -7,7 +7,7 @@ import messages from "@flyee/content/messages/pt-BR.json";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 
 // The receipt of a lawsuit filed before its case was in ONE (0286), as the lawyer attaches it on the case's card
-// "Protocolo": the receipt read, its day before the case was opened, "Anexar recibo" asks first whether the lawsuit
+// "Protocolo": the receipt read, its day before the case was opened, "Confirmar e anexar" asks first whether the lawsuit
 // was filed before, and confirming attaches it with that word. Every number and name here is invented.
 
 vi.mock("server-only", () => ({}));
@@ -155,10 +155,13 @@ async function readReceipt() {
     });
   });
   await screen.findByText(/anterior à abertura do caso no ONE/, undefined, { timeout: 15_000 });
-  fireEvent.click(screen.getByRole("button", { name: "Anexar recibo" }));
-  await screen.findByText("A ação já tinha sido protocolada?", undefined, { timeout: 15_000 });
+  // Read is not attached: the card says what is still owed, with its button (the owner stopped at "Lido", 2026-11-24).
+  expect(screen.getByText(/O recibo ainda não está anexado/)).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Confirmar e anexar" }));
+  const dialog = await screen.findByRole("dialog", undefined, { timeout: 15_000 });
+  expect(within(dialog).getByText("A ação já tinha sido protocolada?")).toBeTruthy();
   await act(async () => {
-    fireEvent.click(screen.getByRole("button", { name: "Confirmar e anexar" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Confirmar e anexar" }));
   });
 }
 
