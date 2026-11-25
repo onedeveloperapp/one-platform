@@ -36,7 +36,9 @@ import { recordResidenceRelation, waiveResidenceDeclaration } from "@/lib/cases/
  * bill it is (ONE read the name and may have erred), who the holder is to the client and who said it, and where the
  * client's declaration of residence stands: the client's word, an address of another city a person looks at, ONE
  * issuing it, the client signing it, signed. The firm records who the holder is as the client told it, and a partner
- * or a lawyer goes on without the declaration, after reading what that may cost.
+ * or a lawyer goes on without the declaration, after reading what that may cost. In the declaration's place, a
+ * document of the client's link to the holder (0294): where the latest one stands, the firm sending one for the
+ * client, and the declaration settled by it.
  */
 export default function ResidenceLine({
   caseId,
@@ -44,6 +46,7 @@ export default function ResidenceLine({
   recordAddress = null,
   writable,
   mayWaive,
+  onSendLink,
   onChanged,
 }: {
   caseId: string;
@@ -53,6 +56,8 @@ export default function ResidenceLine({
   writable: boolean;
   /** A partner or a lawyer of the firm: who may go on without the declaration. */
   mayWaive: boolean;
+  /** The firm sends the document of the link for the client (0294). */
+  onSendLink?: () => void;
   onChanged: () => void;
 }) {
   const t = useTranslations("product");
@@ -66,7 +71,7 @@ export default function ResidenceLine({
       : t(RELATION_KEY[view.relation]).toLowerCase()
     : null;
   const who = relation ? t("residence-holder-relation", { holder: view.holder, relation }) : view.holder;
-  const open = view.standing !== "signed" && view.standing !== "waived";
+  const open = view.standing !== "signed" && view.standing !== "waived" && view.standing !== "linked";
   const actions = [
     ...(writable && (view.standing === "asking" || view.standing === "conflict" || view.standing === "issuing")
       ? [
@@ -115,8 +120,32 @@ export default function ResidenceLine({
         return <StateLine tone="done">{t("residence-signed", { who })}</StateLine>;
       case "waived":
         return <StateLine tone="info">{t("residence-waived", { reason: view.endedReason ?? "" })}</StateLine>;
+      case "linked":
+        return <StateLine tone="done">{t("residence-linked", { who })}</StateLine>;
     }
   })();
+
+  // The document of the link, in the declaration's place (0294), while the declaration is still owed.
+  const linkLine =
+    view.standing !== "asking" && view.standing !== "issuing" && view.standing !== "signing" ? null : view.link
+        ?.status === "received" ? (
+      <StateLine tone="waiting">{t("residence-link-checking")}</StateLine>
+    ) : (
+      <StateLine
+        tone={view.link?.status === "rejected" ? "attention" : "info"}
+        action={
+          writable && onSendLink ? (
+            <Button variant="outlined" color="grey" size="small" onClick={onSendLink}>
+              {t("residence-link-send")}
+            </Button>
+          ) : undefined
+        }
+      >
+        {view.link?.status === "rejected"
+          ? t("residence-link-refused", { reason: view.link.reason ?? "" })
+          : t("residence-link-instead")}
+      </StateLine>
+    );
 
   return (
     <Box className="flex flex-col gap-2">
@@ -124,6 +153,7 @@ export default function ResidenceLine({
         <Box className="min-w-0 flex-1">{line}</Box>
         {actions.length > 0 ? <QuickActions label={t("residence-actions")} actions={actions} /> : null}
       </Box>
+      {linkLine}
       {holderCorrected(view) ? (
         <StateLine tone="info">{t("residence-holder-corrected", { read: view.holderRead })}</StateLine>
       ) : view.standing === "asking" || view.standing === "issuing" ? (

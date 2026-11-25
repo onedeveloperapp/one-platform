@@ -69,6 +69,7 @@ describe("the declaration of residence", () => {
         billCity: "Goiânia",
         standing: "signing",
         endedReason: null,
+        link: null,
       },
       expect.objectContaining({
         id: "d4",
@@ -79,6 +80,44 @@ describe("the declaration of residence", () => {
       }),
     ]);
     expect(residenceViewsOf(null)).toEqual([]);
+  });
+
+  // 0294: a document of the client's link to the holder settles the declaration.
+  it("reads a declaration a document of the link settled, and the latest document of the link of one still owed", () => {
+    const views = residenceViewsOf([
+      {
+        id: "d5",
+        person_id: "p1",
+        document_id: "doc5",
+        holder: "Joana Teste",
+        status: "linked",
+        blocker: null,
+        link: { id: "l5", status: "accepted", reason: null },
+      },
+      {
+        id: "d6",
+        person_id: "p2",
+        document_id: "doc6",
+        holder: "Carlos Teste",
+        status: "linked",
+        blocker: "residence_address_conflict",
+      },
+      {
+        id: "d7",
+        person_id: "p3",
+        document_id: "doc7",
+        holder: "Rita Teste",
+        status: "open",
+        blocker: "residence_relation_missing",
+        link: { id: "l7", status: "rejected", reason: "Falta o nome de Rita." },
+      },
+    ]);
+    expect(views.map((view) => [view.id, view.standing, view.link?.status ?? null])).toEqual([
+      ["d5", "linked", "accepted"],
+      ["d6", "conflict", null],
+      ["d7", "asking", "rejected"],
+    ]);
+    expect(views[2].link?.reason).toBe("Falta o nome de Rita.");
   });
 
   it("tells a holder's name corrected from the same name written as a name", () => {

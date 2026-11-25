@@ -141,6 +141,7 @@ export const FILING_LABEL: Record<FilingKind, string> = {
   identity: "Documento de identidade",
   address_proof: "Comprovante de endereço",
   residence_declaration: "Declaração de residência",
+  residence_link: "Comprovante de vínculo",
   free_justice_declaration: "Declaração de hipossuficiência",
   income_proof: "Comprovante de renda",
   ticket: "Bilhete",

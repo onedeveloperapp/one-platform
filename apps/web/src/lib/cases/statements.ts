@@ -108,6 +108,8 @@ export function chronologyBriefing(
   contested: { chronology: string | null; clientNote: string | null } | null = null,
   returned: { proposal: string | null; firmNote: string | null } | null = null,
   added: { chronology: string | null; answers: string | null } | null = null,
+  /** The case's other accounts, oldest first (0297): what one of them told is no gap of this one. */
+  others: readonly { recebido_em?: string; relato: string; respostas?: string }[] = [],
 ): string {
   const known = [
     caseKindForModel(trip.incident),
@@ -129,6 +131,12 @@ export function chronologyBriefing(
     parts.push(
       "O que os documentos aceitos pelo escritório dizem da compra da passagem e dos gastos:",
       JSON.stringify({ compras, gastos }, null, 2),
+    );
+  }
+  if (others.length > 0) {
+    parts.push(
+      "Outros relatos do caso, já recebidos (o que um deles já conta não falta neste):",
+      JSON.stringify(others, null, 2),
     );
   }
   parts.push("Relato do cliente, nas palavras dele:", account.trim());
@@ -161,6 +169,34 @@ export function chronologyBriefing(
   }
   return parts.join("\n\n");
 }
+
+/**
+ * The accounts the firm may complement with what the client told it (0297): an order of the facts decided, with what
+ * it says is missing and the questions for it, and no work on it now. Pure.
+ */
+export function statementsToComplement<
+  T extends {
+    id: string;
+    chronologyStatus: ChronologyStatus;
+    missingTopics: readonly unknown[];
+    questions: string[];
+    clientAdded: string | null;
+  },
+>(statements: readonly T[]): T[] {
+  return statements.filter(
+    (statement) =>
+      (statement.chronologyStatus === "approved" || statement.chronologyStatus === "confirmed") &&
+      statement.missingTopics.length > 0 &&
+      statement.questions.length > 0,
+  );
+}
+
+/** What the firm writes for an account's questions, as the account keeps it: each question, and its answer. */
+export const complementText = (pairs: readonly { question: string; answer: string }[]): string =>
+  pairs
+    .filter((pair) => pair.answer.trim().length > 0)
+    .map((pair) => `${pair.question.trim()}\n${pair.answer.trim()}`)
+    .join("\n\n");
 
 // ---------- A statement, as a screen reads it ----------
 

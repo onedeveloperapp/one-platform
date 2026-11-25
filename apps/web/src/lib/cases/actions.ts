@@ -140,9 +140,12 @@ export async function createCase(input: {
   client: Record<string, unknown>;
   origin?: string | null;
   summary?: string | null;
+  /** A person of the firm the case is opened for, from their page (0292): the client fields are then left aside. */
+  personId?: string | null;
 }): Promise<CaseResult<{ caseId: string; seq: number; partyId: string | null }>> {
   const context = await getMemberContext();
   if (!context?.firm) return { ok: false, code: "not_authorized" };
+  if (input?.personId != null && !isId(input.personId)) return { ok: false, code: "person_not_found" };
   const { data, error } = await context.supabase.rpc("create_case", {
     target_org: context.firm.id,
     target_incident: String(input?.incident ?? ""),
@@ -151,6 +154,39 @@ export async function createCase(input: {
     target_client: plainFields(input?.client, PERSON_FIELDS),
     target_origin: input?.origin ? String(input.origin) : null,
     target_summary: input?.summary ? String(input.summary) : null,
+    target_person: input?.personId ?? null,
+  });
+  const result = fold(data, error, (answer) => ({
+    caseId: String(answer.case_id),
+    seq: Number(answer.seq),
+    partyId: answer.party_id ? String(answer.party_id) : null,
+  }));
+  if (result.ok) refresh();
+  return result;
+}
+
+/**
+ * Opens a case of an area of the firm (0292): the area, the kind of case its script lists, and the client, a person
+ * of the firm (`personId`) or the one the panel gives.
+ */
+export async function createAreaCase(input: {
+  areaId: string;
+  caseType: string;
+  client: Record<string, unknown>;
+  origin?: string | null;
+  personId?: string | null;
+}): Promise<CaseResult<{ caseId: string; seq: number; partyId: string | null }>> {
+  const context = await getMemberContext();
+  if (!context?.firm) return { ok: false, code: "not_authorized" };
+  if (!isId(input?.areaId)) return { ok: false, code: "area_not_found", field: "area" };
+  if (input?.personId != null && !isId(input.personId)) return { ok: false, code: "person_not_found" };
+  const { data, error } = await context.supabase.rpc("create_area_case", {
+    target_org: context.firm.id,
+    target_area: input.areaId,
+    target_type: String(input?.caseType ?? ""),
+    target_client: plainFields(input?.client, PERSON_FIELDS),
+    target_person: input?.personId ?? null,
+    target_origin: input?.origin ? String(input.origin) : null,
   });
   const result = fold(data, error, (answer) => ({
     caseId: String(answer.case_id),

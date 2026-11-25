@@ -271,6 +271,15 @@ export default function DocumentsCard({
           })()}
           writable={writable}
           mayWaive={state.lawyer}
+          onSendLink={() => {
+            // The document of the client's link to the holder, sent by the firm for the client (0294).
+            setKind("residence_link");
+            setParty(
+              state.parties.find((candidate) => candidate.person.person_id === residenceOf(document)!.personId)
+                ?.partyId ?? "",
+            );
+            input.current?.click();
+          }}
           onChanged={onChanged}
         />
       ) : null}

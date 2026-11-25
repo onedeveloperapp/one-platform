@@ -351,6 +351,14 @@ export function interviewRows(view: InterviewView): {
 }
 
 /** Where the round stands: the question asked now among the ones it asks, and how many of them have an answer. */
+/** The questions of an open interview still to answer: the one asked now, and those still to come (2026-11-25). */
+export function openInterviewQuestions(view: InterviewView | null): InterviewQuestion[] {
+  if (!view || view.status !== "open") return [];
+  return interviewRows(view)
+    .filter((row) => row.state === "asked" || row.state === "next")
+    .map((row) => row.question);
+}
+
 export function interviewCounts(view: InterviewView): { position: number; total: number; done: number } {
   const { position, total } = interviewProgress(view.facts);
   const asked = new Set(questionsOf(view.facts));

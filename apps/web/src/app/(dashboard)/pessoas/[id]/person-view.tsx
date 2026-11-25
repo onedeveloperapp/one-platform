@@ -7,6 +7,7 @@ import { useState } from "react";
 
 import { Alert, Box, Button, Card, CardContent, MenuItem, TextField, Typography } from "@mui/material";
 
+import NewCaseDialog from "@/app/(dashboard)/casos/components/new-case-dialog";
 import { useViewer } from "@/components/layout/viewer-context";
 import { PersonModuleSections } from "@/components/people/module-people";
 import CardTitle from "@/components/product/card-title";
@@ -17,9 +18,11 @@ import StateLine from "@/components/product/state-line";
 import StatusChip from "@/components/product/status-chip";
 import NiDocumentFull from "@/icons/nexture/ni-document-full";
 import NiFolder from "@/icons/nexture/ni-folder";
+import NiFolderPlus from "@/icons/nexture/ni-folder-plus";
 import NiMessages from "@/icons/nexture/ni-messages";
 import NiShieldCheck from "@/icons/nexture/ni-shield-check";
 import NiUser from "@/icons/nexture/ni-user";
+import type { AreaChoice } from "@/lib/cases/area-choices";
 import { caseLabel, DOCUMENT_KIND_KEY, STATUS_KEY } from "@/lib/cases/cases";
 import { caseKindLabelKey } from "@/lib/modules/registry";
 import { KIND_KEY as NOTICE_KIND_KEY } from "@/lib/notices/notices";
@@ -30,7 +33,14 @@ import { formatCpf } from "@flyee/fields";
 import { formatDayBr } from "@flyee/rules/person";
 
 export type PersonState =
-  | { kind: "ready"; id: string; page: PersonPage; factor: "ok" | "challenge" | "missing" }
+  | {
+      kind: "ready";
+      id: string;
+      page: PersonPage;
+      /** What a case opened for the person needs (0292). */
+      newCase: { airlines: { iata: string; name: string }[]; areas: AreaChoice[] };
+      factor: "ok" | "challenge" | "missing";
+    }
   | { kind: "no-firm" }
   | { kind: "unavailable" }
   | { kind: "error" };
@@ -80,6 +90,7 @@ export default function PersonView({ state }: { state: PersonState }) {
   const viewer = useViewer();
   const [marketing, setMarketing] = useState(false);
   const [data, setData] = useState<"export" | "erase" | null>(null);
+  const [opening, setOpening] = useState(false);
 
   if (state.kind !== "ready") {
     const failedKey = state.kind === "error" ? "people-load-error" : "settings-unavailable";
@@ -193,7 +204,25 @@ export default function PersonView({ state }: { state: PersonState }) {
 
       <Card component="section" aria-labelledby="person-cases">
         <CardContent className="flex flex-col gap-3">
-          <CardTitle id="person-cases" icon={<NiFolder size="medium" />} title={t("person-cases-title")} />
+          <CardTitle
+            id="person-cases"
+            icon={<NiFolder size="medium" />}
+            title={t("person-cases-title")}
+            actions={
+              // A case for somebody the firm already has opens from here, the exception to the cases ONE opens
+              // (0292): nothing of the person is asked again.
+              erased ? undefined : (
+                <Button
+                  size="small"
+                  variant="text"
+                  startIcon={<NiFolderPlus size="small" />}
+                  onClick={() => setOpening(true)}
+                >
+                  {t("person-case-new")}
+                </Button>
+              )
+            }
+          />
           {page.cases.length === 0 ? (
             <Typography variant="body2" className="text-text-secondary">
               {t("person-cases-none")}
@@ -381,6 +410,15 @@ export default function PersonView({ state }: { state: PersonState }) {
           factor={state.factor}
           onClose={() => setData(null)}
           onDone={() => router.refresh()}
+        />
+      ) : null}
+      {opening ? (
+        <NewCaseDialog
+          airlines={state.newCase.airlines}
+          areas={state.newCase.areas}
+          person={{ id: state.id, name }}
+          onClose={() => setOpening(false)}
+          onCreated={(caseId) => router.push(`/casos/${caseId}`)}
         />
       ) : null}
     </Box>

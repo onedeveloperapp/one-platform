@@ -32,6 +32,27 @@ export async function sendForReading(file: File, reading: PrefillReading): Promi
   return { ok: false, code: read.code, fileId: FILE_REFUSED.includes(read.code) ? null : started.fileId };
 }
 
+/**
+ * A document a form keeps without reading it (0294): the reservation and the bytes, the file joined to the case once
+ * it is saved, where ONE checks it as any document of the case. Answers the file, or why it was not kept.
+ */
+export async function sendForKeeping(file: File): Promise<{ ok: true; fileId: string } | { ok: false; code: string }> {
+  const mime = mimeOf(file);
+  const started = await startCaseUpload({ name: file.name, mime, bytes: file.size });
+  if (!started.ok) return { ok: false, code: started.code };
+  const uploaded = await uploadToSignedUrl({
+    storagePath: started.storagePath,
+    uploadToken: started.uploadToken,
+    file,
+    contentType: mime,
+  });
+  if (!uploaded) {
+    void dropPrefillUpload(started.fileId);
+    return { ok: false, code: "not_uploaded" };
+  }
+  return { ok: true, fileId: started.fileId };
+}
+
 /** The files a form read and never saved go, when the form is closed or a file is sent again in their place. */
 export function dropUnsaved(fileIds: readonly (string | null | undefined)[]): void {
   for (const fileId of fileIds) if (fileId) void dropPrefillUpload(fileId);

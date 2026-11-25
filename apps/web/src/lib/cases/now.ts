@@ -53,6 +53,11 @@ export type NowItem = {
    * but never a reason to hold the screen while the court takes its time.
    */
   outside?: boolean;
+  /**
+   * The client's account lacks what the interview still asks (the owner, 2026-11-25): the firm may complement it with
+   * what the client told it, in the line itself, and the line stays in sight among the client's turns.
+   */
+  complement?: boolean;
 };
 
 /** Who the case is with now. */
@@ -277,6 +282,7 @@ const DOCUMENT_PHRASE_KEY: Record<DocumentKind, string> = {
   evidence: "case-now-document-evidence",
   power_of_attorney: "case-now-document-power-of-attorney",
   residence_declaration: "case-now-document-residence-declaration",
+  residence_link: "case-now-document-residence-link",
   free_justice_declaration: "case-now-document-free-justice-declaration",
   income_proof: "case-now-document-income-proof",
   contract: "case-now-document-contract",
@@ -657,6 +663,7 @@ export function caseNow(input: CaseNowInput): CaseNow {
                     }
                 : { key: "case-now-account-incomplete" },
             section: "statements",
+            complement: true,
           }),
         );
         break;

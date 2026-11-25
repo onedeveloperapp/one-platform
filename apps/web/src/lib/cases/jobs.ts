@@ -220,7 +220,9 @@ export const caseSweeps: Sweep[] = [
    */
   {
     key: "case-advance",
-    when: { every: 10 },
+    // Every beat (2026-11-25): a case whose last step was not followed right after (a signature the clock found,
+    // a look that failed) waited up to ten minutes for its lawsuits and its piece.
+    when: { every: 5 },
     whileUsed: true,
     run: async (service, until) => {
       const outcomes: Record<string, number> = {};

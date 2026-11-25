@@ -2,7 +2,7 @@
 
 import { ClientSection } from "./client-section";
 import { useTranslations } from "next-intl";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import {
   Alert,
@@ -16,9 +16,11 @@ import {
   TextField,
 } from "@mui/material";
 
+import { DOCUMENT_SLOT_ACCEPT } from "@/components/cases/document-slot";
 import StateLine from "@/components/product/state-line";
+import { caseErrorKey } from "@/lib/cases/cases";
 import type { ClientResidenceItem } from "@/lib/cases/client-link";
-import { answerResidence } from "@/lib/cases/client-link-actions";
+import { answerResidence, finishClientUpload, startClientUpload } from "@/lib/cases/client-link-actions";
 import {
   isResidenceRelation,
   RELATION_KEY,
@@ -26,11 +28,14 @@ import {
   residenceErrorKey,
   type ResidenceRelation,
 } from "@/lib/cases/residence";
+import { mimeOf, uploadToSignedUrl } from "@/lib/files/browser-upload";
 
 /**
  * A bill the client sent in somebody else's name, which the firm accepts with a declaration of residence (migration
  * 0123): the page says whose bill it is (as read, which the client may correct) and asks who that person is to them;
- * then the declaration comes to sign, below. Once it was sent to sign, the answer stays as it was.
+ * then the declaration comes to sign, below. Once it was sent to sign, the answer stays as it was. In the declaration's
+ * place, the client may send a document of their link to the holder (0294): ONE checks the names on it, and one that
+ * shows both settles the declaration.
  */
 export default function ClientResidence({
   token,
@@ -72,6 +77,41 @@ function ResidenceItem({
   const [holder, setHolder] = useState(item.holder);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
+  const input = useRef<HTMLInputElement>(null);
+  const [sendingLink, setSendingLink] = useState(false);
+  const [linkProblem, setLinkProblem] = useState<string | null>(null);
+
+  // The document of the link, sent straight to the case: ONE checks it there, against the holder of the bill.
+  const sendLink = async (file: File) => {
+    if (!item.party_id) return;
+    setSendingLink(true);
+    setLinkProblem(null);
+    try {
+      const mime = mimeOf(file);
+      const started = await startClientUpload(token, {
+        kind: "residence_link",
+        partyId: item.party_id,
+        name: file.name,
+        mime,
+        bytes: file.size,
+      });
+      if (!started.ok) return setLinkProblem(started.code);
+      const uploaded = await uploadToSignedUrl({
+        storagePath: started.storagePath,
+        uploadToken: started.uploadToken,
+        file,
+        contentType: mime,
+      });
+      if (!uploaded) return setLinkProblem("not_uploaded");
+      const finished = await finishClientUpload(token, started.documentId);
+      if (!finished.ok) return setLinkProblem(finished.code);
+    } catch {
+      setLinkProblem("not_uploaded");
+    } finally {
+      setSendingLink(false);
+      onSaved();
+    }
+  };
 
   const said = answered
     ? answered === "outro" && item.note
@@ -106,7 +146,9 @@ function ResidenceItem({
       title={t("client-residence-title")}
       lead={t("client-residence-body", { holder: item.holder })}
     >
-      {item.issued ? (
+      {item.linked ? (
+        <StateLine tone="done">{t("client-residence-linked", { holder: item.holder })}</StateLine>
+      ) : item.issued ? (
         <StateLine tone="done">{t("client-residence-issued")}</StateLine>
       ) : !editing && said ? (
         <Box className="flex flex-col gap-2">
@@ -169,6 +211,51 @@ function ResidenceItem({
               {busy ? t("residence-saving") : t("client-residence-send")}
             </Button>
           </Box>
+        </Box>
+      ) : null}
+      {!item.linked && editable && item.party_id ? (
+        // In the declaration's place: a document of the link to the holder (0294).
+        <Box className="flex flex-col gap-2">
+          {item.link?.status === "received" ? (
+            <StateLine tone="waiting">{t("client-residence-link-checking")}</StateLine>
+          ) : (
+            <StateLine
+              tone={item.link?.status === "rejected" ? "attention" : "info"}
+              action={
+                <Button
+                  variant="outlined"
+                  color="grey"
+                  size="small"
+                  disabled={sendingLink}
+                  onClick={() => input.current?.click()}
+                >
+                  {sendingLink ? t("client-residence-link-sending") : t("client-residence-link-send")}
+                </Button>
+              }
+            >
+              {item.link?.status === "rejected"
+                ? t("client-residence-link-refused", { reason: item.link.reason ?? "" })
+                : t("client-residence-link-instead", { holder: item.holder })}
+            </StateLine>
+          )}
+          {linkProblem ? (
+            <Alert severity="error" className="neutral bg-background-paper/60!" role="alert">
+              {t(caseErrorKey(linkProblem))}
+            </Alert>
+          ) : null}
+          <input
+            ref={input}
+            type="file"
+            accept={DOCUMENT_SLOT_ACCEPT}
+            hidden
+            tabIndex={-1}
+            aria-hidden
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              event.target.value = "";
+              if (file) void sendLink(file);
+            }}
+          />
         </Box>
       ) : null}
     </ClientSection>

@@ -91,6 +91,17 @@ function dayOf(value: unknown, notAfter: string | null): string {
   return day;
 }
 
+/** A day and a month as a document prints them ("22/10"), as `MM-DD`, or "". */
+function dayMonthOf(value: unknown): string {
+  const match = /^(\d{1,2})[/.-](\d{1,2})$/.exec(text(value, 10));
+  if (!match) return "";
+  const day = Number(match[1]);
+  const month = Number(match[2]);
+  // 2024 is a leap year: 29/02 is a day some year has.
+  if (!dayOf(`2024-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`, null)) return "";
+  return `${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
 /** A local time as a form takes it (`YYYY-MM-DDTHH:MM`), or "". */
 function localTimeOf(value: unknown): string {
   const time = text(value, 25).replace(" ", "T").slice(0, 16);
@@ -110,6 +121,11 @@ export type PrefillLeg = {
   destination_iata: string;
   scheduled_departure_local: string;
   scheduled_arrival_local: string;
+  /**
+   * The day and the month of the departure as printed (`MM-DD`), read even when the document prints no year (0293):
+   * the year is never supposed, and the person chooses it.
+   */
+  departure_day?: string;
 };
 
 /** What ONE read of an identity, a proof of address or a trip's document. */
@@ -188,6 +204,8 @@ export function documentReadingOf(raw: unknown, today: string): DocumentReading 
       destination_iata: destination,
       scheduled_departure_local: localTimeOf(leg.saida_prevista),
       scheduled_arrival_local: localTimeOf(leg.chegada_prevista),
+      // Only where it was read: a leg with no day keeps the shape it always had.
+      ...(dayMonthOf(leg.dia_mes_saida) ? { departure_day: dayMonthOf(leg.dia_mes_saida) } : {}),
     });
   }
   legs.sort((a, b) => a.scheduled_departure_local.localeCompare(b.scheduled_departure_local));
@@ -213,17 +231,69 @@ export const legComplete = (leg: PrefillLeg): boolean =>
       leg.scheduled_arrival_local,
   );
 
-/** What a new case takes from its documents: the airline of the first flight, and its day. */
+/** A day the flight of a new case may be, when the ticket does not make it clear (0293). */
+export type FlightDayChoice = {
+  /** `YYYY-MM-DD`. */
+  date: string;
+  /** The airline of the leg, when the platform knows it, else "". */
+  airline: string;
+  flight: string;
+  origin: string;
+  destination: string;
+  /** The year was printed: the choice is between legs. Otherwise between the years the printed day may be of. */
+  yearRead: boolean;
+};
+
+/**
+ * What a new case takes from its trip's document: the airline and the day of the flight when the document makes
+ * them clear, else the days the person chooses among (0293). The flights on one day are that day; flights on
+ * different days ask which one had the problem; a day printed without its year asks which year, among the last two
+ * (`today`'s and the one before), never supposed.
+ */
 export function caseFactsOf(
   reading: DocumentReading | null,
   airlines: readonly { iata: string }[],
-): { airline: string; flightDate: string } {
-  const first = reading?.legs.find((leg) => leg.flight_number || leg.scheduled_departure_local) ?? null;
-  const code = first?.flight_number.slice(0, 2) ?? "";
-  return {
-    airline: airlines.some((airline) => airline.iata === code) ? code : "",
-    flightDate: first?.scheduled_departure_local.slice(0, 10) ?? "",
+  today: string,
+): { airline: string; flightDate: string; choices: FlightDayChoice[] } {
+  const legs = reading?.legs ?? [];
+  const airlineOf = (flight: string) => {
+    const code = flight.slice(0, 2);
+    return airlines.some((airline) => airline.iata === code) ? code : "";
   };
+  const firstAirline = airlineOf(legs.find((leg) => leg.flight_number)?.flight_number ?? "");
+  const choiceOf = (leg: PrefillLeg, date: string, yearRead: boolean): FlightDayChoice => ({
+    date,
+    airline: airlineOf(leg.flight_number),
+    flight: leg.flight_number,
+    origin: leg.origin_iata,
+    destination: leg.destination_iata,
+    yearRead,
+  });
+
+  const dated = legs.filter((leg) => leg.scheduled_departure_local);
+  const days = [...new Set(dated.map((leg) => leg.scheduled_departure_local.slice(0, 10)))];
+  if (days.length === 1) {
+    const leg = dated[0];
+    return { airline: airlineOf(leg.flight_number) || firstAirline, flightDate: days[0], choices: [] };
+  }
+  if (days.length > 1) {
+    const choices = dated.map((leg) => choiceOf(leg, leg.scheduled_departure_local.slice(0, 10), true));
+    const airlinesOf = new Set(choices.map((choice) => choice.airline));
+    return { airline: airlinesOf.size === 1 ? choices[0].airline : "", flightDate: "", choices };
+  }
+
+  const year = Number(today.slice(0, 4));
+  const choices: FlightDayChoice[] = [];
+  const seen = new Set<string>();
+  for (const leg of legs) {
+    if (!leg.departure_day || seen.has(leg.departure_day) || seen.size >= 3) continue;
+    seen.add(leg.departure_day);
+    for (const each of [year, year - 1]) {
+      const date = dayOf(`${each}-${leg.departure_day}`, null);
+      if (date) choices.push(choiceOf(leg, date, false));
+    }
+  }
+  return { airline: firstAirline, flightDate: "", choices };
 }
 
 /** What ONE read of a filing's receipt. */

@@ -35,9 +35,13 @@ export const RELATION_KEY: Record<ResidenceRelation, string> = {
 /**
  * Where a declaration stands: the client's word on the holder (`asking`), an address on record in another city that
  * waits for a person (`conflict`), ONE about to issue it (`issuing`), the client signing it (`signing`), signed and
- * going to the court (`signed`), or a partner or a lawyer went on without it (`waived`).
+ * going to the court (`signed`), a partner or a lawyer went on without it (`waived`), or a document of the client's
+ * link to the holder settled it (`linked`, 0294).
  */
-export type ResidenceStanding = "asking" | "conflict" | "issuing" | "signing" | "signed" | "waived";
+export type ResidenceStanding = "asking" | "conflict" | "issuing" | "signing" | "signed" | "waived" | "linked";
+
+/** The latest document of the client's link to the holder (0294): sent and being checked, accepted, or refused. */
+export type ResidenceLink = { id: string; status: "received" | "accepted" | "rejected"; reason: string | null };
 
 export type ResidenceView = {
   id: string;
@@ -52,6 +56,8 @@ export type ResidenceView = {
   billCity: string | null;
   standing: ResidenceStanding;
   endedReason: string | null;
+  /** The latest document of the link, of an open declaration or of the one it settled (0294). */
+  link: ResidenceLink | null;
 };
 
 const text = (value: unknown): string | null => (typeof value === "string" && value.trim() !== "" ? value : null);
@@ -69,6 +75,8 @@ export const holderCorrected = (view: Pick<ResidenceView, "holder" | "holderRead
 /** The standing of one declaration, by what keeps it from the filing and where its envelope stands. */
 export function residenceStanding(status: unknown, blocker: unknown, envelope: unknown): ResidenceStanding {
   if (status === "waived") return "waived";
+  // Settled by a document of the link (0294): only a city of the bill other than the record still waits.
+  if (status === "linked") return blocker === "residence_address_conflict" ? "conflict" : "linked";
   if (blocker === "residence_relation_missing") return "asking";
   if (blocker === "residence_address_conflict") return "conflict";
   if (blocker === "residence_declaration_unsigned") {
@@ -90,7 +98,9 @@ export function residenceViewsOf(raw: unknown): ResidenceView[] {
     const documentId = text(entry?.document_id);
     const holder = text(entry?.holder);
     if (!id || !personId || !documentId || !holder) continue;
-    if (entry.status !== "open" && entry.status !== "waived") continue;
+    if (entry.status !== "open" && entry.status !== "waived" && entry.status !== "linked") continue;
+    const link = (typeof entry.link === "object" && entry.link !== null ? entry.link : {}) as Record<string, unknown>;
+    const linkId = text(link.id);
     views.push({
       id,
       personId,
@@ -103,6 +113,10 @@ export function residenceViewsOf(raw: unknown): ResidenceView[] {
       billCity: text(entry.bill_city),
       standing: residenceStanding(entry.status, entry.blocker, entry.envelope),
       endedReason: text(entry.ended_reason),
+      link:
+        linkId && (link.status === "received" || link.status === "accepted" || link.status === "rejected")
+          ? { id: linkId, status: link.status, reason: text(link.reason) }
+          : null,
     });
   }
   return views;

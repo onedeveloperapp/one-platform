@@ -17,6 +17,8 @@ export const FILING_ORDER = [
   "identity",
   "address_proof",
   "residence_declaration",
+  // What shows the client's link to the holder of a proof of address in somebody else's name (0294).
+  "residence_link",
   "free_justice_declaration",
   "income_proof",
   "ticket",

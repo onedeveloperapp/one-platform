@@ -894,7 +894,11 @@ export async function advanceClaimedCase(
     // A step that failed (whatever ONE says first) is a failure of the look: tried again later each time, then
     // said to need a person.
     if (steps.failed === true) failed = true;
-  } catch {
+  } catch (error) {
+    // Said in the log with nothing of anybody: the steps throw fixed words, and anything else is "unexpected"
+    // (2026-11-25: a look that failed was only "unavailable", with no way to tell which step).
+    const step = error instanceof Error && /^[a-z][a-z ]{2,60}$/.test(error.message) ? error.message : "unexpected";
+    console.error("case_advance_failed", { case: held.caseId, step });
     failed = true;
   }
   const { error: unrecorded } = await service.rpc("record_case_advance", {

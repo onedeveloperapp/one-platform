@@ -95,6 +95,16 @@ describe("caseNow", () => {
     expect(now.sections.trip).toMatchObject({ client: true });
   });
 
+  // The owner, 2026-11-25: the firm complements the account with what the client told it, from the line itself.
+  it("lets the firm complement an account still owed, by its interview or by its accounts' questions", () => {
+    const open = caseNow(
+      base({ account: "incomplete", interview: { status: "open", inChat: false, position: 2, total: 4, done: 1 } }),
+    ).blocking.find((line) => line.id === "account:incomplete");
+    expect(open).toMatchObject({ owner: "client", complement: true });
+    const accounts = caseNow(base({ account: "incomplete" })).blocking.find((line) => line.id === "account:incomplete");
+    expect(accounts?.complement).toBe(true);
+  });
+
   it("holds the case on the client's account only before its lawsuits, never after (0097)", () => {
     expect(ids(caseNow(base({ account: "incomplete" })).blocking)).toContain("account:incomplete");
     expect(ids(caseNow(base({ account: "missing" })).blocking)).toContain("account:missing");

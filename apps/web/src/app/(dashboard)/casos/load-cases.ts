@@ -3,6 +3,7 @@ import "server-only";
 import type { AirlineOption, CasesScope, CasesState, NewCasePrefill } from "./cases-types";
 import { cookies } from "next/headers";
 
+import { readAreaChoices } from "@/lib/cases/area-choices-read";
 import { phoneForField } from "@/lib/cases/cases";
 import { canExportCases } from "@/lib/cases/export";
 import { DEFAULT_PAGE_SIZE, isCaseFilter } from "@/lib/cases/list";
@@ -45,7 +46,7 @@ export async function loadCases(params: {
       }
     : null;
 
-  const [list, stock, airlines, cookieStore] = await Promise.all([
+  const [list, stock, airlines, areas, cookieStore] = await Promise.all([
     readCaseList(supabase, firm, {
       filter,
       search: "",
@@ -57,9 +58,11 @@ export async function loadCases(params: {
     // Who has the cases and the stagnant ones, counted for the views of the list (0111): one read a load.
     readCaseStock(supabase, firm, { module: current?.key ?? null, tests }),
     supabase.from("airlines").select("iata, name").eq("active", true).order("name"),
+    // Under a module's list a case is of that module: the firm's areas are not read.
+    current ? Promise.resolve([]) : readAreaChoices(supabase, firm),
     cookies(),
   ]);
-  if (!list || airlines.error) return { kind: "error" };
+  if (!list || airlines.error || !areas) return { kind: "error" };
 
   // Opened from a conversation: who the person is comes from the conversation, read under this
   // person's session, never from the address (a name or a number in a URL ends up in logs).
@@ -86,6 +89,7 @@ export async function loadCases(params: {
     tests,
     stock,
     airlines: (airlines.data ?? []) as AirlineOption[],
+    areas,
     filter,
     prefill,
     supportVisit,

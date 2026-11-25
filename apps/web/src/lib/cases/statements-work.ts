@@ -56,6 +56,8 @@ type StatementToProcess = {
   trip: unknown;
   /** What the documents the firm accepted say of the purchase and of each expense (0091). */
   readings: unknown;
+  /** The case's other accounts, oldest first, with what was added to each (0297). */
+  other_accounts?: unknown;
 };
 
 /** A statement the sweep holds, with the number of the claim: only who holds it reads and records under it. */
@@ -182,12 +184,25 @@ export async function processClaimedStatement(
   const contested = row.client_note ? { chronology: row.previous_chronology, clientNote: row.client_note } : null;
   const returned = row.firm_note ? { proposal: row.returned_proposal, firmNote: row.firm_note } : null;
   const added = row.client_added ? { chronology: row.previous_chronology, answers: row.client_added } : null;
+  const others = (Array.isArray(row.other_accounts) ? row.other_accounts : []).filter(
+    (other): other is { recebido_em?: string; relato: string; respostas?: string } =>
+      typeof other === "object" && other !== null && typeof (other as { relato?: unknown }).relato === "string",
+  );
   return close(
     await runFirmTask({
       orgId: row.org_id,
       task: CHRONOLOGY_TASK,
-      input: { ...trip, relato: row.transcript, contestada: contested, devolvida: returned, respostas: added },
-      messages: [{ role: "user", content: chronologyBriefing(trip, row.transcript, contested, returned, added) }],
+      input: {
+        ...trip,
+        relato: row.transcript,
+        contestada: contested,
+        devolvida: returned,
+        respostas: added,
+        outros_relatos: others,
+      },
+      messages: [
+        { role: "user", content: chronologyBriefing(trip, row.transcript, contested, returned, added, others) },
+      ],
       subject,
       idempotencyKey: key("cronologia"),
     }),

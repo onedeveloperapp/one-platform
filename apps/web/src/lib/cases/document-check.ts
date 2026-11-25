@@ -44,6 +44,8 @@ const KIND_FOR_MODEL: Record<DocumentKind, string> = {
   evidence: "prova do que aconteceu (foto, conversa, aviso da companhia)",
   power_of_attorney: "procuração",
   residence_declaration: "declaração de residência",
+  residence_link:
+    "documento que comprova o vínculo da pessoa com o titular de um comprovante de endereço (certidão de casamento ou de união estável, certidão de nascimento, contrato de aluguel, ou declaração assinada do titular de que a pessoa mora com ele)",
   free_justice_declaration: "declaração de hipossuficiência econômica",
   income_proof:
     "comprovante de renda (holerite, extrato de benefício do INSS, declaração do imposto de renda ou carteira de trabalho)",

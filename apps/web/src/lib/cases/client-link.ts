@@ -211,7 +211,8 @@ export type ClientCivilCourtItem = {
 
 /**
  * A bill of the link's person in somebody else's name the firm accepted (`client_link_residence`, migration 0123): whose
- * it is, the city on it, what they answered so far, and whether the declaration was issued already.
+ * it is, the city on it, what they answered so far, and whether the declaration was issued already; and, in the
+ * declaration's place (0294), the latest document of their link to the holder, and whether one settled it.
  */
 export type ClientResidenceItem = {
   id: string;
@@ -221,6 +222,9 @@ export type ClientResidenceItem = {
   note: string | null;
   answered_at: string | null;
   issued: boolean;
+  linked?: boolean;
+  party_id?: string | null;
+  link?: { status: "received" | "accepted" | "rejected"; reason: string | null } | null;
 };
 
 export type ClientTasks = {

@@ -48,10 +48,12 @@ select ok(
    where t.slug in ('caso.documento.leitura', 'caso.protocolo.leitura') and t.autonomy = 'autonomous' and not t.shadow),
   'both readings are tasks that never wait for anybody, and the firm reads their runs'
 );
+-- One version of each in force; the document's reading is in its second since 0293 (the day of a flight without its year).
 select ok(
   (select count(*) = 2 from public.prompt_versions v
-   where v.task in ('caso.documento.leitura', 'caso.protocolo.leitura') and v.is_active and v.version = 1),
-  'each reading has its first instructions in force'
+   where v.task in ('caso.documento.leitura', 'caso.protocolo.leitura') and v.is_active
+     and v.version = case v.task when 'caso.documento.leitura' then 2 else 1 end),
+  'each reading has its instructions in force'
 );
 select ok(
   (select v.output_schema -> 'required' ? 'trechos' and v.output_schema -> 'required' ? 'dados_lidos'

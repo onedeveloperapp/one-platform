@@ -343,6 +343,13 @@ export async function syncEnvelope(
     // back, record first: when it is the answer that got lost and the file is the signed document of the
     // case after all, the database refuses to forget it.
     if (code !== "signed") await takeBackFile(store, reserved.fileId, reserved.storagePath);
+    // The last signature may be what the case waited for (its lawsuits, the piece): the cases it woke go on now, not
+    // at the clock's next look (2026-11-25).
+    if (code === "signed") {
+      await import("@/lib/cases/advance-work")
+        .then(({ queueCaseAdvance }) => queueCaseAdvance(null))
+        .catch(() => undefined);
+    }
     return code === "signed" || code === "already_signed" ? code : unsettled(code);
   } catch (thrown) {
     // A refusal here is not taken as the token's end (ZapSign also answers 403 for a document it

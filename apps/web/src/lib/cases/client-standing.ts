@@ -91,9 +91,10 @@ function answersOf(tasks: ClientTasks): Record<ClientAnswerKey, { owed: number; 
       owed: justice.filter((item) => item.asks === null).length,
       given: justice.filter((item) => item.asks !== null).length,
     },
+    // A declaration a document of the link settled owes no answer (0294).
     residence: {
-      owed: tasks.residence.filter((item) => !item.answered_at).length,
-      given: tasks.residence.filter((item) => item.answered_at).length,
+      owed: tasks.residence.filter((item) => !item.answered_at && !item.linked).length,
+      given: tasks.residence.filter((item) => item.answered_at || item.linked).length,
     },
     priorComplaint: {
       owed: prior?.state === "owed" ? 1 : 0,

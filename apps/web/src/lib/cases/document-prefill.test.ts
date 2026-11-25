@@ -155,9 +155,55 @@ describe("what ONE read of a document, for a form", () => {
       },
       TODAY,
     );
-    expect(caseFactsOf(reading, [{ iata: "G3" }, { iata: "LA" }])).toEqual({ airline: "G3", flightDate: "2099-01-20" });
-    expect(caseFactsOf(reading, [{ iata: "LA" }])).toEqual({ airline: "", flightDate: "2099-01-20" });
-    expect(caseFactsOf(null, [])).toEqual({ airline: "", flightDate: "" });
+    expect(caseFactsOf(reading, [{ iata: "G3" }, { iata: "LA" }], TODAY)).toEqual({
+      airline: "G3",
+      flightDate: "2099-01-20",
+      choices: [],
+    });
+    expect(caseFactsOf(reading, [{ iata: "LA" }], TODAY)).toEqual({
+      airline: "",
+      flightDate: "2099-01-20",
+      choices: [],
+    });
+    expect(caseFactsOf(null, [], TODAY)).toEqual({ airline: "", flightDate: "", choices: [] });
+  });
+
+  // 0293: Azul's boarding pass, a screenshot of its app, prints "22 de out." and never the year.
+  it("asks which year a day printed without its year is of, among the last two, never supposing it", () => {
+    const reading = documentReadingOf(
+      { trechos: [{ voo: "AD 4530", origem: "VCP", destino: "JTC", saida_prevista: "", dia_mes_saida: "22/10" }] },
+      "2026-11-25",
+    );
+    expect(reading.legs[0].departure_day).toBe("10-22");
+    const facts = caseFactsOf(reading, [{ iata: "AD" }], "2026-11-25");
+    expect(facts.flightDate).toBe("");
+    expect(facts.airline).toBe("AD");
+    expect(facts.choices.map((choice) => [choice.date, choice.yearRead])).toEqual([
+      ["2026-10-22", false],
+      ["2025-10-22", false],
+    ]);
+    // A day no month has is no day.
+    const wrong = documentReadingOf({ trechos: [{ voo: "AD 4530", dia_mes_saida: "31/02" }] }, "2026-11-25");
+    expect(wrong.legs[0].departure_day).toBeUndefined();
+    expect(caseFactsOf(wrong, [], "2026-11-25").choices).toEqual([]);
+  });
+
+  it("asks which flight had the problem when the ticket's flights are on different days", () => {
+    const reading = documentReadingOf(
+      {
+        trechos: [
+          { voo: "G3 1234", origem: "GYN", destino: "GRU", saida_prevista: "2099-01-20T07:00" },
+          { voo: "G3 1240", origem: "GRU", destino: "GYN", saida_prevista: "2099-01-27T18:00" },
+        ],
+      },
+      TODAY,
+    );
+    const facts = caseFactsOf(reading, [{ iata: "G3" }], TODAY);
+    expect(facts.flightDate).toBe("");
+    expect(facts.airline).toBe("G3");
+    expect(
+      facts.choices.map((choice) => `${choice.date} ${choice.flight} ${choice.origin}-${choice.destination}`),
+    ).toEqual(["2099-01-20 G31234 GYN-GRU", "2099-01-27 G31240 GRU-GYN"]);
   });
 
   it("reads a filing's receipt: the number only when its check digits hold, and a day that has come", () => {

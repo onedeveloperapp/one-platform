@@ -18,6 +18,7 @@ import {
   COMPLAINT_CHANNELS,
   COMPLAINT_OUTCOMES,
   complaintOverdue,
+  complementText,
   COURT_SYSTEMS,
   isPassingStatementFailure,
   OUTCOME_KEY,
@@ -26,6 +27,7 @@ import {
   statementAudioMime,
   statementErrorKey,
   statementStage,
+  statementsToComplement,
   type StatementView,
   STATION_CHECK_KEY,
   stationChecks,
@@ -122,6 +124,15 @@ describe("what the model reads to propose a chronology", () => {
     expect(briefing).toContain("O que o caso registra: atraso de voo, companhia Gol, voo em 20/09/2026.");
     expect(briefing.endsWith("Cheguei às oito e o voo saiu às quatro.")).toBe(true);
     expect(briefing).not.toContain("Cronologia anterior");
+  });
+
+  // 0297: the owner's case 19, told in three texts, asked again what the first had told.
+  it("gives the case's other accounts before this one, so what they told is no gap of it", () => {
+    const others = [{ recebido_em: "25/11/2026 16:02", relato: "Deram só uma caixa de lanche e uma van." }];
+    const briefing = chronologyBriefing(trip, "Soube no aeroporto.", null, null, null, others);
+    expect(briefing).toContain("Outros relatos do caso, já recebidos");
+    expect(briefing.indexOf("caixa de lanche")).toBeLessThan(briefing.indexOf("Soube no aeroporto."));
+    expect(chronologyBriefing(trip, "Relato.")).not.toContain("Outros relatos");
   });
 
   it("gives the legs the case registers, with ANAC's record, before the account (0090)", () => {
@@ -297,5 +308,32 @@ describe("the certificate inventory", () => {
       "created_at",
       "updated_at",
     ]);
+  });
+});
+
+// 0297: what the firm complements of an account, with what the client told it.
+describe("the accounts the firm complements", () => {
+  const account = (overrides: Record<string, unknown> = {}) => ({
+    id: "s1",
+    chronologyStatus: "approved" as const,
+    missingTopics: ["gastos"],
+    questions: ["Você teve algum gasto?"],
+    clientAdded: null,
+    ...overrides,
+  });
+
+  it("are the decided ones with questions for what they lack", () => {
+    expect(statementsToComplement([account()]).map((item) => item.id)).toEqual(["s1"]);
+    expect(statementsToComplement([account({ chronologyStatus: "proposed" })])).toEqual([]);
+    expect(statementsToComplement([account({ missingTopics: [], questions: [] })])).toEqual([]);
+  });
+
+  it("keep each question with its answer, leaving out what was not answered", () => {
+    expect(
+      complementText([
+        { question: "Você teve algum gasto?", answer: " Gastou R$ 50. " },
+        { question: "O que você perdeu?", answer: "  " },
+      ]),
+    ).toBe("Você teve algum gasto?\nGastou R$ 50.");
   });
 });

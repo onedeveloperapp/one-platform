@@ -2,6 +2,7 @@
 
 import type { CaseState } from "../case-types";
 import type { RunningAction } from "./case-action";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { type ReactNode, useEffect, useState } from "react";
@@ -36,6 +37,7 @@ import NiSendRight from "@/icons/nexture/ni-send-right";
 import NiTimeline from "@/icons/nexture/ni-timeline";
 import NiUsers from "@/icons/nexture/ni-users";
 import { eventKeyOf, PERSON_FIELD_KEY } from "@/lib/cases/cases";
+import { openInterviewQuestions } from "@/lib/cases/interview";
 import {
   type CaseJourney,
   JOURNEY_ENDED_KEY,
@@ -55,6 +57,7 @@ import {
   sectionOfEvent,
 } from "@/lib/cases/now";
 import type { CaseSection } from "@/lib/cases/sections";
+import { statementsToComplement } from "@/lib/cases/statements";
 import { sayPending } from "@/lib/firm/pending";
 import { momentIn } from "@/lib/hearings/hearings";
 import { cn } from "@/lib/utils";
@@ -133,6 +136,9 @@ const clock = (at: number | string) =>
   );
 
 /** Opens a card of the screen and brings it into view, also when its address is already the page's. */
+// The panel that complements the client's account loads when it opens: it writes through a server action.
+const ComplementAccountPanel = dynamic(() => import("./complement-account-panel"));
+
 export function goToSection(section: CaseSection) {
   const id = SECTION_ANCHOR[section];
   if (window.location.hash === `#${id}`) window.dispatchEvent(new HashChangeEvent("hashchange"));
@@ -202,6 +208,8 @@ export default function JourneyCard({
   const [stepsOpen, setStepsOpen] = useState(false);
   // The client's turns, when there are several, are one line that opens the list.
   const [clientOpen, setClientOpen] = useState(false);
+  // What the client's account left out, answered by the firm in a panel (the owner, 2026-11-25).
+  const [complementing, setComplementing] = useState(false);
   const [answering, setAnswering] = useState<string | null>(null);
   // Marked for a moment when a person's action moved the case (`showTrail`).
   const [moved, setMoved] = useState(false);
@@ -286,6 +294,23 @@ export default function JourneyCard({
   const way = (line: NowItem, label: string) => {
     if (state.supportVisit) return null;
     if (line.owner === "firm" && !mayAct(line.actor, viewer)) return null;
+    // The account the client has not finished: the firm complements it with what the client told it.
+    if (
+      line.complement &&
+      (openInterviewQuestions(state.interview).length > 0 || statementsToComplement(state.statements).length > 0)
+    ) {
+      return (
+        <Button
+          variant="outlined"
+          color="grey"
+          size="small"
+          disabled={action !== null}
+          onClick={() => setComplementing(true)}
+        >
+          {t("case-now-complement")}
+        </Button>
+      );
+    }
     if (line.href) {
       return (
         <Button
@@ -406,8 +431,9 @@ export default function JourneyCard({
   }
 
   // The client's turns: one line when there are several, which opens their list; the rest as they are.
-  const clientLines = now.blocking.filter((line) => line.owner === "client");
-  const notClient = now.blocking.filter((line) => line.owner !== "client");
+  // A line the firm can answer in place (the account to complement) stays in sight, out of the group.
+  const clientLines = now.blocking.filter((line) => line.owner === "client" && !line.complement);
+  const notClient = now.blocking.filter((line) => line.owner !== "client" || line.complement);
   const clientGrouped = clientLines.length > 1;
 
   // What changed with the latest reading: who has the case and each line of the top, marked for a few seconds.
@@ -700,6 +726,7 @@ export default function JourneyCard({
           </Typography>
         ) : null}
       </CardContent>
+      {complementing ? <ComplementAccountPanel state={state} onClose={() => setComplementing(false)} /> : null}
     </Card>
   );
 }

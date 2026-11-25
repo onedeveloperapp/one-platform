@@ -234,6 +234,27 @@ export async function answerInterviewQuestion(
 }
 
 /**
+ * A person of the firm complements an account with what the client told the firm (0297), as the client's answer on
+ * their link does: joined to that account, and ONE orders it again with everything.
+ */
+export async function completeStatement(caseId: string, statementId: string, text: string): Promise<StatementResult> {
+  const context = await getMemberContext();
+  if (!context?.firm || !isId(caseId)) return { ok: false, code: "case_not_found" };
+  if (!isId(statementId)) return { ok: false, code: "not_found" };
+  if (await isSupportVisit()) return { ok: false, code: "not_allowed_in_support_session" };
+  const { data, error } = await context.supabase.rpc("complete_case_statement", {
+    target_statement: statementId,
+    target_text: String(text ?? "").slice(0, 4000),
+  });
+  const result = fold(data, error, () => ({}));
+  if (result.ok) {
+    refresh(caseId);
+    await queueStatementWork(statementId);
+  }
+  return result;
+}
+
+/**
  * A partner or a lawyer decides the case goes on without what the passenger did not answer (migration 0095): ONE
  * asks nothing more, and looks at the case at once to create the lawsuits.
  */

@@ -41,6 +41,9 @@ export const DOCUMENT_KINDS = [
   "evidence",
   "power_of_attorney",
   "residence_declaration",
+  // What shows the client's link to the holder of a proof of address in somebody else's name (0294): a marriage or a
+  // birth certificate, a lease, the holder's own declaration. It takes the place of the residence declaration.
+  "residence_link",
   "free_justice_declaration",
   "income_proof",
   "contract",
@@ -145,6 +148,7 @@ export const DOCUMENT_KIND_KEY: Record<DocumentKind, string> = {
   evidence: "case-document-evidence",
   power_of_attorney: "case-document-power-of-attorney",
   residence_declaration: "case-document-residence-declaration",
+  residence_link: "case-document-residence-link",
   free_justice_declaration: "case-document-free-justice-declaration",
   income_proof: "case-document-income-proof",
   contract: "case-document-contract",
@@ -942,6 +946,12 @@ const ERROR_KEYS: Record<string, string> = {
   account_unavailable: "case-error-signature-account",
   unknown_at_provider: "case-error-unknown-at-provider",
   invalid_incident: "case-error-incident",
+  // 0292: a case of an area of the firm, opened by a person.
+  area_not_found: "case-error-area",
+  no_area_script: "case-error-area-script",
+  invalid_case_type: "case-error-case-type",
+  // 0293: the panel's own, when the ticket did not make the flight's day clear and nobody chose it.
+  flight_day_unclear: "case-error-flight-day",
   unknown_airline: "case-error-airline",
   invalid_flight_date: "case-error-flight-date",
   invalid_flight_number: "case-error-flight-number",

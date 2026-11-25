@@ -1,4 +1,5 @@
 import type { StatusTone } from "@/components/product/status-chip";
+import type { AreaChoice } from "@/lib/cases/area-choices";
 import type { StatusGroup } from "@/lib/cases/cases";
 import type { CaseFilter, CaseListPage } from "@/lib/cases/list";
 import type { CaseStock } from "@/lib/cases/standing";
@@ -36,6 +37,8 @@ export type CasesState =
        */
       stock: CaseStock | null;
       airlines: AirlineOption[];
+      /** The areas of the firm's own a person opens a case of (0292). */
+      areas: AreaChoice[];
       /** The filter the address asked for (`?ver=`), which the first page was read under. */
       filter: CaseFilter | null;
       prefill: NewCasePrefill;

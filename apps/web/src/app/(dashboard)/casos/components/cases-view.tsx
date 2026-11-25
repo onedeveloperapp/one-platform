@@ -1090,6 +1090,7 @@ function CasesList({ ready }: { ready: Ready }) {
       {creating && (
         <NewCaseDialog
           airlines={ready.airlines}
+          areas={ready.areas}
           module={scope?.module.key ?? null}
           prefill={ready.prefill}
           onClose={() => setCreating(false)}
