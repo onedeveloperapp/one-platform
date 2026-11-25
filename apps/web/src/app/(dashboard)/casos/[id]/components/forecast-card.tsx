@@ -3,14 +3,15 @@
 import type { CaseProceeding } from "../case-types";
 import { useCaseForecast } from "./use-forecast";
 import { useTranslations } from "next-intl";
-import { type ReactNode, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
-import { Box, Card, CardContent, Link, Skeleton, ToggleButton, ToggleButtonGroup, Typography } from "@mui/material";
+import { Box, Button, Link, Skeleton, ToggleButton, ToggleButtonGroup, Typography } from "@mui/material";
 
-import CardTitle from "@/components/product/card-title";
+import InfoHint from "@/components/product/info-hint";
 import MetricBars, { type MetricBarItem } from "@/components/product/metric-bars";
 import RatioGauge from "@/components/product/ratio-gauge";
 import SectionTitle from "@/components/product/section-title";
+import SidePanel from "@/components/product/side-panel";
 import StateLine from "@/components/product/state-line";
 import StatusChip from "@/components/product/status-chip";
 import TrendSparkline from "@/components/product/trend-sparkline";
@@ -61,12 +62,14 @@ export function cutWords(t: T, forecast: Forecast, airlineName: string | null): 
 
 /**
  * The forecast of the case (0250, approved by the owner on 2026-11-14): what the market decided in lawsuits like this
- * one, from the cut nearest the case with the sample, open under the top of the case with no click. The chance of
- * winning as a ring, what usually comes of it as a range, how such lawsuits end, each level beside it (who judges, the
- * unit, the comarca, the court) and the months. For the firm alone, never on the client's page; never to choose a
- * judge, who is read only of a lawsuit already filed. A lawsuit with nothing to say draws nothing.
+ * one, from the cut nearest the case with the sample, for the firm alone, never on the client's page; never to choose
+ * a judge, who is read only of a lawsuit already filed. At the side of the case's top since the owner's canvas
+ * "ONE · O caso em abas" (2026-11-25): three numbers,
+ * the chance as a ring, what usually comes of it per claimant and the base it rests on, and the rest one click away in
+ * a panel beside the case, so the top and its tabs fit the first screen. Nothing when the case's lawsuits have nothing
+ * to say; a read that failed says so.
  */
-export default function ForecastCard({
+export function ForecastSummary({
   proceedings,
   airlines,
 }: {
@@ -76,81 +79,107 @@ export default function ForecastCard({
   const t = useTranslations("product");
   const open = useMemo(() => proceedings.filter((item) => item.status !== "closed" && item.court), [proceedings]);
   const [picked, setPicked] = useState<string | null>(null);
+  const [panel, setPanel] = useState(false);
   const current = open.find((item) => item.id === picked) ?? open[0] ?? null;
   const version = current ? `${current.status}|${current.unit ?? ""}|${current.cnj ?? ""}` : "";
   const read = useCaseForecast(current?.id ?? null, version);
   if (!current) return null;
-  if (read.state === "loading") return <Skeleton variant="rounded" height={220} />;
+  if (read.state === "loading") return <Skeleton variant="rounded" height={150} />;
   if (read.state === "error") {
     return (
-      <Card component="section" aria-labelledby="case-forecast">
-        <CardContent className="flex flex-col gap-3">
-          <CardTitle id="case-forecast" icon={<NiTelescope size="medium" />} title={t("forecast-title")} />
-          <StateLine tone="failed">{t("forecast-error")}</StateLine>
-        </CardContent>
-      </Card>
+      <Box component="section" aria-labelledby="case-forecast" className="flex flex-col gap-2">
+        <Typography id="case-forecast" variant="subtitle2" component="h3" className="mb-0">
+          {t("forecast-title")}
+        </Typography>
+        <StateLine tone="failed">{t("forecast-error")}</StateLine>
+      </Box>
     );
   }
   if (!hasForecast(read.read)) return null;
   const forecastRead = read.read;
+  const forecast = forecastRead.forecast;
   const airlineName = airlines.find((item) => item.iata === forecastRead.airline)?.name ?? forecastRead.airline;
+  const toggle =
+    open.length > 1 ? (
+      <ToggleButtonGroup
+        exclusive
+        size="small"
+        value={current.id}
+        onChange={(_, value) => value && setPicked(value)}
+        aria-label={t("forecast-proceedings")}
+      >
+        {open.map((item) => (
+          <ToggleButton key={item.id} value={item.id}>
+            {t(KIND_KEY[item.kind])}
+          </ToggleButton>
+        ))}
+      </ToggleButtonGroup>
+    ) : null;
+  const moral = forecast.moral;
   return (
-    <ForecastPanel
-      read={forecastRead}
-      airlineName={airlineName}
-      toggle={
-        open.length > 1 ? (
-          <ToggleButtonGroup
-            exclusive
-            size="small"
-            value={current.id}
-            onChange={(_, value) => value && setPicked(value)}
-            aria-label={t("forecast-proceedings")}
-          >
-            {open.map((item) => (
-              <ToggleButton key={item.id} value={item.id}>
-                {t(KIND_KEY[item.kind])}
-              </ToggleButton>
-            ))}
-          </ToggleButtonGroup>
-        ) : null
-      }
-    />
-  );
-}
-
-/** The forecast drawn from what the database answered: the card the case shows, apart from its reading. */
-export function ForecastPanel({
-  read,
-  airlineName,
-  toggle,
-}: {
-  read: CaseForecast & { forecast: Forecast };
-  airlineName: string | null;
-  toggle?: ReactNode;
-}) {
-  const t = useTranslations("product");
-  const forecast = read.forecast;
-  return (
-    <Card component="section" aria-labelledby="case-forecast">
-      <CardContent className="flex flex-col gap-4">
-        <CardTitle
-          id="case-forecast"
-          icon={<NiTelescope size="medium" />}
+    <Box component="section" aria-labelledby="case-forecast" className="flex flex-col gap-3">
+      <Box className="flex flex-wrap items-center justify-between gap-2">
+        <Box className="flex items-center gap-1">
+          <Typography id="case-forecast" variant="subtitle2" component="h3" className="mb-0">
+            {t("forecast-title")}
+          </Typography>
+          <InfoHint label={t("forecast-description")} />
+        </Box>
+        <StatusChip tone={BASE_TONE[forecast.base]} label={t(BASE_KEY[forecast.base], { count: forecast.decisions })} />
+      </Box>
+      {toggle}
+      <Box className="flex flex-row items-center gap-3">
+        <RatioGauge
+          value={forecast.won}
+          total={forecast.merits}
+          size={56}
+          label={t("forecast-chance-gauge", { percent: forecast.chancePercent ?? 0 })}
+        />
+        <Box className="flex min-w-0 flex-col">
+          <Typography variant="h6" component="p" className="text-primary mb-0 tabular-nums">
+            {t("forecast-summary-chance", { percent: forecast.chancePercent ?? 0 })}
+          </Typography>
+          <Typography variant="caption" className="text-text-secondary">
+            {t("forecast-chance-merits", { won: forecast.won, merits: forecast.merits })}
+          </Typography>
+        </Box>
+      </Box>
+      {moral.median !== null ? (
+        <Box className="flex flex-col">
+          <Typography variant="body2">
+            <strong className="tabular-nums">{brl(moral.median)}</strong> {t("forecast-summary-value")}
+          </Typography>
+          {moral.p25 !== null && moral.p75 !== null ? (
+            <Typography variant="caption" className="text-text-secondary">
+              {t("forecast-summary-band", { low: brl(moral.p25), high: brl(moral.p75) })}
+            </Typography>
+          ) : null}
+        </Box>
+      ) : null}
+      <Button variant="text" size="small" className="self-start" onClick={() => setPanel(true)}>
+        {t("forecast-see-all")}
+      </Button>
+      {panel ? (
+        <SidePanel
+          onClose={() => setPanel(false)}
+          closeLabel={t("forecast-close")}
           title={t("forecast-title")}
-          description={t("forecast-description")}
-          detail={cutWords(t, forecast, airlineName)}
-          chip={
+          description={cutWords(t, forecast, airlineName)}
+          icon={<NiTelescope size="medium" />}
+          wide
+        >
+          <Box className="flex flex-col gap-4">
             <StatusChip
               tone={BASE_TONE[forecast.base]}
               label={t(BASE_KEY[forecast.base], { count: forecast.decisions })}
+              className="self-start"
             />
-          }
-        />
-        {toggle}
-        <ForecastBody read={read} forecast={forecast} airlineName={airlineName} />
-      </CardContent>
-    </Card>
+            {toggle}
+            <ForecastBody read={forecastRead} forecast={forecast} airlineName={airlineName} />
+          </Box>
+        </SidePanel>
+      ) : null}
+    </Box>
   );
 }
 

@@ -41,6 +41,7 @@ export default function ActivityCards({
   title,
   items,
   titleAs = "h3",
+  stacked = false,
 }: {
   id: string;
   title: string;
@@ -50,6 +51,8 @@ export default function ActivityCards({
    * product (a page's demonstration), whose words must not enter the page's outline.
    */
   titleAs?: "h3" | "div";
+  /** One under the other at every width, for a narrow column (the side of the case's top, 2026-11-25). */
+  stacked?: boolean;
 }) {
   if (items.length === 0) return null;
   return (
@@ -57,7 +60,10 @@ export default function ActivityCards({
       <Typography id={id} variant="subtitle2" component={titleAs} className="mb-0">
         {title}
       </Typography>
-      <Box component="ul" className="m-0 grid list-none grid-cols-1 gap-2 p-0 sm:grid-cols-2 lg:grid-cols-3">
+      <Box
+        component="ul"
+        className={cn("m-0 grid list-none grid-cols-1 gap-2 p-0", !stacked && "sm:grid-cols-2 lg:grid-cols-3")}
+      >
         {items.map((item) => {
           const style = TILE_TONE[item.tone];
           const body = (

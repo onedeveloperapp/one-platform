@@ -15,7 +15,7 @@ import DossierCard from "./dossier-card";
 import DraftsCard from "./drafts-card";
 import FeesCard from "./fees-card";
 import FilingCard from "./filing-card";
-import ForecastCard from "./forecast-card";
+import { ForecastSummary } from "./forecast-card";
 import HearingsCard from "./hearings-card";
 import IntermediatePiecesCard from "./intermediate-pieces-card";
 import JourneyCard from "./journey-card";
@@ -447,14 +447,12 @@ export default function CaseView({ state: read }: { state: CaseState }) {
           action={actions.running}
           syncing={actions.syncing}
           onJudgment={onJudgment}
+          aside={ofArea ? null : <ForecastSummary proceedings={state.proceedings} airlines={state.airlines} />}
         />
 
         {/* While ONE works on the case, its actions wait: the notice says what ONE is doing, and the screen comes back
           by itself, read again, when it ends (the screen pattern after ADVBox). */}
         <CaseAtWork caseId={state.case.id} working={facts.now.working} events={state.events} />
-
-        {/* What the market decided in lawsuits like this one (0250): open under the top, no click, for the firm alone. */}
-        {ofArea ? null : <ForecastCard proceedings={state.proceedings} airlines={state.airlines} />}
 
         {/* The cards in six tabs, in the order of the case's way; each tab says what waits in it. */}
         <CaseTabsBar tab={tab} marks={marksOfTabs} flashed={flashedTabs} onPick={pick} />

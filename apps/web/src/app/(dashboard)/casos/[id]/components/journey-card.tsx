@@ -183,6 +183,7 @@ export default function JourneyCard({
   action,
   syncing,
   onJudgment,
+  aside,
 }: {
   state: Ready;
   journey: CaseJourney;
@@ -194,9 +195,13 @@ export default function JourneyCard({
   syncing: boolean;
   /** The person says whether a decision the court published is the judgment. */
   onJudgment: (publicationId: string, judgment: boolean) => Promise<void>;
+  /** What sits at the side of the top, over what ONE did a moment ago: the case's forecast. */
+  aside?: ReactNode;
 }) {
   const t = useTranslations("product");
   const [stepsOpen, setStepsOpen] = useState(false);
+  // The client's turns, when there are several, are one line that opens the list.
+  const [clientOpen, setClientOpen] = useState(false);
   const [answering, setAnswering] = useState<string | null>(null);
   // Marked for a moment when a person's action moved the case (`showTrail`).
   const [moved, setMoved] = useState(false);
@@ -400,6 +405,11 @@ export default function JourneyCard({
     ].filter((fact): fact is string => fact !== null);
   }
 
+  // The client's turns: one line when there are several, which opens their list; the rest as they are.
+  const clientLines = now.blocking.filter((line) => line.owner === "client");
+  const notClient = now.blocking.filter((line) => line.owner !== "client");
+  const clientGrouped = clientLines.length > 1;
+
   // What changed with the latest reading: who has the case and each line of the top, marked for a few seconds.
   const fresh = useFresh({
     holder: `${now.holder}:${nowKey}:${extra ?? ""}`,
@@ -419,6 +429,22 @@ export default function JourneyCard({
       line
     );
 
+  const blockingLine = (line: NowItem) =>
+    newLine(
+      `blocking:${line.id}`,
+      <StateLine
+        key={line.id}
+        tone={line.tone}
+        status={isNew(`blocking:${line.id}`) ? newChip : undefined}
+        action={line.ask ? ask(line) : way(line, line.owner === "firm" ? t("case-now-do") : t("case-now-see"))}
+      >
+        {say(line)}
+        <Box component="span" className="text-text-secondary block">
+          {whose(line)}
+        </Box>
+      </StateLine>,
+    );
+
   return (
     <Card
       component="section"
@@ -431,7 +457,7 @@ export default function JourneyCard({
       )}
     >
       {reading ? <LinearProgress aria-hidden className="absolute inset-x-0 top-0 h-[3px]" /> : null}
-      <CardContent className="flex flex-col gap-5">
+      <CardContent className="flex flex-col gap-4">
         <Box className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
           <Typography id="case-journey-title" variant="h5" component="h2" className="mb-0">
             {t("journey-title")}
@@ -473,13 +499,14 @@ export default function JourneyCard({
             cards, never after them. */}
         <Box
           className={cn(
-            "flex flex-col gap-5 transition-opacity duration-200 motion-reduce:transition-none",
+            "flex flex-col gap-4 transition-opacity duration-200 motion-reduce:transition-none",
             reading && "opacity-45",
           )}
         >
           {/* From a tablet on, the steps across; on a phone, who has the case first and the steps one tap away. */}
           <Box className="hidden md:block">
             <ProgressSteps
+              dense
               steps={steps}
               label={t("journey-title")}
               working={working}
@@ -496,148 +523,176 @@ export default function JourneyCard({
             />
           </Box>
 
-          <Box
-            className={cn(
-              "rounded-2xl transition-shadow duration-500 motion-reduce:transition-none",
-              isNew("holder") && "ring-primary/40 dark:ring-primary-light/40 ring-2",
-            )}
-          >
-            <ProgressNow
-              tone={journey.ended === "closed" ? "done" : journey.ended === "declined" ? "stopped" : "progress"}
-              working={working}
-              lead={t(HOLDER_KEY[now.holder])}
-              text={t(nowKey)}
-              extra={
-                extra ? (
-                  <Typography variant="body2" className="text-text-secondary">
-                    {extra}
-                  </Typography>
-                ) : undefined
-              }
-              action={isNew("holder") ? newChip : undefined}
-            />
-          </Box>
-
-          <Box className="flex flex-col gap-2 md:hidden">
-            <Box className="flex flex-wrap items-center justify-between gap-2">
-              <Typography variant="body2" className="font-semibold">
-                {t("case-now-steps-compact", {
-                  position: current + 1,
-                  total: steps.length,
-                  step: steps[current]?.label ?? "",
-                })}
-              </Typography>
-              <Button variant="text" color="grey" size="small" onClick={() => setStepsOpen((open) => !open)}>
-                {stepsOpen ? t("case-now-steps-hide") : t("case-now-steps-show")}
-              </Button>
-            </Box>
-            <ProgressBar
-              steps={steps.length}
-              reached={journey.reached}
-              state={journey.ended === "declined" ? "stopped" : journey.ended ? "done" : "progress"}
-              label={t("journey-bar-label", {
-                label: steps[current]?.label ?? "",
-                position: current + 1,
-                total: steps.length,
-              })}
-            />
-            <Collapse in={stepsOpen}>
-              <Box className="pt-2">
-                <ProgressSteps
-                  steps={steps}
-                  label={t("journey-title")}
+          {/* The case and what holds it at the left; at the side, the forecast and what ONE did a moment ago (the
+              owner's canvas "ONE · O caso em abas", 2026-11-25: one card, so the tabs show on the first screen). */}
+          <Box className="flex flex-col gap-5 lg:flex-row">
+            <Box className="flex min-w-0 flex-1 flex-col gap-4">
+              <Box
+                className={cn(
+                  "rounded-2xl transition-shadow duration-500 motion-reduce:transition-none",
+                  isNew("holder") && "ring-primary/40 dark:ring-primary-light/40 ring-2",
+                )}
+              >
+                <ProgressNow
+                  dense
+                  tone={journey.ended === "closed" ? "done" : journey.ended === "declined" ? "stopped" : "progress"}
                   working={working}
-                  stateWords={{
-                    done: t("journey-state-done"),
-                    current: t("journey-state-current"),
-                    next: t("journey-state-next"),
-                    stopped: t("journey-state-stopped"),
-                  }}
+                  lead={t(HOLDER_KEY[now.holder])}
+                  text={t(nowKey)}
+                  extra={
+                    extra ? (
+                      <Typography variant="body2" className="text-text-secondary">
+                        {extra}
+                      </Typography>
+                    ) : undefined
+                  }
+                  action={isNew("holder") ? newChip : undefined}
                 />
               </Box>
-            </Collapse>
-          </Box>
 
-          {now.working.length > 0 ? (
-            <Box component="section" aria-labelledby="case-now-working" className="flex flex-col gap-2">
-              <Typography id="case-now-working" variant="subtitle2" component="h3" className="mb-0">
-                {t("case-now-title-working")}
-              </Typography>
-              {now.working.map((line) =>
-                newLine(
-                  `working:${line.id}`,
-                  <StateLine
-                    key={line.id}
-                    tone="waiting"
-                    status={
-                      isNew(`working:${line.id}`) || line.slow || line.since ? (
-                        <Box component="span" className="flex items-center gap-2">
-                          {isNew(`working:${line.id}`) ? newChip : null}
-                          {line.slow
-                            ? t("case-now-slow")
-                            : line.since
-                              ? t("case-now-since", { time: clock(line.since) })
-                              : null}
-                        </Box>
-                      ) : undefined
-                    }
-                    action={line.section ? way({ ...line, owner: "one" }, t("case-now-see")) : undefined}
-                  >
-                    {say(line)}
-                  </StateLine>,
-                ),
-              )}
-            </Box>
-          ) : null}
+              <Box className="flex flex-col gap-2 md:hidden">
+                <Box className="flex flex-wrap items-center justify-between gap-2">
+                  <Typography variant="body2" className="font-semibold">
+                    {t("case-now-steps-compact", {
+                      position: current + 1,
+                      total: steps.length,
+                      step: steps[current]?.label ?? "",
+                    })}
+                  </Typography>
+                  <Button variant="text" color="grey" size="small" onClick={() => setStepsOpen((open) => !open)}>
+                    {stepsOpen ? t("case-now-steps-hide") : t("case-now-steps-show")}
+                  </Button>
+                </Box>
+                <ProgressBar
+                  steps={steps.length}
+                  reached={journey.reached}
+                  state={journey.ended === "declined" ? "stopped" : journey.ended ? "done" : "progress"}
+                  label={t("journey-bar-label", {
+                    label: steps[current]?.label ?? "",
+                    position: current + 1,
+                    total: steps.length,
+                  })}
+                />
+                <Collapse in={stepsOpen}>
+                  <Box className="pt-2">
+                    <ProgressSteps
+                      steps={steps}
+                      label={t("journey-title")}
+                      working={working}
+                      stateWords={{
+                        done: t("journey-state-done"),
+                        current: t("journey-state-current"),
+                        next: t("journey-state-next"),
+                        stopped: t("journey-state-stopped"),
+                      }}
+                    />
+                  </Box>
+                </Collapse>
+              </Box>
 
-          {!journey.ended ? (
-            <Box component="section" aria-labelledby="case-now-blocking" className="flex flex-col gap-2">
-              <Typography id="case-now-blocking" variant="subtitle2" component="h3" className="mb-0">
-                {t("case-now-title-blocking")}
-              </Typography>
-              {now.blocking.length === 0
-                ? newLine(
-                    "blocking:none",
-                    <StateLine key="none" tone="done" status={isNew("blocking:none") ? newChip : undefined}>
-                      {t(working ? "case-now-nothing-working" : "case-now-nothing")}
-                    </StateLine>,
-                  )
-                : now.blocking.map((line) =>
+              {now.working.length > 0 ? (
+                <Box component="section" aria-labelledby="case-now-working" className="flex flex-col gap-2">
+                  <Typography id="case-now-working" variant="subtitle2" component="h3" className="mb-0">
+                    {t("case-now-title-working")}
+                  </Typography>
+                  {now.working.map((line) =>
                     newLine(
-                      `blocking:${line.id}`,
+                      `working:${line.id}`,
                       <StateLine
                         key={line.id}
-                        tone={line.tone}
-                        status={isNew(`blocking:${line.id}`) ? newChip : undefined}
-                        action={
-                          line.ask ? ask(line) : way(line, line.owner === "firm" ? t("case-now-do") : t("case-now-see"))
+                        tone="waiting"
+                        status={
+                          isNew(`working:${line.id}`) || line.slow || line.since ? (
+                            <Box component="span" className="flex items-center gap-2">
+                              {isNew(`working:${line.id}`) ? newChip : null}
+                              {line.slow
+                                ? t("case-now-slow")
+                                : line.since
+                                  ? t("case-now-since", { time: clock(line.since) })
+                                  : null}
+                            </Box>
+                          ) : undefined
                         }
+                        action={line.section ? way({ ...line, owner: "one" }, t("case-now-see")) : undefined}
                       >
                         {say(line)}
-                        <Box component="span" className="text-text-secondary block">
-                          {whose(line)}
-                        </Box>
                       </StateLine>,
                     ),
                   )}
-            </Box>
-          ) : null}
+                </Box>
+              ) : null}
 
-          {/* What ONE does after what waits now: never said as its work now (the owner's test of 2026-11-23). */}
-          {now.later.length > 0 ? (
-            <Box component="section" aria-labelledby="case-now-later" className="flex flex-col gap-2">
-              <Typography id="case-now-later" variant="subtitle2" component="h3" className="mb-0">
-                {t("case-now-title-later")}
-              </Typography>
-              {now.later.map((line) => (
-                <StateLine key={line.id} tone="info">
-                  {say(line)}
-                </StateLine>
-              ))}
-            </Box>
-          ) : null}
+              {!journey.ended ? (
+                <Box component="section" aria-labelledby="case-now-blocking" className="flex flex-col gap-2">
+                  <Typography id="case-now-blocking" variant="subtitle2" component="h3" className="mb-0">
+                    {t("case-now-title-blocking")}
+                  </Typography>
+                  {now.blocking.length === 0
+                    ? newLine(
+                        "blocking:none",
+                        <StateLine key="none" tone="done" status={isNew("blocking:none") ? newChip : undefined}>
+                          {t(working ? "case-now-nothing-working" : "case-now-nothing")}
+                        </StateLine>,
+                      )
+                    : null}
+                  {(clientGrouped ? notClient : now.blocking).map((line) => blockingLine(line))}
+                  {clientGrouped ? (
+                    <>
+                      <StateLine
+                        tone={clientLines[0]?.tone ?? "waiting"}
+                        status={clientLines.some((line) => isNew(`blocking:${line.id}`)) ? newChip : undefined}
+                        action={
+                          <Button
+                            variant="text"
+                            size="small"
+                            aria-expanded={clientOpen}
+                            aria-controls="case-now-client"
+                            onClick={() => setClientOpen((open) => !open)}
+                          >
+                            {clientOpen
+                              ? t("case-now-client-hide")
+                              : t("case-now-client-show", { count: clientLines.length })}
+                          </Button>
+                        }
+                      >
+                        {t("case-now-client-group", { count: clientLines.length })}
+                        <Box component="span" className="text-text-secondary block">
+                          {t(OWNER_KEY.client)}
+                        </Box>
+                      </StateLine>
+                      <Collapse in={clientOpen} id="case-now-client">
+                        <Box className="border-grey-100 ms-3 flex flex-col gap-2 border-s ps-4">
+                          {clientLines.map((line) => blockingLine(line))}
+                        </Box>
+                      </Collapse>
+                    </>
+                  ) : null}
+                </Box>
+              ) : null}
 
-          <ActivityCards id="case-now-recent" title={t("case-now-title-recent")} items={recent} />
+              {/* What ONE does after what waits now: never said as its work now (the owner's test of 2026-11-23). */}
+              {now.later.length > 0 ? (
+                <Box component="section" aria-labelledby="case-now-later" className="flex flex-col gap-2">
+                  <Typography id="case-now-later" variant="subtitle2" component="h3" className="mb-0">
+                    {t("case-now-title-later")}
+                  </Typography>
+                  {now.later.map((line) => (
+                    <StateLine key={line.id} tone="info">
+                      {say(line)}
+                    </StateLine>
+                  ))}
+                </Box>
+              ) : null}
+            </Box>
+
+            {/* Nothing at the side (no forecast, nothing done a moment ago): the column takes no room. */}
+            <Box className="border-grey-100 flex flex-col gap-5 empty:hidden lg:w-80 lg:flex-none lg:border-s lg:ps-5 xl:w-96">
+              {aside}
+              {recent.length > 0 ? (
+                <ActivityCards id="case-now-recent" title={t("case-now-title-recent")} items={recent} stacked />
+              ) : null}
+            </Box>
+          </Box>
         </Box>
         {action ? (
           <Typography variant="body2" className="text-text-secondary">

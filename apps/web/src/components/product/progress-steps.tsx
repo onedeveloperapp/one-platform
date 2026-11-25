@@ -58,6 +58,7 @@ export default function ProgressSteps({
   stateWords,
   working = true,
   href,
+  dense = false,
 }: {
   steps: ProgressStep[];
   /** What the steps are of, for assistive technology ("Andamento do caso"). */
@@ -71,6 +72,8 @@ export default function ProgressSteps({
   working?: boolean;
   /** Where each step is done, for the steps that lead somewhere (a card of the screen). */
   href?: (step: ProgressStep) => string | null;
+  /** Smaller marks, for a top that must leave room under it (the case's, 2026-11-25). */
+  dense?: boolean;
 }) {
   const reached = Math.max(
     0,
@@ -80,7 +83,10 @@ export default function ProgressSteps({
 
   // The mark sits on the paper's own colour, its tint over it, so the line behind never shows through.
   const node = (step: ProgressStep) => (
-    <span aria-hidden className="bg-background-paper relative z-10 flex h-10 w-10 flex-none rounded-xl">
+    <span
+      aria-hidden
+      className={cn("bg-background-paper relative z-10 flex flex-none rounded-xl", dense ? "h-8 w-8" : "h-10 w-10")}
+    >
       <span className={cn("flex h-full w-full items-center justify-center rounded-xl border", NODE[step.state])}>
         {step.state === "current" && working ? (
           <NiLoader size="small" className="animate-spin motion-reduce:animate-none" />
@@ -126,7 +132,7 @@ export default function ProgressSteps({
       <Box className="relative hidden md:block">
         <Box
           aria-hidden
-          className="bg-grey-100 absolute top-5 h-0.5"
+          className={cn("bg-grey-100 absolute h-0.5", dense ? "top-4" : "top-5")}
           style={{ left: `calc(100% / ${steps.length * 2})`, right: `calc(100% / ${steps.length * 2})` }}
         >
           <Box className="bg-primary/40 h-full" style={{ width: `${filled}%` }} />
@@ -144,7 +150,7 @@ export default function ProgressSteps({
                 component="li"
                 key={step.key}
                 aria-current={step.state === "current" ? "step" : undefined}
-                className="flex flex-col items-center gap-2"
+                className={cn("flex flex-col items-center", dense ? "gap-1" : "gap-2")}
               >
                 {to ? (
                   <a
@@ -204,6 +210,7 @@ export function ProgressNow({
   extra,
   action,
   working = true,
+  dense = false,
 }: {
   tone: "progress" | "done" | "stopped";
   /** Under way and something is at work now: the mark turns; under way and waiting for somebody, a clock. */
@@ -214,6 +221,8 @@ export function ProgressNow({
   /** A second line: what ONE waits for, what is missing, the next date. */
   extra?: ReactNode;
   action?: ReactNode;
+  /** Less padding and smaller words, for a top that must leave room under it. */
+  dense?: boolean;
 }) {
   const look = {
     progress: { box: "border-accent-4/40 bg-accent-4-light/15", icon: "text-accent-4" },
@@ -223,7 +232,11 @@ export function ProgressNow({
   return (
     <Box
       role="status"
-      className={cn("flex flex-col gap-3 rounded-2xl border p-4 sm:flex-row sm:items-center", look.box)}
+      className={cn(
+        "flex flex-col gap-3 rounded-2xl border sm:flex-row sm:items-center",
+        dense ? "px-3 py-2.5" : "p-4",
+        look.box,
+      )}
     >
       <Box className="flex min-w-0 flex-1 flex-row gap-3">
         <span aria-hidden className={cn("flex-none pt-0.5", look.icon)}>
@@ -238,7 +251,7 @@ export function ProgressNow({
           )}
         </span>
         <Box className="flex min-w-0 flex-col gap-1">
-          <Typography variant="body1">
+          <Typography variant={dense ? "body2" : "body1"}>
             <strong>{lead}</strong> {text}
           </Typography>
           {extra}
