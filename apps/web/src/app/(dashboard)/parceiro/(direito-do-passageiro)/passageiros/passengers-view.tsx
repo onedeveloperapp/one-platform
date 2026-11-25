@@ -90,6 +90,13 @@ export default function PassengersView({ data }: { data: PassengersData | null }
       return;
     }
     setFailed(false);
+    // A page past the end (the list got shorter meanwhile) is never shown empty: its last page is read instead.
+    if (result.page.rows.length === 0 && next.offset > 0 && result.page.total > 0) {
+      const last = Math.floor((result.page.total - 1) / PAX_PAGE_SIZE) * PAX_PAGE_SIZE;
+      setOffset(last);
+      void load({ ...next, offset: last });
+      return;
+    }
     setPage(result.page);
   };
 

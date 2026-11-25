@@ -9,6 +9,7 @@ import DataTable from "@/components/data-grid/data-table";
 import EmptyState from "@/components/product/empty-state";
 import IllustrationAccounts from "@/icons/illustrations/illustration-accounts";
 import { recordAudit } from "@/lib/audit";
+import { fetchAllPages } from "@/lib/fetch-all-pages";
 import { createClient } from "@flyee/auth/client";
 
 type SubRow = {
@@ -99,14 +100,19 @@ export default function SubscriptionsAdmin() {
   const refresh = useCallback(async () => {
     const supabase = createClient();
     const [{ data, error: readError }, { data: planRows }] = await Promise.all([
-      supabase
-        .from("subscriptions")
-        .select(
-          "id, org_id, plan_id, status, admin_suspended, period, provider, provider_subscription_id, created_at, price_cents, currency, coupon_code_snapshot, renews, cancel_at_period_end, current_period_end, cancel_reason, organizations(name), plans(name)",
-        )
-        .in("status", ["trialing", "active", "past_due", "incomplete"])
-        .order("created_at", { ascending: false })
-        .limit(200),
+      // Every live subscription, one per firm, in the pages the API hands back: a fixed limit left the firms past
+      // it out of this console without a word.
+      fetchAllPages((from, to) =>
+        supabase
+          .from("subscriptions")
+          .select(
+            "id, org_id, plan_id, status, admin_suspended, period, provider, provider_subscription_id, created_at, price_cents, currency, coupon_code_snapshot, renews, cancel_at_period_end, current_period_end, cancel_reason, organizations(name), plans(name)",
+          )
+          .in("status", ["trialing", "active", "past_due", "incomplete"])
+          .order("created_at", { ascending: false })
+          .order("id", { ascending: false })
+          .range(from, to),
+      ),
       // Assignable tiers only: recurring plans. An add-on or a one-time access
       // plan (the kit) is not something a workspace is subscribed to —
       // `set_org_plan` refuses those anyway, so offering them here would only
@@ -122,7 +128,7 @@ export default function SubscriptionsAdmin() {
     ]);
 
     if (readError) {
-      setError(readError.message);
+      setError(readError);
       setLoadFailed(true);
       setLoaded(true);
       return;

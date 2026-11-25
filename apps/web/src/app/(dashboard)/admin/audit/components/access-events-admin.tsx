@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { TRAIL_PAGE_SIZES, type TrailPage, trailPageOf, type TrailQuery, useTrailPages } from "./trail-pages";
+import { useMemo } from "react";
 
-import { Alert, Box, Chip, Tooltip, Typography } from "@mui/material";
+import { Alert, Box, Button, Chip, Tooltip, Typography } from "@mui/material";
 import { type GridColDef, type GridRenderCellParams } from "@mui/x-data-grid";
 
 import DataTable from "@/components/data-grid/data-table";
@@ -13,6 +14,9 @@ import { createClient } from "@flyee/auth/client";
 type AccessRow = {
   id: string;
   userName: string | null;
+  /** Of a support visit, the operator who opened it: the access is never the person's own sign-in. */
+  support: boolean;
+  supportName: string | null;
   ip: string | null;
   userAgent: string | null;
   aal: string | null;
@@ -45,47 +49,41 @@ export const describeAgent = (agent: string | null) => {
   return [browser, os].filter(Boolean).join(" · ") || agent.slice(0, 40);
 };
 
+/** One page of the sign-in trail, searched in the database (0291). */
+async function readAccess(query: TrailQuery): Promise<TrailPage<AccessRow> | { error: string }> {
+  const { data, error } = await createClient().rpc("admin_access_events", {
+    target_search: query.search || null,
+    target_limit: query.pageSize,
+    target_offset: query.page * query.pageSize,
+  });
+  if (error) return { error: error.message };
+  const answer = trailPageOf(data);
+  if (!answer) return { error: "A trilha de acessos veio num formato que este console não lê." };
+  const text = (value: unknown) => (typeof value === "string" ? value : null);
+  return {
+    total: answer.total,
+    rows: answer.rows.map((row) => ({
+      id: String(row.id),
+      userName: text(row.user_name),
+      support: row.support === true,
+      supportName: text(row.support_name),
+      ip: text(row.ip),
+      userAgent: text(row.user_agent),
+      aal: text(row.aal),
+      createdAt: text(row.created_at) ?? "",
+    })),
+  };
+}
+
 /**
  * Sign-in trail viewer: who authenticated, from where, with which assurance
  * level. The operator's job is scanning many events to spot the anomalous
- * one (odd IP, unexpected hour, aal1 where 2FA was expected).
+ * one (odd IP, unexpected hour, aal1 where 2FA was expected). Read a page at
+ * a time and searched in the database, so every access is reachable; a
+ * support visit says so, with the operator who opened it.
  */
 export default function AccessEventsAdmin() {
-  const [rows, setRows] = useState<AccessRow[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [loaded, setLoaded] = useState(false);
-  const [loadFailed, setLoadFailed] = useState(false);
-
-  const refresh = useCallback(async () => {
-    const supabase = createClient();
-    const { data, error: readError } = await supabase
-      .from("access_events")
-      .select("id, ip, user_agent, aal, created_at, profiles(display_name)")
-      .order("created_at", { ascending: false })
-      .limit(200);
-    if (readError) {
-      setError(readError.message);
-      setLoadFailed(true);
-      setLoaded(true);
-      return;
-    }
-    setRows(
-      (data ?? []).map((row) => ({
-        id: row.id,
-        userName: (row.profiles as unknown as { display_name: string | null } | null)?.display_name ?? null,
-        ip: row.ip,
-        userAgent: row.user_agent,
-        aal: row.aal,
-        createdAt: row.created_at,
-      })),
-    );
-    setLoadFailed(false);
-    setLoaded(true);
-  }, []);
-
-  useEffect(() => {
-    refresh();
-  }, [refresh]);
+  const trail = useTrailPages(readAccess);
 
   const columns = useMemo<GridColDef<AccessRow>[]>(
     () => [
@@ -111,6 +109,7 @@ export default function AccessEventsAdmin() {
           <Box className="flex h-full items-center">
             <Typography variant="body2" className="text-text-secondary truncate">
               {params.value ?? "Integrante desconhecido"}
+              {params.row.support ? ` · acesso de suporte (${params.row.supportName ?? "operador removido"})` : ""}
             </Typography>
           </Box>
         ),
@@ -167,31 +166,45 @@ export default function AccessEventsAdmin() {
 
   return (
     <Box className="flex flex-col gap-3">
-      {error && (
-        <Alert severity="error" className="neutral bg-background-paper/60!">
-          {error}
+      {trail.error && (
+        <Alert
+          severity="error"
+          className="neutral bg-background-paper/60!"
+          action={
+            <Button color="inherit" size="small" onClick={trail.retry}>
+              Tentar de novo
+            </Button>
+          }
+        >
+          {trail.error}
         </Alert>
       )}
 
-      {/* A failed load is an error, never an empty-looking table. */}
-      {!loadFailed && (
+      {/* A failed first read is an error, never an empty-looking table. */}
+      {(trail.loaded || !trail.error) && (
         <DataTable<AccessRow>
-          rows={rows}
+          rows={trail.rows}
           columns={columns}
-          loading={!loaded}
+          loading={trail.loading}
+          // The trail is the database's, a page at a time: an export here would be of the page alone.
+          enableExport={false}
+          pageSize={trail.query.pageSize}
+          pageSizeOptions={TRAIL_PAGE_SIZES}
+          server={trail.server}
           noRowsOverlay={
-            <EmptyState
-              layout="row"
-              illustration={<IllustrationAccess />}
-              title="Nenhum acesso registrado ainda"
-              description="Toda nova sessão cai aqui automaticamente (trigger em auth.sessions, migração 0016). Se há acessos acontecendo e nada aparece, aplique a migração."
-              className="border-none"
-            />
-          }
-          noResultsOverlay={
-            <Typography variant="body2" className="text-text-secondary">
-              Nenhum acesso corresponde à sua busca.
-            </Typography>
+            trail.query.search ? (
+              <Typography variant="body2" className="text-text-secondary">
+                Nenhum acesso corresponde à sua busca.
+              </Typography>
+            ) : (
+              <EmptyState
+                layout="row"
+                illustration={<IllustrationAccess />}
+                title="Nenhum acesso registrado ainda"
+                description="Toda nova sessão cai aqui automaticamente (trigger em auth.sessions, migração 0016). Se há acessos acontecendo e nada aparece, aplique a migração."
+                className="border-none"
+              />
+            )
           }
         />
       )}

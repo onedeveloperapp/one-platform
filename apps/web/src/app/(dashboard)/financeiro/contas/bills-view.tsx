@@ -14,6 +14,7 @@ import CardTitle from "@/components/product/card-title";
 import ConfirmActionDialog from "@/components/product/confirm-action-dialog";
 import EmptyState from "@/components/product/empty-state";
 import ListBar, { type ListView } from "@/components/product/list-bar";
+import ListMore, { useListPart } from "@/components/product/list-more";
 import MetricBars from "@/components/product/metric-bars";
 import NumberCard from "@/components/product/number-card";
 import PageHeader from "@/components/product/page-header";
@@ -48,6 +49,8 @@ import { configuresBooks, dayLabel, financeErrorKey, money, operatesBooks } from
 import { openFinanceDocument } from "@/lib/finance/document-actions";
 import { type FinanceReceipt, receiptOfBill } from "@/lib/finance/receipts";
 
+/** How many bills the list draws at a time. */
+const BILLS_STEP = 100;
 const VIEW_KEY: Record<BillView, string> = {
   pagar: "finance-bills-view-pagar",
   receber: "finance-bills-view-receber",
@@ -130,6 +133,8 @@ export default function BillsView({ state }: { state: FinanceState }) {
       )
       .sort(billOrder);
   }, [bills, view, search, day]);
+  // Every bill is read (the views, the counts and the search act on all of them); the list is drawn in parts.
+  const listed = useListPart(shown, BILLS_STEP, `${view}|${search.trim()}`);
   if (state.kind !== "ready") return <FinanceGate state={state} title={t("finance-bills-title")} />;
   const writes = operatesBooks(state.level) && !state.supportVisit;
   const configures = configuresBooks(state.level) && !state.supportVisit;
@@ -508,7 +513,7 @@ export default function BillsView({ state }: { state: FinanceState }) {
             />
           ) : (
             <Box component="ul" className="m-0 flex list-none flex-col p-0">
-              {shown.map((bill) => (
+              {listed.part.map((bill) => (
                 <Box
                   component="li"
                   key={bill.id}
@@ -575,6 +580,7 @@ export default function BillsView({ state }: { state: FinanceState }) {
               ))}
             </Box>
           )}
+          <ListMore shown={listed.part.length} total={listed.total} step={BILLS_STEP} onMore={listed.more} />
         </CardContent>
       </Card>
 

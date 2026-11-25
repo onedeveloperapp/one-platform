@@ -1,5 +1,6 @@
 import "server-only";
 
+import { fetchAllPages } from "@/lib/fetch-all-pages";
 import type { BillStatus, FinanceBill } from "@/lib/finance/bills";
 import {
   type AccountKind,
@@ -132,24 +133,28 @@ export type FinanceEntryRow = FinanceEntryView & {
   fileId: string | null;
 };
 
-/** The entries of the books, the latest first, a page at a time (the list decides its views in the browser). */
-export async function readFinanceEntries(
-  supabase: SupabaseClient,
-  firmId: string,
-  limit = 500,
-): Promise<FinanceEntryRow[] | null> {
-  const { data, error } = await supabase
-    .from("finance_entries")
-    .select(
-      "id, kind, cents, occurred_on, by_one, source, counterparty, description, cancelled_at, cancelled_reason, transfer_id, statement_line_id, apart_at, file_id, finance_accounts(name, kind), finance_categories(name)",
-    )
-    .eq("org_id", firmId)
-    .order("occurred_on", { ascending: false })
-    .order("created_at", { ascending: false })
-    .limit(limit);
+/**
+ * Every entry of the books, the latest first: the list decides its views, its search and its export in the browser,
+ * so it holds them all, read in the pages the API hands back (it hands a thousand rows at most, and the latest 500
+ * alone made the counts, the search and the export of an older entry say nothing of it). A read that fails is null,
+ * never a shorter book.
+ */
+export async function readFinanceEntries(supabase: SupabaseClient, firmId: string): Promise<FinanceEntryRow[] | null> {
+  const { data, error } = await fetchAllPages((from, to) =>
+    supabase
+      .from("finance_entries")
+      .select(
+        "id, kind, cents, occurred_on, by_one, source, counterparty, description, cancelled_at, cancelled_reason, transfer_id, statement_line_id, apart_at, file_id, finance_accounts(name, kind), finance_categories(name)",
+      )
+      .eq("org_id", firmId)
+      .order("occurred_on", { ascending: false })
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false })
+      .range(from, to),
+  );
   if (error) return null;
   const rows: FinanceEntryRow[] = [];
-  for (const row of data ?? []) {
+  for (const row of data) {
     const view = entryViewOf({
       ...row,
       account: (row.finance_accounts as { name?: string } | null)?.name ?? "",
@@ -196,22 +201,25 @@ export type FinanceLine = {
   reading: boolean;
 };
 
-/** The lines of the statements: those that wait for a person first, then what ONE decided lately. */
-export async function readFinanceLines(
-  supabase: SupabaseClient,
-  firmId: string,
-  limit = 300,
-): Promise<FinanceLine[] | null> {
-  const { data, error } = await supabase
-    .from("finance_statement_lines")
-    .select(
-      "id, account_id, posted_on, cents, memo, state, repeat_of, decided_by_one, decided_rule, entry_id, ai_asked, ai_category_id, ai_counterparty, ai_sure, finance_accounts(name), finance_statements(ai_state)",
-    )
-    .eq("org_id", firmId)
-    .order("posted_on", { ascending: false })
-    .limit(limit);
+/**
+ * Every line of the statements, the latest first: the screen counts and shows those that wait for a person and what
+ * ONE decided, so it holds them all, read in the pages the API hands back. The latest 300 alone left a line that
+ * waits, older than they are, out of the list and of its count: never decided, never seen. A read that fails is null.
+ */
+export async function readFinanceLines(supabase: SupabaseClient, firmId: string): Promise<FinanceLine[] | null> {
+  const { data, error } = await fetchAllPages((from, to) =>
+    supabase
+      .from("finance_statement_lines")
+      .select(
+        "id, account_id, posted_on, cents, memo, state, repeat_of, decided_by_one, decided_rule, entry_id, ai_asked, ai_category_id, ai_counterparty, ai_sure, finance_accounts(name), finance_statements(ai_state)",
+      )
+      .eq("org_id", firmId)
+      .order("posted_on", { ascending: false })
+      .order("id", { ascending: false })
+      .range(from, to),
+  );
   if (error) return null;
-  return (data ?? []).map((row) => ({
+  return data.map((row) => ({
     id: String(row.id),
     accountId: String(row.account_id),
     account: (row.finance_accounts as { name?: string } | null)?.name ?? "",
@@ -279,22 +287,25 @@ export async function readFinancePeople(supabase: SupabaseClient, firmId: string
 
 const BILL_STATUSES: readonly BillStatus[] = ["open", "paid", "cancelled", "renegotiated", "written_off"];
 
-/** The bills to pay and to receive (0129): the open ones and the latest closed, with what their payments said. */
-export async function readFinanceBills(
-  supabase: SupabaseClient,
-  firmId: string,
-  limit = 1000,
-): Promise<FinanceBill[] | null> {
-  const { data, error } = await supabase
-    .from("finance_bills")
-    .select(
-      "id, direction, status, counterparty, description, category_id, case_id, cents, paid_cents, due_on, competence_on, paid_on, typed_line, series_index, series_total, closed_reason, file_id, source, by_one, finance_categories(name), finance_bill_payments(id, paid_on, by_one, extra_cents, discount_cents, fine_cents, interest_cents, split_by, undone_at)",
-    )
-    .eq("org_id", firmId)
-    .order("due_on", { ascending: false })
-    .limit(limit);
+/**
+ * Every bill to pay and to receive (0129), with what its payments said, read in the pages the API hands back: the
+ * screen's views and counts are of every bill, and a read of the first thousand left an open bill out of them. A
+ * read that fails is null.
+ */
+export async function readFinanceBills(supabase: SupabaseClient, firmId: string): Promise<FinanceBill[] | null> {
+  const { data, error } = await fetchAllPages((from, to) =>
+    supabase
+      .from("finance_bills")
+      .select(
+        "id, direction, status, counterparty, description, category_id, case_id, cents, paid_cents, due_on, competence_on, paid_on, typed_line, series_index, series_total, closed_reason, file_id, source, by_one, finance_categories(name), finance_bill_payments(id, paid_on, by_one, extra_cents, discount_cents, fine_cents, interest_cents, split_by, undone_at)",
+      )
+      .eq("org_id", firmId)
+      .order("due_on", { ascending: false })
+      .order("id", { ascending: false })
+      .range(from, to),
+  );
   if (error) return null;
-  return (data ?? []).flatMap((row): FinanceBill[] => {
+  return data.flatMap((row): FinanceBill[] => {
     const status = BILL_STATUSES.find((known) => known === row.status);
     if (!status || (row.direction !== "pay" && row.direction !== "receive")) return [];
     const payments = (

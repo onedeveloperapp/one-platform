@@ -13,6 +13,7 @@ import NewPersonPanel from "@/components/people/new-person-panel";
 import CardTitle from "@/components/product/card-title";
 import EmptyState from "@/components/product/empty-state";
 import ListBar from "@/components/product/list-bar";
+import ListMore from "@/components/product/list-more";
 import NumberCard from "@/components/product/number-card";
 import PageHeader from "@/components/product/page-header";
 import StatusChip from "@/components/product/status-chip";
@@ -119,10 +120,13 @@ export default function PeopleView({ state }: { state: PeopleState }) {
   const [adding, setAdding] = useState(false);
   const [search, setSearch] = useState("");
   const [shown, setShown] = useState<PeoplePage | null>(ready?.page ?? null);
-  const [more, setMore] = useState(0);
+  const view = ready?.view ?? "todos";
+  // How many pages past the first are open, of the view they were opened in: another view starts at its first page.
+  const [opened, setOpened] = useState<{ view: string; pages: number }>({ view, pages: 0 });
+  const more = opened.view === view ? opened.pages : 0;
+  const setMore = (pages: (now: number) => number) => setOpened({ view, pages: pages(more) });
   const [failed, setFailed] = useState(false);
   const asked = useRef(0);
-  const view = ready?.view ?? "todos";
 
   // A search is asked a moment after the last key, in the request's body; the newest answer wins.
   useEffect(() => {
@@ -248,7 +252,7 @@ export default function PeopleView({ state }: { state: PeopleState }) {
               placeholder: t("people-search-placeholder"),
               value: search,
               onChange: (typed) => {
-                setMore(0);
+                setMore(() => 0);
                 setSearch(typed);
               },
             }}
@@ -332,15 +336,13 @@ export default function PeopleView({ state }: { state: PeopleState }) {
             </Card>
           ) : null}
 
-          {shown && shown.rows.length < shown.total ? (
-            <Box className="flex flex-wrap items-center gap-3">
-              <Typography variant="body2" className="text-text-secondary min-w-0 flex-1">
-                {t("people-shown", { shown: shown.rows.length, total: shown.total })}
-              </Typography>
-              <Button variant="outlined" color="grey" onClick={() => setMore((count) => count + 1)}>
-                {t("people-more", { count: Math.min(PEOPLE_SHOWN, shown.total - shown.rows.length) })}
-              </Button>
-            </Box>
+          {shown ? (
+            <ListMore
+              shown={shown.rows.length}
+              total={shown.total}
+              step={PEOPLE_SHOWN}
+              onMore={() => setMore((count) => count + 1)}
+            />
           ) : null}
 
           {numbers.registered > 0 ? (

@@ -14,6 +14,7 @@ import NiCheck from "@/icons/nexture/ni-check";
 import NiCross from "@/icons/nexture/ni-cross";
 import { formatDateTime } from "@/lib/admin/format";
 import { recordAudit } from "@/lib/audit";
+import { fetchAllPages } from "@/lib/fetch-all-pages";
 import { createClient } from "@flyee/auth/client";
 
 type CommentRow = {
@@ -55,14 +56,19 @@ export default function BlogCommentsAdmin() {
 
   const refresh = useCallback(async () => {
     const supabase = createClient();
-    const { data, error: readError } = await supabase
-      .from("blog_comments")
-      .select("id, author_name, body, status, created_at, blog_posts(title)")
-      .eq("status", status)
-      .order("created_at", { ascending: false })
-      .limit(200);
+    // Every row, in the pages the API hands back: the table pages, counts and searches in the browser, and a fixed
+    // limit dropped the older rows without a word.
+    const { data, error: readError } = await fetchAllPages((from, to) =>
+      supabase
+        .from("blog_comments")
+        .select("id, author_name, body, status, created_at, blog_posts(title)")
+        .eq("status", status)
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: false })
+        .range(from, to),
+    );
     if (readError) {
-      setError(readError.message);
+      setError(readError);
       setLoadFailed(true);
       setLoaded(true);
       return;

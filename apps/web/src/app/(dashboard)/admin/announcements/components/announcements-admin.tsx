@@ -11,6 +11,7 @@ import EmptyState from "@/components/product/empty-state";
 import IllustrationEmail from "@/icons/illustrations/illustration-email";
 import NiPen from "@/icons/nexture/ni-pen";
 import { recordAudit } from "@/lib/audit";
+import { fetchAllPages } from "@/lib/fetch-all-pages";
 import { createClient } from "@flyee/auth/client";
 
 type AnnouncementRow = {
@@ -107,13 +108,18 @@ export default function AnnouncementsAdmin() {
 
   const refresh = useCallback(async () => {
     const supabase = createClient();
-    const { data, error: readError } = await supabase
-      .from("announcements")
-      .select("id, title, body, level, href, starts_at, ends_at, is_active")
-      .order("created_at", { ascending: false })
-      .limit(100);
+    // Every row, in the pages the API hands back: the table pages, counts and searches in the browser, and a fixed
+    // limit dropped the older rows without a word.
+    const { data, error: readError } = await fetchAllPages((from, to) =>
+      supabase
+        .from("announcements")
+        .select("id, title, body, level, href, starts_at, ends_at, is_active")
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: false })
+        .range(from, to),
+    );
     if (readError) {
-      setError(readError.message);
+      setError(readError);
       setLoadFailed(true);
       setLoaded(true);
       return;

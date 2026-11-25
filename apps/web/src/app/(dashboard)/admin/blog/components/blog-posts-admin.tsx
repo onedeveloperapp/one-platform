@@ -16,6 +16,7 @@ import NiPen from "@/icons/nexture/ni-pen";
 import { formatDate } from "@/lib/admin/format";
 import { labelOf, LOCALE_LABEL } from "@/lib/admin/labels";
 import { recordAudit } from "@/lib/audit";
+import { fetchAllPages } from "@/lib/fetch-all-pages";
 import { createClient } from "@flyee/auth/client";
 
 /** `blog_posts.kind` (migration 0007): a blog post, or a news item that also feeds the members' /novidades. */
@@ -89,15 +90,20 @@ export default function BlogPostsAdmin() {
 
   const refresh = useCallback(async () => {
     const supabase = createClient();
-    const { data, error: readError } = await supabase
-      .from("blog_posts")
-      .select(
-        "id, locale, kind, audience, translation_group, slug, title, excerpt, body_md, cover_url, author_name, tags, is_published, published_at",
-      )
-      .order("created_at", { ascending: false })
-      .limit(200);
+    // Every row, in the pages the API hands back: the table pages, counts and searches in the browser, and a fixed
+    // limit dropped the older rows without a word.
+    const { data, error: readError } = await fetchAllPages((from, to) =>
+      supabase
+        .from("blog_posts")
+        .select(
+          "id, locale, kind, audience, translation_group, slug, title, excerpt, body_md, cover_url, author_name, tags, is_published, published_at",
+        )
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: false })
+        .range(from, to),
+    );
     if (readError) {
-      setError(readError.message);
+      setError(readError);
       setLoadFailed(true);
       setLoaded(true);
       return;

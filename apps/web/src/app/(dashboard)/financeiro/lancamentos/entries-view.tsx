@@ -12,6 +12,7 @@ import { Alert, Box, Card, CardContent, Typography } from "@mui/material";
 import ConfirmActionDialog from "@/components/product/confirm-action-dialog";
 import EmptyState from "@/components/product/empty-state";
 import ListBar, { type ListView } from "@/components/product/list-bar";
+import ListMore, { useListPart } from "@/components/product/list-more";
 import PageHeader from "@/components/product/page-header";
 import QuickActions, { type QuickAction } from "@/components/product/quick-actions";
 import StateLine from "@/components/product/state-line";
@@ -32,6 +33,8 @@ import {
 } from "@/lib/finance/export";
 import type { FinanceEntryRow } from "@/lib/finance/read";
 
+/** How many entries the list draws at a time. */
+const ENTRIES_STEP = 100;
 const VIEWS = [
   "todos",
   "receitas",
@@ -111,6 +114,8 @@ export default function EntriesView({ state }: { state: FinanceState }) {
           ).includes(words)),
     );
   }, [entries, view, search]);
+  // The book is read whole (its views, counts, search and export act on every entry); it is drawn in parts.
+  const listed = useListPart(shown, ENTRIES_STEP, `${view}|${search.trim()}`);
   if (state.kind !== "ready") return <FinanceGate state={state} title={t("finance-entries-title")} />;
   const writes = operatesBooks(state.level) && !state.supportVisit;
 
@@ -275,7 +280,7 @@ export default function EntriesView({ state }: { state: FinanceState }) {
             />
           ) : (
             <Box component="ul" className="m-0 flex list-none flex-col p-0">
-              {shown.map((entry) => (
+              {listed.part.map((entry) => (
                 <Box
                   component="li"
                   key={entry.id}
@@ -321,6 +326,7 @@ export default function EntriesView({ state }: { state: FinanceState }) {
               ))}
             </Box>
           )}
+          <ListMore shown={listed.part.length} total={listed.total} step={ENTRIES_STEP} onMore={listed.more} />
         </CardContent>
       </Card>
 

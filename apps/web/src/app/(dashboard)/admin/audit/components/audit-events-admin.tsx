@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { TRAIL_PAGE_SIZES, type TrailPage, trailPageOf, type TrailQuery, useTrailPages } from "./trail-pages";
+import { useMemo, useState } from "react";
 
 import {
   Alert,
@@ -36,50 +37,42 @@ type AuditRow = {
 const entityOf = (row: AuditRow) =>
   row.entityType ? `${row.entityType}${row.entityId ? ` · ${row.entityId}` : ""}` : "";
 
+/** One page of the audit trail, searched in the database (0291). */
+async function readAudit(query: TrailQuery): Promise<TrailPage<AuditRow> | { error: string }> {
+  const { data, error } = await createClient().rpc("admin_audit_events", {
+    target_search: query.search || null,
+    target_limit: query.pageSize,
+    target_offset: query.page * query.pageSize,
+  });
+  if (error) return { error: error.message };
+  const answer = trailPageOf(data);
+  if (!answer) return { error: "A trilha de auditoria veio num formato que este console não lê." };
+  const text = (value: unknown) => (typeof value === "string" ? value : null);
+  return {
+    total: answer.total,
+    rows: answer.rows.map((row) => ({
+      id: String(row.id),
+      action: text(row.action) ?? "",
+      entityType: text(row.entity_type),
+      entityId: text(row.entity_id),
+      metadata:
+        typeof row.metadata === "object" && row.metadata !== null ? (row.metadata as Record<string, unknown>) : {},
+      actorName: text(row.actor_name),
+      orgName: text(row.org_name),
+      createdAt: text(row.created_at) ?? "",
+    })),
+  };
+}
+
 /**
  * Compliance viewer over the append-only audit trail (packages/audit).
  * The job is scan/inspect many events: filter, find the one that matters,
- * open its metadata.
+ * open its metadata. The trail is read a page at a time and searched in the
+ * database: every event is reachable, the oldest too.
  */
 export default function AuditEventsAdmin() {
-  const [rows, setRows] = useState<AuditRow[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [loaded, setLoaded] = useState(false);
-  const [loadFailed, setLoadFailed] = useState(false);
+  const trail = useTrailPages(readAudit);
   const [detail, setDetail] = useState<AuditRow | null>(null);
-
-  const refresh = useCallback(async () => {
-    const supabase = createClient();
-    const { data, error: readError } = await supabase
-      .from("audit_events")
-      .select("id, action, entity_type, entity_id, metadata, created_at, profiles(display_name), organizations(name)")
-      .order("created_at", { ascending: false })
-      .limit(200);
-    if (readError) {
-      setError(readError.message);
-      setLoadFailed(true);
-      setLoaded(true);
-      return;
-    }
-    setRows(
-      (data ?? []).map((row) => ({
-        id: row.id,
-        action: row.action,
-        entityType: row.entity_type,
-        entityId: row.entity_id,
-        metadata: (row.metadata as Record<string, unknown>) ?? {},
-        actorName: (row.profiles as unknown as { display_name: string | null } | null)?.display_name ?? null,
-        orgName: (row.organizations as unknown as { name: string } | null)?.name ?? null,
-        createdAt: row.created_at,
-      })),
-    );
-    setLoadFailed(false);
-    setLoaded(true);
-  }, []);
-
-  useEffect(() => {
-    refresh();
-  }, [refresh]);
 
   const columns = useMemo<GridColDef<AuditRow>[]>(
     () => [
@@ -178,31 +171,45 @@ export default function AuditEventsAdmin() {
 
   return (
     <Box className="flex flex-col gap-3">
-      {error && (
-        <Alert severity="error" className="neutral bg-background-paper/60!">
-          {error}
+      {trail.error && (
+        <Alert
+          severity="error"
+          className="neutral bg-background-paper/60!"
+          action={
+            <Button color="inherit" size="small" onClick={trail.retry}>
+              Tentar de novo
+            </Button>
+          }
+        >
+          {trail.error}
         </Alert>
       )}
 
-      {/* A failed load is an error, never an empty-looking table. */}
-      {!loadFailed && (
+      {/* A failed first read is an error, never an empty-looking table. */}
+      {(trail.loaded || !trail.error) && (
         <DataTable<AuditRow>
-          rows={rows}
+          rows={trail.rows}
           columns={columns}
-          loading={!loaded}
+          loading={trail.loading}
+          // The trail is the database's, a page at a time: an export here would be of the page alone.
+          enableExport={false}
+          pageSize={trail.query.pageSize}
+          pageSizeOptions={TRAIL_PAGE_SIZES}
+          server={trail.server}
           noRowsOverlay={
-            <EmptyState
-              layout="row"
-              illustration={<IllustrationDocumentation />}
-              title="Nenhum evento de auditoria ainda"
-              description="Eventos registrados por logAuditEvent (packages/audit) aparecem aqui — a trilha é append-only, então nada pode ser editado ou excluído."
-              className="border-none"
-            />
-          }
-          noResultsOverlay={
-            <Typography variant="body2" className="text-text-secondary">
-              Nenhum evento corresponde à sua busca.
-            </Typography>
+            trail.query.search ? (
+              <Typography variant="body2" className="text-text-secondary">
+                Nenhum evento corresponde à sua busca.
+              </Typography>
+            ) : (
+              <EmptyState
+                layout="row"
+                illustration={<IllustrationDocumentation />}
+                title="Nenhum evento de auditoria ainda"
+                description="Eventos registrados por logAuditEvent (packages/audit) aparecem aqui — a trilha é append-only, então nada pode ser editado ou excluído."
+                className="border-none"
+              />
+            )
           }
         />
       )}

@@ -10,6 +10,7 @@ import DataTable from "@/components/data-grid/data-table";
 import EmptyState from "@/components/product/empty-state";
 import IllustrationStorage from "@/icons/illustrations/illustration-storage";
 import NiDownloadCloud from "@/icons/nexture/ni-download-cloud";
+import { fetchAllPages } from "@/lib/fetch-all-pages";
 import { createClient } from "@flyee/auth/client";
 
 type RunRow = {
@@ -87,15 +88,20 @@ export default function BackupsAdmin() {
 
   const refresh = useCallback(async () => {
     const supabase = createClient();
-    const { data, error: readError } = await supabase
-      .from("backup_runs")
-      .select(
-        "id, status, triggered_by, started_at, finished_at, table_count, row_count, total_bytes, storage_prefix, error",
-      )
-      .order("started_at", { ascending: false })
-      .limit(100);
+    // Every row, in the pages the API hands back: the table pages, counts and searches in the browser, and a fixed
+    // limit dropped the older rows without a word.
+    const { data, error: readError } = await fetchAllPages((from, to) =>
+      supabase
+        .from("backup_runs")
+        .select(
+          "id, status, triggered_by, started_at, finished_at, table_count, row_count, total_bytes, storage_prefix, error",
+        )
+        .order("started_at", { ascending: false })
+        .order("id", { ascending: false })
+        .range(from, to),
+    );
     if (readError) {
-      setError(readError.message);
+      setError(readError);
       setLoadFailed(true);
       setLoaded(true);
       return;

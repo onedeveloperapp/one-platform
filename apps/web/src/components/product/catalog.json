@@ -253,6 +253,12 @@
       "use": "The same bar on every list (the screen pattern after ADVBox, approved by the owner on 2026-11-07): the ready views with how many each holds, grouped in its menu; the list's search (waits for the person to stop typing; the page asks the server in the request's body, or filters in the browser a list read whole; `numeric` for a list searched by a number); \"Filtrar\" (a panel of the list's own filters, which narrow every count and every view as the module does); \"Ordenar\"; \"Exportar\" only where the list really exports (`formats` when it goes to more than one, a menu of them); at the right \"Novo\" where a person registers in the list (`create`: one kind is one button, several a menu, the one that starts from a document first; none on a list of what ONE makes by itself) and what the list keeps out of sight (opening a record by hand, an import); under it each filter in force as a chip. Above a DataTable, pass `hideToolbar` to the table. A list that is learned once is known everywhere: never a list with its own bar of another shape."
     },
     {
+      "name": "ListMore",
+      "from": "@/components/product/list-more",
+      "props": "shown, total, step, onMore; useListPart(items, step, key) → { part, total, more }",
+      "use": "The foot of a list of cards read whole and drawn a part at a time (the books, the bills, the lines of the statements, the people): \"N de M\" and \"Mostrar mais K\". The views, the counts, the search and the export act on every row; only the drawing is in parts, and `useListPart` starts again at the first part when its key (the view and the search) changes. A list that outgrows what a browser should carry is paged by the server instead (DataTable `server`, or the pager of `/prazos`); never a list cut at a fixed number of rows that says nothing of the rest."
+    },
+    {
       "name": "OnboardingChecklist / ActivationProgress / SetupWizard",
       "from": "@/components/product/*",
       "props": "see each file; SetupWizard steps: { title, label? (its name in the list), done?, hint?, content, onPrimary? (saves the step: true goes on), onLeave? (what forward by the list or setting aside saves), primaryLabel?, secondary?, busy?, canAdvance?, hidePrimary?, noBack? }",

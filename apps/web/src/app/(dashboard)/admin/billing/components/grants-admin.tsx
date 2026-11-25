@@ -24,6 +24,7 @@ import { type GridColDef, type GridRenderCellParams } from "@mui/x-data-grid";
 import DataTable from "@/components/data-grid/data-table";
 import EmptyState from "@/components/product/empty-state";
 import IllustrationAccess from "@/icons/illustrations/illustration-access";
+import { fetchAllPages } from "@/lib/fetch-all-pages";
 import { createClient } from "@flyee/auth/client";
 
 type GrantRow = {
@@ -86,14 +87,21 @@ export default function GrantsAdmin() {
   const refresh = useCallback(async () => {
     const supabase = createClient();
     const [grantsResult, orgsResult, plansResult] = await Promise.all([
-      supabase
-        .from("entitlement_grants")
-        .select(
-          "id, org_id, kind, price_cents, currency, source, note, created_at, expires_at, revoked_at, revoke_reason, organizations(name), plans(name)",
-        )
-        .order("created_at", { ascending: false })
-        .limit(200),
-      supabase.from("organizations").select("id, name").order("name").limit(1000),
+      // Every grant, and every firm to grant to, in the pages the API hands back: fixed limits left the older grants
+      // and the firms past the thousandth out of this console without a word.
+      fetchAllPages((from, to) =>
+        supabase
+          .from("entitlement_grants")
+          .select(
+            "id, org_id, kind, price_cents, currency, source, note, created_at, expires_at, revoked_at, revoke_reason, organizations(name), plans(name)",
+          )
+          .order("created_at", { ascending: false })
+          .order("id", { ascending: false })
+          .range(from, to),
+      ),
+      fetchAllPages((from, to) =>
+        supabase.from("organizations").select("id, name").order("name").order("id").range(from, to),
+      ),
       supabase
         .from("plans")
         .select("id, name, kind, currency, is_free, is_addon, sort")
@@ -103,7 +111,7 @@ export default function GrantsAdmin() {
         .order("sort"),
     ]);
     if (grantsResult.error || orgsResult.error || plansResult.error) {
-      setError((grantsResult.error ?? orgsResult.error ?? plansResult.error)?.message ?? "Falha ao carregar.");
+      setError(grantsResult.error ?? orgsResult.error ?? plansResult.error?.message ?? "Falha ao carregar.");
       setLoadFailed(true);
       setLoaded(true);
       return;

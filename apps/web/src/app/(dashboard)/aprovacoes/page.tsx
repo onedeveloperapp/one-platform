@@ -54,7 +54,9 @@ async function loadApprovals(modulo: string | undefined): Promise<ApprovalsState
   const scope = pageScopeOf(context.catalog, context.modules, modulo);
   const module = scope.current?.key ?? null;
   // Under a module, the database names the answers of it first: the ones that wait, with how many, and the latest
-  // decided. The queue then reads them as it reads every one.
+  // decided. The queue then reads them as it reads every one. The texts of pieces are left out there (0291), of the
+  // page and of the count: chosen among the oldest and dropped here, a module whose oldest were pieces showed
+  // "N waiting" over no card at all.
   const [ofModuleWaiting, ofModuleDecided] = module
     ? await Promise.all([
         supabase.rpc("firm_module_approvals", {
@@ -62,6 +64,7 @@ async function loadApprovals(modulo: string | undefined): Promise<ApprovalsState
           target_module: module,
           target_decided: false,
           target_limit: PENDING_PAGE,
+          target_except_task: DRAFT_TASK,
         }),
         supabase.rpc("firm_module_approvals", {
           target_org: firm.id,
@@ -146,10 +149,10 @@ async function loadApprovals(modulo: string | undefined): Promise<ApprovalsState
     firm: { id: firm.id, name: firm.name },
     me: { firmFunction: firm.firmFunction },
     pending: waiting,
-    // Under a module, how many of it wait, as the database counted them, less the pieces it named (never here).
+    // Under a module, how many of it wait, as the database counted them, the pieces already left out (0291).
     pendingTotal: module
       ? typeof moduleTotal === "number"
-        ? Math.max(waiting.length, moduleTotal - ((waitingIds?.length ?? 0) - waiting.length))
+        ? Math.max(waiting.length, moduleTotal)
         : waiting.length
       : (pending.count ?? waiting.length),
     decided: recent,

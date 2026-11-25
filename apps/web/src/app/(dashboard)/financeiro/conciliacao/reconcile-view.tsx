@@ -22,6 +22,7 @@ import {
 import CardTitle from "@/components/product/card-title";
 import EmptyState from "@/components/product/empty-state";
 import ListBar, { type ListView } from "@/components/product/list-bar";
+import ListMore, { useListPart } from "@/components/product/list-more";
 import OutcomeDialog from "@/components/product/outcome-dialog";
 import PageHeader from "@/components/product/page-header";
 import QuickActions from "@/components/product/quick-actions";
@@ -52,6 +53,8 @@ import type { FinanceLine } from "@/lib/finance/read";
 import { readStatementFile, type StatementFile } from "@/lib/finance/statement-file";
 import { memoWords } from "@flyee/rules/finance";
 
+/** How many lines the list draws at a time. */
+const LINES_STEP = 100;
 const VIEWS = ["esperam", "one", "todas"] as const;
 type View = (typeof VIEWS)[number];
 const VIEW_KEY: Record<View, string> = {
@@ -126,9 +129,11 @@ export default function ReconcileView({ state }: { state: FinanceState }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const lines = useMemo(() => (state.kind === "ready" ? (state.lines ?? []) : []), [state]);
+  const shown = useMemo(() => lines.filter((line) => inView(line, view)), [lines, view]);
+  // Every line is read (the views count all of them, an old one that waits included); the list is drawn in parts.
+  const listed = useListPart(shown, LINES_STEP, view);
   if (state.kind !== "ready") return <FinanceGate state={state} title={t("finance-reconcile-title")} />;
   const writes = operatesBooks(state.level) && !state.supportVisit;
-  const shown = lines.filter((line) => inView(line, view));
   const views: ListView[] = VIEWS.map((key) => ({
     key,
     label: t(VIEW_KEY[key]),
@@ -188,7 +193,7 @@ export default function ReconcileView({ state }: { state: FinanceState }) {
             />
           ) : (
             <Box component="ul" className="m-0 flex list-none flex-col p-0">
-              {shown.map((line) => (
+              {listed.part.map((line) => (
                 <Box
                   component="li"
                   key={line.id}
@@ -259,6 +264,7 @@ export default function ReconcileView({ state }: { state: FinanceState }) {
               ))}
             </Box>
           )}
+          <ListMore shown={listed.part.length} total={listed.total} step={LINES_STEP} onMore={listed.more} />
         </CardContent>
       </Card>
       <Typography variant="caption" className="text-text-secondary">
