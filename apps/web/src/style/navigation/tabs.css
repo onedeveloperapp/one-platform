@@ -81,4 +81,30 @@
   .MuiTabs-root:has(.MuiTabScrollButton-root) {
     @apply -mx-4;
   }
+
+  /* Underlined: the parts of one page in a strip (the case in tabs, the owner's model of 2026-11-25), the line under
+     the part that is open and no pills. */
+  .MuiTabs-root.underlined {
+    @apply border-grey-100 mb-0 border-b border-solid;
+
+    .MuiTabs-indicator {
+      @apply bg-primary block h-0.5;
+    }
+
+    .MuiTabs-list {
+      @apply gap-0;
+    }
+
+    .MuiButtonBase-root.MuiTab-root {
+      @apply text-text-secondary rounded-none border-0 px-3 py-3 font-semibold;
+
+      &:not(.Mui-selected):hover {
+        @apply bg-grey-500/5;
+      }
+
+      &.Mui-selected {
+        @apply text-primary border-0;
+      }
+    }
+  }
 }

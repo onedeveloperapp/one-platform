@@ -6,6 +6,7 @@ import type { CaseState } from "../case-types";
 import AreaCard from "./area-card";
 import { CaseActionProvider, useCaseActions } from "./case-action";
 import CaseAtWork from "./case-at-work";
+import CaseTabsBar, { TAB_HINT_KEY } from "./case-tabs-bar";
 import ClientLinkCard from "./client-link-card";
 import ComplaintCard from "./complaint-card";
 import DeadlinesCard from "./deadlines-card";
@@ -31,11 +32,12 @@ import StatementsCard from "./statements-card";
 import SummaryCard from "./summary-card";
 import TimelineCard from "./timeline-card";
 import TripCard from "./trip-card";
-import { useRouter } from "next/navigation";
+import { useCaseTab } from "./use-case-tab";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { Alert, Box, Button, Grid } from "@mui/material";
+import { Alert, Box, Button, Typography } from "@mui/material";
 
 import {
   type CardLook,
@@ -69,6 +71,7 @@ import NiScale from "@/icons/nexture/ni-scale";
 import NiSendRight from "@/icons/nexture/ni-send-right";
 import NiTimeline from "@/icons/nexture/ni-timeline";
 import NiUsers from "@/icons/nexture/ni-users";
+import { CASE_TABS, type CaseTab, SECTION_TAB, tabMarks } from "@/lib/cases/case-tabs";
 import { caseHolder, caseLabel, groupOf, STATUS_KEY } from "@/lib/cases/cases";
 import { SECTION_ANCHOR } from "@/lib/cases/now";
 import { readCasePulse } from "@/lib/cases/pulse-read";
@@ -242,6 +245,20 @@ export default function CaseView({ state: read }: { state: CaseState }) {
     return new Set([...fresh].filter((id) => id !== acted));
   }, [fresh, note]);
 
+  // The tab the screen is on, and the card a link sent the person to (`useCaseTab`).
+  const params = useSearchParams();
+  const { tab, pick } = useCaseTab({
+    asked: params.get("aba"),
+    blocking: facts?.now.blocking ?? [],
+    step: facts?.journey.current ?? "intake",
+  });
+  // What waits in each tab, and the tabs whose cards changed a moment ago.
+  const marksOfTabs = useMemo(() => tabMarks(facts?.now.blocking ?? [], facts?.now.working ?? []), [facts]);
+  const flashedTabs = useMemo(() => {
+    const tabOf = new Map(CASE_SECTIONS.map((section) => [SECTION_ANCHOR[section], SECTION_TAB[section]]));
+    return new Set([...flash].flatMap((anchor) => (tabOf.has(anchor) ? [tabOf.get(anchor) as CaseTab] : [])));
+  }, [flash]);
+
   const onJudgment = useCallback(
     async (publicationId: string, judgment: boolean) => {
       const result = await setPublicationJudgment(publicationId, judgment);
@@ -305,6 +322,64 @@ export default function CaseView({ state: read }: { state: CaseState }) {
   const writable = !state.supportVisit;
   // Whoever answers for the case: the first adult claimant, or else a guardian of the minors, never a minor.
   const holderParty = caseHolder(state.parties, state.today);
+  // The cards of each tab, in the order the work is done in it.
+  const panels: Record<CaseTab, ReactNode> = {
+    cliente: (
+      <>
+        <PeopleCard state={state} writable={writable} onChanged={refresh} />
+        {ofArea ? (
+          <AreaCard state={state} writable={writable} onChanged={refresh} />
+        ) : (
+          <TripCard state={state} writable={writable} onChanged={refresh} />
+        )}
+        <StatementsCard state={state} writable={writable} onChanged={refresh} />
+        <ClientLinkCard
+          state={state}
+          holderPersonId={holderParty?.person.person_id ?? null}
+          writable={writable}
+          onChanged={refresh}
+        />
+        <NoticesCard state={state} writable={writable} onChanged={refresh} />
+      </>
+    ),
+    documentos: (
+      <>
+        <DocumentsCard state={state} writable={writable} onChanged={refresh} />
+        <SignaturesCard state={state} writable={writable} onChanged={refresh} />
+        <DossierCard state={state} writable={writable} onChanged={refresh} />
+      </>
+    ),
+    acao: (
+      <>
+        {ofArea ? null : <RulesCard state={state} writable={writable} onChanged={refresh} />}
+        {ofArea ? null : <ComplaintCard state={state} writable={writable} onChanged={refresh} />}
+        <ProceedingsCard state={state} writable={writable} onChanged={refresh} />
+        <DraftsCard state={state} writable={writable} onChanged={refresh} />
+        <FilingCard state={state} writable={writable} onChanged={refresh} />
+      </>
+    ),
+    processo: (
+      <>
+        <PublicationsCard state={state} writable={writable} onChanged={refresh} />
+        <DeadlinesCard state={state} writable={writable} onChanged={refresh} />
+        <HearingsCard state={state} writable={writable} onChanged={refresh} />
+        <IntermediatePiecesCard state={state} writable={writable} onChanged={refresh} />
+        <OutcomeCard state={state} writable={writable} onChanged={refresh} />
+      </>
+    ),
+    dinheiro: (
+      <>
+        <MoneyCard state={state} />
+        <FeesCard state={state} writable={writable} onChanged={refresh} />
+      </>
+    ),
+    historico: (
+      <>
+        {ofArea ? null : <SummaryCard state={state} writable={writable} onChanged={refresh} />}
+        <TimelineCard state={state} />
+      </>
+    ),
+  };
 
   return (
     <Box className="flex flex-col gap-6">
@@ -381,49 +456,31 @@ export default function CaseView({ state: read }: { state: CaseState }) {
         {/* What the market decided in lawsuits like this one (0250): open under the top, no click, for the firm alone. */}
         {ofArea ? null : <ForecastCard proceedings={state.proceedings} airlines={state.airlines} />}
 
+        {/* The cards in six tabs, in the order of the case's way; each tab says what waits in it. */}
+        <CaseTabsBar tab={tab} marks={marksOfTabs} flashed={flashedTabs} onPick={pick} />
+
         {/* Each card opens by itself when the case's stage is about it or something in it waits for the firm, and
           closes once that is done; the person may open or close every one at once to read the whole case. */}
         <CollapsibleGroup marks={marks} looks={looks} words={words} lock={lock} notes={notes} flash={flash}>
-          <CollapsibleGroupToggle className="-mb-3" />
-          <Grid container spacing={3}>
-            <Grid size={{ xs: 12, lg: 8 }} className="flex flex-col gap-3">
-              {/* In the order the case goes: its people and trip, what happened, the papers, the lawsuits, the court. */}
-              <PeopleCard state={state} writable={writable} onChanged={refresh} />
-              {ofArea ? (
-                <AreaCard state={state} writable={writable} onChanged={refresh} />
-              ) : (
-                <TripCard state={state} writable={writable} onChanged={refresh} />
-              )}
-              <StatementsCard state={state} writable={writable} onChanged={refresh} />
-              <DocumentsCard state={state} writable={writable} onChanged={refresh} />
-              <SignaturesCard state={state} writable={writable} onChanged={refresh} />
-              {ofArea ? null : <RulesCard state={state} writable={writable} onChanged={refresh} />}
-              <ProceedingsCard state={state} writable={writable} onChanged={refresh} />
-              <DraftsCard state={state} writable={writable} onChanged={refresh} />
-              <FilingCard state={state} writable={writable} onChanged={refresh} />
-              <HearingsCard state={state} writable={writable} onChanged={refresh} />
-              <PublicationsCard state={state} writable={writable} onChanged={refresh} />
-              <IntermediatePiecesCard state={state} writable={writable} onChanged={refresh} />
-              <OutcomeCard state={state} writable={writable} onChanged={refresh} />
-              <MoneyCard state={state} />
-              <FeesCard state={state} writable={writable} onChanged={refresh} />
-              <DeadlinesCard state={state} writable={writable} onChanged={refresh} />
-              {ofArea ? null : <ComplaintCard state={state} writable={writable} onChanged={refresh} />}
-            </Grid>
-
-            <Grid size={{ xs: 12, lg: 4 }} className="flex flex-col gap-3">
-              <ClientLinkCard
-                state={state}
-                holderPersonId={holderParty?.person.person_id ?? null}
-                writable={writable}
-                onChanged={refresh}
-              />
-              <NoticesCard state={state} writable={writable} onChanged={refresh} />
-              {ofArea ? null : <SummaryCard state={state} writable={writable} onChanged={refresh} />}
-              <DossierCard state={state} writable={writable} onChanged={refresh} />
-              <TimelineCard state={state} />
-            </Grid>
-          </Grid>
+          <Box className="-mt-3 flex flex-wrap items-center justify-between gap-2">
+            <Typography variant="body2" className="text-text-secondary">
+              {t(TAB_HINT_KEY[tab])}
+            </Typography>
+            <CollapsibleGroupToggle />
+          </Box>
+          {CASE_TABS.map((key) => (
+            <Box
+              key={key}
+              role="tabpanel"
+              id={`case-panel-${key}`}
+              aria-labelledby={`case-tab-${key}`}
+              data-case-tab={key}
+              hidden={tab !== key}
+              className="-mt-3 flex flex-col gap-3"
+            >
+              {panels[key]}
+            </Box>
+          ))}
         </CollapsibleGroup>
       </CaseActionProvider>
 
