@@ -247,6 +247,40 @@ describe("caseNow", () => {
     expect(now.holder).toBe("firm");
   });
 
+  it("never says a held package is to be filed: built again, or the contact its court's screen asks (0288)", () => {
+    const held = (code: string) =>
+      caseNow(
+        base({
+          status: "drafting",
+          proceedings: [planned],
+          drafts: [{ id: "dr", proceedingId: "lw", status: "issued", work: null }],
+          filings: [
+            {
+              id: "fp",
+              proceedingId: "lw",
+              system: "eproc",
+              status: "ready",
+              blocker: null,
+              held: code,
+              signature: { takesSigned: false, status: null },
+            },
+          ],
+        }),
+      );
+    const words = { kind: { message: "case-proceeding-kind-juizado" }, system: { message: "case-system-eproc" } };
+    for (const [code, key] of [
+      ["package_outdated", "case-now-filing-outdated"],
+      ["contact_missing", "case-now-filing-contact"],
+    ] as const) {
+      const now = held(code);
+      expect(now.blocking.map((line) => [line.id, line.owner, line.actor, line.tone])).toEqual([
+        ["filing:fp:held", "firm", "anyone", "attention"],
+      ]);
+      expect(now.blocking[0].text).toEqual({ key, values: words });
+      expect(now.holder).toBe("firm");
+    }
+  });
+
   it("says ONE files the package itself, and that a sending tried again later waits on the court", () => {
     const filing = (submission: { status: string; attempts?: number; retryAfter?: string | null }) =>
       caseNow(

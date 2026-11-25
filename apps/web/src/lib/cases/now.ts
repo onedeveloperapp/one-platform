@@ -133,6 +133,8 @@ type Filing = {
   status: string;
   slow?: boolean;
   blocker: string | null;
+  /** What holds the package itself (0288): built for the lawsuit as it was, or a contact its court's screen asks. */
+  held?: string | null;
   signature: { takesSigned: boolean; status: "due" | "waiting" | "signed" | "failed" | null };
   /**
    * ONE filing it itself (0101): through which channel, what keeps it from doing so, and what came of its sending; a
@@ -246,6 +248,12 @@ const SCREEN_LINE: Record<Exclude<ScreenStanding["kind"], "hand">, { key: string
   firm_unchosen: { key: "case-now-filing-screen-firm", actor: "partner" },
   choose: { key: "case-now-filing-screen-choose", actor: "lawyer" },
   batch: { key: "case-now-filing-screen-batch", actor: "lawyer" },
+};
+
+/** What holds a package itself (0288), in the words of the top of the case. */
+const FILING_HELD_KEY: Record<string, string> = {
+  package_outdated: "case-now-filing-outdated",
+  contact_missing: "case-now-filing-contact",
 };
 
 /** What came of ONE's filing, where a lawyer takes it up (0101). */
@@ -975,6 +983,18 @@ export function caseNow(input: CaseNowInput): CaseNow {
               }),
             );
           }
+        } else if (filing.held && FILING_HELD_KEY[filing.held]) {
+          // The package itself waits (0288): built again, or the contact the court's screen asks, before anybody files it.
+          blocking.push(
+            item({
+              id: `filing:${filing.id}:held`,
+              owner: "firm",
+              actor: "anyone",
+              tone: "attention",
+              text: { key: FILING_HELD_KEY[filing.held], values: { kind, system: systemWord(filing.system) } },
+              section: "filing",
+            }),
+          );
         } else if (filing.signature.takesSigned && filing.signature.status === "due") {
           working.push(
             item({

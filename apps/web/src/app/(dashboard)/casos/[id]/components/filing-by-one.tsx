@@ -108,6 +108,18 @@ export default function FilingByOne({
     );
   }
 
+  // Something holds the package before ONE took it (what holds its case, built for the lawsuit as it was, a contact
+  // the court's screen asks, 0288): the card says what above, and ONE's way waits until it is put right.
+  if (
+    !sub &&
+    (filing.blocker !== null ||
+      Boolean(filing.held) ||
+      byOne.blocker === "package_outdated" ||
+      byOne.blocker === "contact_missing")
+  ) {
+    return null;
+  }
+
   // A lawyer's batch on the court's screen: where the batch is followed, and where the lawyer gives their word.
   const toBatches = (
     <Button variant="outlined" color="grey" size="small" href="/protocolo" LinkComponent={Link}>

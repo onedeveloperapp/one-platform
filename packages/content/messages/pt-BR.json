@@ -3487,6 +3487,8 @@
     "case-now-draft-failed": "A peça da ação ({kind}) não foi escrita: peça de novo.",
     "case-now-filing-failed": "O pacote da ação ({kind}) não foi montado: veja o que aconteceu.",
     "case-now-filing-blocked": "O pacote da ação ({kind}) espera {reason}.",
+    "case-now-filing-outdated": "O processo ou os documentos mudaram depois que o pacote da ação ({kind}) foi montado: monte o pacote de novo.",
+    "case-now-filing-contact": "Falta no caso o e-mail ou o celular que o {system} pede para protocolar a ação ({kind}).",
     "case-now-filing-authorize": "Um advogado da ação autoriza a assinatura em nuvem para o ONE assinar o pacote ({kind}).",
     "case-now-filing-sign-failed": "A assinatura dos arquivos do pacote ({kind}) falhou: veja o que aconteceu.",
     "case-now-filing-ready": "Protocole a ação ({kind}) no {system} e anexe o recibo.",

@@ -58,6 +58,15 @@ export type FilingSignature = {
 
 export type FilingReceipt = { id: string; cnj: string; filedOn: string };
 
+/**
+ * What holds a package itself (0288, `filing_package_hold`), apart from what holds its lawsuit: built for the lawsuit
+ * as it was, or a contact the court's screen asks that the case lacks.
+ */
+const PACKAGE_HELD = ["package_outdated", "contact_missing"] as const;
+export type PackageHeld = (typeof PACKAGE_HELD)[number];
+const packageHeld = (code: string | undefined): PackageHeld | null =>
+  (PACKAGE_HELD as readonly string[]).includes(code ?? "") ? (code as PackageHeld) : null;
+
 /** The package of a lawsuit, as the case shows it. */
 /**
  * ONE filing a package itself (0101): through which channel (the court's MNI, or the test court of a test case), what
@@ -166,6 +175,12 @@ export type CaseFiling = {
    * whose word on the civil court is not a yes. A package built before that changed is not to be filed.
    */
   blocker: string | null;
+  /**
+   * What holds the package itself, apart from its lawsuit (0288, `filing_package_holds`): built for the lawsuit as it
+   * was, or a contact the court's screen asks and the case lacks. The top of the case says it; the card reads the
+   * same from the package and its sheet. Absent when it could not be read.
+   */
+  held?: PackageHeld | null;
   signature: FilingSignature;
   /** ONE filing it itself (0101); null when it could not be read. */
   byOne: FilingByOne | null;
@@ -369,12 +384,18 @@ export async function loadCaseFilings(
       }) ?? []
     );
   });
-  const [blockers, byOne, sheets] = await Promise.all([
+  const [blockers, holds, byOne, sheets] = await Promise.all([
     blockersOf(
       supabase,
       firmId,
       filings.filter((filing) => filing.status !== "filed").map((filing) => filing.proceedingId),
     ),
+    // What holds each package itself (0288). A read that fails leaves it unsaid: the card reads it from the package.
+    holdsOf(
+      supabase,
+      firmId,
+      filings.filter((filing) => filing.status !== "filed").map((filing) => filing.id),
+    ).catch(() => new Map<string, string>()),
     // What ONE does with each package (0101). A read that fails says nothing of it: the lawyer's own way shows.
     supabase.rpc("case_filing_by_one", { target_case: caseId }).then(
       ({ data, error }) =>
@@ -396,6 +417,7 @@ export async function loadCaseFilings(
     return {
       ...filing,
       blocker: filing.status === "filed" ? filing.blocker : (blockers.get(filing.proceedingId) ?? null),
+      held: filing.status === "filed" ? null : packageHeld(holds.get(filing.id)),
       byOne: one ? { ...one, screen: screens(filing) } : null,
       sheet: sheets.get(filing.id) ?? null,
     };
@@ -491,6 +513,20 @@ async function blockersOf(
   );
 }
 
+/**
+ * What holds each package named, by package (0288, `filing_package_holds`): built for the lawsuit as it was, what
+ * holds its lawsuit, or a contact the court's screen asks and the case lacks. Throws when it could not be read.
+ */
+async function holdsOf(supabase: SupabaseClient, firmId: string, packageIds: string[]): Promise<Map<string, string>> {
+  if (packageIds.length === 0) return new Map();
+  const { data, error } = await supabase.rpc("filing_package_holds", {
+    target_org: firmId,
+    target_packages: [...new Set(packageIds)],
+  });
+  if (error) throw new Error("what holds a package could not be read");
+  return new Map(((data ?? []) as { package_id: string; code: string }[]).map((row) => [row.package_id, row.code]));
+}
+
 /** A package in the firm's filing queue, with the case it belongs to. */
 export type QueuedFiling = {
   id: string;
@@ -506,7 +542,10 @@ export type QueuedFiling = {
   requestedLabel: string;
   /** When it was asked for, as the database wrote it: what the queue is ordered by. */
   requestedAt: string;
-  /** What keeps its lawsuit from being filed now: the package waits for it before it is filed. */
+  /**
+   * What holds the package now (0288, `filing_package_hold`): built for the lawsuit as it was, what holds its
+   * lawsuit, or a contact the court's screen asks and the case lacks. It waits for that before it is filed.
+   */
   blocker: string | null;
   /** Where the court's system takes the files signed: how ONE's signature of them stands. */
   signature: FilingSignature["status"] | null;
@@ -548,10 +587,11 @@ export async function loadFilingQueue(
   const { data, error } = await query.order("requested_at", { ascending: true }).limit(QUEUE_SHOWN + 1);
   if (error) throw new Error("the filing queue could not be read");
   const raw = (data ?? []) as QueueRow[];
-  const blockers = await blockersOf(
+  // What holds each package, the same rule the case and ONE's own filing read (0288): never said ready while held.
+  const holds = await holdsOf(
     supabase,
     firmId,
-    raw.slice(0, QUEUE_SHOWN).map((row) => row.proceeding_id),
+    raw.slice(0, QUEUE_SHOWN).map((row) => row.id),
   );
   const rows = raw.slice(0, QUEUE_SHOWN).flatMap((row): QueuedFiling[] => {
     if (row.status !== "requested" && row.status !== "ready" && row.status !== "failed") return [];
@@ -577,7 +617,7 @@ export async function loadFilingQueue(
         files: many(row.filing_package_items).length,
         requestedLabel: momentLabel(row.requested_at, timeZone),
         requestedAt: row.requested_at,
-        blocker: blockers.get(row.proceeding_id) ?? null,
+        blocker: holds.get(row.id) ?? null,
         signature: (SIGNATURE_STATUSES as readonly string[]).includes(row.signature_status ?? "")
           ? (row.signature_status as FilingSignature["status"])
           : null,

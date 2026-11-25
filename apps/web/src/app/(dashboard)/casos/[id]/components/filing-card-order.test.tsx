@@ -149,13 +149,13 @@ const filingOf = (email: string | null) => ({
   sheet: sheetOf(email),
 });
 
-const stateOf = (email: string | null, approvedAuto: boolean) =>
+const stateOf = (email: string | null, approvedAuto: boolean, filing: Record<string, unknown> = {}) =>
   ({
     kind: "ready",
     today: "2026-11-24",
     case: { id: "c0000000-0000-4000-8000-000000000001", status: "drafting", createdAt: "2026-11-20T20:21:16Z" },
     proceedings: [PROCEEDING],
-    filings: [filingOf(email)],
+    filings: [{ ...filingOf(email), ...filing }],
     documents: [
       {
         id: PETITION,
@@ -226,6 +226,35 @@ describe("the card Protocolo, in the order of the owner's canvas (2026-11-24)", 
     // The ficha's step that lacks the value says which; the missing line is not said again inside the ficha.
     expect(screen.getByText("Falta o e-mail")).toBeTruthy();
     expect(screen.getAllByText(/Falta no caso o e-mail/).length).toBe(1);
+  });
+
+  it("never hands ONE's batch a package the court's screen cannot take yet (0288)", { timeout: 60_000 }, () => {
+    const viewer = "u0000000-0000-4000-8000-000000000001";
+    // Ana files on the eproc by ONE's browser: a package nothing holds waits for her batch on /protocolo.
+    const byOne = (blocker: string) => ({
+      byOne: {
+        channel: null,
+        blocker,
+        mode: "auto",
+        submission: null,
+        screen: {
+          key: "eproc-tjsp",
+          name: "eproc do TJSP",
+          ways: ["browser", "extension"],
+          firmWay: "browser",
+          lawyers: [{ userId: viewer, way: "browser" }],
+          viewerId: viewer,
+        },
+      },
+    });
+    draw(stateOf("marina@exemplo.com.br", false, byOne("no_channel")));
+    expect(screen.getByText(/num lote que você aprova em Protocolo/)).toBeTruthy();
+    cleanup();
+    // The e-mail the eproc asks is missing: what holds it is said, and no batch is offered for it.
+    draw(stateOf(null, false, { ...byOne("contact_missing"), held: "contact_missing" }));
+    expect(screen.queryByText(/num lote que você aprova em Protocolo/)).toBeNull();
+    expect(screen.queryByText(/falta a liberação do tribunal/)).toBeNull();
+    expect(screen.getByText(/Falta no caso o e-mail de Marina Alves Pereira/)).toBeTruthy();
   });
 
   it("keeps building again and cancelling in the lawsuit's menu", { timeout: 60_000 }, () => {
