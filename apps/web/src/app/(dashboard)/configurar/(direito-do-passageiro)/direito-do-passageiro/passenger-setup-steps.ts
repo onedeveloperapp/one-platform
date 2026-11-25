@@ -4,7 +4,7 @@
  * client reference on the server, so calling one there throws (seen in production on 2026-11-04, where the page
  * imported this guard from its view and every visit answered the error boundary).
  */
-export const PASSENGER_SETUP_STEPS = ["seguranca", "valores", "clausula", "agencia"] as const;
+export const PASSENGER_SETUP_STEPS = ["seguranca", "pecas", "valores", "clausula", "agencia"] as const;
 export type PassengerSetupStep = (typeof PASSENGER_SETUP_STEPS)[number];
 
 export const isPassengerSetupStep = (value: unknown): value is PassengerSetupStep =>

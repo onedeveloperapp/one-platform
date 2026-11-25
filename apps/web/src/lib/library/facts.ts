@@ -380,6 +380,141 @@ export async function loadSetupPapers(
   return { procuracao: paper("procuracao"), contrato: paper("contrato") };
 }
 
+/** The petition of a kind of lawsuit, as the module's setup offers it: the model ONE writes it from now. */
+export type SetupPetition = {
+  kind: "juizado" | "comum";
+  /** The firm's own, else the platform's default; null when ONE has none to write it from. */
+  used: LibraryTemplate | null;
+  /** The firm's petitions ONE takes first for the cases of a problem (0244), each its own. */
+  byProblem: LibraryTemplate[];
+};
+
+/** The pieces ONE writes for the module's cases, as its setup offers them (the owner, 2026-11-25). */
+export type SetupPieces = {
+  petitions: SetupPetition[];
+  /** The kinds of piece of the process ONE writes (0189), for a model of one of them. */
+  pieceKinds: { slug: string; name: string }[];
+  /** The firm's models ONE writes a piece of the process from, one per kind at most (`piece_template_for`). */
+  processOwn: LibraryTemplate[];
+  /** The firm's own models of a petition or of a piece of the process, for the default a new one replaces. */
+  firmModels: LibraryTemplate[];
+};
+
+export type PieceRow = ModelRow & {
+  provisional: boolean | null;
+  prepared_by_one: boolean | null;
+  name: string;
+  updated_at: string;
+};
+
+/**
+ * What the module's setup says of the pieces ONE writes, from the firm's and the platform's models of a petition and
+ * of a piece of the process: for each kind of lawsuit, the petition ONE writes from now (`modelForKind`, as
+ * `draft_template_for` decides it) and the firm's own by problem; the firm's model of each piece of the process
+ * (`pieceModelFor`). Pure: the rows come from `loadSetupPieces`.
+ */
+export function setupPiecesOf(
+  rows: readonly PieceRow[],
+  pieceKinds: readonly { slug: string; name: string }[],
+  firmId: string,
+  timeZone: string | null | undefined,
+): SetupPieces {
+  const ordered = [...rows].sort(
+    (a, b) => Number(a.org_id === null) - Number(b.org_id === null) || a.name.localeCompare(b.name),
+  );
+  const pieceName = new Map(pieceKinds.map((kind) => [kind.slug, kind.name]));
+  const view = (row: PieceRow, used: boolean): LibraryTemplate => {
+    const documentKind = documentOf(row);
+    return {
+      id: row.id,
+      name: row.name,
+      documentKind,
+      proceedingKind: row.proceeding_kind === "juizado" || row.proceeding_kind === "comum" ? row.proceeding_kind : null,
+      problem: documentKind === "piece" ? (row.problem ?? null) : null,
+      pieceKind: documentKind === "peca_processo" ? (row.piece_kind ?? null) : null,
+      pieceKindName:
+        documentKind === "peca_processo" && row.piece_kind ? (pieceName.get(row.piece_kind) ?? null) : null,
+      isDefault: row.is_default === true,
+      platform: row.org_id === null,
+      provisional: row.org_id === null && row.provisional === true,
+      usedByOne: used,
+      preparedByOne: row.org_id !== null && row.prepared_by_one === true,
+      updatedAt: row.updated_at,
+      updatedLabel: momentLabel(row.updated_at, timeZone),
+      updatedBy: null,
+      cited: 0,
+      missing: 0,
+    };
+  };
+  const byId = (id: string | null) => (id ? (ordered.find((row) => row.id === id) ?? null) : null);
+
+  const problems = [
+    ...new Set(
+      ordered.flatMap((row) =>
+        row.org_id === firmId && documentOf(row) === "piece" && row.problem ? [row.problem] : [],
+      ),
+    ),
+  ];
+  const usedIds = new Set<string>();
+  const petitions = (["juizado", "comum"] as const).map((kind): SetupPetition => {
+    const used = byId(modelForKind(ordered, firmId, kind));
+    const byProblem = problems.flatMap((problem) => {
+      const row = byId(modelForKind(ordered, firmId, kind, problem));
+      // Only a problem with a model of its own: its other cases go to the kind's model.
+      return row && row.problem === problem ? [row] : [];
+    });
+    for (const row of [used, ...byProblem]) if (row) usedIds.add(row.id);
+    return { kind, used: used ? view(used, true) : null, byProblem: byProblem.map((row) => view(row, true)) };
+  });
+  const processRows = [
+    ...new Map(
+      pieceKinds.flatMap((piece) => {
+        const row = byId(
+          pieceModelFor(ordered, firmId, piece.slug, "juizado") ?? pieceModelFor(ordered, firmId, piece.slug, "comum"),
+        );
+        return row ? [[row.id, row] as const] : [];
+      }),
+    ).values(),
+  ];
+  for (const row of processRows) usedIds.add(row.id);
+  return {
+    petitions,
+    pieceKinds: [...pieceKinds],
+    processOwn: processRows.map((row) => view(row, true)),
+    firmModels: ordered.filter((row) => row.org_id === firmId).map((row) => view(row, usedIds.has(row.id))),
+  };
+}
+
+/**
+ * The pieces ONE writes as the module's setup offers them: the firm's and the platform's models of a petition and of
+ * a piece of the process, read under the person's own session. Null when they could not be read: the step says so,
+ * never that ONE writes from nothing.
+ */
+export async function loadSetupPieces(
+  supabase: SupabaseClient,
+  firmId: string,
+  timeZone: string | null | undefined,
+): Promise<SetupPieces | null> {
+  const [templates, kinds] = await Promise.all([
+    supabase
+      .from("draft_templates")
+      .select(
+        "id, org_id, provisional, prepared_by_one, name, document_kind, proceeding_kind, problem, piece_kind, is_default, updated_at",
+      )
+      .or(`org_id.eq.${firmId},org_id.is.null`)
+      .in("document_kind", ["piece", "peca_processo"])
+      .order("name"),
+    supabase.from("piece_kinds").select("slug, name").order("position"),
+  ]);
+  if (templates.error || kinds.error) return null;
+  return setupPiecesOf(
+    (templates.data ?? []) as PieceRow[],
+    (kinds.data ?? []) as { slug: string; name: string }[],
+    firmId,
+    timeZone,
+  );
+}
+
 export async function loadLibrary(
   supabase: SupabaseClient,
   firmId: string,

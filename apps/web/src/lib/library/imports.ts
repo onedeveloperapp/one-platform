@@ -558,18 +558,23 @@ const ONE_PER_USE: readonly ModelDocument[] = [
   "declaracao_hipossuficiencia",
 ];
 
+/** The pieces a firm keeps models of, as the module's setup asks them: a petition, a piece of the process. */
+export const PIECE_USES: readonly ModelDocument[] = ["piece", "peca_processo"];
+
 /**
  * Whether a request that failed or was refused is behind the firm already: it was sent as a paper of which the firm
  * saved a model after it was sent (from a later document, or written by hand). Nothing is owed of it, and neither
  * the setup nor the library says it any more. A saved request goes with what it saved (0067), so without this the
- * setup fell back to an older failure of the same paper right after the firm's model was saved (2026-11-20).
+ * setup fell back to an older failure of the same paper right after the firm's model was saved (2026-11-20). The
+ * module's setup asks the same of a petition and a piece of the process (`kinds`, `PIECE_USES`).
  */
 export function requestSettled(
   request: { status: string; expected: string | null; sentAt: string | Date },
   savedAt: Partial<Record<ModelDocument, number>>,
+  kinds: readonly ModelDocument[] = ONE_PER_USE,
 ): boolean {
   if (request.status !== "failed" && request.status !== "refused") return false;
-  const paper = ONE_PER_USE.find((kind) => kind === request.expected);
+  const paper = kinds.find((kind) => kind === request.expected);
   const saved = paper ? savedAt[paper] : undefined;
   const sent = momentOf(request.sentAt);
   return saved !== undefined && Number.isFinite(sent) && saved >= sent;
@@ -582,10 +587,11 @@ const momentOf = (value: string | Date | null | undefined): number =>
 /** The latest moment the firm saved a model of each paper, from its rows of `draft_templates`, in milliseconds. */
 export function papersSavedAt(
   rows: readonly { document_kind: string | null; updated_at: string | Date | null }[],
+  kinds: readonly ModelDocument[] = ONE_PER_USE,
 ): Partial<Record<ModelDocument, number>> {
   const latest: Partial<Record<ModelDocument, number>> = {};
   for (const row of rows) {
-    const kind = ONE_PER_USE.find((paper) => paper === row.document_kind);
+    const kind = kinds.find((paper) => paper === row.document_kind);
     const at = momentOf(row.updated_at);
     if (!kind || !Number.isFinite(at)) continue;
     if (latest[kind] === undefined || at > (latest[kind] as number)) latest[kind] = at;

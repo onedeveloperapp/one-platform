@@ -19,6 +19,7 @@ import {
   modelChecks,
   papersSavedAt,
   paragraphsOf,
+  PIECE_USES,
   proposalOf,
   questionsOf,
   refusalOf,
@@ -318,6 +319,64 @@ export async function readPaperImports(
     };
   };
   return { procuracao: latest("procuracao"), contrato: latest("contrato") };
+}
+
+/** A request sent as a petition or a piece of the process from the module's setup, with what it was sent as. */
+export type PieceImport = PaperImport & { expected: "piece" | "peca_processo" };
+
+/** How many of the firm's requests of a piece the module's setup lists at most: the rest wait in the library. */
+const PIECE_IMPORTS_SHOWN = 5;
+
+/**
+ * The requests sent as a petition or a piece of the process that still say something to the firm (the module's
+ * setup, 2026-11-25), the newest first: a firm keeps many models of a piece, so each request is its own line, not
+ * only the latest. None that ONE saved (a model of the library now), and none that failed or was refused before
+ * the firm saved a model of that piece (`requestSettled`). None for who does not write models, and none when the
+ * read fails: the step then says what ONE writes from, as it would with nothing sent.
+ */
+export async function readPieceImports(supabase: SupabaseClient, firmId: string): Promise<PieceImport[]> {
+  const [{ data, error }, saved] = await Promise.all([
+    supabase
+      .from("template_imports")
+      .select("id, file_name, status, failure, expected_kind, refusal, created_at")
+      .eq("org_id", firmId)
+      .in("expected_kind", ["piece", "peca_processo"])
+      .neq("status", "saved")
+      .order("created_at", { ascending: false })
+      .limit(20),
+    supabase
+      .from("draft_templates")
+      .select("document_kind, updated_at")
+      .eq("org_id", firmId)
+      .in("document_kind", ["piece", "peca_processo"]),
+  ]);
+  if (error) return [];
+  const savedAt = saved.error
+    ? {}
+    : papersSavedAt((saved.data ?? []) as { document_kind: string | null; updated_at: string | null }[], PIECE_USES);
+  const rows = (data ?? []) as Pick<
+    ImportRow,
+    "id" | "file_name" | "status" | "failure" | "expected_kind" | "refusal" | "created_at"
+  >[];
+  return rows
+    .flatMap((row): PieceImport[] => {
+      const expected =
+        row.expected_kind === "piece" || row.expected_kind === "peca_processo" ? row.expected_kind : null;
+      if (!expected || row.status === "saved") return [];
+      if (requestSettled({ status: row.status, expected, sentAt: row.created_at }, savedAt, PIECE_USES)) return [];
+      const status = statusOf(row.status);
+      return [
+        {
+          id: row.id,
+          fileName: row.file_name,
+          status,
+          failure: row.failure,
+          refusal: status === "refused" ? refusalOf(row.refusal) : null,
+          expected,
+        },
+      ];
+    })
+    .slice(0, PIECE_IMPORTS_SHOWN);
 }
 
 /** What may be sent for a model, from the setting (public): what the dialog says before anything is sent. */

@@ -7,6 +7,8 @@ import { cookies } from "next/headers";
 import type { SecondFactorState } from "@/lib/ai/approvals";
 import { claimDefaultsOf } from "@/lib/firm/autonomy";
 import { isManager } from "@/lib/firm/roles";
+import { loadSetupPieces } from "@/lib/library/facts";
+import { readPieceImports } from "@/lib/library/import-read";
 import type { MemberContext } from "@/lib/member/context";
 import { nextModuleSetup } from "@/lib/modules/module-setups";
 import { readModuleSetups } from "@/lib/modules/module-setups-read";
@@ -18,8 +20,9 @@ import { IMPERSONATION_MARKER_COOKIE } from "@flyee/auth";
 
 /**
  * What the passenger module's setup shows (migration 0081), read under the person's own session: the module as
- * the catalog names it and where it stands among the firm's module setups, the Valor da Causa Pedido of each kind
- * of problem, the words of the clause the firm gives its agencies (or ONE's proposal written for the firm), its
+ * the catalog names it and where it stands among the firm's module setups, the petitions and the pieces of the
+ * process ONE writes for its cases (the model of each it writes from, and what ONE does with a document the firm sent
+ * for one), the Valor da Causa Pedido of each kind of problem, the words of the clause the firm gives its agencies (or ONE's proposal written for the firm), its
  * partner agencies and the channel the partnership needs, and the modules the firm did not contract, shown
  * disabled. Each part that could not be read is its step's to say; the others stand.
  */
@@ -33,24 +36,39 @@ export async function loadPassengerSetupState(
   const module = (context.catalog ?? []).find((entry) => entry.key === PASSENGER_MODULE) ?? null;
   if (!module || !context.modules.includes(PASSENGER_MODULE)) return { kind: "not-contracted" };
 
-  const [assurance, cookieStore, decides, defaults, clause, proposal, partners, connections, setups] =
-    await Promise.all([
-      context.supabase.auth.mfa.getAuthenticatorAssuranceLevel(),
-      cookies(),
-      context.supabase.rpc("decides_for_firm", { target_org: firm.id }),
-      context.supabase.from("firm_claim_defaults").select("incident, cents").eq("org_id", firm.id),
-      context.supabase
-        .from("pax_firm_clauses")
-        .select("version, body")
-        .eq("org_id", firm.id)
-        .order("version", { ascending: false })
-        .limit(1)
-        .maybeSingle(),
-      context.supabase.rpc("pax_firm_clause_proposal", { target_org: firm.id }),
-      readFirmPartners(context).catch(() => null),
-      loadConnections(null).catch((): ConnectionsState => ({ kind: "error" })),
-      readModuleSetups(context).catch(() => null),
-    ]);
+  const [
+    assurance,
+    cookieStore,
+    decides,
+    defaults,
+    clause,
+    proposal,
+    partners,
+    connections,
+    setups,
+    pieces,
+    pieceImports,
+  ] = await Promise.all([
+    context.supabase.auth.mfa.getAuthenticatorAssuranceLevel(),
+    cookies(),
+    context.supabase.rpc("decides_for_firm", { target_org: firm.id }),
+    context.supabase.from("firm_claim_defaults").select("incident, cents").eq("org_id", firm.id),
+    context.supabase
+      .from("pax_firm_clauses")
+      .select("version, body")
+      .eq("org_id", firm.id)
+      .order("version", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    context.supabase.rpc("pax_firm_clause_proposal", { target_org: firm.id }),
+    readFirmPartners(context).catch(() => null),
+    loadConnections(null).catch((): ConnectionsState => ({ kind: "error" })),
+    readModuleSetups(context).catch(() => null),
+    // The petitions and the pieces of the process ONE writes for the module's cases (2026-11-25): a read that fails
+    // is the step's to say, and the requests are read by who writes the models only.
+    loadSetupPieces(context.supabase, firm.id, context.profile.timezone).catch(() => null),
+    readPieceImports(context.supabase, firm.id).catch(() => []),
+  ]);
 
   const secondFactor: SecondFactorState =
     assurance.data?.currentLevel === "aal2" ? "ok" : assurance.data?.nextLevel === "aal2" ? "challenge" : "missing";
@@ -75,6 +93,9 @@ export async function loadPassengerSetupState(
     next: next ? { href: next.href, name: next.name } : null,
     answered: mine?.answered ?? false,
     decidesForFirm: decides.error ? false : decides.data === true,
+    writesModels: firm.firmFunction === "socio" || firm.firmFunction === "advogado",
+    pieces,
+    pieceImports,
     secondFactor,
     supportVisit: cookieStore.has(IMPERSONATION_MARKER_COOKIE),
     claimDefaults: defaults.error ? null : claimDefaultsOf(defaults.data),

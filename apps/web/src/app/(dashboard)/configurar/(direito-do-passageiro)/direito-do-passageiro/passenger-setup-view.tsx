@@ -1,6 +1,7 @@
 "use client";
 
 import ConnectCard from "../../../settings/connections/components/connect-card";
+import PassengerPieces from "./passenger-setup-pieces";
 import { PASSENGER_SETUP_STEPS, type PassengerSetupStep } from "./passenger-setup-steps";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -28,6 +29,8 @@ import {
   typedClaims,
 } from "@/lib/firm/autonomy";
 import { setFirmClaimDefault } from "@/lib/firm/autonomy-actions";
+import type { SetupPieces } from "@/lib/library/facts";
+import type { PieceImport } from "@/lib/library/import-read";
 import type { ModuleTone } from "@/lib/modules/offer";
 import { caseKindLabelKey, caseKindsOf } from "@/lib/modules/registry";
 import { answerModuleSetup } from "@/lib/modules/setup-actions";
@@ -53,6 +56,12 @@ export type PassengerSetupState =
       answered: boolean;
       /** Who answers decides for the firm (0078): the Valor da Causa Pedido and the clause's words are theirs. */
       decidesForFirm: boolean;
+      /** Who answers writes the firm's models (a partner or a lawyer): the petitions and the pieces are theirs. */
+      writesModels: boolean;
+      /** The model ONE writes each petition and each piece of the process from; null when it could not be read. */
+      pieces: SetupPieces | null;
+      /** What ONE does with each petition or piece the firm sent for a model, while it says something. */
+      pieceImports: PieceImport[];
       secondFactor: SecondFactorState;
       supportVisit: boolean;
       claimDefaults: ClaimDefault[] | null;
@@ -71,7 +80,9 @@ export type PassengerSetupState =
 /**
  * The passenger module's own setup (the owner, 2026-11-03; migration 0081), in the module's colour, after the
  * firm's core setup and before the home: only what this module needs, which a firm that did not contract it never
- * sees. The Valor da Causa Pedido of the air-passenger problems; the words of the clause its partner agencies
+ * sees. The petitions and the pieces of the process ONE writes for its cases, from the firm's own models, which the
+ * firm makes by sending a piece it already uses (2026-11-25); the Valor da Causa Pedido of the air-passenger
+ * problems; the words of the clause its partner agencies
  * register in their contracts (ONE proposes them written for the firm, the firm registers them, and each agency
  * receives them ready in its own setup); and the partner agency, with the channel the partnership needs turned on
  * in place. The second factor comes first only for a session that has none, since every step asks for it. Under
@@ -111,7 +122,7 @@ function PassengerSetupFlow({ state }: { state: Extract<PassengerSetupState, { k
   const factorOk = factor === "ok";
   // The steps are decided when the page opens: confirming the factor reads the page again, and the steps stay.
   const [keys] = useState<PassengerSetupStep[]>(() =>
-    state.secondFactor === "ok" ? ["valores", "clausula", "agencia"] : [...PASSENGER_SETUP_STEPS],
+    state.secondFactor === "ok" ? ["pecas", "valores", "clausula", "agencia"] : [...PASSENGER_SETUP_STEPS],
   );
   const asked = state.step && keys.includes(state.step) ? state.step : null;
   const [stepIndex, setStepIndex] = useState(() =>
@@ -220,8 +231,24 @@ function PassengerSetupFlow({ state }: { state: Extract<PassengerSetupState, { k
           state={factor}
           onConfirmed={() => {
             setConfirmedHere(true);
-            goTo("valores");
+            goTo("pecas");
           }}
+        />
+      ),
+    },
+    pecas: {
+      label: t("pax-setup-step-label-pieces"),
+      title: t("pax-setup-pieces-title"),
+      hint: t("pax-setup-pieces-hint"),
+      // Sending a piece acts at once, in its line: "Continuar" has nothing of its own to save.
+      canAdvance: !blocked,
+      content: (
+        <PassengerPieces
+          pieces={state.pieces}
+          imports={state.pieceImports}
+          writes={state.writesModels}
+          blocked={blocked || !factorOk}
+          onRetry={refresh}
         />
       ),
     },
