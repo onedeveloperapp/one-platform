@@ -6,6 +6,7 @@ import {
   inTurn,
   isValidWhen,
   slotOf,
+  slowestSweeps,
   type Sweep,
   type SweepWhen,
   TICK_MINUTES,
@@ -90,5 +91,20 @@ describe("the clock's beat (2026-11-04)", () => {
         .map((item) => item.key)
         .sort(),
     ).toEqual(["notices", "reading"]);
+  });
+});
+
+describe("the slow sweeps the clock's log names (2026-11-24)", () => {
+  it("names each sweep of a second or more, the slowest first, in whole milliseconds, and nothing else", () => {
+    const named = slowestSweeps({
+      "djen-cases": 14_220.4,
+      "case-advance": 31_800,
+      quick: 999,
+      again: 31_800,
+      odd: Number.NaN,
+    });
+    expect(named).toEqual({ again: 31_800, "case-advance": 31_800, "djen-cases": 14_220 });
+    expect(Object.keys(named)).toEqual(["again", "case-advance", "djen-cases"]);
+    expect(slowestSweeps({})).toEqual({});
   });
 });

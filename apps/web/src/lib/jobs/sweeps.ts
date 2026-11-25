@@ -4,10 +4,14 @@ import { aiPausedFor } from "@/lib/ai/health";
 import { clockOrder, slotOf, type Sweep, type SweepReport, whileUsedOrder } from "@/lib/jobs/schedule";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-/** What one round of the sweeps did: each sweep's counts, and which failed or were left for the next round. */
+/**
+ * What one round of the sweeps did: each sweep's counts, how long each one that started took (in milliseconds,
+ * failed or paused ones too), and which failed or were left for the next round.
+ */
 export type SweepsReport = {
   slot: number;
   ran: Record<string, SweepReport>;
+  ms: Record<string, number>;
   failed: string[];
   skipped: string[];
 };
@@ -26,15 +30,18 @@ export async function runSweeps(
   const slot = slotOf(options.at);
   const order = options.whileUsed ? whileUsedOrder(sweeps, slot) : clockOrder(sweeps, slot);
   const until = Date.now() + options.budgetMs;
-  const report: SweepsReport = { slot, ran: {}, failed: [], skipped: [] };
+  const report: SweepsReport = { slot, ran: {}, ms: {}, failed: [], skipped: [] };
   for (const sweep of order) {
     if (Date.now() >= until) {
       report.skipped.push(sweep.key);
       continue;
     }
+    // Each sweep's own time, from its start to its end, whatever came of it: the clock's log names the slow ones.
+    const started = Date.now();
     // The work of a model waits while the provider of its tasks refuses the platform's AI account (0255).
     if (sweep.ai && (await aiPausedFor(service, sweep.ai).catch(() => false))) {
       report.ran[sweep.key] = { paused: "ai" };
+      report.ms[sweep.key] = Date.now() - started;
       continue;
     }
     try {
@@ -47,6 +54,7 @@ export async function runSweeps(
         message: error instanceof Error ? error.message.slice(0, 160) : "unknown",
       });
     }
+    report.ms[sweep.key] = Date.now() - started;
   }
   return report;
 }

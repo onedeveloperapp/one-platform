@@ -1,5 +1,6 @@
 import { CLOCK_BEAT_KEY, type ClockBeat } from "@/lib/jobs/clock-beat";
 import { SWEEPS } from "@/lib/jobs/registry";
+import { slowestSweeps } from "@/lib/jobs/schedule";
 import { runSweeps } from "@/lib/jobs/sweeps";
 import { createServiceClient } from "@flyee/auth/service";
 
@@ -10,7 +11,8 @@ import { createServiceClient } from "@flyee/auth/service";
  * minutes on the app's host were most of what the free plan allows. One process, one beat at a time: a beat that
  * runs past the next mark leaves that mark to the following one, as the runner's concurrency of one did. Each beat
  * leaves its mark in the database (`clock_beat`), so the app runs its own round while ONE is used only when the
- * clock has been silent (`lib/jobs/while-used.ts`). Its log holds counts only.
+ * clock has been silent (`lib/jobs/while-used.ts`). Its log holds counts and times only: the line of a beat names
+ * each sweep that took a second or more, with its milliseconds (`slow`).
  */
 
 const BEAT_MS = 5 * 60_000;
@@ -39,6 +41,8 @@ async function beat(at: number): Promise<void> {
     failed: report.failed,
     skipped: report.skipped.length,
     marked: !error,
+    // Each sweep that took a second or more, the slowest first, in milliseconds: where the beat's time went.
+    slow: slowestSweeps(report.ms),
   });
 }
 

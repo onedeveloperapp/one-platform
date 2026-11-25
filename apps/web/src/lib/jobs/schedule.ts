@@ -96,3 +96,20 @@ export function whileUsedOrder(sweeps: readonly Sweep[], slot: number): Sweep[] 
     slot,
   );
 }
+
+/** How long a sweep must take to be named in the clock's log (2026-11-24). */
+export const SLOW_SWEEP_MS = 1_000;
+
+/**
+ * The sweeps of a round that took a second or more, the slowest first, each with its milliseconds: what the clock's
+ * log names so a beat that grows tells where its time went (asked for on 2026-11-24, when a beat took
+ * 128 s of its 200). Only the sweep's key and its time: nothing of a work.
+ */
+export function slowestSweeps(ms: Readonly<Record<string, number>>, least = SLOW_SWEEP_MS): Record<string, number> {
+  return Object.fromEntries(
+    Object.entries(ms)
+      .filter(([, took]) => Number.isFinite(took) && took >= least)
+      .sort(([a, tookA], [b, tookB]) => tookB - tookA || a.localeCompare(b))
+      .map(([key, took]) => [key, Math.round(took)]),
+  );
+}

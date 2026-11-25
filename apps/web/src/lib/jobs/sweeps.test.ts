@@ -33,6 +33,26 @@ describe("a round of the sweeps (2026-11-04)", () => {
     expect(error).toHaveBeenCalledWith("sweep_failed", { sweep: "b", message: "down" });
   });
 
+  it("times each sweep that started, a failed one too, and none it left for the next round (2026-11-24)", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const sweeps: Sweep[] = [
+      { key: "slow", when: { every: 5 }, run: async () => (await new Promise((done) => setTimeout(done, 30)), {}) },
+      {
+        key: "failing",
+        when: { every: 5 },
+        run: async () => {
+          throw new Error("down");
+        },
+      },
+    ];
+    const report = await runSweeps(service, sweeps, { at, budgetMs: 60_000 });
+    expect(Object.keys(report.ms).sort()).toEqual(["failing", "slow"]);
+    expect(report.ms.slow).toBeGreaterThanOrEqual(25);
+    expect(report.ms.failing).toBeGreaterThanOrEqual(0);
+    const none = await runSweeps(service, sweeps, { at, budgetMs: 0 });
+    expect(none.ms).toEqual({});
+  });
+
   it("starts nothing once the time given is over, and says what it left for the next round", async () => {
     const sweeps: Sweep[] = ["a", "b"].map((key) => ({ key, when: { every: 5 }, run: async () => ({}) }));
     const report = await runSweeps(service, sweeps, { at, budgetMs: 0 });
