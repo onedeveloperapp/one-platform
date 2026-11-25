@@ -79,6 +79,8 @@ vi.mock("@flyee/ai/fake", async (original) => {
               },
           observacoes: "",
           trechos: [],
+          // The names written on a document of the link to a bill's holder (0294): none on these papers.
+          nomes_no_documento: [],
           // The purchase and the expense the check reads of a ticket and a receipt (0091): none on these papers.
           compra: { data: "", canal: "", valor: "", reserva: "" },
           gasto: { descricao: "", valor: "", data: "" },

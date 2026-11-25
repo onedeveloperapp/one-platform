@@ -36,7 +36,21 @@ const schemaOf = (migration: string, name: string): Schema => {
 const SEEDED_SCHEMA = schemaOf(MIGRATION, "0024");
 /** And the one in force, as migration 0063 publishes it: the second version, which reads the person's data. */
 const IN_FORCE = fs.readFileSync(path.join(ROOT, "packages/db/migrations/0063_data_from_documents.sql"), "utf8");
-const SCHEMA_IN_FORCE = schemaOf(IN_FORCE, "0063");
+/**
+ * The schema in force: 0063's, with what 0294's eighth instructions add to it by `jsonb_set`, the names written on a
+ * document of the link to a bill's holder (read here from that migration, so a schema that drops it is seen).
+ */
+const LINK_ADDED = fs
+  .readFileSync(path.join(ROOT, "packages/db/migrations/0294_residence_link.sql"), "utf8")
+  .includes("'{properties,nomes_no_documento}'");
+const SCHEMA_0063 = schemaOf(IN_FORCE, "0063");
+const SCHEMA_IN_FORCE: Schema = LINK_ADDED
+  ? {
+      ...SCHEMA_0063,
+      required: [...SCHEMA_0063.required, "nomes_no_documento"],
+      properties: { ...SCHEMA_0063.properties, nomes_no_documento: { type: "array", required: [], properties: {} } },
+    }
+  : SCHEMA_0063;
 
 const answer = (overrides: Record<string, unknown> = {}): Record<string, unknown> => ({
   decisao: "aceitar",
@@ -127,6 +141,7 @@ describe("what the model is told", () => {
 
 describe("the answer", () => {
   it("asks the model for exactly the fields the code reads, and the console keeps them", () => {
+    expect(LINK_ADDED).toBe(true);
     expect([...SCHEMA_IN_FORCE.required].sort()).toEqual([...TASK_OUTPUT_KEYS[DOCUMENT_CHECK_TASK]].sort());
     expect(Object.keys(SCHEMA_IN_FORCE.properties).sort()).toEqual([...TASK_OUTPUT_KEYS[DOCUMENT_CHECK_TASK]].sort());
     // The second version keeps every field of the first, which the answers on record carry.

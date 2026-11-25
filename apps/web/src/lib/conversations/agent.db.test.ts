@@ -320,6 +320,8 @@ describe.skipIf(!DB_URL)("ONE in the conversation, from the first word on a flig
               },
               observacoes: "",
               trechos: [],
+              // The names written on a document of the link to a bill's holder (0294): none on an identity.
+              nomes_no_documento: [],
               // The purchase and the expense the check reads of a ticket and a receipt (0091): none on an identity.
               compra: { data: "", canal: "", valor: "", reserva: "" },
               gasto: { descricao: "", valor: "", data: "" },

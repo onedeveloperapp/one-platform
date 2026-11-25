@@ -496,6 +496,9 @@ export const TASK_OUTPUT_KEYS: Record<string, readonly string[]> = {
     "dados_lidos",
     "observacoes",
     "trechos",
+    // The names on a document of the link to a bill's holder: a rule decides whether they are the person's and the
+    // holder's (0294).
+    "nomes_no_documento",
   ],
   "caso.relato.transcricao": ["texto"],
   "caso.relato.cronologia": ["cronologia", "perguntas"],
