@@ -288,6 +288,13 @@ export const EVENT_KEY: Record<string, string> = {
   signer_occasional: "case-event-signer-occasional",
   draft_proposed: "case-event-draft-proposed",
   draft_edited: "case-event-draft-edited",
+  // A partner or a lawyer took on the sources a version cites that the library does not cover (0299).
+  draft_sources_taken: "case-event-draft-sources-taken",
+  // A document of the client's link to a bill's holder settled the declaration, or was refused after (0294).
+  residence_linked: "case-event-residence-linked",
+  residence_link_withdrawn: "case-event-residence-link-withdrawn",
+  // The firm complemented the client's account with what the client told it (0297).
+  statement_completed: "case-event-statement-completed",
   draft_approved: "case-event-draft-approved",
   draft_rejected: "case-event-draft-rejected",
   draft_returned: "case-event-draft-returned",

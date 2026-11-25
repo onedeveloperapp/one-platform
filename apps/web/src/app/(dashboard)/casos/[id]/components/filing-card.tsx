@@ -758,7 +758,7 @@ function Lawsuit({
         />
       ) : null}
 
-      {proceeding.status === "planned" && (!proceeding.court || !proceeding.system) ? (
+      {proceeding.status === "planned" && !proceeding.court ? (
         <StateLine
           tone="attention"
           action={
@@ -769,6 +769,10 @@ function Lawsuit({
         >
           {t("filing-needs-forum")}
         </StateLine>
+      ) : proceeding.status === "planned" && !proceeding.system ? (
+        // The system is ONE's to name from the platform's table (0066), never the firm's to type: with no row for the
+        // court and kind, the wait is the platform's (2026-11-25, the test case 19 at the juizado of the TJRJ).
+        <StateLine tone="info">{t("filing-needs-system-platform", { court: proceeding.court ?? "" })}</StateLine>
       ) : null}
 
       {ahead ? (

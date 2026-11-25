@@ -9,6 +9,7 @@ import {
   type Missing,
   PERSON_FIELD_KEY,
 } from "@/lib/cases/cases";
+import { pieceGaps } from "@/lib/cases/drafts";
 import { DATA_KINDS } from "@/lib/cases/read-fields";
 import type { CaseSection } from "@/lib/cases/sections";
 import { complaintOverdue } from "@/lib/cases/statements";
@@ -128,8 +129,14 @@ const gapsOf = (draft: Draft): string[] => (draft.gaps && draft.gaps.length > 0 
 
 /** What a piece's text leaves to complete, in its own words, once each. */
 export function draftGaps(body: string | null | undefined): string[] {
-  const gaps = [...(body ?? "").matchAll(/\[COMPLETAR:\s*([^\]]+)\]/g)].map((match) => match[1].trim());
-  return [...new Set(gaps.filter(Boolean))];
+  // One rule of a piece's marks (`pieceGaps`, 2026-11-25): what each one asks, once.
+  return [
+    ...new Set(
+      pieceGaps(body ?? "")
+        .map((gap) => gap.label)
+        .filter(Boolean),
+    ),
+  ];
 }
 type Filing = {
   id: string;

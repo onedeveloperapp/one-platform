@@ -8,6 +8,7 @@ import { TASK_OUTPUT_KEYS } from "@/lib/admin/ai";
 import {
   approvalOf,
   citedSources,
+  COMPLETE_GAPS_REQUEST,
   DRAFT_MARK_KEY,
   DRAFT_MARKS,
   DRAFT_STATUS_KEY,
@@ -20,6 +21,7 @@ import {
   draftLibrary,
   type DraftStatus,
   draftToShow,
+  fillGaps,
   hasPersonMark,
   isDraftBlocker,
   isDraftInCourse,
@@ -29,6 +31,7 @@ import {
   maskIdentifiers,
   PERSON_MARK_PATTERN,
   personMarks,
+  pieceGaps,
   readDraft,
   revisionBriefing,
   sourceFromCitation,
@@ -782,5 +785,43 @@ describe("the models a lawsuit's piece is written from", () => {
     expect(startsLawsuit(model("procuracao", null), "comum")).toBe(false);
     expect(startsLawsuit(model("peca_processo", null), "juizado")).toBe(false);
     expect(startsLawsuit(model(null, null), "juizado")).toBe(false);
+  });
+});
+
+// The owner, 2026-11-25: a piece's marks are answered outside its text, never looked for in it.
+describe("what a piece lacks, outside its text", () => {
+  const text = [
+    "Voo [COMPLETAR: número do voo e data], da [COMPLETAR: nome da companhia].",
+    "A [COMPLETAR: nome da companhia] cancelou o voo.",
+    "[COMPLETAR]",
+    "Narrativa: [completar - narrar a contratação].",
+  ].join(" ");
+
+  it("says each mark once, in the order it first appears, with how many times the text writes it", () => {
+    expect(pieceGaps(text)).toEqual([
+      { mark: "[COMPLETAR: número do voo e data]", label: "número do voo e data", times: 1 },
+      { mark: "[COMPLETAR: nome da companhia]", label: "nome da companhia", times: 2 },
+      { mark: "[COMPLETAR]", label: "", times: 1 },
+      { mark: "[completar - narrar a contratação]", label: "narrar a contratação", times: 1 },
+    ]);
+    expect(pieceGaps("Nada a completar aqui.")).toEqual([]);
+  });
+
+  it("writes each answer in place of its mark, every time, and leaves a mark not answered", () => {
+    const filled = fillGaps(text, {
+      "[COMPLETAR: nome da companhia]": " Azul ",
+      "[COMPLETAR: número do voo e data]": "AD 4530 de 22/10/2026",
+      "[COMPLETAR]": "   ",
+    });
+    expect(filled).toContain("Voo AD 4530 de 22/10/2026, da Azul.");
+    expect(filled).toContain("A Azul cancelou o voo.");
+    expect(pieceGaps(filled).map((gap) => gap.mark)).toEqual(["[COMPLETAR]", "[completar - narrar a contratação]"]);
+  });
+
+  it("asks ONE to complete them in a request the database takes: long enough, and no mark of a person", () => {
+    expect(COMPLETE_GAPS_REQUEST.length).toBeGreaterThanOrEqual(10);
+    expect(COMPLETE_GAPS_REQUEST.length).toBeLessThanOrEqual(2000);
+    expect(hasPersonMark(COMPLETE_GAPS_REQUEST)).toBe(false);
+    expect(COMPLETE_GAPS_REQUEST).not.toMatch(/[[\]—–!]/);
   });
 });

@@ -67,6 +67,11 @@ export type CaseDraft = {
   } | null;
   /** The sources the latest text cites, the ones outside the verified library first. */
   sources: CitedSource[];
+  /**
+   * A partner or a lawyer took on, for the latest version, the sources it cites that the library does not cover
+   * (0299): who, when and which. Null when nobody did, or did for another version.
+   */
+  sourcesTaken: { by: string | null; atLabel: string; keys: string[] } | null;
   /** The firm's most alike pieces of other cases, as measured when the text was last read. */
   alike: { draftId: string; caseId: string; caseSeq: number | null; percent: number }[];
   approvedLabel: string | null;
@@ -185,6 +190,10 @@ type DraftRow = {
   approved_auto: boolean | null;
   document_id: string | null;
   approved_by: string | null;
+  sources_taken_version: number | null;
+  sources_taken_by: string | null;
+  sources_taken_at: string | null;
+  sources_taken_keys: string[] | null;
   requested_by: string | null;
   requested_auto: boolean | null;
   requested_at: string;
@@ -192,7 +201,7 @@ type DraftRow = {
 };
 
 const DRAFT_COLUMNS =
-  "id, piece_kind, recommendation, recommendation_reason, waits_for, decision, decision_reason, decided_by, decided_at, filing_status, filing_message, filed_at, filed_how, filed_protocol, receipt_file_id, publication_id, proceeding_id, template_id, template_name, status, work, run_id, version, checked_version, revision_note, revision_by, revision_at, revisions, alike, approved_at, approved_by, approved_auto, document_id, requested_by, requested_auto, requested_at, updated_at";
+  "id, piece_kind, recommendation, recommendation_reason, waits_for, decision, decision_reason, decided_by, decided_at, filing_status, filing_message, filed_at, filed_how, filed_protocol, receipt_file_id, publication_id, proceeding_id, template_id, template_name, status, work, run_id, version, checked_version, revision_note, revision_by, revision_at, revisions, alike, approved_at, approved_by, approved_auto, document_id, requested_by, requested_auto, requested_at, updated_at, sources_taken_version, sources_taken_by, sources_taken_at, sources_taken_keys";
 
 /** How long a work may be owed before the screen says a job is late. */
 const SLOW_MINUTES = 8;
@@ -467,6 +476,14 @@ export async function loadCasePieces(
                 }
               : null,
           sources: row.status === "proposed" && checked ? (sourcesOf.get(row.id) ?? []) : [],
+          sourcesTaken:
+            row.status === "proposed" && row.sources_taken_version === row.version && row.sources_taken_at
+              ? {
+                  by: row.sources_taken_by ? names.get(row.sources_taken_by) || null : null,
+                  atLabel: momentLabel(row.sources_taken_at, timeZone),
+                  keys: (row.sources_taken_keys ?? []).filter((key): key is string => typeof key === "string"),
+                }
+              : null,
           alike: alikeOf(row.alike).map((item) => ({
             draftId: item.draft,
             caseId: item.case,

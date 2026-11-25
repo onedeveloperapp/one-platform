@@ -236,6 +236,52 @@ export const PERSON_MARK_PATTERN =
  */
 export const hasPersonMark = (text: string): boolean => new RegExp(PERSON_MARK_PATTERN, "i").test(markText(text));
 
+/**
+ * A mark of what a piece still lacks, as a model of the firm or the AI writes it: `[COMPLETAR]`, `[COMPLETAR: o voo]`.
+ * The database holds a text with any such mark from its approval (`draft_incomplete`, read as `\[\s*completar`).
+ */
+const GAP_MARK = /\[\s*completar\b([^\]]*)\]/gi;
+
+/** A mark of what a piece lacks: as it is written, what it asks, and how many times the text writes it. */
+export type PieceGap = { mark: string; label: string; times: number };
+
+/**
+ * What a piece lacks, said outside its text (the owner, 2026-11-25: looking for each mark in the text and writing in
+ * its place is bureaucracy): each mark once, in the order it first appears. Pure.
+ */
+export function pieceGaps(text: string): PieceGap[] {
+  const found = new Map<string, PieceGap>();
+  for (const match of text.matchAll(GAP_MARK)) {
+    const known = found.get(match[0]);
+    if (known) {
+      known.times += 1;
+      continue;
+    }
+    const label = (match[1] ?? "")
+      .replace(/^[\s:;,.-]+/, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    found.set(match[0], { mark: match[0], label, times: 1 });
+  }
+  return [...found.values()];
+}
+
+/** The text with each mark answered written in its place, every time it appears; a mark left blank stays. Pure. */
+export function fillGaps(text: string, answers: Readonly<Record<string, string>>): string {
+  return text.replace(GAP_MARK, (mark) => {
+    const answer = answers[mark]?.trim();
+    return answer ? answer : mark;
+  });
+}
+
+/**
+ * What ONE is asked when the firm asks it to complete a piece's marks (the owner, 2026-11-25), as a lawyer's request
+ * to rewrite the text: what the case, the client's account and the accepted documents say goes in each mark, the rest
+ * of the text as it is. No bracket in it: a request is refused when it holds a mark of a person.
+ */
+export const COMPLETE_GAPS_REQUEST =
+  "Complete cada trecho marcado como COMPLETAR com o que o caso, o relato do cliente e os documentos aceitos dizem, sem mudar o resto do texto. Mantenha a marca só onde nada disso diz o que falta.";
+
 /** The marks of a person a text holds, as they are written in it, each once and five at most (`person_marks`). */
 export function personMarks(text: string): string[] {
   const found = new Set<string>();

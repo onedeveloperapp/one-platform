@@ -46,10 +46,12 @@ import {
   resumeCaseDraft,
   returnCaseDraft,
   saveDraftVersion,
+  takeDraftSources,
   withdrawDraftRevision,
 } from "@/lib/cases/draft-actions";
 import {
   type CitedSource,
+  COMPLETE_GAPS_REQUEST,
   DRAFT_MARK_KEY,
   DRAFT_MARKS,
   DRAFT_STATUS_KEY,
@@ -57,9 +59,11 @@ import {
   draftErrorKey,
   type DraftStatus,
   draftToShow,
+  fillGaps,
   hasPersonMark,
   isDraftBlocker,
   personMarks,
+  pieceGaps,
   startsLawsuit,
   unknownMarks,
 } from "@/lib/cases/drafts";
@@ -1076,6 +1080,10 @@ export function DraftDialog({
   const [alreadyWorking, setAlreadyWorking] = useState(false);
   // Whether what the AI changed is in sight.
   const [showChanges, setShowChanges] = useState(true);
+  // What the person answers for each mark of what the piece lacks, outside its text (2026-11-25).
+  const [gapAnswers, setGapAnswers] = useState<Record<string, string>>({});
+  // Whether the person is taking on the sources the library does not cover (0299).
+  const [taking, setTaking] = useState(false);
   // What was typed here before and never saved, offered back once (only ever opened from a click, so the
   // tab's storage is there to read).
   const [recovered, setRecovered] = useState<Unsaved | null>(() => {
@@ -1133,6 +1141,22 @@ export function DraftDialog({
   // Whether the text on the screen may be sent back now, whatever the words of the request.
   const textReady = mayAskAi && !previewStale;
   const maySend = requestOk && textReady;
+  // What the piece lacks, said outside its text, each mark once (the owner, 2026-11-25: looking for each mark in the
+  // text and writing in its place is bureaucracy): answered here, the text is completed by itself.
+  const gaps = mayEdit && !preview ? pieceGaps(body) : [];
+  const gapsAnswered = gaps.filter((gap) => (gapAnswers[gap.mark] ?? "").trim() !== "").length;
+  // The sources the latest version cites that the library does not cover: a partner or a lawyer may take them on for
+  // this very version (0299), which is the one on the screen, saved and read.
+  const uncovered = draft.sources.filter((source) => !source.covered);
+  const takenKeys = new Set(draft.sourcesTaken?.keys ?? []);
+  const mayTake =
+    mayEdit &&
+    inReview &&
+    draft.checked &&
+    !changed &&
+    !behind &&
+    base.version === draft.version &&
+    uncovered.length > 0;
   // A request somebody wrote and did not send is as much to lose as a text not saved, with its box open or
   // closed: nothing closes over it without asking, and the text it is about never changes unseen.
   const drafted = request.trim() !== "";
@@ -1188,17 +1212,17 @@ export function DraftDialog({
     onChanged(false);
   };
 
-  const save = () =>
+  const save = (text: string = body) =>
     startTransition(async () => {
       setErrorCode(null);
       try {
-        const result = await saveDraftVersion({ caseId, draftId: draft.id, body, baseVersion: base.version });
+        const result = await saveDraftVersion({ caseId, draftId: draft.id, body: text, baseVersion: base.version });
         if (!result.ok) {
           // A text too short to be a piece is said as such, never as a form with something wrong in it.
           return refused(result.code === "invalid_data" && result.field === "body" ? "body_too_short" : result.code);
         }
         // The text on screen is the version just saved: nothing is left to save, and the dialog stays open.
-        setBase({ version: result.version, body });
+        setBase({ version: result.version, body: text });
         setPreview(null);
         keepUnsaved(draftId, null);
         onChanged();
@@ -1292,6 +1316,58 @@ export function DraftDialog({
     });
   };
 
+  // The answers go into the text in place of their marks, every time each is written, and the text is saved: no mark
+  // is looked for in it.
+  const completeGaps = () => {
+    const filled = fillGaps(body, gapAnswers);
+    if (filled === body) return;
+    setBody(filled);
+    setGapAnswers({});
+    save(filled);
+  };
+
+  // ONE completes what it can of the marks from the case, the client's account and the documents, as a lawyer's
+  // request to rewrite the text: what nothing says stays marked, to be answered here.
+  const askOneToComplete = () => {
+    if (!textReady) return;
+    startTransition(async () => {
+      setErrorCode(null);
+      try {
+        const result = await returnCaseDraft({
+          caseId,
+          draftId: draft.id,
+          version: onScreen,
+          note: COMPLETE_GAPS_REQUEST,
+        });
+        if (!result.ok) return refused(result.code);
+        setGapAnswers({});
+        setPreview(null);
+        setShowChanges(true);
+        onChanged();
+      } catch {
+        setErrorCode("failed");
+      }
+    });
+  };
+
+  // A partner or a lawyer takes on, for the version on the screen, the sources the library does not cover (0299).
+  const takeSources = async (): Promise<string | null> => {
+    try {
+      const result = await takeDraftSources({ caseId, draftId: draft.id, version: base.version });
+      if (!result.ok) {
+        // Said in the confirmation; the case is read again, since what refused it (a new version) may be there.
+        onChanged(false);
+        return t(draftErrorKey(result.code));
+      }
+      setTaking(false);
+      setPreview(null);
+      onChanged();
+      return null;
+    } catch {
+      return t("draft-error-failed");
+    }
+  };
+
   const withdraw = () =>
     startTransition(async () => {
       setErrorCode(null);
@@ -1314,6 +1390,22 @@ export function DraftDialog({
 
   return (
     <Dialog open onClose={close} aria-labelledby={titleId} maxWidth="lg" fullWidth>
+      {taking ? (
+        <ConfirmActionDialog
+          title={t("draft-sources-take-title")}
+          intro={t("draft-sources-take-intro", {
+            version: base.version,
+            sources: uncovered.map((source) => source.label).join(" · "),
+          })}
+          consequences={[t("draft-sources-take-yours"), t("draft-sources-take-new-version")]}
+          stays={[t("draft-sources-take-one")]}
+          requireReason={false}
+          confirmLabel={t("draft-sources-take-confirm")}
+          busyLabel={t("draft-sources-take-busy")}
+          onConfirm={takeSources}
+          onClose={() => setTaking(false)}
+        />
+      ) : null}
       <DialogHeader
         id={titleId}
         title={t("draft-editor-title", { lawsuit: title })}
@@ -1459,6 +1551,56 @@ export function DraftDialog({
           </Alert>
         ) : null}
 
+        {gaps.length > 0 ? (
+          <Box component="section" aria-labelledby={`${titleId}-gaps`} className="flex flex-col gap-3">
+            <SectionTitle
+              id={`${titleId}-gaps`}
+              as="h3"
+              variant="subtitle2"
+              title={t("draft-gaps-title")}
+              description={t("draft-gaps-about")}
+            />
+            <StateLine tone="attention">{t("draft-gaps-lead", { count: gaps.length })}</StateLine>
+            {gaps.map((gap, index) => (
+              <TextField
+                key={gap.mark}
+                id={`${titleId}-gap-${index}`}
+                label={gap.label || t("draft-gap-unnamed", { position: index + 1 })}
+                value={gapAnswers[gap.mark] ?? ""}
+                onChange={(event) => setGapAnswers((current) => ({ ...current, [gap.mark]: event.target.value }))}
+                disabled={pending}
+                multiline
+                minRows={gap.label.length > 60 ? 3 : 1}
+                fullWidth
+                helperText={gap.times > 1 ? t("draft-gap-times", { count: gap.times }) : undefined}
+              />
+            ))}
+            <Box className="flex flex-wrap items-center gap-2">
+              <Button
+                variant={gapsAnswered > 0 ? "contained" : "outlined"}
+                color={gapsAnswered > 0 ? "primary" : "grey"}
+                disabled={pending || gapsAnswered === 0}
+                onClick={completeGaps}
+              >
+                {t("draft-gaps-complete")}
+              </Button>
+              <Button
+                variant={gapsAnswered > 0 ? "outlined" : "contained"}
+                color={gapsAnswered > 0 ? "grey" : "primary"}
+                disabled={pending || !textReady}
+                onClick={askOneToComplete}
+              >
+                {t("draft-gaps-ask-one")}
+              </Button>
+            </Box>
+            {!textReady ? (
+              <Typography variant="body2" className="text-text-secondary">
+                {t(changed ? "draft-gaps-save-first" : "draft-gaps-one-later")}
+              </Typography>
+            ) : null}
+          </Box>
+        ) : null}
+
         {preview ? (
           <Box component="section" aria-labelledby={`${titleId}-preview`} className="flex flex-col gap-3">
             <Box className="flex flex-col gap-1">
@@ -1595,8 +1737,14 @@ export function DraftDialog({
                             </Typography>
                           </Box>
                           <StatusChip
-                            tone={source.covered ? "positive" : "attention"}
-                            label={t(source.covered ? "draft-source-covered" : "draft-source-missing")}
+                            tone={source.covered ? "positive" : takenKeys.has(source.key) ? "neutral" : "attention"}
+                            label={t(
+                              source.covered
+                                ? "draft-source-covered"
+                                : takenKeys.has(source.key)
+                                  ? "draft-source-taken"
+                                  : "draft-source-missing",
+                            )}
                           />
                           {!source.covered && source.gap === null && mayEdit ? (
                             <Button
@@ -1614,10 +1762,33 @@ export function DraftDialog({
                         </Box>
                       ))}
                     </Box>
-                    {draft.sources.some((source) => !source.covered) ? (
-                      <Alert severity="warning" className="neutral bg-background-paper/60!">
+                    {draft.sourcesTaken && uncovered.every((source) => takenKeys.has(source.key)) ? (
+                      // Taken on for this version (0299): the piece goes on to its approval, the responsibility said.
+                      <StateLine tone="done">
+                        {t("draft-sources-taken", {
+                          name: draft.sourcesTaken.by ?? t("draft-somebody"),
+                          when: draft.sourcesTaken.atLabel,
+                        })}
+                      </StateLine>
+                    ) : uncovered.length > 0 ? (
+                      <StateLine
+                        tone="attention"
+                        action={
+                          mayTake ? (
+                            <Button
+                              variant="outlined"
+                              color="grey"
+                              size="small"
+                              disabled={pending}
+                              onClick={() => setTaking(true)}
+                            >
+                              {t("draft-sources-take")}
+                            </Button>
+                          ) : undefined
+                        }
+                      >
                         {t("draft-blocker-not-verified")}
-                      </Alert>
+                      </StateLine>
                     ) : null}
                   </>
                 )}
@@ -1736,7 +1907,7 @@ export function DraftDialog({
                   variant={changed ? "contained" : "outlined"}
                   color={changed ? "primary" : "grey"}
                   disabled={pending || !changed || (behind && changed)}
-                  onClick={save}
+                  onClick={() => save()}
                 >
                   {t("draft-save")}
                 </Button>

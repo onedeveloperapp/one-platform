@@ -342,6 +342,31 @@ export async function withdrawDraftRevision(input: { caseId: string; draftId: st
   return result;
 }
 
+/**
+ * A partner or a lawyer takes on the sources the version they read cites and the firm's library does not cover
+ * (0299): the version may then be approved, the responsibility theirs, kept on the draft and said on the case's trail.
+ */
+export async function takeDraftSources(input: {
+  caseId: string;
+  draftId: string;
+  version: number;
+}): Promise<DraftResult<{ sources: string[] }>> {
+  const context = await getMemberContext();
+  if (!context?.firm || !isId(input?.caseId) || !isId(input?.draftId)) return { ok: false, code: "draft_not_found" };
+  if (!Number.isInteger(input?.version) || input.version < 1) return { ok: false, code: "draft_changed" };
+  const { data, error } = await context.supabase.rpc("take_draft_sources", {
+    target_draft: input.draftId,
+    target_version: input.version,
+  });
+  const result = fold(data, error, (answer) => ({
+    sources: Array.isArray(answer.sources)
+      ? answer.sources.filter((key): key is string => typeof key === "string")
+      : [],
+  }));
+  if (result.ok) refresh(input.caseId);
+  return result;
+}
+
 /** A person gives up a draft that was not approved. */
 export async function cancelCaseDraft(input: { caseId: string; draftId: string }): Promise<DraftResult> {
   const context = await getMemberContext();
