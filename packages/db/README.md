@@ -81,7 +81,7 @@ Many firms share this database and never see each other. A firm is an `organizat
 
 ## Conventions every migration follows
 
-- **Secure by default.** Nothing in `public` is reachable by the API roles unless the migration grants it: an explicit `grant` beside each table's policies, RLS on every table, and for every function `revoke all ... from public, anon` followed by an explicit `grant execute`. PostgreSQL grants EXECUTE to PUBLIC by default, so the revoke is never optional.
+- **Secure by default.** Nothing in `public` is reachable by the API roles unless the migration grants it: an explicit `grant` beside each table's policies, RLS on every table, and for every function `revoke all ... from public, anon` followed by an explicit `grant execute`. PostgreSQL grants EXECUTE to PUBLIC by default, so the revoke is never optional. A table a session reads column by column (its grant names each column: `case_drafts`, `publications` and eleven more) grants each new column in the migration that adds it, or no session reads it and a screen that asks for it fails (0299 and 0305).
 - **The firm is on everything.** A table of firm data carries `org_id`; a function that reads or writes firm data takes the firm as an argument and checks membership. `current_org_id()` is only for what is about the person.
 - Who belongs to a firm, and anything a person decides in it, changes through an audited function, never a direct write. Functions that give or take access call `require_aal2()`.
 - Definer functions pin `set search_path = public`.
@@ -95,7 +95,7 @@ Many firms share this database and never see each other. A firm is an `organizat
 Three files cover what nobody remembers to cover, because they read the system catalog instead of a list:
 
 - `tests/0003_two_firms_isolation.test.sql`: every table with an `org_id` must have a row of both firms in its fixture (the test fails when a new table has none), and a person of one firm reads zero rows of the other in each of them.
-- `tests/0012_grants_catalog_scan.test.sql`: a table or function that becomes reachable by `anon`, a table without RLS, a table a session may write without a policy, or a definer function without a pinned search path fails it.
+- `tests/0012_grants_catalog_scan.test.sql`: a table or function that becomes reachable by `anon`, a table without RLS, a table a session may write without a policy, a definer function without a pinned search path, or a column of a table read column by column that is neither granted to `authenticated` nor named among the ones hidden on purpose, with their reasons, fails it.
 - `tests/0009_account_deletion.test.sql`: a new `NO ACTION` or `RESTRICT` reference fails until the deletion decides what to do with it.
 - `tests/0012_grants_catalog_scan.test.sql` also holds three rules that came with the vault: the sealed tokens are reachable by no API role, not even the service role; every table of firm data is fenced against a support visit or named with the reason it is not; and no column is named for a lawyer's own credential.
 

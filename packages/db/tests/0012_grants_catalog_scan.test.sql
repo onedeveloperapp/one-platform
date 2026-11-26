@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(13);
+select plan(14);
 
 -- ============================================================
 -- The privilege model, scanned from the catalog (every migration).
@@ -268,6 +268,54 @@ select is(
   ),
   '{}'::text[],
   'every table a session may write has a policy that says which rows'
+);
+
+-- A table a session reads column by column (its grant names each column) hides the rest on purpose, and a column
+-- added later is read by no session until a migration grants it: a screen that asks for it fails. 0299 added four
+-- columns to `case_drafts` with no grant, and the case's page answered "error" in production (2026-11-25, fixed by
+-- 0305). Every column of such a table is granted to `authenticated`, or named here, hidden for its reason.
+select is(
+  (
+    select coalesce(array_agg(c.relname || '.' || a.attname order by c.relname, a.attname), '{}')
+    from pg_class c
+    join pg_namespace n on n.oid = c.relnamespace
+    join pg_attribute a on a.attrelid = c.oid and a.attnum > 0 and not a.attisdropped
+    where n.nspname = 'public' and c.relkind in ('r', 'p')
+      and not has_table_privilege('authenticated', c.oid, 'SELECT')
+      and has_any_column_privilege('authenticated', c.oid, 'SELECT')
+      and not has_column_privilege('authenticated', c.oid, a.attnum, 'SELECT')
+  ),
+  array[
+    -- The hash of a secret link, code or key, never read back by any session.
+    'agenda_preferences.calendar_hash',
+    -- Why the operator holds a decision for every firm (0016): the operator's note.
+    'autonomy_decisions.held_at', 'autonomy_decisions.held_by', 'autonomy_decisions.held_note',
+    -- The backend's own bookkeeping of a work it claims: when, how many times, until when.
+    'case_advances.after', 'case_advances.attempts', 'case_advances.claimed_at', 'case_advances.claims',
+    'case_advances.created_at', 'case_advances.lawsuits_at', 'case_advances.woken_at',
+    -- What each mark of a text sent to the AI stood for (0029): the database puts it back, no session reads it.
+    'case_drafts.revision_keys',
+    'extension_links.code_hash', 'extension_links.ended_by', 'extension_links.token_hash',
+    'firm_invitations.token_hash',
+    'partner_api_keys.key_hash', 'partner_api_keys.revoked_by', 'partner_api_keys.window_calls',
+    'partner_api_keys.window_start',
+    'partner_invitations.token_hash',
+    'piece_fact_checks.claimed_at', 'piece_fact_checks.claims', 'piece_fact_checks.keys', 'piece_fact_checks.run_id',
+    'piece_fact_checks.work_after',
+    'publication_readings.attempts', 'publication_readings.claimed_at', 'publication_readings.claims',
+    'publication_readings.created_at', 'publication_readings.due_since', 'publication_readings.releases',
+    'publication_readings.retry_after', 'publication_readings.run_id',
+    -- How the operator set each category of the triage (0035): the operator's.
+    'publication_triage_policies.changed_at', 'publication_triage_policies.changed_by',
+    'publication_triage_policies.demoted_at', 'publication_triage_policies.note',
+    -- The AI's shadow answer on a publication is not a member's to read, nor the backend's bookkeeping of it.
+    'publications.ai_attempts', 'publications.ai_category', 'publications.ai_claimed_at', 'publications.ai_claims',
+    'publications.ai_error', 'publications.ai_rejections', 'publications.ai_retry_after', 'publications.ai_run_id',
+    'publications.ai_urgent', 'publications.final_read_at', 'publications.hearing_settled_by',
+    'publications.outcome_read_at',
+    'test_chats.token'
+  ],
+  'every column of a table read column by column is granted to a session, or hidden here on purpose'
 );
 
 select * from finish();
