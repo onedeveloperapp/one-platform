@@ -30,6 +30,8 @@ The owner's first filing through the extension in the PJe of TJRJ (2026-11-26, t
 
 An extension before 0.4 still files with ONE's backend after this change, reading each screen as new.
 
+**0.4.1, the target of each field** (the same day, migration 0307): the owner's second try with 0.4.0 stopped where the first had, and the runs showed why both had, in every system: a plan names a field by its target (`frame|selector|index`), but the AI was handed the selector and the position apart and told to give "o seletor exatamente como veio na tela"; it answered with the bare selector, the robot found no field by it, dropped every action as an unknown target, and only the waits ran. Nothing was ever chosen or typed on the court's screen. ONE's backend now hands the AI each field, button and action of a line with its target to copy (`screenForAi`, the third instructions of `protocolo.tela`), which an extension 0.4.0 already follows; and since 0.4.1 the robot also reads a bare selector of one field as that field (`resolveTarget`), never guessing between two.
+
 ## The diagnosis of version 0.1: mapping the screens
 
 Under "Mapear as telas do tribunal", the panel keeps version 0.1's mapping, a diagnosis for when a screen surprises ONE, never a step of the filing. The extension talks to no server for it: the map is a file the lawyer downloads.

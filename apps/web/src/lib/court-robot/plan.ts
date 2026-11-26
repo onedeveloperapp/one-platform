@@ -77,6 +77,78 @@ export function isLineTarget(frames: readonly MappedScreen[], alvo: string): boo
 /** What ONE did on a screen, in order, with what came of each action: what the AI reads again of that screen. */
 export type DoneAction = { acao: PlanAction; resultado: string };
 
+/**
+ * The target a plan names, as the screen shows it (`frame|selector|index`), or null. The AI is handed each field with
+ * its target (`screenForAi`); one that answers with the bare selector the screen showed (as the first and second
+ * instructions asked: "o seletor exatamente como veio na tela"), or with the selector and its position, is read as
+ * that field when the screen has exactly one such field. Before this, every action of every plan was dropped as an
+ * unknown target and only the waits ran (the PJe of TJRJ, 2026-11-26: the matéria was never chosen).
+ */
+export function resolveTarget(fields: ReadonlyMap<string, MappedField>, alvo: string): string | null {
+  if (fields.has(alvo)) return alvo;
+  const trimmed = alvo.trim();
+  if (fields.has(trimmed)) return trimmed;
+  const keys = [...fields.keys()];
+  const only = (matches: string[]) => (matches.length === 1 ? (matches[0] ?? null) : null);
+  // The bare selector of one field.
+  const bySelector = keys.filter((key) => parseTarget(key)?.selector === trimmed);
+  if (bySelector.length > 0) return only(bySelector);
+  // The selector with its position ("selector|index"), or its frame with the selector ("frame|selector").
+  const cut = trimmed.lastIndexOf("|");
+  if (cut > 0) {
+    const head = trimmed.slice(0, cut);
+    const tail = trimmed.slice(cut + 1);
+    if (/^\d+$/.test(tail)) {
+      const withIndex = keys.filter((key) => {
+        const target = parseTarget(key);
+        return target?.selector === head && target.index === Number(tail);
+      });
+      if (withIndex.length > 0) return only(withIndex);
+    }
+    if (/^\d+$/.test(head)) {
+      const inFrame = keys.filter((key) => {
+        const target = parseTarget(key);
+        return target?.frame === Number(head) && target.selector === tail;
+      });
+      if (inFrame.length > 0) return only(inFrame);
+    }
+  }
+  return null;
+}
+
+/**
+ * The screen as the AI reads it: each field, each table and each action of a line with its target (`alvo`, the key a
+ * plan names it by, `frame|selector|index`), in the place of the selector and position the program keeps. The AI
+ * copies the target as it came, and never has to compose it.
+ */
+export function screenForAi(frames: readonly MappedScreen[]): unknown[] {
+  return frames.map((frame, position) => {
+    const withTarget = (field: MappedField) => {
+      const shown: Record<string, unknown> = { alvo: targetKey(position, field), ...field };
+      delete shown.selector;
+      delete shown.index;
+      return shown;
+    };
+    return {
+      quadro: position,
+      system: frame.system,
+      host: frame.host,
+      path: frame.path,
+      params: frame.params,
+      title: frame.title,
+      headings: frame.headings,
+      fields: frame.fields.map(withTarget),
+      tables: frame.tables.map((table) => ({
+        headers: table.headers,
+        rows: table.rows,
+        ...(table.lines
+          ? { lines: table.lines.map((line) => ({ cells: line.cells, actions: line.actions.map(withTarget) })) }
+          : {}),
+      })),
+    };
+  });
+}
+
 const KINDS: readonly ScreenKind[] = [
   "login",
   "segundo_fator",
@@ -138,9 +210,10 @@ export const MAY_SEND =
   /\b(confirmar ajuizamento|finalizar|concluir (o )?peticionamento|enviar peti[cç][aã]o|protocolar|peticionar|ajuizar|distribuir|assinar e enviar)\b/i;
 
 /**
- * Checks a plan against the screen and the case: every target exists, every fact is the case's, every code is a line
- * of that list, every file is the package's, and nothing is typed in a field of a login or a code. A click whose words
- * send to the court is marked as sending even when the plan did not mark it. Pure.
+ * Checks a plan against the screen and the case: every target exists (a bare selector of one field read as that
+ * field's target), every fact is the case's, every code is a line of that list, every file is the package's, and
+ * nothing is typed in a field of a login or a code. A click whose words send to the court is marked as sending even
+ * when the plan did not mark it. The actions come back with their targets as the screen keys them. Pure.
  */
 export function checkPlan(
   plan: ScreenPlan,
@@ -150,13 +223,16 @@ export function checkPlan(
   const fields = fieldsByTarget(frames);
   const problems: PlanProblem[] = [];
   const actions: PlanAction[] = [];
-  plan.acoes.forEach((action, index) => {
-    if (action.fazer === "esperar") {
-      actions.push(action);
+  plan.acoes.forEach((asked, index) => {
+    if (asked.fazer === "esperar") {
+      actions.push(asked);
       return;
     }
-    const field = fields.get(action.alvo);
-    if (!field) return problems.push({ action: index, code: "unknown_target" });
+    // The target as the screen keys it: a bare selector of one field is that field (`resolveTarget`).
+    const key = resolveTarget(fields, asked.alvo);
+    const field = key ? fields.get(key) : undefined;
+    if (!key || !field) return problems.push({ action: index, code: "unknown_target" });
+    const action = key === asked.alvo ? asked : { ...asked, alvo: key };
     const about = `${field.label ?? ""} ${field.name ?? ""} ${field.id ?? ""}`;
     if (
       /(senha|password|token|c[oó]digo de (acesso|autentica|verifica)|2fa|captcha)/i.test(about) &&

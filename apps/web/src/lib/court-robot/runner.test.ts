@@ -3,7 +3,15 @@ import { describe, expect, it } from "vitest";
 import type { MappedField, MappedScreen } from "@/lib/court-extension/capture";
 import { filingFactsOf, type ToSend } from "@/lib/court-robot/facts";
 import { type LearnedStep, learnedStep, stepFor } from "@/lib/court-robot/map";
-import { checkPlan, type ScreenPlan, type Target, targetKey } from "@/lib/court-robot/plan";
+import {
+  checkPlan,
+  fieldsByTarget,
+  resolveTarget,
+  screenForAi,
+  type ScreenPlan,
+  type Target,
+  targetKey,
+} from "@/lib/court-robot/plan";
 import { type PlanInput, runFiling, type ScreenDriver, type SendPoint } from "@/lib/court-robot/runner";
 
 // ---------- A stand-in court: four screens of an eproc, kept in memory ----------
@@ -846,5 +854,109 @@ describe("the path ONE keeps of a screen whose line depends on a search", () => 
         FACTS,
       ).problems,
     ).toEqual([]);
+  });
+});
+
+// ---------- The target a plan names (the PJe of TJRJ, 2026-11-26) ----------
+
+/** The "Dados iniciais" as the extension read them: the PJe's lists by their JSF ids, and a button of each row. */
+const PJE_SCREEN: MappedScreen[] = [
+  {
+    system: "pje-tjrj",
+    host: "tjrj.pje.jus.br",
+    path: "/1g/Processo/CadastroProcesso/listView.seam",
+    params: {},
+    title: "Cadastro de processo",
+    headings: ["Cadastro de processo"],
+    fields: [
+      field("select", "materia", "Matéria", {
+        selector: "#processoTrfForm\\:classeJudicial\\:j_id207\\:areaDireitoCombo",
+        options: MATERIAS,
+        optionCount: 2,
+        chosen: "",
+      }),
+      field("button", "incluir", "INCLUIR", { selector: "tr > td > button", index: 0 }),
+      field("button", "incluir2", "INCLUIR", { selector: "tr > td > button", index: 1 }),
+    ],
+    tables: [],
+    capturedAt: "2026-11-26T18:15:00.000Z",
+  },
+];
+const MATERIA = "#processoTrfForm\\:classeJudicial\\:j_id207\\:areaDireitoCombo";
+
+describe("the target a plan names", () => {
+  it("reads the bare selector the AI answered with as the one field it names, and never guesses between two", () => {
+    const fields = fieldsByTarget(PJE_SCREEN);
+    expect(resolveTarget(fields, `0|${MATERIA}|0`)).toBe(`0|${MATERIA}|0`);
+    // What the first and second instructions led the AI to answer, every action then dropped as an unknown target.
+    expect(resolveTarget(fields, MATERIA)).toBe(`0|${MATERIA}|0`);
+    expect(resolveTarget(fields, `${MATERIA}|0`)).toBe(`0|${MATERIA}|0`);
+    expect(resolveTarget(fields, `0|${MATERIA}`)).toBe(`0|${MATERIA}|0`);
+    // Two fields share the selector: only its position tells them apart.
+    expect(resolveTarget(fields, "tr > td > button")).toBeNull();
+    expect(resolveTarget(fields, "tr > td > button|1")).toBe("0|tr > td > button|1");
+    expect(resolveTarget(fields, "#naoExiste")).toBeNull();
+  });
+
+  it("checks a plan with the bare selector and hands its action back keyed as the screen keys it", () => {
+    const { actions, problems } = checkPlan(
+      {
+        tela: { tipo: "formulario", titulo: "Cadastro de processo" },
+        acoes: [
+          { fazer: "escolher", alvo: MATERIA, opcao: "1215" },
+          { fazer: "esperar", alvo: "#processoTrfForm\\:classeJudicial\\:jurisdicaoCombo" },
+        ],
+        pronto: false,
+        pergunta: "",
+      },
+      PJE_SCREEN,
+      FACTS,
+    );
+    expect(problems).toEqual([]);
+    expect(actions[0]).toEqual({ fazer: "escolher", alvo: `0|${MATERIA}|0`, opcao: "1215" });
+  });
+
+  it("chooses the matéria when the AI names it by its selector, where before only the wait ran", async () => {
+    const court = new StandInPje();
+    const result = await runFiling({
+      driver: court,
+      planner: async () =>
+        court.chosen.get("#materia") === "1215"
+          ? null
+          : {
+              tela: { tipo: "formulario", titulo: "Cadastro de processo" },
+              acoes: [
+                { fazer: "escolher", alvo: "#materia", opcao: "1215" },
+                { fazer: "esperar", alvo: "#jurisdicao" },
+              ],
+              pronto: false,
+              pergunta: "",
+            },
+      system: "PJe do TJRJ",
+      facts: FACTS,
+      file: async () => PDF,
+      learning: false,
+      confirm: async () => "go",
+      map: null,
+      beforeSend: async () => ({ ok: true, code: "sending" }),
+    });
+    expect(court.chosen.get("#materia")).toBe("1215");
+    expect(result.outcome).toEqual({ kind: "stuck", why: "no_plan" });
+  });
+
+  it("hands the AI each field with its target to copy, in the place of the selector and its position", () => {
+    const [frame] = screenForAi(PJE_SCREEN) as {
+      quadro: number;
+      fields: Record<string, unknown>[];
+    }[];
+    expect(frame?.quadro).toBe(0);
+    expect(frame?.fields[0]).toMatchObject({ alvo: `0|${MATERIA}|0`, kind: "select", label: "Matéria", chosen: "" });
+    expect(frame?.fields[0]).not.toHaveProperty("selector");
+    expect(frame?.fields[0]).not.toHaveProperty("index");
+    expect(frame?.fields.map((item) => item.alvo)).toEqual([
+      `0|${MATERIA}|0`,
+      "0|tr > td > button|0",
+      "0|tr > td > button|1",
+    ]);
   });
 });

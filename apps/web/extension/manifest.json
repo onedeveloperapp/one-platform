@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "ONE · Protocolo nos tribunais",
   "short_name": "ONE",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Protocola no eproc do TJSP, no Projudi do TJGO e no PJe do TJRJ os lotes que o advogado aprovou no ONE, na sessão que ele abriu com o próprio login.",
   "minimum_chrome_version": "120",
   "permissions": ["storage", "scripting", "sidePanel"],
