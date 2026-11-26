@@ -334,6 +334,15 @@ const PACKAGE_DATE = "2026-01-01T00:00:00";
  * document whose body can be found.
  */
 export function writeDocxOnLetterhead(template: Uint8Array, blocks: readonly LetterheadBlock[]): Uint8Array | null {
+  return writeDocxBody(template, () => (blocks.length > 0 ? blocks.map(paragraphXml).join("") : "<w:p/>"));
+}
+
+/**
+ * The firm's own document with its body written again by `write`, from what its body was (without the last
+ * section's properties, which stay after it): every other part as the firm wrote it. Null when the bytes are no Word
+ * document whose body can be found, or whose prefix for Word's names is not `w`.
+ */
+export function writeDocxBody(template: Uint8Array, write: (inside: string) => string): Uint8Array | null {
   let files: Record<string, Uint8Array>;
   try {
     files = unzipSync(template);
@@ -347,9 +356,13 @@ export function writeDocxOnLetterhead(template: Uint8Array, blocks: readonly Let
   const closing = document.lastIndexOf(`</${opening?.[1] ?? ""}body>`);
   if (!opening || closing < 0) return null;
   const inside = document.slice(opening.index + opening[0].length, closing);
-  const section = [...inside.matchAll(/<(?:\w+:)?sectPr\b[\s\S]*?<\/(?:\w+:)?sectPr>/g)].at(-1)?.[0] ?? "";
-  const body = (blocks.length > 0 ? blocks.map(paragraphXml).join("") : "<w:p/>") + section;
-  // A document whose prefix for Word's names is not `w` still names them so: the blocks are written with `w`.
+  const sections = [...inside.matchAll(/<(?:\w+:)?sectPr\b[\s\S]*?<\/(?:\w+:)?sectPr>/g)];
+  const last = sections.at(-1);
+  const section = last?.[0] ?? "";
+  // The body's own last section is its last child; a section inside a paragraph is that paragraph's.
+  const trailing = last && inside.slice(last.index! + section.length).trim() === "";
+  const body = write(trailing ? inside.slice(0, last.index) : inside) + section;
+  // A document whose prefix for Word's names is not `w` still names them so: what is written uses `w`.
   const declaresW = /xmlns:w\s*=/.test(document.slice(0, opening.index));
   if (!declaresW) return null;
   files["word/document.xml"] = strToU8(

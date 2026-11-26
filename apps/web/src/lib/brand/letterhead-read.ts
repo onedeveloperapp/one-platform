@@ -5,10 +5,12 @@ import type { Band, BandImage, BandLine, PdfLetterhead } from "@flyee/documents/
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 /**
- * The firm's letterhead as the documents it issues draw it (migration 0260): what ONE read of the file the firm sent,
- * with the bytes it draws (the blank page of its paper, or the pictures of its header and footer). Only a letterhead
- * the firm confirmed on its page of example, unless the example itself asks. A letterhead that cannot be read whole is
- * none: the document goes on plain paper rather than not at all. The backend's (the service client).
+ * The firm's letterhead as the documents it issues draw it (migrations 0260 and 0300): the firm's paper ONE copied (a
+ * PDF of its first page and its following one, each with where the text goes), drawn under every page. A PDF
+ * letterhead read before 0300 is its own file, as it was; a Word letterhead read before 0300 is drawn from what ONE
+ * read of it only while ONE's server copies its paper, and a Word letterhead whose paper is not ready is none. Only a
+ * letterhead the firm confirmed on its page of example, unless the example itself asks. A letterhead that cannot be
+ * read whole is none: the document goes on plain paper rather than not at all. The backend's (the service client).
  */
 
 type StoredImage = {
@@ -28,8 +30,22 @@ export type StoredLetterhead = {
   font?: string | null;
 };
 
+/** What ONE keeps of the firm's paper (0300): its pages, each measured. */
+type StoredPaper = {
+  pages?: number;
+  first?: { margins?: Partial<StoredMargins> };
+  rest?: { margins?: Partial<StoredMargins> };
+};
+
 const finite = (value: unknown, fallback: number): number =>
   typeof value === "number" && Number.isFinite(value) ? value : fallback;
+
+const marginsOf = (margins: Partial<StoredMargins> | undefined) => ({
+  top: finite(margins?.top, 72),
+  bottom: finite(margins?.bottom, 72),
+  left: finite(margins?.left, 62),
+  right: finite(margins?.right, 62),
+});
 
 async function pathsOf(service: SupabaseClient, orgId: string, ids: string[]): Promise<Map<string, string>> {
   if (ids.length === 0) return new Map();
@@ -50,7 +66,9 @@ export async function firmLetterhead(
   try {
     const { data: row } = await service
       .from("firm_brands")
-      .select("letterhead_kind, letterhead_source_file_id, letterhead, letterhead_confirmed_at")
+      .select(
+        "letterhead_kind, letterhead_source_file_id, letterhead, letterhead_confirmed_at, letterhead_paper_status, letterhead_paper_file_id, letterhead_paper",
+      )
       .eq("org_id", orgId)
       .maybeSingle();
     if (!row?.letterhead_kind || !row.letterhead) return null;
@@ -58,6 +76,31 @@ export async function firmLetterhead(
     const stored = row.letterhead as StoredLetterhead;
     const margins = stored.margins ?? { top: 72, bottom: 72, left: 62, right: 62 };
     const store = supabaseFileStore(service);
+
+    // The firm's paper, copied (0300).
+    if (row.letterhead_paper_status === "ready" && row.letterhead_paper_file_id && row.letterhead_paper) {
+      const paper = row.letterhead_paper as StoredPaper;
+      const paths = await pathsOf(service, orgId, [String(row.letterhead_paper_file_id)]);
+      const path = paths.get(String(row.letterhead_paper_file_id));
+      const pdf = path ? await store.get(path) : null;
+      if (!pdf) return null;
+      const pages = Math.max(1, Math.min(2, Math.round(finite(paper.pages, 1))));
+      return {
+        kind: "page",
+        pdf,
+        page: pages - 1,
+        margins: marginsOf(paper.rest?.margins),
+        first: pages > 1 ? { page: 0, margins: marginsOf(paper.first?.margins) } : undefined,
+      };
+    }
+    // A Word letterhead is drawn again from what ONE read of it only while its paper is being copied, and only one
+    // the firm confirmed before 0300 (a new one is confirmed on its paper).
+    if (
+      row.letterhead_kind === "word" &&
+      (row.letterhead_paper_status !== "converting" || !row.letterhead_confirmed_at)
+    ) {
+      return null;
+    }
 
     if (row.letterhead_kind === "pdf") {
       const paths = await pathsOf(service, orgId, [String(row.letterhead_source_file_id)]);

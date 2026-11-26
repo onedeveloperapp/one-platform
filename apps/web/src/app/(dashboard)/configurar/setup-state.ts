@@ -6,6 +6,7 @@ import { cookies } from "next/headers";
 
 import type { SecondFactorState } from "@/lib/ai/approvals";
 import { readAreaScripts } from "@/lib/areas/script-actions";
+import { paperOf } from "@/lib/brand/letterhead-paper";
 import { cloudSigningOffered } from "@/lib/cases/filing-facts";
 import { downloadUrl } from "@/lib/files/uploads";
 import { loadFilingWays } from "@/lib/filing-ways/read";
@@ -103,7 +104,9 @@ export async function loadSetupState(
     // The firm's logo and colour (0258): a read that fails asks them as never given.
     context.supabase
       .from("firm_brands")
-      .select("logo_file_id, color, color_from, logo_color, letterhead_kind, letterhead_confirmed_at")
+      .select(
+        "logo_file_id, color, color_from, logo_color, letterhead_kind, letterhead_confirmed_at, letterhead_paper_status, letterhead_paper_problem, letterhead_paper",
+      )
       .eq("org_id", firm.id)
       .maybeSingle(),
     // The firm's profile (0272): a read that fails shows the step as never written, and ONE writes it.
@@ -122,6 +125,9 @@ export async function loadSetupState(
     logo_color: string | null;
     letterhead_kind: "word" | "pdf" | null;
     letterhead_confirmed_at: string | null;
+    letterhead_paper_status: string | null;
+    letterhead_paper_problem: string | null;
+    letterhead_paper: unknown;
   } | null;
   const logoLink = brandData?.logo_file_id
     ? await downloadUrl(context, brandData.logo_file_id).catch(() => null)
@@ -135,6 +141,7 @@ export async function loadSetupState(
   const letterhead: SetupLetterhead = {
     kind: brandData?.letterhead_kind ?? null,
     confirmed: Boolean(brandData?.letterhead_confirmed_at),
+    paper: paperOf(brandData),
   };
 
   const signing = ((signers.data ?? []) as { user_id: string }[]).map((row) => row.user_id);

@@ -27,10 +27,11 @@
     "./brand": "./src/brand.ts",
     "./logo": "./src/logo.ts",
     "./letterhead": "./src/letterhead.ts",
-    "./letterhead-image": "./src/letterhead-image.ts"
+    "./letterhead-image": "./src/letterhead-image.ts",
+    "./office": "./src/office.ts"
   },
   "scripts": {
-    "test": "node --experimental-strip-types --test src/documents.test.ts src/normalize.test.ts src/text-pdf.test.ts src/table-pdf.test.ts src/quality.test.ts src/cms.test.ts src/pdf-signature.test.ts src/taken.test.ts src/brand.test.ts src/letterhead.test.ts",
+    "test": "node --experimental-strip-types --test src/documents.test.ts src/normalize.test.ts src/text-pdf.test.ts src/table-pdf.test.ts src/quality.test.ts src/cms.test.ts src/pdf-signature.test.ts src/taken.test.ts src/brand.test.ts src/letterhead.test.ts src/office.test.ts",
     "bench": "node --expose-gc --experimental-strip-types scripts/normalization-bench.ts",
     "quality": "node --experimental-strip-types scripts/quality-table.ts"
   },

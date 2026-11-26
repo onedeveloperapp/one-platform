@@ -1,4 +1,5 @@
-# The platform's one clock on ONE's server (clock/main.ts), and ONE's own browser beside it (clock/navegador.ts). Shipped
+# The platform's one clock on ONE's server (clock/main.ts), ONE's own browser beside it (clock/navegador.ts), and the
+# converter of the firms' Word letterheads with its office suite (clock/conversor.ts, conversor-office). Shipped
 # with each version (clock/build.mjs copies it into the bundle) and brought up by receber.sh from that version's folder,
 # so a bind mount always holds one version whole.
 name: one-relogio
@@ -56,6 +57,59 @@ services:
     stop_grace_period: 5m
     mem_limit: 2g
     cpus: 1.5
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # The office suite that makes a firm's Word letterhead a PDF (2026-11-25): LibreOffice behind Gotenberg's API, reached
+  # by the converter on the services' own network and by nothing else (no port is published). A version of Gotenberg's
+  # maintained line, pinned; its image carries the fonts of the same measure as Microsoft's (Liberation, Carlito,
+  # Caladea). The image is pulled the first time.
+  conversor-office:
+    image: gotenberg/gotenberg:9.4.0-libreoffice
+    # Gotenberg's own settings (its 9.x configuration): a document may take two minutes, LibreOffice is restarted
+    # every 20 conversions, and nothing is ever sent elsewhere.
+    environment:
+      API_TIMEOUT: 120s
+      LIBREOFFICE_RESTART_AFTER: "20"
+      WEBHOOK_DISABLE: "true"
+    restart: unless-stopped
+    mem_limit: 1g
+    cpus: 1.0
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # The converter (2026-11-25): takes each Word letterhead as soon as it waits, has the suite convert it and keeps the
+  # firm's paper. It asks the database every few seconds while nothing waits.
+  conversor:
+    image: node:22-slim
+    user: node
+    working_dir: /app
+    command: ["node", "conversor.mjs"]
+    init: true
+    volumes:
+      - ./:/app:ro
+    env_file:
+      - /opt/atendimento/one/segredos/relogio.env
+    environment:
+      ONE_COMMIT: ${ONE_COMMIT:-unknown}
+      ONE_OFFICE_URL: http://conversor-office:3000
+      # The same guards as the app's production: no simulator, no fake provider is honoured here.
+      NODE_ENV: production
+      VERCEL_ENV: production
+      TZ: UTC
+    depends_on:
+      - conversor-office
+    restart: unless-stopped
+    # A new version waits for the letterhead under way (a conversion takes seconds).
+    stop_grace_period: 2m
+    mem_limit: 384m
+    cpus: 0.5
     logging:
       driver: json-file
       options:

@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
+import { PDFArray, PDFDocument, PDFName, PDFNumber, PDFOperator, PDFOperatorNames, PDFString, rgb, StandardFonts } from "pdf-lib";
 
-import { LEAST_MARGIN, readPdfLetterhead } from "@flyee/documents/letterhead";
+import { LEAST_MARGIN, readPdfLetterhead, readPdfPaper } from "@flyee/documents/letterhead";
 
 /** An A4 page of an invented firm's paper: a bar and its name above, its address below, and what `extra` draws. */
 async function paper(extra?: (page: import("pdf-lib").PDFPage, font: import("pdf-lib").PDFFont) => void) {
@@ -68,5 +68,122 @@ describe("a picture of the letterhead", () => {
       .png()
       .toBuffer();
     assert.equal((await compressLetterheadImage(new Uint8Array(clear))).mime, "image/png");
+  });
+});
+
+const PIECE = "O autor viajou no dia 3 e o voo atrasou seis horas, sem assistencia da companhia.";
+
+/** The lines of a piece written down the middle of a page, as a document typed on the paper has them. */
+function writePiece(page: import("pdf-lib").PDFPage, font: import("pdf-lib").PDFFont, from = 700, lines = 36) {
+  for (let line = 0; line < lines; line += 1) {
+    page.drawText(PIECE, { x: 85, y: from - line * 16, size: 11, font });
+  }
+}
+
+describe("the firm's paper, copied", () => {
+  it("copies a blank page as it is, measured as the blank page always was", async () => {
+    const read = await readPdfPaper(await paper());
+    assert.equal(read.ok, true);
+    if (!read.ok) return;
+    const blank = await readPdfLetterhead(await paper());
+    assert.ok(blank.ok);
+    assert.equal(read.pages, 1);
+    assert.equal(read.stripped, false);
+    assert.deepEqual(read.first, read.rest);
+    assert.equal(read.first.header, Math.round(blank.header));
+    assert.equal(read.first.footer, Math.round(blank.footer));
+    assert.equal(read.first.margins.top, Math.round(blank.margins.top));
+    assert.equal(read.first.margins.bottom, Math.round(blank.margins.bottom));
+    assert.deepEqual(read.fonts, ["Helvetica"]);
+    // What it copies is the same paper: the same bytes for the same file.
+    const again = await readPdfPaper(await paper());
+    assert.ok(again.ok);
+    assert.deepEqual(again.pdf, read.pdf);
+  });
+
+  it("takes the text of a document out of the paper and keeps the header and the footer where they were", async () => {
+    const written = await paper((page, font) => writePiece(page, font));
+    const read = await readPdfPaper(written);
+    assert.equal(read.ok, true);
+    if (!read.ok) return;
+    assert.equal(read.stripped, true);
+    // The page left is a blank page of the same paper: its header, its footer, nothing between.
+    const left = await readPdfLetterhead(read.pdf);
+    assert.equal(left.ok, true, "the paper left holds no lines of the piece");
+    const blank = await readPdfLetterhead(await paper());
+    assert.ok(left.ok && blank.ok);
+    assert.equal(left.header, blank.header);
+    assert.equal(left.footer, blank.footer);
+    // The text goes where the document's text was, never closer to the edge than the least.
+    assert.equal(read.first.margins.left, 85);
+  });
+
+  it("takes out text however the page shows it, moving to its lines as it did", async () => {
+    const pdf = await PDFDocument.create();
+    const page = pdf.addPage([595.28, 841.89]);
+    const font = await pdf.embedFont(StandardFonts.Helvetica);
+    page.drawText("Souza Advogados", { x: 60, y: 770, size: 14, font });
+    page.drawText("Rua das Flores, 100, Goiania", { x: 60, y: 30, size: 8, font });
+    page.setFont(font);
+    const key = (page as unknown as { fontKey: PDFName }).fontKey;
+    const op = (name: string, ...args: (number | string | PDFArray)[]) =>
+      PDFOperator.of(
+        name as PDFOperatorNames,
+        args.map((arg) =>
+          typeof arg === "number" ? PDFNumber.of(arg) : typeof arg === "string" ? PDFString.of(arg) : arg,
+        ),
+      );
+    const adjusted = pdf.context.obj([PDFString.of("O voo"), PDFNumber.of(-250), PDFString.of("atrasou")]);
+    page.pushOperators(
+      op(PDFOperatorNames.BeginText),
+      PDFOperator.of(PDFOperatorNames.SetFontAndSize, [key, PDFNumber.of(11)]),
+      op(PDFOperatorNames.SetTextLineHeight, 16),
+      op(PDFOperatorNames.MoveText, 85, 560),
+      op(PDFOperatorNames.ShowTextAdjusted, adjusted),
+      ...Array.from({ length: 10 }, () => op(PDFOperatorNames.ShowTextLine, PIECE)),
+      op(PDFOperatorNames.ShowTextLineAndSpace, 1, 0, PIECE),
+      op(PDFOperatorNames.EndText),
+    );
+    const read = await readPdfPaper(await pdf.save());
+    assert.equal(read.ok, true);
+    if (!read.ok) return;
+    assert.equal(read.stripped, true);
+    assert.equal((await readPdfLetterhead(read.pdf)).ok, true);
+  });
+
+  it("keeps the first page of the paper and its following one, each measured, and no more", async () => {
+    const pdf = await PDFDocument.create();
+    const font = await pdf.embedFont(StandardFonts.Helvetica);
+    for (const top of [700, 790, 790]) {
+      const page = pdf.addPage([595.28, 841.89]);
+      // The first page's header goes down to a big logo, the others' to a line.
+      page.drawRectangle({ x: 60, y: top, width: 200, height: 820 - top, color: rgb(0.1, 0.3, 0.6) });
+      page.drawText("Rua das Flores, 100, Goiania", { x: 60, y: 30, size: 8, font });
+      writePiece(page, font, top - 40, 20);
+    }
+    const read = await readPdfPaper(await pdf.save());
+    assert.equal(read.ok, true);
+    if (!read.ok) return;
+    assert.equal(read.pages, 2);
+    assert.equal((await PDFDocument.load(read.pdf)).getPageCount(), 2);
+    assert.equal(read.first.header, Math.round(841.89 - 700));
+    assert.equal(read.rest.header, Math.round(841.89 - 790));
+    assert.ok(read.first.margins.top > read.rest.margins.top);
+  });
+
+  it("never puts the text closer to the edges than the Word document's own margins", async () => {
+    const read = await readPdfPaper(await paper(), { base: { top: 170, bottom: 90, left: 85, right: 57 } });
+    assert.ok(read.ok);
+    assert.equal(read.first.margins.top, 170);
+    assert.equal(read.first.margins.bottom, 90);
+    assert.equal(read.first.margins.left, 85);
+    assert.equal(read.first.margins.right, 57);
+  });
+
+  it("refuses a page with nothing printed, and what is no PDF", async () => {
+    const pdf = await PDFDocument.create();
+    pdf.addPage([595.28, 841.89]);
+    assert.deepEqual(await readPdfPaper(await pdf.save()), { ok: false, code: "empty" });
+    assert.deepEqual(await readPdfPaper(new Uint8Array([1, 2, 3])), { ok: false, code: "not_pdf" });
   });
 });

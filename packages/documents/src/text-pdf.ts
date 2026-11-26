@@ -67,8 +67,33 @@ function bandHeight(band: Band, width: number): number {
   return height;
 }
 
-/** The layout of a page of the document, with or without the firm's letterhead. */
+/**
+ * The layout of the pages of the document, with or without the firm's letterhead: of its first page and of the
+ * others, where the firm's paper has a first page of its own. The verification mark is drawn at the same height on
+ * every page, above the higher of the two footers.
+ */
+export function pageLayouts(
+  letterhead: PdfLetterhead | null | undefined,
+  stamped = true,
+): { first: PageLayout; rest: PageLayout } {
+  const rest = singleLayout(letterhead, stamped);
+  if (letterhead?.kind !== "page" || !letterhead.first) return { first: rest, rest };
+  const first = singleLayout({ ...letterhead, margins: letterhead.first.margins }, stamped);
+  const stampAt = Math.max(first.stampAt, rest.stampAt);
+  const lifted = (layout: PageLayout) => ({
+    ...layout,
+    stampAt,
+    bottom: stamped ? Math.max(layout.bottom, stampAt - 2 + STAMP_BAND + 10) : layout.bottom,
+  });
+  return { first: lifted(first), rest: lifted(rest) };
+}
+
+/** The layout of a page of the document, with or without the firm's letterhead: the pages after the first. */
 export function pageLayout(letterhead: PdfLetterhead | null | undefined, stamped = true): PageLayout {
+  return pageLayouts(letterhead, stamped).rest;
+}
+
+function singleLayout(letterhead: PdfLetterhead | null | undefined, stamped: boolean): PageLayout {
   if (!letterhead) {
     return { top: MARGIN_TOP, bottom: MARGIN_BOTTOM, left: MARGIN_X, right: MARGIN_X, stampAt: 0 };
   }
@@ -106,15 +131,23 @@ export async function renderTextPdf(document: TextDocument): Promise<Uint8Array>
   const regular = await pdf.embedFont(StandardFonts.Helvetica);
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
   const letterhead = document.letterhead ?? null;
-  const layout = pageLayout(letterhead, document.stamped !== false);
+  const layouts = pageLayouts(letterhead, document.stamped !== false);
+  const layout = layouts.rest;
   const MARGIN_X = layout.left;
-  const MARGIN_TOP = layout.top;
-  const MARGIN_BOTTOM = layout.bottom;
-  // The firm's blank page, drawn under each page; or the pictures of its header and footer, embedded once.
+  // Where the text goes on the page being written: the first page may have a header of its own.
+  let MARGIN_TOP = layouts.first.top;
+  let MARGIN_BOTTOM = layouts.first.bottom;
+  // The firm's paper, drawn under each page (its first page under the first); or the pictures of its header and
+  // footer, embedded once.
   let paper: PDFEmbeddedPage | null = null;
+  let firstPaper: PDFEmbeddedPage | null = null;
   const pictures = new Map<Uint8Array, PDFImage>();
   if (letterhead?.kind === "page") {
-    [paper] = await pdf.embedPdf(letterhead.pdf, [0]);
+    const restIndex = letterhead.page ?? 0;
+    const firstIndex = letterhead.first?.page ?? restIndex;
+    const embedded = await pdf.embedPdf(letterhead.pdf, firstIndex === restIndex ? [restIndex] : [firstIndex, restIndex]);
+    firstPaper = embedded[0] ?? null;
+    paper = embedded[embedded.length - 1] ?? null;
   } else if (letterhead?.kind === "bands") {
     for (const image of [...letterhead.header.images, ...letterhead.footer.images]) {
       if (pictures.has(image.bytes)) continue;
@@ -139,7 +172,11 @@ export async function renderTextPdf(document: TextDocument): Promise<Uint8Array>
 
   const newPage = () => {
     page = pdf.addPage([A4.width, A4.height]);
-    if (paper) page.drawPage(paper, { x: 0, y: 0, width: A4.width, height: A4.height });
+    const first = pages.length === 0;
+    const under = first ? firstPaper : paper;
+    if (under) page.drawPage(under, { x: 0, y: 0, width: A4.width, height: A4.height });
+    MARGIN_TOP = first ? layouts.first.top : layout.top;
+    MARGIN_BOTTOM = first ? layouts.first.bottom : layout.bottom;
     pages.push(page);
     y = A4.height - MARGIN_TOP;
   };
@@ -240,7 +277,7 @@ export async function renderTextPdf(document: TextDocument): Promise<Uint8Array>
       drawBand(sheet, letterhead.header, A4.height - letterhead.margins.header);
       drawBand(sheet, letterhead.footer, letterhead.margins.footer + bandHeight(letterhead.footer, width));
     }
-    const top = A4.height - MARGIN_TOP + 22;
+    const top = A4.height - (index === 0 ? layouts.first.top : layout.top) + 22;
     if (header) {
       const fitted = wrapText(header, regular, HEADER_SIZE, width - 60)[0] ?? "";
       sheet.drawText(fitted, { x: MARGIN_X, y: top, size: HEADER_SIZE, font: regular, color: soft });

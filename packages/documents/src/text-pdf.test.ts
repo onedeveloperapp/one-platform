@@ -6,6 +6,7 @@ import { measureFile } from "./measure.ts";
 import { stampVerification } from "./stamp.ts";
 import {
   pageLayout,
+  pageLayouts,
   PLAIN_CODES,
   renderTextPdf,
   type TextBlock,
@@ -160,6 +161,44 @@ describe("a document of text as a PDF", () => {
     assert.equal(pageLayout(letterhead, false).bottom, 90);
     const stamped = await stampVerification(bytes, { firm: "Souza Advogados", verifyCode: "ABCD2345", verifyUrl: "https://one.invalid/verificar" }, { at: layout.stampAt });
     assert.equal((await PDFDocument.load(stamped)).getPageCount(), loaded.getPageCount());
+  });
+
+  it("draws the paper's first page under the first page and its following page under the others, each with its own margins", async () => {
+    const paper = await PDFDocument.create();
+    const font = await paper.embedFont(StandardFonts.Helvetica);
+    for (const name of ["Souza Advogados, primeira folha", "Souza Advogados"]) {
+      paper.addPage([595.28, 841.89]).drawText(name, { x: 60, y: 770, size: 14, font });
+    }
+    const letterhead = {
+      kind: "page" as const,
+      pdf: await paper.save(),
+      page: 1,
+      margins: { top: 100, bottom: 70, left: 70, right: 60 },
+      first: { page: 0, margins: { top: 220, bottom: 110, left: 70, right: 60 } },
+    };
+    const layouts = pageLayouts(letterhead, true);
+    assert.equal(layouts.first.top, 220);
+    assert.equal(layouts.rest.top, 100);
+    // The mark is at one height on every page, above the higher footer, and the text of every page above the mark.
+    assert.equal(layouts.first.stampAt, layouts.rest.stampAt);
+    assert.equal(layouts.rest.stampAt, 110 - 14 + 2);
+    assert.ok(layouts.rest.bottom >= layouts.rest.stampAt + 10);
+    assert.deepEqual(pageLayout(letterhead, true), layouts.rest);
+    const blocks = Array.from({ length: 50 }, (_, index) => ({
+      kind: "paragraph" as const,
+      text: `Parágrafo ${index + 1} da peça, escrito no timbrado do escritório.`,
+    }));
+    const pages = (await PDFDocument.load(await renderTextPdf({ blocks, letterhead, stamped: true }))).getPageCount();
+    // The same text on the following page alone takes no more pages: the first page holds fewer lines.
+    const alone = (
+      await PDFDocument.load(
+        await renderTextPdf({ blocks, letterhead: { ...letterhead, first: undefined }, stamped: true }),
+      )
+    ).getPageCount();
+    assert.ok(pages >= alone);
+    // A paper of one page is drawn under every page as before.
+    const single = pageLayouts({ kind: "page", pdf: letterhead.pdf, margins: letterhead.margins }, true);
+    assert.deepEqual(single.first, single.rest);
   });
 
   it("draws the header and the footer of a Word letterhead, the text below and above them", async () => {

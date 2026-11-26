@@ -66,6 +66,14 @@ select is(
    from public.firm_brands where org_id = 'b2600000-0000-4000-8000-00000000000a'),
   array['word', 'true', 'Souza Advogados'], 'unconfirmed until the page of example'
 );
+-- ONE's server keeps the paper it copied of the Word document (0300): only a paper the person saw is confirmed.
+reset role;
+update public.firm_brands
+set letterhead_paper_status = 'ready', letterhead_paper_file_id = 'f2600000-0000-4000-8000-000000000003',
+    letterhead_paper = '{}'::jsonb
+where org_id = 'b2600000-0000-4000-8000-00000000000a';
+set local role authenticated;
+select pg_temp.sign_in('a2600000-0000-4000-8000-000000000001');
 select is(
   public.confirm_firm_letterhead('b2600000-0000-4000-8000-00000000000a') ->> 'code', 'confirmed',
   'the person confirms it'

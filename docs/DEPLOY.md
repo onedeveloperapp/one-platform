@@ -319,6 +319,15 @@ permite. A lista das varreduras, com o horário de cada uma, fica em
   chaves do servidor e abre e fecha o Chromium antes de trocar a versão. Cada
   minuto marca `court_browser_beat` em `platform_settings`. Ver o navegador:
   `ssh one@187.53.106.93 'docker logs --tail 20 one-relogio-navegador-1'`.
+- **O conversor do timbrado** (desde 2026-11-25) roda ao lado do relógio, no
+  mesmo pacote e no mesmo `compose.yml`: `apps/web/clock/conversor.ts`,
+  empacotado como `conversor.mjs`, na imagem `node:22-slim`, e o LibreOffice
+  atrás do Gotenberg (`conversor-office`, `gotenberg/gotenberg:9.4.0-libreoffice`,
+  1 GB, sem porta publicada, alcançado só pela rede dos serviços). Copia o
+  timbrado em Word que um escritório envia como um PDF do seu papel, poucos
+  segundos depois do envio. A imagem do Gotenberg é baixada no primeiro deploy
+  que a traz. Ver o conversor:
+  `ssh one@187.53.106.93 'docker logs --tail 20 one-relogio-conversor-1'`.
 - **`apps/web/clock/receber.sh` muda à mão**: o deploy nunca o reescreve.
   Depois de mudar, copie para o servidor e dê `chmod 755`.
 

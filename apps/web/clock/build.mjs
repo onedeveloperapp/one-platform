@@ -1,7 +1,8 @@
-// Bundles the clock (clock/main.ts) and ONE's own browser (clock/navegador.ts) for ONE's server, from the same code and
-// commit the app runs: `node apps/web/clock/build.mjs` writes apps/web/clock/dist/ (git-ignored) with relogio.mjs,
-// navegador.mjs, the script every page ONE's browser opens carries (pagina.js), the package.json of what stays outside
-// the bundles (native modules and Playwright's core, installed on the server), and the compose file that runs both.
+// Bundles the clock (clock/main.ts), ONE's own browser (clock/navegador.ts) and the converter of the firms' Word
+// letterheads (clock/conversor.ts) for ONE's server, from the same code and commit the app runs: `node
+// apps/web/clock/build.mjs` writes apps/web/clock/dist/ (git-ignored) with relogio.mjs, navegador.mjs, conversor.mjs,
+// the script every page ONE's browser opens carries (pagina.js), the package.json of what stays outside the bundles
+// (native modules and Playwright's core, installed on the server), and the compose file that runs them.
 // The production deploy runs it and ships the folder to clock/receber.sh on ONE's server.
 /* global console */
 import { build } from "esbuild";
@@ -67,6 +68,7 @@ const service = (entry, file) =>
 const results = await Promise.all([
   service("main.ts", "relogio.mjs"),
   service("navegador.ts", "navegador.mjs"),
+  service("conversor.ts", "conversor.mjs"),
   // The script every frame of ONE's browser carries, run in the court's page.
   build({
     entryPoints: [path.join(web, "src/lib/court-browser/page-script.ts")],
@@ -103,5 +105,5 @@ const bytes = results.map((result) =>
   (Object.values(result.metafile.outputs).reduce((sum, output) => sum + output.bytes, 0) / 1e6).toFixed(1),
 );
 console.log(
-  `clock bundled: relogio ${bytes[0]} MB, navegador ${bytes[1]} MB, pagina ${bytes[2]} MB, external ${JSON.stringify(versions)}`,
+  `clock bundled: relogio ${bytes[0]} MB, navegador ${bytes[1]} MB, conversor ${bytes[2]} MB, pagina ${bytes[3]} MB, external ${JSON.stringify(versions)}`,
 );

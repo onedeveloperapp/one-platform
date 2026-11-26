@@ -1,7 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { Box, Button } from "@mui/material";
 
@@ -17,10 +17,12 @@ import NiPalette from "@/icons/nexture/ni-palette";
 import NiUploadCloud from "@/icons/nexture/ni-upload-cloud";
 import {
   confirmFirmLetterhead,
+  letterheadPaperState,
   letterheadSample,
   readFirmLetterhead,
   startLetterheadUpload,
 } from "@/lib/brand/letterhead-actions";
+import type { LetterheadPaper } from "@/lib/brand/letterhead-paper";
 import { mimeOf, uploadToSignedUrl } from "@/lib/files/browser-upload";
 import { readFirmLogo, setFirmColor, startLogoUpload } from "@/lib/firm/brand-actions";
 import { type FirmOffice, officeAddressGiven } from "@/lib/firm/office";
@@ -36,15 +38,20 @@ export type SetupBrand = {
   logoColor: string | null;
 };
 
-/** The firm's letterhead (0260): its kind, and whether the person confirmed it on the page of example. */
-export type SetupLetterhead = { kind: "word" | "pdf" | null; confirmed: boolean };
+/**
+ * The firm's letterhead (0260, 0300): its kind, whether the person confirmed it on the page of example, and where the
+ * paper ONE copies of it stands.
+ */
+export type SetupLetterhead = { kind: "word" | "pdf" | null; confirmed: boolean; paper: LetterheadPaper };
+
+/** How often the step asks whether ONE's server finished copying a Word letterhead. */
+const PAPER_POLL_MS = 3_000;
 
 /** What the letterhead's refusal says, by its code. */
 const LETTERHEAD_ERRORS: Record<string, string> = {
-  not_blank: "setup-office-letterhead-error-not-blank",
   empty: "setup-office-letterhead-error-empty",
-  no_letterhead: "setup-office-letterhead-error-none",
   too_heavy: "setup-office-letterhead-error-heavy",
+  paper_not_ready: "setup-office-letterhead-error-not-ready",
   type_not_allowed: "setup-office-letterhead-error-type",
   not_pdf: "setup-office-letterhead-error-unreadable",
   not_docx: "setup-office-letterhead-error-unreadable",
@@ -175,6 +182,27 @@ export function useOfficeStep(input: {
     setSample(null);
   };
 
+  // While ONE's server copies a Word letterhead, the line follows it; the page of example opens once it is ready.
+  const copying = letterhead.paper.status === "converting";
+  useEffect(() => {
+    if (!copying) return;
+    let live = true;
+    const timer = setInterval(() => {
+      void letterheadPaperState()
+        .then((state) => {
+          if (!live || !state.ok || state.paper.status === "converting") return;
+          setLetterhead((current) => ({ ...current, paper: state.paper }));
+          if (state.paper.status === "ready") void showSample();
+        })
+        .catch(() => undefined);
+    }, PAPER_POLL_MS);
+    return () => {
+      live = false;
+      clearInterval(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- showSample reads only setters and the translations.
+  }, [copying]);
+
   const sendLetterhead = async (file: File) => {
     setLetterheadError(null);
     setReadingLetterhead(true);
@@ -200,11 +228,11 @@ export function useOfficeStep(input: {
         setLetterheadError(t(LETTERHEAD_ERRORS[read.code] ?? "setup-operation-error-failed"));
         return;
       }
-      setLetterhead({ kind: read.kind, confirmed: false });
+      setLetterhead({ kind: read.kind, confirmed: false, paper: read.paper });
       if (read.logoUrl && !logoUrl) setLogoUrl(read.logoUrl);
       input.onChanged();
-      // What ONE read is shown at once, for the person to confirm.
-      await showSample();
+      // The paper ONE copied is shown at once, for the person to confirm; a Word document's once ONE's server copied it.
+      if (read.paper.status === "ready") await showSample();
     } catch {
       setLetterheadError(t("setup-operation-error-failed"));
     } finally {
@@ -220,7 +248,7 @@ export function useOfficeStep(input: {
       setLetterheadError(
         done.code === "second_factor_required"
           ? t("setup-operation-error-second_factor")
-          : t("setup-operation-error-failed"),
+          : t(LETTERHEAD_ERRORS[done.code] ?? "setup-operation-error-failed"),
       );
       return;
     }
@@ -250,39 +278,21 @@ export function useOfficeStep(input: {
         }
       : readingLetterhead
         ? { state: { tone: "waiting" as const, text: t("setup-office-letterhead-reading"), icon: turning } }
-        : letterhead.kind && letterhead.confirmed
+        : letterhead.kind && copying
           ? {
-              detail: t("setup-office-letterhead-in-use"),
-              state: { tone: "done" as const, text: t("setup-office-row-in-use") },
-              action: (
-                <Button
-                  variant="text"
-                  color="grey"
-                  size="small"
-                  onClick={() => letterheadChooser.current?.click()}
-                  disabled={off}
-                >
-                  {t("setup-office-replace")}
-                </Button>
-              ),
+              detail: t("setup-office-letterhead-copying-detail"),
+              state: { tone: "waiting" as const, text: t("setup-office-letterhead-copying"), icon: turning },
             }
-          : letterhead.kind
+          : letterhead.kind && letterhead.paper.status === "failed"
             ? {
-                state: { tone: "attention" as const, text: t("setup-office-letterhead-check") },
-                action: (
-                  <Button
-                    variant="outlined"
-                    size="small"
-                    onClick={() => void showSample()}
-                    disabled={off || sampleBusy}
-                  >
-                    {t("setup-office-letterhead-see")}
-                  </Button>
-                ),
-              }
-            : {
-                detail: t("setup-office-letterhead-what"),
-                state: { tone: "attention" as const, text: t("setup-office-row-missing") },
+                detail: t("setup-office-letterhead-pdf-how"),
+                state: {
+                  tone: "failed" as const,
+                  text:
+                    letterhead.paper.problem === "empty"
+                      ? t("setup-office-letterhead-failed-empty")
+                      : t("setup-office-letterhead-failed"),
+                },
                 action: (
                   <Button
                     variant="outlined"
@@ -291,10 +301,55 @@ export function useOfficeStep(input: {
                     onClick={() => letterheadChooser.current?.click()}
                     disabled={off}
                   >
-                    {t("setup-office-send")}
+                    {t("setup-office-letterhead-send-pdf")}
                   </Button>
                 ),
-              }),
+              }
+            : letterhead.kind && letterhead.confirmed
+              ? {
+                  detail: t("setup-office-letterhead-in-use"),
+                  state: { tone: "done" as const, text: t("setup-office-row-in-use") },
+                  action: (
+                    <Button
+                      variant="text"
+                      color="grey"
+                      size="small"
+                      onClick={() => letterheadChooser.current?.click()}
+                      disabled={off}
+                    >
+                      {t("setup-office-replace")}
+                    </Button>
+                  ),
+                }
+              : letterhead.kind
+                ? {
+                    state: { tone: "attention" as const, text: t("setup-office-letterhead-check") },
+                    action: (
+                      <Button
+                        variant="outlined"
+                        size="small"
+                        onClick={() => void showSample()}
+                        disabled={off || sampleBusy}
+                      >
+                        {t("setup-office-letterhead-see")}
+                      </Button>
+                    ),
+                  }
+                : {
+                    detail: t("setup-office-letterhead-what"),
+                    state: { tone: "attention" as const, text: t("setup-office-row-missing") },
+                    action: (
+                      <Button
+                        variant="outlined"
+                        size="small"
+                        startIcon={<NiUploadCloud size="small" />}
+                        onClick={() => letterheadChooser.current?.click()}
+                        disabled={off}
+                      >
+                        {t("setup-office-send")}
+                      </Button>
+                    ),
+                  }),
   };
 
   const colorPicker = (label: string, initial: string) => (
@@ -464,12 +519,23 @@ export function useOfficeStep(input: {
     </Box>
   );
 
+  // What the page of example says: what ONE did with the file, and where a copy of a Word document may differ.
+  const sampleNote = [
+    letterhead.kind === "word" ? t("setup-office-letterhead-sample-word") : t("setup-office-letterhead-sample-info"),
+    letterhead.paper.stripped ? t("setup-office-letterhead-stripped") : null,
+    letterhead.kind === "word" && letterhead.paper.missing.length > 0
+      ? t("setup-office-letterhead-fonts", { fonts: letterhead.paper.missing.join(", ") })
+      : null,
+  ]
+    .filter(Boolean)
+    .join(" ");
+
   const panel = sample ? (
     <SidePanel
       onClose={closeSample}
       closeLabel={t("setup-office-letterhead-close")}
       title={t("setup-office-letterhead-sample-title")}
-      description={t("setup-office-letterhead-sample-info")}
+      description={sampleNote}
       icon={<NiDocumentFull size="medium" />}
       wide
       busy={sampleBusy}
