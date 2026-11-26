@@ -1,5 +1,5 @@
 import { useCaseTab } from "./use-case-tab";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { TabLine } from "@/lib/cases/case-tabs";
 import { CASE_TABS } from "@/lib/cases/case-tabs";
@@ -8,12 +8,26 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 afterEach(cleanup);
 beforeEach(() => window.history.replaceState(null, "", "/casos/c1"));
 
+/** A link as the router draws it: an anchor whose click the router takes for itself, so no `hashchange` follows. */
+function RouterLink({ href, children }: { href: string; children: string }) {
+  return (
+    <a href={href} onClick={(event) => event.preventDefault()}>
+      {children}
+    </a>
+  );
+}
+
 /** The case's panels as the screen draws them: every one mounted, the ones not open hidden, a card in each. */
 function Harness({ asked, blocking }: { asked: string | null; blocking: TabLine[] }) {
   const { tab, pick } = useCaseTab({ asked, blocking, step: "documents" });
   return (
     <>
       <p data-testid="tab">{tab}</p>
+      <RouterLink href="#card-of-cliente">completar no cartão das pessoas</RouterLink>
+      <RouterLink href="/casos/c1#card-of-processo">aviso do sino deste caso</RouterLink>
+      <RouterLink href="/casos/c2#card-of-processo">aviso do sino de outro caso</RouterLink>
+      <RouterLink href="#nenhum-cartao">um endereço sem cartão</RouterLink>
+      <RouterLink href="#%E0%A4%A">um endereço mal escrito</RouterLink>
       {CASE_TABS.map((key) => (
         <button key={key} type="button" onClick={() => pick(key)}>
           {`aba ${key}`}
@@ -67,6 +81,36 @@ describe("the tab of the case screen", () => {
     window.history.replaceState(null, "", "/casos/c1#card-of-historico");
     render(<Harness asked={null} blocking={[firmAt("publications")]} />);
     expect(screen.getByTestId("tab").textContent).toBe("historico");
+  });
+
+  it("a link the router draws to a card of this case opens its tab, though no hashchange is said", () => {
+    render(<Harness asked={null} blocking={[]} />);
+    // Nothing but the click may open the tab here: the hook that only listened to `hashchange` left this link dead.
+    const heard = vi.fn();
+    window.addEventListener("hashchange", heard);
+    fireEvent.click(screen.getByRole("link", { name: "completar no cartão das pessoas" }));
+    window.removeEventListener("hashchange", heard);
+    expect(heard).not.toHaveBeenCalled();
+    expect(screen.getByTestId("tab").textContent).toBe("cliente");
+    expect(`${window.location.search}${window.location.hash}`).toBe("?aba=cliente#card-of-cliente");
+  });
+
+  it("and so does the whole address of the case that is open, as a notice of the bell carries it", () => {
+    render(<Harness asked={null} blocking={[]} />);
+    fireEvent.click(screen.getByRole("link", { name: "aviso do sino deste caso" }));
+    expect(screen.getByTestId("tab").textContent).toBe("processo");
+    expect(`${window.location.search}${window.location.hash}`).toBe("?aba=processo#card-of-processo");
+  });
+
+  it("leaves the tab alone for a link to another case, a click that opens a new tab of the browser and an address of no card", () => {
+    render(<Harness asked={null} blocking={[]} />);
+    fireEvent.click(screen.getByRole("link", { name: "aviso do sino de outro caso" }));
+    fireEvent.click(screen.getByRole("link", { name: "completar no cartão das pessoas" }), { ctrlKey: true });
+    fireEvent.click(screen.getByRole("link", { name: "completar no cartão das pessoas" }), { button: 1 });
+    fireEvent.click(screen.getByRole("link", { name: "um endereço sem cartão" }));
+    fireEvent.click(screen.getByRole("link", { name: "um endereço mal escrito" }));
+    expect(screen.getByTestId("tab").textContent).toBe("documentos");
+    expect(window.location.search).toBe("");
   });
 
   it("never loses what was typed in a tab the person left", () => {
