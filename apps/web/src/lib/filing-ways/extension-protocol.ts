@@ -1,7 +1,9 @@
 import {
   COURT_SYSTEMS,
   type CourtSystemKey,
+  isCodeTable,
   type MappedField,
+  type MappedLine,
   type MappedScreen,
   type MappedTable,
   redact,
@@ -9,7 +11,13 @@ import {
 } from "@/lib/court-extension/capture";
 import type { FilingFacts } from "@/lib/court-robot/facts";
 import type { CaseShape, LearnedStep, ScreenSignature } from "@/lib/court-robot/map";
-import { parseTarget, type PlanAction, type ScreenKind, type ScreenPlan } from "@/lib/court-robot/plan";
+import {
+  type DoneAction,
+  parseTarget,
+  type PlanAction,
+  type ScreenKind,
+  type ScreenPlan,
+} from "@/lib/court-robot/plan";
 
 /**
  * The calls ONE's browser extension makes to ONE (`/api/extensao/v1/...`; the owner's second way to file, 2026-11-20:
@@ -161,18 +169,56 @@ function fieldOf(raw: unknown): MappedField | null {
     optionCount: typeof field.optionCount === "number" ? field.optionCount : null,
     selector: field.selector.slice(0, 300),
     index: Math.max(0, Math.floor(field.index)),
+    // What the field holds now (2026-11-26): the code chosen only in a list whose lines are the system's own (a list
+    // of people keeps no lines, so it keeps no choice), a box ticked, a field filled; never a value.
+    ...(options !== null && (typeof field.chosen === "string" || field.chosen === null)
+      ? { chosen: field.chosen === null ? null : redact(text(field.chosen, 60)).slice(0, 60) }
+      : {}),
+    ...(typeof field.checked === "boolean" ? { checked: field.checked } : {}),
+    ...(typeof field.filled === "boolean" ? { filled: field.filled } : {}),
   };
+}
+
+const LINES_MOST = 60;
+const CELLS_MOST = 8;
+const LINE_ACTIONS_MOST = 4;
+
+/**
+ * The lines of a table the extension read line by line: only where its column names make it a table of the system's
+ * own codes (the same rule as the capture's, read again here), every cell redacted again, each action a button or a
+ * link. Null when there is none to take.
+ */
+function linesOf(raw: unknown, headers: readonly string[]): MappedLine[] | null {
+  if (!Array.isArray(raw) || !isCodeTable(headers)) return null;
+  return raw.slice(0, LINES_MOST).flatMap((item): MappedLine[] => {
+    if (typeof item !== "object" || item === null) return [];
+    const line = item as Record<string, unknown>;
+    const cells = Array.isArray(line.cells)
+      ? line.cells.slice(0, CELLS_MOST).map((cell) => redact(text(cell, 120)))
+      : [];
+    const actions = Array.isArray(line.actions)
+      ? line.actions
+          .slice(0, LINE_ACTIONS_MOST)
+          .flatMap((action) => fieldOf(action) ?? [])
+          .filter((action) => action.kind === "button" || action.kind === "link")
+          .map((action) => ({ ...action, options: null, optionCount: null }))
+      : [];
+    return [{ cells, actions }];
+  });
 }
 
 function tableOf(raw: unknown): MappedTable | null {
   if (typeof raw !== "object" || raw === null) return null;
   const table = raw as Record<string, unknown>;
   if (typeof table.selector !== "string" || typeof table.index !== "number") return null;
+  const headers = Array.isArray(table.headers) ? table.headers.slice(0, 30).map((cell) => redact(text(cell, 120))) : [];
+  const lines = linesOf(table.lines, headers);
   return {
     selector: table.selector.slice(0, 300),
     index: Math.max(0, Math.floor(table.index)),
-    headers: Array.isArray(table.headers) ? table.headers.slice(0, 30).map((cell) => redact(text(cell, 120))) : [],
+    headers,
     rows: typeof table.rows === "number" ? Math.max(0, Math.floor(table.rows)) : 0,
+    ...(lines ? { lines } : {}),
   };
 }
 
@@ -329,9 +375,36 @@ export function readSteps(raw: unknown): LearnedStep[] | null {
     }
     const forma = shapeOf(step.forma);
     if (forma === undefined) return null;
-    steps.push({ assinatura, tipo: step.tipo as ScreenKind, acoes, forma });
+    steps.push({
+      assinatura,
+      tipo: step.tipo as ScreenKind,
+      acoes,
+      forma,
+      // A step that pressed the line a search found is never followed again: the mark is kept as it came.
+      ...(step.linhas === true ? { linhas: true as const } : {}),
+    });
   }
   return steps;
+}
+
+/** What came of an action, as the runner says it: done, not taken by the screen, or why it was not tried. */
+const DONE_RESULTS = ["ok", "not_done", "unknown_target", "unknown_fact", "unknown_file"] as const;
+const DONE_MOST = 40;
+
+/**
+ * What ONE did on the screen it reads again (2026-11-26), as the backend takes it before the AI reads it: each action
+ * checked as a path's action is (a target, a fact's key, a code of the system's list, a file's position, never a
+ * value) with what came of it. What is not so is left out; none when nothing came.
+ */
+export function readDone(raw: unknown): DoneAction[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.slice(-DONE_MOST).flatMap((item): DoneAction[] => {
+    if (typeof item !== "object" || item === null) return [];
+    const done = item as Record<string, unknown>;
+    const acao = actionOf(done.acao);
+    const resultado = (DONE_RESULTS as readonly unknown[]).includes(done.resultado) ? String(done.resultado) : null;
+    return acao && resultado ? [{ acao, resultado }] : [];
+  });
 }
 
 /** A lawsuit's number as the extension read it from the receipt: twenty digits, or null. */

@@ -184,7 +184,7 @@ export async function runBatch(input: BatchRunInput): Promise<BatchRunEnd> {
       const run = await runFiling({
         driver: input.driver,
         planner: async (planInput) => {
-          const answer = await api.plan(filing.id, filing.claim, planInput.tela);
+          const answer = await api.plan(filing.id, filing.claim, planInput.tela, planInput.feito);
           return answer.ok ? answer.value.plan : null;
         },
         system: input.system.name,

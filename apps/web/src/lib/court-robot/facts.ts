@@ -112,7 +112,29 @@ const brazilianDay = (iso: string | null): string => {
   return match ? `${match[3]}/${match[2]}/${match[1]}` : "";
 };
 
-export function filingFactsOf(sent: ToSend): FilingFacts {
+/**
+ * The codes of the CNJ's unified tables the platform keeps (`platform_settings.tpu`, migration 0269): the subject of
+ * each problem and the moral damage every lawsuit adds. A problem with no code is named by its words only.
+ */
+export type TpuCodes = { subjects: Record<string, number>; moral: number | null };
+
+/** The codes as the setting holds them, or none: a code is a whole number, never a guess. */
+export function tpuCodesOf(value: unknown): TpuCodes {
+  const setting = (typeof value === "object" && value !== null ? value : {}) as Record<string, unknown>;
+  const code = (raw: unknown): number | null =>
+    typeof raw === "number" && Number.isInteger(raw) && raw > 0 ? raw : null;
+  const subjects: Record<string, number> = {};
+  const given = setting.subjects;
+  if (typeof given === "object" && given !== null) {
+    for (const [incident, raw] of Object.entries(given as Record<string, unknown>)) {
+      const read = code(raw);
+      if (read !== null) subjects[incident] = read;
+    }
+  }
+  return { subjects, moral: code(setting.moral) };
+}
+
+export function filingFactsOf(sent: ToSend, codes: TpuCodes | null = null): FilingFacts {
   const fatos: FactDescriptor[] = [];
   const values: Record<string, string> = {};
   const said = (chave: string, descricao: string, value: string | null | undefined, personal: boolean): void => {
@@ -135,10 +157,26 @@ export function filingFactsOf(sent: ToSend): FilingFacts {
     sent.incident ? SUBJECT_OF_INCIDENT[sent.incident] : null,
     false,
   );
+  // The code of the subject in the CNJ's table, which the courts' searches of subjects take (2026-11-26: the PJe of
+  // TJRJ searched by words and ONE asked the lawyer for the code the platform already had).
+  const subjectCode = sent.incident ? (codes?.subjects[sent.incident] ?? null) : null;
+  said(
+    "processo.assunto_principal_codigo",
+    "Código do assunto principal na tabela do CNJ",
+    subjectCode === null ? null : String(subjectCode),
+    false,
+  );
+  const moral = codes?.moral ?? null;
   said(
     "processo.assunto_complementar",
-    "Assunto complementar (código 7779 na tabela do CNJ)",
+    moral === null ? "Assunto complementar" : `Assunto complementar (código ${moral} na tabela do CNJ)`,
     "Indenização por Dano Moral",
+    false,
+  );
+  said(
+    "processo.assunto_complementar_codigo",
+    "Código do assunto complementar na tabela do CNJ",
+    moral === null ? null : String(moral),
     false,
   );
   if (typeof sent.value_cents === "number" && sent.value_cents > 0) {

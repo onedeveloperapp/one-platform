@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   LINK_CODE_LETTERS,
   linkCodeOf,
+  readDone,
   readScreen,
   readSteps,
   receiptDigits,
@@ -112,6 +113,103 @@ describe("what ONE takes from the lawyer's extension", () => {
       expect(readSteps([STEP, step])).toBeNull();
     expect(readSteps([])).toBeNull();
     expect(readSteps({})).toBeNull();
+  });
+
+  it("takes what a field holds now as a code of the system's list or a yes or a no, never a value (0306)", () => {
+    const frames = readScreen([
+      {
+        ...FRAME,
+        fields: [
+          { ...FRAME.fields[0], chosen: "436" },
+          {
+            kind: "select",
+            selector: "#selAdvogado",
+            index: 0,
+            label: "Advogado",
+            options: null,
+            optionCount: 2,
+            chosen: "Ana Souza",
+          },
+          {
+            kind: "input",
+            type: "text",
+            selector: "#txtValor",
+            index: 0,
+            label: "Valor",
+            filled: true,
+            value: "10.000,00",
+          },
+          { kind: "input", type: "checkbox", selector: "#chk", index: 0, label: "Não se aplica", checked: "sim" },
+        ],
+      },
+    ]);
+    const [classe, advogado, valor, caixa] = frames?.[0]?.fields ?? [];
+    expect(classe?.chosen).toBe("436");
+    // A list of people keeps no lines, so it keeps no choice either.
+    expect(advogado).not.toHaveProperty("chosen");
+    expect(valor?.filled).toBe(true);
+    expect(caixa).not.toHaveProperty("checked");
+    expect(JSON.stringify(frames)).not.toContain("10.000,00");
+    expect(JSON.stringify(frames)).not.toContain("Ana Souza");
+  });
+
+  it("takes the lines of a table of the system's codes only, read again by its columns", () => {
+    const lines = [
+      {
+        cells: ["4830", "Cancelamento de vôo", "Não"],
+        actions: [{ kind: "link", selector: "#add1", index: 0, label: "Adicionar" }],
+      },
+    ];
+    const frames = readScreen([
+      {
+        ...FRAME,
+        tables: [
+          { selector: "#assuntos", index: 0, headers: ["Cod.", "Assunto", "Complementar?"], rows: 1, lines },
+          // The extension sent the lines of a table of people: the backend takes none of them.
+          {
+            selector: "#tblPartes",
+            index: 0,
+            headers: ["Cód.", "Nome", "CPF"],
+            rows: 1,
+            lines: [{ cells: ["1", "Marina Teste", "529.982.247-25"], actions: [] }],
+          },
+        ],
+      },
+    ]);
+    const [assuntos, partes] = frames?.[0]?.tables ?? [];
+    expect(assuntos?.lines).toEqual([
+      {
+        cells: ["4830", "Cancelamento de vôo", "Não"],
+        actions: [expect.objectContaining({ kind: "link", selector: "#add1", index: 0, label: "Adicionar" })],
+      },
+    ]);
+    expect(partes).not.toHaveProperty("lines");
+    expect(JSON.stringify(frames)).not.toContain("Marina Teste");
+    expect(JSON.stringify(frames)).not.toContain("529.982.247-25");
+  });
+
+  it("takes what ONE did on a screen as a path's actions are taken, with what came of each (0306)", () => {
+    expect(
+      readDone([
+        { acao: { fazer: "escolher", alvo: "0|#materia|0", opcao: "1215", motivo: "matéria" }, resultado: "ok" },
+        { acao: { fazer: "escolher", alvo: "0|#jurisdicao|0", opcao: "77" }, resultado: "not_done" },
+        { acao: { fazer: "preencher", alvo: "0|#txtNome|0", fato: "Marina Teste" }, resultado: "ok" },
+        { acao: { fazer: "clicar", alvo: "0|#btn|0" }, resultado: "talvez" },
+        "nada",
+      ]),
+    ).toEqual([
+      { acao: { fazer: "escolher", alvo: "0|#materia|0", opcao: "1215" }, resultado: "ok" },
+      { acao: { fazer: "escolher", alvo: "0|#jurisdicao|0", opcao: "77" }, resultado: "not_done" },
+    ]);
+    expect(readDone(undefined)).toEqual([]);
+    expect(
+      readDone(Array.from({ length: 50 }, () => ({ acao: { fazer: "esperar", alvo: "" }, resultado: "ok" }))),
+    ).toHaveLength(40);
+  });
+
+  it("keeps the mark of a step that pressed the line a search found", () => {
+    expect(readSteps([{ ...STEP, linhas: true }])?.[0]?.linhas).toBe(true);
+    expect(readSteps([STEP])?.[0]).not.toHaveProperty("linhas");
   });
 
   it("reads the receipt's number and words as the extension sends them", () => {

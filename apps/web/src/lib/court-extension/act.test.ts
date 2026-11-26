@@ -155,4 +155,30 @@ describe("ONE's extension acting on a court's screen", () => {
     await Promise.resolve();
     expect(watched.stillFor()).toBe(0);
   });
+
+  it("brings each element into view before acting on it, as a person scrolls to a field (2026-11-26)", () => {
+    document.body.innerHTML = STEP;
+    const scrolled: string[] = [];
+    // jsdom draws nothing, so it has no scrolling of its own: each element says it was asked.
+    for (const element of Array.from(document.querySelectorAll("input, select, button"))) {
+      (element as HTMLElement).scrollIntoView = () => scrolled.push(element.id);
+    }
+    act(document, { op: "fill", selector: "#txtValor", index: 0, value: "10.000,00" });
+    act(document, { op: "select", selector: "#selClasse", index: 0, code: "436" });
+    act(document, { op: "check", selector: "#chkRenuncia", index: 0, on: true });
+    act(document, { op: "click", selector: "#btnProxima", index: 0 });
+    expect(scrolled).toEqual(["txtValor", "selClasse", "chkRenuncia", "btnProxima"]);
+    // Nothing it may not act on is scrolled to: a password stays where it is.
+    act(document, { op: "fill", selector: "#pwdSenha", index: 0, value: "x" });
+    expect(scrolled).not.toContain("pwdSenha");
+  });
+
+  it("leaves a list as a person's hand does: taken, changed, left, so a page that reloads the next list does", () => {
+    document.body.innerHTML = STEP;
+    const seen: string[] = [];
+    const list = document.getElementById("selClasse") as HTMLSelectElement;
+    for (const type of ["focus", "input", "change", "blur"]) list.addEventListener(type, () => seen.push(type));
+    expect(act(document, { op: "select", selector: "#selClasse", index: 0, code: "436" })).toBe(true);
+    expect(seen).toEqual(["focus", "input", "change", "blur"]);
+  });
 });

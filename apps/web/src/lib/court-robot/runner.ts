@@ -3,6 +3,7 @@ import type { FilingFacts } from "@/lib/court-robot/facts";
 import { type LearnedStep, learnedStep, sameScreen, signatureOf, stepFor } from "@/lib/court-robot/map";
 import {
   checkPlan,
+  type DoneAction,
   fieldsByTarget,
   parseTarget,
   type PlanAction,
@@ -16,7 +17,10 @@ import {
  * code wherever it runs: in the lawyer's own browser (the extension, a driver over the page) or in ONE's own browser
  * (a driver over Playwright). Screen by screen it reads the structure (never a value), follows the step the map of
  * the system has for it or asks the AI that reads screens (`protocolo.tela`), checks the plan, does it, and reads the
- * screen again. The facts' values are typed here, never seen by the AI.
+ * screen again. The facts' values are typed here, never seen by the AI. A screen read again is read with what ONE
+ * already did on it (`feito`), so a form whose lists load one after the other goes forward one list at a time; an
+ * action the screen did not take sends ONE back to read it, and ONE stops on a screen only when readings in a row
+ * bring nothing new (2026-11-26, the PJe of TJRJ).
  *
  * What it never does: type a login, a password or a code (it answers that the court asks one, and the host asks the
  * lawyer); solve a captcha or accept a term (it answers with the question); press, while ONE still learns the system,
@@ -61,7 +65,8 @@ export type PlanInput = {
   partes: FilingFacts["partes"];
   arquivos: FilingFacts["arquivos"];
   tela: MappedScreen[];
-  feito: { acao: PlanAction; resultado: string }[];
+  /** What ONE did on this same screen before this reading, in order, with what came of each action. */
+  feito: DoneAction[];
 };
 
 /** Asks the AI what to do on a screen. Null when it gave no usable answer. */
@@ -113,7 +118,23 @@ export type RunOutcome =
 
 export type RunResult = { outcome: RunOutcome; learned: LearnedStep[]; aiScreens: number };
 
-const SAME_SCREEN_LIMIT = 3;
+/**
+ * How many readings in a row of one screen may bring nothing new (no action done that was not done there before)
+ * before ONE stops there: a screen whose lists load one after the other (the PJe of TJRJ: the matéria, then the
+ * jurisdição, then the class) is read once per list, and only a screen where nothing moves stops ONE.
+ */
+const IDLE_READINGS_MOST = 3;
+/** How many times one screen is read at most, whatever was done on it. */
+const ONE_SCREEN_READINGS_MOST = 12;
+/** How many of the actions done on a screen the AI reads again: the latest. */
+const DONE_SHOWN_MOST = 40;
+
+/** An action as it is told apart from the others done on the same screen. */
+const actionKey = (action: PlanAction): string =>
+  [action.fazer, action.alvo, action.fato ?? "", action.opcao ?? "", action.arquivo ?? ""].join("|");
+
+/** An action after which the page may change (a list that loads another, a press, a file sent): it settles first. */
+const MOVES_PAGE: readonly PlanAction["fazer"][] = ["escolher", "clicar", "marcar", "desmarcar", "anexar"];
 
 async function act(driver: ScreenDriver, action: PlanAction, input: RunInput): Promise<string> {
   driver.pressing?.(action.envia === true);
@@ -158,7 +179,12 @@ export async function runFiling(input: RunInput): Promise<RunResult> {
   // The lawyer said ONE may send this filing (asked once, and only while ONE learns the system).
   let confirmed = !input.learning || input.confirmed === true;
   let previous: ReturnType<typeof signatureOf> | null = null;
-  let repeats = 0;
+  // What ONE did on the screen it is on, read again by the AI each time it reads that screen (2026-11-26: with
+  // nothing of it, ONE chose the PJe's matéria three times over and stopped there).
+  let doneOnScreen: DoneAction[] = [];
+  let doneKeys = new Set<string>();
+  let idleReadings = 0;
+  let readings = 0;
 
   const done = (outcome: RunOutcome): RunResult => ({ outcome, learned, aiScreens });
 
@@ -167,12 +193,22 @@ export async function runFiling(input: RunInput): Promise<RunResult> {
     if (driver.signedOut && (await driver.signedOut())) return done(sent ? { kind: "unknown" } : { kind: "login" });
     const frames = await driver.capture();
     const signature = signatureOf(frames);
-    repeats = previous && sameScreen(previous, signature) ? repeats + 1 : 0;
+    const again = previous !== null && sameScreen(previous, signature);
     previous = signature;
-    if (repeats >= SAME_SCREEN_LIMIT) return done(sent ? { kind: "unknown" } : { kind: "stuck", why: "same_screen" });
+    if (!again) {
+      doneOnScreen = [];
+      doneKeys = new Set();
+      idleReadings = 0;
+      readings = 0;
+    }
+    readings += 1;
+    // The same screen read again and again with nothing new done on it: ONE stops there.
+    if (again && (idleReadings >= IDLE_READINGS_MOST || readings > ONE_SCREEN_READINGS_MOST)) {
+      return done(sent ? { kind: "unknown" } : { kind: "stuck", why: "same_screen" });
+    }
 
-    // The map's step for this screen, else the AI's reading of it.
-    const known = repeats === 0 ? stepFor(input.map, frames, input.facts) : null;
+    // The map's step for this screen, the first time it is read, else the AI's reading of it.
+    const known = !again ? stepFor(input.map, frames, input.facts) : null;
     let plan: ScreenPlan | null;
     if (known) {
       plan = { tela: { tipo: known.tipo, titulo: signature.titulo }, acoes: known.acoes, pronto: true, pergunta: "" };
@@ -187,7 +223,7 @@ export async function runFiling(input: RunInput): Promise<RunResult> {
         partes: input.facts.partes,
         arquivos: input.facts.arquivos,
         tela: frames,
-        feito: [],
+        feito: doneOnScreen.slice(-DONE_SHOWN_MOST),
       });
     }
     if (!plan) return done(sent ? { kind: "unknown" } : { kind: "stuck", why: "no_plan" });
@@ -219,7 +255,11 @@ export async function runFiling(input: RunInput): Promise<RunResult> {
     const doneHere: PlanAction[] = [];
     // The lawyer acted on the screen while ONE waited for their word: this screen is theirs from there.
     let moved = false;
-    for (const action of actions) {
+    // Something was done here that was not done on this screen before: the reading brought the screen forward.
+    let progressed = false;
+    // An action the screen did not take: the screen is read again, and the AI sees what came of it.
+    let refused = false;
+    for (const [position, action] of actions.entries()) {
       if (action.envia) {
         if (!confirmed) {
           const target = parseTarget(action.alvo);
@@ -246,12 +286,29 @@ export async function runFiling(input: RunInput): Promise<RunResult> {
         if (moved) break;
       }
       const result = await act(driver, action, input);
-      if (result !== "ok") return done(sent ? { kind: "unknown" } : { kind: "stuck", why: result });
+      const told = { ...action };
+      delete told.motivo;
+      doneOnScreen.push({ acao: told, resultado: result });
+      if (result !== "ok") {
+        // After a press that may have sent, nothing is tried again: what came of it is unknown.
+        if (sent) return done({ kind: "unknown" });
+        refused = true;
+        break;
+      }
       doneHere.push(action);
+      if (action.fazer !== "esperar" && !doneKeys.has(actionKey(action))) {
+        doneKeys.add(actionKey(action));
+        progressed = true;
+      }
       if (action.envia) break;
+      // A list that loads the next, a press, a file sent: the page settles before the next action acts on it.
+      if (MOVES_PAGE.includes(action.fazer) && position < actions.length - 1) await driver.settle();
     }
+    idleReadings = progressed ? 0 : idleReadings + 1;
     learned.push(learnedStep(frames, kind, doneHere, input.facts));
-    if (!moved && plan.pergunta && !plan.pronto) return done({ kind: "question", question: plan.pergunta });
+    if (!refused && !moved && plan.pergunta && !plan.pronto) {
+      return done({ kind: "question", question: plan.pergunta });
+    }
     await driver.settle();
   }
   return done(sent ? { kind: "unknown" } : { kind: "stuck", why: "too_many_screens" });

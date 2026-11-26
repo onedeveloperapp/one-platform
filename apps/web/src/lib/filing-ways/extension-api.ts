@@ -7,6 +7,7 @@ import {
   type ExtensionBatch,
   type ExtensionSystem,
   linkCodeOf,
+  readDone,
   readScreen,
   readSteps,
   receiptDigits,
@@ -270,7 +271,14 @@ async function plan(
     return refused("not_working");
   const frames = readScreen(body.screen);
   if (!frames) return refused("invalid_screen");
-  const reading = await planScreen(deps, { filing: found.filing, claim, systemKey: found.batch.system_key, frames });
+  const reading = await planScreen(deps, {
+    filing: found.filing,
+    claim,
+    systemKey: found.batch.system_key,
+    frames,
+    // What ONE did on this screen before: an extension before 0.4.0 sends none, and the AI reads the screen as new.
+    done: readDone(body.done),
+  });
   return reading.ok ? answered({ plan: reading.plan }) : refused(reading.code);
 }
 

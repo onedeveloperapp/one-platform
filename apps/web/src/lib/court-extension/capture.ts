@@ -6,6 +6,12 @@
  * certificate never pass through here, and nothing leaves the lawyer's computer: the extension saves a file that the
  * lawyer sends (the owner's choice of 2026-11-18: the robot runs in the lawyer's own browser, on their own session).
  *
+ * ONE's robot reads a little more of the screen it fills (`{ rows: true }`, 2026-11-26, after the PJe of TJRJ where it
+ * chose the same line three times and could not see what its search found): the code chosen in each list of the
+ * system's own, whether each box is ticked and each field filled (a yes or a no, never the words), and the lines of a
+ * table of the system's own codes (`isCodeTable`: its subjects, its classes), never of a table of people, documents or
+ * lawsuits.
+ *
  * Pure over a `Document`, so it is tested in jsdom; the extension runs it in each frame of the court's page.
  */
 
@@ -54,9 +60,32 @@ export type MappedField = {
   /** How to find it again: a CSS selector and, when it matches several, which of them. */
   selector: string;
   index: number;
+  /**
+   * What the screen holds now, for ONE's robot only (`{ rows: true }`), never what was written: the code of the line
+   * chosen in a list of the system's own (null when none, never of a list of people), whether a box is ticked, and
+   * whether a field holds something (a yes or a no, never its words). Without them ONE chose again, reading after
+   * reading, a line the screen already held (the PJe of TJRJ, 2026-11-26).
+   */
+  chosen?: string | null;
+  checked?: boolean;
+  filled?: boolean;
 };
 
-export type MappedTable = { selector: string; index: number; headers: string[]; rows: number };
+/**
+ * A line of a table of the system's own codes (its subjects, its classes), for ONE's robot only: the words of its cells
+ * and the actions it offers ("Adicionar"), each found again by its own selector, so ONE presses the line of the subject
+ * it searched and never the first one by chance. Never a line of a table of people, documents or lawsuits.
+ */
+export type MappedLine = { cells: string[]; actions: MappedField[] };
+
+export type MappedTable = {
+  selector: string;
+  index: number;
+  headers: string[];
+  rows: number;
+  /** Only for a table of the system's own codes (`isCodeTable`), only in the robot's reading. */
+  lines?: MappedLine[];
+};
 
 export type MappedScreen = {
   system: CourtSystemKey | null;
@@ -271,9 +300,86 @@ function isActionLink(element: Element, label: string | null, rows: boolean): bo
   return rows && ROW_ACTION.test(label);
 }
 
+/** A column of codes: "Cód.", "Código", "Cod". */
+const CODE_COLUMN = /^c[oó]d(igo|\.)?(\s|$)/i;
+
+/** A column of a person, a document, a lawsuit or a moment: its table is never read line by line. */
+const NOT_CODES =
+  /(nome|parte|pessoa|cpf|cnpj|\brg\b|advogad|autor|r[eé]u\b|polo|procurador|representante|usu[aá]rio|cliente|juiz|magistrad|servidor|destinat|interessad|e-?mail|telefone|celular|endere[cç]o|processo|documento|arquivo|anexo|data|hora|n[uú]mero)/i;
+
+/**
+ * Whether a table holds the system's own codes (its subjects, its classes), by its column names: one column of codes,
+ * none of a person, a document, a lawsuit or a moment. Only such a table is read line by line, for ONE's robot.
+ */
+export function isCodeTable(headers: readonly string[]): boolean {
+  return headers.some((header) => CODE_COLUMN.test(header.trim())) && !headers.some((header) => NOT_CODES.test(header));
+}
+
+const LINES_MOST = 60;
+const CELLS_MOST = 8;
+const LINE_ACTIONS_MOST = 4;
+
+/** The words an action of a line shows: its own words, else its title or its picture's (an icon "Adicionar"). */
+function lineActionLabel(element: Element): string | null {
+  const pick = (text: string | null | undefined) => {
+    const clean = redact(text);
+    return clean && clean.length <= 60 ? clean : null;
+  };
+  const image = element.querySelector("img");
+  return (
+    pick(element.getAttribute("aria-label")) ??
+    pick(element instanceof HTMLInputElement ? element.value : ownText(element)) ??
+    pick(element.getAttribute("title")) ??
+    pick(image?.getAttribute("alt")) ??
+    pick(image?.getAttribute("title"))
+  );
+}
+
+/** The lines of a table of the system's codes: each cell's words and the actions each line offers. */
+function linesOf(table: HTMLTableElement): MappedLine[] {
+  const lines: MappedLine[] = [];
+  for (const row of Array.from(table.querySelectorAll("tr"))) {
+    if (lines.length >= LINES_MOST) break;
+    // A line of this table, never of a table inside it.
+    if (row.closest("table") !== table) continue;
+    const cells = Array.from(row.children).filter((cell) => cell.tagName === "TD");
+    if (cells.length === 0) continue;
+    const actions: MappedField[] = [];
+    for (const element of Array.from(
+      row.querySelectorAll(
+        "a[href], a[onclick], button, input[type=button], input[type=submit], input[type=image], [role=button]",
+      ),
+    )) {
+      if (actions.length >= LINE_ACTIONS_MOST) break;
+      const label = lineActionLabel(element);
+      if (!label || /\.(pdf|p7s|docx?|html?|jpe?g|png)\b/i.test(label) || /\[número\]|\[e-mail\]/.test(label)) continue;
+      const { selector, index } = locate(element);
+      actions.push({
+        kind: element instanceof HTMLAnchorElement ? "link" : "button",
+        type: element instanceof HTMLInputElement ? element.type : null,
+        id: null,
+        name: null,
+        label,
+        required: false,
+        disabled: (element as HTMLButtonElement).disabled === true,
+        readOnly: false,
+        visible: isVisible(element),
+        options: null,
+        optionCount: null,
+        selector,
+        index,
+      });
+    }
+    // Every cell in its place, an empty one too: the cells line up with the column names.
+    lines.push({ cells: cells.slice(0, CELLS_MOST).map((cell) => redact(ownText(cell))), actions });
+  }
+  return lines;
+}
+
 /**
  * A field as the map keeps it, or null for what is not mapped (a hidden field, a link that is not a step). `rows`: the
- * capture of ONE's robot, which also keeps the actions of a table's rows.
+ * capture of ONE's robot, which also keeps the actions of a table's rows and what each field holds now (the code
+ * chosen in a list of the system's own, a box ticked, a field filled or not), never what a person wrote.
  */
 export function mapField(element: Element, rows = false): MappedField | null {
   const kind = kindOf(element);
@@ -310,7 +416,28 @@ export function mapField(element: Element, rows = false): MappedField | null {
     optionCount,
     selector,
     index,
+    ...(rows ? holding(element, options !== null) : {}),
   };
+}
+
+/**
+ * What a field holds now, as ONE's robot reads it: the code chosen in a list of the system's own (as its options are
+ * kept), a box ticked or not, a field filled or not. Never a value a person wrote, nor the line chosen among people.
+ */
+function holding(element: Element, systemList: boolean): Pick<MappedField, "chosen" | "checked" | "filled"> {
+  if (element instanceof HTMLSelectElement) {
+    if (!systemList) return {};
+    const line = element.selectedIndex >= 0 ? element.options[element.selectedIndex] : null;
+    return { chosen: line ? redact(line.value).slice(0, 60) : null };
+  }
+  if (element instanceof HTMLInputElement) {
+    if (element.type === "checkbox" || element.type === "radio") return { checked: element.checked };
+    if (element.type === "file") return { filled: (element.files?.length ?? 0) > 0 };
+    if (["hidden", "password", "submit", "button", "image", "reset"].includes(element.type)) return {};
+    return { filled: element.value.trim() !== "" };
+  }
+  if (element instanceof HTMLTextAreaElement) return { filled: element.value.trim() !== "" };
+  return {};
 }
 
 /**
@@ -349,7 +476,8 @@ export function captureScreen(
     if (text && isVisible(element) && !headings.includes(text)) headings.push(text);
   }
 
-  // A table keeps its column names and how many rows it had: never what is in them.
+  // A table keeps its column names and how many rows it had: never what is in them, but, for ONE's robot, the lines of
+  // a table of the system's own codes (the subjects a search found), each with the actions it offers.
   const tables: MappedTable[] = [];
   for (const table of Array.from(document.querySelectorAll("table"))) {
     if (tables.length >= TABLE_LIMIT) break;
@@ -359,7 +487,14 @@ export function captureScreen(
       .slice(0, 30);
     if (headers.length === 0) continue;
     const { selector, index } = locate(table);
-    tables.push({ selector, index, headers, rows: table.querySelectorAll("tbody tr").length });
+    const lines = options.rows === true && isCodeTable(headers) ? linesOf(table) : null;
+    tables.push({
+      selector,
+      index,
+      headers,
+      rows: table.querySelectorAll("tbody tr").length,
+      ...(lines ? { lines } : {}),
+    });
   }
 
   return {

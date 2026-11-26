@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import type { MappedField, MappedScreen } from "@/lib/court-extension/capture";
 import { filingFactsOf, type ToSend } from "@/lib/court-robot/facts";
-import type { LearnedStep } from "@/lib/court-robot/map";
-import { type ScreenPlan, type Target, targetKey } from "@/lib/court-robot/plan";
+import { type LearnedStep, learnedStep, stepFor } from "@/lib/court-robot/map";
+import { checkPlan, type ScreenPlan, type Target, targetKey } from "@/lib/court-robot/plan";
 import { type PlanInput, runFiling, type ScreenDriver, type SendPoint } from "@/lib/court-robot/runner";
 
 // ---------- A stand-in court: four screens of an eproc, kept in memory ----------
@@ -569,5 +569,282 @@ describe("ONE filing on a court's screen", () => {
     expect(result.outcome.kind).toBe("filed");
     // "Finalizar" may send (ONE's own rule: in another system it does) and so does the summary's confirmation.
     expect(presses).toEqual([false, false, false, false, false, false, true, true]);
+  });
+});
+
+// ---------- A stand-in PJe: lists that load one after the other (the owner's test of 2026-11-26) ----------
+
+const MATERIAS = [
+  { value: "", text: "Selecione" },
+  { value: "1215", text: "Direito do Consumidor" },
+];
+const JURISDICOES = [
+  { value: "", text: "Selecione" },
+  { value: "77", text: "Comarca da Capital" },
+];
+const CLASSES = [
+  { value: "", text: "Selecione" },
+  { value: "436", text: "PROCEDIMENTO DO JUIZADO ESPECIAL CÍVEL" },
+];
+
+/** The "Dados iniciais" of a PJe: the jurisdição loads after the matéria, the class after the jurisdição. */
+class StandInPje implements ScreenDriver {
+  chosen = new Map<string, string>();
+  filed = false;
+  /** How many times the screen undoes the matéria chosen, as a page that reloads its form would. */
+  undoes = 0;
+  /** How many times the jurisdição is not there yet when ONE chooses it. */
+  late = 0;
+  settles = 0;
+
+  async capture(): Promise<MappedScreen[]> {
+    const list = (id: string, label: string, options: { value: string; text: string }[]) =>
+      field("select", id, label, {
+        options,
+        optionCount: options.length,
+        chosen: this.chosen.get(`#${id}`) ?? "",
+      });
+    const materia = this.chosen.get("#materia");
+    const jurisdicao = this.chosen.get("#jurisdicao");
+    return [
+      {
+        system: "pje-tjrj",
+        host: "tjrj.pje.jus.br",
+        path: "/1g/Processo/CadastroProcesso/listView.seam",
+        params: {},
+        title: "Cadastro de processo",
+        headings: [this.filed ? "Processo distribuído" : "Cadastro de processo"],
+        fields: this.filed
+          ? []
+          : [
+              list("materia", "Matéria", MATERIAS),
+              list("jurisdicao", "Jurisdição", materia ? JURISDICOES : MATERIAS.slice(0, 1)),
+              list("classe", "Classe judicial", jurisdicao ? CLASSES : CLASSES.slice(0, 1)),
+              field("button", "incluir", "INCLUIR"),
+            ],
+        tables: [],
+        capturedAt: "2026-11-26T12:28:00.000Z",
+      },
+    ];
+  }
+  async text(): Promise<string> {
+    return this.filed ? "Processo 0800123-07.2099.8.19.0001 distribuído" : "";
+  }
+  async fill(): Promise<boolean> {
+    return true;
+  }
+  async select(target: Target, choice: { code: string } | { text: string }): Promise<boolean> {
+    if (!("code" in choice)) return false;
+    if (target.selector === "#jurisdicao" && (!this.chosen.get("#materia") || this.late > 0)) {
+      this.late = Math.max(0, this.late - 1);
+      return false;
+    }
+    this.chosen.set(target.selector, choice.code);
+    if (target.selector === "#materia" && this.undoes > 0) {
+      this.undoes -= 1;
+      this.chosen.delete("#materia");
+    }
+    return true;
+  }
+  async check(): Promise<boolean> {
+    return true;
+  }
+  async click(target: Target): Promise<boolean> {
+    if (target.selector === "#incluir" && this.chosen.get("#classe") === "436") this.filed = true;
+    return true;
+  }
+  async upload(): Promise<boolean> {
+    return true;
+  }
+  async settle(): Promise<void> {
+    this.settles += 1;
+  }
+}
+
+const P = (id: string) => targetKey(0, { selector: `#${id}`, index: 0 });
+
+/** The AI as the second instructions ask: what the screen holds and what ONE did decide the next list. */
+function pjePlanner(seen: PlanInput[]) {
+  return async (input: PlanInput): Promise<ScreenPlan | null> => {
+    seen.push(input);
+    const frame = input.tela[0];
+    if (!frame || frame.fields.length === 0) {
+      return { tela: { tipo: "recibo", titulo: "Processo distribuído" }, acoes: [], pronto: true, pergunta: "" };
+    }
+    const holds = (id: string) => frame.fields.find((item) => item.id === id)?.chosen ?? "";
+    const offers = (id: string, code: string) =>
+      frame.fields.find((item) => item.id === id)?.options?.some((option) => option.value === code) === true;
+    const titulo = "Cadastro de processo";
+    const choose = (id: string, opcao: string): ScreenPlan => ({
+      tela: { tipo: "formulario", titulo },
+      acoes: [
+        { fazer: "escolher", alvo: P(id), opcao },
+        { fazer: "esperar", alvo: P(id) },
+      ],
+      pronto: false,
+      pergunta: "",
+    });
+    if (holds("materia") !== "1215") return choose("materia", "1215");
+    if (holds("jurisdicao") !== "77")
+      return offers("jurisdicao", "77") ? choose("jurisdicao", "77") : choose("materia", "1215");
+    if (holds("classe") !== "436") return choose("classe", "436");
+    return {
+      tela: { tipo: "formulario", titulo },
+      acoes: [{ fazer: "clicar", alvo: P("incluir") }],
+      pronto: true,
+      pergunta: "",
+    };
+  };
+}
+
+const pjeRun = (court: StandInPje, planner: (input: PlanInput) => Promise<ScreenPlan | null>) =>
+  runFiling({
+    driver: court,
+    planner,
+    system: "PJe do TJRJ",
+    facts: FACTS,
+    file: async () => PDF,
+    learning: false,
+    confirm: async () => "go",
+    map: null,
+    beforeSend: async () => ({ ok: true, code: "sending" }),
+  });
+
+describe("a screen whose lists load one after the other (the PJe of TJRJ, 2026-11-26)", () => {
+  it("goes forward one list a reading, each reading told what ONE already did on the screen", async () => {
+    const court = new StandInPje();
+    const seen: PlanInput[] = [];
+    const result = await pjeRun(court, pjePlanner(seen));
+    expect(result.outcome).toEqual({ kind: "filed", number: "08001230720998190001" });
+    // Four readings of one screen, past the three the robot stopped at before, and the receipt.
+    expect(seen).toHaveLength(5);
+    expect(seen[0]?.feito).toEqual([]);
+    expect(seen[1]?.feito).toEqual([
+      { acao: { fazer: "escolher", alvo: P("materia"), opcao: "1215" }, resultado: "ok" },
+      { acao: { fazer: "esperar", alvo: P("materia") }, resultado: "ok" },
+    ]);
+    expect(seen[3]?.feito.map((done) => done.acao.alvo)).toEqual([
+      P("materia"),
+      P("materia"),
+      P("jurisdicao"),
+      P("jurisdicao"),
+      P("classe"),
+      P("classe"),
+    ]);
+    // A new screen starts with nothing done on it.
+    expect(seen[4]?.feito).toEqual([]);
+  });
+
+  it("an action the screen does not take is read again, and the AI sees what came of it", async () => {
+    const court = new StandInPje();
+    // The jurisdição is listed, but the page is still loading it the first time ONE chooses it.
+    court.late = 1;
+    const seen: PlanInput[] = [];
+    const result = await pjeRun(court, pjePlanner(seen));
+    // Before, an action the screen did not take stopped the filing there.
+    expect(result.outcome.kind).toBe("filed");
+    expect(seen[2]?.feito).toEqual([
+      { acao: { fazer: "escolher", alvo: P("materia"), opcao: "1215" }, resultado: "ok" },
+      { acao: { fazer: "esperar", alvo: P("materia") }, resultado: "ok" },
+      { acao: { fazer: "escolher", alvo: P("jurisdicao"), opcao: "77" }, resultado: "not_done" },
+    ]);
+    expect(court.chosen.get("#jurisdicao")).toBe("77");
+  });
+
+  it("lets the page settle after a list that may load the next, before the next action acts on it", async () => {
+    const court = new StandInPje();
+    const order: string[] = [];
+    const settle = court.settle.bind(court);
+    court.settle = async () => {
+      order.push("settle");
+      await settle();
+    };
+    const select = court.select.bind(court);
+    court.select = async (target, choice) => {
+      order.push(`select ${target.selector}`);
+      return select(target, choice);
+    };
+    const click = court.click.bind(court);
+    court.click = async (target) => {
+      order.push(`click ${target.selector}`);
+      return click(target);
+    };
+    await pjeRun(court, async (input) => {
+      if (input.tela[0]?.fields.find((item) => item.id === "materia")?.chosen === "1215") return null;
+      return {
+        tela: { tipo: "formulario", titulo: "Cadastro de processo" },
+        acoes: [
+          { fazer: "escolher", alvo: P("materia"), opcao: "1215" },
+          { fazer: "clicar", alvo: P("incluir") },
+        ],
+        pronto: false,
+        pergunta: "",
+      };
+    });
+    expect(order.slice(0, 3)).toEqual(["select #materia", "settle", "click #incluir"]);
+  });
+
+  it("a screen where readings in a row bring nothing new stops ONE there, and nothing else is tried", async () => {
+    const court = new StandInPje();
+    // The screen undoes the matéria each time: ONE chooses it, it is gone, and again.
+    court.undoes = 99;
+    let readings = 0;
+    const result = await pjeRun(court, async () => {
+      readings += 1;
+      return {
+        tela: { tipo: "formulario", titulo: "Cadastro de processo" },
+        acoes: [{ fazer: "escolher", alvo: P("materia"), opcao: "1215" }],
+        pronto: false,
+        pergunta: "",
+      };
+    });
+    expect(result.outcome).toEqual({ kind: "stuck", why: "same_screen" });
+    // The first reading did something new; the three after it did nothing that had not been done.
+    expect(readings).toBe(4);
+  });
+});
+
+describe("the path ONE keeps of a screen whose line depends on a search", () => {
+  it("never follows again a step that pressed the line a search found", async () => {
+    const frames: MappedScreen[] = [
+      {
+        system: "pje-tjrj",
+        host: "tjrj.pje.jus.br",
+        path: "/1g/Processo/CadastroProcesso/listView.seam",
+        params: {},
+        title: "Cadastro de processo",
+        headings: ["Assuntos"],
+        fields: [field("button", "pesquisar", "PESQUISAR")],
+        tables: [
+          {
+            selector: "#resultado",
+            index: 0,
+            headers: ["Cod.", "Assunto"],
+            rows: 1,
+            lines: [{ cells: ["4830", "Cancelamento de vôo"], actions: [field("link", "add1", "Adicionar")] }],
+          },
+        ],
+        capturedAt: "2026-11-26T12:33:00.000Z",
+      },
+    ];
+    const pressed = learnedStep(frames, "formulario", [{ fazer: "clicar", alvo: P("add1") }], FACTS);
+    expect(pressed.linhas).toBe(true);
+    expect(stepFor([pressed], frames, FACTS)).toBeNull();
+    const searched = learnedStep(frames, "formulario", [{ fazer: "clicar", alvo: P("pesquisar") }], FACTS);
+    expect(searched).not.toHaveProperty("linhas");
+    expect(stepFor([searched], frames, FACTS)).toEqual(searched);
+    // The line's action is a target the plan may name.
+    expect(
+      checkPlan(
+        {
+          tela: { tipo: "formulario", titulo: "" },
+          acoes: [{ fazer: "clicar", alvo: P("add1") }],
+          pronto: false,
+          pergunta: "",
+        },
+        frames,
+        FACTS,
+      ).problems,
+    ).toEqual([]);
   });
 });

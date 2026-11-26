@@ -1,6 +1,6 @@
 import type { MappedScreen } from "@/lib/court-extension/capture";
 import type { LearnedStep } from "@/lib/court-robot/map";
-import type { ScreenPlan } from "@/lib/court-robot/plan";
+import type { DoneAction, ScreenPlan } from "@/lib/court-robot/plan";
 import {
   EXTENSION_API,
   type ExtensionFiling,
@@ -25,7 +25,13 @@ export type OneApi = {
   next(batchId: string, claim: number): Promise<OneAnswer<{ filing: ExtensionFiling | null }>>;
   keep(batchId: string, claim: number): Promise<OneAnswer<{ held: boolean }>>;
   finish(batchId: string, claim: number, error: string | null): Promise<OneAnswer<{ code: string }>>;
-  plan(filingId: string, claim: number, screen: MappedScreen[]): Promise<OneAnswer<{ plan: ScreenPlan | null }>>;
+  /** The AI's reading of a screen, with what ONE did on that same screen before (`done`, read again by the AI). */
+  plan(
+    filingId: string,
+    claim: number,
+    screen: MappedScreen[],
+    done?: DoneAction[],
+  ): Promise<OneAnswer<{ plan: ScreenPlan | null }>>;
   hold(filingId: string, claim: number): Promise<OneAnswer<{ code: string }>>;
   confirm(filingId: string): Promise<OneAnswer<{ code: string }>>;
   state(filingId: string): Promise<OneAnswer<ExtensionFilingState>>;
@@ -87,7 +93,8 @@ export function oneApi(base: string, token: () => string | null, fetcher: Fetch)
     next: (batchId, claim) => call("POST", `lotes/${batchId}/proximo`, { claim }),
     keep: (batchId, claim) => call("POST", `lotes/${batchId}/manter`, { claim }),
     finish: (batchId, claim, error) => call("POST", `lotes/${batchId}/fim`, { claim, error }),
-    plan: (filingId, claim, screen) => call("POST", `envios/${filingId}/tela`, { claim, screen }),
+    plan: (filingId, claim, screen, done) =>
+      call("POST", `envios/${filingId}/tela`, { claim, screen, done: done ?? [] }),
     hold: (filingId, claim) => call("POST", `envios/${filingId}/segurar`, { claim }),
     confirm: (filingId) => call("POST", `envios/${filingId}/confirmar`, {}),
     state: (filingId) => call("POST", `envios/${filingId}/estado`, {}),

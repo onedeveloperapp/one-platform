@@ -18,6 +18,18 @@ The lawyer chose, in ONE, to file at a system through the extension, and approve
 
 ONE's side is `/api/extensao/v1/...` (`apps/web/src/app/api/extensao/v1/[...rota]/route.ts`, `lib/filing-ways/extension-api.ts`): every call but linking carries the token, and each batch and filing is found as that lawyer's, of that firm, filed by their extension, before any function of the database (0263, 0264, 0267) is called. What the extension sends is checked before it reaches the AI or the platform's map (`lib/filing-ways/extension-protocol.ts`), and the AI reads at most sixty screens of one filing.
 
+## Version 0.4: what the screen holds, and what ONE did on it
+
+The owner's first filing through the extension in the PJe of TJRJ (2026-11-26, test case 19) stopped twice: on "Dados iniciais" ONE chose the matéria three readings in a row, and on "Assuntos" it searched and could not see what the search found. Neither was a matter of scrolling: the extension reads the whole page, below the fold too. ONE read each screen with no word of what it held nor of what ONE had just done there, and a table only by its column names. Since 0.4 (migration 0306, the second instructions of `protocolo.tela`):
+
+- **What a field holds now** (`chosen`, `checked`, `filled` in the robot's capture, `{ rows: true }`): the code chosen in a list of the system's own, whether a box is ticked, whether a field holds something. A yes or a no, never the words; never the line chosen among people. The lawyer's map of version 0.1 keeps none of it.
+- **The lines of a table of the system's own codes** (`lines`, `isCodeTable`: a column of codes and none of a person, a document, a lawsuit or a moment): each line's cells and the actions it offers with their own selectors, so ONE presses "Adicionar" on the line of the subject it searched, never the first by chance. ONE's backend reads the columns again and takes no line of any other table. A path step that pressed such a line is never followed again (`linhas`).
+- **What ONE did on the screen it reads again** (`feito`, sent as `done` with each reading): each action with what came of it, so a form whose lists load one after the other (the PJe: the jurisdição after the matéria, the class after the jurisdição) goes forward one list a reading. An action the screen did not take sends ONE back to read it, and ONE stops on a screen only after three readings in a row that bring nothing new (at most twelve readings of one screen).
+- **The page settles** after a choice, a press, a box or a file, before the next action of the same reading acts on it; and each element is brought into view before ONE acts on it, so the lawyer sees on the court's screen where ONE works.
+- **The subjects by their code** in the CNJ's table (`processo.assunto_principal_codigo`, `processo.assunto_complementar_codigo`, from `platform_settings.tpu`): the courts' searches of subjects take the code.
+
+An extension before 0.4 still files with ONE's backend after this change, reading each screen as new.
+
 ## The diagnosis of version 0.1: mapping the screens
 
 Under "Mapear as telas do tribunal", the panel keeps version 0.1's mapping, a diagnosis for when a screen surprises ONE, never a step of the filing. The extension talks to no server for it: the map is a file the lawyer downloads.

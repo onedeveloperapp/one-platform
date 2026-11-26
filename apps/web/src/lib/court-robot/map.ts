@@ -1,6 +1,6 @@
 import type { MappedScreen } from "@/lib/court-extension/capture";
 import type { FilingFacts } from "@/lib/court-robot/facts";
-import type { PlanAction, ScreenKind } from "@/lib/court-robot/plan";
+import { isLineTarget, type PlanAction, type ScreenKind } from "@/lib/court-robot/plan";
 
 /**
  * The path ONE learned at a court's system (migration 0264, `court_screen_maps`): each screen by what tells it apart
@@ -19,6 +19,11 @@ export type LearnedStep = {
   tipo: ScreenKind;
   acoes: PlanAction[];
   forma: CaseShape | null;
+  /**
+   * The step pressed the action of a line of a table (the subject a search found): which line depends on what the
+   * search found for that case, so the step is never followed again, and ONE reads that screen each time.
+   */
+  linhas?: true;
 };
 
 const FIELDS_KEPT = 40;
@@ -85,6 +90,7 @@ export function learnedStep(
     tipo,
     acoes: kept,
     forma: dependsOnShape(kept) ? shapeOf(facts) : null,
+    ...(kept.some((action) => isLineTarget(frames, action.alvo)) ? { linhas: true as const } : {}),
   };
 }
 
@@ -101,7 +107,7 @@ export function stepFor(
   const here = signatureOf(frames);
   const shape = shapeOf(facts);
   const step = map.find((candidate) => sameScreen(candidate.assinatura, here)) ?? null;
-  if (!step) return null;
+  if (!step || step.linhas) return null;
   if (
     step.forma &&
     (step.forma.autores !== shape.autores || step.forma.reus !== shape.reus || step.forma.arquivos !== shape.arquivos)
@@ -128,6 +134,7 @@ export function readMap(steps: unknown): LearnedStep[] | null {
       tipo: step.tipo,
       acoes: step.acoes,
       forma: step.forma ?? null,
+      ...(step.linhas === true ? { linhas: true as const } : {}),
     });
   }
   return read;

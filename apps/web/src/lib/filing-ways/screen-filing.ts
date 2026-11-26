@@ -1,8 +1,8 @@
 import "server-only";
 
 import type { MappedScreen } from "@/lib/court-extension/capture";
-import { filingFactsOf, type ToSend } from "@/lib/court-robot/facts";
-import type { ScreenPlan } from "@/lib/court-robot/plan";
+import { filingFactsOf, type ToSend, type TpuCodes, tpuCodesOf } from "@/lib/court-robot/facts";
+import type { DoneAction, ScreenPlan } from "@/lib/court-robot/plan";
 import { aiScreenPlanner } from "@/lib/court-robot/planner";
 import type { ScreenPlanner } from "@/lib/court-robot/runner";
 import { FIRM_FILES_BUCKET } from "@/lib/files/bucket";
@@ -98,6 +98,17 @@ export async function toSendOf(
 }
 
 /**
+ * The codes of the CNJ's tables the platform keeps (`platform_settings.tpu`): the subject of each problem and the moral
+ * damage, which the robot types in a court's search of subjects. None when the setting could not be read: the subjects
+ * still go by their words.
+ */
+export async function tpuCodes(service: SupabaseClient): Promise<TpuCodes | null> {
+  const { data, error } = await service.from("platform_settings").select("value").eq("key", "tpu").maybeSingle();
+  if (error || !data) return null;
+  return tpuCodesOf((data as { value: unknown }).value);
+}
+
+/**
  * The next lawsuit of a batch its runner files: its facts, by key with their values (the runner types them, the AI
  * never sees them), and a short link to each file of its package. Null when the batch has nothing left to file.
  */
@@ -110,9 +121,12 @@ export async function nextFiling(
   if (error) return { ok: false, code: "unavailable" };
   const held = data as { submission_id?: string; claim?: number; learning?: boolean; confirmed?: boolean } | null;
   if (!held?.submission_id || typeof held.claim !== "number") return { ok: true, filing: null };
-  const sent = await toSendOf(service, held.submission_id, Number(held.claim));
+  const [sent, codes] = await Promise.all([
+    toSendOf(service, held.submission_id, Number(held.claim)),
+    tpuCodes(service),
+  ]);
   if (!sent) return { ok: false, code: "not_working" };
-  const facts = filingFactsOf(sent);
+  const facts = filingFactsOf(sent, codes);
   const bucket = service.storage.from(FIRM_FILES_BUCKET);
   const files: ExtensionFile[] = [];
   for (const item of sent.items) {
@@ -173,7 +187,14 @@ export async function filingRowOf(service: SupabaseClient, submissionId: string)
  */
 export async function planScreen(
   deps: ScreenFilingDeps,
-  input: { filing: FilingRow; claim: number; systemKey: string; frames: MappedScreen[] },
+  input: {
+    filing: FilingRow;
+    claim: number;
+    systemKey: string;
+    frames: MappedScreen[];
+    /** What the runner did on this same screen before this reading (`readDone` of what the extension sent). */
+    done?: DoneAction[];
+  },
 ): Promise<{ ok: true; plan: ScreenPlan | null } | { ok: false; code: string }> {
   const { service } = deps;
   const { filing } = input;
@@ -186,12 +207,13 @@ export async function planScreen(
     .eq("subject_id", filing.id);
   if (runs.error) return { ok: false, code: "unavailable" };
   if ((runs.count ?? 0) >= AI_SCREENS_MOST) return { ok: false, code: "too_many_screens" };
-  const [sent, system] = await Promise.all([
+  const [sent, system, codes] = await Promise.all([
     toSendOf(service, filing.id, input.claim),
     systemOf(service, input.systemKey),
+    tpuCodes(service),
   ]);
   if (!sent || !system) return { ok: false, code: "not_working" };
-  const facts = filingFactsOf(sent);
+  const facts = filingFactsOf(sent, codes);
   const planner = (deps.planner ?? aiScreenPlanner)(filing.org_id, filing.id);
   const plan = await planner({
     sistema: system.name,
@@ -201,7 +223,7 @@ export async function planScreen(
     partes: facts.partes,
     arquivos: facts.arquivos,
     tela: input.frames,
-    feito: [],
+    feito: input.done ?? [],
   });
   return { ok: true, plan };
 }

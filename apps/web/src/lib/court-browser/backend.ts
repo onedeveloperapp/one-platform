@@ -14,7 +14,7 @@ import type { OneAnswer, OneApi } from "@/lib/court-extension/one-api";
 import { readMap } from "@/lib/court-robot/map";
 import { supabaseFileStore } from "@/lib/files/store";
 import { tellBatchStop, tellBatchStopped } from "@/lib/filing-ways/batch-notices-work";
-import { readScreen, readSteps, receiptDigits, receiptText } from "@/lib/filing-ways/extension-protocol";
+import { readDone, readScreen, readSteps, receiptDigits, receiptText } from "@/lib/filing-ways/extension-protocol";
 import {
   filingRowOf,
   nextFiling,
@@ -328,12 +328,18 @@ export function serverBackend(
           return answer;
         },
 
-        async plan(filingId, claim, screen) {
+        async plan(filingId, claim, screen, done) {
           const frames = readScreen(screen);
           if (!frames) return refused("invalid_screen");
           const filing = await mine(filingId);
           if (!filing) return refused("not_found");
-          const reading = await planScreen(deps, { filing, claim, systemKey: batch.system.key, frames });
+          const reading = await planScreen(deps, {
+            filing,
+            claim,
+            systemKey: batch.system.key,
+            frames,
+            done: readDone(done),
+          });
           return reading.ok ? answered({ plan: reading.plan }) : refused(reading.code);
         },
 

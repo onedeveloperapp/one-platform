@@ -57,10 +57,19 @@ export function lineByWords(options: readonly HTMLOptionElement[], text: string)
   return holding.length === 1 ? (holding[0] ?? null) : null;
 }
 
+/**
+ * Brings the element into view before acting on it, as a person scrolls to a field before using it: the lawyer
+ * watching the court's screen sees where ONE works, and a page that does something only for what is on screen does it.
+ */
+function bringIntoView(element: Element): void {
+  element.scrollIntoView?.({ block: "center", inline: "nearest" });
+}
+
 function fill(element: Element, value: string): boolean {
   if (!(element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement)) return false;
   if (element.disabled || element.readOnly) return false;
   if (element instanceof HTMLInputElement && NOT_TYPED.includes(element.type)) return false;
+  bringIntoView(element);
   element.focus();
   // Through the element's own setter, as typing sets it: a page that watches the property sees the change.
   const prototype = element instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
@@ -88,15 +97,21 @@ function choose(element: Element, choice: { code?: string; text?: string }): boo
     line = lineByWords(options, choice.text);
   }
   if (!line || line.disabled) return false;
+  bringIntoView(element);
+  // As a person's hand leaves it: the list taken, changed and left, so a page that reacts to any of these reacts (the
+  // PJe reloads the next list when the change comes).
+  element.focus();
   element.value = line.value;
   element.dispatchEvent(new Event("input", { bubbles: true }));
   element.dispatchEvent(new Event("change", { bubbles: true }));
+  element.blur();
   return element.value === line.value;
 }
 
 function tick(element: Element, on: boolean): boolean {
   if (!(element instanceof HTMLInputElement) || element.disabled) return false;
   if (element.type !== "checkbox" && element.type !== "radio") return false;
+  bringIntoView(element);
   // A click, as a person's: the page's own handlers run, and a radio cannot be left unticked.
   if (element.checked !== on) element.click();
   return element.checked === on;
@@ -105,7 +120,7 @@ function tick(element: Element, on: boolean): boolean {
 function press(element: Element): boolean {
   if (!(element instanceof HTMLElement)) return false;
   if ((element as HTMLButtonElement).disabled || element.getAttribute("aria-disabled") === "true") return false;
-  element.scrollIntoView?.({ block: "center" });
+  bringIntoView(element);
   element.click();
   return true;
 }
@@ -132,6 +147,7 @@ function attach(element: Element, file: File, listOf: FileListOf): boolean {
   if (!(element instanceof HTMLInputElement) || element.type !== "file" || element.disabled) return false;
   const list = listOf(file);
   if (!list) return false;
+  bringIntoView(element);
   element.files = list;
   element.dispatchEvent(new Event("input", { bubbles: true }));
   element.dispatchEvent(new Event("change", { bubbles: true }));

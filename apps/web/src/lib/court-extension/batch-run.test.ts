@@ -364,6 +364,10 @@ describe("a batch filed by the lawyer's extension", () => {
     expect(told).toEqual(["filing", "waiting_word", "filed"]);
     const finish = one.calls.find((call) => call.name === "finish");
     expect(finish?.args[2]).toBeNull();
+    // Each reading of a screen goes with what ONE did on it before (0306): nothing on a screen read for the first time.
+    const plans = one.calls.filter((call) => call.name === "plan");
+    expect(plans.length).toBeGreaterThan(0);
+    expect(plans.every((call) => Array.isArray(call.args[3]) && (call.args[3] as unknown[]).length === 0)).toBe(true);
   });
 
   it("when the lawyer says stop, nothing that may send is pressed and the batch stops with the path kept", async () => {

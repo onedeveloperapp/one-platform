@@ -45,14 +45,37 @@ export function parseTarget(key: string): Target | null {
   return { frame, selector, index };
 }
 
-/** The fields of every frame by the target each is shown with. */
+/**
+ * The fields of every frame by the target each is shown with, the actions of the lines of a table of the system's own
+ * codes included ("Adicionar" on the line of the subject ONE searched).
+ */
 export function fieldsByTarget(frames: readonly MappedScreen[]): Map<string, MappedField> {
   const found = new Map<string, MappedField>();
   frames.forEach((frame, index) => {
     for (const field of frame.fields) found.set(targetKey(index, field), field);
+    for (const table of frame.tables) {
+      for (const line of table.lines ?? []) {
+        for (const action of line.actions) {
+          const key = targetKey(index, action);
+          if (!found.has(key)) found.set(key, action);
+        }
+      }
+    }
   });
   return found;
 }
+
+/** Whether a target is an action of a line of a table: what it presses depends on what the search found. */
+export function isLineTarget(frames: readonly MappedScreen[], alvo: string): boolean {
+  return frames.some((frame, index) =>
+    frame.tables.some((table) =>
+      (table.lines ?? []).some((line) => line.actions.some((action) => targetKey(index, action) === alvo)),
+    ),
+  );
+}
+
+/** What ONE did on a screen, in order, with what came of each action: what the AI reads again of that screen. */
+export type DoneAction = { acao: PlanAction; resultado: string };
 
 const KINDS: readonly ScreenKind[] = [
   "login",

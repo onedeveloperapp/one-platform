@@ -7,6 +7,7 @@ import {
   COURT_SYSTEMS,
   courtSystemNames,
   courtSystemOf,
+  isCodeTable,
   locate,
   pageStep,
   redact,
@@ -265,5 +266,83 @@ describe("the screen as ONE's robot reads it", () => {
     expect(robot.fields.map((field) => field.label)).toEqual(["Incluir"]);
     expect(JSON.stringify(robot)).not.toContain("Marina");
     expect(robot.tables[0]).toMatchObject({ headers: ["Nome", "Ações"], rows: 1 });
+    expect(robot.tables[0]).not.toHaveProperty("lines");
+  });
+
+  it("says what the screen holds now: the code chosen in a system's list, a box ticked, a field filled, never the words", () => {
+    document.body.innerHTML = EPROC_FIRST_STEP;
+    (document.getElementById("selLocalidade") as HTMLSelectElement).value = "0021";
+    (document.getElementById("selAdvogado") as HTMLSelectElement).value = "2";
+    const robot = captureScreen(document, EPROC, NOW, { rows: true });
+    const byId = (id: string) => robot.fields.find((field) => field.id === id);
+    expect(byId("selLocalidade")?.chosen).toBe("0021");
+    expect(byId("selClasse")?.chosen).toBe("436");
+    expect(byId("txtValorCausa")?.filled).toBe(true);
+    expect(byId("chkNaoSeAplica")?.checked).toBe(true);
+    // The line chosen among the firm's lawyers is a person: never said.
+    expect(byId("selAdvogado")).not.toHaveProperty("chosen");
+    const text = json(robot);
+    expect(text).not.toContain("1500000");
+    expect(text).not.toContain("Rui Teste");
+
+    // The lawyer's map of a screen keeps only its structure, as before.
+    const mapped = captureScreen(document, EPROC, NOW);
+    for (const field of mapped.fields) {
+      expect(field).not.toHaveProperty("chosen");
+      expect(field).not.toHaveProperty("filled");
+      expect(field).not.toHaveProperty("checked");
+    }
+  });
+
+  it("reads line by line a table of the system's own codes, with each line's action, and never one of people", () => {
+    // The PJe's search of subjects (2026-11-26): the lines the search found, each with its "Adicionar" (an icon).
+    document.body.innerHTML = `
+      <h2>Assuntos</h2>
+      <table id="assuntosAssociados">
+        <thead><tr><th>Cod.</th><th>Assunto Principal</th><th>Assunto</th><th>Complementar?</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <table id="r_processoAssuntoListList">
+        <thead><tr><th>Cod.</th><th>Assunto</th><th>Complementar?</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><a id="add1" href="#" title="Adicionar"><img src="add.png" alt=""></a> 4830</td>
+            <td>DIREITO DO CONSUMIDOR (1156) | Transporte Aéreo | Cancelamento de vôo</td>
+            <td>Não</td>
+          </tr>
+          <tr>
+            <td><a id="add2" href="#"><img src="add.png" alt="Adicionar"></a> 7779</td>
+            <td>DIREITO DO CONSUMIDOR (1156) | Indenização por Dano Moral</td>
+            <td>Sim</td>
+          </tr>
+        </tbody>
+      </table>
+      ${EPROC_PARTIES}`;
+    const robot = captureScreen(document, EPROC, NOW, { rows: true });
+    const subjects = robot.tables.find((table) => table.selector === "#r_processoAssuntoListList");
+    expect(subjects?.lines?.map((line) => line.cells)).toEqual([
+      ["4830", "DIREITO DO CONSUMIDOR (1156) | Transporte Aéreo | Cancelamento de vôo", "Não"],
+      ["7779", "DIREITO DO CONSUMIDOR (1156) | Indenização por Dano Moral", "Sim"],
+    ]);
+    expect(subjects?.lines?.map((line) => line.actions.map((action) => [action.label, action.selector]))).toEqual([
+      [["Adicionar", "#add1"]],
+      [["Adicionar", "#add2"]],
+    ]);
+    // The subjects already taken: a table of codes with no line yet.
+    expect(robot.tables.find((table) => table.selector === "#assuntosAssociados")?.lines).toEqual([]);
+    // The parties found: a table of people, read only by its column names, as the lawyer's map reads every table.
+    const parties = robot.tables.find((table) => table.selector === "#tblResultado");
+    expect(parties).not.toHaveProperty("lines");
+    for (const kept of ["RUI TESTE", "529.982.247-25", "rui@teste.invalid"]) expect(json(robot)).not.toContain(kept);
+    expect(captureScreen(document, EPROC, NOW).tables.some((table) => "lines" in table)).toBe(false);
+  });
+
+  it("tells a table of the system's codes by its columns", () => {
+    expect(isCodeTable(["Cod.", "Assunto", "Complementar?"])).toBe(true);
+    expect(isCodeTable(["Código", "Classe judicial"])).toBe(true);
+    expect(isCodeTable(["Assunto", "Complementar?"])).toBe(false);
+    expect(isCodeTable(["Cód.", "Nome da parte"])).toBe(false);
+    expect(isCodeTable(["Código", "Processo", "Data"])).toBe(false);
+    expect(isCodeTable(["Cód.", "Documento"])).toBe(false);
   });
 });
