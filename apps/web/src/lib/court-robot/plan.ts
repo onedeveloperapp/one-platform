@@ -204,10 +204,12 @@ export type PlanProblem = { action: number; code: string };
 /**
  * The words a person reads on a button that may send something to the court, whatever the model said of it: one that
  * surely sends ("Confirmar ajuizamento", "Protocolar") and one that may, depending on the system ("Finalizar", which in
- * the eproc of TJSP opens the summary and elsewhere may send at once). Never "Confirmar seleção de documento".
+ * the eproc of TJSP opens the summary and elsewhere may send at once). Never "Confirmar seleção de documento", nor the
+ * PJe's tab "Protocolar inicial", which opens its summary (its button "Protocolar" sends): asking the lawyer's word
+ * and marking the filing as going at the tab would have said a filing went that had not (2026-11-26).
  */
 export const MAY_SEND =
-  /\b(confirmar ajuizamento|finalizar|concluir (o )?peticionamento|enviar peti[cç][aã]o|protocolar|peticionar|ajuizar|distribuir|assinar e enviar)\b/i;
+  /\b(confirmar ajuizamento|finalizar|concluir (o )?peticionamento|enviar peti[cç][aã]o|protocolar(?! inicial)|peticionar|ajuizar|distribuir|assinar e enviar)\b/i;
 
 /**
  * Checks a plan against the screen and the case: every target exists (a bare selector of one field read as that

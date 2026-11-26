@@ -6,13 +6,21 @@ import { type LearnedStep, learnedStep, stepFor } from "@/lib/court-robot/map";
 import {
   checkPlan,
   fieldsByTarget,
+  MAY_SEND,
   resolveTarget,
   screenForAi,
   type ScreenPlan,
   type Target,
   targetKey,
 } from "@/lib/court-robot/plan";
-import { type PlanInput, runFiling, type ScreenDriver, type SendPoint } from "@/lib/court-robot/runner";
+import {
+  type PlanInput,
+  runFiling,
+  type ScreenDriver,
+  type SendPoint,
+  SIGN_QUESTION,
+  SIGNS,
+} from "@/lib/court-robot/runner";
 
 // ---------- A stand-in court: four screens of an eproc, kept in memory ----------
 
@@ -958,5 +966,91 @@ describe("the target a plan names", () => {
       "0|tr > td > button|0",
       "0|tr > td > button|1",
     ]);
+  });
+});
+
+// ---------- The PJe's signature and its last tab (its manual, 2026-11-26) ----------
+
+/** The tab "Incluir petições e documentos" of a PJe: the files in, and the button that signs with the certificate. */
+class StandInSigning implements ScreenDriver {
+  clicks: string[] = [];
+  async capture(): Promise<MappedScreen[]> {
+    return [
+      {
+        system: "pje-tjrj",
+        host: "tjrj.pje.jus.br",
+        path: "/1g/Processo/CadastroProcesso/listView.seam",
+        params: {},
+        title: "Cadastro de processo",
+        headings: ["Incluir petições e documentos"],
+        fields: [field("button", "assinar", "ASSINAR DOCUMENTO(S)"), field("link", "abaCustas", "CUSTAS JUDICIAIS")],
+        tables: [],
+        capturedAt: "2026-11-26T19:00:00.000Z",
+      },
+    ];
+  }
+  async text(): Promise<string> {
+    return "";
+  }
+  async fill(): Promise<boolean> {
+    return true;
+  }
+  async select(): Promise<boolean> {
+    return true;
+  }
+  async check(): Promise<boolean> {
+    return true;
+  }
+  async click(target: Target): Promise<boolean> {
+    this.clicks.push(target.selector);
+    return true;
+  }
+  async upload(): Promise<boolean> {
+    return true;
+  }
+  async settle(): Promise<void> {}
+}
+
+describe("the PJe's signature with the lawyer's certificate", () => {
+  it("presses the button that signs once and waits for the lawyer, who signs in the PJeOffice", async () => {
+    const court = new StandInSigning();
+    const seen: PlanInput[] = [];
+    const planner = async (input: PlanInput): Promise<ScreenPlan> => {
+      seen.push(input);
+      const signed = input.feito.some((item) => item.acao.alvo === P("assinar") && item.resultado === "ok");
+      return {
+        tela: { tipo: "formulario", titulo: "Incluir petições e documentos" },
+        acoes: [{ fazer: "clicar", alvo: signed ? P("abaCustas") : P("assinar") }],
+        pronto: false,
+        pergunta: "",
+      };
+    };
+    const base = {
+      driver: court,
+      planner,
+      system: "PJe do TJRJ",
+      facts: FACTS,
+      file: async () => PDF,
+      learning: false,
+      confirm: async () => "go" as const,
+      map: null,
+      beforeSend: async () => ({ ok: true, code: "sending" }),
+    };
+    const first = await runFiling(base);
+    expect(first.outcome).toEqual({ kind: "question", question: SIGN_QUESTION });
+    expect(court.clicks).toEqual(["#assinar"]);
+    // The lawyer signed and said "Continuar": the run taken up again knows the button was pressed.
+    const again = await runFiling({ ...base, resume: first.screen, maxScreens: 1 });
+    expect(seen[1]?.feito.map((item) => item.acao.alvo)).toEqual([P("assinar")]);
+    expect(court.clicks).toEqual(["#assinar", "#abaCustas"]);
+    expect(again.outcome.kind).toBe("stuck");
+  });
+
+  it("never takes the PJe's tab 'Protocolar inicial' for the button that sends, which 'Protocolar' is", () => {
+    expect(MAY_SEND.test("PROTOCOLAR INICIAL")).toBe(false);
+    expect(MAY_SEND.test("PROTOCOLAR")).toBe(true);
+    expect(MAY_SEND.test("Confirmar ajuizamento")).toBe(true);
+    expect(SIGNS.test("ASSINAR DOCUMENTO(S)")).toBe(true);
+    expect(SIGNS.test("Assinar e enviar")).toBe(false);
   });
 });

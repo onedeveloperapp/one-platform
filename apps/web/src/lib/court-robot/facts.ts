@@ -1,3 +1,5 @@
+import { ageOn } from "@flyee/rules/person";
+
 /**
  * The facts of a lawsuit ONE files on a court's screen (migration 0264, `filing_submission_to_send`), as the robot
  * works with them: each fact by a key and the words that describe it, which is all the AI that reads a screen ever
@@ -33,6 +35,8 @@ export type ToSend = {
   screen_system: string | null;
   org_id: string;
   case_id: string;
+  /** The lawsuit filed (`filing_submission_to_send` hands it since 0264). */
+  proceeding_id?: string | null;
   incident: string | null;
   package_id: string;
   kind: string;
@@ -134,7 +138,27 @@ export function tpuCodesOf(value: unknown): TpuCodes {
   return { subjects, moral: code(setting.moral) };
 }
 
-export function filingFactsOf(sent: ToSend, codes: TpuCodes | null = null): FilingFacts {
+/**
+ * What the court's screen asks of the lawsuit beside its parties and files (the PJe's "Características" and "Custas
+ * judiciais", 2026-11-26): whether free justice is asked (in the civil court, a claimant's answer; in the small-claims
+ * court nothing is asked, Lei 9.099/1995, art. 54), whether the petition asks an injunction, read from its text, and
+ * the day of the filing, for a claimant's age. Unknown is null, and its fact is left out: the AI asks the lawyer.
+ */
+export type FilingExtras = { freeJustice: boolean | null; injunction: boolean | null; today: string };
+
+/** The words of a petition that ask an injunction or an anticipated relief. */
+const INJUNCTION =
+  /(tutela (de urg[eê]ncia|antecipada|provis[oó]ria)|antecipa[cç][aã]o (dos efeitos )?da tutela|liminar)/i;
+
+/** Whether a petition's text asks an injunction: null for no text. */
+export const asksInjunction = (text: string | null | undefined): boolean | null =>
+  typeof text === "string" && text.trim() ? INJUNCTION.test(text) : null;
+
+export function filingFactsOf(
+  sent: ToSend,
+  codes: TpuCodes | null = null,
+  extras: FilingExtras | null = null,
+): FilingFacts {
   const fatos: FactDescriptor[] = [];
   const values: Record<string, string> = {};
   const said = (chave: string, descricao: string, value: string | null | undefined, personal: boolean): void => {
@@ -179,6 +203,46 @@ export function filingFactsOf(sent: ToSend, codes: TpuCodes | null = null): Fili
     moral === null ? null : String(moral),
     false,
   );
+  // What the screen asks of the lawsuit itself (the PJe's "Características" and "Custas judiciais").
+  const freeJustice = sent.kind === "juizado" ? false : (extras?.freeJustice ?? null);
+  said(
+    "processo.justica_gratuita",
+    "Se a ação pede justiça gratuita (Sim ou Não)",
+    freeJustice === null ? null : freeJustice ? "Sim" : "Não",
+    false,
+  );
+  said(
+    "processo.liminar",
+    "Se a petição pede liminar ou antecipação de tutela (Sim ou Não)",
+    extras?.injunction === false ? "Não" : extras?.injunction === true ? "Sim" : null,
+    false,
+  );
+  said("processo.segredo_de_justica", "Se a ação corre em segredo de justiça (Sim ou Não)", "Não", false);
+  said(
+    "processo.custas",
+    "Custas iniciais e a guia de recolhimento",
+    sent.kind === "juizado"
+      ? "Sem custas no primeiro grau do Juizado Especial Cível (Lei 9.099/1995, art. 54): sem guia, pelo motivo de não gerar custas que diz isso"
+      : freeJustice
+        ? "Sem guia: a ação pede justiça gratuita"
+        : null,
+    false,
+  );
+  // An elderly claimant's priority (Estatuto da Pessoa Idosa, art. 71; above 80, the special one of its § 5º): the
+  // kind of priority only, never an age nor a name.
+  const ages = extras
+    ? sent.claimants
+        .map((person) => ageOn(person.birth_date, extras.today))
+        .filter((age): age is number => age !== null)
+    : [];
+  const eldest = ages.length > 0 ? Math.max(...ages) : null;
+  said(
+    "processo.prioridade",
+    "Prioridade de tramitação de um autor idoso",
+    eldest === null || eldest < 60 ? null : eldest >= 80 ? "Idoso com mais de 80 anos" : "Idoso(a)",
+    false,
+  );
+
   if (typeof sent.value_cents === "number" && sent.value_cents > 0) {
     said("processo.valor_causa", "Valor da causa, em reais", brazilianMoney(sent.value_cents), false);
   } else {

@@ -1,6 +1,13 @@
 import type { MappedScreen } from "@/lib/court-extension/capture";
 import type { FilingFacts } from "@/lib/court-robot/facts";
-import { type LearnedStep, learnedStep, sameScreen, signatureOf, stepFor } from "@/lib/court-robot/map";
+import {
+  type LearnedStep,
+  learnedStep,
+  sameScreen,
+  type ScreenSignature,
+  signatureOf,
+  stepFor,
+} from "@/lib/court-robot/map";
 import {
   checkPlan,
   type DoneAction,
@@ -103,7 +110,15 @@ export type RunInput = {
   /** Before the first button that may send: the database marks the filing as going (0101's `sending`). */
   beforeSend(): Promise<{ ok: boolean; code: string }>;
   maxScreens?: number;
+  /**
+   * The screen the run before this one stopped on, with what ONE did there (a pause the lawyer ended with "Continuar"):
+   * read again as the same screen, ONE knows what it already pressed (the button that signs, above all).
+   */
+  resume?: ScreenState | null;
 };
+
+/** A screen as the run left it: what tells it apart and what ONE did on it. */
+export type ScreenState = { signature: ScreenSignature; done: DoneAction[] };
 
 export type RunOutcome =
   | { kind: "filed"; number: string | null }
@@ -116,7 +131,13 @@ export type RunOutcome =
   | { kind: "not_sent"; code: string }
   | { kind: "stuck"; why: string };
 
-export type RunResult = { outcome: RunOutcome; learned: LearnedStep[]; aiScreens: number };
+export type RunResult = {
+  outcome: RunOutcome;
+  learned: LearnedStep[];
+  aiScreens: number;
+  /** The screen the run stopped on, for the run that takes it up again. */
+  screen: ScreenState | null;
+};
 
 /**
  * How many readings in a row of one screen may bring nothing new (no action done that was not done there before)
@@ -132,6 +153,17 @@ const DONE_SHOWN_MOST = 40;
 /** An action as it is told apart from the others done on the same screen. */
 const actionKey = (action: PlanAction): string =>
   [action.fazer, action.alvo, action.fato ?? "", action.opcao ?? "", action.arquivo ?? ""].join("|");
+
+/**
+ * The words of a button that signs the documents with the lawyer's certificate on their computer (the PJe's
+ * "Assinar documento(s)", through the PJeOffice): the lawyer types the certificate's PIN, never ONE. One that also
+ * sends ("Assinar e enviar") is a press that may send, asked before as such.
+ */
+export const SIGNS = /^\s*assinar( o| os)?( documento| documentos| documento\(s\))?\s*$/i;
+
+/** What the lawyer is asked after ONE pressed a button that signs with their certificate (2026-11-26). */
+export const SIGN_QUESTION =
+  "assine os documentos com o seu certificado no PJeOffice. Se o Chrome perguntar se o site pode acessar a rede local, toque em Permitir";
 
 /** An action after which the page may change (a list that loads another, a press, a file sent): it settles first. */
 const MOVES_PAGE: readonly PlanAction["fazer"][] = ["escolher", "clicar", "marcar", "desmarcar", "anexar"];
@@ -178,15 +210,22 @@ export async function runFiling(input: RunInput): Promise<RunResult> {
   let sent = input.sent === true;
   // The lawyer said ONE may send this filing (asked once, and only while ONE learns the system).
   let confirmed = !input.learning || input.confirmed === true;
-  let previous: ReturnType<typeof signatureOf> | null = null;
+  let previous: ScreenSignature | null = input.resume?.signature ?? null;
   // What ONE did on the screen it is on, read again by the AI each time it reads that screen (2026-11-26: with
   // nothing of it, ONE chose the PJe's matéria three times over and stopped there).
-  let doneOnScreen: DoneAction[] = [];
-  let doneKeys = new Set<string>();
+  let doneOnScreen: DoneAction[] = input.resume ? [...input.resume.done] : [];
+  let doneKeys = new Set<string>(
+    doneOnScreen.filter((item) => item.resultado === "ok").map((item) => actionKey(item.acao)),
+  );
   let idleReadings = 0;
   let readings = 0;
 
-  const done = (outcome: RunOutcome): RunResult => ({ outcome, learned, aiScreens });
+  const done = (outcome: RunOutcome): RunResult => ({
+    outcome,
+    learned,
+    aiScreens,
+    screen: previous ? { signature: previous, done: doneOnScreen.slice(-DONE_SHOWN_MOST) } : null,
+  });
 
   for (let screen = 0; screen < maxScreens; screen += 1) {
     // The court's session ended: after something that may have sent, what came of it is unknown.
@@ -299,6 +338,12 @@ export async function runFiling(input: RunInput): Promise<RunResult> {
       if (action.fazer !== "esperar" && !doneKeys.has(actionKey(action))) {
         doneKeys.add(actionKey(action));
         progressed = true;
+      }
+      // A press that signs with the lawyer's certificate (the PJe's "Assinar documento(s)", through the PJeOffice on
+      // their computer): only the lawyer types its PIN, so ONE waits for them, and presses nothing else meanwhile.
+      if (!action.envia && action.fazer === "clicar" && SIGNS.test(fields.get(action.alvo)?.label ?? "")) {
+        learned.push(learnedStep(frames, kind, doneHere, input.facts));
+        return done({ kind: "question", question: SIGN_QUESTION });
       }
       if (action.envia) break;
       // A list that loads the next, a press, a file sent: the page settles before the next action acts on it.

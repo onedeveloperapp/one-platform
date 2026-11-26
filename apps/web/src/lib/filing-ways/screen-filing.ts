@@ -1,7 +1,14 @@
 import "server-only";
 
 import type { MappedScreen } from "@/lib/court-extension/capture";
-import { filingFactsOf, type ToSend, type TpuCodes, tpuCodesOf } from "@/lib/court-robot/facts";
+import {
+  asksInjunction,
+  type FilingExtras,
+  filingFactsOf,
+  type ToSend,
+  type TpuCodes,
+  tpuCodesOf,
+} from "@/lib/court-robot/facts";
 import type { DoneAction, ScreenPlan } from "@/lib/court-robot/plan";
 import { aiScreenPlanner } from "@/lib/court-robot/planner";
 import type { ScreenPlanner } from "@/lib/court-robot/runner";
@@ -109,6 +116,37 @@ export async function tpuCodes(service: SupabaseClient): Promise<TpuCodes | null
 }
 
 /**
+ * What the court's screen asks of a lawsuit beside its parties and files (2026-11-26): whether free justice is asked
+ * (in the civil court, a claimant's answer in force, `free_justice_answers` of 0125), whether its issued petition asks
+ * an injunction, and the day in Brasília, for a claimant's age. A read that fails leaves that fact unknown.
+ */
+export async function filingExtras(service: SupabaseClient, sent: ToSend, now: Date): Promise<FilingExtras> {
+  const [answers, petition] = await Promise.all([
+    sent.kind === "juizado"
+      ? Promise.resolve(null)
+      : service.from("free_justice_answers").select("asks").eq("case_id", sent.case_id).is("replaced_at", null),
+    sent.proceeding_id
+      ? service
+          .from("case_drafts")
+          .select("approved_body")
+          .eq("proceeding_id", sent.proceeding_id)
+          .eq("piece_kind", "inicial")
+          .eq("status", "issued")
+          .order("updated_at", { ascending: false })
+          .limit(1)
+          .maybeSingle()
+      : Promise.resolve(null),
+  ]);
+  const asked = answers && !answers.error ? ((answers.data ?? []) as { asks: boolean }[]) : null;
+  const body = petition && !petition.error ? (petition.data as { approved_body: string | null } | null) : null;
+  return {
+    freeJustice: asked === null ? null : asked.some((answer) => answer.asks === true),
+    injunction: asksInjunction(body?.approved_body ?? null),
+    today: brasiliaDay(now),
+  };
+}
+
+/**
  * The next lawsuit of a batch its runner files: its facts, by key with their values (the runner types them, the AI
  * never sees them), and a short link to each file of its package. Null when the batch has nothing left to file.
  */
@@ -126,7 +164,7 @@ export async function nextFiling(
     tpuCodes(service),
   ]);
   if (!sent) return { ok: false, code: "not_working" };
-  const facts = filingFactsOf(sent, codes);
+  const facts = filingFactsOf(sent, codes, await filingExtras(service, sent, new Date()));
   const bucket = service.storage.from(FIRM_FILES_BUCKET);
   const files: ExtensionFile[] = [];
   for (const item of sent.items) {
@@ -213,7 +251,7 @@ export async function planScreen(
     tpuCodes(service),
   ]);
   if (!sent || !system) return { ok: false, code: "not_working" };
-  const facts = filingFactsOf(sent, codes);
+  const facts = filingFactsOf(sent, codes, await filingExtras(service, sent, (deps.now ?? (() => new Date()))()));
   const planner = (deps.planner ?? aiScreenPlanner)(filing.org_id, filing.id);
   const plan = await planner({
     sistema: system.name,

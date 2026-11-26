@@ -37,8 +37,13 @@ $$ select set_config('request.jwt.claims', '{"role":"service_role"}', true); $$;
 
 select ok(
   (select count(*) = 1 from public.prompt_versions where task = 'protocolo.tela' and is_active)
-  and (select v.version = 3 from public.prompt_versions v where v.task = 'protocolo.tela' and v.is_active),
-  'one version of the reading of a screen is in force, the third');
+  and (select v.version >= 3 from public.prompt_versions v where v.task = 'protocolo.tela' and v.is_active)
+  and exists (
+    select 1 from public.prompt_versions v
+    where v.task = 'protocolo.tela' and v.version = 3
+      and position('copiado exatamente como veio na tela' in v.system_prompt) > 0
+  ),
+  'one version of the reading of a screen is in force, the third or one after it');
 select ok(
   (select n.output_schema = o.output_schema and n.model = o.model and n.provider = o.provider and n.effort = o.effort
           and n.max_tokens = o.max_tokens and n.version = o.version + 1 and not o.is_active

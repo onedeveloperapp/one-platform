@@ -331,8 +331,30 @@ function lineActionLabel(element: Element): string | null {
     pick(element instanceof HTMLInputElement ? element.value : ownText(element)) ??
     pick(element.getAttribute("title")) ??
     pick(image?.getAttribute("alt")) ??
-    pick(image?.getAttribute("title"))
+    pick(image?.getAttribute("title")) ??
+    iconWords(element)
   );
+}
+
+/**
+ * The words for an action that is only an icon, read from the icon's own names (the PJe adds a subject by an arrow
+ * with no word, 2026-11-26): "ícone: seta para a esquerda". Never null for an action of a line, so the line keeps it.
+ */
+function iconWords(element: Element): string {
+  const named = [element, ...Array.from(element.querySelectorAll("i, span, img, svg"))]
+    .map((node) => `${node.getAttribute("class") ?? ""} ${node.getAttribute("src") ?? ""}`)
+    .join(" ")
+    .toLowerCase();
+  const KNOWN: [RegExp, string][] = [
+    [/arrow-left|seta.?esq|chevron-left|angle-left|left/, "seta para a esquerda"],
+    [/arrow-right|seta.?dir|chevron-right|angle-right|right/, "seta para a direita"],
+    [/plus|add|adicionar|incluir|mais/, "mais"],
+    [/trash|lixeira|excluir|remove|delete|minus/, "lixeira"],
+    [/pencil|edit|editar|lapis/, "lápis"],
+    [/check|ok|confirm/, "marca de confirmar"],
+  ];
+  const found = KNOWN.find(([pattern]) => pattern.test(named));
+  return found ? `ícone: ${found[1]}` : "ícone sem nome";
 }
 
 /** The lines of a table of the system's codes: each cell's words and the actions each line offers. */

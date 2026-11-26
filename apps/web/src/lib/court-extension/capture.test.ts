@@ -337,6 +337,21 @@ describe("the screen as ONE's robot reads it", () => {
     expect(captureScreen(document, EPROC, NOW).tables.some((table) => "lines" in table)).toBe(false);
   });
 
+  it("keeps a line's action that is only an icon, named by the icon (the PJe's arrow that adds a subject)", () => {
+    document.body.innerHTML = `
+      <table id="assuntos">
+        <thead><tr><th></th><th>Cod.</th><th>Assunto</th><th>Complementar?</th></tr></thead>
+        <tbody><tr>
+          <td><a id="seta1" href="#"><i class="fa fa-arrow-left"></i></a></td>
+          <td>7748</td><td>DIREITO DO CONSUMIDOR (1156) | Transporte Aéreo (4862) | Acidente Aéreo (7748)</td><td>Sim</td>
+        </tr></tbody>
+      </table>`;
+    const robot = captureScreen(document, EPROC, NOW, { rows: true });
+    expect(robot.tables[0]?.lines?.[0]?.actions.map((action) => [action.label, action.selector])).toEqual([
+      ["ícone: seta para a esquerda", "#seta1"],
+    ]);
+  });
+
   it("tells a table of the system's codes by its columns", () => {
     expect(isCodeTable(["Cod.", "Assunto", "Complementar?"])).toBe(true);
     expect(isCodeTable(["Código", "Classe judicial"])).toBe(true);

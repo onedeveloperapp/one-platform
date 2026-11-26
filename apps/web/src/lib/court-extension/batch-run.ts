@@ -6,6 +6,7 @@ import {
   runFiling,
   type RunOutcome,
   type ScreenDriver,
+  type ScreenState,
   type SendPoint,
 } from "@/lib/court-robot/runner";
 import type {
@@ -153,6 +154,8 @@ export async function runBatch(input: BatchRunInput): Promise<BatchRunEnd> {
     let marked = false;
     // ONE waited for the lawyer's word for as long as it waits, and no word came.
     let timedOut = false;
+    // The screen a pause stopped on, with what ONE did there: taken up again with it after the lawyer's "Continuar".
+    let resume: ScreenState | null = null;
 
     const confirm = async (point: SendPoint): Promise<Confirmation> => {
       const held = await api.hold(filing.id, filing.claim);
@@ -198,6 +201,7 @@ export async function runBatch(input: BatchRunInput): Promise<BatchRunEnd> {
         sent: marked,
         confirm,
         map,
+        resume,
         beforeSend: async () => {
           const going = await api.sending(filing.id, filing.claim);
           if (going.ok && going.value.going) {
@@ -251,7 +255,10 @@ export async function runBatch(input: BatchRunInput): Promise<BatchRunEnd> {
         question: outcome.kind === "question" || outcome.kind === "court_error" ? outcome.question : null,
         filing,
       });
-      if (word === "continue") continue;
+      if (word === "continue") {
+        resume = run.screen;
+        continue;
+      }
       if (marked) {
         await api.result(filing.id, filing.claim, {
           outcome: "unknown",
