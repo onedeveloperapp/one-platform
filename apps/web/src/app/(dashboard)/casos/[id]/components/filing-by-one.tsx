@@ -226,16 +226,30 @@ function ScreenLine({
 }) {
   const t = useTranslations("product");
   const standing = screenStanding(screen);
-  // The bell's ask of the lawyer's access (0304) opens the case with their choice in front (`?acesso=<system>`).
-  const asked = useSearchParams()?.get("acesso") === screen.key;
-  const [choosing, setChoosing] = useState(
-    () =>
-      asked &&
-      mayAct &&
-      standing?.kind === "choose" &&
-      Boolean(screen.viewerId) &&
-      standing.lawyers.includes(screen.viewerId ?? ""),
-  );
+  // The bell's ask of the lawyer's access (0304) brings their choice in front (`?acesso=<system>`), to a lawyer whose
+  // choice it is: when the case opens with it, and when it arrives while the case is open (the bell's notice clicked
+  // on this very case): a page is never mounted again for a new query, so the ask is followed, not read once.
+  const askedHere =
+    useSearchParams()?.get("acesso") === screen.key &&
+    mayAct &&
+    standing?.kind === "choose" &&
+    Boolean(screen.viewerId) &&
+    standing.lawyers.includes(screen.viewerId ?? "");
+  const [choosing, setChoosing] = useState(askedHere);
+  const [wasAsked, setWasAsked] = useState(askedHere);
+  if (askedHere !== wasAsked) {
+    setWasAsked(askedHere);
+    if (askedHere) setChoosing(true);
+  }
+  // The choice made or set aside: the ask leaves the address, so coming back does not reopen it and the bell's link
+  // opens it again.
+  const closeChoice = () => {
+    setChoosing(false);
+    const url = new URL(window.location.href);
+    if (!url.searchParams.has("acesso")) return;
+    url.searchParams.delete("acesso");
+    window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+  };
   if (!standing) return null;
 
   const system = screen.name;
@@ -245,7 +259,7 @@ function ScreenLine({
     screen.firmWay,
   );
   const dialog = choosing ? (
-    <FilingChoiceDialog systemKey={screen.key} signs={signs} onClose={() => setChoosing(false)} onSaved={onChanged} />
+    <FilingChoiceDialog systemKey={screen.key} signs={signs} onClose={closeChoice} onSaved={onChanged} />
   ) : null;
   const changeButton = (
     <Button variant="text" color="grey" size="small" disabled={busy} onClick={() => setChoosing(true)}>

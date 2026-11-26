@@ -65,7 +65,14 @@ describe("the case in tabs", () => {
   });
 
   it("keeps the tab in the address, and the card the person was sent to after it", () => {
-    expect(tabAddress("/casos/c1", "acao", "#case-drafts")).toBe("/casos/c1?aba=acao#case-drafts");
-    expect(tabAddress("/casos/c1", "cliente")).toBe("/casos/c1?aba=cliente");
+    expect(tabAddress("/casos/c1", "", "acao", "#case-drafts")).toBe("/casos/c1?aba=acao#case-drafts");
+    expect(tabAddress("/casos/c1", "?aba=documentos", "cliente")).toBe("/casos/c1?aba=cliente");
+  });
+
+  it("keeps the rest of the address's query, as the bell's ask of a lawyer's access", () => {
+    expect(tabAddress("/casos/c1", "?acesso=pje-tjrj", "acao", "#case-filing")).toBe(
+      "/casos/c1?acesso=pje-tjrj&aba=acao#case-filing",
+    );
+    expect(tabAddress("/casos/c1", "?acesso=pje-tjrj&aba=cliente", "acao")).toBe("/casos/c1?acesso=pje-tjrj&aba=acao");
   });
 });

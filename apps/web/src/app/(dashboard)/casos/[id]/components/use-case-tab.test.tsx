@@ -1,8 +1,10 @@
 import { useCaseTab } from "./use-case-tab";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import CollapsibleCard from "@/components/product/collapsible-card";
 import type { TabLine } from "@/lib/cases/case-tabs";
 import { CASE_TABS } from "@/lib/cases/case-tabs";
+import { accessHref } from "@/lib/filing-ways/access-asks";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 afterEach(cleanup);
@@ -44,7 +46,39 @@ function Harness({ asked, blocking }: { asked: string | null; blocking: TabLine[
   );
 }
 
+/** The screen with real cards in its tabs: the people's card closed in "cliente", the filing's in "acao". */
+function WithCards() {
+  const { tab, pick } = useCaseTab({ asked: null, blocking: [], step: "documents" });
+  return (
+    <>
+      <p data-testid="tab">{tab}</p>
+      <a href="#case-people">completar no cartão das pessoas, pelo navegador</a>
+      <RouterLink href={accessHref({ caseId: "c1", systemKey: "pje-tjrj" })}>pedido de acesso do sino</RouterLink>
+      <button type="button" onClick={() => pick("dinheiro")}>
+        aba dinheiro
+      </button>
+      {CASE_TABS.map((key) => (
+        <div key={key} data-case-tab={key} hidden={tab !== key}>
+          {key === "cliente" ? (
+            <CollapsibleCard id="case-people" title="Pessoas">
+              <p>as pessoas do caso</p>
+            </CollapsibleCard>
+          ) : null}
+          {key === "acao" ? (
+            <CollapsibleCard id="case-filing" title="Protocolo">
+              <p>o pacote</p>
+            </CollapsibleCard>
+          ) : null}
+        </div>
+      ))}
+    </>
+  );
+}
+
 const firmAt = (section: TabLine["section"]): TabLine => ({ owner: "firm", tone: "attention", section });
+// A card in a tab out of sight is still asked where it stands.
+const opened = (title: string) =>
+  screen.getByRole("button", { name: title, hidden: true }).getAttribute("aria-expanded");
 
 describe("the tab of the case screen", () => {
   it("opens where the firm is asked first, else on the step's tab, and the address chooses over both", () => {
@@ -111,6 +145,36 @@ describe("the tab of the case screen", () => {
     fireEvent.click(screen.getByRole("link", { name: "um endereço mal escrito" }));
     expect(screen.getByTestId("tab").textContent).toBe("documentos");
     expect(window.location.search).toBe("");
+  });
+
+  it("a link of the browser to a closed card opens its tab and the card itself", () => {
+    render(<WithCards />);
+    expect(screen.getByTestId("tab").textContent).toBe("documentos");
+    expect(opened("Pessoas")).toBe("false");
+    // The tab writes the card into the address during the click, so the browser follows the link with no hashchange:
+    // the card that listened to that event alone stayed closed in the tab that opened.
+    fireEvent.click(screen.getByRole("link", { name: "completar no cartão das pessoas, pelo navegador" }));
+    expect(screen.getByTestId("tab").textContent).toBe("cliente");
+    expect(opened("Pessoas")).toBe("true");
+  });
+
+  it("the bell's ask of a lawyer's access keeps its query in the address, clicked on this very case", () => {
+    render(<WithCards />);
+    fireEvent.click(screen.getByRole("link", { name: "pedido de acesso do sino" }));
+    expect(screen.getByTestId("tab").textContent).toBe("acao");
+    expect(opened("Protocolo")).toBe("true");
+    expect(`${window.location.search}${window.location.hash}`).toBe("?acesso=pje-tjrj&aba=acao#case-filing");
+  });
+
+  it("and arriving with it from another page, the tab the person picks keeping it too", () => {
+    window.history.replaceState(null, "", "/casos/c1?acesso=pje-tjrj#case-filing");
+    render(<WithCards />);
+    expect(screen.getByTestId("tab").textContent).toBe("acao");
+    expect(opened("Protocolo")).toBe("true");
+    expect(`${window.location.search}${window.location.hash}`).toBe("?acesso=pje-tjrj&aba=acao#case-filing");
+    // A tab picked by hand: the card the link sent the person to leaves the address, the rest of it stays.
+    fireEvent.click(screen.getByRole("button", { name: "aba dinheiro" }));
+    expect(`${window.location.search}${window.location.hash}`).toBe("?acesso=pje-tjrj&aba=dinheiro");
   });
 
   it("never loses what was typed in a tab the person left", () => {

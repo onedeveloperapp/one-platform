@@ -8,6 +8,7 @@ import { Box, Button, Collapse, Typography, useMediaQuery } from "@mui/material"
 import StateLine, { type StateTone } from "@/components/product/state-line";
 import { TILE_TONE, type TileTone } from "@/components/product/tile-tone";
 import NiChevronDownSmall from "@/icons/nexture/ni-chevron-down-small";
+import { followArrivals } from "@/lib/anchor-arrival";
 import { cn } from "@/lib/utils";
 
 /** One thing of a list, as one line: what it is, where it stands, its one action, and what opens in it. */
@@ -90,17 +91,14 @@ export default function ItemRows({
   const addresses = (arrival ?? []).join("|");
   useEffect(() => {
     if (!addresses) return;
-    const follow = () => {
-      const hash = decodeURIComponent(window.location.hash.slice(1));
+    // Heard as the card hears it (`followArrivals`): an address, or a link to it, whatever draws the link.
+    return followArrivals((arrived) => {
       const first = firstAsking.current;
-      if (hash && addresses.split("|").includes(hash) && first) {
+      if (addresses.split("|").includes(arrived) && first) {
         setOpenKey(first);
         setMounted((current) => (current.has(first) ? current : new Set([...current, first])));
       }
-    };
-    follow();
-    window.addEventListener("hashchange", follow);
-    return () => window.removeEventListener("hashchange", follow);
+    });
   }, [addresses]);
 
   return (

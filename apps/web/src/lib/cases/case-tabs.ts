@@ -88,7 +88,12 @@ export function tabMarks(blocking: readonly TabLine[], working: readonly TabLine
   ) as Record<CaseTab, TabMark | null>;
 }
 
-/** The address of the case on a tab: the tab in `?aba=`, and the card the person was sent to kept after it. */
-export function tabAddress(path: string, tab: CaseTab, hash = ""): string {
-  return `${path}?aba=${tab}${hash}`;
+/**
+ * The address of the case on a tab: the tab in `?aba=`, the rest of the query kept (what the screen reads of it, as
+ * the bell's `?acesso=` for a lawyer's choice), and the card the person was sent to after it.
+ */
+export function tabAddress(path: string, search: string, tab: CaseTab, hash = ""): string {
+  const query = new URLSearchParams(search);
+  query.set("aba", tab);
+  return `${path}?${query.toString()}${hash}`;
 }

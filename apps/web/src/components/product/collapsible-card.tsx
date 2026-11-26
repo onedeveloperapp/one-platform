@@ -17,6 +17,7 @@ import NiCrossSquare from "@/icons/nexture/ni-cross-square";
 import NiExclamationSquare from "@/icons/nexture/ni-exclamation-square";
 import NiLoader from "@/icons/nexture/ni-loader";
 import NiPlus from "@/icons/nexture/ni-plus";
+import { followArrivals } from "@/lib/anchor-arrival";
 import { cn } from "@/lib/utils";
 
 /** An order given to every card of a screen at once: open them all, or close them all. */
@@ -189,7 +190,9 @@ export function CollapsibleGroupToggle({ className }: { className?: string }) {
  * height as any other.
  *
  * A link to the heading's id (`#case-drafts`) or to `anchor` opens the card
- * and brings it into view. The body stays mounted while closed: a text being
+ * and brings it into view, whatever draws the link (`followArrivals`: a
+ * router's link says no `hashchange`), and so does an address that names it;
+ * one typed wrong breaks nothing. The body stays mounted while closed: a text being
  * typed in it, or a card that reads itself again, is not lost. A card whose
  * content starts over when the screen reads again (a form keyed by what it
  * saved) keys that content, never the card, or it would close under the
@@ -329,19 +332,18 @@ export default function CollapsibleCard({
             : null
       : null;
 
-  useEffect(() => {
-    const follow = () => {
-      const hash = decodeURIComponent(window.location.hash.slice(1));
-      if (!hash || (hash !== id && hash !== anchor)) return;
-      // The person came to this card (a link of the top, or an address): it is theirs, and never closes by itself.
-      setOpen(true);
-      setOpenedBy("person");
-      window.requestAnimationFrame(() => card.current?.scrollIntoView({ block: "start" }));
-    };
-    follow();
-    window.addEventListener("hashchange", follow);
-    return () => window.removeEventListener("hashchange", follow);
-  }, [id, anchor]);
+  // The person came to this card (a link of the top, the bell or another card, whatever draws it, or an address): it
+  // opens, it is theirs, and it never closes by itself.
+  useEffect(
+    () =>
+      followArrivals((arrived) => {
+        if (arrived !== id && arrived !== anchor) return;
+        setOpen(true);
+        setOpenedBy("person");
+        window.requestAnimationFrame(() => card.current?.scrollIntoView?.({ block: "start" }));
+      }),
+    [id, anchor],
+  );
 
   return (
     <Card

@@ -1,5 +1,5 @@
 import CollapsibleCard, { type CardMark, CollapsibleGroup } from "./collapsible-card";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
@@ -74,5 +74,47 @@ describe("CollapsibleCard and the marks of the top", () => {
     );
     expect(screen.getByText("1 para conferir")).toBeTruthy();
     expect(screen.queryByText("Decidir documentos")).toBeNull();
+  });
+});
+
+// A person who comes to a card finds it open, whatever drew the link that brought them (2026-11-26).
+describe("CollapsibleCard and the person who comes to it", () => {
+  beforeEach(() => window.history.replaceState(null, "", "/casos/c1"));
+
+  it("opens for an address that names it, and an address somebody typed wrong breaks nothing", () => {
+    window.history.replaceState(null, "", "/casos/c1#%E0%A4%A");
+    render(<Screen mark={quiet} />);
+    expect(header().getAttribute("aria-expanded")).toBe("false");
+    cleanup();
+    window.history.replaceState(null, "", "/casos/c1#case-documents");
+    render(<Screen mark={quiet} />);
+    expect(header().getAttribute("aria-expanded")).toBe("true");
+  });
+
+  it("opens for a link the router draws, which says no hashchange", () => {
+    render(
+      <>
+        <Screen mark={quiet} />
+        <a href="/casos/c1#case-documents" onClick={(event) => event.preventDefault()}>
+          aviso do sino deste caso
+        </a>
+      </>,
+    );
+    fireEvent.click(screen.getByRole("link", { name: "aviso do sino deste caso" }));
+    expect(header().getAttribute("aria-expanded")).toBe("true");
+  });
+
+  it("opens again for a link of the browser while the address already names it, which says no hashchange either", () => {
+    window.history.replaceState(null, "", "/casos/c1#case-documents");
+    render(
+      <>
+        <Screen mark={quiet} />
+        <a href="#case-documents">completar nos documentos</a>
+      </>,
+    );
+    fireEvent.click(header());
+    expect(header().getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(screen.getByRole("link", { name: "completar nos documentos" }));
+    expect(header().getAttribute("aria-expanded")).toBe("true");
   });
 });
