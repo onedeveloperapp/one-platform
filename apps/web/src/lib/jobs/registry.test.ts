@@ -50,6 +50,7 @@ describe("the platform's sweeps (2026-11-04)", () => {
         "document-reuse",
         "files-copy",
         "files-upkeep",
+        "filing-access",
         "filing-packages",
         "filing-submissions",
         "filing-waits",
