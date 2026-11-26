@@ -2,14 +2,15 @@
   "manifest_version": 3,
   "name": "ONE · Protocolo nos tribunais",
   "short_name": "ONE",
-  "version": "0.2.0",
-  "description": "Protocola no eproc do TJSP e no Projudi do TJGO os lotes que o advogado aprovou no ONE, na sessão que ele abriu com o próprio login.",
+  "version": "0.3.0",
+  "description": "Protocola no eproc do TJSP, no Projudi do TJGO e no PJe do TJRJ os lotes que o advogado aprovou no ONE, na sessão que ele abriu com o próprio login.",
   "minimum_chrome_version": "120",
   "permissions": ["storage", "scripting", "sidePanel"],
   "host_permissions": [
     "https://eproc1g.tjsp.jus.br/*",
     "https://projudi.tjgo.jus.br/*",
-    "https://eproc1g.tjrj.jus.br/*"
+    "https://eproc1g.tjrj.jus.br/*",
+    "https://tjrj.pje.jus.br/*"
   ],
   "background": { "service_worker": "background.js" },
   "action": {
@@ -20,7 +21,12 @@
   "icons": { "128": "icon-128.png" },
   "content_scripts": [
     {
-      "matches": ["https://eproc1g.tjsp.jus.br/*", "https://projudi.tjgo.jus.br/*", "https://eproc1g.tjrj.jus.br/*"],
+      "matches": [
+        "https://eproc1g.tjsp.jus.br/*",
+        "https://projudi.tjgo.jus.br/*",
+        "https://eproc1g.tjrj.jus.br/*",
+        "https://tjrj.pje.jus.br/*"
+      ],
       "js": ["content.js"],
       "all_frames": true,
       "run_at": "document_idle"

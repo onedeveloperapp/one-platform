@@ -39,7 +39,8 @@ export type SheetScreen = {
   key: string;
   name: string;
   host: string;
-  loginKind: "password_app" | "password_email";
+  /** How the lawyer signs in: the certificate where the court signs by it (the PJe, 0304). */
+  loginKind: "password_app" | "password_email" | "certificate";
   /** The screen refuses a claimant with no e-mail and mobile. */
   asksContact: boolean;
 };
@@ -93,7 +94,10 @@ export function filingSheetOf(raw: unknown): FilingSheetData | null {
             key: text(screen.key) ?? "",
             name: text(screen.name) ?? "",
             host: text(screen.host) ?? "",
-            loginKind: screen.login_kind === "password_email" ? "password_email" : "password_app",
+            loginKind:
+              screen.login_kind === "password_email" || screen.login_kind === "certificate"
+                ? screen.login_kind
+                : "password_app",
             asksContact: screen.asks_contact === true,
           }
         : null,
@@ -367,11 +371,18 @@ function priorityRows(sheet: FilingSheetData, today: string): SheetRow[] {
   ];
 }
 
+/** The words of how a lawyer signs in at a court's screen, by how it asks. */
+const ACCESS_KEY: Record<"password_app" | "password_email" | "certificate", string> = {
+  password_app: "filing-guide-access-app",
+  password_email: "filing-guide-access-email",
+  certificate: "filing-guide-access-certificate",
+};
+
 /** How a lawyer gets into the court's screen: where, and the second factor it asks. */
 function accessHint(sheet: FilingSheetData): SheetWords {
   if (sheet.screen) {
     return {
-      key: sheet.screen.loginKind === "password_email" ? "filing-guide-access-email" : "filing-guide-access-app",
+      key: ACCESS_KEY[sheet.screen.loginKind],
       values: { host: sheet.screen.host },
     };
   }

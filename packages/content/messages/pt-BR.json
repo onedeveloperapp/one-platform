@@ -10507,6 +10507,7 @@
     "filing-guide-step-access-plain": "Entrar no sistema do tribunal",
     "filing-guide-access-app": "Em {host}, entre com o seu login e a senha, ou com o certificado, e o código do aplicativo autenticador.",
     "filing-guide-access-email": "Em {host}, entre com o seu login e a senha, ou com o certificado, e o código que o sistema manda ao seu e-mail.",
+    "filing-guide-access-certificate": "Em {host}, entre com o seu certificado digital: é ele que assina cada documento da ação.",
     "filing-guide-step-receipt": "Anexar o recibo",
     "filing-guide-step-eproc-info": "Informações do processo",
     "filing-guide-eproc-info": "No menu ou no Painel do Advogado, abra Petição Inicial. Escolha a cidade, o rito, a área e a classe e informe o valor da causa. Em Incluir outros advogados, inclua os outros advogados da ação pela OAB.",

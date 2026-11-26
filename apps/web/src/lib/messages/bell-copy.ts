@@ -159,6 +159,15 @@ const ptBR = {
   }),
 
   /** ONE's browser stopped a batch for a reason not a person's own (0284). */
+  /**
+   * A lawsuit of the lawyer waits at a court's screen where they never said how ONE files for them (migration 0304):
+   * the case opens on the choice. `what` names the lawsuit ("A ação do caso nº 19"), `system` the court's system.
+   */
+  filingAccessAsk: (what: string, system: string): BellText => ({
+    title: "O ONE precisa do seu acesso ao tribunal",
+    body: `${what} está pronta para o ${system}, onde você ainda não escolheu como o ONE protocola por você. Escolha no próprio caso, e o ONE protocola assim que você aprovar o lote.`,
+  }),
+
   filingBatchStopped: (system: string): BellText => ({
     title: "O protocolo do lote parou",
     body: `O ONE parou o lote do ${system}. Em Protocolo, veja o motivo e o que fazer; o que não foi enviado volta para a fila de prontos.`,

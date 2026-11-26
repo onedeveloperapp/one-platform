@@ -3,6 +3,7 @@
 import type { CaseFiling } from "../case-types";
 import { onScreen } from "./filing-by-one-rules";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 
@@ -224,8 +225,17 @@ function ScreenLine({
   onChanged: () => void;
 }) {
   const t = useTranslations("product");
-  const [choosing, setChoosing] = useState(false);
   const standing = screenStanding(screen);
+  // The bell's ask of the lawyer's access (0304) opens the case with their choice in front (`?acesso=<system>`).
+  const asked = useSearchParams()?.get("acesso") === screen.key;
+  const [choosing, setChoosing] = useState(
+    () =>
+      asked &&
+      mayAct &&
+      standing?.kind === "choose" &&
+      Boolean(screen.viewerId) &&
+      standing.lawyers.includes(screen.viewerId ?? ""),
+  );
   if (!standing) return null;
 
   const system = screen.name;

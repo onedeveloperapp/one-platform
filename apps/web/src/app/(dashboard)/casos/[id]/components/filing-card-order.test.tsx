@@ -24,7 +24,10 @@ vi.mock("@/lib/cases/filing-actions", () => ({
 vi.mock("@/lib/cases/actions", () => ({ openCaseFile: vi.fn(async () => ({ ok: false, code: "unavailable" })) }));
 vi.mock("@/lib/cases/prefill-browser", () => ({ sendForReading: vi.fn(), dropUnsaved: vi.fn() }));
 vi.mock("@/lib/filing-ways/actions", () => ({ readMyFilingWays: vi.fn(async () => null) }));
-vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }) }));
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(),
+}));
 
 type Ready = Extract<CaseState, { kind: "ready" }>;
 

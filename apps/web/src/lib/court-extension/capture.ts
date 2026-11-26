@@ -12,14 +12,16 @@
 /**
  * The court systems the extension knows, by the host they answer at. The eproc of TJSP joined on 2026-11-20, the
  * first one a lawyer of the pilot maps (its small-claims and civil courts file new lawsuits there: `court_systems`
- * of migration 0021).
+ * of migration 0021). The PJe of TJRJ joined on 2026-11-25 (migration 0304), where the small-claims courts of the Capital
+ * take new lawsuits until the eproc comes there: by the extension alone, since the lawyer signs with their certificate.
  */
-export type CourtSystemKey = "eproc-tjsp" | "projudi-tjgo" | "eproc-tjrj";
+export type CourtSystemKey = "eproc-tjsp" | "projudi-tjgo" | "eproc-tjrj" | "pje-tjrj";
 
 export const COURT_SYSTEMS: Record<CourtSystemKey, { host: string; name: string }> = {
   "eproc-tjsp": { host: "eproc1g.tjsp.jus.br", name: "eproc do TJSP" },
   "projudi-tjgo": { host: "projudi.tjgo.jus.br", name: "Projudi do TJGO" },
   "eproc-tjrj": { host: "eproc1g.tjrj.jus.br", name: "eproc do TJRJ" },
+  "pje-tjrj": { host: "tjrj.pje.jus.br", name: "PJe do TJRJ" },
 };
 
 /** The systems the extension knows, as a sentence lists them ("o a, o b ou o c"; every name is masculine). */

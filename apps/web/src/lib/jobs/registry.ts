@@ -22,6 +22,7 @@ import { sessionSweeps } from "@/lib/courts/session-work";
 import { deadlineSweeps } from "@/lib/deadlines/jobs";
 import { fileCopySweeps } from "@/lib/files/copy-work";
 import { fileSweeps } from "@/lib/files/jobs";
+import { filingAccessSweeps } from "@/lib/filing-ways/access-asks-work";
 import { financeSweeps } from "@/lib/finance/jobs";
 import { moneySweeps } from "@/lib/finance/money-work";
 import { personalitySweeps } from "@/lib/firm/personality-work";
@@ -56,6 +57,7 @@ export const SWEEPS: readonly Sweep[] = [
   ...leadFollowupSweeps,
   ...caseSweeps,
   ...filingWaitsSweeps,
+  ...filingAccessSweeps,
   ...pieceSweeps,
   ...marketSweeps,
   ...noticeSweeps,

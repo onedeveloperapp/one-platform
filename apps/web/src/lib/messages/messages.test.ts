@@ -36,6 +36,7 @@ const notices = (copy: BellCopy): Record<keyof BellCopy, BellText> => ({
   filingBatchCode: copy.filingBatchCode("eproc do TJSP", false, 5),
   filingBatchConfirm: copy.filingBatchConfirm("eproc do TJSP"),
   filingBatchStopped: copy.filingBatchStopped("Projudi do TJGO"),
+  filingAccessAsk: copy.filingAccessAsk("A ação do caso nº 19", "PJe do TJRJ"),
   aiDown: copy.aiDown("Anthropic", "6 de novembro de 2026, 10:12"),
   aiUp: copy.aiUp("Anthropic", "20 de novembro de 2026, 13:44"),
   supportAccess: copy.supportAccess("Ana", "pagamento duplicado", 30),
