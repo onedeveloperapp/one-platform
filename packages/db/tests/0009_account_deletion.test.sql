@@ -297,6 +297,8 @@ select is(
     'consent_acceptances.term_id',
     -- Which comarca each municipality belongs to (0145) is platform data of a court, which is never deleted.
     'court_comarcas.court',
+    -- The places of a court inside a comarca, by neighbourhood (0309), are platform data of a court, never deleted.
+    'court_forum_areas.court',
     -- A court's way of paying (0135) is platform data of a court, which is never deleted.
     'court_payment_paths.court',
     -- The court systems ONE works on and the texts of the filing ways (0263, 0264) are the platform's, never deleted.
