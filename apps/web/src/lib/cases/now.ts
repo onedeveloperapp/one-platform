@@ -1073,13 +1073,18 @@ export function caseNow(input: CaseNowInput): CaseNow {
               }),
             );
           } else if ((byOne?.channel || onScreen) && (sent !== null || byOne?.blocker === null)) {
-            // A sending the court did not take is tried again at a later time: ONE waits on the court then.
+            // A sending the court did not take is tried again at a later time: ONE waits on the court then. A filing
+            // on the court's screen goes at the court's pace, in the lawyer's browser or ONE's, and pauses for the
+            // lawyer (their code, their certificate, their word): never a reason to hold the case's screen (the
+            // owner, 2026-11-27: the notice held the test case 19 for minutes while the batch waited for the
+            // lawyer's extension, and the lawyer could not get on).
             const retry = byOne?.submission ?? null;
             const outside =
-              sent === "owed" &&
-              (retry?.attempts ?? 0) > 0 &&
-              Boolean(retry?.retryAfter) &&
-              Date.parse(retry?.retryAfter ?? "") > Date.parse(input.now);
+              onScreen ||
+              (sent === "owed" &&
+                (retry?.attempts ?? 0) > 0 &&
+                Boolean(retry?.retryAfter) &&
+                Date.parse(retry?.retryAfter ?? "") > Date.parse(input.now));
             working.push(
               item({
                 id: `filing:${filing.id}`,

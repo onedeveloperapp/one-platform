@@ -668,15 +668,29 @@ export function ExtensionLinkBox({
     </Alert>
   ) : null;
 
-  if (link) {
+  // A code asked while an extension is linked (one reinstalled, or another computer): the code shows as when none is,
+  // and the extension that types it replaces the one linked before (`claim_extension_link` ends it, 0263). Before
+  // 2026-11-27 a linked extension offered only "Desligar", and the owner, who had reinstalled it, found no code.
+  if (link && !code) {
     return (
       <Box className="flex flex-col gap-1">
         <StateLine
           tone="done"
           action={
-            <Button size="small" variant="text" color="grey" onClick={() => void unlink()} disabled={busy || disabled}>
-              {t("filing-ways-extension-unlink")}
-            </Button>
+            <Box className="flex flex-row flex-wrap gap-1">
+              <Button size="small" variant="text" color="grey" onClick={() => void ask()} disabled={busy || disabled}>
+                {t("filing-ways-extension-relink")}
+              </Button>
+              <Button
+                size="small"
+                variant="text"
+                color="grey"
+                onClick={() => void unlink()}
+                disabled={busy || disabled}
+              >
+                {t("filing-ways-extension-unlink")}
+              </Button>
+            </Box>
           }
         >
           {t("filing-ways-extension-linked", { label: link.label ?? t("filing-ways-extension-unnamed") })}

@@ -10351,6 +10351,7 @@
     "filing-ways-password": "Senha",
     "filing-ways-password-help": "Fica lacrada no cofre do ONE, só para protocolar, e não aparece mais na tela.",
     "filing-ways-extension-unlink": "Desligar",
+    "filing-ways-extension-relink": "Ligar de novo",
     "filing-ways-extension-linked": "Extensão ligada à sua conta · {label}",
     "filing-ways-extension-unnamed": "neste navegador",
     "filing-ways-extension-code": "Abra o painel da extensão do ONE no Chrome e digite este código em Ligar ao ONE. Ele vale 10 minutos.",

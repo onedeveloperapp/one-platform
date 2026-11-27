@@ -342,6 +342,8 @@ describe("caseNow", () => {
       expect(now(status).working.find((line) => line.id === "filing:fp")).toMatchObject({
         owner: "one",
         text: { key: "case-now-filing-one" },
+        // At the court's pace, in the lawyer's browser: never a reason to hold the case's screen (2026-11-27).
+        outside: true,
       });
     }
     expect(now("confirming").blocking.find((line) => line.id === "filing:fp")).toMatchObject({
