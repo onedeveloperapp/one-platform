@@ -1,12 +1,15 @@
 /**
- * The forecast of a lawsuit (migration 0250), as the screens read it: the cut nearest the case with the sample (the
- * judge, the unit, the comarca, the court, every court), the chance of winning, the moral damages' quartiles and the
+ * The forecast of a lawsuit (migrations 0250 and 0310), as the screens read it: the cut nearest the case with the
+ * sample (the judge, the unit, the place inside the comarca, the comarca, the court, every court; always of the
+ * lawsuit's kind, a juizado's or a civil court's), the chance of winning, the moral damages' quartiles and the
  * values to place an offer among, how such lawsuits end, each level beside it, what the claimants may expect and what
  * the airline does at the unit. Every number comes from the database's one rule; this only reads it and places an
  * offer. Pure.
  */
 
-export type ForecastLevel = "judge" | "unit" | "comarca" | "court" | "all";
+export type ForecastLevel = "judge" | "unit" | "place" | "comarca" | "court" | "all";
+/** The kind of lawsuit a cut reads: a juizado's or a civil court's; null where no kind is cut (the intake's). */
+export type ForecastKind = "juizado" | "comum";
 export type ForecastBase = "pequena" | "media" | "solida";
 export type ExtinctionReason =
   | "ausencia_autor"
@@ -20,9 +23,12 @@ export type ForecastCut = {
   level: ForecastLevel;
   court: string | null;
   comarca: string | null;
+  /** The place inside the comarca as the court names it ("Lagoa", "Regional da Barra da Tijuca"). */
+  place: string | null;
   unit: string | null;
   judge: string | null;
   airline: string | null;
+  kind: ForecastKind | null;
   problem: string;
 };
 
@@ -56,8 +62,11 @@ export type CaseForecast = {
   stage: "before" | "distributed";
   problem: string | null;
   airline: string | null;
+  kind: ForecastKind | null;
   court: string | null;
   comarca: string | null;
+  /** The place the client's neighbourhood takes the lawsuit to, or the unit's of a lawsuit distributed. */
+  place: string | null;
   unit: string | null;
   judge: string | null;
   claimants: number;
@@ -65,7 +74,7 @@ export type CaseForecast = {
   expectedCents: number | null;
   levels: LevelRow[];
   hearing: {
-    level: "unit" | "comarca" | "court";
+    level: HearingLevel;
     decisions: number;
     acordo: number;
     extinto: number;
@@ -79,7 +88,10 @@ const num = (value: unknown): number => (Number.isFinite(Number(value)) ? Number
 const maybe = (value: unknown): number | null =>
   value === null || value === undefined || value === "" || !Number.isFinite(Number(value)) ? null : Number(value);
 const text = (value: unknown): string | null => (typeof value === "string" && value.trim() ? value : null);
-const LEVELS: ForecastLevel[] = ["judge", "unit", "comarca", "court", "all"];
+const LEVELS: ForecastLevel[] = ["judge", "unit", "place", "comarca", "court", "all"];
+const HEARING_LEVELS = ["unit", "place", "comarca", "court"] as const;
+export type HearingLevel = (typeof HEARING_LEVELS)[number];
+const kindOf = (value: unknown): ForecastKind | null => (value === "juizado" || value === "comum" ? value : null);
 const REASONS: ExtinctionReason[] = [
   "ausencia_autor",
   "desistencia",
@@ -96,9 +108,11 @@ function cutOf(raw: unknown): ForecastCut {
     level,
     court: text(row.court),
     comarca: text(row.comarca),
+    place: text(row.place),
     unit: text(row.unit),
     judge: text(row.judge),
     airline: text(row.airline),
+    kind: kindOf(row.kind),
     problem: text(row.problem) ?? "other",
   };
 }
@@ -159,15 +173,16 @@ export function caseForecastOf(raw: unknown): CaseForecast | null {
   const row = obj(raw);
   if (typeof row.proceeding !== "string") return null;
   const hearing = obj(row.hearing);
-  const hearingLevel =
-    hearing.level === "unit" || hearing.level === "comarca" || hearing.level === "court" ? hearing.level : null;
+  const hearingLevel = HEARING_LEVELS.find((level) => level === hearing.level) ?? null;
   return {
     proceedingId: row.proceeding,
     stage: row.stage === "distributed" ? "distributed" : "before",
     problem: text(row.problem),
     airline: text(row.airline),
+    kind: kindOf(row.kind),
     court: text(row.court),
     comarca: text(row.comarca),
+    place: text(row.place),
     unit: text(row.unit),
     judge: text(row.judge),
     claimants: num(row.claimants),

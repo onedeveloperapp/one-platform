@@ -50,6 +50,45 @@ describe("the forecast of a lawsuit", () => {
     expect(hasForecast(read)).toBe(true);
   });
 
+  it("reads the place inside the comarca and the kind of lawsuit each cut reads (0310)", () => {
+    const read = caseForecastOf({
+      ...RAW,
+      stage: "before",
+      kind: "juizado",
+      court: "TJRJ",
+      comarca: "Rio de Janeiro",
+      place: "Lagoa",
+      unit: null,
+      judge: null,
+      forecast: {
+        ...RAW.forecast,
+        cut: {
+          level: "place",
+          court: "TJRJ",
+          comarca: "Rio de Janeiro",
+          place: "Lagoa",
+          kind: "juizado",
+          problem: "cancellation",
+        },
+      },
+      levels: [
+        {
+          cut: { level: "comarca", comarca: "Rio de Janeiro", kind: "juizado", problem: "cancellation" },
+          merits: 42,
+          won: 28,
+        },
+      ],
+      hearing: { level: "place", decisions: 32, acordo: 0, extinto: 0, reasons: {} },
+    });
+    expect(read).toMatchObject({ kind: "juizado", place: "Lagoa", stage: "before" });
+    expect(read?.forecast?.cut).toMatchObject({ level: "place", place: "Lagoa", kind: "juizado" });
+    expect(read?.levels[0]).toMatchObject({ level: "comarca", cut: { kind: "juizado" } });
+    expect(read?.hearing?.level).toBe("place");
+    // A kind the database does not know is no kind; an older answer without one reads as none.
+    expect(caseForecastOf({ ...RAW, kind: "federal" })?.kind).toBeNull();
+    expect(caseForecastOf(RAW)?.forecast?.cut.kind).toBeNull();
+  });
+
   it("says nothing of a lawsuit with no forecast, nor of an answer that is none", () => {
     expect(caseForecastOf(null)).toBeNull();
     expect(forecastOf({})).toBeNull();

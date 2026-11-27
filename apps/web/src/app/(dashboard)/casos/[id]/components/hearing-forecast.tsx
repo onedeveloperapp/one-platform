@@ -15,6 +15,7 @@ import { brl } from "@/lib/jurimetrics/profile";
 
 const PLACE_KEY = {
   unit: "forecast-place-unit",
+  place: "forecast-place-place",
   comarca: "forecast-place-comarca",
   court: "forecast-place-court",
 } as const;
@@ -85,7 +86,7 @@ export function HearingForecastView({
                 {t("forecast-hearing-settle", {
                   count: hearing.acordo,
                   total: hearing.decisions,
-                  place: t(PLACE_KEY[hearing.level]),
+                  place: t(PLACE_KEY[hearing.level], { kind: read.kind ?? "other" }),
                 })}
               </Typography>
               {settles !== null && settles < 0.03 ? (
@@ -107,7 +108,7 @@ export function HearingForecastView({
                 {t("forecast-hearing-extinct", {
                   count: hearing.extinto,
                   total: hearing.decisions,
-                  place: t(PLACE_KEY[hearing.level]),
+                  place: t(PLACE_KEY[hearing.level], { kind: read.kind ?? "other" }),
                 })}
               </Typography>
               {absent > 0 ? (

@@ -42,13 +42,19 @@ export const dayWords = (iso: string | null): string => {
   return match ? `${match[3]}/${match[2]}/${match[1]}` : "";
 };
 
-/** Where a cut was read, in the words of the case: the judge, the unit, the comarca, the court or every court. */
+/**
+ * Where a cut was read, in the words of the case: the judge, the unit, the place inside the comarca, the comarca, the
+ * court or every court, the last three with the kind of lawsuit they read (0310: a juizado's forecast reads juizados).
+ */
 export function whereWords(t: T, cut: ForecastCut, courts: string[]): string {
+  const kind = cut.kind ?? "other";
   if (cut.level === "judge" && cut.judge) return t("forecast-where-judge", { judge: cut.judge });
   if (cut.level === "unit" && cut.unit) return cut.unit;
-  if (cut.level === "comarca" && cut.comarca) return t("forecast-where-comarca", { comarca: cut.comarca });
-  if (cut.level === "court" && cut.court) return t("forecast-where-court", { court: cut.court });
-  return t("forecast-where-all", { courts: courts.join(", ") });
+  if (cut.level === "place" && cut.place && cut.comarca)
+    return t("forecast-where-place", { place: cut.place, comarca: cut.comarca });
+  if (cut.level === "comarca" && cut.comarca) return t("forecast-where-comarca", { comarca: cut.comarca, kind });
+  if (cut.level === "court" && cut.court) return t("forecast-where-court", { court: cut.court, kind });
+  return t("forecast-where-all", { courts: courts.join(", "), kind });
 }
 
 /** What a cut is of: where, against which airline (or every one), and the problem. */
@@ -368,7 +374,11 @@ function ForecastBody({
         </Box>
       </Box>
 
-      {read.stage === "before" ? <StateLine tone="info">{t("forecast-before")}</StateLine> : null}
+      {read.stage === "before" ? (
+        <StateLine tone="info">
+          {read.place ? t("forecast-before-place", { place: read.place }) : t("forecast-before")}
+        </StateLine>
+      ) : null}
 
       <Box className="border-grey-100 flex flex-row flex-wrap items-center gap-x-3 gap-y-1 border-t pt-3">
         <Typography variant="caption" className="text-text-secondary flex-1">
@@ -382,12 +392,18 @@ function ForecastBody({
   );
 }
 
-/** A level's name beside the forecast: who judges, the unit, the comarca or the court, with the airline when cut by it. */
+/**
+ * A level's name beside the forecast: who judges, the unit, the place inside the comarca, the comarca, the court or
+ * every court, with the kind of lawsuit it reads and the airline when cut by it.
+ */
 function levelWords(t: T, level: string, cut: ForecastCut, airlineName: string | null): string {
   const airline = cut.airline && airlineName ? t("forecast-level-airline", { airline: airlineName }) : "";
+  const kind = cut.kind ?? "other";
   if (level === "judge" && cut.judge) return t("forecast-level-judge", { judge: cut.judge, airline });
-  if (level === "unit") return t("forecast-level-unit", { airline });
-  if (level === "comarca" && cut.comarca) return t("forecast-level-comarca", { comarca: cut.comarca, airline });
-  if (level === "court" && cut.court) return t("forecast-level-court", { court: cut.court, airline });
-  return t("forecast-level-all", { airline });
+  if (level === "unit") return t("forecast-level-unit", { airline, kind });
+  if (level === "place" && cut.place && cut.comarca)
+    return t("forecast-level-place", { place: cut.place, comarca: cut.comarca, airline });
+  if (level === "comarca" && cut.comarca) return t("forecast-level-comarca", { comarca: cut.comarca, airline, kind });
+  if (level === "court" && cut.court) return t("forecast-level-court", { court: cut.court, airline, kind });
+  return t("forecast-level-all", { airline, kind });
 }

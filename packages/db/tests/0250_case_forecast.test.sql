@@ -210,7 +210,7 @@ select ok(
 
 select ok(
   not has_function_privilege('authenticated', 'public.market_forecast(text, text, text, text, text)', 'EXECUTE')
-  and not has_function_privilege('authenticated', 'public.market_forecast_of(text, text, text, text, text, text, integer, boolean)', 'EXECUTE')
+  and not has_function_privilege('authenticated', 'public.market_forecast_of(text, text, text, text, text, text, text, text, integer, boolean)', 'EXECUTE')
   and not has_function_privilege('authenticated', 'public.proceeding_forecast(uuid)', 'EXECUTE')
   and not has_function_privilege('authenticated', 'public.record_market_day(uuid, date, jsonb, boolean, text)', 'EXECUTE')
   and not has_function_privilege('authenticated', 'public.refresh_case_forecasts(integer)', 'EXECUTE')
