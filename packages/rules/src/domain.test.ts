@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { cityKey, decideForum, type ForumInput } from "./forum.ts";
+import { cityKey, decideForum, districtKey, type ForumArea, type ForumInput, forumOfDistrict } from "./forum.ts";
 import { planProceedings, smallClaimsCeilingCents } from "./proceedings.ts";
 import { countCausesByState, oneMoreNeedsSupplementary } from "./state-count.ts";
 import { type StatedCause, triageSuspension } from "./suspension.ts";
@@ -46,6 +46,31 @@ test("another forum needs a link to the flight and a recorded reason, whatever t
   );
   assert.equal(decided.ok, true);
   assert.equal(cityKey("São  Paulo"), cityKey("sao paulo"));
+});
+
+test("inside the comarca, the place that takes a resident's lawsuit is read from the court's list of neighbourhoods", () => {
+  const areas: ForumArea[] = [
+    { district: "Jardim Botânico", forum: "Lagoa" },
+    { district: "Gávea", forum: "Lagoa" },
+    { district: "Barra da Tijuca", forum: "Regional da Barra da Tijuca" },
+    { district: "Cidade Nova", forum: "Centro" },
+    { district: "Cidade Nova", forum: "Tijuca" },
+  ];
+  assert.equal(forumOfDistrict(areas, "Jardim Botânico"), "Lagoa");
+  // As people write it: no accents, other case, the short first word.
+  assert.equal(forumOfDistrict(areas, " jd. botanico "), "Lagoa");
+  assert.equal(forumOfDistrict(areas, "GAVEA"), "Lagoa");
+  assert.equal(forumOfDistrict(areas, "barra da tijuca"), "Regional da Barra da Tijuca");
+  // Nothing guessed: a neighbourhood not listed, none at all, or one the list gives two places.
+  assert.equal(forumOfDistrict(areas, "Copacabana"), null);
+  assert.equal(forumOfDistrict(areas, null), null);
+  assert.equal(forumOfDistrict(areas, "  "), null);
+  assert.equal(forumOfDistrict(areas, "Cidade Nova"), null);
+  assert.equal(forumOfDistrict([], "Gávea"), null);
+  assert.equal(districtKey("Pq. Anchieta"), "parque anchieta");
+  assert.equal(districtKey("Sta. Teresa"), "santa teresa");
+  assert.equal(districtKey("S. Cristóvão"), "sao cristovao");
+  assert.equal(districtKey("Vila Isabel"), "vila isabel");
 });
 
 test("a family with a minor goes to the civil court together, unless a lawyer chose to split it", () => {

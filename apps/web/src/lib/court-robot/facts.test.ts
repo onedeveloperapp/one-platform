@@ -112,6 +112,21 @@ describe("what the court's screen asks of the lawsuit itself (the PJe of TJRJ's 
     expect(fact(unknown, "processo.custas")).toBeUndefined();
   });
 
+  it("names the place inside the comarca that takes the claimant's neighbourhood, never the neighbourhood (2026-11-27)", () => {
+    const resident = { ...CLAIMANT, district: "Jardim Botânico", city: "Rio de Janeiro", state: "RJ" };
+    const facts = filingFactsOf({ ...SENT, claimants: [resident] }, null, {
+      freeJustice: null,
+      injunction: null,
+      today: "2026-11-27",
+      forum: "Lagoa",
+    });
+    expect(fact(facts, "processo.foro")?.valor).toBe("Lagoa");
+    // The neighbourhood is the claimant's address: it goes to the AI only by its key, never its words.
+    expect(JSON.stringify(facts.fatos)).not.toContain("Jardim Botânico");
+    // With no place, no fact: the lawsuit goes to the comarca, as before.
+    expect(fact(filingFactsOf({ ...SENT, claimants: [resident] }), "processo.foro")).toBeUndefined();
+  });
+
   it("reads an injunction asked from the petition's words, and nothing from no text", () => {
     expect(asksInjunction("Requer a concessão de tutela de urgência para ...")).toBe(true);
     expect(asksInjunction("Requer a citação da ré e a condenação ao pagamento de indenização.")).toBe(false);

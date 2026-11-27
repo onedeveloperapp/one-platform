@@ -14,7 +14,14 @@ import type { OneAnswer, OneApi } from "@/lib/court-extension/one-api";
 import { readMap } from "@/lib/court-robot/map";
 import { supabaseFileStore } from "@/lib/files/store";
 import { tellBatchStop, tellBatchStopped } from "@/lib/filing-ways/batch-notices-work";
-import { readDone, readScreen, readSteps, receiptDigits, receiptText } from "@/lib/filing-ways/extension-protocol";
+import {
+  readDone,
+  readPath,
+  readScreen,
+  readSteps,
+  receiptDigits,
+  receiptText,
+} from "@/lib/filing-ways/extension-protocol";
 import {
   filingRowOf,
   nextFiling,
@@ -328,7 +335,7 @@ export function serverBackend(
           return answer;
         },
 
-        async plan(filingId, claim, screen, done) {
+        async plan(filingId, claim, screen, done, path) {
           const frames = readScreen(screen);
           if (!frames) return refused("invalid_screen");
           const filing = await mine(filingId);
@@ -339,6 +346,7 @@ export function serverBackend(
             systemKey: batch.system.key,
             frames,
             done: readDone(done),
+            path: readPath(path),
           });
           return reading.ok ? answered({ plan: reading.plan }) : refused(reading.code);
         },

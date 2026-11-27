@@ -361,3 +361,159 @@ describe("the screen as ONE's robot reads it", () => {
     expect(isCodeTable(["Cód.", "Documento"])).toBe(false);
   });
 });
+
+describe("the tabs of a court's screen (the PJe of TJRJ, 2026-11-27)", () => {
+  // The headers of a RichFaces tab panel, as the PJe's "Cadastro de processo" shows them: cells of tables, no link.
+  const RICHFACES_TABS = `
+    <table class="rich-tabpanel"><tbody><tr>
+      <td><table id="f:tabInfo_shifted" class="rich-tabhdr-cell-inactive" onclick="void 0"><tbody><tr>
+        <td class="rich-tabhdr-side-cell"><table><tbody><tr>
+          <td id="f:tabInfo_lbl" class="dr-tbpnl-tb rich-tab-header rich-tab-inactive">Dados iniciais</td>
+        </tr></tbody></table></td>
+      </tr></tbody></table></td>
+      <td><table id="f:tabPartes_shifted" class="rich-tabhdr-cell-active" onclick="void 0"><tbody><tr>
+        <td class="rich-tabhdr-side-cell"><table><tbody><tr>
+          <td id="f:tabPartes_lbl" class="dr-tbpnl-tb rich-tab-header rich-tab-active">Partes</td>
+        </tr></tbody></table></td>
+      </tr></tbody></table></td>
+      <td><table class="rich-tabhdr-cell-disabled"><tbody><tr>
+        <td class="rich-tabhdr-side-cell"><table><tbody><tr>
+          <td class="dr-tbpnl-tb rich-tab-header rich-tab-disabled">Protocolar inicial</td>
+        </tr></tbody></table></td>
+      </tr></tbody></table></td>
+      <td><table class="rich-tabhdr-cell-inactive"><tbody><tr>
+        <td class="rich-tabhdr-side-cell"><table><tbody><tr>
+          <td class="dr-tbpnl-tb rich-tab-header rich-tab-inactive"><a href="#">Custas judiciais</a></td>
+        </tr></tbody></table></td>
+      </tr></tbody></table></td>
+    </tr></tbody></table>
+    <h3>Polo Ativo</h3>
+    <button id="addParte">Parte</button>`;
+
+  it("maps each tab as a link named for it, the open one said, a closed one disabled, each found again alone", () => {
+    document.body.innerHTML = RICHFACES_TABS;
+    const robot = captureScreen(document, EPROC, NOW, { rows: true });
+    const tabs = robot.fields.filter((field) => field.label?.startsWith("Aba "));
+    expect(tabs.map((tab) => [tab.kind, tab.label, tab.disabled])).toEqual([
+      ["link", "Aba Dados iniciais", false],
+      ["link", "Aba Partes (aberta)", false],
+      ["link", "Aba Protocolar inicial", true],
+      ["link", "Aba Custas judiciais", false],
+    ]);
+    expect(tabs[0]?.selector).toBe(String.raw`#f\:tabInfo_lbl`);
+    // A tab with no id of its own is kept apart from the others: never folded into one button of a table's rows.
+    const unnamed = tabs.filter((tab) => !tab.selector.startsWith("#f"));
+    expect(new Set(unnamed.map((tab) => `${tab.selector}|${tab.index}`)).size).toBe(2);
+    for (const tab of unnamed) {
+      const found = Array.from(document.querySelectorAll(tab.selector))[tab.index];
+      expect(found?.textContent?.trim()).toBe(tab.label?.replace(/^Aba /, ""));
+    }
+    // The link inside a tab's header is the tab, mapped once.
+    expect(robot.fields.filter((field) => /custas/i.test(field.label ?? ""))).toHaveLength(1);
+    expect(robot.fields.find((field) => field.label === "Parte")?.kind).toBe("button");
+    // The lawyer's map reads the tabs too.
+    expect(captureScreen(document, EPROC, NOW).fields.filter((field) => field.label?.startsWith("Aba "))).toHaveLength(
+      4,
+    );
+  });
+
+  it("reads the tabs of a list ARIA or Bootstrap names, and a press on a tab as a step of the path", () => {
+    document.body.innerHTML = `
+      <ul class="nav nav-tabs"><li class="active"><a href="#dados">Dados</a></li><li><a href="#docs">Documentos</a></li></ul>
+      <div role="tablist"><button role="tab" aria-selected="false" id="t1">Assuntos</button></div>`;
+    const robot = captureScreen(document, EPROC, NOW, { rows: true });
+    expect(robot.fields.map((field) => field.label)).toEqual(["Aba Dados (aberta)", "Aba Documentos", "Aba Assuntos"]);
+    const press = new MouseEvent("click", { bubbles: true });
+    Object.defineProperty(press, "target", { value: document.getElementById("t1") });
+    expect(stepOf(press, EPROC, NOW)?.label).toBe("Aba Assuntos");
+  });
+});
+
+describe("the PJe of TJRJ as the lawyer walked it (the recording of 2026-11-27)", () => {
+  it("reads a column's name without the script the PJe writes in it, and a layout table takes no names of the tables inside it", () => {
+    document.body.innerHTML = `
+      <table id="tabPanel"><tbody><tr><td>
+        <div class="rich-panel"><div class="rich-panel-header">Assuntos Associados<span class="required">*</span></div>
+        <div class="rich-panel-body"><table id="associados">
+          <thead><tr>
+            <th></th>
+            <th>Cod.<script>function clear_l_processoAssuntoListList_3Aj_id271() { _clearJSFFormParameters('l_processoAssuntoListList'); }</script></th>
+            <th>Assunto Principal<script>function clear_x() {}</script></th>
+            <th>Assunto<script>function clear_y() {}</script></th>
+          </tr></thead>
+          <tbody>
+            <tr><td><a id="rem1" href="#" title="Remover"><i class="fa fa-arrow-right"></i></a></td><td>4830</td><td><input type="radio" name="principal"></td><td>DIREITO DO CONSUMIDOR (1156) | Cancelamento de vôo (4830)</td></tr>
+          </tbody>
+        </table></div></div>
+      </td></tr></tbody></table>`;
+    const robot = captureScreen(document, EPROC, NOW, { rows: true });
+    const inner = robot.tables.find((table) => table.selector === "#associados");
+    expect(inner?.headers).toEqual(["Cod.", "Assunto Principal", "Assunto"]);
+    expect(inner?.lines?.map((line) => line.cells[1])).toEqual(["4830"]);
+    expect(inner?.lines?.[0]?.actions.map((action) => action.label)).toEqual(["Remover"]);
+    // The layout table around it has no names of its own: it is no table of the screen.
+    expect(robot.tables.find((table) => table.selector === "#tabPanel")).toBeUndefined();
+    expect(robot.headings).toContain("Assuntos Associados *");
+  });
+
+  it("maps the cells the PJe made pressable as buttons, each told by the part of the screen it is in", () => {
+    document.body.innerHTML = `
+      <div class="rich-panel" id="ativo"><div class="rich-panel-header"><label>Polo Ativo</label>
+        <form id="formAtivo"><table class="rich-toolbar" id="formAtivo:toolbar"><tbody><tr>
+          <td class="rich-toolbar-item" onclick="A4J.AJAX.Submit('formAtivo')"><span class="btn" title="Adicionar parte"><i class="fa fa-plus"></i></span></td>
+          <td class="rich-toolbar-item" onclick="A4J.AJAX.Submit('formAtivo')"><label for="formAtivo:addParteA">Parte</label></td>
+          <td class="rich-toolbar-item" onclick="A4J.AJAX.Submit('formAtivo')"><div style="width: 300px"></div></td>
+          <td class="rich-toolbar-item" onclick="A4J.AJAX.Submit('formAtivo')"><label>Procurador | Terceiro Vinculado</label></td>
+        </tr></tbody></table></form></div></div>
+      <div class="rich-panel" id="passivo"><div class="rich-panel-header"><label>Polo Passivo</label>
+        <form id="formPassivo"><table class="rich-toolbar" id="formPassivo:toolbar"><tbody><tr>
+          <td class="rich-toolbar-item" onclick="A4J.AJAX.Submit('formPassivo')"><label>Parte</label></td>
+        </tr></tbody></table></form></div></div>
+      <span class="btn-fechar" onclick="hideDialogMessage(this);"><i class="icon-fechar"></i></span>
+      <div onclick="">Nada</div>`;
+    const robot = captureScreen(document, EPROC, NOW, { rows: true });
+    const buttons = robot.fields.filter((field) => field.kind === "button");
+    expect(buttons.map((field) => [field.label, field.section])).toEqual([
+      ["Adicionar parte", "Polo Ativo"],
+      ["Parte", "Polo Ativo"],
+      ["Procurador | Terceiro Vinculado", "Polo Ativo"],
+      ["Parte", "Polo Passivo"],
+    ]);
+    // Each found again alone, where a press runs the page's own handler.
+    for (const button of buttons) {
+      const found = Array.from(document.querySelectorAll(button.selector))[button.index];
+      expect(found?.getAttribute("onclick")).toContain("A4J.AJAX.Submit");
+    }
+    // A panel's title without the toolbar its header holds.
+    expect(robot.headings).toEqual(["Polo Ativo", "Polo Passivo"]);
+    // The lawyer's map keeps no section.
+    expect(captureScreen(document, EPROC, NOW).fields.some((field) => "section" in field)).toBe(false);
+  });
+
+  it("says a radio with its question, a box by its label that has words, and a file field by its button", () => {
+    document.body.innerHTML = `
+      <span id="jg"><div class="name"><label for="f:jg:radio">Justiça Gratuita?</label></div>
+        <div class="value"><table id="f:jg:radio" class="radio"><tbody><tr>
+          <td><input type="radio" name="f:jg:radio" id="f:jg:radio:0" value="true"> <label for="f:jg:radio:0">Sim</label></td>
+          <td><input type="radio" checked name="f:jg:radio" id="f:jg:radio:1" value="false"> <label for="f:jg:radio:1">Não</label></td>
+        </tr></tbody></table></div></span>
+      <div class="rich-panel"><div class="rich-panel-header">Segredo de Justiça</div><div class="rich-panel-body">
+        <table id="sig:radio"><tbody><tr><td><input type="radio" name="sig:radio" id="sig:radio:0"> <label for="sig:radio:0">Sim</label></td></tr></tbody></table>
+      </div></div>
+      <div class="name"><label for="sigDP" class=""></label></div>
+      <div class="value"><input id="sigDP" type="checkbox"> <label for="sigDP">Sigiloso</label></div>
+      <div class="rich-fileupload-button"><div class="rich-fileupload-button-content">Adicionar</div>
+        <div style="overflow: hidden"><input class="rich-fileupload-hidden" id="up:file" type="file"></div></div>`;
+    const robot = captureScreen(document, EPROC, NOW, { rows: true });
+    const said = (selector: string) => robot.fields.find((field) => field.selector === selector);
+    expect(said(String.raw`#f\:jg\:radio\:0`)?.label).toBe("Justiça Gratuita? · Sim");
+    expect(said(String.raw`#f\:jg\:radio\:1`)?.label).toBe("Justiça Gratuita? · Não");
+    expect(said(String.raw`#f\:jg\:radio\:1`)?.checked).toBe(true);
+    expect([said(String.raw`#sig\:radio\:0`)?.label, said(String.raw`#sig\:radio\:0`)?.section]).toEqual([
+      "Sim",
+      "Segredo de Justiça",
+    ]);
+    expect(said("#sigDP")?.label).toBe("Sigiloso");
+    expect(said(String.raw`#up\:file`)?.label).toBe("Adicionar");
+  });
+});

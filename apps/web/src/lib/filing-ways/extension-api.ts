@@ -8,6 +8,7 @@ import {
   type ExtensionSystem,
   linkCodeOf,
   readDone,
+  readPath,
   readScreen,
   readSteps,
   receiptDigits,
@@ -278,6 +279,8 @@ async function plan(
     frames,
     // What ONE did on this screen before: an extension before 0.4.0 sends none, and the AI reads the screen as new.
     done: readDone(body.done),
+    // The screens before it in this filing: an extension before 0.4.3 sends none.
+    path: readPath(body.path),
   });
   return reading.ok ? answered({ plan: reading.plan }) : refused(reading.code);
 }

@@ -368,6 +368,10 @@ describe("a batch filed by the lawyer's extension", () => {
     const plans = one.calls.filter((call) => call.name === "plan");
     expect(plans.length).toBeGreaterThan(0);
     expect(plans.every((call) => Array.isArray(call.args[3]) && (call.args[3] as unknown[]).length === 0)).toBe(true);
+    // And with the screens before it in this filing (2026-11-27): none on the first, the ones ONE went through after.
+    const paths = plans.map((call) => (call.args[4] as { tela: string }[]).map((step) => step.tela));
+    expect(paths[0]).toEqual([]);
+    expect(paths[paths.length - 1]?.length).toBeGreaterThan(0);
   });
 
   it("when the lawyer says stop, nothing that may send is pressed and the batch stops with the path kept", async () => {

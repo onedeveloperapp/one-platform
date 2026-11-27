@@ -69,6 +69,11 @@ export type MappedField = {
   chosen?: string | null;
   checked?: boolean;
   filled?: boolean;
+  /**
+   * The title of the part of the screen the field is in (a panel's header, a fieldset's legend: the PJe's "Polo Ativo",
+   * "Segredo de Justiça"), for ONE's robot: two "Parte" buttons or two "Sim" are told apart by it (2026-11-27).
+   */
+  section?: string | null;
 };
 
 /**
@@ -227,12 +232,8 @@ function labelOf(element: Element): string | null {
   };
   const aria = pick(element.getAttribute("aria-label"));
   if (aria) return aria;
-  const id = element.getAttribute("id");
-  if (id) {
-    const forLabel = document.querySelector(`label[for="${id.replace(/"/g, '\\"')}"]`);
-    const text = forLabel ? pick(ownText(forLabel)) : null;
-    if (text) return text;
-  }
+  const named = labelFor(element);
+  if (named) return named;
   const wrapping = element.closest("label");
   if (wrapping) {
     const text = pick(ownText(wrapping));
@@ -268,10 +269,127 @@ function labelOf(element: Element): string | null {
     const text = pick(ownText(previousCell));
     if (text) return text;
   }
-  return pick(element.getAttribute("title")) ?? pick(element.getAttribute("placeholder"));
+  const titled = pick(element.getAttribute("title")) ?? pick(element.getAttribute("placeholder"));
+  if (titled) return titled;
+  // A file field hidden inside the button that opens it (RichFaces' "Adicionar"): the words of that button.
+  if (element instanceof HTMLInputElement && element.type === "file") {
+    let node = element.parentElement;
+    for (let level = 0; node && level < 3; level += 1, node = node.parentElement) {
+      const text = redact(ownText(node));
+      if (text) return text.length <= 60 ? text : null;
+    }
+  }
+  return null;
+}
+
+/**
+ * The words of the labels that name an element by its id, the first that has any: a page may write an empty one first
+ * (the PJe's box "Sigiloso", 2026-11-27).
+ */
+function labelFor(element: Element): string | null {
+  const id = element.getAttribute("id");
+  if (!id) return null;
+  for (const label of Array.from(element.ownerDocument.querySelectorAll(`label[for="${id.replace(/"/g, '\\"')}"]`))) {
+    const text = redact(ownText(label));
+    if (text && text.length <= 100) return text;
+  }
+  return null;
+}
+
+/**
+ * The question a radio or a box answers when its own words are only the answer ("Sim", "Não"): the label the page
+ * writes for what holds the options (the PJe's "Justiça Gratuita?" and "Brasileiro?" name the table of the options),
+ * or a group's ARIA name (2026-11-27: ONE read four "Sim" and "Não" with no question). A fieldset's legend is the
+ * field's section (`sectionOf`), not part of its words.
+ */
+function groupOf(element: Element): string | null {
+  let node = element.parentElement;
+  for (let level = 0; node && level < 5; level += 1, node = node.parentElement) {
+    const named = labelFor(node);
+    if (named) return named;
+    const aria = redact(node.getAttribute("aria-label"));
+    if (aria && aria.length <= 100 && node.matches("[role=radiogroup], [role=group]")) return aria;
+  }
+  return null;
+}
+
+/** The parts of the screen that have a title of their own: a RichFaces panel, a Bootstrap panel or card, a fieldset. */
+const SECTION = ".rich-panel, .panel, .card, fieldset";
+const SECTION_TITLE = ":scope > .rich-panel-header, :scope > .panel-heading, :scope > .card-header, :scope > legend";
+
+/** The words of a part's title, without the forms, tables and fields a header may also hold (the PJe's "+ Parte"). */
+function titleText(header: Element): string {
+  let text = "";
+  header.childNodes.forEach((child) => {
+    if (child.nodeType === 3) text += child.textContent ?? "";
+    else if (
+      child instanceof Element &&
+      !child.matches("form, table, input, select, textarea, button, a, script, style")
+    ) {
+      text += ` ${titleText(child)}`;
+    }
+  });
+  return redact(text);
+}
+
+/** The title of the part of the screen an element is in, the nearest that has one: "Polo Ativo", "Segredo de Justiça". */
+function sectionOf(element: Element): string | null {
+  for (let node = element.parentElement; node; node = node.parentElement) {
+    if (!node.matches(SECTION)) continue;
+    const header = node.querySelector(SECTION_TITLE);
+    const text = header ? titleText(header) : "";
+    if (text && text.length <= 80) return text;
+  }
+  return null;
+}
+
+/**
+ * An element the page made pressable with no button nor link of its own: a cell or a box with an `onclick` (the PJe's
+ * "+ Parte" and "Procurador | Terceiro Vinculado", cells of a RichFaces toolbar, 2026-11-27), the innermost one, mapped
+ * as a button by its words, its title or its icon.
+ */
+const PRESSABLE = "td[onclick], span[onclick], div[onclick], li[onclick], img[onclick], i[onclick]";
+
+export function isPressable(element: Element): boolean {
+  if (!element.matches(PRESSABLE) || isTab(element) || !element.getAttribute("onclick")?.trim()) return false;
+  return !element.querySelector(`${PRESSABLE}, input, select, textarea, button, a, table`);
+}
+
+function pressableLabel(element: Element): string | null {
+  const own = redact(ownText(element));
+  if (own) return own.length <= 60 ? own : null;
+  for (const node of [element, ...Array.from(element.querySelectorAll("[aria-label], [title], img[alt]"))]) {
+    const text = redact(node.getAttribute("aria-label") ?? node.getAttribute("title") ?? node.getAttribute("alt"));
+    if (text && text.length <= 60) return text;
+  }
+  // An icon the AI can read ("mais", "lixeira"); one with no name (a window's "x") says nothing, and is left out.
+  const icon = element.querySelector("i, svg, img") ? iconWords(element) : null;
+  return icon === "ícone sem nome" ? null : icon;
+}
+
+/**
+ * A tab of the system's screen: an element ARIA names a tab, the header of a RichFaces tab (the PJe's "Dados iniciais",
+ * "Assuntos", "Partes": a cell of a table with no link nor button in it, 2026-11-27), or a link or button of a list of
+ * tabs. Mapped as a link whose words say it is a tab, and which one is open.
+ */
+const TAB = "[role=tab], .rich-tab-header, .nav-tabs a, .nav-tabs button, [role=tablist] a, [role=tablist] button";
+
+export const isTab = (element: Element): boolean => element.matches(TAB);
+
+/** The words of a tab: "Aba Partes", and "(aberta)" on the one the screen shows. */
+function tabLabel(element: Element): string | null {
+  const words =
+    redact(ownText(element)) || redact(element.getAttribute("aria-label")) || redact(element.getAttribute("title"));
+  if (!words || words.length > 60) return null;
+  const classes = `${element.getAttribute("class") ?? ""} ${element.parentElement?.getAttribute("class") ?? ""}`;
+  // RichFaces' "rich-tab-active", Bootstrap's "active" (never "rich-tab-inactive").
+  const open = element.getAttribute("aria-selected") === "true" || /\bactive\b/.test(classes);
+  return `Aba ${words}${open ? " (aberta)" : ""}`;
 }
 
 function kindOf(element: Element): MappedField["kind"] | null {
+  if (isTab(element)) return "link";
+  if (isPressable(element)) return "button";
   if (element instanceof HTMLSelectElement) return "select";
   if (element instanceof HTMLTextAreaElement) return "textarea";
   if (element instanceof HTMLButtonElement || element.getAttribute("role") === "button") return "button";
@@ -407,8 +525,17 @@ export function mapField(element: Element, rows = false): MappedField | null {
   const kind = kindOf(element);
   if (!kind) return null;
   if (element instanceof HTMLInputElement && element.type === "hidden") return null;
-  const label = labelOf(element);
-  if (kind === "link" && !isActionLink(element, label, rows)) return null;
+  const tab = isTab(element);
+  const pressable = !tab && isPressable(element);
+  let label = tab ? tabLabel(element) : pressable ? pressableLabel(element) : labelOf(element);
+  if ((tab || pressable) && !label) return null;
+  if (kind === "link" && !tab && !isActionLink(element, label, rows)) return null;
+  // A radio or a box whose words are only the answer is said with its question: "Justiça Gratuita? · Sim".
+  if (element instanceof HTMLInputElement && (element.type === "radio" || element.type === "checkbox")) {
+    const group = groupOf(element);
+    if (group && group !== label) label = label ? `${group} · ${label}`.slice(0, 120) : group;
+  }
+  const section = rows ? sectionOf(element) : null;
   const id = element.getAttribute("id");
   const name = element.getAttribute("name");
   const about = `${label ?? ""} ${id ?? ""} ${name ?? ""}`;
@@ -431,7 +558,9 @@ export function mapField(element: Element, rows = false): MappedField | null {
     name: name && /^[\w:.[\]-]{1,80}$/.test(name) ? name : null,
     label,
     required: element.hasAttribute("required") || element.getAttribute("aria-required") === "true",
-    disabled: (element as HTMLInputElement).disabled === true,
+    disabled:
+      (element as HTMLInputElement).disabled === true ||
+      (tab && (element.getAttribute("aria-disabled") === "true" || /\brich-tab-disabled\b/.test(element.className))),
     readOnly: (element as HTMLInputElement).readOnly === true,
     visible: isVisible(element),
     options,
@@ -439,6 +568,7 @@ export function mapField(element: Element, rows = false): MappedField | null {
     selector,
     index,
     ...(rows ? holding(element, options !== null) : {}),
+    ...(section ? { section } : {}),
   };
 }
 
@@ -475,13 +605,16 @@ export function captureScreen(
   const fields: MappedField[] = [];
   const seen = new Set<string>();
   for (const element of Array.from(
-    document.querySelectorAll("input, select, textarea, button, a[href], [role=button]"),
+    document.querySelectorAll(`input, select, textarea, button, a[href], [role=button], ${TAB}, ${PRESSABLE}`),
   )) {
     if (fields.length >= FIELD_LIMIT) break;
+    // A link or button inside a tab's header is the tab, mapped once.
+    if (!isTab(element) && element.closest(TAB)) continue;
     const field = mapField(element, options.rows === true);
     if (!field) continue;
-    // A button repeated on every row of a table ("Incluir") is one button of the screen, found in any row.
-    if (element.closest("tr")) {
+    // A button repeated on every row of a table ("Incluir") is one button of the screen, found in any row. A tab is
+    // one of its own, wherever its header is.
+    if (element.closest("tr") && !isTab(element) && !isPressable(element)) {
       field.selector = field.selector.replace(/\btr:nth-of-type\(\d+\)/g, "tr");
       field.index = 0;
     }
@@ -492,9 +625,14 @@ export function captureScreen(
   }
 
   const headings: string[] = [];
-  for (const element of Array.from(document.querySelectorAll("h1, h2, h3, h4, legend, caption, [role=heading]"))) {
+  for (const element of Array.from(
+    document.querySelectorAll(
+      "h1, h2, h3, h4, legend, caption, [role=heading], .rich-panel-header, .panel-heading, .card-header",
+    ),
+  )) {
     if (headings.length >= HEADING_LIMIT) break;
-    const text = redact(element.textContent);
+    // Its words, never a script's nor those of a form a panel's header holds (the PJe's "Polo Ativo" and its "+ Parte").
+    const text = titleText(element);
     if (text && isVisible(element) && !headings.includes(text)) headings.push(text);
   }
 
@@ -503,8 +641,11 @@ export function captureScreen(
   const tables: MappedTable[] = [];
   for (const table of Array.from(document.querySelectorAll("table"))) {
     if (tables.length >= TABLE_LIMIT) break;
+    // The table's own column names, never those of a table inside it, and their words without a script (the PJe writes
+    // one in each name: "Cod.function clear_l_processoAssuntoListList..." read no column of codes, 2026-11-27).
     const headers = Array.from(table.querySelectorAll("th"))
-      .map((cell) => redact(cell.textContent))
+      .filter((cell) => cell.closest("table") === table)
+      .map((cell) => redact(ownText(cell)))
       .filter(Boolean)
       .slice(0, 30);
     if (headers.length === 0) continue;
@@ -514,7 +655,7 @@ export function captureScreen(
       selector,
       index,
       headers,
-      rows: table.querySelectorAll("tbody tr").length,
+      rows: Array.from(table.querySelectorAll("tbody tr")).filter((row) => row.closest("table") === table).length,
       ...(lines ? { lines } : {}),
     });
   }
@@ -535,7 +676,11 @@ export function captureScreen(
 /** What a click or a change was, while the path is recorded: which field and how it was left, never what was typed. */
 export function stepOf(event: Event, place: Place, now: Date): MappedStep | null {
   const target =
-    event.target instanceof Element ? event.target.closest("input, select, textarea, button, a, [role=button]") : null;
+    event.target instanceof Element
+      ? (event.target.closest(TAB) ??
+        event.target.closest("input, select, textarea, button, a, [role=button]") ??
+        event.target.closest(PRESSABLE))
+      : null;
   if (!target) return null;
   const field = mapField(target);
   if (!field) return null;

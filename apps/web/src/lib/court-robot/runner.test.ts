@@ -735,9 +735,10 @@ describe("a screen whose lists load one after the other (the PJe of TJRJ, 2026-1
     // Four readings of one screen, past the three the robot stopped at before, and the receipt.
     expect(seen).toHaveLength(5);
     expect(seen[0]?.feito).toEqual([]);
+    // Each action with the words of its field, which the path keeps once ONE leaves the screen.
     expect(seen[1]?.feito).toEqual([
-      { acao: { fazer: "escolher", alvo: P("materia"), opcao: "1215" }, resultado: "ok" },
-      { acao: { fazer: "esperar", alvo: P("materia") }, resultado: "ok" },
+      { acao: { fazer: "escolher", alvo: P("materia"), opcao: "1215" }, resultado: "ok", rotulo: "Matéria" },
+      { acao: { fazer: "esperar", alvo: P("materia") }, resultado: "ok", rotulo: "Matéria" },
     ]);
     expect(seen[3]?.feito.map((done) => done.acao.alvo)).toEqual([
       P("materia"),
@@ -760,9 +761,9 @@ describe("a screen whose lists load one after the other (the PJe of TJRJ, 2026-1
     // Before, an action the screen did not take stopped the filing there.
     expect(result.outcome.kind).toBe("filed");
     expect(seen[2]?.feito).toEqual([
-      { acao: { fazer: "escolher", alvo: P("materia"), opcao: "1215" }, resultado: "ok" },
-      { acao: { fazer: "esperar", alvo: P("materia") }, resultado: "ok" },
-      { acao: { fazer: "escolher", alvo: P("jurisdicao"), opcao: "77" }, resultado: "not_done" },
+      { acao: { fazer: "escolher", alvo: P("materia"), opcao: "1215" }, resultado: "ok", rotulo: "Matéria" },
+      { acao: { fazer: "esperar", alvo: P("materia") }, resultado: "ok", rotulo: "Matéria" },
+      { acao: { fazer: "escolher", alvo: P("jurisdicao"), opcao: "77" }, resultado: "not_done", rotulo: "Jurisdição" },
     ]);
     expect(court.chosen.get("#jurisdicao")).toBe("77");
   });
@@ -1052,5 +1053,146 @@ describe("the PJe's signature with the lawyer's certificate", () => {
     expect(MAY_SEND.test("Confirmar ajuizamento")).toBe(true);
     expect(SIGNS.test("ASSINAR DOCUMENTO(S)")).toBe(true);
     expect(SIGNS.test("Assinar e enviar")).toBe(false);
+  });
+});
+
+// ---------- The path of a filing across the PJe's tabs (2026-11-27) ----------
+
+/** The PJe's tabs of subjects and of parties, in memory: a press on a tab opens it, as the lawyer's own press does. */
+class StandInTabs implements ScreenDriver {
+  tab: "assuntos" | "partes" = "assuntos";
+  async capture(): Promise<MappedScreen[]> {
+    const tabs = [
+      field("link", "abaAssuntos", `Aba Assuntos${this.tab === "assuntos" ? " (aberta)" : ""}`),
+      field("link", "abaPartes", `Aba Partes${this.tab === "partes" ? " (aberta)" : ""}`),
+    ];
+    return [
+      {
+        system: "pje-tjrj",
+        host: "tjrj.pje.jus.br",
+        path: "/1g/Processo/CadastroProcesso/listView.seam",
+        params: {},
+        title: "Cadastro de processo",
+        headings: [this.tab === "assuntos" ? "Assuntos Associados" : "Polo Ativo"],
+        fields:
+          this.tab === "assuntos"
+            ? [field("input", "codAssunto", "Código"), field("button", "pesquisar", "Pesquisar"), ...tabs]
+            : [field("button", "parteAtivo", "Parte"), field("button", "procurador", "Procurador"), ...tabs],
+        tables: [],
+        capturedAt: "2026-11-27T13:00:00.000Z",
+      },
+    ];
+  }
+  async text(): Promise<string> {
+    return "";
+  }
+  async fill(): Promise<boolean> {
+    return true;
+  }
+  async select(): Promise<boolean> {
+    return true;
+  }
+  async check(): Promise<boolean> {
+    return true;
+  }
+  async click(target: Target): Promise<boolean> {
+    if (target.selector === "#abaPartes") this.tab = "partes";
+    return true;
+  }
+  async upload(): Promise<boolean> {
+    return true;
+  }
+  async settle(): Promise<void> {}
+}
+
+describe("the path of a filing ONE started itself (the PJe of TJRJ, 2026-11-27)", () => {
+  const base = (court: StandInTabs, planner: (input: PlanInput) => Promise<ScreenPlan | null>) => ({
+    driver: court,
+    planner,
+    system: "PJe do TJRJ",
+    facts: FACTS,
+    file: async () => PDF,
+    learning: false,
+    confirm: async () => "go" as const,
+    map: null,
+    beforeSend: async () => ({ ok: true, code: "sending" }),
+  });
+  const SUBJECTS = "Cadastro de processo · Assuntos";
+
+  it("reads each screen with the screens before it and what ONE did there, words of fields and keys of facts only", async () => {
+    const court = new StandInTabs();
+    const seen: PlanInput[] = [];
+    const planner = async (input: PlanInput): Promise<ScreenPlan> => {
+      seen.push(input);
+      if (court.tab === "assuntos") {
+        return {
+          tela: { tipo: "formulario", titulo: SUBJECTS },
+          acoes: [
+            { fazer: "preencher", alvo: P("codAssunto"), fato: "processo.comarca" },
+            { fazer: "clicar", alvo: P("pesquisar") },
+            { fazer: "esperar", alvo: "" },
+            { fazer: "clicar", alvo: P("abaPartes") },
+          ],
+          pronto: true,
+          pergunta: "",
+        };
+      }
+      return { tela: { tipo: "formulario", titulo: "Partes" }, acoes: [], pronto: false, pergunta: "Qual parte?" };
+    };
+    const run = await runFiling(base(court, planner));
+    expect(run.outcome).toEqual({ kind: "question", question: "Qual parte?" });
+    expect(seen[0]?.percurso).toEqual([]);
+    expect(seen[1]?.feito).toEqual([]);
+    expect(seen[1]?.percurso).toEqual([
+      {
+        tela: SUBJECTS,
+        feito: [
+          { fazer: "preencher", rotulo: "Código", fato: "processo.comarca" },
+          { fazer: "clicar", rotulo: "Pesquisar" },
+          { fazer: "clicar", rotulo: "Aba Partes" },
+        ],
+      },
+    ]);
+    // Never a value the robot typed: the path names the fact, never what it holds.
+    expect(JSON.stringify(seen[1]?.percurso)).not.toContain("São Paulo");
+    expect(run.screen?.path).toEqual(seen[1]?.percurso);
+  });
+
+  it("keeps the path across the lawyer's 'Continuar', where the screen they moved to is read as part of ONE's own filing", async () => {
+    const court = new StandInTabs();
+    const seen: PlanInput[] = [];
+    const planner = async (input: PlanInput): Promise<ScreenPlan> => {
+      seen.push(input);
+      if (court.tab === "assuntos" && input.feito.length === 0) {
+        return {
+          tela: { tipo: "formulario", titulo: SUBJECTS },
+          acoes: [
+            { fazer: "preencher", alvo: P("codAssunto"), fato: "processo.comarca" },
+            { fazer: "clicar", alvo: P("pesquisar") },
+          ],
+          pronto: false,
+          pergunta: "",
+        };
+      }
+      // Where the tab is not seen: ONE asks the lawyer, who opens the tab of the parties and says "Continuar".
+      return { tela: { tipo: "formulario", titulo: "?" }, acoes: [], pronto: false, pergunta: "Qual é a próxima aba?" };
+    };
+    const first = await runFiling(base(court, planner));
+    expect(first.outcome.kind).toBe("question");
+    expect(first.screen?.path).toEqual([]);
+    expect(first.screen?.done.map((item) => item.rotulo)).toEqual(["Código", "Pesquisar"]);
+    court.tab = "partes";
+    await runFiling({ ...base(court, planner), resume: first.screen, maxScreens: 1 });
+    const onParties = seen[seen.length - 1];
+    expect(onParties?.feito).toEqual([]);
+    expect(onParties?.percurso).toEqual([
+      {
+        tela: "?",
+        feito: [
+          { fazer: "preencher", rotulo: "Código", fato: "processo.comarca" },
+          { fazer: "clicar", rotulo: "Pesquisar" },
+        ],
+      },
+    ]);
   });
 });

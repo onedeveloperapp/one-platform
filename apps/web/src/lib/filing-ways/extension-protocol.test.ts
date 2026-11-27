@@ -4,6 +4,7 @@ import {
   LINK_CODE_LETTERS,
   linkCodeOf,
   readDone,
+  readPath,
   readScreen,
   readSteps,
   receiptDigits,
@@ -205,6 +206,56 @@ describe("what ONE takes from the lawyer's extension", () => {
     expect(
       readDone(Array.from({ length: 50 }, () => ({ acao: { fazer: "esperar", alvo: "" }, resultado: "ok" }))),
     ).toHaveLength(40);
+  });
+
+  it("keeps the words of the field each action was done on, redacted again (2026-11-27)", () => {
+    expect(
+      readDone([
+        { acao: { fazer: "escolher", alvo: "0|#materia|0", opcao: "1215" }, resultado: "ok", rotulo: "Matéria" },
+        { acao: { fazer: "clicar", alvo: "0|#btn|0" }, resultado: "ok", rotulo: "Marina marina@teste.invalid" },
+        { acao: { fazer: "clicar", alvo: "0|#btn2|0" }, resultado: "ok", rotulo: 7 },
+      ]).map((done) => done.rotulo),
+    ).toEqual(["Matéria", "Marina [e-mail]", undefined]);
+  });
+
+  it("takes the screens ONE went through in a filing as the AI may read them, and nothing else (2026-11-27)", () => {
+    expect(
+      readPath([
+        {
+          tela: "Cadastro de processo · Assuntos",
+          feito: [
+            { fazer: "preencher", rotulo: "Código", fato: "processo.assunto_principal_codigo" },
+            { fazer: "clicar", rotulo: "Aba Partes" },
+            { fazer: "esperar", rotulo: null },
+            { fazer: "preencher", rotulo: "CPF 529.982.247-25 52998224725", fato: "Marina Teste" },
+            { fazer: "apagar", rotulo: "Tudo" },
+            "nada",
+          ],
+        },
+        { tela: "Vazia", feito: [{ fazer: "esperar", rotulo: null }] },
+        { tela: "Sem lista", feito: "nada" },
+        "nada",
+      ]),
+    ).toEqual([
+      {
+        tela: "Cadastro de processo · Assuntos",
+        feito: [
+          { fazer: "preencher", rotulo: "Código", fato: "processo.assunto_principal_codigo" },
+          { fazer: "clicar", rotulo: "Aba Partes" },
+          // A fact that is not a key is left out; a person's number never reaches the AI.
+          { fazer: "preencher", rotulo: "CPF [número]" },
+        ],
+      },
+    ]);
+    expect(readPath(undefined)).toEqual([]);
+    const long = Array.from({ length: 40 }, (_, index) => ({
+      tela: `Tela ${index}`,
+      feito: Array.from({ length: 30 }, () => ({ fazer: "clicar", rotulo: "Próxima" })),
+    }));
+    const kept = readPath(long);
+    expect(kept).toHaveLength(30);
+    expect(kept[0]?.tela).toBe("Tela 10");
+    expect(kept[0]?.feito).toHaveLength(20);
   });
 
   it("keeps the mark of a step that pressed the line a search found", () => {

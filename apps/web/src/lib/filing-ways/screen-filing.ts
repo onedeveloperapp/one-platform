@@ -9,7 +9,7 @@ import {
   type TpuCodes,
   tpuCodesOf,
 } from "@/lib/court-robot/facts";
-import type { DoneAction, ScreenPlan } from "@/lib/court-robot/plan";
+import type { DoneAction, PathStep, ScreenPlan } from "@/lib/court-robot/plan";
 import { aiScreenPlanner } from "@/lib/court-robot/planner";
 import type { ScreenPlanner } from "@/lib/court-robot/runner";
 import { FIRM_FILES_BUCKET } from "@/lib/files/bucket";
@@ -19,6 +19,7 @@ import { settleFirmNotices } from "@/lib/notices/work";
 import { takeBackFile } from "@flyee/documents/files";
 import { measureFile } from "@flyee/documents/measure";
 import { renderTextPdf, type TextBlock } from "@flyee/documents/text-pdf";
+import { cityKey, forumOfDistrict } from "@flyee/rules/forum";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 /**
@@ -121,7 +122,7 @@ export async function tpuCodes(service: SupabaseClient): Promise<TpuCodes | null
  * an injunction, and the day in Brasília, for a claimant's age. A read that fails leaves that fact unknown.
  */
 export async function filingExtras(service: SupabaseClient, sent: ToSend, now: Date): Promise<FilingExtras> {
-  const [answers, petition] = await Promise.all([
+  const [answers, petition, forum] = await Promise.all([
     sent.kind === "juizado"
       ? Promise.resolve(null)
       : service.from("free_justice_answers").select("asks").eq("case_id", sent.case_id).is("replaced_at", null),
@@ -136,6 +137,7 @@ export async function filingExtras(service: SupabaseClient, sent: ToSend, now: D
           .limit(1)
           .maybeSingle()
       : Promise.resolve(null),
+    forumOf(service, sent),
   ]);
   const asked = answers && !answers.error ? ((answers.data ?? []) as { asks: boolean }[]) : null;
   const body = petition && !petition.error ? (petition.data as { approved_body: string | null } | null) : null;
@@ -143,7 +145,30 @@ export async function filingExtras(service: SupabaseClient, sent: ToSend, now: D
     freeJustice: asked === null ? null : asked.some((answer) => answer.asks === true),
     injunction: asksInjunction(body?.approved_body ?? null),
     today: brasiliaDay(now),
+    forum,
   };
+}
+
+/**
+ * The place inside the comarca that takes the lawsuits of the first claimant's neighbourhood, where the comarca is the
+ * city of their domicile and the court lists its places by neighbourhood (`court_forum_areas`, 0309); null otherwise,
+ * and when the list could not be read: the lawsuit then goes to the comarca, as before.
+ */
+async function forumOf(service: SupabaseClient, sent: ToSend): Promise<string | null> {
+  const claimant = sent.claimants[0];
+  if (!claimant?.district || !claimant.city || !sent.comarca) return null;
+  if (cityKey(claimant.city) !== cityKey(sent.comarca)) return null;
+  const { data, error } = await service
+    .from("court_forum_areas")
+    .select("comarca, district, forum")
+    .eq("court", sent.court)
+    .eq("kind", sent.kind);
+  if (error || !data) return null;
+  const comarca = cityKey(sent.comarca);
+  const areas = (data as { comarca: string; district: string; forum: string }[]).filter(
+    (row) => cityKey(row.comarca) === comarca,
+  );
+  return forumOfDistrict(areas, claimant.district);
 }
 
 /**
@@ -232,6 +257,8 @@ export async function planScreen(
     frames: MappedScreen[];
     /** What the runner did on this same screen before this reading (`readDone` of what the extension sent). */
     done?: DoneAction[];
+    /** The screens before it in this filing (`readPath` of what the extension sent). */
+    path?: PathStep[];
   },
 ): Promise<{ ok: true; plan: ScreenPlan | null } | { ok: false; code: string }> {
   const { service } = deps;
@@ -262,6 +289,7 @@ export async function planScreen(
     arquivos: facts.arquivos,
     tela: input.frames,
     feito: input.done ?? [],
+    percurso: input.path ?? [],
   });
   return { ok: true, plan };
 }

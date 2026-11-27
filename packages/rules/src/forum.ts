@@ -64,6 +64,44 @@ export const samePlace = (left: Place, right: Place): boolean =>
 const isPlace = (place: Place | null): place is Place =>
   place !== null && cityKey(place.city) !== "" && /^[A-Z]{2}$/.test(place.uf.trim().toUpperCase());
 
+/**
+ * A neighbourhood of a comarca and the place of the court that takes the lawsuits of its residents, as the court's act
+ * writes them (the Capital of Rio de Janeiro: the small-claims courts of each region of the city).
+ */
+export type ForumArea = { district: string; forum: string };
+
+/** Short forms people write for a neighbourhood's first word ("Jd. Botânico", "Pq. Anchieta"), spelled out. */
+const DISTRICT_WORDS: [RegExp, string][] = [
+  [/^jd\b/, "jardim"],
+  [/^pq\b/, "parque"],
+  [/^vl\b/, "vila"],
+  [/^sta\b/, "santa"],
+  [/^sto\b/, "santo"],
+  [/^s\b/, "sao"],
+  [/^n sra\b|^nsa sra\b|^ns\b/, "nossa senhora"],
+  [/^cid\b/, "cidade"],
+  [/^ilha do gov\b/, "ilha do governador"],
+];
+
+/** A neighbourhood as it is compared: as a city is, its short first word spelled out. */
+export function districtKey(district: string): string {
+  let key = cityKey(district);
+  for (const [short, long] of DISTRICT_WORDS) key = key.replace(short, long);
+  return key.replace(/\s+/g, " ").trim();
+}
+
+/**
+ * The place of the court that takes a resident's lawsuit inside the comarca of their domicile, by their neighbourhood
+ * as the court's act lists it: null when the neighbourhood is not in the list (nothing is guessed: the lawsuit goes to
+ * the comarca, as before) or names two places.
+ */
+export function forumOfDistrict(areas: readonly ForumArea[], district: string | null | undefined): string | null {
+  const key = districtKey(district ?? "");
+  if (!key) return null;
+  const places = new Set(areas.filter((area) => districtKey(area.district) === key).map((area) => area.forum));
+  return places.size === 1 ? [...places][0]! : null;
+}
+
 export function decideForum(input: ForumInput): ForumDecision {
   const rule = FORUM_RULE_VERSION;
   if (input.basis === "domicile") {

@@ -144,7 +144,17 @@ export function tpuCodesOf(value: unknown): TpuCodes {
  * court nothing is asked, Lei 9.099/1995, art. 54), whether the petition asks an injunction, read from its text, and
  * the day of the filing, for a claimant's age. Unknown is null, and its fact is left out: the AI asks the lawyer.
  */
-export type FilingExtras = { freeJustice: boolean | null; injunction: boolean | null; today: string };
+export type FilingExtras = {
+  freeJustice: boolean | null;
+  injunction: boolean | null;
+  today: string;
+  /**
+   * The place of the court that takes the lawsuits of the claimant's neighbourhood inside the comarca of their domicile,
+   * as the court names it ("Lagoa", "Regional da Barra da Tijuca"): `forumOfDistrict` over the court's list
+   * (`court_forum_areas`, 0309). Absent where the comarca has no such list or the neighbourhood is not in it.
+   */
+  forum?: string | null;
+};
 
 /** The words of a petition that ask an injunction or an anticipated relief. */
 const INJUNCTION =
@@ -175,6 +185,15 @@ export function filingFactsOf(
   said("processo.estado", "Estado do tribunal", sent.court_state, false);
   said("processo.comarca", "Comarca, cidade ou localidade onde a ação entra", sent.comarca, false);
   said("processo.unidade", "Unidade judiciária, quando o caso já a tem", sent.unit, false);
+  // The place inside the comarca that takes the lawsuits of the claimant's neighbourhood, by the court's own list
+  // (2026-11-27: the PJe of TJRJ lists the Capital's places, and ONE chose the Capital's centre for a resident of the
+  // Jardim Botânico). A place, never the neighbourhood nor the address.
+  said(
+    "processo.foro",
+    "Foro da comarca que atende o bairro do domicílio do autor, como o tribunal o chama",
+    extras?.forum ?? null,
+    false,
+  );
   said(
     "processo.assunto_principal",
     "Assunto principal",

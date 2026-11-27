@@ -14,6 +14,9 @@ import type { CaseShape, LearnedStep, ScreenSignature } from "@/lib/court-robot/
 import {
   type DoneAction,
   parseTarget,
+  PATH_ACTIONS_MOST,
+  PATH_SCREENS_MOST,
+  type PathStep,
   type PlanAction,
   type ScreenKind,
   type ScreenPlan,
@@ -176,6 +179,10 @@ function fieldOf(raw: unknown): MappedField | null {
       : {}),
     ...(typeof field.checked === "boolean" ? { checked: field.checked } : {}),
     ...(typeof field.filled === "boolean" ? { filled: field.filled } : {}),
+    // The title of the part of the screen it is in ("Polo Ativo"), redacted again (2026-11-27).
+    ...(typeof field.section === "string" && redact(field.section)
+      ? { section: redact(text(field.section, 120)) }
+      : {}),
   };
 }
 
@@ -403,7 +410,33 @@ export function readDone(raw: unknown): DoneAction[] {
     const done = item as Record<string, unknown>;
     const acao = actionOf(done.acao);
     const resultado = (DONE_RESULTS as readonly unknown[]).includes(done.resultado) ? String(done.resultado) : null;
-    return acao && resultado ? [{ acao, resultado }] : [];
+    const rotulo = typeof done.rotulo === "string" ? redact(done.rotulo) : "";
+    return acao && resultado ? [{ acao, resultado, ...(rotulo ? { rotulo } : {}) }] : [];
+  });
+}
+
+/**
+ * The screens ONE went through in this filing before the one it reads (2026-11-27), as the backend takes them before
+ * the AI reads them: each screen's words and, of what ONE did there, the kind of action, the words of the field and the
+ * key of the fact, every text redacted again, never a value. What is not so is left out; none when nothing came (an
+ * extension before 0.4.3 sends none, and the AI reads each screen with no path).
+ */
+export function readPath(raw: unknown): PathStep[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.slice(-PATH_SCREENS_MOST).flatMap((item): PathStep[] => {
+    if (typeof item !== "object" || item === null) return [];
+    const step = item as Record<string, unknown>;
+    const tela = typeof step.tela === "string" ? redact(step.tela).slice(0, 160) : "";
+    if (!Array.isArray(step.feito)) return [];
+    const feito = step.feito.slice(-PATH_ACTIONS_MOST).flatMap((raw): PathStep["feito"] => {
+      if (typeof raw !== "object" || raw === null) return [];
+      const action = raw as Record<string, unknown>;
+      if (!DOINGS.includes(action.fazer as PlanAction["fazer"]) || action.fazer === "esperar") return [];
+      const rotulo = typeof action.rotulo === "string" ? redact(action.rotulo) || null : null;
+      const fato = typeof action.fato === "string" && FACT_KEY.test(action.fato) ? action.fato : null;
+      return [{ fazer: action.fazer as PlanAction["fazer"], rotulo, ...(fato ? { fato } : {}) }];
+    });
+    return feito.length > 0 ? [{ tela, feito }] : [];
   });
 }
 

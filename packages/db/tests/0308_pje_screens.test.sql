@@ -39,15 +39,20 @@ $$ select set_config('request.jwt.claims', '{"role":"service_role"}', true); $$;
 
 select ok(
   (select count(*) = 1 from public.prompt_versions where task = 'protocolo.tela' and is_active)
-  and (select v.version = 4 from public.prompt_versions v where v.task = 'protocolo.tela' and v.is_active),
-  'one version of the reading of a screen is in force, the fourth');
+  and (select v.version >= 4 from public.prompt_versions v where v.task = 'protocolo.tela' and v.is_active)
+  and exists (
+    select 1 from public.prompt_versions v
+    where v.task = 'protocolo.tela' and v.version = 4
+      and position('processo.justica_gratuita' in v.system_prompt) > 0
+  ),
+  'one version of the reading of a screen is in force, the fourth or one after it');
 select ok(
   (select n.output_schema = o.output_schema and n.model = o.model and n.provider = o.provider and n.effort = o.effort
           and n.max_tokens = o.max_tokens and n.version = o.version + 1 and not o.is_active
    from public.prompt_versions n
    join public.prompt_versions o on o.task = n.task and o.version = n.version - 1
    where n.task = 'protocolo.tela' and n.is_active),
-  'its schema, model, effort and tokens are the third version''s, which leaves');
+  'its schema, model, effort and tokens are the version''s before it, which leaves');
 select ok(
   (select position('processo.justica_gratuita' in v.system_prompt) > 0
           and position('processo.custas' in v.system_prompt) > 0
@@ -80,7 +85,7 @@ select ok(
                        = (select v.version from public.prompt_versions v where v.task = 'protocolo.tela' and v.is_active)
                    and position('processo.justica_gratuita' in payload -> 'prompt' ->> 'system_prompt') > 0)
    from res where name in ('a', 'b')),
-  'the backend reads a screen for either firm with the fourth version');
+  'the backend reads a screen for either firm with the version in force');
 select ok(
   (select count(*) = 2 from public.ai_runs r
    join res on (res.payload ->> 'run_id')::uuid = r.id

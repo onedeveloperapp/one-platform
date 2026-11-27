@@ -13,6 +13,9 @@ import {
   type DoneAction,
   fieldsByTarget,
   parseTarget,
+  PATH_SCREENS_MOST,
+  type PathStep,
+  pathStepOf,
   type PlanAction,
   receiptNumber,
   type ScreenPlan,
@@ -27,7 +30,9 @@ import {
  * screen again. The facts' values are typed here, never seen by the AI. A screen read again is read with what ONE
  * already did on it (`feito`), so a form whose lists load one after the other goes forward one list at a time; an
  * action the screen did not take sends ONE back to read it, and ONE stops on a screen only when readings in a row
- * bring nothing new (2026-11-26, the PJe of TJRJ).
+ * bring nothing new (2026-11-26, the PJe of TJRJ). Every screen is read with the path of the screens before it in this
+ * filing (`percurso`), carried across a pause the lawyer ends with "Continuar", so ONE knows a filing it started is
+ * its own (2026-11-27).
  *
  * What it never does: type a login, a password or a code (it answers that the court asks one, and the host asks the
  * lawyer); solve a captcha or accept a term (it answers with the question); press, while ONE still learns the system,
@@ -74,6 +79,8 @@ export type PlanInput = {
   tela: MappedScreen[];
   /** What ONE did on this same screen before this reading, in order, with what came of each action. */
   feito: DoneAction[];
+  /** The screens ONE went through in this filing before this one, in order, with what it did on each. */
+  percurso: PathStep[];
 };
 
 /** Asks the AI what to do on a screen. Null when it gave no usable answer. */
@@ -111,14 +118,18 @@ export type RunInput = {
   beforeSend(): Promise<{ ok: boolean; code: string }>;
   maxScreens?: number;
   /**
-   * The screen the run before this one stopped on, with what ONE did there (a pause the lawyer ended with "Continuar"):
-   * read again as the same screen, ONE knows what it already pressed (the button that signs, above all).
+   * The screen the run before this one stopped on, with what ONE did there and the path that led to it (a pause the
+   * lawyer ended with "Continuar"): read again as the same screen, ONE knows what it already pressed (the button that
+   * signs, above all); on another screen (the lawyer moved on), ONE knows the filing is still its own.
    */
   resume?: ScreenState | null;
 };
 
-/** A screen as the run left it: what tells it apart and what ONE did on it. */
-export type ScreenState = { signature: ScreenSignature; done: DoneAction[] };
+/**
+ * A screen as the run left it: what tells it apart, what ONE did on it, its words as the AI named it, and the screens
+ * before it in this filing.
+ */
+export type ScreenState = { signature: ScreenSignature; done: DoneAction[]; titulo?: string; path?: PathStep[] };
 
 export type RunOutcome =
   | { kind: "filed"; number: string | null }
@@ -217,6 +228,10 @@ export async function runFiling(input: RunInput): Promise<RunResult> {
   let doneKeys = new Set<string>(
     doneOnScreen.filter((item) => item.resultado === "ok").map((item) => actionKey(item.acao)),
   );
+  // The screens ONE went through in this filing before the one it is on, what it did on each (2026-11-27).
+  const path: PathStep[] = input.resume?.path ? [...input.resume.path] : [];
+  // The words of the screen ONE is on, as the AI named it, else as the screen did: how the path tells it.
+  let title = input.resume?.titulo ?? input.resume?.signature.titulo ?? "";
   let idleReadings = 0;
   let readings = 0;
 
@@ -224,7 +239,14 @@ export async function runFiling(input: RunInput): Promise<RunResult> {
     outcome,
     learned,
     aiScreens,
-    screen: previous ? { signature: previous, done: doneOnScreen.slice(-DONE_SHOWN_MOST) } : null,
+    screen: previous
+      ? {
+          signature: previous,
+          done: doneOnScreen.slice(-DONE_SHOWN_MOST),
+          titulo: title,
+          path: path.slice(-PATH_SCREENS_MOST),
+        }
+      : null,
   });
 
   for (let screen = 0; screen < maxScreens; screen += 1) {
@@ -235,6 +257,11 @@ export async function runFiling(input: RunInput): Promise<RunResult> {
     const again = previous !== null && sameScreen(previous, signature);
     previous = signature;
     if (!again) {
+      // The screen ONE leaves goes to the path, with what it did there.
+      const left = pathStepOf(title, doneOnScreen);
+      if (left) path.push(left);
+      if (path.length > PATH_SCREENS_MOST) path.splice(0, path.length - PATH_SCREENS_MOST);
+      title = signature.titulo;
       doneOnScreen = [];
       doneKeys = new Set();
       idleReadings = 0;
@@ -263,9 +290,11 @@ export async function runFiling(input: RunInput): Promise<RunResult> {
         arquivos: input.facts.arquivos,
         tela: frames,
         feito: doneOnScreen.slice(-DONE_SHOWN_MOST),
+        percurso: path.slice(-PATH_SCREENS_MOST),
       });
     }
     if (!plan) return done(sent ? { kind: "unknown" } : { kind: "stuck", why: "no_plan" });
+    if (plan.tela.titulo.trim()) title = plan.tela.titulo.trim();
 
     const kind = plan.tela.tipo;
     if (kind === "recibo") {
@@ -327,7 +356,8 @@ export async function runFiling(input: RunInput): Promise<RunResult> {
       const result = await act(driver, action, input);
       const told = { ...action };
       delete told.motivo;
-      doneOnScreen.push({ acao: told, resultado: result });
+      const rotulo = fields.get(action.alvo)?.label;
+      doneOnScreen.push({ acao: told, resultado: result, ...(rotulo ? { rotulo } : {}) });
       if (result !== "ok") {
         // After a press that may have sent, nothing is tried again: what came of it is unknown.
         if (sent) return done({ kind: "unknown" });

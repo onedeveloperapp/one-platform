@@ -74,8 +74,40 @@ export function isLineTarget(frames: readonly MappedScreen[], alvo: string): boo
   );
 }
 
-/** What ONE did on a screen, in order, with what came of each action: what the AI reads again of that screen. */
-export type DoneAction = { acao: PlanAction; resultado: string };
+/**
+ * What ONE did on a screen, in order, with what came of each action: what the AI reads again of that screen. `rotulo`:
+ * the words of the field it acted on, as the screen showed them (never a value), so the screen can be told again once
+ * ONE has left it (`PathStep`).
+ */
+export type DoneAction = { acao: PlanAction; resultado: string; rotulo?: string };
+
+/**
+ * A screen ONE went through in this filing before the one it reads, with what it did there that the screen took: the
+ * AI reads the path again on every screen, so a filing ONE itself started is never taken for someone's old draft (the
+ * PJe of TJRJ, 2026-11-27: after the lawyer's "Continuar" on the tab of the parties, ONE asked whether to go on "com
+ * este rascunho" it had made itself). Words of fields and keys of facts only, never a value.
+ */
+export type PathStep = {
+  tela: string;
+  feito: { fazer: PlanAction["fazer"]; rotulo: string | null; fato?: string }[];
+};
+
+/** How many screens of the path the AI reads, the latest, and how many actions of each. */
+export const PATH_SCREENS_MOST = 30;
+export const PATH_ACTIONS_MOST = 20;
+
+/** A screen as the path keeps it: what ONE did there that the screen took, waits left out. Null when nothing was. */
+export function pathStepOf(tela: string, done: readonly DoneAction[]): PathStep | null {
+  const feito = done
+    .filter((item) => item.resultado === "ok" && item.acao.fazer !== "esperar")
+    .slice(-PATH_ACTIONS_MOST)
+    .map((item) => ({
+      fazer: item.acao.fazer,
+      rotulo: item.rotulo ?? null,
+      ...(item.acao.fato ? { fato: item.acao.fato } : {}),
+    }));
+  return feito.length > 0 ? { tela: tela.slice(0, 160), feito } : null;
+}
 
 /**
  * The target a plan names, as the screen shows it (`frame|selector|index`), or null. The AI is handed each field with
