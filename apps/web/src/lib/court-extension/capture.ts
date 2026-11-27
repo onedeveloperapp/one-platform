@@ -253,8 +253,10 @@ function labelOf(element: Element): string | null {
     const caption = pick(element instanceof HTMLInputElement ? element.value : ownText(element));
     if (caption) return caption;
   }
-  // The text before it in the same box, then in the cell before its cell (the court's forms are often tables).
-  let sibling = element.previousElementSibling;
+  // The text before it in the same box, then in the cell before its cell (the court's forms are often tables). A field
+  // the page keeps loose at the end of the page (the attachments' hidden file field of the PJe) has no box: whatever
+  // stands before it there is not its label.
+  let sibling = element.parentElement === document.body ? null : element.previousElementSibling;
   let steps = 0;
   while (sibling && steps < 3) {
     if (sibling.matches("input, select, textarea, button")) break;
@@ -274,7 +276,7 @@ function labelOf(element: Element): string | null {
   // A file field hidden inside the button that opens it (RichFaces' "Adicionar"): the words of that button.
   if (element instanceof HTMLInputElement && element.type === "file") {
     let node = element.parentElement;
-    for (let level = 0; node && level < 3; level += 1, node = node.parentElement) {
+    for (let level = 0; node && node !== document.body && level < 3; level += 1, node = node.parentElement) {
       const text = redact(ownText(node));
       if (text) return text.length <= 60 ? text : null;
     }
@@ -339,6 +341,31 @@ function sectionOf(element: Element): string | null {
     const header = node.querySelector(SECTION_TITLE);
     const text = header ? titleText(header) : "";
     if (text && text.length <= 80) return text;
+  }
+  return element instanceof HTMLInputElement && element.type === "file" ? titleBefore(element) : null;
+}
+
+/** A short title written before a part of the screen: "Sua petição:", "Anexos:" (bold words, a label of no field). */
+const TITLE_WORDS = "strong, b, h1, h2, h3, h4, h5, h6, legend, label:not([for])";
+const TITLE_CHILD = TITLE_WORDS.split(", ")
+  .map((tag) => `:scope > ${tag}`)
+  .join(", ");
+
+/**
+ * The title written before a file field in the blocks that hold it (the PJe's "Sua petição:" above the field of the
+ * petition, 2026-11-27: ONE took it for the attachments' and the identity replaced the petition). Null for a field
+ * outside any block, as the attachments' field the page keeps hidden at the end of the page.
+ */
+function titleBefore(element: Element): string | null {
+  let node: Element | null = element;
+  for (let level = 0; node && node.parentElement && level < 10; level += 1, node = node.parentElement) {
+    if (node.parentElement === element.ownerDocument.body) break;
+    let sibling = node.previousElementSibling;
+    for (let steps = 0; sibling && steps < 6; steps += 1, sibling = sibling.previousElementSibling) {
+      const title = sibling.matches(TITLE_WORDS) ? sibling : sibling.querySelector(TITLE_CHILD);
+      const text = title ? redact(ownText(title)).replace(/\s*:\s*$/, "") : "";
+      if (text && text.length <= 60) return text;
+    }
   }
   return null;
 }

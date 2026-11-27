@@ -240,6 +240,12 @@ export type PlanProblem = { action: number; code: string };
  * PJe's tab "Protocolar inicial", which opens its summary (its button "Protocolar" sends): asking the lawyer's word
  * and marking the filing as going at the tab would have said a filing went that had not (2026-11-26).
  */
+/** A file field of the petition itself ("Sua petição"), and a file that is the petition. */
+const PETITION_FIELD = /peti[cç][aã]o/i;
+const PETITION = /peti[cç][aã]o inicial/i;
+/** A box or a question of secrecy: "Sigiloso", "Segredo de Justiça". */
+const SECRECY = /sigil|segredo de justi/i;
+
 export const MAY_SEND =
   /\b(confirmar ajuizamento|finalizar|concluir (o )?peticionamento|enviar peti[cç][aã]o|protocolar(?! inicial)|peticionar|ajuizar|distribuir|assinar e enviar)\b/i;
 
@@ -255,6 +261,7 @@ export function checkPlan(
   facts: Pick<FilingFacts, "values" | "arquivos">,
 ): { actions: PlanAction[]; problems: PlanProblem[] } {
   const fields = fieldsByTarget(frames);
+  const fileFields = [...fields.values()].filter((field) => field.type === "file").length;
   const problems: PlanProblem[] = [];
   const actions: PlanAction[] = [];
   plan.acoes.forEach((asked, index) => {
@@ -287,9 +294,28 @@ export function checkPlan(
       }
     }
     if (action.fazer === "anexar") {
-      if (!facts.arquivos.some((file) => file.posicao === action.arquivo)) {
-        return problems.push({ action: index, code: "unknown_file" });
+      const file = facts.arquivos.find((item) => item.posicao === action.arquivo);
+      if (!file) return problems.push({ action: index, code: "unknown_file" });
+      // Where the screen has a field for the petition and another for the rest, the petition's takes the petition
+      // alone: another file there takes its place (the PJe of TJRJ, 2026-11-27: the identity went into "Sua
+      // petição" and the petition was gone). A screen of one file field takes every file in it.
+      if (
+        fileFields > 1 &&
+        PETITION_FIELD.test(`${field.section ?? ""} ${field.label ?? ""}`) &&
+        !PETITION.test(file.tipo)
+      ) {
+        return problems.push({ action: index, code: "not_the_petition" });
       }
+    }
+    // Secrecy only where the case asks it: a box "Sigiloso" ticked, or "Sim" of a secrecy question, never otherwise
+    // (2026-11-27: ONE ticked the petition's "Sigiloso" taking it for the box that selects a document).
+    const secrecy = SECRECY.test(`${field.section ?? ""} ${field.label ?? ""}`);
+    const ticks =
+      field.type === "checkbox"
+        ? action.fazer === "marcar" || (action.fazer === "clicar" && field.checked !== true)
+        : field.type === "radio" && /\bsim\b/i.test(field.label ?? "") && action.fazer !== "desmarcar";
+    if (secrecy && ticks && facts.values["processo.segredo_de_justica"] !== "Sim") {
+      return problems.push({ action: index, code: "secrecy_not_asked" });
     }
     const sends = action.envia === true || (action.fazer === "clicar" && MAY_SEND.test(field.label ?? ""));
     actions.push(sends ? { ...action, envia: true } : action);

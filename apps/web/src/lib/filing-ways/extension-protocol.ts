@@ -395,7 +395,19 @@ export function readSteps(raw: unknown): LearnedStep[] | null {
 }
 
 /** What came of an action, as the runner says it: done, not taken by the screen, or why it was not tried. */
-const DONE_RESULTS = ["ok", "not_done", "unknown_target", "unknown_fact", "unknown_file"] as const;
+const DONE_RESULTS = [
+  "ok",
+  "not_done",
+  "unknown_target",
+  "unknown_fact",
+  "unknown_file",
+  // Refused by the program before it tried (2026-11-27): a list's line it lacks, a field of a credential, a file in
+  // the petition's field, secrecy the case does not ask.
+  "unknown_option",
+  "credential_field",
+  "not_the_petition",
+  "secrecy_not_asked",
+] as const;
 const DONE_MOST = 40;
 
 /**

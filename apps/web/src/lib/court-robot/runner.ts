@@ -234,6 +234,8 @@ export async function runFiling(input: RunInput): Promise<RunResult> {
   let title = input.resume?.titulo ?? input.resume?.signature.titulo ?? "";
   let idleReadings = 0;
   let readings = 0;
+  // Why the program refused the last action it refused on this screen: said if ONE stops there.
+  let refusal: string | null = null;
 
   const done = (outcome: RunOutcome): RunResult => ({
     outcome,
@@ -262,6 +264,7 @@ export async function runFiling(input: RunInput): Promise<RunResult> {
       if (left) path.push(left);
       if (path.length > PATH_SCREENS_MOST) path.splice(0, path.length - PATH_SCREENS_MOST);
       title = signature.titulo;
+      refusal = null;
       doneOnScreen = [];
       doneKeys = new Set();
       idleReadings = 0;
@@ -270,7 +273,7 @@ export async function runFiling(input: RunInput): Promise<RunResult> {
     readings += 1;
     // The same screen read again and again with nothing new done on it: ONE stops there.
     if (again && (idleReadings >= IDLE_READINGS_MOST || readings > ONE_SCREEN_READINGS_MOST)) {
-      return done(sent ? { kind: "unknown" } : { kind: "stuck", why: "same_screen" });
+      return done(sent ? { kind: "unknown" } : { kind: "stuck", why: refusal ?? "same_screen" });
     }
 
     // The map's step for this screen, the first time it is read, else the AI's reading of it.
@@ -315,11 +318,25 @@ export async function runFiling(input: RunInput): Promise<RunResult> {
     if (plan.pergunta && plan.acoes.length === 0) return done({ kind: "question", question: plan.pergunta });
 
     const { actions, problems } = checkPlan(plan, frames, input.facts);
+    const fields = fieldsByTarget(frames);
+    // What the program refused before trying (a fact the case lacks, a file in the petition's field, secrecy the case
+    // does not ask) goes to `feito` with why, so the next reading takes another way (2026-11-27). A screen where every
+    // action is refused is read again, and ONE stops there only when readings in a row bring nothing new.
+    for (const problem of problems) {
+      const asked = plan.acoes[problem.action];
+      if (!asked) continue;
+      const told = { ...asked };
+      delete told.motivo;
+      const rotulo = fields.get(asked.alvo)?.label;
+      doneOnScreen.push({ acao: told, resultado: problem.code, ...(rotulo ? { rotulo } : {}) });
+    }
+    if (problems[0]) refusal = problems[0].code;
     if (problems.length > 0 && actions.length === 0) {
-      return done({ kind: "stuck", why: problems[0]?.code ?? "invalid_plan" });
+      idleReadings += 1;
+      await driver.settle();
+      continue;
     }
 
-    const fields = fieldsByTarget(frames);
     const doneHere: PlanAction[] = [];
     // The lawyer acted on the screen while ONE waited for their word: this screen is theirs from there.
     let moved = false;

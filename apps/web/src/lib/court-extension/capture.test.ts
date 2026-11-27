@@ -517,3 +517,25 @@ describe("the PJe of TJRJ as the lawyer walked it (the recording of 2026-11-27)"
     expect(said(String.raw`#up\:file`)?.label).toBe("Adicionar");
   });
 });
+
+describe("the PJe's file fields (2026-11-27)", () => {
+  it("names the petition's file field by the title before it, and leaves the attachments' hidden one with none", () => {
+    document.body.innerHTML = `
+      <div id="divArquivos"><div id="j_id973">
+        <strong>Sua petição:</strong>
+        <table id="raTipoDocPrincipal"><tbody><tr><td><input type="radio" id="raTipoDocPrincipal:0"> <label for="raTipoDocPrincipal:0">Arquivo PDF</label></td></tr></tbody></table>
+        <div id="uploadDocumentoPrincipalDecoration"><table class="rich-fileupload-toolbar-decor"><tbody><tr><td>
+          <div class="rich-fileupload-button"><div class="rich-fileupload-button-content">Adicionar</div>
+            <div style="overflow: hidden"><input id="up:file" type="file"></div></div>
+        </td></tr></tbody></table></div>
+      </div></div>
+      <div><strong>Anexos:</strong><button id="addAnexo">Adicionar</button></div>
+      <input type="file" class="dz-hidden-input" style="visibility: hidden; position: absolute">`;
+    const robot = captureScreen(document, EPROC, NOW, { rows: true });
+    const files = robot.fields.filter((field) => field.type === "file");
+    expect(files.map((field) => [field.label, field.section ?? null])).toEqual([
+      ["Adicionar", "Sua petição"],
+      [null, null],
+    ]);
+  });
+});

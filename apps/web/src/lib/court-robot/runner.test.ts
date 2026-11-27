@@ -1196,3 +1196,129 @@ describe("the path of a filing ONE started itself (the PJe of TJRJ, 2026-11-27)"
     ]);
   });
 });
+
+// ---------- The PJe's documents (2026-11-27) ----------
+
+/** The PJe's tab of documents: the petition's own file field, the attachments' hidden one, and "Sigiloso". */
+class StandInDocuments implements ScreenDriver {
+  attached: [string, string][] = [];
+  ticked = false;
+  async capture(): Promise<MappedScreen[]> {
+    return [
+      {
+        system: "pje-tjrj",
+        host: "tjrj.pje.jus.br",
+        path: "/1g/Processo/update.seam",
+        params: {},
+        title: "Cadastro de processo",
+        headings: ["Incluir petições e documentos"],
+        fields: [
+          field("input", "sigiloso", "Sigiloso", { type: "checkbox", checked: this.ticked }),
+          field("input", "peticao", "Adicionar", { type: "file", section: "Sua petição" }),
+          field("input", "anexos", "", { type: "file", label: null, visible: false }),
+        ],
+        tables: [],
+        capturedAt: "2026-11-27T16:10:00.000Z",
+      },
+    ];
+  }
+  async text(): Promise<string> {
+    return "";
+  }
+  async fill(): Promise<boolean> {
+    return true;
+  }
+  async select(): Promise<boolean> {
+    return true;
+  }
+  async check(): Promise<boolean> {
+    return true;
+  }
+  async click(target: Target): Promise<boolean> {
+    if (target.selector === "#sigiloso") this.ticked = !this.ticked;
+    return true;
+  }
+  async upload(target: Target, file: { name: string }): Promise<boolean> {
+    this.attached.push([target.selector, file.name]);
+    return true;
+  }
+  async settle(): Promise<void> {}
+}
+
+describe("the PJe's documents, where the petition has a field of its own (2026-11-27)", () => {
+  const FILES = filingFactsOf({
+    ...SENT,
+    items: [
+      { ...SENT.items[0]!, position: 1, name: "01-peticao-inicial.pdf", document_kind: "petition" },
+      { ...SENT.items[0]!, position: 2, name: "02-identidade.pdf", file_id: "f2", document_kind: "identity" },
+    ],
+  });
+
+  it("never puts another file in the petition's field, never ticks 'Sigiloso', and tells the AI why each was refused", async () => {
+    const court = new StandInDocuments();
+    const seen: PlanInput[] = [];
+    const planner = async (input: PlanInput): Promise<ScreenPlan> => {
+      seen.push(input);
+      const refused = input.feito.some((item) => item.resultado === "not_the_petition");
+      if (input.feito.some((item) => item.acao.alvo === P("anexos") && item.resultado === "ok")) {
+        return { tela: { tipo: "formulario", titulo: "x" }, acoes: [], pronto: false, pergunta: "Feito." };
+      }
+      return {
+        tela: { tipo: "formulario", titulo: "Incluir petições e documentos" },
+        acoes: refused
+          ? [{ fazer: "anexar", alvo: P("anexos"), arquivo: 2 }]
+          : [
+              { fazer: "anexar", alvo: P("peticao"), arquivo: 1 },
+              { fazer: "clicar", alvo: P("sigiloso") },
+              { fazer: "anexar", alvo: P("peticao"), arquivo: 2 },
+            ],
+        pronto: false,
+        pergunta: "",
+      };
+    };
+    await runFiling({
+      driver: court,
+      planner,
+      system: "PJe do TJRJ",
+      facts: FILES,
+      file: async (position: number) => ({ ...PDF, name: `arquivo-${position}.pdf` }),
+      learning: false,
+      confirm: async () => "go",
+      map: null,
+      beforeSend: async () => ({ ok: true, code: "sending" }),
+      maxScreens: 3,
+    });
+    expect(court.ticked).toBe(false);
+    expect(court.attached).toEqual([
+      ["#peticao", "arquivo-1.pdf"],
+      ["#anexos", "arquivo-2.pdf"],
+    ]);
+    expect(seen[1]?.feito.map((item) => [item.acao.alvo, item.resultado])).toEqual([
+      [P("sigiloso"), "secrecy_not_asked"],
+      [P("peticao"), "not_the_petition"],
+      [P("peticao"), "ok"],
+    ]);
+  });
+
+  it("stops where every action is refused, readings in a row, with why", async () => {
+    const court = new StandInDocuments();
+    const result = await runFiling({
+      driver: court,
+      planner: async () => ({
+        tela: { tipo: "formulario", titulo: "Incluir petições e documentos" },
+        acoes: [{ fazer: "clicar", alvo: P("sigiloso") }],
+        pronto: false,
+        pergunta: "",
+      }),
+      system: "PJe do TJRJ",
+      facts: FILES,
+      file: async () => PDF,
+      learning: false,
+      confirm: async () => "go",
+      map: null,
+      beforeSend: async () => ({ ok: true, code: "sending" }),
+    });
+    expect(result.outcome).toEqual({ kind: "stuck", why: "secrecy_not_asked" });
+    expect(court.ticked).toBe(false);
+  });
+});
